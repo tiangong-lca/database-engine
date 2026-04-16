@@ -48,6 +48,7 @@ Warnings:
 
 - Manual edits inside `remote_schema.sql`, `global/`, and `schemas/` are not stable
 - Refresh can overwrite uncommitted Git changes in generated workspace files
+- If you want `--git-changes` to reflect only later hand edits, commit the refreshed `supabase/workspace/schemas` to Git after syncing the remote database and before editing files.
 
 ### `copy_workspace_file_to_changes.py`
 
@@ -75,6 +76,7 @@ Behavior:
 - Preserves relative paths
 - Supports a single file or a directory
 - `--git-changes` copies every uncommitted file currently detected under `supabase/workspace/schemas`
+- Recommended workflow: refresh the workspace, commit the generated `supabase/workspace/schemas` state to Git, then edit files and use `--git-changes`
 
 ### `new_migration.py`
 

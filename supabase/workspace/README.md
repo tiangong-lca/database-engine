@@ -32,6 +32,7 @@ Each refresh performs these operations inside `supabase/workspace`:
 
 - Use `remote_schema.sql` for full raw-dump inspection.
 - Use `global/` and `schemas/` for human-readable browsing and review.
+- If you plan to rely on `python scripts/copy_workspace_file_to_changes.py --git-changes`, refresh the workspace first, then commit the updated `supabase/workspace/schemas` to Git before starting manual edits.
 - Copy objects you plan to modify into `changes/`, keeping the same relative structure as `schemas/`.
 - Generate migrations from files under `changes/` or `supabase/model/schemas/` only when the source path matches one of the currently supported object types:
   - `functions/<name>/definition.sql`

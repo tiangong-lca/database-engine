@@ -32,6 +32,7 @@
 
 - `remote_schema.sql` 适合查看完整原始导出。
 - `global/` 和 `schemas/` 适合按对象结构浏览和审查。
+- 如果你准备依赖 `python scripts/copy_workspace_file_to_changes.py --git-changes` 自动识别后续手工改动，应该先同步远程数据库并刷新 workspace，然后把新的 `supabase/workspace/schemas` 提交到 Git，再开始编辑。
 - 需要修改的对象应先复制到 `changes/`，并尽量保持与 `schemas/` 相同的相对目录结构。
 - 只有当源文件路径属于当前脚本支持的对象类型时，才应从 `changes/` 或 `supabase/model/schemas/` 生成 migration：
   - `functions/<name>/definition.sql`

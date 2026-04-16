@@ -48,6 +48,7 @@ python scripts/build_schema_workspace.py --environment dev
 
 - `remote_schema.sql`、`global/` 和 `schemas/` 中的手工修改都不稳定
 - 刷新时可能覆盖这些生成文件里尚未提交到 Git 的改动
+- 如果你希望 `--git-changes` 只反映后续手工修改，应在同步远程数据库并刷新 workspace 之后，先把新的 `supabase/workspace/schemas` 提交到 Git，再开始编辑
 
 ### `copy_workspace_file_to_changes.py`
 
@@ -75,6 +76,7 @@ python scripts/copy_workspace_file_to_changes.py --git-changes
 - 保留相对路径
 - 支持单个文件或目录
 - `--git-changes` 会复制当前 Git 检测到的 `supabase/workspace/schemas` 下所有未提交文件
+- 建议流程：先刷新 workspace，再将生成的 `supabase/workspace/schemas` 提交到 Git，然后再进行手工修改并使用 `--git-changes`
 
 ### `new_migration.py`
 
