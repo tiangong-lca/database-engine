@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "process_extract_md_trigger_update" AFTER UPDATE OF "json" ON "public"."processes" FOR EACH ROW WHEN (("new"."json" IS DISTINCT FROM "old"."json")) EXECUTE FUNCTION "util"."invoke_edge_webhook"('webhook_process_embedding_ft', '1000');

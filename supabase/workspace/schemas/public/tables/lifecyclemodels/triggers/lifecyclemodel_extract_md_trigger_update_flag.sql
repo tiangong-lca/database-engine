@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "lifecyclemodel_extract_md_trigger_update_flag" AFTER UPDATE OF "embedding_flag" ON "public"."lifecyclemodels" FOR EACH ROW WHEN (("new"."embedding_flag" IS DISTINCT FROM "old"."embedding_flag")) EXECUTE FUNCTION "util"."queue_embedding_webhook"();

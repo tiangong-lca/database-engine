@@ -1,0 +1,1 @@
+CREATE POLICY "comments update by review-admin" ON "public"."comments" FOR UPDATE TO "authenticated" USING ("public"."policy_is_current_user_in_roles"('00000000-0000-0000-0000-000000000000'::"uuid", ARRAY['review-admin'::"text"])) WITH CHECK ("public"."policy_is_current_user_in_roles"('00000000-0000-0000-0000-000000000000'::"uuid", ARRAY['review-admin'::"text"]));

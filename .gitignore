@@ -1,1 +1,8 @@
 .env.supabase*.local
+
+__pycache__/
+*.pyc
+
+supabase/workspace/changes/*
+!supabase/workspace/changes/README.md
+!supabase/workspace/changes/README.zh-CN.md

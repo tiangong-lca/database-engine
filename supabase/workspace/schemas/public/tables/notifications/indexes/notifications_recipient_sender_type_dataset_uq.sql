@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "notifications_recipient_sender_type_dataset_uq" ON "public"."notifications" USING "btree" ("recipient_user_id", "sender_user_id", "type", "dataset_type", "dataset_id", "dataset_version");

@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "lifecyclemodels_extract_text_trigger_insert" AFTER INSERT ON "public"."lifecyclemodels" FOR EACH ROW EXECUTE FUNCTION "util"."invoke_edge_webhook"('webhook_model_embedding', '1000');
