@@ -60,7 +60,7 @@ These commands confirm that the local stack starts, the migration history can be
 | `.github/workflows/supabase-dev.yml` | inspect YAML changes and confirm referenced secrets/vars still exist in docs | verify the intended deploy path in a PR note because the real push occurs only on Git `dev` | Local dry-run for GitHub-hosted execution is limited; document the expected remote proof. |
 | `scripts/**` | run the touched script with `--help` when possible, or execute the narrowest safe non-destructive path | if a script changes generated workspace behavior, refresh the workspace in a safe environment and inspect git diff | Avoid remote-destructive script runs unless the task explicitly requires them. |
 | `supabase/workspace/**` | prove whether the touched file is generated or stable | if stable manual overlay files changed, explain how they feed migration generation | Generated files alone are not sufficient evidence of a durable schema change. |
-| AI docs only | run the root `ai-doc-lint` warning flow against touched files | perform scenario-based routing checks from root into this repo | Refresh review metadata even when prose stays unchanged. |
+| AI docs only | run repo-local `ai-doc-lint` against touched files or the equivalent local PR check | perform scenario-based routing checks from root into this repo | Refresh review metadata even when prose stays unchanged. |
 
 ## SQL Assertion Notes
 

@@ -93,6 +93,8 @@ Route those tasks to:
 - Promote path: `dev -> main`
 - Hotfix path: branch from `main`, merge back into `main`, then back-merge `main -> dev`
 
+- Repo-local AI-doc maintenance is enforced by `.github/workflows/ai-doc-lint.yml` using the vendored `.github/scripts/ai-doc-lint.*` files.
+
 Do not infer the working trunk from GitHub default-branch UI.
 
 ## Stable Vs Generated Paths

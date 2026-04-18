@@ -143,7 +143,8 @@
         "style": "PGTAP SQL files",
         "wrapperStatus": "no single checked-in runner",
         "note": "Record the exact local invocation used for relevant SQL test files in the PR."
-      }
+      },
+      "aiDocLintWorkflow": ".github/workflows/ai-doc-lint.yml"
     }
   }
 }
