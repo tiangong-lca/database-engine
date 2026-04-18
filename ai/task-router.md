@@ -65,6 +65,7 @@ When working inside `database-engine`, load docs in this order:
 | Update operator branch-binding templates | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | `ai/repo.yaml`, `docs/agents/supabase-branching.md` | These are operator templates, not app runtime env files. |
 | Decide whether a task belongs in frontend envs or app-side Supabase clients | `tiangong-lca-next` instead of this repo | root `ai/task-router.md` | This repo does not own frontend runtime env selection. |
 | Decide whether a task belongs in Edge Function runtime code | `tiangong-lca-edge-functions` instead of this repo | root `ai/task-router.md` | Database-side SQL may call Edge Functions, but runtime code still belongs in the edge repo. |
+| Change repo-local AI-doc maintenance only | `AGENTS.md`, `ai/**`, `.github/workflows/ai-doc-lint.yml`, `.github/scripts/ai-doc-lint.*` | `ai/validation.md` when present, otherwise `ai/repo.yaml` | Keep the repo-local maintenance gate aligned with root `ai/ci-lint-spec.md` and `ai/review-matrix.md`. |
 | Decide whether work is delivery-complete after merge | root workspace docs, not repo code paths | root `AGENTS.md`, `_docs/workspace-branch-policy-contract.md` | Root integration remains a separate phase. |
 
 ## Wrong Turns To Avoid
