@@ -2,6 +2,16 @@
 
 `database-engine` is the Supabase database governance repository for the TianGong LCA workspace.
 
+## AI Entry Docs
+
+For AI-facing routing and current repo facts, start here:
+
+- `AGENTS.md`
+- `ai/repo.yaml`
+- `ai/task-router.md`
+- `ai/validation.md`
+- `ai/architecture.md`
+
 It owns the checked-in database source of truth:
 
 - `supabase/config.toml`
@@ -57,5 +67,10 @@ Frontend runtime env files stay in `tiangong-lca-next`.
 
 ## Docs
 
+- AI entrypoint: `AGENTS.md`
+- Repo facts: `ai/repo.yaml`
+- Task router: `ai/task-router.md`
+- Validation guide: `ai/validation.md`
+- Architecture notes: `ai/architecture.md`
 - English: `docs/agents/supabase-branching.md`
 - Chinese: `docs/agents/supabase-branching_CN.md`
