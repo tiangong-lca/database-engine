@@ -1,0 +1,150 @@
+{
+  "version": 1,
+  "lastReviewedAt": "2026-04-18",
+  "lastReviewedCommit": "0ffe436a3bc80671d68c3f2ff37b248146bc6af2",
+  "repo": {
+    "id": "database-engine",
+    "path": "database-engine",
+    "canonicalRepo": "tiangong-lca/database-engine",
+    "purpose": "Supabase database governance repository for TianGong LCA.",
+    "entryDoc": "AGENTS.md",
+    "taskRouterDoc": "ai/task-router.md",
+    "validationDoc": "ai/validation.md",
+    "architectureDoc": "ai/architecture.md",
+    "branchingDeepDiveDoc": "docs/agents/supabase-branching.md",
+    "branchingDeepDiveDocZh": "docs/agents/supabase-branching_CN.md",
+    "defaultBranch": "main",
+    "dailyTrunk": "dev",
+    "routinePrBase": "dev",
+    "branchModel": "M2",
+    "promotePath": "dev -> main",
+    "hotfixPath": "main -> main, then back-merge main -> dev",
+    "workspaceIntegrationRequired": true,
+    "rootIntegrationRule": "lca-workspace/main should normally bump only commits already promoted onto database-engine/main.",
+    "trackedBy": {
+      "workspaceParentIssue": "https://github.com/tiangong-lca/workspace/issues/73",
+      "repoIssue": "https://github.com/tiangong-lca/database-engine/issues/10"
+    },
+    "sourceOfTruth": {
+      "stableManualEditPaths": [
+        {
+          "path": "supabase/config.toml",
+          "role": "shared Supabase CLI baseline plus branch-specific remote bindings"
+        },
+        {
+          "path": "supabase/migrations/**",
+          "role": "committed migration history and schema change truth"
+        },
+        {
+          "path": "supabase/seed.sql",
+          "role": "shared seed data loaded on local reset"
+        },
+        {
+          "path": "supabase/seeds/dev.sql",
+          "role": "persistent dev-only seed overlay"
+        },
+        {
+          "path": "supabase/tests/**",
+          "role": "PGTAP-style database assertions and regression checks"
+        },
+        {
+          "path": "scripts/**",
+          "role": "schema export, workspace refresh, change-copying, and migration-generation helpers"
+        },
+        {
+          "path": "supabase/workspace/README.md",
+          "role": "contract for the generated remote schema workspace"
+        },
+        {
+          "path": "supabase/workspace/changes/**",
+          "role": "stable manual overlay area when generating migrations from workspace files"
+        },
+        {
+          "path": ".github/workflows/supabase-dev.yml",
+          "role": "only checked-in automation that pushes committed migrations to the persistent remote dev branch"
+        },
+        {
+          "path": ".env.supabase.dev.local.example",
+          "role": "operator dev branch binding template"
+        },
+        {
+          "path": ".env.supabase.main.local.example",
+          "role": "operator main branch binding template"
+        }
+      ],
+      "generatedInspectionPaths": [
+        "supabase/workspace/remote_schema.sql",
+        "supabase/workspace/global/**",
+        "supabase/workspace/schemas/**"
+      ],
+      "nonOwnerBoundaries": [
+        {
+          "repo": "tiangong-lca-next",
+          "doesNotOwn": [
+            "frontend runtime env files",
+            "app-side Supabase clients",
+            "frontend validation flows"
+          ]
+        },
+        {
+          "repo": "tiangong-lca-edge-functions",
+          "doesNotOwn": [
+            "Edge Function runtime code",
+            "non-SQL API orchestration logic"
+          ]
+        },
+        {
+          "repo": "lca-workspace",
+          "doesNotOwn": [
+            "submodule pointer updates",
+            "workspace delivery completion",
+            "root integration branch decisions"
+          ]
+        }
+      ]
+    },
+    "taskHotspots": [
+      {
+        "topic": "access control, review workflow, and query/command RPC boundaries",
+        "paths": [
+          "supabase/migrations/**",
+          "supabase/tests/**",
+          "supabase/workspace/schemas/public/functions/**",
+          "supabase/workspace/schemas/public/tables/**/policies/**",
+          "supabase/workspace/schemas/public/tables/**/triggers/**"
+        ]
+      },
+      {
+        "topic": "preview branch and persistent dev branch operations",
+        "paths": [
+          "supabase/config.toml",
+          ".github/workflows/supabase-dev.yml",
+          "docs/agents/supabase-branching.md"
+        ]
+      },
+      {
+        "topic": "generated remote schema browsing and migration generation",
+        "paths": [
+          "supabase/workspace/**",
+          "scripts/build_schema_workspace.py",
+          "scripts/copy_workspace_file_to_changes.py",
+          "scripts/new_migration.py"
+        ]
+      }
+    ],
+    "validation": {
+      "baselineLocalCommands": [
+        "supabase start",
+        "supabase db reset",
+        "supabase migration list"
+      ],
+      "sqlTests": {
+        "path": "supabase/tests/**",
+        "style": "PGTAP SQL files",
+        "wrapperStatus": "no single checked-in runner",
+        "note": "Record the exact local invocation used for relevant SQL test files in the PR."
+      },
+      "aiDocLintWorkflow": ".github/workflows/ai-doc-lint.yml"
+    }
+  }
+}

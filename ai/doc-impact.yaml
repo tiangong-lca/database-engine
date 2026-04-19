@@ -1,0 +1,219 @@
+{
+  "version": 1,
+  "lastReviewedAt": "2026-04-18",
+  "lastReviewedCommit": "0ffe436a3bc80671d68c3f2ff37b248146bc6af2",
+  "rules": [
+    {
+      "id": "database-engine-bootstrap-contract",
+      "scope": "repo",
+      "repo": "database-engine",
+      "triggers": [
+        {
+          "path": "AGENTS.md",
+          "kind": "doc-contract"
+        },
+        {
+          "path": "README.md",
+          "kind": "doc-entry"
+        },
+        {
+          "path": "docs/agents/**",
+          "kind": "doc-ops"
+        }
+      ],
+      "requiredDocs": [
+        {
+          "path": "AGENTS.md",
+          "mode": "review_or_update"
+        },
+        {
+          "path": "ai/repo.yaml",
+          "mode": "review_or_update"
+        },
+        {
+          "path": "ai/task-router.md",
+          "mode": "review_or_update"
+        }
+      ],
+      "reason": "Entry guidance, repo facts, and routing guidance must stay aligned."
+    },
+    {
+      "id": "database-engine-branch-config-and-automation",
+      "scope": "repo",
+      "repo": "database-engine",
+      "triggers": [
+        {
+          "path": "supabase/config.toml",
+          "kind": "db-config"
+        },
+        {
+          "path": ".github/workflows/supabase-dev.yml",
+          "kind": "automation"
+        },
+        {
+          "path": ".env.supabase.dev.local.example",
+          "kind": "operator-template"
+        },
+        {
+          "path": ".env.supabase.main.local.example",
+          "kind": "operator-template"
+        }
+      ],
+      "requiredDocs": [
+        {
+          "path": "AGENTS.md",
+          "mode": "review_or_update"
+        },
+        {
+          "path": "ai/repo.yaml",
+          "mode": "review_or_update"
+        },
+        {
+          "path": "ai/task-router.md",
+          "mode": "review_or_update"
+        },
+        {
+          "path": "ai/validation.md",
+          "mode": "review_or_update"
+        },
+        {
+          "path": "ai/architecture.md",
+          "mode": "review_or_update"
+        }
+      ],
+      "reason": "Branch bindings and persistent dev automation change how the repo should be routed and validated."
+    },
+    {
+      "id": "database-engine-migration-seed-contract",
+      "scope": "repo",
+      "repo": "database-engine",
+      "triggers": [
+        {
+          "path": "supabase/migrations/**",
+          "kind": "db-schema"
+        },
+        {
+          "path": "supabase/seed.sql",
+          "kind": "db-seed"
+        },
+        {
+          "path": "supabase/seeds/**",
+          "kind": "db-seed"
+        }
+      ],
+      "requiredDocs": [
+        {
+          "path": "ai/repo.yaml",
+          "mode": "review_or_update"
+        },
+        {
+          "path": "ai/task-router.md",
+          "mode": "review_or_update"
+        },
+        {
+          "path": "ai/validation.md",
+          "mode": "review_or_update"
+        },
+        {
+          "path": "ai/architecture.md",
+          "mode": "review_or_update"
+        }
+      ],
+      "reason": "Schema and seed changes affect source-of-truth boundaries, authoring routes, and validation expectations."
+    },
+    {
+      "id": "database-engine-sql-tests-contract",
+      "scope": "repo",
+      "repo": "database-engine",
+      "triggers": [
+        {
+          "path": "supabase/tests/**",
+          "kind": "db-test"
+        }
+      ],
+      "requiredDocs": [
+        {
+          "path": "ai/task-router.md",
+          "mode": "review_or_update"
+        },
+        {
+          "path": "ai/validation.md",
+          "mode": "review_or_update"
+        }
+      ],
+      "reason": "Regression and access-control test changes can change the minimum verification story for future work."
+    },
+    {
+      "id": "database-engine-schema-workspace-tooling",
+      "scope": "repo",
+      "repo": "database-engine",
+      "triggers": [
+        {
+          "path": "scripts/**",
+          "kind": "tooling"
+        },
+        {
+          "path": "supabase/workspace/**",
+          "kind": "generated-workspace"
+        }
+      ],
+      "requiredDocs": [
+        {
+          "path": "ai/repo.yaml",
+          "mode": "review_or_update"
+        },
+        {
+          "path": "ai/task-router.md",
+          "mode": "review_or_update"
+        },
+        {
+          "path": "ai/validation.md",
+          "mode": "review_or_update"
+        },
+        {
+          "path": "ai/architecture.md",
+          "mode": "review_or_update"
+        }
+      ],
+      "reason": "Schema-workspace scripts and generated inspection trees need explicit documentation because some paths are stable and others are disposable."
+    },
+    {
+      "id": "database-engine-ai-doc-maintenance-contract",
+      "scope": "repo",
+      "repo": "database-engine",
+      "triggers": [
+        {
+          "path": ".github/workflows/ai-doc-lint.yml",
+          "kind": "automation"
+        },
+        {
+          "path": ".github/scripts/ai-doc-lint.mjs",
+          "kind": "automation"
+        },
+        {
+          "path": ".github/scripts/ai-doc-lint.test.mjs",
+          "kind": "automation"
+        }
+      ],
+      "requiredDocs": [
+        {
+          "path": "AGENTS.md",
+          "mode": "review_or_update"
+        },
+        {
+          "path": "ai/repo.yaml",
+          "mode": "review_or_update"
+        },
+        {
+          "path": "ai/doc-impact.yaml",
+          "mode": "review_or_update"
+        },
+        {
+          "path": "ai/validation.md",
+          "mode": "review_or_update"
+        }
+      ],
+      "reason": "Repo-local AI doc maintenance automation changes alter the maintenance gate and should refresh the AI contract docs."
+    }
+  ]
+}

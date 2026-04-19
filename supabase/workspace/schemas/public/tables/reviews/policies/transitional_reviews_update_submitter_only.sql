@@ -1,0 +1,1 @@
+CREATE POLICY "transitional_reviews_update_submitter_only" ON "public"."reviews" FOR UPDATE TO "authenticated" USING ((("auth"."uid"() IS NOT NULL) AND (((("json" -> 'user'::"text") ->> 'id'::"text"))::"uuid" = "auth"."uid"()))) WITH CHECK ((("auth"."uid"() IS NOT NULL) AND (((("json" -> 'user'::"text") ->> 'id'::"text"))::"uuid" = "auth"."uid"())));
