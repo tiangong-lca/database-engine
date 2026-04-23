@@ -1,3 +1,32 @@
+---
+title: 远程 Schema 工作区
+docType: guide
+scope: repo
+status: active
+authoritative: false
+owner: database-engine
+language: zh-CN
+whenToUse:
+  - 当任务涉及生成的 schema workspace 文件或刷新流程时
+  - 当你需要判断 workspace 路径是生成视图还是稳定人工维护区时
+whenToUpdate:
+  - 当 workspace 刷新行为或稳定 overlay 规则变化时
+  - 当支持的 migration 生成来源变化时
+checkPaths:
+  - supabase/workspace/README.zh-CN.md
+  - supabase/workspace/**
+  - scripts/**
+  - docs/agents/repo-architecture.md
+lastReviewedAt: 2026-04-23
+lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
+related:
+  - ../../AGENTS.md
+  - ../../.docpact/config.yaml
+  - ../../docs/agents/repo-architecture.md
+  - ../../docs/agents/repo-validation.md
+  - README.md
+---
+
 # 远程 Schema 工作区
 
 这个目录用于保存 `dev` 数据库的最新远程 schema 导出，以及基于该导出拆分出来的可读工作区。

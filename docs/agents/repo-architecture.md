@@ -1,5 +1,5 @@
 ---
-title: database-engine Architecture Notes
+title: database-engine Repo Architecture Notes
 docType: guide
 scope: repo
 status: active
@@ -7,7 +7,7 @@ authoritative: false
 owner: database-engine
 language: en
 whenToUse:
-  - when you need a compact mental model of the repo before editing SQL, config, or schema-workspace tooling
+  - when you need a compact mental model before editing SQL, config, or schema-workspace tooling
   - when deciding whether a path is stable source of truth or generated inspection output
   - when the task mentions workspace-based migration authoring, remote schema export, or branch-specific database behavior
 whenToUpdate:
@@ -15,26 +15,22 @@ whenToUpdate:
   - when the generated schema workspace contract changes
   - when new hotspot areas make the current map misleading
 checkPaths:
-  - ai/architecture.md
-  - ai/repo.yaml
+  - docs/agents/repo-architecture.md
+  - .docpact/config.yaml
   - supabase/config.toml
   - supabase/migrations/**
   - supabase/tests/**
   - supabase/workspace/**
   - scripts/**
   - .github/workflows/supabase-dev.yml
-lastReviewedAt: 2026-04-18
-lastReviewedCommit: 0ffe436a3bc80671d68c3f2ff37b248146bc6af2
+lastReviewedAt: 2026-04-23
+lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
 related:
-  - ../AGENTS.md
-  - ./repo.yaml
-  - ./task-router.md
-  - ./validation.md
-  - ../supabase/workspace/README.md
-  - ../scripts/README.md
+  - ../../AGENTS.md
+  - ../../.docpact/config.yaml
+  - ./repo-validation.md
+  - ./supabase-branching.md
 ---
-
-# database-engine Architecture Notes
 
 ## Repo Shape
 
@@ -42,19 +38,20 @@ This repo is organized around one checked-in Supabase project plus a generated s
 
 ## Stable Path Map
 
-| Path group | Stability | Why it matters |
-| --- | --- | --- |
-| `supabase/config.toml` | stable | shared local baseline plus branch-specific remote bindings |
-| `supabase/migrations/**` | stable | authoritative migration history and durable schema changes |
-| `supabase/seed.sql` | stable | shared seed data |
-| `supabase/seeds/dev.sql` | stable | persistent dev-only seed overlay |
-| `supabase/tests/**` | stable | PGTAP-style regression and access-control assertions |
-| `scripts/**` | stable | export, refresh, change-copy, and migration-generation helpers |
-| `.github/workflows/supabase-dev.yml` | stable | only checked-in automation for pushing committed migrations to the persistent remote `dev` branch |
-| `supabase/workspace/changes/**` | stable | manual overlay area used when generating migrations from workspace files |
-| `supabase/workspace/remote_schema.sql` | generated | full raw dump from the remote database |
-| `supabase/workspace/global/**` | generated | split-out global objects rebuilt on workspace refresh |
-| `supabase/workspace/schemas/**` | generated | human-browsable split schema objects rebuilt on workspace refresh |
+| Path group | Role |
+| --- | --- |
+| `supabase/config.toml` | shared local baseline plus branch-specific remote bindings |
+| `supabase/migrations/**` | authoritative migration history and durable schema changes |
+| `supabase/seed.sql` | shared seed data |
+| `supabase/seeds/dev.sql` | persistent dev-only seed overlay |
+| `supabase/tests/**` | PGTAP-style regression and access-control assertions |
+| `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |
+| `scripts/**` | export, refresh, change-copy, and migration-generation helpers |
+| `.github/workflows/supabase-dev.yml` | only checked-in automation for pushing committed migrations to the persistent remote `dev` branch |
+| `supabase/workspace/changes/**` | manual overlay area used when generating migrations from workspace files |
+| `supabase/workspace/remote_schema.sql` | generated full raw dump from the remote database |
+| `supabase/workspace/global/**` | generated split-out global objects rebuilt on workspace refresh |
+| `supabase/workspace/schemas/**` | generated human-browsable split schema objects rebuilt on workspace refresh |
 
 ## Branch Model In Practice
 

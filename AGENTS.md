@@ -9,16 +9,17 @@ language: en
 whenToUse:
   - when a task may change database schema, migrations, seeds, Supabase branch config, or database-side SQL tests
   - when routing work from the workspace root into the database-engine repo
-  - when deciding whether a change belongs here, in tiangong-lca-next, in tiangong-lca-edge-functions, or in lca-workspace
+  - when deciding which document owns a rule, command, or path boundary in this repo
 whenToUpdate:
   - when repo ownership or source-of-truth paths change
   - when branch policy or workspace integration rules change
-  - when the repo-local AI bootstrap docs under ai/ change
+  - when the current documentation system becomes redundant or ambiguous
 checkPaths:
   - AGENTS.md
   - README.md
-  - ai/**/*.md
-  - ai/**/*.yaml
+  - README.zh-CN.md
+  - .docpact/**/*.yaml
+  - docs/agents/**
   - supabase/config.toml
   - supabase/migrations/**
   - supabase/tests/**
@@ -29,37 +30,92 @@ checkPaths:
   - docs/agents/**
   - .github/workflows/**
   - .env.supabase*.example
-lastReviewedAt: 2026-04-18
-lastReviewedCommit: 0ffe436a3bc80671d68c3f2ff37b248146bc6af2
+lastReviewedAt: 2026-04-23
+lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
 related:
-  - ai/repo.yaml
-  - ai/task-router.md
-  - ai/validation.md
-  - ai/architecture.md
+  - .docpact/config.yaml
+  - docs/agents/repo-validation.md
+  - docs/agents/repo-architecture.md
   - docs/agents/supabase-branching.md
 ---
 
-# AGENTS.md — database-engine AI Working Guide
+## Repo Contract
 
-`database-engine` owns the checked-in Supabase database contract for the TianGong LCA workspace. Start here when the task may change schema truth, migration history, database-side tests, branch bindings, or the automation that deploys the persistent Supabase `dev` branch.
+`database-engine` owns the checked-in Supabase database contract for the TianGong LCA workspace: schema truth, migration history, operator branch bindings, database-side tests, and the automation that deploys committed migrations to the persistent Supabase `dev` branch.
 
-## AI Load Order
+Start here when the task may change schema truth, branch bindings, generated schema-workspace tooling, repo validation rules, or documentation ownership inside this repo.
 
-Load docs in this order:
+## Documentation System Principles
+
+This repository treats documentation as an information system, not as narrative writing.
+
+Required principles:
+
+- single source of truth: one rule has one owning document
+- one document, one job: each document solves one problem clearly
+- conclusion first: put purpose, rules, steps, and boundaries before background
+- no redundant prose: keep facts, rules, commands, exceptions, and validation; remove filler
+- no ambiguity: prefer explicit conditions and exact actions over vague guidance
+- executable commands: any documented command must run as written
+- verifiable rules: readers must be able to tell whether they followed the rule correctly
+- rules before explanation: operational content comes before rationale
+- stable structure: same document type uses the same section order where practical
+- reference instead of duplication: when a rule already has an owner, link to it instead of restating it
+
+## Documentation Roles
+
+| Document | Owns | Does not own |
+| --- | --- | --- |
+| `AGENTS.md` | repo contract, documentation principles, branch and delivery rules, hard boundaries | deep implementation details or large reference material |
+| `.docpact/config.yaml` | machine-readable repo facts, routing intents, lint rules, governed-doc inventory | prose explanations and narrative summaries |
+| `docs/agents/repo-validation.md` | minimum proof by change type and PR validation note shape | branch rationale or schema-workspace mental model |
+| `docs/agents/repo-architecture.md` | compact repo mental model and stable-versus-generated path map | execution checklist details |
+| `docs/agents/supabase-branching.md` and `docs/agents/supabase-branching_CN.md` | branch-specific database operations and branch-binding workflow | repo-wide validation matrix or generated-path map |
+| `scripts/README.md` and `scripts/README.zh-CN.md` | helper-script usage and supported migration-generation flows | repo contract or branch-policy truth |
+| `supabase/workspace/README.md` and `supabase/workspace/README.zh-CN.md` | generated-workspace contract and refresh warnings | schema source-of-truth ownership |
+
+Additional governed source docs, not part of the default first-load surface:
+
+| Document | Owns | Does not own |
+| --- | --- | --- |
+| `README.md` and `README.zh-CN.md` | repo landing context and high-level purpose | repo contract, proof bar, or branch-policy truth |
+
+## Load Order
+
+Read in this order:
 
 1. `AGENTS.md`
-2. `ai/repo.yaml`
-3. `ai/task-router.md`
-4. `ai/validation.md` for change verification
-5. `ai/architecture.md` for schema-workspace or hotspot context
-6. `docs/agents/supabase-branching.md` for deeper branch-operation rules
-7. `supabase/workspace/README.md` and `scripts/README.md` only when working with generated schema workspace helpers
+2. `.docpact/config.yaml`
+3. `docs/agents/repo-validation.md` or `docs/agents/repo-architecture.md`
+4. `docs/agents/supabase-branching.md`
+5. `supabase/workspace/README.md` or `scripts/README.md` only when the task touches schema-workspace tooling
 
-Do not start with the generated schema workspace, long migration files, or GitHub UI branch defaults.
+Do not start from generated schema workspace files, long migration history, or GitHub default-branch UI.
 
-## Repo Ownership
+## Operational Pointers
 
-This repo owns:
+- path-level ownership, routing intents, governed-doc inventory, and lint rules live in `.docpact/config.yaml`
+- minimum proof and PR validation note shape live in `docs/agents/repo-validation.md`
+- stable path ownership and generated-workspace rules live in `docs/agents/repo-architecture.md`
+- deeper branch-operation rules live in `docs/agents/supabase-branching.md`
+- repo-local documentation maintenance is enforced by `.github/workflows/ai-doc-lint.yml` with `docpact lint`
+
+## Minimal Execution Facts
+
+Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md` and the narrow source docs for the full details.
+
+- local baseline: `supabase start`, `supabase db reset`, `supabase migration list`
+- migration authoring starts from Git `dev`, not GitHub default-branch UI
+- preview-branch proof belongs to the repo PR
+- persistent `dev` proof belongs after merge into Git `dev`
+- root workspace proof belongs later in `lca-workspace`
+- generated workspace helpers are low-risk to inspect with `python scripts/<name>.py --help`
+
+## Ownership Boundaries
+
+The authoritative path-level ownership map lives in `.docpact/config.yaml`.
+
+At a human-readable level, this repo owns:
 
 - `supabase/config.toml`
 - `supabase/migrations/**`
@@ -70,7 +126,7 @@ This repo owns:
 - `.github/workflows/supabase-dev.yml`
 - `.env.supabase.dev.local.example`
 - `.env.supabase.main.local.example`
-- branching and database-operations docs under `docs/agents/**`
+- repo-local governance and branching docs
 
 This repo does not own:
 
@@ -84,56 +140,33 @@ Route those tasks to:
 - `tiangong-lca-edge-functions` for Edge Function runtime behavior
 - `lca-workspace` for root integration after merge
 
-## Branch Facts
+## Branch And Delivery Facts
 
 - GitHub default branch: `main`
-- True daily trunk: `dev`
-- Routine branch base: `dev`
-- Routine PR base: `dev`
-- Promote path: `dev -> main`
-- Hotfix path: branch from `main`, merge back into `main`, then back-merge `main -> dev`
+- true daily trunk: `dev`
+- routine branch base: `dev`
+- routine PR base: `dev`
+- promote path: `dev -> main`
+- hotfix path: branch from `main`, merge back into `main`, then back-merge `main -> dev`
 
-- Repo-local AI-doc maintenance is enforced by `.github/workflows/ai-doc-lint.yml` using the vendored `.github/scripts/ai-doc-lint.*` files.
+Do not infer the working trunk from GitHub default-branch UI alone.
 
-Do not infer the working trunk from GitHub default-branch UI.
+## Documentation Update Rules
 
-## Stable Vs Generated Paths
+Use the role table in this file as the update map.
 
-Treat these as stable manual-edit locations:
-
-- `supabase/migrations/**`
-- `supabase/seed.sql`
-- `supabase/seeds/**`
-- `supabase/tests/**`
-- `supabase/workspace/changes/**`
-- `scripts/**`
-- docs and workflow files
-
-Treat these as generated inspection views, not hand-maintained truth:
-
-- `supabase/workspace/remote_schema.sql`
-- `supabase/workspace/global/**`
-- `supabase/workspace/schemas/**`
-
-If you need to author a migration from generated workspace content, copy the target object into `supabase/workspace/changes/**` first and then generate the migration.
-
-## Quick Routes
-
-| If the task is about... | Load next |
-| --- | --- |
-| adding or editing a migration, policy, RPC, trigger, or seed | `ai/task-router.md`, then `ai/validation.md` |
-| changing branch config, auth redirect settings, or the persistent dev workflow | `ai/repo.yaml`, then `docs/agents/supabase-branching.md` |
-| investigating preview-branch failure or migration drift | `ai/validation.md`, then `docs/agents/supabase-branching.md` |
-| browsing remote schema snapshots or generating a migration from workspace files | `ai/architecture.md`, then `supabase/workspace/README.md` and `scripts/README.md` |
-| deciding whether the change belongs in frontend or edge runtime code instead | `ai/task-router.md` |
-| deciding whether root workspace integration is still pending after merge | root `AGENTS.md` and `_docs/workspace-branch-policy-contract.md` in `lca-workspace` |
+- if a machine-readable repo fact or governed-doc rule changes, update `.docpact/config.yaml` in the same change
+- if a human-readable repo contract, branch rule, or hard boundary changes, update `AGENTS.md`
+- if proof, architecture, or branch-operation guidance changes, update only the document that owns that subject
+- if a document is governed but not in the default first-load surface, route to it on demand instead of duplicating its rules into `AGENTS.md`
+- do not copy the same rule into multiple docs just to make it easier to find
 
 ## Hard Boundaries
 
-- Do not treat `supabase/workspace/global/**` or `supabase/workspace/schemas/**` as stable edit locations.
-- Do not create a second workflow that pushes to the persistent Supabase `dev` branch without updating the repo contract docs in the same change.
-- Do not move frontend `.env` or app-side client logic into this repo.
-- Do not treat a merged PR here as delivery-complete when the workspace still needs a submodule bump.
+- do not treat `supabase/workspace/remote_schema.sql`, `global/**`, or `schemas/**` as stable edit locations
+- do not create a second workflow that pushes to the persistent Supabase `dev` branch without updating the repo contract docs in the same change
+- do not move frontend `.env` or app-side client logic into this repo
+- do not treat a merged PR here as delivery-complete when the workspace still needs a submodule bump
 
 ## Workspace Integration
 
