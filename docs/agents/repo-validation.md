@@ -1,5 +1,5 @@
 ---
-title: database-engine Validation Guide
+title: database-engine Repo Validation Guide
 docType: guide
 scope: repo
 status: active
@@ -15,8 +15,8 @@ whenToUpdate:
   - when change categories require different minimum checks
   - when schema-workspace tooling or branch operations change
 checkPaths:
-  - ai/validation.md
-  - ai/task-router.md
+  - docs/agents/repo-validation.md
+  - .docpact/config.yaml
   - supabase/config.toml
   - supabase/migrations/**
   - supabase/tests/**
@@ -24,22 +24,26 @@ checkPaths:
   - supabase/seeds/**
   - scripts/**
   - .github/workflows/supabase-dev.yml
-lastReviewedAt: 2026-04-18
-lastReviewedCommit: 0ffe436a3bc80671d68c3f2ff37b248146bc6af2
+  - .github/workflows/ai-doc-lint.yml
+lastReviewedAt: 2026-04-23
+lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
 related:
-  - ../AGENTS.md
-  - ./repo.yaml
-  - ./task-router.md
-  - ./architecture.md
-  - ../docs/agents/supabase-branching.md
-  - ../scripts/README.md
+  - ../../AGENTS.md
+  - ../../.docpact/config.yaml
+  - ./repo-architecture.md
+  - ./supabase-branching.md
 ---
 
-# database-engine Validation Guide
+## Validation Order
+
+1. identify the change type
+2. run the minimum proof for that change type
+3. add stronger proof only when the risk actually increases
+4. record exact commands, SQL files, and environments in the PR
 
 ## Default Baseline
 
-Unless the change is doc-only, the baseline local commands are:
+Unless the change is doc-only repo-maintenance work, the baseline local commands are:
 
 ```bash
 supabase start
@@ -47,24 +51,22 @@ supabase db reset
 supabase migration list
 ```
 
-These commands confirm that the local stack starts, the migration history can be replayed, and the local migration state is inspectable.
+## Proof Matrix
 
-## Validation Matrix
-
-| Change type | Minimum local proof | Additional proof when risk is higher | Notes |
+| Change type | Minimum local proof | Stronger proof when risk is higher | Notes |
 | --- | --- | --- | --- |
-| `supabase/migrations/**` | `supabase db reset` succeeds | run the relevant SQL assertions under `supabase/tests/**`; inspect affected workspace objects if the migration was authored from workspace files | Record which migration and which test files were exercised. |
+| `supabase/migrations/**` | `supabase db reset` succeeds | run the relevant SQL assertions under `supabase/tests/**`; inspect affected workspace objects if the migration was authored from workspace files | Record which migration and which SQL test files were exercised. |
 | `supabase/tests/**` only | run the relevant SQL assertion files against a reset local DB | add a nearby migration or policy smoke check if the new assertions expose a gap | This repo stores PGTAP-style SQL assertions, not a single canonical runner wrapper. |
 | `supabase/seed.sql` or `supabase/seeds/dev.sql` | `supabase db reset` succeeds with expected seed behavior | rerun targeted SQL assertions that depend on the seeded rows | Keep shared seed and dev-only seed expectations separate. |
 | `supabase/config.toml` | `supabase start` and `supabase db reset` still work locally | verify the changed branch-binding or auth assumption against `docs/agents/supabase-branching.md` | Config changes can affect preview, persistent dev, and local behavior together. |
-| `.github/workflows/supabase-dev.yml` | inspect YAML changes and confirm referenced secrets/vars still exist in docs | verify the intended deploy path in a PR note because the real push occurs only on Git `dev` | Local dry-run for GitHub-hosted execution is limited; document the expected remote proof. |
+| `.github/workflows/supabase-dev.yml` | inspect YAML changes and confirm referenced secrets and vars still exist in docs | verify the intended deploy path in a PR note because the real push occurs only on Git `dev` | Local dry-run for GitHub-hosted execution is limited; document the expected remote proof. |
 | `scripts/**` | run the touched script with `--help` when possible, or execute the narrowest safe non-destructive path | if a script changes generated workspace behavior, refresh the workspace in a safe environment and inspect git diff | Avoid remote-destructive script runs unless the task explicitly requires them. |
 | `supabase/workspace/**` | prove whether the touched file is generated or stable | if stable manual overlay files changed, explain how they feed migration generation | Generated files alone are not sufficient evidence of a durable schema change. |
-| AI docs only | run repo-local `ai-doc-lint` against touched files or the equivalent local PR check | perform scenario-based routing checks from root into this repo | Refresh review metadata even when prose stays unchanged. |
+| repo docs only | `docpact lint --root . --files "<csv>" --mode enforce` | `docpact validate-config --root . --strict` when `.docpact/config.yaml` changes | Refresh review metadata even when prose stays unchanged. |
 
 ## SQL Assertion Notes
 
-The repo currently stores SQL assertions under `supabase/tests/**`.
+The repo stores SQL assertions under `supabase/tests/**`.
 
 Facts that matter:
 
@@ -107,10 +109,10 @@ For branch-oriented changes:
 
 Do not collapse those three phases into one validation note.
 
-## Minimum PR Note Quality
+## Minimum PR Validation Note
 
-A good PR note for this repo should say:
+Every PR note for this repo should state:
 
-1. which local commands ran
-2. which SQL assertion files or migration paths were exercised
+1. exact commands run
+2. exact SQL assertion files or migration paths exercised
 3. whether any proof is deferred to preview branch, persistent `dev`, or root integration

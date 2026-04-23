@@ -1,3 +1,35 @@
+---
+title: Supabase Branching
+docType: guide
+scope: repo
+status: active
+authoritative: false
+owner: database-engine
+language: zh-CN
+whenToUse:
+  - 当你需要确认 Supabase 分支绑定、preview 行为或持久化 dev 自动化时
+  - 当你需要用中文查看本仓的 branch-specific 数据库工作流时
+whenToUpdate:
+  - 当分支绑定、Vault secret 规则或持久化 dev 部署路径变化时
+  - 当这里的分支运维说明与 repo contract 或验证指南不一致时
+checkPaths:
+  - docs/agents/supabase-branching_CN.md
+  - AGENTS.md
+  - .docpact/config.yaml
+  - supabase/config.toml
+  - .github/workflows/supabase-dev.yml
+  - .env.supabase.dev.local.example
+  - .env.supabase.main.local.example
+lastReviewedAt: 2026-04-23
+lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
+related:
+  - ../../AGENTS.md
+  - ../../.docpact/config.yaml
+  - ./repo-validation.md
+  - ./repo-architecture.md
+  - ./supabase-branching.md
+---
+
 # Supabase Branching
 
 `database-engine` 是 TianGong LCA workspace 中唯一的 Supabase 真相源仓库。

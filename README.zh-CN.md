@@ -1,3 +1,31 @@
+---
+title: database-engine
+docType: overview
+scope: repo
+status: active
+authoritative: false
+owner: database-engine
+language: zh-CN
+whenToUse:
+  - 当你只需要这个仓库的高层作用说明，而不需要完整 AI 契约面时
+  - 当你从中文入口快速确认 repo 负责范围时
+whenToUpdate:
+  - 当 repo 目的、分支模型或负责边界发生变化时
+  - 当这里列出的 AI 入口文档变化时
+checkPaths:
+  - README.zh-CN.md
+  - AGENTS.md
+  - .docpact/config.yaml
+  - docs/agents/**
+lastReviewedAt: 2026-04-23
+lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
+related:
+  - AGENTS.md
+  - .docpact/config.yaml
+  - docs/agents/repo-validation.md
+  - docs/agents/repo-architecture.md
+---
+
 # database-engine
 
 `database-engine` 是 TianGong LCA workspace 中用于管理 Supabase 数据库治理的仓库。
@@ -57,5 +85,9 @@
 
 ## 文档
 
-- 英文：`docs/agents/supabase-branching.md`
-- 中文：`docs/agents/supabase-branching_CN.md`
+- AI 入口：`AGENTS.md`
+- 机器可读治理：`.docpact/config.yaml`
+- 验证指南：`docs/agents/repo-validation.md`
+- 架构说明：`docs/agents/repo-architecture.md`
+- 英文分支文档：`docs/agents/supabase-branching.md`
+- 中文分支文档：`docs/agents/supabase-branching_CN.md`

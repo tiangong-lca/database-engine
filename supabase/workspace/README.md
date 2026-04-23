@@ -1,3 +1,32 @@
+---
+title: Remote Schema Workspace
+docType: guide
+scope: repo
+status: active
+authoritative: false
+owner: database-engine
+language: en
+whenToUse:
+  - when the task touches generated schema-workspace files or refresh workflow
+  - when deciding whether a workspace path is generated or stable
+whenToUpdate:
+  - when workspace refresh behavior or stable manual-overlay rules change
+  - when supported migration-generation sources change
+checkPaths:
+  - supabase/workspace/README.md
+  - supabase/workspace/**
+  - scripts/**
+  - docs/agents/repo-architecture.md
+lastReviewedAt: 2026-04-23
+lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
+related:
+  - ../../AGENTS.md
+  - ../../.docpact/config.yaml
+  - ../../docs/agents/repo-architecture.md
+  - ../../docs/agents/repo-validation.md
+  - README.zh-CN.md
+---
+
 # Remote Schema Workspace
 
 This directory stores the latest remote schema dump and the split-out workspace generated from the `dev` database.
