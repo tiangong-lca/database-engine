@@ -1,3 +1,31 @@
+---
+title: Scripts
+docType: guide
+scope: repo
+status: active
+authoritative: false
+owner: database-engine
+language: en
+whenToUse:
+  - when the task touches schema-workspace helper scripts
+  - when you need the supported command surface for workspace refresh or migration generation
+whenToUpdate:
+  - when script entrypoints, supported source shapes, or workspace refresh behavior changes
+checkPaths:
+  - scripts/README.md
+  - scripts/**
+  - supabase/workspace/**
+  - docs/agents/repo-architecture.md
+lastReviewedAt: 2026-04-23
+lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
+related:
+  - ../AGENTS.md
+  - ../.docpact/config.yaml
+  - ../docs/agents/repo-architecture.md
+  - ../docs/agents/repo-validation.md
+  - README.zh-CN.md
+---
+
 # Scripts
 
 This directory contains the command-line helpers used for remote schema export, workspace refresh, change-copying, and migration generation.

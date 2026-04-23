@@ -1,3 +1,35 @@
+---
+title: Supabase Branching
+docType: guide
+scope: repo
+status: active
+authoritative: false
+owner: database-engine
+language: en
+whenToUse:
+  - when changing Supabase branch bindings, preview behavior, or persistent dev automation
+  - when confirming the branch-specific database workflow for this repo
+whenToUpdate:
+  - when branch bindings, Vault secret rules, or the persistent dev deployment path change
+  - when branch-operation guidance diverges from repo contract or validation guidance
+checkPaths:
+  - docs/agents/supabase-branching.md
+  - AGENTS.md
+  - .docpact/config.yaml
+  - supabase/config.toml
+  - .github/workflows/supabase-dev.yml
+  - .env.supabase.dev.local.example
+  - .env.supabase.main.local.example
+lastReviewedAt: 2026-04-23
+lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
+related:
+  - ../../AGENTS.md
+  - ../../.docpact/config.yaml
+  - ./repo-validation.md
+  - ./repo-architecture.md
+  - ./supabase-branching_CN.md
+---
+
 # Supabase Branching
 
 `database-engine` is the single Supabase source-of-truth repository for the TianGong LCA workspace.

@@ -1,3 +1,31 @@
+---
+title: database-engine
+docType: overview
+scope: repo
+status: active
+authoritative: false
+owner: database-engine
+language: en
+whenToUse:
+  - when you need the shortest high-level description of what this repo owns
+  - when landing in the repo without needing the full AI contract surface yet
+whenToUpdate:
+  - when repo purpose, branch model, or owned surfaces change
+  - when the AI entry surface listed here changes
+checkPaths:
+  - README.md
+  - AGENTS.md
+  - .docpact/config.yaml
+  - docs/agents/**
+lastReviewedAt: 2026-04-23
+lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
+related:
+  - AGENTS.md
+  - .docpact/config.yaml
+  - docs/agents/repo-validation.md
+  - docs/agents/repo-architecture.md
+---
+
 # database-engine
 
 `database-engine` is the Supabase database governance repository for the TianGong LCA workspace.
@@ -7,10 +35,10 @@
 For AI-facing routing and current repo facts, start here:
 
 - `AGENTS.md`
-- `ai/repo.yaml`
-- `ai/task-router.md`
-- `ai/validation.md`
-- `ai/architecture.md`
+- `.docpact/config.yaml`
+- `docs/agents/repo-validation.md`
+- `docs/agents/repo-architecture.md`
+- `docs/agents/supabase-branching.md`
 
 It owns the checked-in database source of truth:
 
@@ -68,9 +96,8 @@ Frontend runtime env files stay in `tiangong-lca-next`.
 ## Docs
 
 - AI entrypoint: `AGENTS.md`
-- Repo facts: `ai/repo.yaml`
-- Task router: `ai/task-router.md`
-- Validation guide: `ai/validation.md`
-- Architecture notes: `ai/architecture.md`
+- Machine-readable governance: `.docpact/config.yaml`
+- Validation guide: `docs/agents/repo-validation.md`
+- Architecture notes: `docs/agents/repo-architecture.md`
 - English: `docs/agents/supabase-branching.md`
 - Chinese: `docs/agents/supabase-branching_CN.md`

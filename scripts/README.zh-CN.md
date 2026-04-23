@@ -1,3 +1,31 @@
+---
+title: Scripts
+docType: guide
+scope: repo
+status: active
+authoritative: false
+owner: database-engine
+language: zh-CN
+whenToUse:
+  - 当任务涉及 schema-workspace 辅助脚本时
+  - 当你需要确认 workspace 刷新或 migration 生成的支持命令面时
+whenToUpdate:
+  - 当脚本入口、支持的 source path 形态或 workspace 刷新行为变化时
+checkPaths:
+  - scripts/README.zh-CN.md
+  - scripts/**
+  - supabase/workspace/**
+  - docs/agents/repo-architecture.md
+lastReviewedAt: 2026-04-23
+lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
+related:
+  - ../AGENTS.md
+  - ../.docpact/config.yaml
+  - ../docs/agents/repo-architecture.md
+  - ../docs/agents/repo-validation.md
+  - README.md
+---
+
 # Scripts
 
 这个目录包含用于远程 schema 导出、workspace 刷新、修改复制和 migration 生成的命令行脚本。
