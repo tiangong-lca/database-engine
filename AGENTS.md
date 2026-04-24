@@ -30,8 +30,8 @@ checkPaths:
   - docs/agents/**
   - .github/workflows/**
   - .env.supabase*.example
-lastReviewedAt: 2026-04-23
-lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
+lastReviewedAt: 2026-04-24
+lastReviewedCommit: 9cbf95369a7786d2b15e2787b46462ebbee42cc1
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
