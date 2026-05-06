@@ -198,11 +198,9 @@ rules:
         kind: repo-landing
     requiredDocs:
       - path: AGENTS.md
-        mode: review_or_update
-      - path: README.md
-        mode: review_or_update
-      - path: README.zh-CN.md
-        mode: review_or_update
+        mode: must_exist
+      - path: .docpact/config.yaml
+        mode: must_exist
     reason: Repo landing docs should stay aligned with the current repo contract and AI entry surface.
   - id: database-engine-branch-config-and-automation
     scope: repo
