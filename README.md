@@ -1,31 +1,3 @@
----
-title: database-engine
-docType: overview
-scope: repo
-status: active
-authoritative: false
-owner: database-engine
-language: en
-whenToUse:
-  - when you need the shortest high-level description of what this repo owns
-  - when landing in the repo without needing the full AI contract surface yet
-whenToUpdate:
-  - when repo purpose, branch model, or owned surfaces change
-  - when the AI entry surface listed here changes
-checkPaths:
-  - README.md
-  - AGENTS.md
-  - .docpact/config.yaml
-  - docs/agents/**
-lastReviewedAt: 2026-04-23
-lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
-related:
-  - AGENTS.md
-  - .docpact/config.yaml
-  - docs/agents/repo-validation.md
-  - docs/agents/repo-architecture.md
----
-
 # database-engine
 
 `database-engine` is the Supabase database governance repository for the TianGong LCA workspace.
