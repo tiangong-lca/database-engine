@@ -25,8 +25,8 @@ checkPaths:
   - scripts/**
   - .github/workflows/supabase-dev.yml
   - .github/workflows/ai-doc-lint.yml
-lastReviewedAt: 2026-05-06
-lastReviewedCommit: f05cdcc2ff7181046692baf8f08ace36d6daeda7
+lastReviewedAt: 2026-05-07
+lastReviewedCommit: 76656f62ad96b10fe8bc6676344c5c8320ea2f31
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(44);
+select plan(51);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -508,6 +508,50 @@ values
     '[{"key":0,"id":"53000000-0000-0000-0000-000000000205"}]'::jsonb
   ),
   (
+    '32000000-0000-0000-0000-000000000207',
+    '01.00.000',
+    '{
+      "processDataSet": {
+        "processInformation": {
+          "dataSetInformation": {
+            "name": {
+              "baseName": [
+                { "@xml:lang": "en", "#text": "Draft Reject Mismatch Process" }
+              ]
+            }
+          }
+        },
+        "modellingAndValidation": {
+          "validation": { "review": [] },
+          "complianceDeclarations": { "compliance": [] }
+        }
+      }
+    }'::jsonb,
+    '{
+      "processDataSet": {
+        "processInformation": {
+          "dataSetInformation": {
+            "name": {
+              "baseName": [
+                { "@xml:lang": "en", "#text": "Draft Reject Mismatch Process" }
+              ]
+            }
+          }
+        },
+        "modellingAndValidation": {
+          "validation": { "review": [] },
+          "complianceDeclarations": { "compliance": [] }
+        }
+      }
+    }'::json,
+    '12000000-0000-0000-0000-000000000001',
+    0,
+    '22000000-0000-0000-0000-000000000001',
+    '42000000-0000-0000-0000-000000000207',
+    true,
+    '[{"key":0,"id":"53000000-0000-0000-0000-000000000207"}]'::jsonb
+  ),
+  (
     '32000000-0000-0000-0000-000000000301',
     '01.00.000',
     '{
@@ -907,6 +951,34 @@ values
     '["12000000-0000-0000-0000-000000000011"]'::jsonb,
     '{
       "data": { "id": "32000000-0000-0000-0000-000000000205", "version": "01.00.000" },
+      "team": { "id": "22000000-0000-0000-0000-000000000001", "name": "Review Team" },
+      "user": { "id": "12000000-0000-0000-0000-000000000001", "name": "Review Owner", "email": "review-owner@example.com" },
+      "comment": { "message": "" },
+      "logs": []
+    }'::jsonb
+  ),
+  (
+    '53000000-0000-0000-0000-000000000206',
+    '32000000-0000-0000-0000-000000000206',
+    '01.00.000',
+    1,
+    '["12000000-0000-0000-0000-000000000011"]'::jsonb,
+    '{
+      "data": { "id": "32000000-0000-0000-0000-000000000206", "version": "01.00.000" },
+      "team": { "id": "22000000-0000-0000-0000-000000000001", "name": "Review Team" },
+      "user": { "id": "12000000-0000-0000-0000-000000000001", "name": "Review Owner", "email": "review-owner@example.com" },
+      "comment": { "message": "" },
+      "logs": []
+    }'::jsonb
+  ),
+  (
+    '53000000-0000-0000-0000-000000000207',
+    '32000000-0000-0000-0000-000000000207',
+    '01.00.000',
+    1,
+    '["12000000-0000-0000-0000-000000000011"]'::jsonb,
+    '{
+      "data": { "id": "32000000-0000-0000-0000-000000000207", "version": "01.00.000" },
       "team": { "id": "22000000-0000-0000-0000-000000000001", "name": "Review Team" },
       "user": { "id": "12000000-0000-0000-0000-000000000001", "name": "Review Owner", "email": "review-owner@example.com" },
       "comment": { "message": "" },
@@ -1382,6 +1454,46 @@ select is(
 select is(
   public.cmd_review_reject(
     'processes',
+    '53000000-0000-0000-0000-000000000206',
+    'Missing root dataset',
+    '{"command":"review_reject"}'::jsonb
+  )->>'code',
+  'REVIEW_ROOT_TARGET_NOT_FOUND',
+  'review reject fails when the root dataset is not collected'
+);
+
+select is(
+  (select state_code::text from public.reviews where id = '53000000-0000-0000-0000-000000000206'),
+  '1',
+  'failed reject for a missing root dataset leaves the review state unchanged'
+);
+
+select is(
+  public.cmd_review_reject(
+    'processes',
+    '53000000-0000-0000-0000-000000000207',
+    'Root is already draft',
+    '{"command":"review_reject"}'::jsonb
+  )->>'code',
+  'REVIEW_ROOT_STATE_MISMATCH',
+  'review reject fails when an active review root dataset is not under review'
+);
+
+select is(
+  (select state_code::text from public.processes where id = '32000000-0000-0000-0000-000000000207' and version = '01.00.000'),
+  '0',
+  'failed reject for a draft root dataset leaves the root dataset state unchanged'
+);
+
+select is(
+  (select state_code::text from public.reviews where id = '53000000-0000-0000-0000-000000000207'),
+  '1',
+  'failed reject for a draft root dataset leaves the review state unchanged'
+);
+
+select is(
+  public.cmd_review_reject(
+    'processes',
     '53000000-0000-0000-0000-000000000204',
     'Needs more evidence',
     '{"command":"review_reject"}'::jsonb
@@ -1400,6 +1512,32 @@ select is(
   (select state_code::text from public.reviews where id = '53000000-0000-0000-0000-000000000204'),
   '-1',
   'rejecting a review marks the review row as rejected'
+);
+
+select is(
+  (
+    select payload->>'collected_targets_count'
+    from public.command_audit_log
+    where command = 'cmd_review_reject'
+      and target_id = '53000000-0000-0000-0000-000000000204'
+    order by created_at desc
+    limit 1
+  ),
+  '1',
+  'successful review reject audit records the collected target count'
+);
+
+select is(
+  (
+    select payload->>'rollback_targets_count'
+    from public.command_audit_log
+    where command = 'cmd_review_reject'
+      and target_id = '53000000-0000-0000-0000-000000000204'
+    order by created_at desc
+    limit 1
+  ),
+  '1',
+  'successful review reject audit records the rollback target count'
 );
 
 select is(
