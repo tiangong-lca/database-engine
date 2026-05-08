@@ -16,8 +16,11 @@ checkPaths:
   - scripts/**
   - supabase/workspace/**
   - docs/agents/repo-architecture.md
-lastReviewedAt: 2026-04-23
-lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
+  - .githooks/pre-push
+  - scripts/docpact-gate.sh
+  - scripts/install-git-hooks.sh
+lastReviewedAt: 2026-05-08
+lastReviewedCommit: 099def790221c0e7c2cba0456b4bf157d915f019
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -144,3 +147,7 @@ Not currently supported:
 Internal shared module used by the scripts above.
 
 It is not intended to be the primary entry point for routine command-line use.
+
+## Local Docpact Push Gate
+
+The repository now includes a local pre-push docpact gate in `scripts/docpact-gate.sh`. It is documentation-governance tooling and does not change database schema workspace behavior.
