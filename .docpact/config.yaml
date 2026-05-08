@@ -1,7 +1,7 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-04-24"
-lastReviewedCommit: "9cbf95369a7786d2b15e2787b46462ebbee42cc1"
+lastReviewedAt: 2026-05-08
+lastReviewedCommit: 099def790221c0e7c2cba0456b4bf157d915f019
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -49,8 +49,19 @@ ownership:
           - supabase/workspace/**
       ownerRepo: database-engine
 
+    - id: local-docpact-push-gate
+      paths:
+        include:
+          - .githooks/**
+          - scripts/docpact-gate.sh
+          - scripts/install-git-hooks.sh
+      ownerRepo: database-engine
+
 coverage:
   include:
+    - .githooks/**
+    - scripts/docpact-gate.sh
+    - scripts/install-git-hooks.sh
     - AGENTS.md
     - README.md
     - README.zh-CN.md
@@ -85,6 +96,11 @@ freshness:
 
 routing:
   intents:
+    local-docpact-gate:
+      paths:
+        - .githooks/pre-push
+        - scripts/docpact-gate.sh
+        - scripts/install-git-hooks.sh
     migration-and-rpc:
       paths:
         - supabase/migrations/**
@@ -294,3 +310,19 @@ rules:
       - path: docs/agents/repo-validation.md
         mode: review_or_update
     reason: Repo-local documentation maintenance automation must stay aligned with the repo contract and governed-doc rules.
+  - id: database-engine-local-docpact-push-gate
+    scope: repo
+    repo: database-engine
+    triggers:
+      - path: .githooks/pre-push
+        kind: local-git-hook
+      - path: scripts/docpact-gate.sh
+        kind: local-automation
+      - path: scripts/install-git-hooks.sh
+        kind: local-automation
+    requiredDocs:
+      - path: .docpact/config.yaml
+        mode: review_or_update
+      - path: docs/agents/repo-validation.md
+        mode: review_or_update
+    reason: Local push documentation governance gates must stay aligned with repo validation guidance and docpact configuration.
