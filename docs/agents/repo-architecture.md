@@ -23,8 +23,11 @@ checkPaths:
   - supabase/workspace/**
   - scripts/**
   - .github/workflows/supabase-dev.yml
-lastReviewedAt: 2026-05-06
-lastReviewedCommit: f05cdcc2ff7181046692baf8f08ace36d6daeda7
+  - .githooks/pre-push
+  - scripts/docpact-gate.sh
+  - scripts/install-git-hooks.sh
+lastReviewedAt: 2026-05-08
+lastReviewedCommit: 099def790221c0e7c2cba0456b4bf157d915f019
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -115,3 +118,7 @@ If a task changes both schema and app behavior, the SQL truth still starts here.
 - generated workspace files are not the durable schema source of truth
 - GitHub default branch does not define the daily trunk
 - a merged child PR does not finish workspace delivery
+
+## Local Docpact Push Gate
+
+This repository has a versioned local `pre-push` hook under `.githooks/pre-push` that delegates to `scripts/docpact-gate.sh`. The hook is a local developer guard for docpact config validation and enforced doc-governance linting; CI remains the authoritative PR enforcement path.

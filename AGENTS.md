@@ -30,8 +30,11 @@ checkPaths:
   - docs/agents/**
   - .github/workflows/**
   - .env.supabase*.example
-lastReviewedAt: 2026-05-06
-lastReviewedCommit: f05cdcc2ff7181046692baf8f08ace36d6daeda7
+  - .githooks/**
+  - scripts/docpact-gate.sh
+  - scripts/install-git-hooks.sh
+lastReviewedAt: 2026-05-08
+lastReviewedCommit: 099def790221c0e7c2cba0456b4bf157d915f019
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -179,3 +182,13 @@ If the change must ship through the workspace:
 3. update the `lca-workspace` submodule pointer deliberately
 
 For normal root `main` integration, `lca-workspace/main` should point only at commits already promoted onto `database-engine/main`.
+
+## Local Docpact Push Gate
+
+Install the versioned local hook once per checkout:
+
+```bash
+./scripts/install-git-hooks.sh
+```
+
+The `pre-push` hook runs `scripts/docpact-gate.sh`, which performs strict config validation and `docpact lint --mode enforce` before the push leaves the machine. The default comparison base is `origin/dev` for routine branches and `origin/main` for promote or hotfix branches. Override it for unusual stacks with `DOCPACT_BASE_REF=<ref>` or `scripts/docpact-gate.sh --base <ref>`. The gate writes its detailed report to a temporary file so normal pushes do not create `.docpact/runs/` artifacts.
