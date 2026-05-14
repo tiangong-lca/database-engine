@@ -20,8 +20,8 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-04-23
-lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
+lastReviewedAt: 2026-05-14
+lastReviewedCommit: 5c0152c65b2e9afaf433817d6794d0da705f435d
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -118,6 +118,30 @@ Repository configuration expected by `.github/workflows/supabase-dev.yml`:
 - variable `SUPABASE_DEV_PROJECT_ID`
 - secret `SUPABASE_ACCESS_TOKEN`
 - secret `SUPABASE_DEV_DB_PASSWORD`
+
+## PR to Supabase migration path
+
+Committed migration files do not affect any remote database until one of the
+deployment paths below runs.
+
+Normal PR path:
+
+1. A feature branch includes new files under `supabase/migrations/`.
+2. The PR targets Git `dev`.
+3. Supabase GitHub integration creates or updates the PR preview branch from
+   the checked-in `supabase/` directory.
+4. The preview branch is PR-scoped proof only; it is not the persistent
+   Supabase `dev` branch.
+5. After the PR merges, the resulting push to Git `dev` triggers
+   `.github/workflows/supabase-dev.yml`.
+6. The workflow links to `SUPABASE_DEV_PROJECT_ID` and runs `supabase db push`.
+7. Pending checked-in migrations are then applied to the persistent Supabase
+   `dev` branch.
+
+This repository currently has no checked-in manual `workflow_dispatch` deploy
+for Supabase. An operator can still run `supabase link` and `supabase db push`
+locally, but that is a deliberate manual deployment path and must be recorded
+as such in validation or incident notes.
 
 ## Vault secret contract
 
