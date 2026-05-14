@@ -20,8 +20,8 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-04-23
-lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
+lastReviewedAt: 2026-05-14
+lastReviewedCommit: 5c0152c65b2e9afaf433817d6794d0da705f435d
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -118,6 +118,23 @@ related:
 - variable `SUPABASE_DEV_PROJECT_ID`
 - secret `SUPABASE_ACCESS_TOKEN`
 - secret `SUPABASE_DEV_DB_PASSWORD`
+
+## PR 到 Supabase migration 路径
+
+已提交的 migration 文件不会因为文件存在就影响远端数据库，只有下面这些部署路径运行后才会生效。
+
+常规 PR 路径：
+
+1. feature 分支包含新的 `supabase/migrations/` 文件。
+2. PR 目标分支是 Git `dev`。
+3. Supabase GitHub integration 根据已提交的 `supabase/` 目录创建或更新该 PR 的 preview branch。
+4. preview branch 只用于 PR 级别验证；它不是持久化 Supabase `dev` 分支。
+5. PR 合并后，对 Git `dev` 的 push 会触发 `.github/workflows/supabase-dev.yml`。
+6. 该 workflow 会连接 `SUPABASE_DEV_PROJECT_ID` 并执行 `supabase db push`。
+7. 尚未应用的已提交 migrations 随后才会应用到持久化 Supabase `dev` 分支。
+
+本仓目前没有 checked-in 的手动 `workflow_dispatch` Supabase 部署流程。运维人员仍可在本地执行
+`supabase link` 和 `supabase db push`，但这是明确的人工部署路径，必须在验证记录或事故记录中说明。
 
 ## Vault secret 契约
 
