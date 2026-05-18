@@ -20,8 +20,8 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-05-14
-lastReviewedCommit: 5c0152c65b2e9afaf433817d6794d0da705f435d
+lastReviewedAt: 2026-05-18
+lastReviewedCommit: 181511dbc6a2e084ad01016df64708453b6b10f5
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
