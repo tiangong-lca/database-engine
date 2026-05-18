@@ -33,8 +33,8 @@ checkPaths:
   - .githooks/**
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-05-14
-lastReviewedCommit: 5c0152c65b2e9afaf433817d6794d0da705f435d
+lastReviewedAt: 2026-05-18
+lastReviewedCommit: 3dc752e9d8a8a322a3bd823308dae50e3cc4b657
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
