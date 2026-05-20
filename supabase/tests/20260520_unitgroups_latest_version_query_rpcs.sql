@@ -44,6 +44,8 @@ values
   ('26000000-0000-0000-0000-000000000046', '{"name":"Latest Unitgroup Team A"}'::jsonb, 1, false),
   ('26000000-0000-0000-0000-000000000047', '{"name":"Latest Unitgroup Team B"}'::jsonb, 2, false);
 
+alter table public.unitgroups disable trigger "unitgroups_json_sync_trigger";
+
 insert into public.unitgroups (
   id,
   version,
