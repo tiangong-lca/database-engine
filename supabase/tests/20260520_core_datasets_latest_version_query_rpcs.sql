@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(31);
+select plan(33);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -343,6 +343,16 @@ select is(
 select ok(
   to_regclass('public.flows_public_latest_keys_cover_idx') is not null,
   'flow open-data latest-version key scan has a partial covering index'
+);
+
+select ok(
+  to_regclass('public.flows_public_json_pgroonga_idx') is not null,
+  'flow open-data latest PGroonga search has a partial JSON index'
+);
+
+select ok(
+  strpos(pg_get_functiondef('public.pgroonga_search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'JOIN LATERAL') > 0,
+  'flow open-data latest PGroonga search fetches latest versions with lateral index lookups'
 );
 
 select ok(
