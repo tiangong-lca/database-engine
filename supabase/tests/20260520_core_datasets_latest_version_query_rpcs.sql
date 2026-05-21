@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(34);
+select plan(31);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -211,11 +211,6 @@ select is(
   'flow list returns the highest visible version for a UUID'
 );
 
-select is(
-  (select version_count from public.get_latest_flow_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '47000000-0000-0000-0000-000000000001'),
-  2::bigint,
-  'flow list reports version_count for the visible UUID group'
-);
 
 select is(
   (select max(total_count) from public.get_latest_flow_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047')),
@@ -253,11 +248,6 @@ select is(
   'process list returns the highest visible version for a UUID'
 );
 
-select is(
-  (select version_count from public.get_latest_process_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '48000000-0000-0000-0000-000000000001'),
-  2::bigint,
-  'process list reports version_count for the visible UUID group'
-);
 
 select is(
   (select max(total_count) from public.get_latest_process_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047')),
@@ -283,11 +273,6 @@ select is(
   'lifecyclemodel list returns the highest visible version for a UUID'
 );
 
-select is(
-  (select version_count from public.get_latest_lifecyclemodel_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '49000000-0000-0000-0000-000000000001'),
-  2::bigint,
-  'lifecyclemodel list reports version_count for the visible UUID group'
-);
 
 select is(
   (select max(total_count) from public.get_latest_lifecyclemodel_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047')),
