@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(23);
+select plan(25);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -221,6 +221,18 @@ select is(
   (select max(total_count) from public.get_latest_flow_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047')),
   2::bigint,
   'flow list total_count counts unique UUIDs'
+);
+
+select is(
+  (select version::text from public.get_latest_flow_versions(10, 1, 'my', '16000000-0000-0000-0000-000000000047') where id = '47000000-0000-0000-0000-000000000001'),
+  '01.00.002',
+  'flow my data list returns the highest user-owned version for a UUID'
+);
+
+select is(
+  (select max(total_count) from public.get_latest_flow_versions(10, 1, 'my', '16000000-0000-0000-0000-000000000047')),
+  2::bigint,
+  'flow my data list total_count counts user-owned unique UUIDs'
 );
 
 select is(

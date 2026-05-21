@@ -65,6 +65,119 @@ BEGIN
   END IF;
   filter_condition_jsonb := filter_condition_jsonb - 'classification';
 
+  IF filter_condition_jsonb = '{}'::jsonb
+    AND flow_type IS NULL
+    AND as_input IS NULL
+    AND jsonb_array_length(classification_filter) = 0
+  THEN
+    RETURN QUERY
+      WITH visible_keys AS (
+        SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
+        FROM public.flows f
+        WHERE data_source = 'tg'
+          AND f.state_code = 100
+          AND (team_id_filter IS NULL OR f.team_id = team_id_filter)
+        UNION ALL
+        SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
+        FROM public.flows f
+        WHERE data_source = 'co'
+          AND f.state_code = 200
+          AND (team_id_filter IS NULL OR f.team_id = team_id_filter)
+        UNION ALL
+        SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
+        FROM public.flows f
+        WHERE data_source = 'my'
+          AND normalized_this_user_id IS NOT NULL
+          AND f.user_id = normalized_this_user_id
+          AND (state_code_filter IS NULL OR f.state_code = state_code_filter)
+        UNION ALL
+        SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
+        FROM public.flows f
+        WHERE data_source = 'te'
+          AND team_id_filter IS NOT NULL
+          AND f.team_id = team_id_filter
+          AND (state_code_filter IS NULL OR f.state_code = state_code_filter)
+      ),
+      latest_keys AS (
+        SELECT DISTINCT ON (visible_keys.id)
+          visible_keys.id,
+          visible_keys.version,
+          visible_keys.created_at,
+          visible_keys.modified_at,
+          visible_keys.team_id
+        FROM visible_keys
+        ORDER BY visible_keys.id, visible_keys.version DESC, visible_keys.modified_at DESC
+      ),
+      counted_keys AS (
+        SELECT latest_keys.*, count(*) OVER()::bigint AS total_count
+        FROM latest_keys
+      ),
+      paged_keys AS (
+        SELECT counted_keys.*
+        FROM counted_keys
+        ORDER BY
+          CASE
+            WHEN normalized_sort_by = 'version' AND normalized_sort_direction = 'asc' THEN counted_keys.version
+          END ASC NULLS LAST,
+          CASE
+            WHEN normalized_sort_by = 'version' AND normalized_sort_direction <> 'asc' THEN counted_keys.version
+          END DESC NULLS LAST,
+          CASE
+            WHEN normalized_sort_by = 'created_at' AND normalized_sort_direction = 'asc' THEN counted_keys.created_at
+          END ASC NULLS LAST,
+          CASE
+            WHEN normalized_sort_by = 'created_at' AND normalized_sort_direction <> 'asc' THEN counted_keys.created_at
+          END DESC NULLS LAST,
+          CASE
+            WHEN normalized_sort_by = 'modified_at' AND normalized_sort_direction = 'asc' THEN counted_keys.modified_at
+          END ASC NULLS LAST,
+          CASE
+            WHEN normalized_sort_by = 'modified_at' AND normalized_sort_direction <> 'asc' THEN counted_keys.modified_at
+          END DESC NULLS LAST,
+          counted_keys.id
+        LIMIT normalized_page_size
+        OFFSET (normalized_page_current - 1) * normalized_page_size
+      )
+      SELECT
+        payload.id,
+        payload.json,
+        payload.version,
+        payload.modified_at,
+        payload.team_id,
+        page_version_counts.version_count,
+        paged_keys.total_count
+      FROM paged_keys
+      JOIN public.flows payload
+        ON payload.id = paged_keys.id
+       AND payload.version = paged_keys.version
+      JOIN LATERAL (
+        SELECT count(*)::bigint AS version_count
+        FROM visible_keys
+        WHERE visible_keys.id = paged_keys.id
+      ) page_version_counts ON true
+      ORDER BY
+        CASE
+          WHEN normalized_sort_by = 'version' AND normalized_sort_direction = 'asc' THEN paged_keys.version
+        END ASC NULLS LAST,
+        CASE
+          WHEN normalized_sort_by = 'version' AND normalized_sort_direction <> 'asc' THEN paged_keys.version
+        END DESC NULLS LAST,
+        CASE
+          WHEN normalized_sort_by = 'created_at' AND normalized_sort_direction = 'asc' THEN paged_keys.created_at
+        END ASC NULLS LAST,
+        CASE
+          WHEN normalized_sort_by = 'created_at' AND normalized_sort_direction <> 'asc' THEN paged_keys.created_at
+        END DESC NULLS LAST,
+        CASE
+          WHEN normalized_sort_by = 'modified_at' AND normalized_sort_direction = 'asc' THEN paged_keys.modified_at
+        END ASC NULLS LAST,
+        CASE
+          WHEN normalized_sort_by = 'modified_at' AND normalized_sort_direction <> 'asc' THEN paged_keys.modified_at
+        END DESC NULLS LAST,
+        paged_keys.id;
+    RETURN;
+  END IF;
+
   RETURN QUERY
     WITH visible_rows AS (
       SELECT f.*
