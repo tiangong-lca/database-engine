@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(15);
+select plan(25);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -224,6 +224,18 @@ select is(
 );
 
 select is(
+  (select version::text from public.get_latest_flow_versions(10, 1, 'my', '16000000-0000-0000-0000-000000000047') where id = '47000000-0000-0000-0000-000000000001'),
+  '01.00.002',
+  'flow my data list returns the highest user-owned version for a UUID'
+);
+
+select is(
+  (select max(total_count) from public.get_latest_flow_versions(10, 1, 'my', '16000000-0000-0000-0000-000000000047')),
+  2::bigint,
+  'flow my data list total_count counts user-owned unique UUIDs'
+);
+
+select is(
   (select version::text from public.pgroonga_search_flows_latest('legacy-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '47000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'flow PGroonga search can match an older version while returning the highest visible version'
@@ -293,6 +305,54 @@ select is(
   (select version::text from public.hybrid_search_lifecyclemodels('legacy-lifecycle-token', (select value from latest_zero_embedding), '{}', 0.1, 20, 0.3, 0.2, 0.5, 10, 'tg', 10, 1) where id = '49000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'lifecyclemodel hybrid search returns the highest visible version for a matching UUID'
+);
+
+select is(
+  (select version::text from public.get_latest_process_versions(10, 1, 'my', '16000000-0000-0000-0000-000000000047') where id = '48000000-0000-0000-0000-000000000001'),
+  '01.00.002',
+  'process my data list returns the highest user-owned version for a UUID'
+);
+
+select is(
+  (select max(total_count) from public.get_latest_process_versions(10, 1, 'my', '16000000-0000-0000-0000-000000000047')),
+  2::bigint,
+  'process my data list total_count counts user-owned unique UUIDs'
+);
+
+select is(
+  strpos(pg_get_functiondef('public.get_latest_flow_versions(bigint,bigint,text,text,uuid,integer,jsonb,text,text)'::regprocedure), 'user_id::text = this_user_id'),
+  0,
+  'flow latest list does not cast user_id on the my-data predicate'
+);
+
+select is(
+  strpos(pg_get_functiondef('public.get_latest_process_versions(bigint,bigint,text,text,uuid,integer,text,text,text)'::regprocedure), 'user_id::text = this_user_id'),
+  0,
+  'process latest list does not cast user_id on the my-data predicate'
+);
+
+select is(
+  strpos(pg_get_functiondef('public.get_latest_lifecyclemodel_versions(bigint,bigint,text,text,uuid,integer,text,text)'::regprocedure), 'user_id::text = this_user_id'),
+  0,
+  'lifecyclemodel latest list does not cast user_id on the my-data predicate'
+);
+
+select is(
+  strpos(pg_get_functiondef('public.pgroonga_search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'user_id::text = this_user_id'),
+  0,
+  'flow latest search does not cast user_id on the my-data predicate'
+);
+
+select is(
+  strpos(pg_get_functiondef('public.pgroonga_search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'user_id::text = this_user_id'),
+  0,
+  'process latest search does not cast user_id on the my-data predicate'
+);
+
+select is(
+  strpos(pg_get_functiondef('public.pgroonga_search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'user_id::text = this_user_id'),
+  0,
+  'lifecyclemodel latest search does not cast user_id on the my-data predicate'
 );
 
 select * from finish();
