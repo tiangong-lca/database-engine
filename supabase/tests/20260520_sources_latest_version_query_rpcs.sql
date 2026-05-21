@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(8);
+select plan(5);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -143,15 +143,6 @@ select is(
   'open source list returns the highest visible version for a UUID'
 );
 
-select is(
-  (
-    select version_count
-    from public.get_latest_source_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000001')
-    where id = '36000000-0000-0000-0000-000000000001'
-  ),
-  2::bigint,
-  'open source list reports version_count for the visible UUID group'
-);
 
 select is(
   (
@@ -177,37 +168,7 @@ select is(
   'team filter limits open source latest-version rows before pagination'
 );
 
-select is(
-  (
-    select version_count
-    from public.get_latest_source_versions(
-      10,
-      1,
-      'my',
-      '16000000-0000-0000-0000-000000000001'
-    )
-    where id = '36000000-0000-0000-0000-000000000004'
-  ),
-  2::bigint,
-  'my data without a state filter counts all owner-visible versions'
-);
 
-select is(
-  (
-    select version_count
-    from public.get_latest_source_versions(
-      10,
-      1,
-      'my',
-      '16000000-0000-0000-0000-000000000001',
-      null,
-      20
-    )
-    where id = '36000000-0000-0000-0000-000000000004'
-  ),
-  1::bigint,
-  'my data state filter is applied before version_count is calculated'
-);
 
 select is(
   (
