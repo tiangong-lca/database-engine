@@ -24,10 +24,11 @@ checkPaths:
   - scripts/**
   - .github/workflows/supabase-dev.yml
   - .githooks/pre-push
+  - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-05-18
-lastReviewedCommit: 9b0c7f2d41057d9eecf2fa0adad2a9055ca8ee32
+lastReviewedAt: 2026-05-21
+lastReviewedCommit: f7c400dbbdf4f834286520d405687199a0c451f1
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -121,4 +122,4 @@ If a task changes both schema and app behavior, the SQL truth still starts here.
 
 ## Local Docpact Push Gate
 
-This repository has a versioned local `pre-push` hook under `.githooks/pre-push` that delegates to `scripts/docpact-gate.sh`. The hook is a local developer guard for docpact config validation and enforced doc-governance linting; CI remains the authoritative PR enforcement path.
+This repository has a versioned local `pre-push` hook under `.githooks/pre-push` that delegates to `scripts/docpact-gate.sh`. The gate resolves the CLI through `scripts/docpact`, so local agent shells do not need bare `docpact` on `PATH`. The hook is a local developer guard for docpact config validation and enforced doc-governance linting; CI remains the authoritative PR enforcement path.
