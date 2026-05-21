@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(29);
+select plan(34);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -361,6 +361,16 @@ select ok(
 );
 
 select ok(
+  to_regclass('public.processes_public_latest_keys_cover_idx') is not null,
+  'process open-data latest-version key scan has a partial covering index'
+);
+
+select ok(
+  to_regclass('public.lifecyclemodels_public_latest_keys_cover_idx') is not null,
+  'lifecyclemodel open-data latest-version key scan has a partial covering index'
+);
+
+select ok(
   exists (
     select 1
     from pg_proc p
@@ -391,6 +401,39 @@ select ok(
       and cfg = 'statement_timeout=60s'
   ),
   'lifecyclemodel latest list has a function-level timeout budget'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    cross join unnest(p.proconfig) cfg
+    where p.oid = 'public.pgroonga_search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure
+      and cfg = 'statement_timeout=60s'
+  ),
+  'flow latest PGroonga search has a function-level timeout budget'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    cross join unnest(p.proconfig) cfg
+    where p.oid = 'public.pgroonga_search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure
+      and cfg = 'statement_timeout=60s'
+  ),
+  'process latest PGroonga search has a function-level timeout budget'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    cross join unnest(p.proconfig) cfg
+    where p.oid = 'public.pgroonga_search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure
+      and cfg = 'statement_timeout=60s'
+  ),
+  'lifecyclemodel latest PGroonga search has a function-level timeout budget'
 );
 
 select * from finish();
