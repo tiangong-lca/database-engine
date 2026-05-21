@@ -17,6 +17,7 @@ checkPaths:
   - supabase/workspace/**
   - docs/agents/repo-architecture.md
   - .githooks/pre-push
+  - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-05-08
@@ -150,4 +151,4 @@ python scripts/new_migration.py --name "update policy roles update" --source-pat
 
 ## Local Docpact Push Gate
 
-The repository now includes a local pre-push docpact gate in `scripts/docpact-gate.sh`. It is documentation-governance tooling and does not change database schema workspace behavior.
+The repository now includes a local pre-push docpact gate in `scripts/docpact-gate.sh`. The gate resolves the CLI through `scripts/docpact`. It is documentation-governance tooling and does not change database schema workspace behavior.
