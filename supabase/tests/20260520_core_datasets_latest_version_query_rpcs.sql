@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(33);
+select plan(37);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -47,6 +47,7 @@ create temporary table latest_zero_embedding (value text) on commit drop;
 insert into latest_zero_embedding (value)
 select '[' || string_agg('0', ',') || ']'
 from generate_series(1, 1024);
+grant select on latest_zero_embedding to authenticated;
 
 alter table public.flows disable trigger "flows_json_sync_trigger";
 alter table public.processes disable trigger "processes_json_sync_trigger";
@@ -358,6 +359,26 @@ select ok(
 select ok(
   to_regclass('public.processes_public_latest_keys_cover_idx') is not null,
   'process open-data latest-version key scan has a partial covering index'
+);
+
+select ok(
+  to_regclass('public.processes_public_json_pgroonga_idx') is not null,
+  'process open-data latest PGroonga search has a partial JSON index'
+);
+
+select ok(
+  to_regclass('public.processes_co_json_pgroonga_idx') is not null,
+  'process collaborative latest PGroonga search has a partial JSON index'
+);
+
+select ok(
+  strpos(pg_get_functiondef('public.pgroonga_search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'JOIN LATERAL') > 0,
+  'process latest PGroonga search fetches latest versions with lateral index lookups'
+);
+
+select ok(
+  strpos(pg_get_functiondef('public.pgroonga_search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'p.json &@~ query_text') > 0,
+  'process latest PGroonga search keeps full-text matching for query_text'
 );
 
 select ok(
