@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(5);
+select plan(11);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -203,6 +203,43 @@ select is(
   ),
   1::bigint,
   'search total_count counts matching UUIDs after grouping'
+);
+
+select is(
+  strpos(pg_get_functiondef('public.pgroonga_search_flowproperties_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'user_id::text = this_user_id'),
+  0,
+  'flow property latest search does not cast user_id on the my-data predicate'
+);
+
+select ok(
+  to_regclass('public.flowproperties_public_json_pgroonga_idx') is not null,
+  'flow property open-data latest PGroonga search has a partial JSON index'
+);
+
+select ok(
+  to_regclass('public.flowproperties_co_json_pgroonga_idx') is not null,
+  'flow property collaborative latest PGroonga search has a partial JSON index'
+);
+
+select ok(
+  strpos(pg_get_functiondef('public.pgroonga_search_flowproperties_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'JOIN LATERAL') > 0,
+  'flow property latest PGroonga search fetches latest versions with lateral index lookups'
+);
+
+select ok(
+  strpos(pg_get_functiondef('public.pgroonga_search_flowproperties_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'f.json &@~ query_text') > 0,
+  'flow property latest PGroonga search keeps full-text matching for query_text'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    cross join unnest(p.proconfig) cfg
+    where p.oid = 'public.pgroonga_search_flowproperties_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure
+      and cfg = 'statement_timeout=60s'
+  ),
+  'flow property latest PGroonga search has a function-level timeout budget'
 );
 
 select * from finish();

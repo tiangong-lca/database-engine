@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(5);
+select plan(11);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -43,6 +43,8 @@ insert into public.teams (id, json, rank, is_public)
 values
   ('27000000-0000-0000-0000-000000000001', '{"name":"Latest Contact Team A"}'::jsonb, 1, false),
   ('27000000-0000-0000-0000-000000000002', '{"name":"Latest Contact Team B"}'::jsonb, 2, false);
+
+alter table public.contacts disable trigger "contacts_json_sync_trigger";
 
 insert into public.contacts (
   id,
@@ -201,6 +203,43 @@ select is(
   ),
   1::bigint,
   'search total_count counts matching UUIDs after grouping'
+);
+
+select is(
+  strpos(pg_get_functiondef('public.pgroonga_search_contacts_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'user_id::text = this_user_id'),
+  0,
+  'contact latest search does not cast user_id on the my-data predicate'
+);
+
+select ok(
+  to_regclass('public.contacts_public_json_pgroonga_idx') is not null,
+  'contact open-data latest PGroonga search has a partial JSON index'
+);
+
+select ok(
+  to_regclass('public.contacts_co_json_pgroonga_idx') is not null,
+  'contact collaborative latest PGroonga search has a partial JSON index'
+);
+
+select ok(
+  strpos(pg_get_functiondef('public.pgroonga_search_contacts_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'JOIN LATERAL') > 0,
+  'contact latest PGroonga search fetches latest versions with lateral index lookups'
+);
+
+select ok(
+  strpos(pg_get_functiondef('public.pgroonga_search_contacts_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'f.json &@~ query_text') > 0,
+  'contact latest PGroonga search keeps full-text matching for query_text'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_proc p
+    cross join unnest(p.proconfig) cfg
+    where p.oid = 'public.pgroonga_search_contacts_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure
+      and cfg = 'statement_timeout=60s'
+  ),
+  'contact latest PGroonga search has a function-level timeout budget'
 );
 
 select * from finish();
