@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(37);
+select plan(45);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -52,6 +52,12 @@ grant select on latest_zero_embedding to authenticated;
 alter table public.flows disable trigger "flows_json_sync_trigger";
 alter table public.processes disable trigger "processes_json_sync_trigger";
 alter table public.lifecyclemodels disable trigger "lifecyclemodels_json_sync_trigger";
+alter table public.flows disable trigger "flow_extract_md_trigger_insert";
+alter table public.flows disable trigger "flow_extract_text_trigger_insert";
+alter table public.processes disable trigger "process_extract_md_trigger_insert";
+alter table public.processes disable trigger "process_extract_text_trigger_insert";
+alter table public.lifecyclemodels disable trigger "lifecyclemodel_extract_md_trigger_insert";
+alter table public.lifecyclemodels disable trigger "lifecyclemodels_extract_text_trigger_insert";
 
 insert into public.flows (
   id,
@@ -238,6 +244,12 @@ select is(
 );
 
 select is(
+  (select version::text from public.pgroonga_search_flows_latest('legacy-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', '16000000-0000-0000-0000-000000000047') where id = '47000000-0000-0000-0000-000000000001'),
+  '01.00.002',
+  'flow my-data PGroonga search can match an older version while returning the highest user-owned version'
+);
+
+select is(
   (select version::text from public.hybrid_search_flows('legacy-flow-token', (select value from latest_zero_embedding), '{}', 0.1, 20, 0.3, 0.2, 0.5, 10, 'tg', 10, 1) where id = '47000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'flow hybrid search returns the highest visible version for a matching UUID'
@@ -285,6 +297,12 @@ select is(
   (select version::text from public.pgroonga_search_lifecyclemodels_latest('legacy-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '49000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'lifecyclemodel PGroonga search can match an older version while returning the highest visible version'
+);
+
+select is(
+  (select version::text from public.pgroonga_search_lifecyclemodels_latest('legacy-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', '16000000-0000-0000-0000-000000000047') where id = '49000000-0000-0000-0000-000000000001'),
+  '01.00.002',
+  'lifecyclemodel my-data PGroonga search can match an older version while returning the highest user-owned version'
 );
 
 select is(
@@ -352,8 +370,18 @@ select ok(
 );
 
 select ok(
+  to_regclass('public.flows_co_json_pgroonga_idx') is not null,
+  'flow collaborative latest PGroonga search has a partial JSON index'
+);
+
+select ok(
   strpos(pg_get_functiondef('public.pgroonga_search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'JOIN LATERAL') > 0,
   'flow open-data latest PGroonga search fetches latest versions with lateral index lookups'
+);
+
+select ok(
+  strpos(pg_get_functiondef('public.pgroonga_search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'f.json &@~ query_text') > 0,
+  'flow latest PGroonga search keeps full-text matching for query_text'
 );
 
 select ok(
@@ -384,6 +412,26 @@ select ok(
 select ok(
   to_regclass('public.lifecyclemodels_public_latest_keys_cover_idx') is not null,
   'lifecyclemodel open-data latest-version key scan has a partial covering index'
+);
+
+select ok(
+  to_regclass('public.lifecyclemodels_public_json_pgroonga_idx') is not null,
+  'lifecyclemodel open-data latest PGroonga search has a partial JSON index'
+);
+
+select ok(
+  to_regclass('public.lifecyclemodels_co_json_pgroonga_idx') is not null,
+  'lifecyclemodel collaborative latest PGroonga search has a partial JSON index'
+);
+
+select ok(
+  strpos(pg_get_functiondef('public.pgroonga_search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'JOIN LATERAL') > 0,
+  'lifecyclemodel latest PGroonga search fetches latest versions with lateral index lookups'
+);
+
+select ok(
+  strpos(pg_get_functiondef('public.pgroonga_search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'l.json &@~ query_text') > 0,
+  'lifecyclemodel latest PGroonga search keeps full-text matching for query_text'
 );
 
 select ok(
