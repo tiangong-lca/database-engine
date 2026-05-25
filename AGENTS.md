@@ -126,6 +126,7 @@ At a human-readable level, this repo owns:
 - `supabase/seed.sql`
 - `supabase/seeds/**`
 - `supabase/tests/**`
+- database-side review-submit gate state and final submit-review assertion RPCs
 - `scripts/**` for schema export, workspace refresh, change copying, and migration generation
 - `.github/workflows/supabase-dev.yml`
 - `.env.supabase.dev.local.example`
@@ -134,12 +135,14 @@ At a human-readable level, this repo owns:
 
 This repo does not own:
 
+- calculator numeric-stability heuristics or report generation
 - frontend runtime env selection or app-side Supabase clients
 - Edge Function runtime code
 - workspace submodule pointer bumps or delivery completion
 
 Route those tasks to:
 
+- `tiangong-lca-calculator` for numeric-stability checks and calculator report semantics
 - `tiangong-lca-next` for frontend envs and app-side Supabase integration
 - `tiangong-lca-edge-functions` for Edge Function runtime behavior
 - `lca-workspace` for root integration after merge
