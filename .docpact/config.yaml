@@ -110,6 +110,13 @@ routing:
         - supabase/seed.sql
         - supabase/seeds/**
         - supabase/tests/**
+    review-submit-gate:
+      paths:
+        - supabase/migrations/*review_submit_gate*.sql
+        - supabase/tests/*review_submit_gate*.sql
+        - supabase/tests/*review_submit_rpc*.sql
+        - docs/agents/repo-validation.md
+        - docs/agents/repo-architecture.md
     branch-config:
       paths:
         - supabase/config.toml
@@ -263,6 +270,26 @@ rules:
       - path: docs/agents/repo-architecture.md
         mode: review_or_update
     reason: Schema and seed changes affect authoring routes, source-of-truth boundaries, and minimum proof expectations.
+  - id: database-engine-review-submit-gate-contract
+    scope: repo
+    repo: database-engine
+    triggers:
+      - path: supabase/migrations/*review_submit_gate*.sql
+        kind: db-schema
+      - path: supabase/tests/*review_submit_gate*.sql
+        kind: db-test
+      - path: supabase/tests/*review_submit_rpc*.sql
+        kind: db-test
+    requiredDocs:
+      - path: AGENTS.md
+        mode: review_or_update
+      - path: .docpact/config.yaml
+        mode: review_or_update
+      - path: docs/agents/repo-validation.md
+        mode: review_or_update
+      - path: docs/agents/repo-architecture.md
+        mode: review_or_update
+    reason: Review-submit gate storage and final submit assertions define the database boundary for calculator, Edge API, and UI integration.
   - id: database-engine-sql-tests-contract
     scope: repo
     repo: database-engine
