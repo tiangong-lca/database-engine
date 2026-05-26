@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(9);
+select plan(12);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -152,6 +152,106 @@ select is(
     'rule_verification', false
   )::text,
   'cmd_dataset_create persists version, owner, and rule_verification'
+);
+
+select is(
+  public.cmd_dataset_create(
+    'sources',
+    '94000000-0000-0000-0000-000000000010',
+    '{
+      "sourceDataSet": {
+        "sourceInformation": {
+          "dataSetInformation": {
+            "common:shortName": [
+              {
+                "@xml:lang": "en",
+                "#text": "created-source"
+              }
+            ]
+          }
+        }
+      }
+    }'::jsonb,
+    null,
+    true,
+    '{"command":"dataset_create"}'::jsonb
+  )->>'ok',
+  'true',
+  'dataset owner can create a source dataset through cmd_dataset_create'
+);
+
+select is(
+  public.cmd_dataset_create(
+    'unitgroups',
+    '94000000-0000-0000-0000-000000000011',
+    '{
+      "unitGroupDataSet": {
+        "unitGroupInformation": {
+          "dataSetInformation": {
+            "common:name": [
+              {
+                "@xml:lang": "en",
+                "#text": "created-unit-group"
+              }
+            ]
+          },
+          "quantitativeReference": {
+            "referenceToReferenceUnit": "u1"
+          }
+        },
+        "units": {
+          "unit": [
+            {
+              "@dataSetInternalID": "u1",
+              "name": "kg"
+            }
+          ]
+        }
+      }
+    }'::jsonb,
+    null,
+    true,
+    '{"command":"dataset_create"}'::jsonb
+  )->>'ok',
+  'true',
+  'dataset owner can create a unit group dataset through cmd_dataset_create'
+);
+
+select is(
+  public.cmd_dataset_create(
+    'flowproperties',
+    '94000000-0000-0000-0000-000000000012',
+    '{
+      "flowPropertyDataSet": {
+        "flowPropertiesInformation": {
+          "dataSetInformation": {
+            "common:name": [
+              {
+                "@xml:lang": "en",
+                "#text": "created-flow-property"
+              }
+            ]
+          },
+          "quantitativeReference": {
+            "referenceToReferenceUnitGroup": "u1"
+          }
+        },
+        "units": {
+          "unit": [
+            {
+              "@dataSetInternalID": "u1",
+              "name": "kg"
+            }
+          ]
+        }
+      }
+    }'::jsonb,
+    null,
+    true,
+    '{"command":"dataset_create"}'::jsonb
+  )->>'ok',
+  'true',
+  'dataset owner can create a flow property dataset through cmd_dataset_create'
 );
 
 select is(
