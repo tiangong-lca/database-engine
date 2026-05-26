@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(45);
+select plan(54);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -287,6 +287,12 @@ select is(
 );
 
 select is(
+  (select version::text from public.search_flows_latest('legacy-flow-token', '{"search":"legacy-flow-token"}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '47000000-0000-0000-0000-000000000001'),
+  '01.00.002',
+  'flow latest search keeps non-empty JSON filters while returning the highest visible version'
+);
+
+select is(
   (select version::text from public.hybrid_search_flows('legacy-flow-token', (select value from latest_zero_embedding), '{}', 0.1, 20, 0.3, 0.2, 0.5, 10, 'tg', 10, 1) where id = '47000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'flow hybrid search returns the highest visible version for a matching UUID'
@@ -309,6 +315,12 @@ select is(
   (select version::text from public.pgroonga_search_processes_latest('legacy-process-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '48000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'process PGroonga search can match an older version while returning the highest visible version'
+);
+
+select is(
+  (select version::text from public.search_processes_latest('legacy-process-token', '{"search":"legacy-process-token"}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047', null, null, 'all') where id = '48000000-0000-0000-0000-000000000001'),
+  '01.00.002',
+  'process latest search keeps non-empty JSON filters while returning the highest visible version'
 );
 
 select is(
@@ -340,6 +352,12 @@ select is(
   (select version::text from public.pgroonga_search_lifecyclemodels_latest('legacy-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', '16000000-0000-0000-0000-000000000047') where id = '49000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'lifecyclemodel my-data PGroonga search can match an older version while returning the highest user-owned version'
+);
+
+select is(
+  (select version::text from public.search_lifecyclemodels_latest('legacy-lifecycle-token', '{"search":"legacy-lifecycle-token"}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '49000000-0000-0000-0000-000000000001'),
+  '01.00.002',
+  'lifecyclemodel latest search keeps non-empty JSON filters while returning the highest visible version'
 );
 
 select is(
@@ -417,8 +435,18 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'f.extracted_text &@~ query_text') > 0,
+  strpos(pg_get_functiondef('public.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'f.extracted_text &@~ $1') > 0,
   'flow latest PGroonga search matches query_text against extracted_text'
+);
+
+select ok(
+  strpos(pg_get_functiondef('public.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'json_filter_clause') > 0,
+  'flow latest PGroonga search branches on empty JSON filters'
+);
+
+select ok(
+  strpos(pg_get_functiondef('public.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'and f.json @> $2') > 0,
+  'flow latest PGroonga search only keeps JSON containment for non-empty filters'
 );
 
 select ok(
@@ -442,8 +470,18 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'p.extracted_text &@~ query_text') > 0,
+  strpos(pg_get_functiondef('public.search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'p.extracted_text &@~ $1') > 0,
   'process latest PGroonga search matches query_text against extracted_text'
+);
+
+select ok(
+  strpos(pg_get_functiondef('public.search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'json_filter_clause') > 0,
+  'process latest PGroonga search branches on empty JSON filters'
+);
+
+select ok(
+  strpos(pg_get_functiondef('public.search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'and p.json @> $2') > 0,
+  'process latest PGroonga search only keeps JSON containment for non-empty filters'
 );
 
 select ok(
@@ -469,6 +507,16 @@ select ok(
 select ok(
   strpos(pg_get_functiondef('public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'd.extracted_text &@~ $1') > 0,
   'lifecyclemodel latest PGroonga search matches query_text against extracted_text'
+);
+
+select ok(
+  strpos(pg_get_functiondef('public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'json_filter_clause') > 0,
+  'simple dataset latest PGroonga search branches on empty JSON filters'
+);
+
+select ok(
+  strpos(pg_get_functiondef('public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'and d.json @> $2') > 0,
+  'simple dataset latest PGroonga search only keeps JSON containment for non-empty filters'
 );
 
 select ok(
