@@ -52,8 +52,33 @@ grant select on latest_zero_embedding to authenticated;
 alter table public.flows disable trigger "flows_json_sync_trigger";
 alter table public.processes disable trigger "processes_json_sync_trigger";
 alter table public.lifecyclemodels disable trigger "lifecyclemodels_json_sync_trigger";
-alter table public.flows disable trigger "flow_extract_md_trigger_insert";
-alter table public.flows disable trigger "flow_extract_text_trigger_insert";
+do $$
+begin
+  if exists (
+    select 1 from pg_trigger
+    where tgrelid = 'public.flows'::regclass
+      and tgname = 'flow_extract_md_trigger_insert'
+  ) then
+    alter table public.flows disable trigger "flow_extract_md_trigger_insert";
+  end if;
+
+  if exists (
+    select 1 from pg_trigger
+    where tgrelid = 'public.flows'::regclass
+      and tgname = 'flow_extract_text_trigger_insert'
+  ) then
+    alter table public.flows disable trigger "flow_extract_text_trigger_insert";
+  end if;
+
+  if exists (
+    select 1 from pg_trigger
+    where tgrelid = 'public.flows'::regclass
+      and tgname = 'flow_dataset_extraction_trigger_insert'
+  ) then
+    alter table public.flows disable trigger "flow_dataset_extraction_trigger_insert";
+  end if;
+end
+$$;
 alter table public.processes disable trigger "process_extract_md_trigger_insert";
 alter table public.processes disable trigger "process_extract_text_trigger_insert";
 alter table public.lifecyclemodels disable trigger "lifecyclemodel_extract_md_trigger_insert";
