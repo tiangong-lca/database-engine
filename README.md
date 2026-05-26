@@ -65,6 +65,20 @@ Copy them to `.env.supabase.dev.local` or `.env.supabase.main.local` for local-o
 Those real `.local` files are ignored by Git because they may contain remote database passwords.
 Frontend runtime env files stay in `tiangong-lca-next`.
 
+## Embedding queue operations
+
+Bulk imports can defer embedding queue fan-out through `util.embedding_queue_policy`.
+
+Minimal operator sequence:
+
+1. Set the target policy to `deferred`, for example `public / flows / embedding_ft / embedding_ft`.
+2. Run the bulk import.
+3. Confirm pending work in `util.pending_embedding_jobs`.
+4. Enqueue backfill in bounded batches with `select util.enqueue_pending_embeddings(<limit>, 'public', 'flows', 'embedding_ft', 'embedding_ft');`.
+5. Return the policy to `normal` after the queue is draining safely.
+
+Use `paused` only as a stopgap when no new backfill should be enqueued. Jobs that exceed retry policy are recorded in `util.embedding_job_failures`.
+
 ## Docs
 
 - AI entrypoint: `AGENTS.md`
