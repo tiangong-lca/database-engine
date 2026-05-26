@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(19);
+select plan(24);
 
 do $$
 begin
@@ -17,6 +17,13 @@ $$;
 
 delete from pgmq.q_dataset_extraction_jobs;
 delete from util.dataset_extraction_job_failures;
+delete from vault.secrets where name = 'project_secret_key';
+
+select vault.create_secret(
+  'test-dataset-extraction-service-key',
+  'project_secret_key',
+  'pgTAP dataset extraction service auth'
+);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -271,6 +278,60 @@ select is(
   0,
   'acked dataset extraction jobs are removed from the live queue'
 );
+
+set local role service_role;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
+select set_config('request.headers', '{"apikey":"wrong-service-key"}', true);
+
+select is(
+  public.cmd_dataset_extraction_claim(1, 300, 5)->>'code',
+  'SERVICE_ROLE_REQUIRED',
+  'dataset extraction RPCs reject non-service request context'
+);
+
+select set_config('request.jwt.claim.role', '', true);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select set_config('request.headers', '{}', true);
+
+select is(
+  public.cmd_dataset_extraction_ack(array[]::bigint[])->>'ok',
+  'true',
+  'dataset extraction RPCs accept service_role in request.jwt.claims'
+);
+
+select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
+select set_config('request.headers', '{"apikey":"test-dataset-extraction-service-key"}', true);
+
+select is(
+  public.cmd_dataset_extraction_claim(1, 300, 5)->>'ok',
+  'true',
+  'dataset extraction RPCs accept project_secret_key apikey headers'
+);
+
+select set_config('request.headers', '{"authorization":"Bearer test-dataset-extraction-service-key"}', true);
+
+select is(
+  public.cmd_dataset_extraction_ack(array[]::bigint[])->>'ok',
+  'true',
+  'dataset extraction RPCs accept project_secret_key authorization headers'
+);
+
+select is(
+  public.cmd_dataset_extraction_record_failure(
+    999001,
+    1,
+    'service auth smoke',
+    '{"schema":"public","table":"flows"}'::jsonb,
+    'test failure',
+    false
+  )->>'ok',
+  'true',
+  'dataset extraction failure RPC accepts project_secret_key headers'
+);
+
+reset role;
+delete from util.dataset_extraction_job_failures where msg_id = 999001;
 
 select pgmq.send(
   queue_name => 'dataset_extraction_jobs',

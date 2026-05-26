@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-05-26
-lastReviewedCommit: e4c1a46ab3d22d84dc860893fb06e3de319cde49
+lastReviewedCommit: 876fe9b0b20dc192caa15ee5ba375f3e857b8f9d
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
