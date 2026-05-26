@@ -212,23 +212,25 @@ select is(
 );
 
 select ok(
-  to_regclass('public.sources_public_json_pgroonga_idx') is not null,
-  'source open-data latest PGroonga search has a partial JSON index'
+  to_regclass('public.sources_text_pgroonga') is not null,
+  'source latest PGroonga search has an extracted_text index'
 );
 
 select ok(
-  to_regclass('public.sources_co_json_pgroonga_idx') is not null,
-  'source collaborative latest PGroonga search has a partial JSON index'
+  to_regclass('public.sources_json_pgroonga') is null
+    and to_regclass('public.sources_public_json_pgroonga_idx') is null
+    and to_regclass('public.sources_co_json_pgroonga_idx') is null,
+  'source latest search no longer keeps JSON PGroonga indexes'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.pgroonga_search_sources_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'JOIN LATERAL') > 0,
+  strpos(pg_get_functiondef('public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'join lateral') > 0,
   'source latest PGroonga search fetches latest versions with lateral index lookups'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.pgroonga_search_sources_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'f.json &@~ query_text') > 0,
-  'source latest PGroonga search keeps full-text matching for query_text'
+  strpos(pg_get_functiondef('public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'd.extracted_text &@~ $1') > 0,
+  'source latest PGroonga search matches query_text against extracted_text'
 );
 
 select ok(

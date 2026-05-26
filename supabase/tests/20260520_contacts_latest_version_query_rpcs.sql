@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(11);
+select plan(12);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -132,6 +132,45 @@ values
     now() - interval '1 hour'
   );
 
+set local role service_role;
+
+insert into public.contacts (
+  id,
+  version,
+  json,
+  json_ordered,
+  user_id,
+  state_code,
+  team_id,
+  rule_verification,
+  created_at,
+  modified_at
+)
+values (
+  '37000000-0000-0000-0000-000000000099',
+  '01.00.000',
+  '{"contactDataSet":{"contactInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"en","#text":"Service role trigger contact"}]}}},"search":"service role trigger text"}'::jsonb,
+  '{"contactDataSet":{"contactInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"en","#text":"Service role trigger contact"}]}}},"search":"service role trigger text"}'::json,
+  '17000000-0000-0000-0000-000000000001',
+  0,
+  '27000000-0000-0000-0000-000000000001',
+  true,
+  now(),
+  now()
+);
+
+reset role;
+
+select ok(
+  (
+    select extracted_text
+    from public.contacts
+    where id = '37000000-0000-0000-0000-000000000099'
+      and version = '01.00.000'
+  ) like '%service role trigger text%',
+  'service_role direct contact insert can run the extracted_text trigger'
+);
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '17000000-0000-0000-0000-000000000001', true);
 
@@ -212,23 +251,25 @@ select is(
 );
 
 select ok(
-  to_regclass('public.contacts_public_json_pgroonga_idx') is not null,
-  'contact open-data latest PGroonga search has a partial JSON index'
+  to_regclass('public.contacts_text_pgroonga') is not null,
+  'contact latest PGroonga search has an extracted_text index'
 );
 
 select ok(
-  to_regclass('public.contacts_co_json_pgroonga_idx') is not null,
-  'contact collaborative latest PGroonga search has a partial JSON index'
+  to_regclass('public.contacts_json_pgroonga') is null
+    and to_regclass('public.contacts_public_json_pgroonga_idx') is null
+    and to_regclass('public.contacts_co_json_pgroonga_idx') is null,
+  'contact latest search no longer keeps JSON PGroonga indexes'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.pgroonga_search_contacts_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'JOIN LATERAL') > 0,
+  strpos(pg_get_functiondef('public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'join lateral') > 0,
   'contact latest PGroonga search fetches latest versions with lateral index lookups'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.pgroonga_search_contacts_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'f.json &@~ query_text') > 0,
-  'contact latest PGroonga search keeps full-text matching for query_text'
+  strpos(pg_get_functiondef('public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'd.extracted_text &@~ $1') > 0,
+  'contact latest PGroonga search matches query_text against extracted_text'
 );
 
 select ok(

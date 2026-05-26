@@ -234,6 +234,18 @@ values
     now() - interval '2 days'
   );
 
+update public.flows
+   set extracted_text = json->>'search'
+ where id in ('47000000-0000-0000-0000-000000000001', '47000000-0000-0000-0000-000000000002');
+
+update public.processes
+   set extracted_text = json->>'search'
+ where id in ('48000000-0000-0000-0000-000000000001', '48000000-0000-0000-0000-000000000002');
+
+update public.lifecyclemodels
+   set extracted_text = json->>'search'
+ where id in ('49000000-0000-0000-0000-000000000001', '49000000-0000-0000-0000-000000000002');
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '16000000-0000-0000-0000-000000000047', true);
 
@@ -390,23 +402,23 @@ select ok(
 );
 
 select ok(
-  to_regclass('public.flows_public_json_pgroonga_idx') is not null,
-  'flow open-data latest PGroonga search has a partial JSON index'
+  to_regclass('public.flows_text_pgroonga') is not null,
+  'flow latest PGroonga search keeps the extracted_text index'
 );
 
 select ok(
-  to_regclass('public.flows_co_json_pgroonga_idx') is not null,
-  'flow collaborative latest PGroonga search has a partial JSON index'
+  to_regclass('public.flows_public_json_pgroonga_idx') is null,
+  'flow open-data latest search no longer keeps a partial JSON PGroonga index'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.pgroonga_search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'JOIN LATERAL') > 0,
+  strpos(pg_get_functiondef('public.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'join lateral') > 0,
   'flow open-data latest PGroonga search fetches latest versions with lateral index lookups'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.pgroonga_search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'f.json &@~ query_text') > 0,
-  'flow latest PGroonga search keeps full-text matching for query_text'
+  strpos(pg_get_functiondef('public.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'f.extracted_text &@~ query_text') > 0,
+  'flow latest PGroonga search matches query_text against extracted_text'
 );
 
 select ok(
@@ -415,23 +427,23 @@ select ok(
 );
 
 select ok(
-  to_regclass('public.processes_public_json_pgroonga_idx') is not null,
-  'process open-data latest PGroonga search has a partial JSON index'
+  to_regclass('public.processes_text_pgroonga') is not null,
+  'process latest PGroonga search keeps the extracted_text index'
 );
 
 select ok(
-  to_regclass('public.processes_co_json_pgroonga_idx') is not null,
-  'process collaborative latest PGroonga search has a partial JSON index'
+  to_regclass('public.processes_public_json_pgroonga_idx') is null,
+  'process open-data latest search no longer keeps a partial JSON PGroonga index'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.pgroonga_search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'JOIN LATERAL') > 0,
+  strpos(pg_get_functiondef('public.search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'join lateral') > 0,
   'process latest PGroonga search fetches latest versions with lateral index lookups'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.pgroonga_search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'p.json &@~ query_text') > 0,
-  'process latest PGroonga search keeps full-text matching for query_text'
+  strpos(pg_get_functiondef('public.search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'p.extracted_text &@~ query_text') > 0,
+  'process latest PGroonga search matches query_text against extracted_text'
 );
 
 select ok(
@@ -440,23 +452,23 @@ select ok(
 );
 
 select ok(
-  to_regclass('public.lifecyclemodels_public_json_pgroonga_idx') is not null,
-  'lifecyclemodel open-data latest PGroonga search has a partial JSON index'
+  to_regclass('public.lifecyclemodels_text_pgroonga') is not null,
+  'lifecyclemodel latest PGroonga search keeps the extracted_text index'
 );
 
 select ok(
-  to_regclass('public.lifecyclemodels_co_json_pgroonga_idx') is not null,
-  'lifecyclemodel collaborative latest PGroonga search has a partial JSON index'
+  to_regclass('public.lifecyclemodels_public_json_pgroonga_idx') is null,
+  'lifecyclemodel open-data latest search no longer keeps a partial JSON PGroonga index'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.pgroonga_search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'JOIN LATERAL') > 0,
+  strpos(pg_get_functiondef('public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'join lateral') > 0,
   'lifecyclemodel latest PGroonga search fetches latest versions with lateral index lookups'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.pgroonga_search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'l.json &@~ query_text') > 0,
-  'lifecyclemodel latest PGroonga search keeps full-text matching for query_text'
+  strpos(pg_get_functiondef('public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'd.extracted_text &@~ $1') > 0,
+  'lifecyclemodel latest PGroonga search matches query_text against extracted_text'
 );
 
 select ok(
