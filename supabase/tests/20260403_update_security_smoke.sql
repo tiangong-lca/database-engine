@@ -305,28 +305,37 @@ select is(
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002', true);
 
-update public.contacts
-set json_ordered = '{
-  "contactDataSet": {
-    "administrativeInformation": {
-      "publicationAndOwnership": {
-        "common:dataSetVersion": "01.00.000"
+do $$
+begin
+  begin
+    update public.contacts
+    set json_ordered = '{
+      "contactDataSet": {
+        "administrativeInformation": {
+          "publicationAndOwnership": {
+            "common:dataSetVersion": "01.00.000"
+          }
+        }
+      },
+      "payload": {
+        "name": "draft-b"
       }
-    }
-  },
-  "payload": {
-    "name": "draft-b"
-  }
-}'::json
-where id = '30000000-0000-0000-0000-000000000001'
-  and version = '01.00.000';
+    }'::json
+    where id = '30000000-0000-0000-0000-000000000001'
+      and version = '01.00.000';
+  exception
+    when others then
+      null;
+  end;
+end;
+$$;
 
 reset role;
 
 select is(
   (select jsonb_extract_path_text(json, 'payload', 'name') from public.contacts where id = '30000000-0000-0000-0000-000000000001' and version = '01.00.000'),
-  'draft-b',
-  'draft owner can directly update own draft dataset during transition window'
+  'draft-a',
+  'draft owner cannot directly update raw dataset row after command cutover'
 );
 
 set local role authenticated;

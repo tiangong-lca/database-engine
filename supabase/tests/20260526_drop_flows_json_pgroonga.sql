@@ -11,13 +11,14 @@ select ok(
 );
 
 select ok(
-  to_regclass('public.flows_public_json_pgroonga_idx') is not null,
-  'flow open-data latest search keeps the state_code=100 partial JSON PGroonga index'
+  to_regclass('public.flows_text_pgroonga') is not null,
+  'flow latest search keeps the extracted_text PGroonga index'
 );
 
 select ok(
-  to_regclass('public.flows_co_json_pgroonga_idx') is not null,
-  'flow collaborative latest search keeps the state_code=200 partial JSON PGroonga index'
+  to_regclass('public.flows_public_json_pgroonga_idx') is null
+    and to_regclass('public.flows_co_json_pgroonga_idx') is null,
+  'flow latest search no longer keeps partial JSON PGroonga indexes'
 );
 
 select ok(
