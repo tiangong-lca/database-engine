@@ -83,6 +83,20 @@ related:
 这些真实的 `.local` 文件会被 Git 忽略，因为其中可能包含远程数据库密码。
 前端运行时环境文件应保留在 `tiangong-lca-next` 中。
 
+## Embedding 队列运维
+
+大批量导入可以通过 `util.embedding_queue_policy` 延后 embedding 队列 fan-out。
+
+最短运维顺序：
+
+1. 将目标 policy 设为 `deferred`，例如 `public / flows / embedding_ft / embedding_ft`。
+2. 执行大批量导入。
+3. 在 `util.pending_embedding_jobs` 中确认待处理 embedding 工作。
+4. 使用 `select util.enqueue_pending_embeddings(<limit>, 'public', 'flows', 'embedding_ft', 'embedding_ft');` 小批量回填入队。
+5. 当队列安全 drain 后，将 policy 恢复为 `normal`。
+
+仅在不应继续入队回填时使用 `paused` 作为止血手段。超过重试策略的 job 会记录到 `util.embedding_job_failures`。
+
 ## 文档
 
 - AI 入口：`AGENTS.md`
