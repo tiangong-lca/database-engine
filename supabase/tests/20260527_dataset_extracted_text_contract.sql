@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(16);
+select plan(18);
 
 select ok(
   util.dataset_json_search_text(
@@ -110,6 +110,13 @@ select ok(
   strpos(pg_get_functiondef('util.queue_dataset_extraction_jobs()'::regprocedure), '''extracted_md''') > 0
     and strpos(pg_get_functiondef('util.queue_dataset_extraction_jobs()'::regprocedure), '''extracted_text''') = 0,
   'dataset extraction queue only enqueues markdown extraction jobs'
+);
+
+select ok(
+  has_function_privilege('service_role', 'public.cmd_dataset_extracted_text_backfill(text, integer, uuid, text)', 'execute')
+    and not has_function_privilege('authenticated', 'public.cmd_dataset_extracted_text_backfill(text, integer, uuid, text)', 'execute')
+    and not has_function_privilege('anon', 'public.cmd_dataset_extracted_text_backfill(text, integer, uuid, text)', 'execute'),
+  'dataset extracted_text historical backfill RPC is service-role only'
 );
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -329,6 +336,48 @@ select ok(
     where id = '99000000-0000-0000-0000-000000000088'
   ),
   'lifecyclemodel extracted_text trigger preserves all authored languages'
+);
+
+update public.flows
+   set extracted_text = 'stale extracted text'
+ where id = '97000000-0000-0000-0000-000000000088';
+
+do $$
+declare
+  v_payload jsonb;
+  v_after_id uuid;
+  v_after_version text;
+begin
+  for i in 1..20 loop
+    v_payload := public.cmd_dataset_extracted_text_backfill(
+      'flows',
+      5000,
+      v_after_id,
+      v_after_version
+    );
+    v_after_id := (v_payload->>'last_id')::uuid;
+    v_after_version := v_payload->>'last_version';
+
+    exit when coalesce((v_payload->>'has_more')::boolean, false) is false
+      or exists (
+        select 1
+        from public.flows
+        where id = '97000000-0000-0000-0000-000000000088'
+          and extracted_text ~ '交流电'
+          and extracted_text ~ 'electricity'
+          and extracted_text ~ 'Wechselstrom'
+      );
+  end loop;
+end
+$$;
+
+select ok(
+  (select extracted_text ~ '交流电'
+      and extracted_text ~ 'electricity'
+      and extracted_text ~ 'Wechselstrom'
+   from public.flows
+   where id = '97000000-0000-0000-0000-000000000088'),
+  'dataset extracted_text backfill RPC repairs stale rows in bounded batches'
 );
 
 set local role authenticated;
