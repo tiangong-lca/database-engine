@@ -123,40 +123,89 @@ $$;
 
 alter function util.queue_dataset_extraction_jobs() owner to postgres;
 
-update public.flows as f
-   set extracted_text = util.dataset_json_search_text(f.json)
- where f.json is not null
-   and f.extracted_text is distinct from util.dataset_json_search_text(f.json);
+create or replace function public.cmd_dataset_extracted_text_backfill(
+  p_table text,
+  p_batch_size integer default 1000,
+  p_after_id uuid default null,
+  p_after_version text default null
+) returns jsonb
+language plpgsql
+security definer
+set search_path to ''
+as $$
+declare
+  v_table text := lower(btrim(coalesce(p_table, '')));
+  v_batch_size integer := least(greatest(coalesce(p_batch_size, 1000), 1), 5000);
+  v_scanned_count integer := 0;
+  v_updated_count integer := 0;
+  v_last_id uuid;
+  v_last_version text;
+begin
+  if v_table not in (
+    'flows',
+    'processes',
+    'lifecyclemodels',
+    'contacts',
+    'sources',
+    'unitgroups',
+    'flowproperties'
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'UNSUPPORTED_DATASET_TABLE',
+      'message', format('Unsupported dataset table: %s', coalesce(p_table, '<null>'))
+    );
+  end if;
 
-update public.processes as p
-   set extracted_text = util.dataset_json_search_text(p.json)
- where p.json is not null
-   and p.extracted_text is distinct from util.dataset_json_search_text(p.json);
+  execute format(
+    $sql$
+      with page as (
+        select id, version
+          from public.%I
+         where json is not null
+           and ($1 is null or (id, version) > ($1, coalesce($2, '')::character(9)))
+         order by id, version
+         limit $3
+         for update skip locked
+      ),
+      updated as (
+        update public.%I as dataset
+           set extracted_text = util.dataset_json_search_text(dataset.json)
+          from page
+         where dataset.id = page.id
+           and dataset.version = page.version
+           and dataset.extracted_text is distinct from util.dataset_json_search_text(dataset.json)
+         returning 1
+      )
+      select
+        (select count(*)::integer from page),
+        (select count(*)::integer from updated),
+        (select id from page order by id desc, version desc limit 1),
+        (select version::text from page order by id desc, version desc limit 1)
+    $sql$,
+    v_table,
+    v_table
+  )
+  using p_after_id, p_after_version, v_batch_size
+  into v_scanned_count, v_updated_count, v_last_id, v_last_version;
 
-update public.lifecyclemodels as lm
-   set extracted_text = util.dataset_json_search_text(lm.json)
- where lm.json is not null
-   and lm.extracted_text is distinct from util.dataset_json_search_text(lm.json);
+  return jsonb_build_object(
+    'ok', true,
+    'table', v_table,
+    'scanned_count', v_scanned_count,
+    'updated_count', v_updated_count,
+    'last_id', v_last_id,
+    'last_version', v_last_version,
+    'has_more', v_scanned_count = v_batch_size
+  );
+end;
+$$;
 
-update public.contacts as c
-   set extracted_text = util.dataset_json_search_text(c.json)
- where c.json is not null
-   and c.extracted_text is distinct from util.dataset_json_search_text(c.json);
-
-update public.sources as s
-   set extracted_text = util.dataset_json_search_text(s.json)
- where s.json is not null
-   and s.extracted_text is distinct from util.dataset_json_search_text(s.json);
-
-update public.unitgroups as u
-   set extracted_text = util.dataset_json_search_text(u.json)
- where u.json is not null
-   and u.extracted_text is distinct from util.dataset_json_search_text(u.json);
-
-update public.flowproperties as fp
-   set extracted_text = util.dataset_json_search_text(fp.json)
- where fp.json is not null
-   and fp.extracted_text is distinct from util.dataset_json_search_text(fp.json);
+alter function public.cmd_dataset_extracted_text_backfill(text, integer, uuid, text) owner to postgres;
+revoke all on function public.cmd_dataset_extracted_text_backfill(text, integer, uuid, text) from public;
+revoke all on function public.cmd_dataset_extracted_text_backfill(text, integer, uuid, text) from anon;
+revoke all on function public.cmd_dataset_extracted_text_backfill(text, integer, uuid, text) from authenticated;
+grant execute on function public.cmd_dataset_extracted_text_backfill(text, integer, uuid, text) to service_role;
 
 comment on function util.dataset_json_search_text(jsonb) is
   'Builds deterministic dataset full-text search input from every scalar JSON value, preserving all authored languages without LLM summarization.';
@@ -166,3 +215,6 @@ comment on function util.set_dataset_extracted_text_from_json() is
 
 comment on function util.queue_dataset_extraction_jobs() is
   'Queues compact dataset extraction jobs for asynchronous extracted_md generation without carrying json/json_ordered in the transaction payload.';
+
+comment on function public.cmd_dataset_extracted_text_backfill(text, integer, uuid, text) is
+  'Service-role RPC for bounded historical extracted_text backfill. Call repeatedly with the returned cursor; migrations must not run full-table backfills synchronously.';
