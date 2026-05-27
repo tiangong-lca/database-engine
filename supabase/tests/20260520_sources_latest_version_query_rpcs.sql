@@ -176,7 +176,7 @@ select is(
   (
     select version::text
     from public.pgroonga_search_sources_latest(
-      'legacy unique',
+      'Legacy matched source',
       '{}'::jsonb,
       10,
       1,
@@ -193,7 +193,7 @@ select is(
   (
     select max(total_count)
     from public.pgroonga_search_sources_latest(
-      'legacy unique',
+      'Legacy matched source',
       '{}'::jsonb,
       10,
       1,

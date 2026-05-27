@@ -167,7 +167,7 @@ select ok(
     from public.contacts
     where id = '37000000-0000-0000-0000-000000000099'
       and version = '01.00.000'
-  ) like '%service role trigger text%',
+  ) like '%Service role trigger contact%',
   'service_role direct contact insert can run the extracted_text trigger'
 );
 
@@ -215,7 +215,7 @@ select is(
   (
     select version::text
     from public.pgroonga_search_contacts_latest(
-      'legacy unique',
+      'Legacy matched contact',
       '{}'::jsonb,
       10,
       1,
@@ -232,7 +232,7 @@ select is(
   (
     select max(total_count)
     from public.pgroonga_search_contacts_latest(
-      'legacy unique',
+      'Legacy matched contact',
       '{}'::jsonb,
       10,
       1,

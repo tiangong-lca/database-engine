@@ -176,7 +176,7 @@ select is(
   (
     select version::text
     from public.pgroonga_search_flowproperties_latest(
-      'legacy unique',
+      'Legacy matched flow property',
       '{}'::jsonb,
       10,
       1,
@@ -193,7 +193,7 @@ select is(
   (
     select max(total_count)
     from public.pgroonga_search_flowproperties_latest(
-      'legacy unique',
+      'Legacy matched flow property',
       '{}'::jsonb,
       10,
       1,
