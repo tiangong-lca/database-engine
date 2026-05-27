@@ -3,6 +3,23 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
+create or replace function pg_temp.disable_trigger_if_exists(p_table regclass, p_trigger name)
+returns void
+language plpgsql
+as $$
+begin
+  if exists (
+    select 1
+    from pg_trigger
+    where tgrelid = p_table
+      and tgname = p_trigger
+      and not tgisinternal
+  ) then
+    execute format('alter table %s disable trigger %I', p_table, p_trigger);
+  end if;
+end;
+$$;
+
 select plan(13);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -104,7 +121,7 @@ values (
 alter table public.sources disable trigger "sources_json_sync_trigger";
 alter table public.processes disable trigger "processes_json_sync_trigger";
 alter table public.processes disable trigger "process_extract_md_trigger_insert";
-alter table public.processes disable trigger "process_extract_text_trigger_insert";
+select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_extract_text_trigger_insert');
 
 insert into public.sources (
   id,

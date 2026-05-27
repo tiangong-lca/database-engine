@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(24);
+select plan(25);
 
 do $$
 begin
@@ -86,6 +86,14 @@ select public.cmd_dataset_create(
               {
                 "@xml:lang": "en",
                 "#text": "Dataset extraction test flow"
+              },
+              {
+                "@xml:lang": "zh",
+                "#text": "数据抽取测试流"
+              },
+              {
+                "@xml:lang": "de",
+                "#text": "Datensatz Extraktion Testfluss"
               }
             ]
           }
@@ -139,6 +147,18 @@ select ok(
   'minimal create result does not include heavy json or derived embedding fields'
 );
 
+select ok(
+  (
+    select extracted_text ~ 'Dataset extraction test flow'
+       and extracted_text ~ '数据抽取测试流'
+       and extracted_text ~ 'Datensatz Extraktion Testfluss'
+    from public.flows
+    where id = '97000000-0000-0000-0000-000000000001'
+      and version = '01.00.000'
+  ),
+  'flow create synchronously derives multilingual extracted_text from json'
+);
+
 reset role;
 
 select is(
@@ -146,8 +166,8 @@ select is(
     select count(*)::integer
     from pgmq.q_dataset_extraction_jobs
   ),
-  2,
-  'flow create enqueues two dataset extraction jobs'
+  1,
+  'flow create enqueues one dataset extraction job'
 );
 
 select is(
@@ -168,8 +188,8 @@ select is(
     select string_agg(message->>'extraction_kind', ',' order by message->>'extraction_kind')
     from pgmq.q_dataset_extraction_jobs
   ),
-  'extracted_md,extracted_text',
-  'flow create enqueues extracted_md and extracted_text jobs'
+  'extracted_md',
+  'flow create enqueues only extracted_md jobs'
 );
 
 select is(
@@ -184,7 +204,7 @@ select is(
       'entity_kind', 'flow'
     )
   ),
-  2,
+  1,
   'dataset extraction jobs use compact flow identity payloads'
 );
 
@@ -205,23 +225,28 @@ select is(
     select count(*)::integer
     from pg_trigger
     where tgrelid = 'public.flows'::regclass
-      and tgname in ('flow_extract_md_trigger_update', 'flow_extract_text_trigger_update')
+      and tgname = 'flow_extract_text_trigger_update'
       and not tgisinternal
   ),
-  2,
-  'flow UPDATE extraction triggers remain unchanged in v1'
+  0,
+  'flow UPDATE text extraction webhook trigger is removed'
 );
 
 select is(
   (
     select count(*)::integer
     from pg_trigger
-    where tgrelid = 'public.processes'::regclass
-      and tgname in ('process_extract_md_trigger_insert', 'process_extract_text_trigger_insert')
+    where tgrelid in ('public.processes'::regclass, 'public.lifecyclemodels'::regclass)
+      and tgname in (
+        'process_extract_text_trigger_insert',
+        'process_extract_text_trigger_update',
+        'lifecyclemodels_extract_text_trigger_insert',
+        'lifecyclemodels_extract_text_trigger_update'
+      )
       and not tgisinternal
   ),
-  2,
-  'process INSERT webhook triggers remain for the tracked follow-up'
+  0,
+  'process and lifecyclemodel text extraction webhook triggers are removed'
 );
 
 reset role;
@@ -243,8 +268,8 @@ select is(
 
 select is(
   (select jsonb_array_length(result->'data') from claimed_dataset_extraction_jobs),
-  2,
-  'claim returns both queued flow extraction jobs'
+  1,
+  'claim returns the queued flow markdown extraction job'
 );
 
 select ok(

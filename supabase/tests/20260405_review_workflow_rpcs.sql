@@ -3,6 +3,23 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
+create or replace function pg_temp.disable_trigger_if_exists(p_table regclass, p_trigger name)
+returns void
+language plpgsql
+as $$
+begin
+  if exists (
+    select 1
+    from pg_trigger
+    where tgrelid = p_table
+      and tgname = p_trigger
+      and not tgisinternal
+  ) then
+    execute format('alter table %s disable trigger %I', p_table, p_trigger);
+  end if;
+end;
+$$;
+
 select plan(44);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -121,8 +138,8 @@ alter table public.lifecyclemodels disable trigger "lifecyclemodels_json_sync_tr
 
 alter table public.processes disable trigger "process_extract_md_trigger_insert";
 alter table public.processes disable trigger "process_extract_md_trigger_update";
-alter table public.processes disable trigger "process_extract_text_trigger_insert";
-alter table public.processes disable trigger "process_extract_text_trigger_update";
+select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_extract_text_trigger_insert');
+select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_extract_text_trigger_update');
 do $$
 begin
   if exists (
@@ -151,11 +168,11 @@ begin
 end
 $$;
 alter table public.flows disable trigger "flow_extract_md_trigger_update";
-alter table public.flows disable trigger "flow_extract_text_trigger_update";
+select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flow_extract_text_trigger_update');
 alter table public.lifecyclemodels disable trigger "lifecyclemodel_extract_md_trigger_insert";
 alter table public.lifecyclemodels disable trigger "lifecyclemodel_extract_md_trigger_update";
-alter table public.lifecyclemodels disable trigger "lifecyclemodels_extract_text_trigger_insert";
-alter table public.lifecyclemodels disable trigger "lifecyclemodels_extract_text_trigger_update";
+select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodels_extract_text_trigger_insert');
+select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodels_extract_text_trigger_update');
 
 insert into public.flows (
   id,
