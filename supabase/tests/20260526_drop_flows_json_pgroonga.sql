@@ -48,11 +48,11 @@ select is(
     select count(*)
     from pg_trigger
     where tgrelid = 'public.flows'::regclass
-      and tgname in ('flow_extract_md_trigger_update', 'flow_extract_text_trigger_update')
+      and tgname = 'flow_extract_md_trigger_update'
       and not tgisinternal
   ),
-  2::bigint,
-  'flow json update extraction triggers remain unchanged for the non-insert path'
+  1::bigint,
+  'flow json update keeps only the markdown extraction webhook trigger'
 );
 
 select * from finish();
