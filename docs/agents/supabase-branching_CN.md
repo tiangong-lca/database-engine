@@ -56,8 +56,8 @@ related:
 
 ## 分支契约
 
-- Git `main` -> 生产基线
-- Git `dev` -> 持久化 Supabase `dev` 分支
+- Git `main` -> 生产基线，由 Supabase GitHub integration 自动迁移
+- Git `dev` -> 持久化 Supabase `dev` 分支，由 `.github/workflows/supabase-dev.yml` 迁移
 - PR / feature 分支 -> 由 Supabase GitHub integration 自动创建的 preview branch
 
 规则：
@@ -75,6 +75,7 @@ related:
 - 分支差异放在 `supabase/config.toml` 的 `[remotes.<branch>]` 中。
 - 不要为不同 Git 分支复制多套 `supabase/` 目录。
 - 把 `.github/workflows/supabase-dev.yml` 作为本仓唯一会对持久化 Supabase `dev` 分支执行 `supabase db push` 的 GitHub Actions 流程。
+- 不要为 Git `main` 增加 checked-in 的 GitHub Actions 生产部署流程；生产项目由绑定到本仓的 Supabase GitHub integration 自动迁移。
 - 不要先手改远端数据库再回头补 migration。
 
 ## 需要维护的文件
@@ -113,6 +114,9 @@ related:
 - repository: `tiangong-lca/database-engine`
 - relative path: `supabase`
 
+当 Git `main` 前进时，该 integration 会自动把已提交的 migration 应用到生产项目。
+仓库中没有针对 `main` 的 checked-in GitHub Actions workflow，并不表示生产迁移只能手动执行。
+
 `.github/workflows/supabase-dev.yml` 依赖以下仓库配置：
 
 - variable `SUPABASE_DEV_PROJECT_ID`
@@ -133,8 +137,17 @@ related:
 6. 该 workflow 会连接 `SUPABASE_DEV_PROJECT_ID` 并执行 `supabase db push`。
 7. 尚未应用的已提交 migrations 随后才会应用到持久化 Supabase `dev` 分支。
 
-本仓目前没有 checked-in 的手动 `workflow_dispatch` Supabase 部署流程。运维人员仍可在本地执行
-`supabase link` 和 `supabase db push`，但这是明确的人工部署路径，必须在验证记录或事故记录中说明。
+Promote 路径：
+
+1. `dev -> main` promote PR 合并到 Git `main`。
+2. 生产项目的 Supabase GitHub integration 会读取 Git `main` 中已提交的 `supabase/` 目录。
+3. 尚未应用的已提交 migrations 会自动应用到生产项目。
+4. 运维人员在 promote merge 后验证生产 migration 状态和应用行为。
+
+本仓目前没有 checked-in 的 `workflow_dispatch` 生产 Supabase 部署流程。这是有意设计：
+Git `main` 由 Supabase GitHub integration 处理。运维人员仍可在本地执行
+`supabase link` 和 `supabase db push`，但这只能作为明确的兜底或恢复路径，
+并且必须在验证记录或事故记录中说明。
 
 ## Vault secret 契约
 
@@ -167,12 +180,21 @@ related:
 9. 让 Supabase 为该 PR 自动创建或更新 preview branch。
 10. 合并后，在持久化远端 `dev` 分支验证结果。
 11. 准备发布时，再把 `dev` 晋升到 `main`。
+12. 验证生产 Supabase 项目已经由 Supabase GitHub integration 自动完成迁移。
 
 ### 持久化 `dev` 分支部署
 
 - 对 Git `dev` 的 push 会触发 `.github/workflows/supabase-dev.yml`。
 - 该 workflow 会连接持久化 Supabase `dev` 分支并执行 `supabase db push`。
 - 不要再增加第二条会对同一目标执行 push 的自动化链路。
+
+### 生产 `main` 部署
+
+- 对 Git `main` 的 push 由生产项目的 Supabase GitHub integration 处理。
+- 该 integration 监听 repository `tiangong-lca/database-engine`，relative path 为 `supabase`。
+- 当 `main` 前进时，已提交且尚未应用的 migrations 会自动应用到生产项目。
+- 不要把缺少 checked-in 的 `main` GitHub Actions workflow 理解为需要手动部署。
+- 本地 `supabase db push` 仅作为明确的兜底或恢复路径使用，并需要记录该动作。
 
 ### Hotfix 流程
 

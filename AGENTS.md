@@ -45,7 +45,7 @@ related:
 
 ## Repo Contract
 
-`database-engine` owns the checked-in Supabase database contract for the TianGong LCA workspace: schema truth, migration history, operator branch bindings, database-side tests, and the automation that deploys committed migrations to the persistent Supabase `dev` branch.
+`database-engine` owns the checked-in Supabase database contract for the TianGong LCA workspace: schema truth, migration history, operator branch bindings, database-side tests, the automation that deploys committed migrations to the persistent Supabase `dev` branch, and the production Supabase GitHub integration contract that applies Git `main` migrations.
 
 Start here when the task may change schema truth, branch bindings, generated schema-workspace tooling, repo validation rules, or documentation ownership inside this repo.
 
@@ -112,6 +112,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - migration authoring starts from Git `dev`, not GitHub default-branch UI
 - preview-branch proof belongs to the repo PR
 - persistent `dev` proof belongs after merge into Git `dev`
+- production `main` proof belongs after `dev -> main` promote and should confirm Supabase GitHub integration applied migrations automatically
 - root workspace proof belongs later in `lca-workspace`
 - generated workspace helpers are low-risk to inspect with `python scripts/<name>.py --help`
 
@@ -129,6 +130,7 @@ At a human-readable level, this repo owns:
 - database-side review-submit gate state and final submit-review assertion RPCs
 - `scripts/**` for schema export, workspace refresh, change copying, and migration generation
 - `.github/workflows/supabase-dev.yml`
+- production Supabase GitHub integration contract for Git `main`
 - `.env.supabase.dev.local.example`
 - `.env.supabase.main.local.example`
 - repo-local governance and branching docs
