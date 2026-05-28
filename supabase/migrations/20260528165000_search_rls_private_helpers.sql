@@ -1,0 +1,607 @@
+-- Move high-volume dataset search scans behind table-specific private
+-- security-definer helpers. The public RPC signatures stay unchanged, but the
+-- table reads no longer pay per-row authenticated RLS policy costs.
+
+create schema if not exists private;
+
+revoke all on schema private from public;
+grant usage on schema private to anon, authenticated, service_role;
+alter default privileges for role postgres in schema private revoke execute on functions from public;
+
+create or replace function private.dataset_search_effective_user_id(p_this_user_id text)
+returns uuid
+language plpgsql
+stable
+set search_path to 'public', 'extensions', 'pg_temp'
+as $$
+declare
+  v_actor_id uuid := auth.uid();
+  v_request_role text := nullif(current_setting('request.jwt.claim.role', true), '');
+  v_param_user_id uuid;
+begin
+  if v_actor_id is not null then
+    return v_actor_id;
+  end if;
+
+  if coalesce(v_request_role, '') in ('anon', 'authenticated') then
+    return null::uuid;
+  end if;
+
+  v_param_user_id := case
+    when coalesce(btrim(p_this_user_id) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$', false)
+      then btrim(p_this_user_id)::uuid
+    else null::uuid
+  end;
+
+  return v_param_user_id;
+end;
+$$;
+
+create or replace function private.dataset_search_can_read_team_filter(
+  p_team_id uuid,
+  p_actor_id uuid
+) returns boolean
+language plpgsql
+stable
+security definer
+set search_path to 'public', 'extensions', 'pg_temp'
+as $$
+declare
+  v_request_role text := nullif(current_setting('request.jwt.claim.role', true), '');
+begin
+  if p_team_id is null then
+    return false;
+  end if;
+
+  if coalesce(v_request_role, '') not in ('anon', 'authenticated') then
+    return true;
+  end if;
+
+  if p_actor_id is null then
+    return false;
+  end if;
+
+  return exists (
+    select 1
+    from public.roles r
+    where r.team_id = p_team_id
+      and r.user_id = p_actor_id
+      and r.role::text in ('admin', 'member', 'owner')
+  );
+end;
+$$;
+
+create or replace function private.search_lifecyclemodels_latest_impl(
+  query_text text,
+  filter_condition jsonb default '{}'::jsonb,
+  page_size bigint default 10,
+  page_current bigint default 1,
+  data_source text default 'tg'::text,
+  this_user_id text default ''::text,
+  team_id_filter uuid default null::uuid,
+  state_code_filter integer default null::integer
+) returns table(
+  rank bigint,
+  id uuid,
+  "json" jsonb,
+  version character(9),
+  modified_at timestamp with time zone,
+  team_id uuid,
+  total_count bigint
+)
+language plpgsql
+security definer
+set search_path to 'public', 'extensions', 'pg_temp'
+set statement_timeout to '60s'
+as $$
+declare
+  normalized_page_size bigint;
+  normalized_page_current bigint;
+  normalized_data_source text;
+  effective_user_id uuid;
+  can_read_team_filter boolean;
+  filter_condition_jsonb jsonb;
+  json_filter_clause text;
+  v_sql text;
+begin
+  normalized_page_size := greatest(coalesce(page_size, 10), 1);
+  normalized_page_current := greatest(coalesce(page_current, 1), 1);
+  normalized_data_source := coalesce(nullif(lower(btrim(data_source)), ''), 'tg');
+  effective_user_id := private.dataset_search_effective_user_id(this_user_id);
+  can_read_team_filter := private.dataset_search_can_read_team_filter(team_id_filter, effective_user_id);
+  filter_condition_jsonb := coalesce(filter_condition, '{}'::jsonb);
+  json_filter_clause := case
+    when filter_condition_jsonb = '{}'::jsonb then ''
+    else 'and l.json @> $2'
+  end;
+
+  v_sql := format($sql$
+    with text_matches as materialized (
+      select l.id,
+             l.json,
+             l.state_code,
+             l.team_id,
+             l.user_id,
+             pgroonga_score(l.tableoid, l.ctid) as search_score
+      from public.lifecyclemodels l
+      where l.extracted_text &@~ $1
+    ),
+    matched_ids as (
+      select l.id, max(l.search_score) as search_score
+      from text_matches l
+      where (
+          ($5 = 'tg' and l.state_code = 100 and ($7 is null or l.team_id = $7))
+          or ($5 = 'co' and l.state_code = 200 and ($7 is null or l.team_id = $7))
+          or ($5 = 'my' and $6 is not null and l.user_id = $6 and ($8 is null or l.state_code = $8))
+          or ($5 = 'te' and $7 is not null and $9 and l.team_id = $7 and ($8 is null or l.state_code = $8))
+        )
+        %s
+      group by l.id
+    ),
+    latest_rows as (
+      select matched_ids.id, latest_row.json, latest_row.version, latest_row.modified_at, latest_row.team_id, matched_ids.search_score
+      from matched_ids
+      join lateral (
+        select l2.json, l2.version, l2.modified_at, l2.team_id
+        from public.lifecyclemodels l2
+        where l2.id = matched_ids.id
+          and (
+            ($5 = 'tg' and l2.state_code = 100 and ($7 is null or l2.team_id = $7))
+            or ($5 = 'co' and l2.state_code = 200 and ($7 is null or l2.team_id = $7))
+            or ($5 = 'my' and $6 is not null and l2.user_id = $6 and ($8 is null or l2.state_code = $8))
+            or ($5 = 'te' and $7 is not null and $9 and l2.team_id = $7 and ($8 is null or l2.state_code = $8))
+          )
+        order by l2.version desc, l2.modified_at desc
+        limit 1
+      ) latest_row on true
+    ),
+    counted_rows as (
+      select latest_rows.*, count(*) over()::bigint as total_count
+      from latest_rows
+    ),
+    ranked_rows as (
+      select rank() over (order by counted_rows.search_score desc, counted_rows.modified_at desc, counted_rows.id)::bigint as rank,
+             counted_rows.*
+      from counted_rows
+    )
+    select ranked_rows.rank, ranked_rows.id, ranked_rows.json, ranked_rows.version, ranked_rows.modified_at, ranked_rows.team_id, ranked_rows.total_count
+    from ranked_rows
+    order by ranked_rows.rank, ranked_rows.id
+    limit $3
+    offset ($4 - 1) * $3
+  $sql$, json_filter_clause);
+
+  return query execute v_sql
+    using query_text, filter_condition_jsonb, normalized_page_size, normalized_page_current,
+          normalized_data_source, effective_user_id, team_id_filter, state_code_filter, can_read_team_filter;
+end;
+$$;
+
+create or replace function private.search_processes_latest_impl(
+  query_text text,
+  filter_condition jsonb default '{}'::jsonb,
+  page_size bigint default 10,
+  page_current bigint default 1,
+  data_source text default 'tg'::text,
+  this_user_id text default ''::text,
+  team_id_filter uuid default null::uuid,
+  state_code_filter integer default null::integer,
+  type_of_data_set_filter text default 'all'::text
+) returns table(
+  rank bigint,
+  id uuid,
+  "json" jsonb,
+  version character(9),
+  modified_at timestamp with time zone,
+  team_id uuid,
+  model_id uuid,
+  total_count bigint
+)
+language plpgsql
+security definer
+set search_path to 'public', 'extensions', 'pg_temp'
+set statement_timeout to '60s'
+as $$
+declare
+  normalized_page_size bigint;
+  normalized_page_current bigint;
+  normalized_data_source text;
+  effective_user_id uuid;
+  can_read_team_filter boolean;
+  filter_condition_jsonb jsonb;
+  json_filter_clause text;
+  v_sql text;
+begin
+  normalized_page_size := greatest(coalesce(page_size, 10), 1);
+  normalized_page_current := greatest(coalesce(page_current, 1), 1);
+  normalized_data_source := coalesce(nullif(lower(btrim(data_source)), ''), 'tg');
+  effective_user_id := private.dataset_search_effective_user_id(this_user_id);
+  can_read_team_filter := private.dataset_search_can_read_team_filter(team_id_filter, effective_user_id);
+  filter_condition_jsonb := coalesce(filter_condition, '{}'::jsonb);
+  json_filter_clause := case
+    when filter_condition_jsonb = '{}'::jsonb then ''
+    else 'and p.json @> $2'
+  end;
+
+  v_sql := format($sql$
+    with text_matches as materialized (
+      select p.id,
+             p.json,
+             p.state_code,
+             p.team_id,
+             p.user_id,
+             p.model_id,
+             pgroonga_score(p.tableoid, p.ctid) as search_score
+      from public.processes p
+      where p.extracted_text &@~ $1
+    ),
+    matched_ids as (
+      select p.id, max(p.search_score) as search_score
+      from text_matches p
+      where (
+          ($5 = 'tg' and p.state_code = 100 and ($7 is null or p.team_id = $7))
+          or ($5 = 'co' and p.state_code = 200 and ($7 is null or p.team_id = $7))
+          or ($5 = 'my' and $6 is not null and p.user_id = $6 and ($8 is null or p.state_code = $8))
+          or ($5 = 'te' and $7 is not null and $9 and p.team_id = $7 and ($8 is null or p.state_code = $8))
+        )
+        %s
+        and (
+          coalesce($10, 'all') = 'all'
+          or p.json #>> '{processDataSet,modellingAndValidation,LCIMethodAndAllocation,typeOfDataSet}' = $10
+        )
+      group by p.id
+    ),
+    latest_rows as (
+      select matched_ids.id, latest_row.json, latest_row.version, latest_row.modified_at, latest_row.team_id, latest_row.model_id, matched_ids.search_score
+      from matched_ids
+      join lateral (
+        select p2.json, p2.version, p2.modified_at, p2.team_id, p2.model_id
+        from public.processes p2
+        where p2.id = matched_ids.id
+          and (
+            ($5 = 'tg' and p2.state_code = 100 and ($7 is null or p2.team_id = $7))
+            or ($5 = 'co' and p2.state_code = 200 and ($7 is null or p2.team_id = $7))
+            or ($5 = 'my' and $6 is not null and p2.user_id = $6 and ($8 is null or p2.state_code = $8))
+            or ($5 = 'te' and $7 is not null and $9 and p2.team_id = $7 and ($8 is null or p2.state_code = $8))
+          )
+        order by p2.version desc, p2.modified_at desc
+        limit 1
+      ) latest_row on true
+    ),
+    counted_rows as (
+      select latest_rows.*, count(*) over()::bigint as total_count
+      from latest_rows
+    ),
+    ranked_rows as (
+      select rank() over (order by counted_rows.search_score desc, counted_rows.modified_at desc, counted_rows.id)::bigint as rank,
+             counted_rows.*
+      from counted_rows
+    )
+    select ranked_rows.rank, ranked_rows.id, ranked_rows.json, ranked_rows.version, ranked_rows.modified_at, ranked_rows.team_id, ranked_rows.model_id, ranked_rows.total_count
+    from ranked_rows
+    order by ranked_rows.rank, ranked_rows.id
+    limit $3
+    offset ($4 - 1) * $3
+  $sql$, json_filter_clause);
+
+  return query execute v_sql
+    using query_text, filter_condition_jsonb, normalized_page_size, normalized_page_current,
+          normalized_data_source, effective_user_id, team_id_filter, state_code_filter,
+          can_read_team_filter, type_of_data_set_filter;
+end;
+$$;
+
+create or replace function private.search_flows_latest_impl(
+  query_text text,
+  filter_condition jsonb default '{}'::jsonb,
+  page_size bigint default 10,
+  page_current bigint default 1,
+  data_source text default 'tg'::text,
+  this_user_id text default ''::text,
+  team_id_filter uuid default null::uuid,
+  state_code_filter integer default null::integer
+) returns table(
+  rank bigint,
+  id uuid,
+  "json" jsonb,
+  version character(9),
+  modified_at timestamp with time zone,
+  team_id uuid,
+  total_count bigint
+)
+language plpgsql
+security definer
+set search_path to 'public', 'extensions', 'pg_temp'
+set statement_timeout to '60s'
+as $$
+declare
+  normalized_page_size bigint;
+  normalized_page_current bigint;
+  normalized_data_source text;
+  effective_user_id uuid;
+  can_read_team_filter boolean;
+  filter_condition_jsonb jsonb;
+  flow_type text;
+  flow_type_array text[];
+  as_input boolean;
+  classification_filter jsonb;
+  json_filter_clause text;
+  v_sql text;
+begin
+  normalized_page_size := greatest(coalesce(page_size, 10), 1);
+  normalized_page_current := greatest(coalesce(page_current, 1), 1);
+  normalized_data_source := coalesce(nullif(lower(btrim(data_source)), ''), 'tg');
+  effective_user_id := private.dataset_search_effective_user_id(this_user_id);
+  can_read_team_filter := private.dataset_search_can_read_team_filter(team_id_filter, effective_user_id);
+  filter_condition_jsonb := coalesce(filter_condition, '{}'::jsonb);
+
+  flow_type := nullif(btrim(filter_condition_jsonb->>'flowType'), '');
+  if flow_type is not null then
+    flow_type_array := string_to_array(flow_type, ',');
+  else
+    flow_type_array := null;
+  end if;
+  filter_condition_jsonb := filter_condition_jsonb - 'flowType';
+
+  if filter_condition_jsonb ? 'asInput' then
+    as_input := nullif(btrim(filter_condition_jsonb->>'asInput'), '')::boolean;
+  else
+    as_input := null;
+  end if;
+  filter_condition_jsonb := filter_condition_jsonb - 'asInput';
+
+  if jsonb_typeof(filter_condition_jsonb->'classification') = 'array' then
+    classification_filter := filter_condition_jsonb->'classification';
+  else
+    classification_filter := '[]'::jsonb;
+  end if;
+  filter_condition_jsonb := filter_condition_jsonb - 'classification';
+  json_filter_clause := case
+    when filter_condition_jsonb = '{}'::jsonb then ''
+    else 'and f.json @> $2'
+  end;
+
+  v_sql := format($sql$
+    with text_matches as materialized (
+      select f.id,
+             f.json,
+             f.state_code,
+             f.team_id,
+             f.user_id,
+             pgroonga_score(f.tableoid, f.ctid) as search_score
+      from public.flows f
+      where f.extracted_text &@~ $1
+    ),
+    matched_ids as (
+      select f.id, max(f.search_score) as search_score
+      from text_matches f
+      where (
+          ($5 = 'tg' and f.state_code = 100 and ($7 is null or f.team_id = $7))
+          or ($5 = 'co' and f.state_code = 200 and ($7 is null or f.team_id = $7))
+          or ($5 = 'my' and $6 is not null and f.user_id = $6 and ($8 is null or f.state_code = $8))
+          or ($5 = 'te' and $7 is not null and $9 and f.team_id = $7 and ($8 is null or f.state_code = $8))
+        )
+        %s
+        and (
+          $10 is null
+          or (f.json #>> '{flowDataSet,modellingAndValidation,LCIMethod,typeOfDataSet}') = any($11)
+        )
+        and (
+          $12 is null
+          or $12 = false
+          or not (
+            f.json @> '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"classificationInformation":{"common:elementaryFlowCategorization":{"common:category":[{"#text":"Emissions","@level":"0"}]}}}}}}'
+          )
+        )
+        and (
+          jsonb_array_length($13) = 0
+          or exists (
+            select 1
+            from jsonb_array_elements($13) as selected_class(item)
+            where
+              (
+                selected_class.item->>'scope' = 'elementary'
+                and exists (
+                  select 1
+                  from jsonb_array_elements(
+                    case jsonb_typeof(f.json #> '{flowDataSet,flowInformation,dataSetInformation,classificationInformation,common:elementaryFlowCategorization,common:category}')
+                      when 'array' then f.json #> '{flowDataSet,flowInformation,dataSetInformation,classificationInformation,common:elementaryFlowCategorization,common:category}'
+                      when 'object' then jsonb_build_array(f.json #> '{flowDataSet,flowInformation,dataSetInformation,classificationInformation,common:elementaryFlowCategorization,common:category}')
+                      else '[]'::jsonb
+                    end
+                  ) as category(item)
+                  where category.item->>'@catId' = selected_class.item->>'code'
+                )
+              )
+              or (
+                selected_class.item->>'scope' = 'classification'
+                and exists (
+                  select 1
+                  from jsonb_array_elements(
+                    case jsonb_typeof(f.json #> '{flowDataSet,flowInformation,dataSetInformation,classificationInformation,common:classification,common:class}')
+                      when 'array' then f.json #> '{flowDataSet,flowInformation,dataSetInformation,classificationInformation,common:classification,common:class}'
+                      when 'object' then jsonb_build_array(f.json #> '{flowDataSet,flowInformation,dataSetInformation,classificationInformation,common:classification,common:class}')
+                      else '[]'::jsonb
+                    end
+                  ) as class_item(item)
+                  where class_item.item->>'@classId' = selected_class.item->>'code'
+                )
+              )
+          )
+        )
+      group by f.id
+    ),
+    latest_rows as (
+      select matched_ids.id, latest_row.json, latest_row.version, latest_row.modified_at, latest_row.team_id, matched_ids.search_score
+      from matched_ids
+      join lateral (
+        select f2.json, f2.version, f2.modified_at, f2.team_id
+        from public.flows f2
+        where f2.id = matched_ids.id
+          and (
+            ($5 = 'tg' and f2.state_code = 100 and ($7 is null or f2.team_id = $7))
+            or ($5 = 'co' and f2.state_code = 200 and ($7 is null or f2.team_id = $7))
+            or ($5 = 'my' and $6 is not null and f2.user_id = $6 and ($8 is null or f2.state_code = $8))
+            or ($5 = 'te' and $7 is not null and $9 and f2.team_id = $7 and ($8 is null or f2.state_code = $8))
+          )
+        order by f2.version desc, f2.modified_at desc
+        limit 1
+      ) latest_row on true
+    ),
+    counted_rows as (
+      select latest_rows.*, count(*) over()::bigint as total_count
+      from latest_rows
+    ),
+    ranked_rows as (
+      select rank() over (order by counted_rows.search_score desc, counted_rows.modified_at desc, counted_rows.id)::bigint as rank,
+             counted_rows.*
+      from counted_rows
+    )
+    select ranked_rows.rank, ranked_rows.id, ranked_rows.json, ranked_rows.version, ranked_rows.modified_at, ranked_rows.team_id, ranked_rows.total_count
+    from ranked_rows
+    order by ranked_rows.rank, ranked_rows.id
+    limit $3
+    offset ($4 - 1) * $3
+  $sql$, json_filter_clause);
+
+  return query execute v_sql
+    using query_text, filter_condition_jsonb, normalized_page_size, normalized_page_current,
+          normalized_data_source, effective_user_id, team_id_filter, state_code_filter,
+          can_read_team_filter, flow_type, flow_type_array, as_input, classification_filter;
+end;
+$$;
+
+create or replace function public.search_lifecyclemodels_latest(
+  query_text text,
+  filter_condition jsonb default '{}'::jsonb,
+  order_by jsonb default '{}'::jsonb,
+  page_size bigint default 10,
+  page_current bigint default 1,
+  data_source text default 'tg'::text,
+  this_user_id text default ''::text,
+  team_id_filter uuid default null::uuid,
+  state_code_filter integer default null::integer
+) returns table(rank bigint, id uuid, "json" jsonb, version character(9), modified_at timestamp with time zone, team_id uuid, total_count bigint)
+language plpgsql
+set search_path to 'public', 'extensions', 'pg_temp'
+set statement_timeout to '60s'
+as $$
+begin
+  return query
+    select *
+    from private.search_lifecyclemodels_latest_impl(
+      query_text,
+      filter_condition,
+      page_size,
+      page_current,
+      data_source,
+      this_user_id,
+      team_id_filter,
+      state_code_filter
+    );
+end;
+$$;
+
+create or replace function public.search_processes_latest(
+  query_text text,
+  filter_condition jsonb default '{}'::jsonb,
+  order_by jsonb default '{}'::jsonb,
+  page_size bigint default 10,
+  page_current bigint default 1,
+  data_source text default 'tg'::text,
+  this_user_id text default ''::text,
+  team_id_filter uuid default null::uuid,
+  state_code_filter integer default null::integer,
+  type_of_data_set_filter text default 'all'::text
+) returns table(
+  rank bigint,
+  id uuid,
+  "json" jsonb,
+  version character(9),
+  modified_at timestamp with time zone,
+  team_id uuid,
+  model_id uuid,
+  total_count bigint
+)
+language plpgsql
+set search_path to 'public', 'extensions', 'pg_temp'
+set statement_timeout to '60s'
+as $$
+begin
+  return query
+    select *
+    from private.search_processes_latest_impl(
+      query_text,
+      filter_condition,
+      page_size,
+      page_current,
+      data_source,
+      this_user_id,
+      team_id_filter,
+      state_code_filter,
+      type_of_data_set_filter
+    );
+end;
+$$;
+
+create or replace function public.search_flows_latest(
+  query_text text,
+  filter_condition jsonb default '{}'::jsonb,
+  order_by jsonb default '{}'::jsonb,
+  page_size bigint default 10,
+  page_current bigint default 1,
+  data_source text default 'tg'::text,
+  this_user_id text default ''::text,
+  team_id_filter uuid default null::uuid,
+  state_code_filter integer default null::integer
+) returns table(
+  rank bigint,
+  id uuid,
+  "json" jsonb,
+  version character(9),
+  modified_at timestamp with time zone,
+  team_id uuid,
+  total_count bigint
+)
+language plpgsql
+set search_path to 'public', 'extensions', 'pg_temp'
+set statement_timeout to '60s'
+as $$
+begin
+  return query
+    select *
+    from private.search_flows_latest_impl(
+      query_text,
+      filter_condition,
+      page_size,
+      page_current,
+      data_source,
+      this_user_id,
+      team_id_filter,
+      state_code_filter
+    );
+end;
+$$;
+
+alter function private.dataset_search_effective_user_id(text) owner to postgres;
+alter function private.dataset_search_can_read_team_filter(uuid, uuid) owner to postgres;
+alter function private.search_lifecyclemodels_latest_impl(text, jsonb, bigint, bigint, text, text, uuid, integer) owner to postgres;
+alter function private.search_processes_latest_impl(text, jsonb, bigint, bigint, text, text, uuid, integer, text) owner to postgres;
+alter function private.search_flows_latest_impl(text, jsonb, bigint, bigint, text, text, uuid, integer) owner to postgres;
+alter function public.search_lifecyclemodels_latest(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer) owner to postgres;
+alter function public.search_processes_latest(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer, text) owner to postgres;
+alter function public.search_flows_latest(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer) owner to postgres;
+
+revoke all on function private.dataset_search_effective_user_id(text) from public;
+revoke all on function private.dataset_search_can_read_team_filter(uuid, uuid) from public;
+revoke all on function private.search_lifecyclemodels_latest_impl(text, jsonb, bigint, bigint, text, text, uuid, integer) from public;
+revoke all on function private.search_processes_latest_impl(text, jsonb, bigint, bigint, text, text, uuid, integer, text) from public;
+revoke all on function private.search_flows_latest_impl(text, jsonb, bigint, bigint, text, text, uuid, integer) from public;
+
+grant execute on function private.search_lifecyclemodels_latest_impl(text, jsonb, bigint, bigint, text, text, uuid, integer) to anon, authenticated, service_role;
+grant execute on function private.search_processes_latest_impl(text, jsonb, bigint, bigint, text, text, uuid, integer, text) to anon, authenticated, service_role;
+grant execute on function private.search_flows_latest_impl(text, jsonb, bigint, bigint, text, text, uuid, integer) to anon, authenticated, service_role;
+
+grant all on function public.search_lifecyclemodels_latest(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer) to anon, authenticated, service_role;
+grant all on function public.search_processes_latest(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer, text) to anon, authenticated, service_role;
+grant all on function public.search_flows_latest(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer) to anon, authenticated, service_role;
