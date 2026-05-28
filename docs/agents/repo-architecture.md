@@ -51,7 +51,7 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | `supabase/tests/**` | PGTAP-style regression and access-control assertions |
 | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |
 | `scripts/**` | export, refresh, change-copy, and migration-generation helpers |
-| `.github/workflows/supabase-dev.yml` | only checked-in automation for pushing committed migrations to the persistent remote `dev` branch |
+| `.github/workflows/supabase-dev.yml` | only checked-in GitHub Actions automation for pushing committed migrations to the persistent remote `dev` branch |
 | `supabase/workspace/changes/**` | manual overlay area used when generating migrations from workspace files |
 | `supabase/workspace/remote_schema.sql` | generated full raw dump from the remote database |
 | `supabase/workspace/global/**` | generated split-out global objects rebuilt on workspace refresh |
@@ -65,6 +65,7 @@ This repo is organized around one checked-in Supabase project plus a generated s
 - Git `main` is the promoted release line
 - PR branches map to Supabase preview branches
 - `.github/workflows/supabase-dev.yml` pushes committed migrations to the persistent remote `dev` branch on Git `dev`
+- the production Supabase project is migrated automatically by the Supabase GitHub integration when Git `main` advances
 
 This means branch behavior is part of the repo architecture, not just delivery process.
 
