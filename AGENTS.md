@@ -102,7 +102,7 @@ Do not start from generated schema workspace files, long migration history, or G
 - minimum proof and PR validation note shape live in `docs/agents/repo-validation.md`
 - stable path ownership and generated-workspace rules live in `docs/agents/repo-architecture.md`
 - deeper branch-operation rules live in `docs/agents/supabase-branching.md`
-- repo-local documentation maintenance is enforced by `.github/workflows/ai-doc-lint.yml` with `docpact lint`
+- repo-local documentation maintenance is enforced locally by the pre-push docpact gate; `.github/workflows/ai-doc-lint.yml` is manual-dispatch fallback
 
 ## Minimal Execution Facts
 
