@@ -56,8 +56,8 @@ Those stay in consumer repositories such as `tiangong-lca-next` and `tiangong-lc
 
 ## Branch contract
 
-- Git `main` -> production baseline
-- Git `dev` -> persistent Supabase `dev` branch
+- Git `main` -> production baseline migrated automatically by the Supabase GitHub integration
+- Git `dev` -> persistent Supabase `dev` branch migrated by `.github/workflows/supabase-dev.yml`
 - PR / feature branches -> preview branches created by the Supabase GitHub integration
 
 Rules:
@@ -75,6 +75,7 @@ Rules:
 - Keep branch-specific overrides in `[remotes.<branch>]` inside `supabase/config.toml`.
 - Do not create a separate `supabase/` directory per Git branch.
 - Keep `.github/workflows/supabase-dev.yml` as the only GitHub Actions flow in this repo that runs `supabase db push` for the persistent Supabase `dev` branch.
+- Do not add a checked-in GitHub Actions production deploy for Git `main`; the production project is migrated by the Supabase GitHub integration bound to this repository.
 - Do not author normal schema changes by editing the remote database first and reconstructing migrations later.
 
 ## Files to maintain
@@ -113,6 +114,10 @@ Supabase GitHub integration for the production project must point to:
 - repository: `tiangong-lca/database-engine`
 - relative path: `supabase`
 
+This integration applies committed migrations to the production project automatically
+when Git `main` advances. Absence of a checked-in GitHub Actions workflow for
+`main` does not mean production migration is manual-only.
+
 Repository configuration expected by `.github/workflows/supabase-dev.yml`:
 
 - variable `SUPABASE_DEV_PROJECT_ID`
@@ -138,10 +143,21 @@ Normal PR path:
 7. Pending checked-in migrations are then applied to the persistent Supabase
    `dev` branch.
 
-This repository currently has no checked-in manual `workflow_dispatch` deploy
-for Supabase. An operator can still run `supabase link` and `supabase db push`
-locally, but that is a deliberate manual deployment path and must be recorded
-as such in validation or incident notes.
+Promote path:
+
+1. A `dev -> main` promote PR merges into Git `main`.
+2. The production project's Supabase GitHub integration reads the checked-in
+   `supabase/` directory from Git `main`.
+3. Pending checked-in migrations are applied automatically to the production
+   project.
+4. Operators validate production migration state and application behavior after
+   the promote merge.
+
+This repository currently has no checked-in `workflow_dispatch` production
+deploy for Supabase. That is intentional: Git `main` is handled by the Supabase
+GitHub integration. An operator can still run `supabase link` and
+`supabase db push` locally as an explicit fallback or recovery path, but that
+manual action must be recorded in validation or incident notes.
 
 ## Vault secret contract
 
@@ -174,12 +190,22 @@ Rules:
 9. Let Supabase create or update the preview branch for that PR.
 10. After merge, validate the persistent remote `dev` branch.
 11. Promote `dev` to `main` when ready to release.
+12. Validate that the production Supabase project was migrated automatically by
+    the Supabase GitHub integration.
 
 ### Persistent `dev` branch deployment
 
 - Pushes to Git `dev` trigger `.github/workflows/supabase-dev.yml`.
 - That workflow links to the persistent Supabase `dev` branch and runs `supabase db push`.
 - Do not add a second automation path that pushes the same target.
+
+### Production `main` deployment
+
+- Pushes to Git `main` are handled by the production project's Supabase GitHub integration.
+- The integration watches repository `tiangong-lca/database-engine` with relative path `supabase`.
+- Checked-in pending migrations are applied automatically to the production project when `main` advances.
+- Do not treat the missing checked-in GitHub Actions workflow for `main` as a manual-deploy requirement.
+- Use local `supabase db push` only as an explicit fallback or recovery path, and record that action.
 
 ### Hotfix flow
 

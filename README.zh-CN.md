@@ -41,6 +41,7 @@ related:
 - `.env.supabase.main.local.example`
 - Supabase 分支与运维文档
 - 将已提交 migration 推送到持久化 Supabase `dev` 分支的 GitHub Actions 流程
+- 自动应用 Git `main` migrations 的生产 Supabase GitHub integration 契约
 
 它**不**负责以下内容：
 
@@ -70,7 +71,7 @@ related:
 5. 向 `dev` 发起 PR。
 6. 验证 PR 对应创建的 Supabase 预览分支。
 7. 合并后，验证持久化的 `dev` 分支。
-8. 准备发布时，将 `dev` 提升到 `main`。
+8. 准备发布时，将 `dev` 提升到 `main`，随后验证生产 Supabase 自动迁移。
 
 ## 运维环境文件
 

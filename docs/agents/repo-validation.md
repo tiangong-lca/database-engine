@@ -110,9 +110,10 @@ For branch-oriented changes:
 
 - preview-branch proof usually happens on the repo PR
 - persistent remote `dev` proof happens after merge into Git `dev`
+- production `main` proof happens after `dev -> main` promote and should confirm the Supabase GitHub integration applied migrations automatically
 - root workspace proof happens later in `lca-workspace`
 
-Do not collapse those three phases into one validation note.
+Do not collapse those phases into one validation note.
 
 ## Minimum PR Validation Note
 
@@ -120,7 +121,7 @@ Every PR note for this repo should state:
 
 1. exact commands run
 2. exact SQL assertion files or migration paths exercised
-3. whether any proof is deferred to preview branch, persistent `dev`, or root integration
+3. whether any proof is deferred to preview branch, persistent `dev`, production `main`, or root integration
 
 ## Local Docpact Push Gate
 
