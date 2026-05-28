@@ -23,6 +23,7 @@ It owns the checked-in database source of truth:
 - `.env.supabase.main.local.example`
 - Supabase branching and operations docs
 - the GitHub Actions flow that pushes committed migrations to the persistent Supabase `dev` branch
+- the production Supabase GitHub integration contract that applies Git `main` migrations automatically
 
 It does **not** own:
 
@@ -52,7 +53,7 @@ Those stay in consumer repos such as:
 5. Open the PR into `dev`.
 6. Validate the Supabase preview branch created for the PR.
 7. After merge, validate the persistent `dev` branch.
-8. Promote `dev` to `main` when ready to release.
+8. Promote `dev` to `main` when ready to release, then validate the production Supabase auto migration.
 
 ## Maintenance env files
 
