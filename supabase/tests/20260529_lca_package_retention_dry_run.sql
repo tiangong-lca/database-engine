@@ -17,7 +17,7 @@ as $$
   );
 $$;
 
-select plan(16);
+select plan(22);
 
 select ok(
   to_regprocedure('util.preview_lca_package_retention(interval,interval,timestamp with time zone)') is not null,
@@ -98,6 +98,39 @@ insert into public.lca_package_jobs (
     '2025-12-01 00:00:00+00',
     '2025-12-01 00:00:00+00',
     '2025-12-01 00:00:00+00'
+  ),
+  (
+    '91460000-0000-4000-8000-000000000006',
+    'export_package',
+    'ready',
+    '{}'::jsonb,
+    '{}'::jsonb,
+    '91460000-0000-4000-8000-000000000100',
+    '2025-12-01 00:00:00+00',
+    '2025-12-01 00:00:00+00',
+    '2025-12-01 00:00:00+00'
+  ),
+  (
+    '91460000-0000-4000-8000-000000000007',
+    'export_package',
+    'ready',
+    '{}'::jsonb,
+    '{}'::jsonb,
+    '91460000-0000-4000-8000-000000000100',
+    '2025-12-01 00:00:00+00',
+    '2025-12-01 00:00:00+00',
+    '2025-12-01 00:00:00+00'
+  ),
+  (
+    '91460000-0000-4000-8000-000000000008',
+    'export_package',
+    'ready',
+    '{}'::jsonb,
+    '{}'::jsonb,
+    '91460000-0000-4000-8000-000000000100',
+    '2026-01-25 00:00:00+00',
+    '2026-01-25 00:00:00+00',
+    '2026-01-25 00:00:00+00'
   );
 
 insert into public.lca_package_artifacts (
@@ -163,6 +196,38 @@ insert into public.lca_package_artifacts (
     false,
     '2025-12-01 00:00:00+00',
     '2025-12-01 00:00:00+00'
+  ),
+  (
+    '91460000-0000-4000-8000-000000000106',
+    '91460000-0000-4000-8000-000000000006',
+    'export_zip',
+    'deleted',
+    'storage://package/deleted.zip',
+    null,
+    40,
+    'tidas-package-zip:v1',
+    'application/zip',
+    '{}'::jsonb,
+    '2025-12-15 00:00:00+00',
+    false,
+    '2025-12-01 00:00:00+00',
+    '2025-12-01 00:00:00+00'
+  ),
+  (
+    '91460000-0000-4000-8000-000000000107',
+    '91460000-0000-4000-8000-000000000007',
+    'export_zip',
+    'ready',
+    'storage://package/pinned.zip',
+    null,
+    50,
+    'tidas-package-zip:v1',
+    'application/zip',
+    '{}'::jsonb,
+    '2025-12-15 00:00:00+00',
+    true,
+    '2025-12-01 00:00:00+00',
+    '2025-12-01 00:00:00+00'
   );
 
 insert into public.lca_package_export_items (
@@ -219,6 +284,50 @@ insert into public.lca_package_export_items (
     true,
     '2025-12-01 00:00:00+00',
     '2025-12-01 00:00:00+00'
+  ),
+  (
+    '91460000-0000-4000-8000-000000000205',
+    '91460000-0000-4000-8000-000000000005',
+    'processes',
+    '91460000-0000-4000-8000-000000000305',
+    '000000001',
+    false,
+    true,
+    '2025-12-01 00:00:00+00',
+    '2025-12-01 00:00:00+00'
+  ),
+  (
+    '91460000-0000-4000-8000-000000000206',
+    '91460000-0000-4000-8000-000000000006',
+    'processes',
+    '91460000-0000-4000-8000-000000000306',
+    '000000001',
+    false,
+    true,
+    '2025-12-01 00:00:00+00',
+    '2025-12-01 00:00:00+00'
+  ),
+  (
+    '91460000-0000-4000-8000-000000000207',
+    '91460000-0000-4000-8000-000000000007',
+    'processes',
+    '91460000-0000-4000-8000-000000000307',
+    '000000001',
+    false,
+    true,
+    '2025-12-01 00:00:00+00',
+    '2025-12-01 00:00:00+00'
+  ),
+  (
+    '91460000-0000-4000-8000-000000000208',
+    '91460000-0000-4000-8000-000000000008',
+    'processes',
+    '91460000-0000-4000-8000-000000000308',
+    '000000001',
+    false,
+    true,
+    '2026-01-25 00:00:00+00',
+    '2026-01-25 00:00:00+00'
   );
 
 insert into public.lca_package_request_cache (
@@ -319,7 +428,19 @@ select ok(
       and is_eligible
       and reason = 'eligible_terminal_job_older_than_window'
   ),
-  'old terminal jobs without protected artifacts are eligible'
+  'old terminal jobs with no remaining object work are eligible'
+);
+
+select ok(
+  (
+    select row_count >= 4
+      and total_artifact_bytes >= 110
+    from pg_temp.package_retention_preview
+    where retention_area = 'lca_package_jobs'
+      and not is_eligible
+      and reason = 'protected_object_not_deleted'
+  ),
+  'jobs with non-deleted artifact rows are protected until object-aware GC completes'
 );
 
 select ok(
@@ -328,9 +449,9 @@ select ok(
     from pg_temp.package_retention_preview
     where retention_area = 'lca_package_jobs'
       and not is_eligible
-      and reason = 'protected_artifact_not_expired'
+      and reason = 'protected_inside_job_retention_window'
   ),
-  'jobs with attached missing-expiry artifacts are protected'
+  'recent terminal jobs are protected by the job retention window'
 );
 
 select ok(
@@ -339,9 +460,9 @@ select ok(
     from pg_temp.package_retention_preview
     where retention_area = 'lca_package_jobs'
       and not is_eligible
-      and reason = 'protected_recent_request_cache_reference'
+      and reason = 'protected_active_job'
   ),
-  'jobs with recently referenced artifacts are protected'
+  'active package jobs are protected'
 );
 
 select ok(
@@ -381,6 +502,28 @@ select ok(
 select ok(
   (
     select row_count >= 1
+    from pg_temp.package_retention_preview
+    where retention_area = 'lca_package_artifacts'
+      and not is_eligible
+      and reason = 'protected_pinned_artifact'
+  ),
+  'pinned artifacts are protected'
+);
+
+select ok(
+  (
+    select row_count >= 1
+    from pg_temp.package_retention_preview
+    where retention_area = 'lca_package_artifacts'
+      and not is_eligible
+      and reason = 'protected_already_deleted'
+  ),
+  'deleted artifacts are reported as already deleted'
+);
+
+select ok(
+  (
+    select row_count >= 1
       and total_hit_count >= 3
     from pg_temp.package_retention_preview
     where retention_area = 'lca_package_request_cache'
@@ -409,7 +552,40 @@ select ok(
       and is_eligible
       and reason = 'eligible_parent_job_cascade'
   ),
-  'export items follow eligible parent job lifecycle'
+  'export items follow parent jobs with no remaining object work'
+);
+
+select ok(
+  (
+    select row_count >= 4
+    from pg_temp.package_retention_preview
+    where retention_area = 'lca_package_export_items'
+      and not is_eligible
+      and reason = 'protected_object_not_deleted'
+  ),
+  'export items are protected while the parent job still has non-deleted artifacts'
+);
+
+select ok(
+  (
+    select row_count >= 1
+    from pg_temp.package_retention_preview
+    where retention_area = 'lca_package_export_items'
+      and not is_eligible
+      and reason = 'protected_active_parent_job'
+  ),
+  'export items with active parent jobs are protected'
+);
+
+select ok(
+  (
+    select row_count >= 1
+    from pg_temp.package_retention_preview
+    where retention_area = 'lca_package_export_items'
+      and not is_eligible
+      and reason = 'protected_parent_inside_job_retention_window'
+  ),
+  'export items with recent parent jobs are protected by the job retention window'
 );
 
 create temporary table pg_temp.package_retention_error_check (
