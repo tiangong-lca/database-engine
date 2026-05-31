@@ -28,7 +28,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-05-31
-lastReviewedCommit: fd4c4cf2ac646eef93a27761dccc1fc76bfde4e7
+lastReviewedCommit: daba3dff4a09b2191a00de2e05ef03f47f864d97
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -110,7 +110,7 @@ Do not leave durable manual edits only inside generated paths.
 
 This repo owns database truth, but not every runtime consequence:
 
-- `database-engine` owns persisted review-submit gate runs, `worker_jobs` lifecycle schema/RPCs, review-submit job coordinator state, access checks, idempotent gate lookup, result recording, and the final submit-review assertion
+- `database-engine` owns persisted review-submit gate runs, `worker_jobs` lifecycle schema/RPCs, review-submit job coordinator state, access checks, idempotent gate lookup, result recording, legacy lifecycle cutover cleanup, and the final submit-review assertion
 - `tiangong-lca-calculator` owns numeric-stability checks and the calculator report payload semantics
 - `tiangong-lca-next` owns frontend env selection and app-side Supabase clients
 - `tiangong-lca-edge-functions` owns Edge Function runtime orchestration, calculator invocation, and API response shape
