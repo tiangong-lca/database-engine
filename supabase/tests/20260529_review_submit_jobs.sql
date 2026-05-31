@@ -145,7 +145,7 @@ values
 create temporary table review_submit_job_ids (
   label text primary key,
   job_id uuid not null,
-  gate_run_id uuid not null
+  gate_worker_job_id uuid not null
 ) on commit drop;
 
 grant all on review_submit_job_ids to public;
@@ -165,11 +165,11 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '15000000-0000-0000-0000-000000000001', true);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
-insert into review_submit_job_ids (label, job_id, gate_run_id)
+insert into review_submit_job_ids (label, job_id, gate_worker_job_id)
 select
   'passed_process',
   (result->'data'->>'reviewSubmitJobId')::uuid,
-  (result->'data'->>'gateRunId')::uuid
+  (result->'data'->>'gateWorkerJobId')::uuid
 from (
   select public.cmd_dataset_review_submit_job_enqueue(
     p_table => 'processes',
@@ -181,11 +181,17 @@ from (
 ) as enqueue;
 
 select is(
-  public.cmd_dataset_review_submit_job_read(
-    (select job_id from review_submit_job_ids where label = 'passed_process')
-  )->'data'->>'status',
-  'waiting_gate',
-  'enqueue persists a job waiting for the gate result'
+  (
+    public.cmd_dataset_review_submit_job_read(
+      (select job_id from review_submit_job_ids where label = 'passed_process')
+    )->'data'->>'status'
+  ) || ':' || (
+    public.cmd_dataset_review_submit_job_read(
+      (select job_id from review_submit_job_ids where label = 'passed_process')
+    )->'data' ? 'gateWorkerJobId'
+  )::text,
+  'waiting_gate:true',
+  'enqueue persists a job waiting for the worker gate result'
 );
 
 select is(
@@ -259,7 +265,6 @@ select is(
   public.cmd_dataset_review_submit_job_record_result(
     p_job_id => (select job_id from review_submit_job_ids where label = 'passed_process'),
     p_status => 'waiting_gate',
-    p_gate_run_id => (select gate_run_id from review_submit_job_ids where label = 'passed_process'),
     p_audit => '{"command":"review_submit_job_record_waiting"}'::jsonb
   )->'data'->>'status',
   'waiting_gate',
@@ -274,12 +279,28 @@ select is(
   'service role can read review-submit job state'
 );
 
-select public.cmd_dataset_review_submit_gate_record_result(
-  p_gate_run_id => (select gate_run_id from review_submit_job_ids where label = 'passed_process'),
-  p_status => 'passed',
-  p_calculator_report => '{"summary":{"blockerCount":0}}'::jsonb,
-  p_blocking_reasons => '[]'::jsonb,
-  p_audit => '{"command":"review_submit_gate_record_passed"}'::jsonb
+select public.worker_claim_jobs('review_submit_gate', 'review-submit-job-test-worker', 1, 300);
+
+select public.worker_record_job_result(
+  p_job_id => (select gate_worker_job_id from review_submit_job_ids where label = 'passed_process'),
+  p_lease_token => (
+    select lease_token
+    from public.worker_jobs
+    where id = (select gate_worker_job_id from review_submit_job_ids where label = 'passed_process')
+  ),
+  p_status => 'completed',
+  p_result_json => jsonb_build_object(
+    'status', 'passed',
+    'datasetRevision', jsonb_build_object(
+      'table', 'processes',
+      'id', '35000000-0000-0000-0000-000000000001',
+      'version', '01.00.000',
+      'revisionChecksum', repeat('a', 64)
+    ),
+    'calculatorReport', '{"summary":{"blockerCount":0}}'::jsonb,
+    'blockingReasons', '[]'::jsonb
+  ),
+  p_result_schema_version => 'review_submit_gate_report.v1'
 );
 
 select is(
@@ -338,11 +359,11 @@ select set_config('request.jwt.claim.sub', '15000000-0000-0000-0000-000000000001
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 
-insert into review_submit_job_ids (label, job_id, gate_run_id)
+insert into review_submit_job_ids (label, job_id, gate_worker_job_id)
 select
   'stale_process',
   (result->'data'->>'reviewSubmitJobId')::uuid,
-  (result->'data'->>'gateRunId')::uuid
+  (result->'data'->>'gateWorkerJobId')::uuid
 from (
   select public.cmd_dataset_review_submit_job_enqueue(
     p_table => 'processes',
@@ -363,11 +384,28 @@ select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claim.role', 'service_role', true);
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
-select public.cmd_dataset_review_submit_gate_record_result(
-  p_gate_run_id => (select gate_run_id from review_submit_job_ids where label = 'stale_process'),
-  p_status => 'passed',
-  p_calculator_report => '{"summary":{"blockerCount":0}}'::jsonb,
-  p_blocking_reasons => '[]'::jsonb
+select public.worker_claim_jobs('review_submit_gate', 'review-submit-job-test-worker', 1, 300);
+
+select public.worker_record_job_result(
+  p_job_id => (select gate_worker_job_id from review_submit_job_ids where label = 'stale_process'),
+  p_lease_token => (
+    select lease_token
+    from public.worker_jobs
+    where id = (select gate_worker_job_id from review_submit_job_ids where label = 'stale_process')
+  ),
+  p_status => 'completed',
+  p_result_json => jsonb_build_object(
+    'status', 'passed',
+    'datasetRevision', jsonb_build_object(
+      'table', 'processes',
+      'id', '35000000-0000-0000-0000-000000000002',
+      'version', '01.00.000',
+      'revisionChecksum', repeat('b', 64)
+    ),
+    'calculatorReport', '{"summary":{"blockerCount":0}}'::jsonb,
+    'blockingReasons', '[]'::jsonb
+  ),
+  p_result_schema_version => 'review_submit_gate_report.v1'
 );
 
 select is(
@@ -394,11 +432,11 @@ select set_config('request.jwt.claim.sub', '15000000-0000-0000-0000-000000000001
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 
-insert into review_submit_job_ids (label, job_id, gate_run_id)
+insert into review_submit_job_ids (label, job_id, gate_worker_job_id)
 select
   'blocked_process',
   (result->'data'->>'reviewSubmitJobId')::uuid,
-  (result->'data'->>'gateRunId')::uuid
+  (result->'data'->>'gateWorkerJobId')::uuid
 from (
   select public.cmd_dataset_review_submit_job_enqueue(
     p_table => 'processes',
@@ -414,11 +452,31 @@ select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claim.role', 'service_role', true);
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
-select public.cmd_dataset_review_submit_gate_record_result(
-  p_gate_run_id => (select gate_run_id from review_submit_job_ids where label = 'blocked_process'),
+select public.worker_claim_jobs('review_submit_gate', 'review-submit-job-test-worker', 1, 300);
+
+select public.worker_record_job_result(
+  p_job_id => (select gate_worker_job_id from review_submit_job_ids where label = 'blocked_process'),
+  p_lease_token => (
+    select lease_token
+    from public.worker_jobs
+    where id = (select gate_worker_job_id from review_submit_job_ids where label = 'blocked_process')
+  ),
   p_status => 'blocked',
-  p_calculator_report => '{"summary":{"blockerCount":1}}'::jsonb,
-  p_blocking_reasons => '[{"code":"singular_risk_medium_or_high","message":"matrix risk"}]'::jsonb
+  p_result_json => jsonb_build_object(
+    'status', 'blocked',
+    'datasetRevision', jsonb_build_object(
+      'table', 'processes',
+      'id', '35000000-0000-0000-0000-000000000003',
+      'version', '01.00.000',
+      'revisionChecksum', repeat('c', 64)
+    ),
+    'calculatorReport', '{"summary":{"blockerCount":1}}'::jsonb,
+    'blockingReasons', '[{"code":"singular_risk_medium_or_high","message":"matrix risk"}]'::jsonb
+  ),
+  p_result_schema_version => 'review_submit_gate_report.v1',
+  p_blocker_codes => array['singular_risk_medium_or_high'],
+  p_resolution_scope => 'user',
+  p_retryable => true
 );
 
 select is(

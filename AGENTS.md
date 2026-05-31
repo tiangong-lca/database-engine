@@ -128,6 +128,7 @@ At a human-readable level, this repo owns:
 - `supabase/seeds/**`
 - `supabase/tests/**`
 - database-side review-submit gate state and final submit-review assertion RPCs
+- calculator `worker_jobs` queue schema/RPCs and review-submit coordinator links to worker job results
 - `scripts/**` for schema export, workspace refresh, change copying, and migration generation
 - `.github/workflows/supabase-dev.yml`
 - production Supabase GitHub integration contract for Git `main`

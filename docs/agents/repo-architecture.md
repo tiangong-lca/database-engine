@@ -79,7 +79,7 @@ The current migration and test history clusters around these themes:
 4. notification and membership query boundaries
 5. lifecycle bundle cleanup and embedding-related compatibility
 6. remote schema reconciliation and preview-branch validation
-7. review-submit gate persistence and final submit-review assertions
+7. review-submit gate persistence, `worker_jobs` queue state, and final submit-review assertions
 
 If the task touches one of those areas, expect both schema truth and regression assertions to matter.
 
@@ -110,7 +110,7 @@ Do not leave durable manual edits only inside generated paths.
 
 This repo owns database truth, but not every runtime consequence:
 
-- `database-engine` owns persisted review-submit gate runs, access checks, idempotent gate-run lookup, result recording, and the final `cmd_review_submit` pass/fail assertion
+- `database-engine` owns persisted review-submit gate runs, `worker_jobs` lifecycle schema/RPCs, review-submit job coordinator state, access checks, idempotent gate lookup, result recording, and the final submit-review assertion
 - `tiangong-lca-calculator` owns numeric-stability checks and the calculator report payload semantics
 - `tiangong-lca-next` owns frontend env selection and app-side Supabase clients
 - `tiangong-lca-edge-functions` owns Edge Function runtime orchestration, calculator invocation, and API response shape
