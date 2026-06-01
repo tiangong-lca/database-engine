@@ -40,8 +40,10 @@ select ok(
 
 select ok(
   strpos(pg_get_functiondef('private.search_dataset_json_uuid_mentions_impl(uuid,text[],text,text,uuid,integer,integer)'::regprocedure), 'statement_timeout') > 0
-    and strpos(pg_get_functiondef('private.search_dataset_json_uuid_mentions_impl(uuid,text[],text,text,uuid,integer,integer)'::regprocedure), '8s') > 0,
-  'JSON UUID mention RPC has bounded statement timeout'
+    and strpos(pg_get_functiondef('private.search_dataset_json_uuid_mentions_impl(uuid,text[],text,text,uuid,integer,integer)'::regprocedure), '20s') > 0
+    and strpos(pg_get_functiondef('public.search_dataset_json_uuid_mentions(uuid,text[],text,text,uuid,integer,integer)'::regprocedure), 'statement_timeout') > 0
+    and strpos(pg_get_functiondef('public.search_dataset_json_uuid_mentions(uuid,text[],text,text,uuid,integer,integer)'::regprocedure), '20s') > 0,
+  'JSON UUID mention RPC has bounded 20s statement timeout'
 );
 
 insert into auth.users (
