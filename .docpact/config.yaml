@@ -301,7 +301,7 @@ rules:
         mode: review_or_update
       - path: docs/agents/repo-architecture.md
         mode: review_or_update
-    reason: Review-submit gate storage and final submit assertions define the database boundary for calculator, Edge API, and UI integration.
+    reason: Review-submit gate storage and final submit assertions define the database boundary for worker, Edge API, and UI integration.
   - id: database-engine-sql-tests-contract
     scope: repo
     repo: database-engine
