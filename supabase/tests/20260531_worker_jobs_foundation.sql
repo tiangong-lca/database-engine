@@ -39,7 +39,7 @@ select cmp_ok(
   (select count(*) from public.worker_job_kinds),
   '>=',
   12::bigint,
-  'initial calculator worker job kinds are registered'
+  'initial worker job kinds are registered'
 );
 
 set local role authenticated;

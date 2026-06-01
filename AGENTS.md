@@ -128,7 +128,7 @@ At a human-readable level, this repo owns:
 - `supabase/seeds/**`
 - `supabase/tests/**`
 - database-side review-submit gate state and final submit-review assertion RPCs
-- calculator `worker_jobs` queue schema/RPCs, legacy lifecycle cutover cleanup, and review-submit coordinator links to worker job results
+- `tiangong-lca-worker` `worker_jobs` queue schema/RPCs, legacy lifecycle cutover cleanup, and review-submit coordinator links to worker job results
 - `scripts/**` for schema export, workspace refresh, change copying, and migration generation
 - `.github/workflows/supabase-dev.yml`
 - production Supabase GitHub integration contract for Git `main`
@@ -138,14 +138,14 @@ At a human-readable level, this repo owns:
 
 This repo does not own:
 
-- calculator numeric-stability heuristics or report generation
+- worker numeric-stability heuristics or report generation
 - frontend runtime env selection or app-side Supabase clients
 - Edge Function runtime code
 - workspace submodule pointer bumps or delivery completion
 
 Route those tasks to:
 
-- `tiangong-lca-calculator` for numeric-stability checks and calculator report semantics
+- `tiangong-lca-worker` for numeric-stability checks and calculator report payload semantics
 - `tiangong-lca-next` for frontend envs and app-side Supabase integration
 - `tiangong-lca-edge-functions` for Edge Function runtime behavior
 - `lca-workspace` for root integration after merge

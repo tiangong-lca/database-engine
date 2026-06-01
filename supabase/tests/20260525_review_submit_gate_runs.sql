@@ -238,7 +238,7 @@ select is(
     p_audit => '{"command":"dataset_review_submit_gate_record_result"}'::jsonb
   )->'data'->>'status',
   'passed',
-  'service role can persist a passed calculator gate result'
+  'service role can persist a passed worker gate result'
 );
 
 reset role;
@@ -358,7 +358,7 @@ select is(
     p_blocking_reasons => '[{"code":"provider_unresolved","message":"provider is missing"}]'::jsonb
   )->'data'->>'status',
   'blocked',
-  'service role can persist a blocked calculator gate result'
+  'service role can persist a blocked worker gate result'
 );
 
 reset role;
@@ -395,7 +395,7 @@ select is(
     )->'details'->'blockingReasons'->0->>'code'
   ),
   'provider_unresolved',
-  'blocked review submission returns persisted calculator blocking reasons'
+  'blocked review submission returns persisted worker blocking reasons'
 );
 
 select is(
