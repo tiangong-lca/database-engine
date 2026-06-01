@@ -111,9 +111,9 @@ Do not leave durable manual edits only inside generated paths.
 This repo owns database truth, but not every runtime consequence:
 
 - `database-engine` owns persisted review-submit gate runs, `worker_jobs` lifecycle schema/RPCs, review-submit job coordinator state, access checks, idempotent gate lookup, result recording, legacy lifecycle cutover cleanup, and the final submit-review assertion
-- `tiangong-lca-calculator` owns numeric-stability checks and the calculator report payload semantics
+- `tiangong-lca-worker` owns numeric-stability checks and the calculator report payload semantics
 - `tiangong-lca-next` owns frontend env selection and app-side Supabase clients
-- `tiangong-lca-edge-functions` owns Edge Function runtime orchestration, calculator invocation, and API response shape
+- `tiangong-lca-edge-functions` owns Edge Function runtime orchestration, worker invocation, and API response shape
 - `lca-workspace` owns root delivery completion after a child PR merges
 
 If a task changes both schema and app behavior, the SQL truth still starts here.
