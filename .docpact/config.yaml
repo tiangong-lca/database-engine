@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-05-31"
-lastReviewedCommit: "8a9ecac04b3c68f5caf2d9d30624c44630e8ecb4"
+lastReviewedCommit: "fd4c4cf2ac646eef93a27761dccc1fc76bfde4e7"
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -113,8 +113,16 @@ routing:
     review-submit-gate:
       paths:
         - supabase/migrations/*review_submit_gate*.sql
+        - supabase/migrations/*review_submit_jobs*.sql
         - supabase/tests/*review_submit_gate*.sql
+        - supabase/tests/*review_submit_jobs*.sql
         - supabase/tests/*review_submit_rpc*.sql
+        - docs/agents/repo-validation.md
+        - docs/agents/repo-architecture.md
+    worker-jobs:
+      paths:
+        - supabase/migrations/*worker_jobs*.sql
+        - supabase/tests/*worker_jobs*.sql
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
     branch-config:
@@ -276,7 +284,11 @@ rules:
     triggers:
       - path: supabase/migrations/*review_submit_gate*.sql
         kind: db-schema
+      - path: supabase/migrations/*review_submit_jobs*.sql
+        kind: db-schema
       - path: supabase/tests/*review_submit_gate*.sql
+        kind: db-test
+      - path: supabase/tests/*review_submit_jobs*.sql
         kind: db-test
       - path: supabase/tests/*review_submit_rpc*.sql
         kind: db-test
