@@ -34,8 +34,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-05-31
-lastReviewedCommit: 8a9ecac04b3c68f5caf2d9d30624c44630e8ecb4
+lastReviewedAt: 2026-06-01
+lastReviewedCommit: 75d6fca4daf13059dc72aeb5c172b938535367b3
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -128,6 +128,7 @@ At a human-readable level, this repo owns:
 - `supabase/seeds/**`
 - `supabase/tests/**`
 - database-side review-submit gate state and final submit-review assertion RPCs
+- calculator `worker_jobs` queue schema/RPCs, legacy lifecycle cutover cleanup, and review-submit coordinator links to worker job results
 - `scripts/**` for schema export, workspace refresh, change copying, and migration generation
 - `.github/workflows/supabase-dev.yml`
 - production Supabase GitHub integration contract for Git `main`
