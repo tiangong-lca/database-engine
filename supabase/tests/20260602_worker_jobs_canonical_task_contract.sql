@@ -269,21 +269,22 @@ select is(
       and domain_source = 'dataset_review_submit_jobs'
       and domain_role = 'review_submit_coordinator'
   ),
-  '1',
-  'worker_job_domain_refs links root jobs to retained review-submit coordinator rows'
+  '0',
+  'worker_job_domain_refs excludes legacy review-submit coordinator rows so dataset_review_submit_jobs can be retired'
 );
 
 select is(
   (
-    select active_count::text
+    select count(*)::text
     from public.worker_legacy_lifecycle_audit
-    where legacy_source = 'dataset_review_submit_jobs'
-      and task_family = 'review_submit.submit'
-      and legacy_status = 'waiting_gate'
-    limit 1
+    where legacy_source in (
+      'lca_jobs',
+      'lca_package_jobs',
+      'dataset_review_submit_jobs'
+    )
   ),
-  '1',
-  'legacy lifecycle audit includes active review-submit coordinator rows'
+  '0',
+  'legacy lifecycle audit excludes target legacy job tables so they can be retired'
 );
 
 select is(
