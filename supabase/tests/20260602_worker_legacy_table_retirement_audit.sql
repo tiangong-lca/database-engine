@@ -1,0 +1,129 @@
+begin;
+
+create extension if not exists pgtap with schema extensions;
+set local search_path = extensions, public, auth;
+
+select plan(10);
+
+select has_view(
+  'public',
+  'worker_legacy_table_retirement_blockers',
+  'legacy table retirement blocker audit view exists'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '97000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
+
+select ok(
+  not has_table_privilege(
+    'authenticated',
+    'public.worker_legacy_table_retirement_blockers',
+    'SELECT'
+  ),
+  'authenticated users cannot read legacy table retirement blockers'
+);
+
+reset role;
+set local role service_role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
+select ok(
+  has_table_privilege(
+    'service_role',
+    'public.worker_legacy_table_retirement_blockers',
+    'SELECT'
+  ),
+  'service_role can read legacy table retirement blockers'
+);
+
+select cmp_ok(
+  (
+    select count(*)
+    from public.worker_legacy_table_retirement_blockers
+    where legacy_table = 'public.lca_jobs'
+      and blocker_type = 'foreign_key'
+      and is_drop_restrict_blocker
+  ),
+  '>=',
+  1::bigint,
+  'audit reports lca_jobs foreign-key DROP RESTRICT blockers'
+);
+
+select cmp_ok(
+  (
+    select count(*)
+    from public.worker_legacy_table_retirement_blockers
+    where legacy_table = 'public.lca_package_jobs'
+      and blocker_type = 'foreign_key'
+      and is_drop_restrict_blocker
+  ),
+  '>=',
+  1::bigint,
+  'audit reports lca_package_jobs foreign-key DROP RESTRICT blockers'
+);
+
+select ok(
+  exists (
+    select 1
+    from public.worker_legacy_table_retirement_blockers
+    where legacy_table = 'public.dataset_review_submit_jobs'
+      and blocker_type = 'function_signature'
+      and blocker_identity like 'public.cmd_dataset_review_submit_job_payload(%'
+      and is_drop_restrict_blocker
+  ),
+  'audit reports dataset_review_submit_jobs function-signature blocker'
+);
+
+select ok(
+  exists (
+    select 1
+    from public.worker_legacy_table_retirement_blockers
+    where legacy_table = 'public.lca_jobs'
+      and blocker_type = 'dependent_view'
+      and blocker_identity = 'public.worker_legacy_lifecycle_audit'
+      and is_drop_restrict_blocker
+  ),
+  'audit reports legacy lifecycle audit as a dependent view'
+);
+
+select ok(
+  exists (
+    select 1
+    from public.worker_legacy_table_retirement_blockers
+    where legacy_table = 'public.lca_package_jobs'
+      and blocker_type = 'function_source_reference'
+      and not is_drop_restrict_blocker
+  ),
+  'audit reports package function source references as runtime blockers'
+);
+
+select ok(
+  exists (
+    select 1
+    from public.worker_legacy_table_retirement_blockers
+    where legacy_table = 'public.lca_jobs'
+      and details ? 'dependentColumns'
+  ),
+  'foreign-key blocker details include dependent column metadata'
+);
+
+select is(
+  (
+    select count(*)::text
+    from public.worker_legacy_table_retirement_blockers
+    where legacy_table not in (
+      'public.lca_jobs',
+      'public.lca_package_jobs',
+      'public.dataset_review_submit_jobs'
+    )
+  ),
+  '0',
+  'audit is scoped to the three legacy worker job retirement tables'
+);
+
+select * from finish();
+rollback;
