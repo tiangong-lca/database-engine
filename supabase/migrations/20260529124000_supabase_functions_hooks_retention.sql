@@ -1,5 +1,10 @@
-create index if not exists supabase_functions_hooks_created_at_idx
-  on supabase_functions.hooks (created_at);
+do $$
+begin
+  if to_regclass('supabase_functions.hooks') is not null then
+    execute 'create index if not exists supabase_functions_hooks_created_at_idx on supabase_functions.hooks (created_at)';
+  end if;
+end
+$$;
 
 create or replace function util.preview_supabase_functions_hooks_retention(
   p_retention_window interval default interval '14 days',
@@ -29,6 +34,20 @@ begin
     raise exception using
       errcode = '22023',
       message = 'supabase functions hooks retention window must be at least 1 day';
+  end if;
+
+  if to_regclass('supabase_functions.hooks') is null then
+    return query
+    select
+      p_retention_window as retention_window,
+      p_as_of - p_retention_window as cutoff_time,
+      0::bigint as total_rows,
+      0::bigint as eligible_rows,
+      0::bigint as protected_recent_rows,
+      0::bigint as protected_live_response_rows,
+      null::timestamp with time zone as oldest_eligible_created_at,
+      null::timestamp with time zone as newest_eligible_created_at;
+    return;
   end if;
 
   return query
@@ -94,6 +113,10 @@ begin
     raise exception using
       errcode = '22023',
       message = 'supabase functions hooks purge batch size must be between 1 and 100000';
+  end if;
+
+  if to_regclass('supabase_functions.hooks') is null then
+    return 0;
   end if;
 
   if not pg_catalog.pg_try_advisory_xact_lock(
