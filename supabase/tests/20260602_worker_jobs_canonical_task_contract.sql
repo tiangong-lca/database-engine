@@ -36,12 +36,10 @@ select has_view(
 
 with expected(table_name, column_name) as (
   values
-    ('lca_jobs', 'worker_job_id'),
     ('lca_results', 'worker_job_id'),
     ('lca_result_cache', 'worker_job_id'),
     ('lca_latest_all_unit_results', 'worker_job_id'),
     ('lca_factorization_registry', 'prepared_worker_job_id'),
-    ('lca_package_jobs', 'worker_job_id'),
     ('lca_package_artifacts', 'worker_job_id'),
     ('lca_package_export_items', 'worker_job_id'),
     ('lca_package_request_cache', 'worker_job_id'),
@@ -60,17 +58,15 @@ missing as (
 select is(
   (select count(*)::text from missing),
   '0',
-  'all retained domain/history tables expose canonical worker job reference columns'
+  'all retained non-legacy domain/history tables expose canonical worker job reference columns'
 );
 
 with expected(table_name, column_name) as (
   values
-    ('lca_jobs', 'worker_job_id'),
     ('lca_results', 'worker_job_id'),
     ('lca_result_cache', 'worker_job_id'),
     ('lca_latest_all_unit_results', 'worker_job_id'),
     ('lca_factorization_registry', 'prepared_worker_job_id'),
-    ('lca_package_jobs', 'worker_job_id'),
     ('lca_package_artifacts', 'worker_job_id'),
     ('lca_package_export_items', 'worker_job_id'),
     ('lca_package_request_cache', 'worker_job_id'),
