@@ -3,12 +3,18 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(13);
+select plan(15);
 
 select has_view(
   'public',
   'worker_legacy_table_retirement_blockers',
   'legacy table retirement blocker audit view exists'
+);
+
+select has_table(
+  'public',
+  'dataset_review_submit_requests',
+  'review-submit request coordinator replacement table exists'
 );
 
 set local role authenticated;
@@ -128,6 +134,18 @@ select cmp_ok(
   '=',
   0::bigint,
   'audit reports no DROP RESTRICT blockers for the three legacy worker job tables'
+);
+
+select cmp_ok(
+  (
+    select count(*)
+    from public.worker_legacy_table_retirement_blockers
+    where legacy_table = 'public.dataset_review_submit_jobs'
+      and blocker_type = 'function_source_reference'
+  ),
+  '=',
+  0::bigint,
+  'audit reports no runtime function body references to dataset_review_submit_jobs after coordinator cutover'
 );
 
 select ok(

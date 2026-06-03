@@ -20,7 +20,7 @@ begin
 end;
 $$;
 
-select plan(20);
+select plan(21);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -194,6 +194,21 @@ select is(
   'enqueue persists a job waiting for the worker gate result'
 );
 
+reset role;
+select is(
+  (
+    select count(*)::text
+    from public.dataset_review_submit_jobs
+    where id = (select job_id from review_submit_job_ids where label = 'passed_process')
+  ),
+  '0',
+  'enqueue writes active coordinator state to dataset_review_submit_requests instead of the legacy job table'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '15000000-0000-0000-0000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+
 select is(
   (
     public.cmd_dataset_review_submit_job_enqueue(
@@ -233,10 +248,13 @@ select is(
   'non-requester cannot read another user review-submit job'
 );
 
-select is(
-  public.cmd_dataset_review_submit_job_claim(1)->>'code',
-  'SERVICE_ROLE_REQUIRED',
-  'authenticated users cannot claim review-submit jobs'
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'public.cmd_dataset_review_submit_job_claim(integer,integer)',
+    'EXECUTE'
+  ),
+  'authenticated users cannot execute review-submit job claim'
 );
 
 reset role;
@@ -254,7 +272,7 @@ select is(
 select is(
   (
     select status || ':' || attempt_count::text
-    from public.dataset_review_submit_jobs
+    from public.dataset_review_submit_requests
     where id = (select job_id from review_submit_job_ids where label = 'passed_process')
   ),
   'submitting:1',
@@ -315,7 +333,7 @@ select is(
 select is(
   (
     select status
-    from public.dataset_review_submit_jobs
+    from public.dataset_review_submit_requests
     where id = (select job_id from review_submit_job_ids where label = 'passed_process')
   ),
   'submitted',
@@ -419,7 +437,7 @@ select is(
 select is(
   (
     select status
-    from public.dataset_review_submit_jobs
+    from public.dataset_review_submit_requests
     where id = (select job_id from review_submit_job_ids where label = 'stale_process')
   ),
   'stale',
@@ -490,7 +508,7 @@ select is(
 select is(
   (
     select status
-    from public.dataset_review_submit_jobs
+    from public.dataset_review_submit_requests
     where id = (select job_id from review_submit_job_ids where label = 'blocked_process')
   ),
   'blocked',

@@ -45,7 +45,7 @@ with expected(table_name, column_name) as (
     ('lca_package_artifacts', 'worker_job_id'),
     ('lca_package_export_items', 'worker_job_id'),
     ('lca_package_request_cache', 'worker_job_id'),
-    ('dataset_review_submit_jobs', 'submit_worker_job_id'),
+    ('dataset_review_submit_requests', 'submit_worker_job_id'),
     ('dataset_review_submit_gate_runs', 'worker_job_id')
 ),
 missing as (
@@ -74,7 +74,7 @@ with expected(table_name, column_name) as (
     ('lca_package_artifacts', 'worker_job_id'),
     ('lca_package_export_items', 'worker_job_id'),
     ('lca_package_request_cache', 'worker_job_id'),
-    ('dataset_review_submit_jobs', 'submit_worker_job_id'),
+    ('dataset_review_submit_requests', 'submit_worker_job_id'),
     ('dataset_review_submit_gate_runs', 'worker_job_id')
 ),
 actual as (
@@ -229,7 +229,7 @@ select is(
   'review_submit queue is claimable by worker_claim_jobs'
 );
 
-insert into public.dataset_review_submit_jobs (
+insert into public.dataset_review_submit_requests (
   dataset_table,
   dataset_id,
   dataset_version,
@@ -252,7 +252,7 @@ insert into public.dataset_review_submit_jobs (
 select is(
   (
     select submit_worker_job_id::text
-    from public.dataset_review_submit_jobs
+    from public.dataset_review_submit_requests
     where dataset_id = '97000000-0000-4000-8000-000000000101'
       and dataset_version = '01.00.000'
     limit 1
@@ -266,11 +266,11 @@ select is(
     select count(*)::text
     from public.worker_job_domain_refs
     where worker_job_id = (select job_id from worker_canonical_test_ids where label = 'submit_root')
-      and domain_source = 'dataset_review_submit_jobs'
+      and domain_source = 'dataset_review_submit_requests'
       and domain_role = 'review_submit_coordinator'
   ),
-  '0',
-  'worker_job_domain_refs excludes legacy review-submit coordinator rows so dataset_review_submit_jobs can be retired'
+  '1',
+  'worker_job_domain_refs exposes the non-legacy review-submit request coordinator row'
 );
 
 select is(
@@ -290,7 +290,7 @@ select is(
 select is(
   (
     select public.cmd_dataset_review_submit_job_payload(j)->>'submitWorkerJobId'
-    from public.dataset_review_submit_jobs as j
+    from public.dataset_review_submit_requests as j
     where j.submit_worker_job_id = (select job_id from worker_canonical_test_ids where label = 'submit_root')
     limit 1
   ),
@@ -301,7 +301,7 @@ select is(
 select is(
   (
     select public.cmd_dataset_review_submit_job_payload(j)->'submitWorkerJob'->>'id'
-    from public.dataset_review_submit_jobs as j
+    from public.dataset_review_submit_requests as j
     where j.submit_worker_job_id = (select job_id from worker_canonical_test_ids where label = 'submit_root')
     limit 1
   ),
@@ -309,7 +309,7 @@ select is(
   'review-submit job payload includes the root worker job projection'
 );
 
-update public.dataset_review_submit_jobs
+update public.dataset_review_submit_requests
   set status = 'submitted',
       result = jsonb_build_object('reviewStateCode', 20)
 where submit_worker_job_id = (select job_id from worker_canonical_test_ids where label = 'submit_root');
@@ -325,10 +325,10 @@ select is(
 );
 
 select ok(
-  col_description('public.dataset_review_submit_jobs'::regclass, (
+  col_description('public.dataset_review_submit_requests'::regclass, (
     select attnum
     from pg_attribute
-    where attrelid = 'public.dataset_review_submit_jobs'::regclass
+    where attrelid = 'public.dataset_review_submit_requests'::regclass
       and attname = 'submit_worker_job_id'
   )) is not null
   and col_description('public.lca_results'::regclass, (
@@ -337,8 +337,12 @@ select ok(
     where attrelid = 'public.lca_results'::regclass
       and attname = 'worker_job_id'
   )) is not null
+  and obj_description('public.dataset_review_submit_requests'::regclass, 'pg_class')
+    like '%replaces dataset_review_submit_jobs%'
+  and obj_description('public.dataset_review_submit_requests'::regclass, 'pg_class')
+    like '%coordinator%'
   and obj_description('public.worker_job_domain_refs'::regclass, 'pg_class') is not null,
-  'canonical worker job references are documented with comments'
+  'canonical worker job references and review-submit coordinator retirement contract are documented with comments'
 );
 
 select * from finish();
