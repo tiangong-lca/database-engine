@@ -195,14 +195,9 @@ select is(
 );
 
 reset role;
-select is(
-  (
-    select count(*)::text
-    from public.dataset_review_submit_jobs
-    where id = (select job_id from review_submit_job_ids where label = 'passed_process')
-  ),
-  '0',
-  'enqueue writes active coordinator state to dataset_review_submit_requests instead of the legacy job table'
+select ok(
+  to_regclass('public.dataset_review_submit_jobs') is null,
+  'legacy review-submit job table is retired; active coordinator state lives in dataset_review_submit_requests'
 );
 
 set local role authenticated;

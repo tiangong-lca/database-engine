@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(19);
+select plan(13);
 
 select has_function(
   'public',
@@ -48,44 +48,16 @@ select ok(
   'authenticated cannot execute legacy package enqueue'
 );
 
-select ok(
-  has_table_privilege('authenticated', 'public.lca_jobs', 'SELECT'),
-  'authenticated can still read own lca job history through RLS'
+select hasnt_table(
+  'public',
+  'lca_jobs',
+  'legacy lca job table is physically retired after worker_jobs cutover'
 );
 
-select ok(
-  not has_table_privilege('authenticated', 'public.lca_jobs', 'INSERT'),
-  'authenticated cannot insert lca job history'
-);
-
-select ok(
-  not has_table_privilege('authenticated', 'public.lca_jobs', 'UPDATE'),
-  'authenticated cannot update lca job history'
-);
-
-select ok(
-  not has_table_privilege('authenticated', 'public.lca_jobs', 'DELETE'),
-  'authenticated cannot delete lca job history'
-);
-
-select ok(
-  has_table_privilege('authenticated', 'public.lca_package_jobs', 'SELECT'),
-  'authenticated can still read own package job history through RLS'
-);
-
-select ok(
-  not has_table_privilege('authenticated', 'public.lca_package_jobs', 'INSERT'),
-  'authenticated cannot insert package job history'
-);
-
-select ok(
-  not has_table_privilege('authenticated', 'public.lca_package_jobs', 'UPDATE'),
-  'authenticated cannot update package job history'
-);
-
-select ok(
-  not has_table_privilege('authenticated', 'public.lca_package_jobs', 'DELETE'),
-  'authenticated cannot delete package job history'
+select hasnt_table(
+  'public',
+  'lca_package_jobs',
+  'legacy package job table is physically retired after worker_jobs cutover'
 );
 
 select ok(

@@ -140,24 +140,38 @@ insert into public.lca_active_snapshots (
   '2025-12-02 00:00:00+00'
 );
 
-insert into public.lca_jobs (
+insert into public.worker_jobs (
   id,
-  job_type,
-  snapshot_id,
-  status,
-  payload,
-  diagnostics,
+  job_kind,
+  worker_runtime,
+  worker_queue,
+  subject_type,
+  subject_id,
+  requester_type,
   requested_by,
+  status,
+  payload_schema_version,
+  payload_json,
+  result_schema_version,
+  result_json,
   created_at,
-  updated_at
+  updated_at,
+  finished_at
 ) values (
   '91530000-0000-4000-8000-000000000101',
-  'solve_one',
+  'lca.solve_one',
+  'calculator',
+  'solver',
+  'lca_network_snapshot',
   '91530000-0000-4000-8000-000000000004',
-  'completed',
-  '{}'::jsonb,
-  '{}'::jsonb,
+  'user',
   '91530000-0000-4000-8000-000000000201',
+  'completed',
+  'lca.solve_one.request.v1',
+  '{"snapshotId":"91530000-0000-4000-8000-000000000004"}'::jsonb,
+  'lca.solve.result.v1',
+  '{"snapshot":{"id":"91530000-0000-4000-8000-000000000004"}}'::jsonb,
+  '2025-12-01 00:00:00+00',
   '2025-12-01 00:00:00+00',
   '2025-12-01 00:00:00+00'
 );
@@ -165,6 +179,7 @@ insert into public.lca_jobs (
 insert into public.lca_results (
   id,
   job_id,
+  worker_job_id,
   snapshot_id,
   payload,
   diagnostics,
@@ -173,6 +188,7 @@ insert into public.lca_results (
   created_at
 ) values (
   '91530000-0000-4000-8000-000000000102',
+  '91530000-0000-4000-8000-000000000101',
   '91530000-0000-4000-8000-000000000101',
   '91530000-0000-4000-8000-000000000004',
   '{}'::jsonb,
@@ -190,6 +206,7 @@ insert into public.lca_result_cache (
   request_payload,
   status,
   job_id,
+  worker_job_id,
   result_id,
   created_at,
   updated_at
@@ -201,6 +218,7 @@ insert into public.lca_result_cache (
   '{}'::jsonb,
   'ready',
   '91530000-0000-4000-8000-000000000101',
+  '91530000-0000-4000-8000-000000000101',
   '91530000-0000-4000-8000-000000000102',
   '2025-12-01 00:00:00+00',
   '2025-12-01 00:00:00+00'
@@ -210,6 +228,7 @@ insert into public.lca_latest_all_unit_results (
   id,
   snapshot_id,
   job_id,
+  worker_job_id,
   result_id,
   query_artifact_url,
   query_artifact_sha256,
@@ -222,6 +241,7 @@ insert into public.lca_latest_all_unit_results (
 ) values (
   '91530000-0000-4000-8000-000000000104',
   '91530000-0000-4000-8000-000000000004',
+  '91530000-0000-4000-8000-000000000101',
   '91530000-0000-4000-8000-000000000101',
   '91530000-0000-4000-8000-000000000102',
   'storage://lca_results/query.json',

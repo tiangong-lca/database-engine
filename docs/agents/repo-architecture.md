@@ -79,7 +79,7 @@ The current migration and test history clusters around these themes:
 4. notification and membership query boundaries
 5. lifecycle bundle cleanup and embedding-related compatibility
 6. remote schema reconciliation and preview-branch validation
-7. review-submit gate persistence, `worker_jobs` queue state, and final submit-review assertions
+7. review-submit gate persistence, `worker_jobs` queue state, final submit-review assertions, and retired legacy job-table archives
 
 If the task touches one of those areas, expect both schema truth and regression assertions to matter.
 
@@ -110,7 +110,7 @@ Do not leave durable manual edits only inside generated paths.
 
 This repo owns database truth, but not every runtime consequence:
 
-- `database-engine` owns persisted review-submit gate runs, `worker_jobs` lifecycle schema/RPCs, review-submit job coordinator state, access checks, idempotent gate lookup, result recording, legacy lifecycle cutover cleanup, and the final submit-review assertion
+- `database-engine` owns persisted review-submit gate runs, `worker_jobs` lifecycle schema/RPCs, review-submit job coordinator state, access checks, idempotent gate lookup, result recording, legacy lifecycle cutover cleanup, retired legacy job-table archives under `archive.worker_legacy_job_table_rows`, and the final submit-review assertion
 - `tiangong-lca-worker` owns numeric-stability checks and the calculator report payload semantics
 - `tiangong-lca-next` owns frontend env selection and app-side Supabase clients
 - `tiangong-lca-edge-functions` owns Edge Function runtime orchestration, worker invocation, and API response shape
@@ -123,6 +123,7 @@ If a task changes both schema and app behavior, the SQL truth still starts here.
 - generated workspace files are not the durable schema source of truth
 - GitHub default branch does not define the daily trunk
 - a merged child PR does not finish workspace delivery
+- `public.lca_jobs`, `public.lca_package_jobs`, and `public.dataset_review_submit_jobs` are not active or retained task surfaces after the `worker_jobs` cutover; use `worker_jobs`, retained domain result/artifact tables, and the archive table instead
 
 ## Local Docpact Push Gate
 
