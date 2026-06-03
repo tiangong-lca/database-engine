@@ -58,12 +58,25 @@ begin
     );
   end if;
 
+  if p_table = 'flows' then
+    perform set_config('lock_timeout', '2s', true);
+    perform set_config('statement_timeout', '8s', true);
+  end if;
+
   begin
     if p_table = 'processes' then
       execute format(
         'insert into public.%I as t (id, json_ordered, model_id, rule_verification)
          values ($1, $2::json, $3, $4)
-         returning to_jsonb(t)',
+         returning jsonb_build_object(
+           ''id'', t.id,
+           ''version'', t.version,
+           ''state_code'', t.state_code,
+           ''user_id'', t.user_id,
+           ''team_id'', t.team_id,
+           ''model_id'', t.model_id,
+           ''rule_verification'', t.rule_verification
+         )',
         p_table
       )
         into v_created_row
@@ -72,13 +85,35 @@ begin
       execute format(
         'insert into public.%I as t (id, json_ordered, rule_verification)
          values ($1, $2::json, $3)
-         returning to_jsonb(t)',
+         returning jsonb_build_object(
+           ''id'', t.id,
+           ''version'', t.version,
+           ''state_code'', t.state_code,
+           ''user_id'', t.user_id,
+           ''team_id'', t.team_id,
+           ''model_id'', null,
+           ''rule_verification'', t.rule_verification
+         )',
         p_table
       )
         into v_created_row
         using p_id, p_json_ordered, p_rule_verification;
     end if;
   exception
+    when lock_not_available then
+      return jsonb_build_object(
+        'ok', false,
+        'code', 'DATASET_CREATE_LOCK_TIMEOUT',
+        'status', 503,
+        'message', 'Dataset creation is temporarily blocked by concurrent database work'
+      );
+    when query_canceled then
+      return jsonb_build_object(
+        'ok', false,
+        'code', 'DATASET_CREATE_TIMEOUT',
+        'status', 503,
+        'message', 'Dataset creation exceeded the database timeout'
+      );
     when unique_violation then
       return jsonb_build_object(
         'ok', false,

@@ -1,0 +1,1 @@
+COMMENT ON VIEW "public"."worker_job_domain_refs" IS 'Service-role projection from canonical worker_jobs to retained non-legacy domain artifact/cache/history/coordinator rows. Legacy job tables are intentionally excluded so they can be retired with DROP RESTRICT after runtime cutover.';

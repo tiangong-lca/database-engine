@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "public"."lca_read_latest_single_solve_result"("p_requested_by" "uuid", "p_snapshot_id" "uuid", "p_process_index" integer) IS 'Service-role latest solve_one result projection from worker_jobs-backed lca_result_cache, replacing lca_jobs payload scans. Authorization is enforced by EXECUTE grants.';

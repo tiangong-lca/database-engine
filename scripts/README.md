@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-05-08
-lastReviewedCommit: 099def790221c0e7c2cba0456b4bf157d915f019
+lastReviewedCommit: b6c351231116fd0890d2e2d8186f6ec2e455fea0
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -81,6 +81,22 @@ Warnings:
 - Manual edits inside `remote_schema.sql`, `global/`, and `schemas/` are not stable
 - Refresh can overwrite uncommitted Git changes in generated workspace files
 - If you want `--git-changes` to reflect only later hand edits, commit the refreshed `supabase/workspace/schemas` to Git after syncing the remote database and before editing files.
+
+### `check_generated_workspace_legacy_tables.py`
+
+Checks that generated schema workspace output no longer advertises retired public legacy job tables:
+
+- `public.lca_jobs`
+- `public.lca_package_jobs`
+- `public.dataset_review_submit_jobs`
+
+Usage:
+
+```bash
+python scripts/check_generated_workspace_legacy_tables.py
+```
+
+Use this after refreshing `supabase/workspace/**` from a remote branch where the `worker_jobs` cutover and legacy table retirement migrations have applied.
 
 ### `copy_workspace_file_to_changes.py`
 

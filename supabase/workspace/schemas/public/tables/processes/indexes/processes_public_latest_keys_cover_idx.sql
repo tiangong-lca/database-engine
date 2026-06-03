@@ -1,0 +1,1 @@
+CREATE INDEX "processes_public_latest_keys_cover_idx" ON "public"."processes" USING "btree" ("id", "version" DESC, "modified_at" DESC) INCLUDE ("created_at", "team_id", "model_id") WHERE ("state_code" = 100);

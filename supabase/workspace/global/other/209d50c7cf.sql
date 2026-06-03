@@ -1,0 +1,1 @@
+COMMENT ON COLUMN "public"."lca_results"."expires_at" IS 'Result artifact retention deadline used by tiangong-lca-worker lca.result_gc; existing rows created before this contract receive a 30 day migration grace period.';

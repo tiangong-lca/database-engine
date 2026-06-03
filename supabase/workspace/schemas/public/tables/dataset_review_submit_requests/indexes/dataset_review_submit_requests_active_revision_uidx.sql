@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "dataset_review_submit_requests_active_revision_uidx" ON "public"."dataset_review_submit_requests" USING "btree" ("dataset_table", "dataset_id", "dataset_version", "revision_checksum", "policy_profile", "report_schema_version", "requested_by") WHERE ("status" = ANY (ARRAY['queued'::"text", 'waiting_gate'::"text", 'submitting'::"text"]));

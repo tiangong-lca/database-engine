@@ -1,6 +1,8 @@
 CREATE POLICY "select by self and team and admin" ON "public"."users" FOR SELECT TO "authenticated" USING ((("id" = ( SELECT "auth"."uid"() AS "uid")) OR ("id" IN ( SELECT "r"."user_id"
    FROM "public"."roles" "r"
-  WHERE ((("r"."role")::"text" = 'owner'::"text") AND ("public"."policy_is_team_public"("r"."team_id") = true)))) OR ("id" IN ( SELECT "r0"."user_id"
+  WHERE ((("r"."role")::"text" = 'owner'::"text") AND ("public"."policy_is_team_public"("r"."team_id") = true)))) OR (EXISTS ( SELECT 1
+   FROM "public"."roles" "r"
+  WHERE ((("r"."role")::"text" = 'owner'::"text") AND ("r"."user_id" = ( SELECT "auth"."uid"() AS "uid"))))) OR ("id" IN ( SELECT "r0"."user_id"
    FROM "public"."roles" "r0"
   WHERE ("r0"."team_id" IN ( SELECT "r"."team_id"
            FROM "public"."roles" "r"

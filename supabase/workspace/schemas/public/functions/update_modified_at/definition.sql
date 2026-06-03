@@ -1,5 +1,6 @@
 CREATE OR REPLACE FUNCTION "public"."update_modified_at"() RETURNS "trigger"
     LANGUAGE "plpgsql"
+    SET "search_path" TO ''
     AS $$
 begin
   new.modified_at = now();

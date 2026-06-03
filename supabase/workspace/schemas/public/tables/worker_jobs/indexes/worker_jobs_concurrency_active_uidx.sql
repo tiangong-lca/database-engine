@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "worker_jobs_concurrency_active_uidx" ON "public"."worker_jobs" USING "btree" ("worker_runtime", "worker_queue", "concurrency_key") WHERE (("concurrency_key" IS NOT NULL) AND ("status" = ANY (ARRAY['queued'::"text", 'running'::"text", 'waiting'::"text", 'stale'::"text"])));

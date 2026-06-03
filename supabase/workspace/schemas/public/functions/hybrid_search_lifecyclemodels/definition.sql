@@ -1,71 +1,106 @@
-CREATE OR REPLACE FUNCTION "public"."hybrid_search_lifecyclemodels"("query_text" "text", "query_embedding" "text", "filter_condition" "text" DEFAULT ''::"text", "match_threshold" double precision DEFAULT 0.5, "match_count" integer DEFAULT 20, "full_text_weight" double precision DEFAULT 0.3, "extracted_text_weight" double precision DEFAULT 0.2, "semantic_weight" double precision DEFAULT 0.5, "rrf_k" integer DEFAULT 10, "data_source" "text" DEFAULT 'tg'::"text", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1) RETURNS TABLE("id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone)
+CREATE OR REPLACE FUNCTION "public"."hybrid_search_lifecyclemodels"("query_text" "text", "query_embedding" "text", "filter_condition" "text" DEFAULT ''::"text", "match_threshold" double precision DEFAULT 0.5, "match_count" integer DEFAULT 20, "full_text_weight" double precision DEFAULT 0.3, "extracted_text_weight" double precision DEFAULT 0.2, "semantic_weight" double precision DEFAULT 0.5, "rrf_k" integer DEFAULT 10, "data_source" "text" DEFAULT 'tg'::"text", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1) RETURNS TABLE("id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
     LANGUAGE "plpgsql"
     SET "statement_timeout" TO '60s'
     SET "search_path" TO 'public', 'extensions', 'pg_temp'
     AS $$
- BEGIN
-		RETURN QUERY WITH full_text AS (
-			SELECT
-				ps.RANK AS ps_rank,
-				ps.ID AS ps_id,
-				ps.JSON AS ps_json
-			FROM
-			 	-- page_size: 获取足够多候选， page_current: 第1页
-				pgroonga_search_lifecyclemodels_v1 ( query_text, filter_condition, '', 20, 1, data_source ) ps 
-		),
-		ex_text AS (
-			SELECT
-				ex.RANK AS ex_rank,
-				ex.ID AS ex_id,
-				P.JSON AS ex_json
-			FROM
-				pgroonga_search_lifecyclemodels_text_v1( query_text, 20, 1, data_source ) ex
-				JOIN PUBLIC.lifecyclemodels P ON P.ID = ex.ID 
-		),
-		semantic AS (
-			SELECT
-				ss.RANK AS ss_rank,
-				ss.ID AS ss_id,
-				ss.JSON AS ss_json
-			FROM
-				semantic_search_lifecyclemodels_v1 ( query_embedding, filter_condition, match_threshold, match_count, data_source ) ss 
-		), 
-		fused_raw as (
-		SELECT 
-			COALESCE ( full_text.ps_id, semantic.ss_id, ex_text.ex_id ) AS ID,
-			COALESCE ( full_text.ps_json, semantic.ss_json, ex_text.ex_json ) AS JSON,
-			COALESCE ( 1.0 / ( rrf_k + full_text.ps_rank ), 0.0 ) * full_text_weight + COALESCE ( 1.0 / ( rrf_k + ex_text.ex_rank ), 0.0 ) * extracted_text_weight + COALESCE ( 1.0 / ( rrf_k + semantic.ss_rank ), 0.0 ) * semantic_weight AS score 
-		FROM
-			full_text
-			FULL OUTER JOIN semantic ON full_text.ps_id = semantic.ss_id
-			FULL OUTER JOIN ex_text ON ex_text.ex_id = COALESCE ( full_text.ps_id, semantic.ss_id ) 
-		),
-		fused AS (
-			SELECT
-				fr.id AS pid,
-				SUM(fr.score) AS score
-				-- 如果你不希望“多路径叠加加分”，把 SUM 改成 MAX
-			FROM fused_raw fr
-			WHERE fr.id IS NOT NULL
-			GROUP BY fr.id
-		)
-		SELECT
-			f.pid AS id,
-			p.json,
-			p.version,
-			p.modified_at
-		FROM fused f
-		JOIN LATERAL (
-			SELECT p.json, p.version, p.modified_at
-			FROM public.lifecyclemodels p
-			WHERE p.id = f.pid
-			ORDER BY p.modified_at DESC
-			LIMIT 1
-		) p ON true
-		ORDER BY f.score DESC
-		LIMIT page_size OFFSET ( page_current - 1 ) * page_size;
-		
-	END;
+declare
+  candidate_limit integer;
+  semantic_match_count integer;
+  filter_condition_jsonb jsonb;
+  text_weight double precision;
+begin
+  candidate_limit := greatest(coalesce(match_count, 20), coalesce(page_size, 10)) * 10;
+  semantic_match_count := greatest(coalesce(match_count, 20), coalesce(page_size, 10));
+  filter_condition_jsonb := coalesce(nullif(btrim(filter_condition), ''), '{}')::jsonb;
+  text_weight := coalesce(full_text_weight, 0) + coalesce(extracted_text_weight, 0);
+
+  return query
+    with text_matches as (
+      select ts.rank as text_rank, ts.id as text_id
+      from public.search_lifecyclemodels_latest(
+        query_text,
+        filter_condition_jsonb,
+        '{}'::jsonb,
+        candidate_limit,
+        1,
+        data_source,
+        '',
+        null::uuid,
+        null::integer
+      ) ts
+    ),
+    semantic as (
+      select ss.rank as ss_rank, ss.id as ss_id
+      from private.semantic_lifecyclemodel_candidates(
+        query_embedding,
+        filter_condition,
+        match_threshold,
+        semantic_match_count,
+        data_source
+      ) ss
+    ),
+    fused_raw as (
+      select
+        coalesce(text_matches.text_id, semantic.ss_id) as id,
+        coalesce(1.0 / (rrf_k + text_matches.text_rank), 0.0) * text_weight
+          + coalesce(1.0 / (rrf_k + semantic.ss_rank), 0.0) * semantic_weight as score
+      from text_matches
+      full outer join semantic on text_matches.text_id = semantic.ss_id
+    ),
+    fused as (
+      select fused_raw.id, sum(fused_raw.score) as score
+      from fused_raw
+      where fused_raw.id is not null
+      group by fused_raw.id
+    ),
+    visible_rows as (
+      select l.*
+      from public.lifecyclemodels l
+      join fused on fused.id = l.id
+      where (
+        (data_source = 'tg' and l.state_code = 100)
+        or (data_source = 'co' and l.state_code = 200)
+        or (data_source = 'my' and l.user_id = auth.uid())
+        or (
+          data_source = 'te'
+          and exists (
+            select 1
+            from public.roles r
+            where r.user_id = auth.uid()
+              and r.team_id = l.team_id
+              and r.role::text in ('admin', 'member', 'owner')
+          )
+        )
+      )
+    ),
+    latest_rows as (
+      select distinct on (visible_rows.id)
+        visible_rows.id,
+        visible_rows.json,
+        visible_rows.version,
+        visible_rows.modified_at,
+        visible_rows.team_id,
+        fused.score
+      from visible_rows
+      join fused on fused.id = visible_rows.id
+      order by visible_rows.id, visible_rows.version desc, visible_rows.modified_at desc
+    ),
+    counted_rows as (
+      select latest_rows.*, count(*) over()::bigint as total_count
+      from latest_rows
+    )
+    select
+      counted_rows.id,
+      counted_rows.json,
+      counted_rows.version,
+      counted_rows.modified_at,
+      counted_rows.team_id,
+      counted_rows.total_count
+    from counted_rows
+    order by counted_rows.score desc, counted_rows.modified_at desc, counted_rows.id
+    limit greatest(coalesce(page_size, 10), 1)
+    offset (greatest(coalesce(page_current, 1), 1) - 1) * greatest(coalesce(page_size, 10), 1);
+end;
 $$;
 
 ALTER FUNCTION "public"."hybrid_search_lifecyclemodels"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "full_text_weight" double precision, "extracted_text_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer) OWNER TO "postgres";

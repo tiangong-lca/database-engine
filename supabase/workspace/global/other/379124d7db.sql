@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "public"."lca_read_result_projection"("p_requested_by" "uuid", "p_result_id" "uuid", "p_required_artifact_format" "text", "p_include_internal" boolean) IS 'Service-role LCA result projection with worker_jobs ownership, replacing Edge reads through public.lca_jobs. Authorization is enforced by EXECUTE grants.';

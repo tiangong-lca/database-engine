@@ -11,6 +11,7 @@ CREATE TABLE IF NOT EXISTS "public"."lca_latest_all_unit_results" (
     "computed_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "worker_job_id" "uuid",
     CONSTRAINT "lca_latest_all_unit_results_size_chk" CHECK (("query_artifact_byte_size" >= 0)),
     CONSTRAINT "lca_latest_all_unit_results_status_chk" CHECK (("status" = ANY (ARRAY['ready'::"text", 'stale'::"text", 'failed'::"text"])))
 );
@@ -24,13 +25,13 @@ ALTER TABLE ONLY "public"."lca_latest_all_unit_results"
     ADD CONSTRAINT "lca_latest_all_unit_results_snapshot_uk" UNIQUE ("snapshot_id");
 
 ALTER TABLE ONLY "public"."lca_latest_all_unit_results"
-    ADD CONSTRAINT "lca_latest_all_unit_results_job_fk" FOREIGN KEY ("job_id") REFERENCES "public"."lca_jobs"("id") ON DELETE CASCADE;
-
-ALTER TABLE ONLY "public"."lca_latest_all_unit_results"
     ADD CONSTRAINT "lca_latest_all_unit_results_result_fk" FOREIGN KEY ("result_id") REFERENCES "public"."lca_results"("id") ON DELETE CASCADE;
 
 ALTER TABLE ONLY "public"."lca_latest_all_unit_results"
     ADD CONSTRAINT "lca_latest_all_unit_results_snapshot_fk" FOREIGN KEY ("snapshot_id") REFERENCES "public"."lca_network_snapshots"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "public"."lca_latest_all_unit_results"
+    ADD CONSTRAINT "lca_latest_all_unit_results_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "public"."worker_jobs"("id") ON DELETE SET NULL;
 
 ALTER TABLE "public"."lca_latest_all_unit_results" ENABLE ROW LEVEL SECURITY;
 

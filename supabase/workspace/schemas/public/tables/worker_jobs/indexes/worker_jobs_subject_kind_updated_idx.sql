@@ -1,0 +1,1 @@
+CREATE INDEX "worker_jobs_subject_kind_updated_idx" ON "public"."worker_jobs" USING "btree" ("subject_type", "subject_id", "subject_version", "job_kind", "updated_at" DESC) WHERE (("subject_type" IS NOT NULL) AND ("subject_id" IS NOT NULL));

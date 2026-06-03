@@ -12,6 +12,7 @@ CREATE TABLE IF NOT EXISTS "public"."contacts" (
     "review_id" "uuid",
     "rule_verification" boolean,
     "reviews" "jsonb",
+    "extracted_text" "text",
     CONSTRAINT "contacts_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 3, 20, 100])))
 );
 
