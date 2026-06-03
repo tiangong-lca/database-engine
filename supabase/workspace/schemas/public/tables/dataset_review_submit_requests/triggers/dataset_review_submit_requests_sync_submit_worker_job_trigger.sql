@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "dataset_review_submit_requests_sync_submit_worker_job_trigger" AFTER INSERT OR UPDATE OF "status", "last_error_code", "last_error_message", "last_error_details", "result", "submit_worker_job_id" ON "public"."dataset_review_submit_requests" FOR EACH ROW EXECUTE FUNCTION "public"."dataset_review_submit_requests_sync_submit_worker_job"();

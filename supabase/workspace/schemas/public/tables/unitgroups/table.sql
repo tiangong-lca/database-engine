@@ -12,7 +12,8 @@ CREATE TABLE IF NOT EXISTS "public"."unitgroups" (
     "review_id" "uuid",
     "rule_verification" boolean,
     "reviews" "jsonb",
-    CONSTRAINT "unitgroups_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 100, 200])))
+    "extracted_text" "text",
+    CONSTRAINT "unitgroups_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
 );
 
 ALTER TABLE "public"."unitgroups" OWNER TO "postgres";

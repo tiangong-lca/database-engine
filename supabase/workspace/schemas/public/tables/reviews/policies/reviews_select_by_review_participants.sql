@@ -1,1 +1,1 @@
-CREATE POLICY "reviews select by review participants" ON "public"."reviews" FOR SELECT TO "authenticated" USING ((("auth"."uid"() IS NOT NULL) AND "public"."policy_review_can_read"("id", "auth"."uid"())));
+CREATE POLICY "reviews select by review participants" ON "public"."reviews" FOR SELECT TO "authenticated" USING (((( SELECT "auth"."uid"() AS "uid") IS NOT NULL) AND "public"."policy_review_can_read"("id", ( SELECT "auth"."uid"() AS "uid"))));

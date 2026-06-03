@@ -1,0 +1,1 @@
+CREATE INDEX "dataset_review_submit_gate_runs_revision_idx" ON "public"."dataset_review_submit_gate_runs" USING "btree" ("dataset_table", "dataset_id", "dataset_version", "revision_checksum", "policy_profile", "report_schema_version", "created_at" DESC);

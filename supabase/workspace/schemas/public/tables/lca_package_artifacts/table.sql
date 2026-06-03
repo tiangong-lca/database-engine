@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS "public"."lca_package_artifacts" (
     "is_pinned" boolean DEFAULT false NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "worker_job_id" "uuid",
     CONSTRAINT "lca_package_artifacts_format_chk" CHECK (("artifact_format" = ANY (ARRAY['tidas-package-zip:v1'::"text", 'tidas-package-export-report:v1'::"text", 'tidas-package-import-report:v1'::"text"]))),
     CONSTRAINT "lca_package_artifacts_kind_chk" CHECK (("artifact_kind" = ANY (ARRAY['import_source'::"text", 'export_zip'::"text", 'export_report'::"text", 'import_report'::"text"]))),
     CONSTRAINT "lca_package_artifacts_size_chk" CHECK ((("artifact_byte_size" IS NULL) OR ("artifact_byte_size" >= 0))),
@@ -26,7 +27,7 @@ ALTER TABLE ONLY "public"."lca_package_artifacts"
     ADD CONSTRAINT "lca_package_artifacts_pkey" PRIMARY KEY ("id");
 
 ALTER TABLE ONLY "public"."lca_package_artifacts"
-    ADD CONSTRAINT "lca_package_artifacts_job_fk" FOREIGN KEY ("job_id") REFERENCES "public"."lca_package_jobs"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "lca_package_artifacts_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "public"."worker_jobs"("id") ON DELETE SET NULL;
 
 ALTER TABLE "public"."lca_package_artifacts" ENABLE ROW LEVEL SECURITY;
 

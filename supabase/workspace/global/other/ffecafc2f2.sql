@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "public"."cmd_dataset_extracted_text_backfill"("p_table" "text", "p_batch_size" integer, "p_after_id" "uuid", "p_after_version" "text", "p_mode" "text") IS 'Service-role RPC for bounded historical extracted_text backfill. Modes: empty repairs empty rows, noisy rewrites rows with schema/path metadata noise, stale rewrites every selected row.';

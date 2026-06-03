@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "public"."lca_read_job_projection"("p_requested_by" "uuid", "p_worker_job_id" "uuid", "p_legacy_job_id" "uuid", "p_include_internal" boolean) IS 'Service-role LCA job/status/result projection backed by worker_jobs and retained result metadata, not public.lca_jobs. Authorization is enforced by EXECUTE grants.';

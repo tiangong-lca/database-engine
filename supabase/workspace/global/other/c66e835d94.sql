@@ -1,0 +1,1 @@
+COMMENT ON VIEW "public"."worker_legacy_lifecycle_audit" IS 'Service-role lifecycle audit for canonical worker_jobs and retained gate reports. Legacy job tables are intentionally excluded so they can be retired with DROP RESTRICT after runtime cutover.';

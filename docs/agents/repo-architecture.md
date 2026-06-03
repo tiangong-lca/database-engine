@@ -28,7 +28,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-06-03
-lastReviewedCommit: d0234f083eceb035f4f00ea988d14de3be39c1aa
+lastReviewedCommit: b6c351231116fd0890d2e2d8186f6ec2e455fea0
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -80,8 +80,17 @@ The current migration and test history clusters around these themes:
 5. lifecycle bundle cleanup and embedding-related compatibility
 6. remote schema reconciliation and preview-branch validation
 7. review-submit gate persistence, `worker_jobs` queue state, final submit-review assertions, and retired legacy job-table archives
+8. worker-produced domain artifact/state contracts for retained `lca_package_*`, LCA result/cache/projection, and review-submit report/coordinator tables
 
 If the task touches one of those areas, expect both schema truth and regression assertions to matter.
+
+## Worker Jobs And Domain State
+
+`worker_jobs` is the canonical lifecycle and queue-control table for work that cannot be safely carried by Edge Function request/response execution.
+
+Retained domain tables such as `lca_package_artifacts`, `lca_package_export_items`, `lca_package_request_cache`, `lca_results`, `lca_result_cache`, `lca_latest_all_unit_results`, `lca_network_snapshots`, `dataset_review_submit_requests`, and `dataset_review_submit_gate_runs` are not replacement job tables. They store worker-produced artifacts, caches, projections, reports, or coordinator domain state. Post-cutover rows should be traceable back to `worker_jobs` through the appropriate worker job reference columns, except for explicitly documented exceptions such as snapshot identity rows that are traced through downstream worker-linked records.
+
+Use `public.worker_domain_traceability_cutoffs` and `public.worker_domain_traceability_violations` for DB-side audit checks when validating that new worker-produced domain rows remain traceable.
 
 ## Generated Workspace Workflow
 
@@ -124,6 +133,7 @@ If a task changes both schema and app behavior, the SQL truth still starts here.
 - GitHub default branch does not define the daily trunk
 - a merged child PR does not finish workspace delivery
 - `public.lca_jobs`, `public.lca_package_jobs`, and `public.dataset_review_submit_jobs` are not active or retained task surfaces after the `worker_jobs` cutover; use `worker_jobs`, retained domain result/artifact tables, and the archive table instead
+- `lca_package_*`, LCA result/cache, and review-submit gate/coordinator tables are retained domain state, not leftover legacy job tables; clean them through domain retention contracts instead of dropping them as lifecycle tables
 
 ## Local Docpact Push Gate
 

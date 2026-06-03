@@ -20,8 +20,8 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-05-21
-lastReviewedCommit: 4547abfaf702bab17dea46b0fb7a2a7368badb0b
+lastReviewedAt: 2026-06-03
+lastReviewedCommit: b6c351231116fd0890d2e2d8186f6ec2e455fea0
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -79,6 +79,12 @@ Each refresh performs these operations inside `supabase/workspace`:
 
 ```bash
 python scripts/build_schema_workspace.py --environment dev
+```
+
+After refreshing a branch where the `worker_jobs` cutover and legacy table retirement migrations have applied, verify that generated output no longer advertises retired legacy job tables:
+
+```bash
+python scripts/check_generated_workspace_legacy_tables.py
 ```
 
 ## Local Docpact Push Gate

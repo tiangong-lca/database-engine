@@ -1,1 +1,1 @@
-CREATE OR REPLACE TRIGGER "processes_set_modified_at_trigger" BEFORE UPDATE ON "public"."processes" FOR EACH ROW EXECUTE FUNCTION "public"."update_modified_at"();
+CREATE OR REPLACE TRIGGER "processes_set_modified_at_trigger" BEFORE UPDATE OF "json", "json_ordered", "user_id", "state_code", "version", "team_id", "review_id", "rule_verification", "reviews", "embedding_flag", "model_id" ON "public"."processes" FOR EACH ROW EXECUTE FUNCTION "public"."update_modified_at"();

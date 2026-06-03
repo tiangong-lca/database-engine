@@ -1,0 +1,1 @@
+CREATE INDEX "lifecyclemodels_public_latest_keys_cover_idx" ON "public"."lifecyclemodels" USING "btree" ("id", "version" DESC, "modified_at" DESC) INCLUDE ("created_at", "team_id") WHERE ("state_code" = 100);

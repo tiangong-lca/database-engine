@@ -1,1 +1,1 @@
-CREATE POLICY "transitional_update_owner_draft_only" ON "public"."processes" FOR UPDATE TO "authenticated" USING ((("state_code" = 0) AND ("user_id" = "auth"."uid"()))) WITH CHECK ((("state_code" = 0) AND ("user_id" = "auth"."uid"())));
+CREATE POLICY "transitional_update_owner_draft_only" ON "public"."processes" FOR UPDATE TO "authenticated" USING ((("state_code" = 0) AND ("user_id" = ( SELECT "auth"."uid"() AS "uid")))) WITH CHECK ((("state_code" = 0) AND ("user_id" = ( SELECT "auth"."uid"() AS "uid"))));

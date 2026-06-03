@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS "public"."lca_factorization_registry" (
     "last_used_at" timestamp with time zone,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "prepared_worker_job_id" "uuid",
     CONSTRAINT "lca_factorization_registry_backend_chk" CHECK (("backend" = ANY (ARRAY['umfpack'::"text", 'cholmod'::"text", 'spqr'::"text"]))),
     CONSTRAINT "lca_factorization_registry_status_chk" CHECK (("status" = ANY (ARRAY['pending'::"text", 'building'::"text", 'ready'::"text", 'failed'::"text", 'stale'::"text"])))
 );
@@ -26,7 +27,7 @@ ALTER TABLE ONLY "public"."lca_factorization_registry"
     ADD CONSTRAINT "lca_factorization_registry_scope_snapshot_backend_opts_uk" UNIQUE ("scope", "snapshot_id", "backend", "numeric_options_hash");
 
 ALTER TABLE ONLY "public"."lca_factorization_registry"
-    ADD CONSTRAINT "lca_factorization_registry_prepared_job_fk" FOREIGN KEY ("prepared_job_id") REFERENCES "public"."lca_jobs"("id") ON DELETE SET NULL;
+    ADD CONSTRAINT "lca_factorization_registry_prepared_worker_job_id_fkey" FOREIGN KEY ("prepared_worker_job_id") REFERENCES "public"."worker_jobs"("id") ON DELETE SET NULL;
 
 ALTER TABLE ONLY "public"."lca_factorization_registry"
     ADD CONSTRAINT "lca_factorization_registry_snapshot_fk" FOREIGN KEY ("snapshot_id") REFERENCES "public"."lca_network_snapshots"("id") ON DELETE CASCADE;
