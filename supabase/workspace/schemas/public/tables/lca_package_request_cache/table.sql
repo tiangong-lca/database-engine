@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS "public"."lca_package_request_cache" (
     "last_accessed_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "worker_job_id" "uuid",
     CONSTRAINT "lca_package_request_cache_hit_count_chk" CHECK (("hit_count" >= 0)),
     CONSTRAINT "lca_package_request_cache_operation_chk" CHECK (("operation" = ANY (ARRAY['export_package'::"text", 'import_package'::"text"]))),
     CONSTRAINT "lca_package_request_cache_request_key_chk" CHECK (("length"("btrim"("request_key")) > 0)),
@@ -32,10 +33,10 @@ ALTER TABLE ONLY "public"."lca_package_request_cache"
     ADD CONSTRAINT "lca_package_request_cache_export_artifact_fk" FOREIGN KEY ("export_artifact_id") REFERENCES "public"."lca_package_artifacts"("id") ON DELETE SET NULL;
 
 ALTER TABLE ONLY "public"."lca_package_request_cache"
-    ADD CONSTRAINT "lca_package_request_cache_job_fk" FOREIGN KEY ("job_id") REFERENCES "public"."lca_package_jobs"("id") ON DELETE SET NULL;
+    ADD CONSTRAINT "lca_package_request_cache_report_artifact_fk" FOREIGN KEY ("report_artifact_id") REFERENCES "public"."lca_package_artifacts"("id") ON DELETE SET NULL;
 
 ALTER TABLE ONLY "public"."lca_package_request_cache"
-    ADD CONSTRAINT "lca_package_request_cache_report_artifact_fk" FOREIGN KEY ("report_artifact_id") REFERENCES "public"."lca_package_artifacts"("id") ON DELETE SET NULL;
+    ADD CONSTRAINT "lca_package_request_cache_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "public"."worker_jobs"("id") ON DELETE SET NULL;
 
 ALTER TABLE "public"."lca_package_request_cache" ENABLE ROW LEVEL SECURITY;
 

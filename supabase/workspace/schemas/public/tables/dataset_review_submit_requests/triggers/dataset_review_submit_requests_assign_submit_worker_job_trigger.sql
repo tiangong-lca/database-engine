@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "dataset_review_submit_requests_assign_submit_worker_job_trigger" BEFORE INSERT OR UPDATE OF "submit_worker_job_id" ON "public"."dataset_review_submit_requests" FOR EACH ROW EXECUTE FUNCTION "public"."dataset_review_submit_requests_assign_submit_worker_job"();

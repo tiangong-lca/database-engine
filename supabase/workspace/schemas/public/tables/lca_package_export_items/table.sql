@@ -8,6 +8,7 @@ CREATE TABLE IF NOT EXISTS "public"."lca_package_export_items" (
     "refs_done" boolean DEFAULT false NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "worker_job_id" "uuid",
     CONSTRAINT "lca_package_export_items_table_chk" CHECK (("table_name" = ANY (ARRAY['contacts'::"text", 'sources'::"text", 'unitgroups'::"text", 'flowproperties'::"text", 'flows'::"text", 'processes'::"text", 'lifecyclemodels'::"text"]))),
     CONSTRAINT "lca_package_export_items_version_chk" CHECK (("length"("btrim"("version")) > 0))
 );
@@ -18,7 +19,7 @@ ALTER TABLE ONLY "public"."lca_package_export_items"
     ADD CONSTRAINT "lca_package_export_items_pkey" PRIMARY KEY ("id");
 
 ALTER TABLE ONLY "public"."lca_package_export_items"
-    ADD CONSTRAINT "lca_package_export_items_job_fk" FOREIGN KEY ("job_id") REFERENCES "public"."lca_package_jobs"("id") ON DELETE CASCADE;
+    ADD CONSTRAINT "lca_package_export_items_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "public"."worker_jobs"("id") ON DELETE SET NULL;
 
 ALTER TABLE "public"."lca_package_export_items" ENABLE ROW LEVEL SECURITY;
 

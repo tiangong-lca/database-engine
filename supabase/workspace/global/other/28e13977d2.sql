@@ -1,0 +1,1 @@
+COMMENT ON COLUMN "public"."lca_factorization_registry"."prepared_job_id" IS 'Historical legacy LCA preparation job identifier retained for compatibility. New canonical task identity is prepared_worker_job_id.';

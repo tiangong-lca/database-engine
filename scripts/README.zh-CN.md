@@ -20,8 +20,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-05-08
-lastReviewedCommit: 099def790221c0e7c2cba0456b4bf157d915f019
+lastReviewedAt: 2026-06-03
+lastReviewedCommit: b6c351231116fd0890d2e2d8186f6ec2e455fea0
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -81,6 +81,22 @@ python scripts/build_schema_workspace.py --environment dev
 - `remote_schema.sql`、`global/` 和 `schemas/` 中的手工修改都不稳定
 - 刷新时可能覆盖这些生成文件里尚未提交到 Git 的改动
 - 如果你希望 `--git-changes` 只反映后续手工修改，应在同步远程数据库并刷新 workspace 之后，先把新的 `supabase/workspace/schemas` 提交到 Git，再开始编辑
+
+### `check_generated_workspace_legacy_tables.py`
+
+检查生成的 schema workspace 是否仍在展示已退休的 public legacy job 表：
+
+- `public.lca_jobs`
+- `public.lca_package_jobs`
+- `public.dataset_review_submit_jobs`
+
+用法：
+
+```bash
+python scripts/check_generated_workspace_legacy_tables.py
+```
+
+当目标远程分支已经应用 `worker_jobs` cutover 和旧 job 表退休 migration 后，刷新 `supabase/workspace/**`，再运行这个检查。
 
 ### `copy_workspace_file_to_changes.py`
 
