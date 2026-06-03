@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(16);
+select plan(21);
 
 select has_view(
   'public',
@@ -16,11 +16,6 @@ select has_table(
   'dataset_review_submit_requests',
   'review-submit request coordinator replacement table exists'
 );
-
-set local role authenticated;
-select set_config('request.jwt.claim.sub', '97000000-0000-4000-8000-000000000001', true);
-select set_config('request.jwt.claim.role', 'authenticated', true);
-select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 
 select ok(
   not has_table_privilege(
@@ -186,10 +181,70 @@ select is(
 
 reset role;
 
-select lives_ok(
-  $$drop table public.lca_jobs, public.lca_package_jobs, public.dataset_review_submit_jobs restrict$$,
-  'legacy job tables can be dropped with RESTRICT inside the test transaction after DB blockers are removed'
+select hasnt_table(
+  'public',
+  'lca_jobs',
+  'legacy lca job table has been physically retired'
 );
+
+select hasnt_table(
+  'public',
+  'lca_package_jobs',
+  'legacy package job table has been physically retired'
+);
+
+select hasnt_table(
+  'public',
+  'dataset_review_submit_jobs',
+  'legacy review-submit coordinator job table has been physically retired'
+);
+
+select has_table(
+  'archive',
+  'worker_legacy_job_table_rows',
+  'legacy job rows are archived before table retirement'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '97000000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
+
+select ok(
+  not has_table_privilege(
+    'authenticated',
+    (
+      select c.oid
+      from pg_class as c
+      join pg_namespace as n on n.oid = c.relnamespace
+      where n.nspname = 'archive'
+        and c.relname = 'worker_legacy_job_table_rows'
+    ),
+    'SELECT'
+  ),
+  'authenticated users cannot read legacy job archives'
+);
+
+select ok(
+  has_table_privilege(
+    'service_role',
+    (
+      select c.oid
+      from pg_class as c
+      join pg_namespace as n on n.oid = c.relnamespace
+      where n.nspname = 'archive'
+        and c.relname = 'worker_legacy_job_table_rows'
+    ),
+    'SELECT'
+  ),
+  'service_role can read legacy job archives'
+);
+
+reset role;
+set local role service_role;
+select set_config('request.jwt.claim.sub', '', true);
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
 select lives_ok(
   $$select count(*) from util.preview_lca_package_retention(interval '30 days', interval '7 days', now())$$,

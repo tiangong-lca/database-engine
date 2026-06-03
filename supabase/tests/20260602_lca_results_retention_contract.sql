@@ -107,26 +107,40 @@ insert into public.lca_network_snapshots (
   now()
 );
 
-insert into public.lca_jobs (
+insert into public.worker_jobs (
   id,
-  job_type,
-  snapshot_id,
-  status,
-  payload,
-  diagnostics,
+  job_kind,
+  worker_runtime,
+  worker_queue,
+  subject_type,
+  subject_id,
+  requester_type,
   requested_by,
-  request_key,
+  status,
+  payload_schema_version,
+  payload_json,
+  result_schema_version,
+  result_json,
+  request_hash,
   created_at,
-  updated_at
+  updated_at,
+  finished_at
 ) values (
   '91620000-0000-4000-8000-000000000002',
-  'solve_one',
+  'lca.solve_one',
+  'calculator',
+  'solver',
+  'lca_network_snapshot',
   '91620000-0000-4000-8000-000000000001',
-  'completed',
-  '{}'::jsonb,
-  '{}'::jsonb,
+  'user',
   '91620000-0000-4000-8000-000000000101',
+  'completed',
+  'lca.solve_one.request.v1',
+  '{"snapshotId":"91620000-0000-4000-8000-000000000001"}'::jsonb,
+  'lca.solve.result.v1',
+  '{"snapshot":{"id":"91620000-0000-4000-8000-000000000001"}}'::jsonb,
   'pgtap-lca-results-retention',
+  now(),
   now(),
   now()
 );
@@ -134,6 +148,7 @@ insert into public.lca_jobs (
 insert into public.lca_results (
   id,
   job_id,
+  worker_job_id,
   snapshot_id,
   payload,
   diagnostics,
@@ -142,6 +157,7 @@ insert into public.lca_results (
   artifact_format
 ) values (
   '91620000-0000-4000-8000-000000000003',
+  '91620000-0000-4000-8000-000000000002',
   '91620000-0000-4000-8000-000000000002',
   '91620000-0000-4000-8000-000000000001',
   '{}'::jsonb,

@@ -17,7 +17,6 @@ with affected(table_name, policy_name) as (
     ('processes', 'transitional_update_owner_draft_only'),
     ('lifecyclemodels', 'transitional_update_owner_draft_only'),
     ('lca_package_artifacts', 'lca_package_artifacts_select_own'),
-    ('lca_package_jobs', 'lca_package_jobs_select_own'),
     ('lca_package_request_cache', 'lca_package_request_cache_select_own'),
     ('notifications', 'notifications_insert_sender'),
     ('notifications', 'notifications_select_sender_or_recipient'),
@@ -35,7 +34,7 @@ select is(
     join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
     join pg_policy p on p.polrelid = c.oid and p.polname = a.policy_name
   ),
-  19,
+  18,
   'all advisor-targeted RLS policies exist after rewrite'
 );
 
@@ -51,7 +50,6 @@ with affected(table_name, policy_name) as (
     ('processes', 'transitional_update_owner_draft_only'),
     ('lifecyclemodels', 'transitional_update_owner_draft_only'),
     ('lca_package_artifacts', 'lca_package_artifacts_select_own'),
-    ('lca_package_jobs', 'lca_package_jobs_select_own'),
     ('lca_package_request_cache', 'lca_package_request_cache_select_own'),
     ('notifications', 'notifications_insert_sender'),
     ('notifications', 'notifications_select_sender_or_recipient'),

@@ -20,7 +20,7 @@ begin
 end;
 $$;
 
-select plan(17);
+select plan(20);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -181,6 +181,20 @@ select is(
   'ensure creates a queued review-submit gate run'
 );
 
+select ok(
+  (
+    public.cmd_dataset_review_submit_gate(
+      p_table => 'processes',
+      p_id => '33000000-0000-0000-0000-000000000001',
+      p_version => '01.00.000',
+      p_revision_checksum => repeat('a', 64),
+      p_action => 'read',
+      p_gate_run_id => (select gate_run_id from review_submit_gate_ids where label = 'passed_process')
+    )->'data'
+  ) ? 'workerJobId',
+  'standalone ensure links the retained gate run to a worker_jobs record'
+);
+
 select is(
   (
     public.cmd_dataset_review_submit_gate(
@@ -239,6 +253,18 @@ select is(
   )->'data'->>'status',
   'passed',
   'service role can persist a passed worker gate result'
+);
+
+select is(
+  (
+    select worker_job.status
+    from public.dataset_review_submit_gate_runs as gate_run
+    join public.worker_jobs as worker_job
+      on worker_job.id = gate_run.worker_job_id
+    where gate_run.id = (select gate_run_id from review_submit_gate_ids where label = 'passed_process')
+  ),
+  'completed',
+  'legacy record_result synchronizes linked worker_jobs status for passed gates'
 );
 
 reset role;
@@ -422,6 +448,19 @@ select is(
   ),
   'queued',
   'rerun creates a fresh queued gate run after a blocked result'
+);
+
+reset role;
+
+select is(
+  (
+    select count(*)::text
+    from public.dataset_review_submit_gate_runs
+    where status in ('queued', 'running')
+      and worker_job_id is null
+  ),
+  '0',
+  'standalone gate API does not leave queued gate runs without worker_jobs linkage'
 );
 
 select * from finish();
