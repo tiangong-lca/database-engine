@@ -17,7 +17,7 @@ as $$
   );
 $$;
 
-select plan(22);
+select plan(23);
 
 select ok(
   to_regprocedure('util.preview_lca_package_retention(interval,interval,timestamp with time zone)') is not null,
@@ -33,11 +33,14 @@ select ok(
   'service_role can execute package retention dry-run function'
 );
 
-insert into public.lca_package_jobs (
+insert into public.worker_jobs (
   id,
-  job_type,
+  job_kind,
+  worker_runtime,
+  worker_queue,
   status,
-  payload,
+  payload_schema_version,
+  payload_json,
   diagnostics,
   requested_by,
   created_at,
@@ -46,8 +49,11 @@ insert into public.lca_package_jobs (
 ) values
   (
     '91460000-0000-4000-8000-000000000001',
-    'export_package',
-    'ready',
+    'tidas.export_package',
+    'calculator',
+    'package',
+    'completed',
+    'tidas.export_package.request.v1',
     '{}'::jsonb,
     '{}'::jsonb,
     '91460000-0000-4000-8000-000000000100',
@@ -57,8 +63,11 @@ insert into public.lca_package_jobs (
   ),
   (
     '91460000-0000-4000-8000-000000000002',
-    'export_package',
+    'tidas.export_package',
+    'calculator',
+    'package',
     'queued',
+    'tidas.export_package.request.v1',
     '{}'::jsonb,
     '{}'::jsonb,
     '91460000-0000-4000-8000-000000000100',
@@ -68,8 +77,11 @@ insert into public.lca_package_jobs (
   ),
   (
     '91460000-0000-4000-8000-000000000003',
-    'export_package',
-    'ready',
+    'tidas.export_package',
+    'calculator',
+    'package',
+    'completed',
+    'tidas.export_package.request.v1',
     '{}'::jsonb,
     '{}'::jsonb,
     '91460000-0000-4000-8000-000000000100',
@@ -79,8 +91,11 @@ insert into public.lca_package_jobs (
   ),
   (
     '91460000-0000-4000-8000-000000000004',
-    'export_package',
-    'ready',
+    'tidas.export_package',
+    'calculator',
+    'package',
+    'completed',
+    'tidas.export_package.request.v1',
     '{}'::jsonb,
     '{}'::jsonb,
     '91460000-0000-4000-8000-000000000100',
@@ -90,8 +105,11 @@ insert into public.lca_package_jobs (
   ),
   (
     '91460000-0000-4000-8000-000000000005',
-    'export_package',
-    'ready',
+    'tidas.export_package',
+    'calculator',
+    'package',
+    'completed',
+    'tidas.export_package.request.v1',
     '{}'::jsonb,
     '{}'::jsonb,
     '91460000-0000-4000-8000-000000000100',
@@ -101,8 +119,11 @@ insert into public.lca_package_jobs (
   ),
   (
     '91460000-0000-4000-8000-000000000006',
-    'export_package',
-    'ready',
+    'tidas.export_package',
+    'calculator',
+    'package',
+    'completed',
+    'tidas.export_package.request.v1',
     '{}'::jsonb,
     '{}'::jsonb,
     '91460000-0000-4000-8000-000000000100',
@@ -112,8 +133,11 @@ insert into public.lca_package_jobs (
   ),
   (
     '91460000-0000-4000-8000-000000000007',
-    'export_package',
-    'ready',
+    'tidas.export_package',
+    'calculator',
+    'package',
+    'completed',
+    'tidas.export_package.request.v1',
     '{}'::jsonb,
     '{}'::jsonb,
     '91460000-0000-4000-8000-000000000100',
@@ -123,8 +147,11 @@ insert into public.lca_package_jobs (
   ),
   (
     '91460000-0000-4000-8000-000000000008',
-    'export_package',
-    'ready',
+    'tidas.export_package',
+    'calculator',
+    'package',
+    'completed',
+    'tidas.export_package.request.v1',
     '{}'::jsonb,
     '{}'::jsonb,
     '91460000-0000-4000-8000-000000000100',
@@ -136,6 +163,7 @@ insert into public.lca_package_jobs (
 insert into public.lca_package_artifacts (
   id,
   job_id,
+  worker_job_id,
   artifact_kind,
   status,
   artifact_url,
@@ -151,6 +179,7 @@ insert into public.lca_package_artifacts (
 ) values
   (
     '91460000-0000-4000-8000-000000000103',
+    '91460000-0000-4000-8000-000000000003',
     '91460000-0000-4000-8000-000000000003',
     'export_zip',
     'ready',
@@ -168,6 +197,7 @@ insert into public.lca_package_artifacts (
   (
     '91460000-0000-4000-8000-000000000104',
     '91460000-0000-4000-8000-000000000004',
+    '91460000-0000-4000-8000-000000000004',
     'export_zip',
     'ready',
     'storage://package/expired.zip',
@@ -183,6 +213,7 @@ insert into public.lca_package_artifacts (
   ),
   (
     '91460000-0000-4000-8000-000000000105',
+    '91460000-0000-4000-8000-000000000005',
     '91460000-0000-4000-8000-000000000005',
     'export_zip',
     'ready',
@@ -200,6 +231,7 @@ insert into public.lca_package_artifacts (
   (
     '91460000-0000-4000-8000-000000000106',
     '91460000-0000-4000-8000-000000000006',
+    '91460000-0000-4000-8000-000000000006',
     'export_zip',
     'deleted',
     'storage://package/deleted.zip',
@@ -215,6 +247,7 @@ insert into public.lca_package_artifacts (
   ),
   (
     '91460000-0000-4000-8000-000000000107',
+    '91460000-0000-4000-8000-000000000007',
     '91460000-0000-4000-8000-000000000007',
     'export_zip',
     'ready',
@@ -233,6 +266,7 @@ insert into public.lca_package_artifacts (
 insert into public.lca_package_export_items (
   id,
   job_id,
+  worker_job_id,
   table_name,
   dataset_id,
   version,
@@ -243,6 +277,7 @@ insert into public.lca_package_export_items (
 ) values
   (
     '91460000-0000-4000-8000-000000000201',
+    '91460000-0000-4000-8000-000000000001',
     '91460000-0000-4000-8000-000000000001',
     'processes',
     '91460000-0000-4000-8000-000000000301',
@@ -255,6 +290,7 @@ insert into public.lca_package_export_items (
   (
     '91460000-0000-4000-8000-000000000202',
     '91460000-0000-4000-8000-000000000002',
+    '91460000-0000-4000-8000-000000000002',
     'processes',
     '91460000-0000-4000-8000-000000000302',
     '000000001',
@@ -265,6 +301,7 @@ insert into public.lca_package_export_items (
   ),
   (
     '91460000-0000-4000-8000-000000000203',
+    '91460000-0000-4000-8000-000000000003',
     '91460000-0000-4000-8000-000000000003',
     'processes',
     '91460000-0000-4000-8000-000000000303',
@@ -277,6 +314,7 @@ insert into public.lca_package_export_items (
   (
     '91460000-0000-4000-8000-000000000204',
     '91460000-0000-4000-8000-000000000004',
+    '91460000-0000-4000-8000-000000000004',
     'processes',
     '91460000-0000-4000-8000-000000000304',
     '000000001',
@@ -287,6 +325,7 @@ insert into public.lca_package_export_items (
   ),
   (
     '91460000-0000-4000-8000-000000000205',
+    '91460000-0000-4000-8000-000000000005',
     '91460000-0000-4000-8000-000000000005',
     'processes',
     '91460000-0000-4000-8000-000000000305',
@@ -299,6 +338,7 @@ insert into public.lca_package_export_items (
   (
     '91460000-0000-4000-8000-000000000206',
     '91460000-0000-4000-8000-000000000006',
+    '91460000-0000-4000-8000-000000000006',
     'processes',
     '91460000-0000-4000-8000-000000000306',
     '000000001',
@@ -310,6 +350,7 @@ insert into public.lca_package_export_items (
   (
     '91460000-0000-4000-8000-000000000207',
     '91460000-0000-4000-8000-000000000007',
+    '91460000-0000-4000-8000-000000000007',
     'processes',
     '91460000-0000-4000-8000-000000000307',
     '000000001',
@@ -320,6 +361,7 @@ insert into public.lca_package_export_items (
   ),
   (
     '91460000-0000-4000-8000-000000000208',
+    '91460000-0000-4000-8000-000000000008',
     '91460000-0000-4000-8000-000000000008',
     'processes',
     '91460000-0000-4000-8000-000000000308',
@@ -338,6 +380,7 @@ insert into public.lca_package_request_cache (
   request_payload,
   status,
   job_id,
+  worker_job_id,
   export_artifact_id,
   report_artifact_id,
   hit_count,
@@ -352,6 +395,7 @@ insert into public.lca_package_request_cache (
     'old-ready-cache',
     '{}'::jsonb,
     'ready',
+    null,
     null,
     null,
     null,
@@ -370,6 +414,7 @@ insert into public.lca_package_request_cache (
     null,
     null,
     null,
+    null,
     3,
     '2026-01-30 00:00:00+00',
     '2026-01-30 00:00:00+00',
@@ -385,6 +430,7 @@ insert into public.lca_package_request_cache (
     null,
     null,
     null,
+    null,
     0,
     '2025-12-01 00:00:00+00',
     '2025-12-01 00:00:00+00',
@@ -397,6 +443,7 @@ insert into public.lca_package_request_cache (
     'recent-artifact-cache',
     '{}'::jsonb,
     'ready',
+    '91460000-0000-4000-8000-000000000005',
     '91460000-0000-4000-8000-000000000005',
     '91460000-0000-4000-8000-000000000105',
     null,
@@ -424,11 +471,11 @@ select ok(
   (
     select row_count >= 2
     from pg_temp.package_retention_preview
-    where retention_area = 'lca_package_jobs'
+    where retention_area = 'worker_jobs'
       and is_eligible
       and reason = 'eligible_terminal_job_older_than_window'
   ),
-  'old terminal jobs with no remaining object work are eligible'
+  'old terminal package worker jobs with no remaining object work are eligible'
 );
 
 select ok(
@@ -436,33 +483,33 @@ select ok(
     select row_count >= 4
       and total_artifact_bytes >= 110
     from pg_temp.package_retention_preview
-    where retention_area = 'lca_package_jobs'
+    where retention_area = 'worker_jobs'
       and not is_eligible
       and reason = 'protected_object_not_deleted'
   ),
-  'jobs with non-deleted artifact rows are protected until object-aware GC completes'
+  'package worker jobs with non-deleted artifact rows are protected until object-aware GC completes'
 );
 
 select ok(
   (
     select row_count >= 1
     from pg_temp.package_retention_preview
-    where retention_area = 'lca_package_jobs'
+    where retention_area = 'worker_jobs'
       and not is_eligible
       and reason = 'protected_inside_job_retention_window'
   ),
-  'recent terminal jobs are protected by the job retention window'
+  'recent terminal package worker jobs are protected by the job retention window'
 );
 
 select ok(
   (
     select row_count >= 1
     from pg_temp.package_retention_preview
-    where retention_area = 'lca_package_jobs'
+    where retention_area = 'worker_jobs'
       and not is_eligible
       and reason = 'protected_active_job'
   ),
-  'active package jobs are protected'
+  'active package worker jobs are protected'
 );
 
 select ok(
@@ -641,6 +688,11 @@ select ok(
   and lower(pg_get_functiondef('util.preview_lca_package_retention(interval,interval,timestamp with time zone)'::regprocedure)) not like '%update public.lca_package%'
   and lower(pg_get_functiondef('util.preview_lca_package_retention(interval,interval,timestamp with time zone)'::regprocedure)) not like '%insert into public.lca_package%',
   'dry-run function does not contain destructive package DML'
+);
+
+select ok(
+  lower(pg_get_functiondef('util.preview_lca_package_retention(interval,interval,timestamp with time zone)'::regprocedure)) not like '%lca_package_jobs%',
+  'dry-run function does not reference the legacy package job table'
 );
 
 select * from finish();

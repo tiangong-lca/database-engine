@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(15);
+select plan(16);
 
 select has_view(
   'public',
@@ -148,15 +148,16 @@ select cmp_ok(
   'audit reports no runtime function body references to dataset_review_submit_jobs after coordinator cutover'
 );
 
-select ok(
-  exists (
-    select 1
+select cmp_ok(
+  (
+    select count(*)
     from public.worker_legacy_table_retirement_blockers
     where legacy_table = 'public.lca_package_jobs'
       and blocker_type = 'function_source_reference'
-      and not is_drop_restrict_blocker
   ),
-  'audit reports package function source references as runtime blockers'
+  '=',
+  0::bigint,
+  'audit reports no runtime function body references to lca_package_jobs after retention preview cutover'
 );
 
 select ok(
@@ -188,6 +189,11 @@ reset role;
 select lives_ok(
   $$drop table public.lca_jobs, public.lca_package_jobs, public.dataset_review_submit_jobs restrict$$,
   'legacy job tables can be dropped with RESTRICT inside the test transaction after DB blockers are removed'
+);
+
+select lives_ok(
+  $$select count(*) from util.preview_lca_package_retention(interval '30 days', interval '7 days', now())$$,
+  'package retention preview still runs after the legacy package job table is absent'
 );
 
 select * from finish();
