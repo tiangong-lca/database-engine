@@ -337,8 +337,12 @@ select ok(
     where attrelid = 'public.lca_results'::regclass
       and attname = 'worker_job_id'
   )) is not null
+  and obj_description('public.dataset_review_submit_jobs'::regclass, 'pg_class')
+    like '%retirement target%'
+  and obj_description('public.dataset_review_submit_jobs'::regclass, 'pg_class')
+    like '%coordinator%'
   and obj_description('public.worker_job_domain_refs'::regclass, 'pg_class') is not null,
-  'canonical worker job references are documented with comments'
+  'canonical worker job references and review-submit coordinator retirement contract are documented with comments'
 );
 
 select * from finish();
