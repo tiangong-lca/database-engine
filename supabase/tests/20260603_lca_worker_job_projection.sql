@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(16);
+select plan(19);
 
 select has_function(
   'public',
@@ -269,6 +269,40 @@ select is(
   )->>'code',
   'INVALID_LCA_SOLVE_LOOKUP',
   'latest single solve projection validates process index'
+);
+
+select set_config('request.jwt.claim.role', '', true);
+select set_config('request.jwt.claims', '', true);
+select set_config('request.headers', '', true);
+
+select is(
+  public.lca_read_job_projection(
+    p_requested_by => '98110000-0000-4000-8000-000000000001',
+    p_legacy_job_id => '98110000-0000-4000-8000-000000000011',
+    p_include_internal => false
+  )->'data'->'job'->>'workerJobId',
+  (select job_id::text from lca_projection_test_ids where label = 'solve_one_worker'),
+  'service_role execute grant is sufficient for lca_read_job_projection without request GUCs'
+);
+
+select is(
+  public.lca_read_result_projection(
+    p_requested_by => '98110000-0000-4000-8000-000000000001',
+    p_result_id => '98110000-0000-4000-8000-000000000012',
+    p_required_artifact_format => 'hdf5:v1'
+  )->'data'->'job'->>'jobKind',
+  'lca.solve_one',
+  'service_role execute grant is sufficient for lca_read_result_projection without request GUCs'
+);
+
+select is(
+  public.lca_read_latest_single_solve_result(
+    p_requested_by => '98110000-0000-4000-8000-000000000001',
+    p_snapshot_id => '98110000-0000-4000-8000-000000000010',
+    p_process_index => 1
+  )->'data'->'result'->>'resultId',
+  '98110000-0000-4000-8000-000000000012',
+  'service_role execute grant is sufficient for latest single solve projection without request GUCs'
 );
 
 select ok(
