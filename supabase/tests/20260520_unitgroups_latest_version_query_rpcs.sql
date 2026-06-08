@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(11);
+select plan(14);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -168,6 +168,36 @@ select is(
   ),
   2::bigint,
   'team filter limits open unit group latest-version rows before pagination'
+);
+
+select is(
+  strpos(
+    lower(pg_get_functiondef('public.get_latest_unitgroup_versions(bigint,bigint,text,text,uuid,integer,text,text)'::regprocedure)),
+    'user_id::text = this_user_id'
+  ),
+  0,
+  'unit group latest list does not cast user_id on the my-data predicate'
+);
+
+select ok(
+  strpos(
+    lower(pg_get_functiondef('public.get_latest_unitgroup_versions(bigint,bigint,text,text,uuid,integer,text,text)'::regprocedure)),
+    'with visible_keys as'
+  ) > 0
+    and strpos(
+      lower(pg_get_functiondef('public.get_latest_unitgroup_versions(bigint,bigint,text,text,uuid,integer,text,text)'::regprocedure)),
+      'paged_keys as'
+    ) > 0
+    and strpos(
+      lower(pg_get_functiondef('public.get_latest_unitgroup_versions(bigint,bigint,text,text,uuid,integer,text,text)'::regprocedure)),
+      'join public.unitgroups payload'
+    ) > 0,
+  'unit group latest list paginates key rows before fetching json payload'
+);
+
+select ok(
+  to_regclass('public.unitgroups_user_id_id_version_modified_at_latest_idx') is not null,
+  'unit group latest list has a my-data covering key index'
 );
 
 

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(12);
+select plan(15);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -207,6 +207,36 @@ select is(
   ),
   2::bigint,
   'team filter limits open contact latest-version rows before pagination'
+);
+
+select is(
+  strpos(
+    lower(pg_get_functiondef('public.get_latest_contact_versions(bigint,bigint,text,text,uuid,integer,text,text)'::regprocedure)),
+    'user_id::text = this_user_id'
+  ),
+  0,
+  'contact latest list does not cast user_id on the my-data predicate'
+);
+
+select ok(
+  strpos(
+    lower(pg_get_functiondef('public.get_latest_contact_versions(bigint,bigint,text,text,uuid,integer,text,text)'::regprocedure)),
+    'with visible_keys as'
+  ) > 0
+    and strpos(
+      lower(pg_get_functiondef('public.get_latest_contact_versions(bigint,bigint,text,text,uuid,integer,text,text)'::regprocedure)),
+      'paged_keys as'
+    ) > 0
+    and strpos(
+      lower(pg_get_functiondef('public.get_latest_contact_versions(bigint,bigint,text,text,uuid,integer,text,text)'::regprocedure)),
+      'join public.contacts payload'
+    ) > 0,
+  'contact latest list paginates key rows before fetching json payload'
+);
+
+select ok(
+  to_regclass('public.contacts_user_id_id_version_modified_at_latest_idx') is not null,
+  'contact latest list has a my-data covering key index'
 );
 
 
