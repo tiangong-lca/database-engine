@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(40);
+select plan(42);
 
 select ok(to_regclass('public.worker_job_kinds') is not null, 'worker job kind registry exists');
 select ok(to_regclass('public.worker_jobs') is not null, 'worker_jobs table exists');
@@ -38,8 +38,25 @@ select ok(
 select cmp_ok(
   (select count(*) from public.worker_job_kinds),
   '>=',
-  12::bigint,
+  13::bigint,
   'initial worker job kinds are registered'
+);
+
+select ok(
+  exists (
+    select 1
+    from public.worker_job_kinds
+    where job_kind = 'national_carbon.process_flow_graph_cache_build'
+      and worker_runtime = 'calculator'
+      and worker_queue = 'maintenance'
+      and default_visibility = 'operator'
+      and default_max_attempts = 1
+      and default_lease_seconds = 3600
+      and payload_schema_version = 'national_carbon.process_flow_graph_cache_build.request.v1'
+      and result_schema_version = 'national_carbon.process_flow_graph_cache_build.result.v1'
+      and user_visible = false
+  ),
+  'national carbon process-flow graph cache worker job kind is registered'
 );
 
 set local role authenticated;
@@ -161,6 +178,32 @@ select is(
   )->>'code',
   'WORKER_JOB_CONCURRENCY_CONFLICT',
   'concurrencyKey prevents conflicting active jobs'
+);
+
+insert into worker_job_test_ids (label, job_id)
+select
+  'national_carbon_graph_cache',
+  (result->'data'->>'id')::uuid
+from (
+  select public.worker_enqueue_job(
+    p_job_kind => 'national_carbon.process_flow_graph_cache_build',
+    p_payload_json => '{"environment":"test","execute":true}'::jsonb,
+    p_requested_by => '96000000-0000-4000-8000-000000000001',
+    p_requester_type => 'operator',
+    p_idempotency_key => 'national-carbon:process-flow-graph-cache:test:execute',
+    p_concurrency_key => 'national-carbon:process-flow-graph-cache:test:execute',
+    p_subject_type => 'national_carbon_process_flow_graph_cache'
+  ) as result
+) as enqueue;
+
+select is(
+  (
+    select job_kind || ':' || worker_queue || ':' || visibility || ':' || max_attempts::text || ':' || payload_schema_version
+    from public.worker_jobs
+    where id = (select job_id from worker_job_test_ids where label = 'national_carbon_graph_cache')
+  ),
+  'national_carbon.process_flow_graph_cache_build:maintenance:operator:1:national_carbon.process_flow_graph_cache_build.request.v1',
+  'national carbon graph cache enqueue creates a maintenance operator worker job'
 );
 
 insert into worker_job_test_ids (label, job_id)
