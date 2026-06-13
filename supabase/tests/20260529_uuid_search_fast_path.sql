@@ -23,17 +23,17 @@ $$;
 select plan(21);
 
 select ok(
-  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'exact_query_id') > 0,
+  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'exact_query_id') > 0,
   'flow latest search has an exact UUID fast path'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'exact_query_id') > 0,
+  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'exact_query_id') > 0,
   'process latest search has an exact UUID fast path'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'exact_query_id') > 0,
+  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'exact_query_id') > 0,
   'lifecyclemodel latest search has an exact UUID fast path'
 );
 
@@ -43,7 +43,7 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'f.extracted_text &@~ $1') > 0,
+  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_text &@~ $1') > 0,
   'flow non-UUID search still uses extracted_text PGroonga'
 );
 

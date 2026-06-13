@@ -23,23 +23,23 @@ end;
 $$;
 
 select ok(
-  strpos(pg_get_functiondef('public.hybrid_search_flows(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer)'::regprocedure), 'public.search_flows_latest') > 0,
+  strpos(pg_get_functiondef('public.hybrid_search_flows(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.search_flows_latest') > 0,
   'flow hybrid search uses latest text search for text candidates'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.hybrid_search_processes(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer)'::regprocedure), 'public.search_processes_latest') > 0,
+  strpos(pg_get_functiondef('public.hybrid_search_processes(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.search_processes_latest') > 0,
   'process hybrid search uses latest text search for text candidates'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.hybrid_search_lifecyclemodels(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer)'::regprocedure), 'public.search_lifecyclemodels_latest') > 0,
+  strpos(pg_get_functiondef('public.hybrid_search_lifecyclemodels(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.search_lifecyclemodels_latest') > 0,
   'lifecyclemodel hybrid search uses latest text search for text candidates'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.hybrid_search_processes(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer)'::regprocedure), 'pgroonga_search_processes_v1') = 0
-    and strpos(pg_get_functiondef('public.hybrid_search_processes(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer)'::regprocedure), 'pgroonga_search_processes_text_v1') = 0,
+  strpos(pg_get_functiondef('public.hybrid_search_processes(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'pgroonga_search_processes_v1') = 0
+    and strpos(pg_get_functiondef('public.hybrid_search_processes(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'pgroonga_search_processes_text_v1') = 0,
   'process hybrid search no longer depends on legacy process PGroonga helpers'
 );
 

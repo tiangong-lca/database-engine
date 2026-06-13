@@ -25,37 +25,37 @@ select plan(26);
 select ok(to_regnamespace('private') is not null, 'private schema exists for non-exposed search helpers');
 
 select ok(
-  strpos(pg_get_functiondef('public.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'private.search_flows_latest_impl') > 0,
+  strpos(pg_get_functiondef('public.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'private.search_flows_latest_impl') > 0,
   'flow public search wrapper delegates to private helper'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'private.search_processes_latest_impl') > 0,
+  strpos(pg_get_functiondef('public.search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'private.search_processes_latest_impl') > 0,
   'process public search wrapper delegates to private helper'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'private.search_lifecyclemodels_latest_impl') > 0,
+  strpos(pg_get_functiondef('public.search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'private.search_lifecyclemodels_latest_impl') > 0,
   'lifecyclemodel public search wrapper delegates to private helper'
 );
 
 select ok(
-  (select prosecdef from pg_proc where oid = 'private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure),
+  (select prosecdef from pg_proc where oid = 'private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure),
   'flow private helper is security definer'
 );
 
 select ok(
-  (select prosecdef from pg_proc where oid = 'private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure),
+  (select prosecdef from pg_proc where oid = 'private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure),
   'process private helper is security definer'
 );
 
 select ok(
-  (select prosecdef from pg_proc where oid = 'private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure),
+  (select prosecdef from pg_proc where oid = 'private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure),
   'lifecyclemodel private helper is security definer'
 );
 
 select ok(
-  not (select prosecdef from pg_proc where oid = 'public.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure),
+  not (select prosecdef from pg_proc where oid = 'public.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure),
   'public search wrapper remains security invoker'
 );
 
@@ -70,7 +70,7 @@ select ok(
 );
 
 select ok(
-  has_function_privilege('authenticated', 'private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer)', 'EXECUTE'),
+  has_function_privilege('authenticated', 'private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])', 'EXECUTE'),
   'authenticated can execute the hardcoded flow search helper through the wrapper path'
 );
 

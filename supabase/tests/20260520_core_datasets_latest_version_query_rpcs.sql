@@ -447,22 +447,22 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'join lateral') > 0,
+  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'join lateral') > 0,
   'flow open-data latest PGroonga search fetches latest versions with lateral index lookups'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'f.extracted_text &@~ $1') > 0,
+  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_text &@~ $1') > 0,
   'flow latest PGroonga search matches query_text against extracted_text'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'json_filter_clause') > 0,
+  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'json_filter_clause') > 0,
   'flow latest PGroonga search branches on empty JSON filters'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'and f.json @> $2') > 0,
+  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'and f.json @> $2') > 0,
   'flow latest PGroonga search only keeps JSON containment for non-empty filters'
 );
 
@@ -482,22 +482,22 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'join lateral') > 0,
+  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'join lateral') > 0,
   'process latest PGroonga search fetches latest versions with lateral index lookups'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'p.extracted_text &@~ $1') > 0,
+  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'p.extracted_text &@~ $1') > 0,
   'process latest PGroonga search matches query_text against extracted_text'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'json_filter_clause') > 0,
+  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'json_filter_clause') > 0,
   'process latest PGroonga search branches on empty JSON filters'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'and p.json @> $2') > 0,
+  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'and p.json @> $2') > 0,
   'process latest PGroonga search only keeps JSON containment for non-empty filters'
 );
 
@@ -517,22 +517,22 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'join lateral') > 0,
+  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'join lateral') > 0,
   'lifecyclemodel latest PGroonga search fetches latest versions with lateral index lookups'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'l.extracted_text &@~ $1') > 0,
+  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'l.extracted_text &@~ $1') > 0,
   'lifecyclemodel latest PGroonga search matches query_text against extracted_text'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'json_filter_clause') > 0,
+  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'json_filter_clause') > 0,
   'lifecyclemodel latest PGroonga search branches on empty JSON filters'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'and l.json @> $2') > 0,
+  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'and l.json @> $2') > 0,
   'lifecyclemodel latest PGroonga search only keeps JSON containment for non-empty filters'
 );
 
