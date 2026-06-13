@@ -43,8 +43,8 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_text &@~ $1') > 0,
-  'flow non-UUID search still uses extracted_text PGroonga'
+  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_text &@~| $14') > 0,
+  'flow non-UUID search still uses extracted_text PGroonga through escaped term-array search'
 );
 
 select ok(

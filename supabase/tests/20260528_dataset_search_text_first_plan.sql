@@ -16,7 +16,7 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'where f.extracted_text &@~ $1') > 0
+  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'where f.extracted_text &@~| $14') > 0
     and strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'from text_matches f') > 0,
   'flow latest search separates extracted_text scan from source/filter predicates'
 );
@@ -37,7 +37,7 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'where p.extracted_text &@~ $1') > 0
+  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'where p.extracted_text &@~| $11') > 0
     and strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'from text_matches p') > 0,
   'process latest search separates extracted_text scan from source/filter predicates'
 );
@@ -58,7 +58,7 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'where l.extracted_text &@~ $1') > 0
+  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'where l.extracted_text &@~| $10') > 0
     and strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'from text_matches l') > 0,
   'lifecyclemodel latest search separates extracted_text scan from source/filter predicates'
 );

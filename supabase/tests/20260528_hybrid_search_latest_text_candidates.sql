@@ -94,7 +94,25 @@ with latest_zero_embedding(value) as (
   select '[' || array_to_string(array_fill('0'::text, array[1024]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_flows('(电子器件) OR (electronic component)', (select value from latest_zero_embedding), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'tg', 10, 1) limit 1),
+  (
+    select id::text
+    from public.hybrid_search_flows(
+      '(电子器件) OR (electronic component)',
+      (select value from latest_zero_embedding),
+      '{}',
+      0.5,
+      20,
+      0.3,
+      0.2,
+      0.5,
+      10,
+      'tg',
+      10,
+      1,
+      array['电子器件', 'electronic component']
+    )
+    limit 1
+  ),
   'f1000000-0000-0000-0000-000000000101',
   'flow hybrid tg search returns a text candidate through latest search'
 );
@@ -103,7 +121,25 @@ with latest_zero_embedding(value) as (
   select '[' || array_to_string(array_fill('0'::text, array[1024]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_flows('(电子器件) OR (electronic component)', (select value from latest_zero_embedding), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'my', 10, 1) limit 1),
+  (
+    select id::text
+    from public.hybrid_search_flows(
+      '(电子器件) OR (electronic component)',
+      (select value from latest_zero_embedding),
+      '{}',
+      0.5,
+      20,
+      0.3,
+      0.2,
+      0.5,
+      10,
+      'my',
+      10,
+      1,
+      array['电子器件', 'electronic component']
+    )
+    limit 1
+  ),
   'f2000000-0000-0000-0000-000000000101',
   'flow hybrid my search returns the authenticated owner text candidate'
 );
@@ -121,7 +157,25 @@ with latest_zero_embedding(value) as (
   select '[' || array_to_string(array_fill('0'::text, array[1024]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_processes('(正极材料) OR (cathode material)', (select value from latest_zero_embedding), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'tg', 10, 1) limit 1),
+  (
+    select id::text
+    from public.hybrid_search_processes(
+      '(正极材料) OR (cathode material)',
+      (select value from latest_zero_embedding),
+      '{}',
+      0.5,
+      20,
+      0.3,
+      0.2,
+      0.5,
+      10,
+      'tg',
+      10,
+      1,
+      array['正极材料', 'cathode material']
+    )
+    limit 1
+  ),
   'e1000000-0000-0000-0000-000000000101',
   'process hybrid tg search returns a text candidate through latest search'
 );
@@ -130,7 +184,25 @@ with latest_zero_embedding(value) as (
   select '[' || array_to_string(array_fill('0'::text, array[1024]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_processes('(正极材料) OR (cathode material)', (select value from latest_zero_embedding), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'my', 10, 1) limit 1),
+  (
+    select id::text
+    from public.hybrid_search_processes(
+      '(正极材料) OR (cathode material)',
+      (select value from latest_zero_embedding),
+      '{}',
+      0.5,
+      20,
+      0.3,
+      0.2,
+      0.5,
+      10,
+      'my',
+      10,
+      1,
+      array['正极材料', 'cathode material']
+    )
+    limit 1
+  ),
   'e2000000-0000-0000-0000-000000000101',
   'process hybrid my search returns the authenticated owner text candidate'
 );
@@ -148,7 +220,25 @@ with latest_zero_embedding(value) as (
   select '[' || array_to_string(array_fill('0'::text, array[1024]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_lifecyclemodels('(交流电) OR (electricity)', (select value from latest_zero_embedding), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'tg', 10, 1) limit 1),
+  (
+    select id::text
+    from public.hybrid_search_lifecyclemodels(
+      '(交流电) OR (electricity)',
+      (select value from latest_zero_embedding),
+      '{}',
+      0.5,
+      20,
+      0.3,
+      0.2,
+      0.5,
+      10,
+      'tg',
+      10,
+      1,
+      array['交流电', 'electricity']
+    )
+    limit 1
+  ),
   'd1000000-0000-0000-0000-000000000101',
   'lifecyclemodel hybrid tg search returns a text candidate through latest search'
 );
@@ -157,7 +247,25 @@ with latest_zero_embedding(value) as (
   select '[' || array_to_string(array_fill('0'::text, array[1024]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_lifecyclemodels('(交流电) OR (electricity)', (select value from latest_zero_embedding), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'my', 10, 1) limit 1),
+  (
+    select id::text
+    from public.hybrid_search_lifecyclemodels(
+      '(交流电) OR (electricity)',
+      (select value from latest_zero_embedding),
+      '{}',
+      0.5,
+      20,
+      0.3,
+      0.2,
+      0.5,
+      10,
+      'my',
+      10,
+      1,
+      array['交流电', 'electricity']
+    )
+    limit 1
+  ),
   'd2000000-0000-0000-0000-000000000101',
   'lifecyclemodel hybrid my search returns the authenticated owner text candidate'
 );

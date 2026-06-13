@@ -56,10 +56,10 @@ begin
   text_match_clause text;', 'lifecyclemodel private declarations');
   fn := pg_temp.required_replace(fn, '  filter_condition_jsonb := coalesce(filter_condition, ''{}''::jsonb);', '  filter_condition_jsonb := coalesce(filter_condition, ''{}''::jsonb);
   escaped_query_terms := private.pgroonga_escape_query_terms(query_terms);
-  text_match_clause := case
-    when cardinality(escaped_query_terms) > 0 then ''where l.extracted_text &@~| $10''
-    else ''where l.extracted_text &@~ $1''
-  end;', 'lifecyclemodel private escaped terms');
+  if cardinality(escaped_query_terms) = 0 then
+    escaped_query_terms := private.pgroonga_escape_query_terms(array[query_text]);
+  end if;
+  text_match_clause := ''where l.extracted_text &@~| $10'';', 'lifecyclemodel private escaped terms');
   fn := pg_temp.required_replace(fn, '      where l.extracted_text &@~ $1', '      %s', 'lifecyclemodel private text match clause');
   fn := pg_temp.required_replace(fn, '$sql$, json_filter_clause);', '$sql$, text_match_clause, json_filter_clause);', 'lifecyclemodel private format args');
   fn := pg_temp.required_replace(fn, '          normalized_data_source, effective_user_id, team_id_filter, state_code_filter, can_read_team_filter;', '          normalized_data_source, effective_user_id, team_id_filter, state_code_filter,
@@ -73,10 +73,10 @@ begin
   text_match_clause text;', 'process private declarations');
   fn := pg_temp.required_replace(fn, '  filter_condition_jsonb := coalesce(filter_condition, ''{}''::jsonb);', '  filter_condition_jsonb := coalesce(filter_condition, ''{}''::jsonb);
   escaped_query_terms := private.pgroonga_escape_query_terms(query_terms);
-  text_match_clause := case
-    when cardinality(escaped_query_terms) > 0 then ''where p.extracted_text &@~| $11''
-    else ''where p.extracted_text &@~ $1''
-  end;', 'process private escaped terms');
+  if cardinality(escaped_query_terms) = 0 then
+    escaped_query_terms := private.pgroonga_escape_query_terms(array[query_text]);
+  end if;
+  text_match_clause := ''where p.extracted_text &@~| $11'';', 'process private escaped terms');
   fn := pg_temp.required_replace(fn, '      where p.extracted_text &@~ $1', '      %s', 'process private text match clause');
   fn := pg_temp.required_replace(fn, '$sql$, json_filter_clause);', '$sql$, text_match_clause, json_filter_clause);', 'process private format args');
   fn := pg_temp.required_replace(fn, '          can_read_team_filter, type_of_data_set_filter;', '          can_read_team_filter, type_of_data_set_filter, escaped_query_terms;', 'process private execute args');
@@ -89,10 +89,10 @@ begin
   text_match_clause text;', 'flow private declarations');
   fn := pg_temp.required_replace(fn, '  filter_condition_jsonb := coalesce(filter_condition, ''{}''::jsonb);', '  filter_condition_jsonb := coalesce(filter_condition, ''{}''::jsonb);
   escaped_query_terms := private.pgroonga_escape_query_terms(query_terms);
-  text_match_clause := case
-    when cardinality(escaped_query_terms) > 0 then ''where f.extracted_text &@~| $14''
-    else ''where f.extracted_text &@~ $1''
-  end;', 'flow private escaped terms');
+  if cardinality(escaped_query_terms) = 0 then
+    escaped_query_terms := private.pgroonga_escape_query_terms(array[query_text]);
+  end if;
+  text_match_clause := ''where f.extracted_text &@~| $14'';', 'flow private escaped terms');
   fn := pg_temp.required_replace(fn, '      where f.extracted_text &@~ $1', '      %s', 'flow private text match clause');
   fn := pg_temp.required_replace(fn, '$sql$, json_filter_clause);', '$sql$, text_match_clause, json_filter_clause);', 'flow private format args');
   fn := pg_temp.required_replace(fn, '          can_read_team_filter, flow_type, flow_type_array, as_input, classification_filter;', '          can_read_team_filter, flow_type, flow_type_array, as_input, classification_filter,

@@ -452,8 +452,8 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_text &@~ $1') > 0,
-  'flow latest PGroonga search matches query_text against extracted_text'
+  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_text &@~| $14') > 0,
+  'flow latest PGroonga search matches escaped query terms against extracted_text'
 );
 
 select ok(
@@ -487,8 +487,8 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'p.extracted_text &@~ $1') > 0,
-  'process latest PGroonga search matches query_text against extracted_text'
+  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'p.extracted_text &@~| $11') > 0,
+  'process latest PGroonga search matches escaped query terms against extracted_text'
 );
 
 select ok(
@@ -522,8 +522,8 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'l.extracted_text &@~ $1') > 0,
-  'lifecyclemodel latest PGroonga search matches query_text against extracted_text'
+  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'l.extracted_text &@~| $10') > 0,
+  'lifecyclemodel latest PGroonga search matches escaped query terms against extracted_text'
 );
 
 select ok(

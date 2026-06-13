@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(18);
+select plan(20);
 
 create or replace function pg_temp.disable_trigger_if_exists(p_table regclass, p_trigger_name text)
 returns void
@@ -255,6 +255,27 @@ select is(
 select is(
   (
     select id::text
+    from public.search_processes_latest(
+      'alternating current',
+      '{}'::jsonb,
+      '{}'::jsonb,
+      10,
+      1,
+      'tg',
+      '',
+      null::uuid,
+      null::integer,
+      'all'
+    )
+    limit 1
+  ),
+  'e6130000-0000-0000-0000-000000000001',
+  'process latest search derives escaped query terms from query_text when query_terms is omitted'
+);
+
+select is(
+  (
+    select id::text
     from public.search_lifecyclemodels_latest(
       'ignored-invalid-query (硅酸盐水泥)',
       '{}'::jsonb,
@@ -271,6 +292,29 @@ select is(
   ),
   'd6130000-0000-0000-0000-000000000001',
   'lifecyclemodel latest search query_terms handle Chinese terms'
+);
+
+with chemical(term) as (
+  values ('Propanoic acid, 2-[4-[(6-chloro-2-quinoxalinyl)oxy]phenoxy]-, 2-[[(1-methylethylidene)amino]oxy]ethyl ester, (2R)-')
+)
+select is(
+  (
+    select id::text
+    from public.search_flows_latest(
+      (select term from chemical),
+      '{}'::jsonb,
+      '{}'::jsonb,
+      10,
+      1,
+      'tg',
+      '',
+      null::uuid,
+      null::integer
+    )
+    limit 1
+  ),
+  'f6130000-0000-0000-0000-000000000001',
+  'flow latest query_text-only search escapes nested chemical punctuation'
 );
 
 select is(
@@ -290,7 +334,7 @@ select is(
     limit 1
   ),
   'd6130000-0000-0000-0000-000000000002',
-  'legacy query_text fallback still works when query_terms is omitted'
+  'query_text-only search still works when query_terms is omitted'
 );
 
 select is(
@@ -335,18 +379,21 @@ select is(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_text &@~| $14') > 0,
-  'flow latest implementation has a query_terms branch'
+  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_text &@~| $14') > 0
+    and strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_text &@~ $1') = 0,
+  'flow latest implementation always uses escaped term-array text search'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'p.extracted_text &@~| $11') > 0,
-  'process latest implementation has a query_terms branch'
+  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'p.extracted_text &@~| $11') > 0
+    and strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'p.extracted_text &@~ $1') = 0,
+  'process latest implementation always uses escaped term-array text search'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'l.extracted_text &@~| $10') > 0,
-  'lifecyclemodel latest implementation has a query_terms branch'
+  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'l.extracted_text &@~| $10') > 0
+    and strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'l.extracted_text &@~ $1') = 0,
+  'lifecyclemodel latest implementation always uses escaped term-array text search'
 );
 
 select ok(
