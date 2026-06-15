@@ -38,20 +38,20 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.hybrid_search_flows(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer)'::regprocedure), 'private.semantic_flow_candidates') > 0
-    and strpos(pg_get_functiondef('public.hybrid_search_flows(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer)'::regprocedure), 'public.semantic_search_flows_v1') = 0,
+  strpos(pg_get_functiondef('public.hybrid_search_flows(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'private.semantic_flow_candidates') > 0
+    and strpos(pg_get_functiondef('public.hybrid_search_flows(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.semantic_search_flows_v1') = 0,
   'flow hybrid search uses lightweight private semantic candidates'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.hybrid_search_processes(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer)'::regprocedure), 'private.semantic_process_candidates') > 0
-    and strpos(pg_get_functiondef('public.hybrid_search_processes(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer)'::regprocedure), 'public.semantic_search_processes_v1') = 0,
+  strpos(pg_get_functiondef('public.hybrid_search_processes(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'private.semantic_process_candidates') > 0
+    and strpos(pg_get_functiondef('public.hybrid_search_processes(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.semantic_search_processes_v1') = 0,
   'process hybrid search uses lightweight private semantic candidates'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.hybrid_search_lifecyclemodels(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer)'::regprocedure), 'private.semantic_lifecyclemodel_candidates') > 0
-    and strpos(pg_get_functiondef('public.hybrid_search_lifecyclemodels(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer)'::regprocedure), 'public.semantic_search_lifecyclemodels_v1') = 0,
+  strpos(pg_get_functiondef('public.hybrid_search_lifecyclemodels(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'private.semantic_lifecyclemodel_candidates') > 0
+    and strpos(pg_get_functiondef('public.hybrid_search_lifecyclemodels(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.semantic_search_lifecyclemodels_v1') = 0,
   'lifecyclemodel hybrid search uses lightweight private semantic candidates'
 );
 
