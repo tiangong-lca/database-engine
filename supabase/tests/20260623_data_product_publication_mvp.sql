@@ -20,64 +20,64 @@ begin
 end;
 $$;
 
-select plan(34);
+select plan(32);
 
-select has_table('public', 'data_product_runs', 'data product runs table exists');
-select has_table('public', 'data_product_run_inputs', 'data product run inputs table exists');
-select has_table('public', 'data_product_packages', 'data product packages table exists');
-select has_table('public', 'data_product_package_items', 'data product package items table exists');
-select has_table('public', 'data_product_lcia_results', 'data product LCIA result rows table exists');
-select has_table('public', 'data_product_artifacts', 'data product artifacts table exists');
-select has_table('public', 'data_product_publications', 'data product publications table exists');
+select has_table('public', 'lcia_result_packages', 'LCIA result packages table exists');
+select has_table('public', 'lcia_result_publications', 'LCIA result publications table exists');
+select ok(to_regclass('public.data_product_runs') is null, 'data_product_runs table is not created');
+select ok(to_regclass('public.data_product_run_inputs') is null, 'data_product_run_inputs table is not created');
+select ok(to_regclass('public.data_product_packages') is null, 'data_product_packages table is not created');
+select ok(to_regclass('public.data_product_lcia_results') is null, 'data_product_lcia_results table is not created');
+select ok(to_regclass('public.data_product_artifacts') is null, 'data_product_artifacts table is not created');
 
 select has_function(
   'public',
-  'cmd_data_product_run_create',
+  'cmd_lcia_result_build_request',
   array['text', 'jsonb', 'text', 'text', 'jsonb', 'text', 'jsonb'],
-  'cmd_data_product_run_create exists'
+  'cmd_lcia_result_build_request exists'
 );
 
 select has_function(
   'public',
-  'cmd_data_product_package_mark_ready',
-  array['uuid', 'text', 'uuid', 'uuid', 'text', 'text', 'jsonb', 'jsonb', 'jsonb'],
-  'cmd_data_product_package_mark_ready exists'
+  'cmd_lcia_result_package_mark_ready',
+  array['uuid', 'text', 'uuid', 'uuid', 'uuid', 'jsonb', 'jsonb', 'jsonb', 'jsonb', 'text', 'text', 'jsonb'],
+  'cmd_lcia_result_package_mark_ready exists'
 );
 
 select has_function(
   'public',
-  'cmd_data_product_package_publish',
+  'cmd_lcia_result_package_publish',
   array['uuid', 'text', 'text', 'jsonb'],
-  'cmd_data_product_package_publish exists'
+  'cmd_lcia_result_package_publish exists'
 );
 
 select has_function(
   'public',
-  'get_data_product_package_preview',
+  'get_lcia_result_package_preview',
   array['uuid'],
-  'get_data_product_package_preview exists'
+  'get_lcia_result_package_preview exists'
 );
 
 select has_function(
   'public',
-  'get_published_process_lcia_results',
+  'get_published_lcia_result_package',
   array['uuid', 'text', 'text'],
-  'get_published_process_lcia_results exists'
+  'get_published_lcia_result_package exists'
 );
 
 select ok(
-  (select relrowsecurity from pg_class where oid = 'public.data_product_lcia_results'::regclass),
-  'data_product_lcia_results has RLS enabled'
+  (select relrowsecurity from pg_class where oid = 'public.lcia_result_packages'::regclass),
+  'lcia_result_packages has RLS enabled'
 );
 
 select ok(
-  not has_table_privilege('authenticated', 'public.data_product_lcia_results', 'SELECT'),
-  'authenticated users cannot directly select unpublished data product result rows'
+  not has_table_privilege('authenticated', 'public.lcia_result_packages', 'SELECT'),
+  'authenticated users cannot directly select unpublished LCIA result packages'
 );
 
 select ok(
-  not has_table_privilege('anon', 'public.data_product_lcia_results', 'SELECT'),
-  'anon users cannot directly select data product result rows'
+  not has_table_privilege('anon', 'public.lcia_result_publications', 'SELECT'),
+  'anon users cannot directly select LCIA result publications'
 );
 
 select ok(
@@ -106,12 +106,12 @@ select ok(
   exists (
     select 1
     from public.worker_job_kinds
-    where job_kind = 'data_product.package_build'
+    where job_kind = 'lcia_result.package_build'
       and worker_queue = 'solver'
       and default_visibility = 'operator'
-      and payload_schema_version = 'data_product.package_build.request.v1'
+      and payload_schema_version = 'lcia_result.package_build.request.v1'
   ),
-  'data_product.package_build worker job kind is registered'
+  'lcia_result.package_build worker job kind is registered'
 );
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -190,117 +190,169 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 
 select is(
-  public.cmd_data_product_run_create(
-    p_name => 'ordinary user run',
+  public.cmd_lcia_result_build_request(
+    p_name => 'ordinary user build',
     p_processes => null,
     p_coverage_mode => 'global_eligible',
     p_default_impact_category => 'climate-change',
     p_lcia_method_set => '[]'::jsonb,
-    p_idempotency_key => 'pgtap-data-product-ordinary-user',
+    p_idempotency_key => 'pgtap-lcia-result-ordinary-user',
     p_audit => '{}'::jsonb
   )->>'code',
   'not_data_product_manager',
-  'ordinary authenticated users cannot create data product runs'
+  'ordinary authenticated users cannot request LCIA result builds'
 );
 
 select set_config('request.jwt.claim.sub', '98230000-0000-4000-8000-000000000001', true);
 select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 
 select is(
-  public.cmd_data_product_run_create(
-    p_name => 'draft input run',
+  public.cmd_lcia_result_build_request(
+    p_name => 'draft input build',
     p_processes => jsonb_build_array(jsonb_build_object('id', '98230000-0000-4000-8000-000000000103', 'version', '01.00.000')),
     p_coverage_mode => 'subset',
     p_default_impact_category => 'climate-change',
     p_lcia_method_set => '[]'::jsonb,
-    p_idempotency_key => 'pgtap-data-product-draft-input',
+    p_idempotency_key => 'pgtap-lcia-result-draft-input',
     p_audit => '{}'::jsonb
   )->>'code',
   'input_not_eligible',
-  'data product run creation rejects draft process input'
+  'LCIA result build request rejects draft process input'
 );
 
 select is(
-  public.cmd_data_product_run_create(
-    p_name => 'global run with manual input',
+  public.cmd_lcia_result_build_request(
+    p_name => 'global build with manual input',
     p_processes => jsonb_build_array(jsonb_build_object('id', '98230000-0000-4000-8000-000000000101', 'version', '01.00.000')),
     p_coverage_mode => 'global_eligible',
     p_default_impact_category => 'climate-change',
     p_lcia_method_set => '[]'::jsonb,
-    p_idempotency_key => 'pgtap-data-product-global-manual-input',
+    p_idempotency_key => 'pgtap-lcia-result-global-manual-input',
     p_audit => '{}'::jsonb
   )->>'code',
   'invalid_coverage_mode',
-  'global eligible run creation rejects manual process subsets'
+  'global eligible build request rejects manual process subsets'
 );
 
-create temporary table data_product_test_ids (
+create temporary table lcia_result_test_ids (
   label text primary key,
   id uuid not null
 ) on commit drop;
 
-grant all on data_product_test_ids to public;
+grant all on lcia_result_test_ids to public;
 
-insert into data_product_test_ids (label, id)
+insert into lcia_result_test_ids (label, id)
 select
-  'run',
-  (result->'data'->>'runId')::uuid
+  'build',
+  (result->'data'->>'buildId')::uuid
 from (
-  select public.cmd_data_product_run_create(
-    p_name => 'global published run',
+  select public.cmd_lcia_result_build_request(
+    p_name => 'global published LCIA result build',
     p_processes => null,
     p_coverage_mode => 'global_eligible',
     p_default_impact_category => 'climate-change',
     p_lcia_method_set => jsonb_build_array(jsonb_build_object('method', 'EF', 'version', 'v1')),
-    p_idempotency_key => 'pgtap-data-product-global-run',
+    p_idempotency_key => 'pgtap-lcia-result-global-build',
     p_audit => '{}'::jsonb
   ) as result
 ) as created;
 
 select is(
   (
-    select coverage_mode || ':' || eligible_input_count::text || ':' || included_input_count::text
-    from public.data_product_runs
-    where id = (select id from data_product_test_ids where label = 'run')
+    public.cmd_lcia_result_build_request(
+      p_name => 'global published LCIA result build',
+      p_processes => null,
+      p_coverage_mode => 'global_eligible',
+      p_default_impact_category => 'climate-change',
+      p_lcia_method_set => jsonb_build_array(jsonb_build_object('method', 'EF', 'version', 'v1')),
+      p_idempotency_key => 'pgtap-lcia-result-global-build',
+      p_audit => '{}'::jsonb
+    )->'data'->'workerJob'->>'jobKind'
   ),
-  'global_eligible:2:2',
-  'global eligible run captures only published predicate inputs'
+  'lcia_result.package_build',
+  'build request returns the LCIA result worker job kind'
 );
 
-select ok(
-  not exists (
-    select 1
-    from public.data_product_run_inputs
-    where run_id = (select id from data_product_test_ids where label = 'run')
-      and state_code = 0
-  ),
-  'global eligible run does not include draft process inputs'
+select is(
+  (
+    public.cmd_lcia_result_build_request(
+      p_name => 'global published LCIA result build',
+      p_processes => null,
+      p_coverage_mode => 'global_eligible',
+      p_default_impact_category => 'climate-change',
+      p_lcia_method_set => jsonb_build_array(jsonb_build_object('method', 'EF', 'version', 'v1')),
+      p_idempotency_key => 'pgtap-lcia-result-global-build',
+      p_audit => '{}'::jsonb
+    )->'data'->>'includedInputCount'
+  )::integer,
+  2,
+  'build request resolves only published eligible process inputs'
 );
 
 reset role;
-set local role service_role;
-select set_config('request.jwt.claim.sub', '', true);
-select set_config('request.jwt.claim.role', 'service_role', true);
-select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
-insert into public.lca_network_snapshots (
+insert into public.worker_jobs (
   id,
-  scope,
-  process_filter,
-  provider_matching_rule,
-  source_hash,
-  status,
-  created_at,
-  updated_at
-) values (
-  '98230000-0000-4000-8000-000000000201',
+  job_kind,
+  worker_runtime,
+  worker_queue,
+  subject_type,
+  subject_id,
+  requester_type,
+  requested_by,
+  idempotency_key,
+  request_hash,
+  visibility,
+  payload_schema_version,
+  payload_json
+)
+select
+  '98230000-0000-4000-8000-000000000301'::uuid,
+  'lcia_result.package_build',
+  'calculator',
+  'solver',
+  'lcia_result_build',
+  id,
+  'operator',
+  '98230000-0000-4000-8000-000000000001',
+  'pgtap-lcia-result-worker-job',
+  'manifest-hash',
+  'operator',
+  'lcia_result.package_build.request.v1',
+  jsonb_build_object(
+    'type', 'lcia_result_package_build',
+    'build_id', id,
+    'requested_by', '98230000-0000-4000-8000-000000000001',
+    'coverage_mode', 'global_eligible',
+    'input_status_filter', jsonb_build_object('state_code', jsonb_build_object('between', jsonb_build_array(100, 199))),
+    'eligibility_definition', jsonb_build_object('predicateVersion', 'published-state-code-100-199:v1'),
+    'eligibility_resolved_at', now(),
+    'eligible_input_count', 2,
+    'included_input_count', 2,
+    'input_manifest_hash', public.lcia_result_current_eligible_manifest()->>'inputManifestHash',
+    'input_manifest', public.lcia_result_current_eligible_manifest()->'inputManifest',
+    'lcia_method_set', jsonb_build_array(jsonb_build_object('method', 'EF', 'version', 'v1')),
+    'default_impact_category', 'climate-change',
+    'postprocess_manifest', jsonb_build_object('postprocess_mode', 'skipped')
+  )
+from lcia_result_test_ids
+where label = 'build';
+
+insert into lcia_result_test_ids (label, id)
+values
+  ('worker_job', '98230000-0000-4000-8000-000000000301'),
+  ('snapshot', '98230000-0000-4000-8000-000000000401'),
+  ('result', '98230000-0000-4000-8000-000000000501'),
+  ('latest_all_unit', '98230000-0000-4000-8000-000000000601');
+
+insert into public.lca_network_snapshots (id, scope, process_filter, source_hash, status, created_by)
+values (
+  (select id from lcia_result_test_ids where label = 'snapshot'),
   'data_product',
-  '{"process_states":[100,101,102,103,104,105,106,107,108,109,110,111,112,113,114,115,116,117,118,119,120,121,122,123,124,125,126,127,128,129,130,131,132,133,134,135,136,137,138,139,140,141,142,143,144,145,146,147,148,149,150,151,152,153,154,155,156,157,158,159,160,161,162,163,164,165,166,167,168,169,170,171,172,173,174,175,176,177,178,179,180,181,182,183,184,185,186,187,188,189,190,191,192,193,194,195,196,197,198,199],"include_user_id":null}'::jsonb,
-  'split_by_evidence_hybrid',
-  'pgtap-data-product-source',
+  '{"state_code":{"between":[100,199]}}'::jsonb,
+  'pgtap-snapshot-hash',
   'ready',
-  now(),
-  now()
+  '98230000-0000-4000-8000-000000000001'
 );
 
 insert into public.lca_results (
@@ -312,220 +364,183 @@ insert into public.lca_results (
   artifact_url,
   artifact_sha256,
   artifact_byte_size,
-  artifact_format
-) values (
-  '98230000-0000-4000-8000-000000000202',
-  '98230000-0000-4000-8000-000000000203',
-  '98230000-0000-4000-8000-000000000201',
+  artifact_format,
+  worker_job_id,
+  is_pinned
+)
+values (
+  (select id from lcia_result_test_ids where label = 'result'),
+  (select id from lcia_result_test_ids where label = 'worker_job'),
+  (select id from lcia_result_test_ids where label = 'snapshot'),
   '{}'::jsonb,
   '{}'::jsonb,
-  'storage://lca_results/pgtap/data-product.h5',
+  's3://bucket/lcia-result.json',
   repeat('a', 64),
-  1024,
-  'hdf5:v1'
+  123,
+  'application/json',
+  (select id from lcia_result_test_ids where label = 'worker_job'),
+  false
 );
 
-reset role;
-set local role authenticated;
-select set_config('request.jwt.claim.sub', '98230000-0000-4000-8000-000000000001', true);
-select set_config('request.jwt.claim.role', 'authenticated', true);
-select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
-
-select is(
-  public.cmd_data_product_package_publish(
-    p_package_id => '98230000-0000-4000-8000-000000000301',
-    p_display_default_impact_category => 'climate-change',
-    p_reason => 'missing package',
-    p_audit => '{}'::jsonb
-  )->>'code',
-  'package_not_ready',
-  'publish rejects missing packages'
+insert into public.lca_latest_all_unit_results (
+  id,
+  snapshot_id,
+  job_id,
+  result_id,
+  query_artifact_url,
+  query_artifact_sha256,
+  query_artifact_byte_size,
+  query_artifact_format,
+  status,
+  worker_job_id
+)
+values (
+  (select id from lcia_result_test_ids where label = 'latest_all_unit'),
+  (select id from lcia_result_test_ids where label = 'snapshot'),
+  (select id from lcia_result_test_ids where label = 'worker_job'),
+  (select id from lcia_result_test_ids where label = 'result'),
+  's3://bucket/query-sidecar.json',
+  repeat('b', 64),
+  456,
+  'application/json',
+  'ready',
+  (select id from lcia_result_test_ids where label = 'worker_job')
 );
 
-insert into data_product_test_ids (label, id)
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
+insert into lcia_result_test_ids (label, id)
 select
   'package',
   (result->'data'->>'packageId')::uuid
 from (
-  select public.cmd_data_product_package_mark_ready(
-    p_run_id => (select id from data_product_test_ids where label = 'run'),
-    p_package_version => '2026.06.001',
-    p_snapshot_id => '98230000-0000-4000-8000-000000000201',
-    p_source_result_id => '98230000-0000-4000-8000-000000000202',
-    p_package_result_hash => 'pgtap-package-result-hash',
-    p_default_impact_category => 'climate-change',
-    p_result_rows => jsonb_build_array(
-      jsonb_build_object(
-        'process_id', '98230000-0000-4000-8000-000000000101',
-        'process_version', '01.00.000',
-        'impact_category_id', 'climate-change',
-        'impact_label_snapshot', 'Climate change',
-        'value', 12.5,
-        'unit', 'kg CO2 eq',
-        'source_result_id', '98230000-0000-4000-8000-000000000202',
-        'source_artifact_sha256', repeat('a', 64)
-      ),
-      jsonb_build_object(
-        'process_id', '98230000-0000-4000-8000-000000000102',
-        'process_version', '01.00.000',
-        'impact_category_id', 'climate-change',
-        'impact_label_snapshot', 'Climate change',
-        'value', 25.0,
-        'unit', 'kg CO2 eq',
-        'source_result_id', '98230000-0000-4000-8000-000000000202',
-        'source_artifact_sha256', repeat('a', 64)
-      )
-    ),
-    p_artifacts => jsonb_build_array(
-      jsonb_build_object(
-        'artifact_type', 'source_result',
-        'storage_ref', 'storage://lca_results/pgtap/data-product.h5',
-        'sha256', repeat('a', 64),
-        'byte_size', 1024,
-        'format', 'hdf5:v1',
-        'persistence_mode', 'pinned',
-        'is_persisted', true,
-        'source_result_id', '98230000-0000-4000-8000-000000000202',
-        'snapshot_id', '98230000-0000-4000-8000-000000000201'
-      ),
-      jsonb_build_object(
-        'artifact_type', 'snapshot_index',
-        'storage_ref', 'storage://lca_results/pgtap/snapshot-index.json',
-        'sha256', repeat('b', 64),
-        'byte_size', 2048,
-        'format', 'snapshot-index:v1',
-        'persistence_mode', 'copied',
-        'is_persisted', true,
-        'snapshot_id', '98230000-0000-4000-8000-000000000201'
-      )
-    ),
+  select public.cmd_lcia_result_package_mark_ready(
+    p_build_worker_job_id => (select id from lcia_result_test_ids where label = 'worker_job'),
+    p_package_version => '2026-06-public',
+    p_snapshot_id => (select id from lcia_result_test_ids where label = 'snapshot'),
+    p_result_id => (select id from lcia_result_test_ids where label = 'result'),
+    p_latest_all_unit_result_id => (select id from lcia_result_test_ids where label = 'latest_all_unit'),
+    p_available_impact_categories => jsonb_build_array('climate-change', 'acidification'),
+    p_artifact_manifest => jsonb_build_object('persistenceMode', 'pinned'),
     p_audit => '{}'::jsonb
   ) as result
-) as ready;
+) as marked;
 
 select is(
-  (
-    select status || ':' || included_input_count::text || ':' || default_impact_category
-    from public.data_product_packages
-    where id = (select id from data_product_test_ids where label = 'package')
-  ),
-  'preview_ready:2:climate-change',
-  'package mark ready creates an immutable preview package'
+  (select status from public.lcia_result_packages where id = (select id from lcia_result_test_ids where label = 'package')),
+  'preview_ready',
+  'service role can mark an LCIA result package preview_ready'
 );
 
 select is(
-  (
-    select count(*)::text
-    from public.data_product_lcia_results
-    where package_id = (select id from data_product_test_ids where label = 'package')
-  ),
-  '2',
-  'package mark ready materializes LCIA result rows'
+  (select build_worker_job_id from public.lcia_result_packages where id = (select id from lcia_result_test_ids where label = 'package')),
+  (select id from lcia_result_test_ids where label = 'worker_job'),
+  'package keeps the producing worker_jobs reference'
 );
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '98230000-0000-4000-8000-000000000002', true);
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 
 select is(
-  public.cmd_data_product_package_publish(
-    p_package_id => (select id from data_product_test_ids where label = 'package'),
-    p_display_default_impact_category => 'missing-impact',
-    p_reason => 'bad default impact',
-    p_audit => '{}'::jsonb
-  )->>'code',
-  'default_impact_missing',
-  'publish rejects a default impact category that does not exist in package rows'
+  public.get_lcia_result_package_preview((select id from lcia_result_test_ids where label = 'package'))->>'code',
+  'not_data_product_manager',
+  'ordinary users cannot preview unpublished LCIA result packages'
 );
 
-insert into data_product_test_ids (label, id)
+select set_config('request.jwt.claim.sub', '98230000-0000-4000-8000-000000000001', true);
+select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
+
+select is(
+  public.get_lcia_result_package_preview(
+    (select id from lcia_result_test_ids where label = 'package')
+  )->'data'->'summary'->>'packageVersion',
+  '2026-06-public',
+  'manager can preview LCIA result package metadata'
+);
+
+insert into lcia_result_test_ids (label, id)
 select
   'publication',
   (result->'data'->>'publicationId')::uuid
 from (
-  select public.cmd_data_product_package_publish(
-    p_package_id => (select id from data_product_test_ids where label = 'package'),
+  select public.cmd_lcia_result_package_publish(
+    p_package_id => (select id from lcia_result_test_ids where label = 'package'),
     p_display_default_impact_category => 'climate-change',
     p_reason => 'publish pgtap package',
     p_audit => '{}'::jsonb
   ) as result
 ) as published;
 
-select is(
-  (
-    select status || ':' || is_current::text || ':' || publication_series_key || ':' || publication_channel || ':' || visibility_scope
-    from public.data_product_publications
-    where id = (select id from data_product_test_ids where label = 'publication')
-  ),
-  'current:true:global:public:public',
-  'publish creates current global public publication'
-);
-
-select is(
-  (
-    select is_pinned::text
-    from public.lca_results
-    where id = '98230000-0000-4000-8000-000000000202'
-  ),
-  'true',
-  'publish pins the source lca_result'
-);
-
-select is(
-  public.get_data_product_package_preview(
-    p_package_id => (select id from data_product_test_ids where label = 'package')
-  )->'data'->'summary'->>'packageId',
-  (select id::text from data_product_test_ids where label = 'package'),
-  'manager can preview unpublished or published package rows through RPC'
-);
-
-select set_config('request.jwt.claim.sub', '98230000-0000-4000-8000-000000000002', true);
-
-select is(
-  public.get_data_product_package_preview(
-    p_package_id => (select id from data_product_test_ids where label = 'package')
-  )->>'code',
-  'not_data_product_manager',
-  'ordinary users cannot preview package rows'
-);
-
 reset role;
+
+select ok(
+  (
+    select is_current
+    from public.lcia_result_publications
+    where id = (select id from lcia_result_test_ids where label = 'publication')
+  ),
+  'manager can publish a package as current global public latest'
+);
+
+select ok(
+  (select is_pinned from public.lca_results where id = (select id from lcia_result_test_ids where label = 'result')),
+  'published LCIA result is pinned against result GC'
+);
+
 set local role anon;
-select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claim.role', 'anon', true);
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
 
 select is(
-  jsonb_array_length(
-    public.get_published_process_lcia_results(
-      p_process_id => '98230000-0000-4000-8000-000000000101',
-      p_process_version => '01.00.000',
-      p_impact_category_id => 'climate-change'
-    )->'data'->'rows'
-  )::text,
-  '1',
-  'anon public read returns current published process LCIA result rows'
+  public.get_published_lcia_result_package(
+    '98230000-0000-4000-8000-000000000101',
+    '01.00.000',
+    'climate-change'
+  )->'data'->'resultArtifact'->>'artifactUrl',
+  's3://bucket/lcia-result.json',
+  'anon can read only the current public LCIA package artifact reference'
 );
 
-select is(
-  public.get_published_process_lcia_results(
-    p_process_id => '98230000-0000-4000-8000-000000000103',
-    p_process_version => '01.00.000',
-    p_impact_category_id => 'climate-change'
-  )->'data'->>'rowCount',
-  '0',
-  'public read returns an empty row set for processes outside the current package'
+reset role;
+
+select throws_ok(
+  $$
+    update public.lcia_result_packages
+    set input_manifest_hash = 'mutated'
+    where id = (select id from lcia_result_test_ids where label = 'package')
+  $$,
+  '23514',
+  null,
+  'preview_ready package content is immutable'
 );
 
-select is(
-  (
-    select count(*)::text
-    from public.data_product_publications
-    where publication_series_key = 'global'
-      and publication_channel = 'public'
-      and visibility_scope = 'public'
-      and is_current
-  ),
-  '1',
-  'partial unique current publication leaves exactly one current global public row'
+select throws_ok(
+  $$
+    insert into public.lcia_result_publications (
+      package_id,
+      publication_series_key,
+      publication_channel,
+      visibility_scope,
+      is_current,
+      status
+    )
+    values (
+      (select id from lcia_result_test_ids where label = 'package'),
+      'global',
+      'public',
+      'public',
+      true,
+      'current'
+    )
+  $$,
+  '23505',
+  null,
+  'only one global public publication can be current'
 );
 
 select * from finish();
-
 rollback;
