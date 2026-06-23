@@ -20,7 +20,7 @@ begin
 end;
 $$;
 
-select plan(32);
+select plan(34);
 
 select has_table('public', 'lcia_result_packages', 'LCIA result packages table exists');
 select has_table('public', 'lcia_result_publications', 'LCIA result publications table exists');
@@ -181,8 +181,25 @@ select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_
 insert into public.processes (id, version, json, user_id, state_code)
 values
   ('98230000-0000-4000-8000-000000000101', '01.00.000', '{"processDataSet":{"name":"eligible-1"}}'::jsonb, '98230000-0000-4000-8000-000000000001', 100),
+  ('98230000-0000-4000-8000-000000000101', '01.00.001', '{"processDataSet":{"name":"eligible-1-latest"}}'::jsonb, '98230000-0000-4000-8000-000000000001', 100),
   ('98230000-0000-4000-8000-000000000102', '01.00.000', '{"processDataSet":{"name":"eligible-2"}}'::jsonb, '98230000-0000-4000-8000-000000000001', 100),
   ('98230000-0000-4000-8000-000000000103', '01.00.000', '{"processDataSet":{"name":"draft"}}'::jsonb, '98230000-0000-4000-8000-000000000001', 0);
+
+select is(
+  (public.lcia_result_current_eligible_manifest()->>'eligibleInputCount')::integer,
+  2,
+  'global eligible manifest counts latest published process versions only'
+);
+
+select is(
+  (
+    select process.value->>'version'
+    from jsonb_array_elements(public.lcia_result_current_eligible_manifest()->'inputManifest'->'processes') as process(value)
+    where process.value->>'id' = '98230000-0000-4000-8000-000000000101'
+  ),
+  '01.00.001',
+  'global eligible manifest keeps the latest published version per process id'
+);
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '98230000-0000-4000-8000-000000000002', true);
@@ -498,7 +515,7 @@ select set_config('request.jwt.claims', '{"role":"anon"}', true);
 select is(
   public.get_published_lcia_result_package(
     '98230000-0000-4000-8000-000000000101',
-    '01.00.000',
+    '01.00.001',
     'climate-change'
   )->'data'->'resultArtifact'->>'artifactUrl',
   's3://bucket/lcia-result.json',
