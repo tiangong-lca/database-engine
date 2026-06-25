@@ -20,7 +20,7 @@ begin
 end;
 $$;
 
-select plan(34);
+select plan(35);
 
 select has_table('public', 'lcia_result_packages', 'LCIA result packages table exists');
 select has_table('public', 'lcia_result_publications', 'LCIA result publications table exists');
@@ -477,6 +477,14 @@ select is(
   )->'data'->'summary'->>'packageVersion',
   '2026-06-public',
   'manager can preview LCIA result package metadata'
+);
+
+select is(
+  public.get_lcia_result_package_preview(
+    (select id from lcia_result_test_ids where label = 'package')
+  )->'data'->'summary'->>'snapshotId',
+  (select id::text from lcia_result_test_ids where label = 'snapshot'),
+  'manager preview exposes stable snapshot reference for row-level result projection'
 );
 
 insert into lcia_result_test_ids (label, id)
