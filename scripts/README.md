@@ -34,7 +34,29 @@ related:
 
 This directory contains the command-line helpers used for remote schema export, workspace refresh, change-copying, and migration generation.
 
+## Layout
+
+Durable helper entry points remain at the top level of this directory.
+One-off or dated data remediation runners live under:
+
+- `scripts/data_migrations/<topic>_<yyyymm>/`
+
+Those runners should keep their own `README.md` with dry-run, apply, and validation examples.
+Local migration outputs and audit JSONL files should be written under `_artifacts/`, which is intentionally ignored by Git.
+
 ## Script List
+
+### `data_migrations/tidas_schema_202606/runner.py`
+
+Plans, applies, and validates the TIDAS schema 2026-06 JSON data remediation for remote database rows.
+
+Usage:
+
+```bash
+python scripts/data_migrations/tidas_schema_202606/runner.py plan --environment dev --run-id tidas-schema-202606-dev --out _artifacts/tidas-schema-202606/dev-plan.jsonl --dry-run
+```
+
+See `scripts/data_migrations/tidas_schema_202606/README.md` for the complete command surface and safety notes.
 
 ### `export_remote_schema.py`
 

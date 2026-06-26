@@ -34,7 +34,29 @@ related:
 
 这个目录包含用于远程 schema 导出、workspace 刷新、修改复制和 migration 生成的命令行脚本。
 
+## 目录结构
+
+长期维护的 helper 入口保留在本目录顶层。
+一次性或按日期归档的数据修复 runner 放在：
+
+- `scripts/data_migrations/<topic>_<yyyymm>/`
+
+这类 runner 应在自己的 `README.md` 中保留 dry-run、apply 和 validate 示例。
+本地迁移输出和审计 JSONL 文件应写入 `_artifacts/`，该目录已被 Git 忽略。
+
 ## 脚本列表
+
+### `data_migrations/tidas_schema_202606/runner.py`
+
+用于对远程数据库中的 TIDAS schema 2026-06 JSON 数据修复进行 plan、apply 和 validate。
+
+用法：
+
+```bash
+python scripts/data_migrations/tidas_schema_202606/runner.py plan --environment dev --run-id tidas-schema-202606-dev --out _artifacts/tidas-schema-202606/dev-plan.jsonl --dry-run
+```
+
+完整命令面和安全说明见 `scripts/data_migrations/tidas_schema_202606/README.md`。
 
 ### `export_remote_schema.py`
 
