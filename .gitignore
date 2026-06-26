@@ -1,5 +1,8 @@
 .env.supabase*.local
 
+_artifacts/
+.docpact/runs/
+
 __pycache__/
 *.pyc
 
