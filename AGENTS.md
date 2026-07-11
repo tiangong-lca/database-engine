@@ -35,7 +35,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-11
-lastReviewedCommit: 48ff38bb941710df93195c827b68170ac67f8317
+lastReviewedCommit: feab0033c234c2a22520b983b513062326a3488d
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

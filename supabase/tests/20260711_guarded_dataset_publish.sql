@@ -564,6 +564,8 @@ select throws_ok(
   'guarded publish surfaces a forced audit-insert failure'
 );
 
+reset role;
+
 select ok(
   (
     select state_code = 0
@@ -580,6 +582,9 @@ select ok(
   ),
   'forced audit-insert failure rolls back the state update and leaves no audit row'
 );
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'b1000000-0000-0000-0000-000000000001', true);
 
 select ok(
   (
