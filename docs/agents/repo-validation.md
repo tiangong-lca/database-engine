@@ -29,8 +29,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-06-26
-lastReviewedCommit: 8fff106adf1e559b5fd4df6ad8ac578e8c8e57de
+lastReviewedAt: 2026-07-12
+lastReviewedCommit: 48ff38bb941710df93195c827b68170ac67f8317
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -60,6 +60,7 @@ supabase migration list
 | Change type | Minimum local proof | Stronger proof when risk is higher | Notes |
 | --- | --- | --- | --- |
 | `supabase/migrations/**` | `supabase db reset` succeeds | run the relevant SQL assertions under `supabase/tests/**`; inspect affected workspace objects if the migration was authored from workspace files | Record which migration and which SQL test files were exercised. |
+| guarded atomic owner-draft FP/UG alias batch RPC | `supabase db reset`; run `supabase/tests/20260711_guarded_dataset_alias_batch.sql` and the legacy `supabase/tests/20260404_dataset_command_rpcs.sql` | prove the exact `target_visibility=owner_draft` contract; the 25-row/20-exchange time and 27-row/39-exchange length-time scopes; actor-owned `state_code=0` source FP/UG, target FP/UG, flow, and process locks; public/foreign/mixed-row rejection; embedded UUID/version identity; table-specific allowed-path reconstruction; exact decimal factors; canonical before-exchange hash binding; exact live closure; input bounds; summary plus per-row audit cardinality; forced row-audit rollback; and all-row replay | The alias RPC is independent of support publication. It never changes support visibility and accepts only private rows owned by the authenticated actor. It takes short `SHARE ROW EXCLUSIVE` locks on `flows` and `processes` to prevent closure phantoms. One dimension is one transaction: any ownership, visibility, snapshot, closure, row, mutation-evidence, amount, or audit failure must leave all datasets and audits unchanged. |
 | review-submit gate / job coordinator schema or RPCs | `supabase db reset`; run `supabase/tests/20260404_review_submit_rpc.sql`, `supabase/tests/20260529_review_submit_jobs.sql`, and the relevant `supabase/tests/*review_submit_gate*.sql` file | include owner-access, service-role result recording, worker job result mapping, stale checksum, and `cmd_review_submit` rejection/acceptance assertions | Database proof covers persisted gate runs, `worker_jobs` coordinator links, and final submit assertions. Worker report heuristics and Edge orchestration need separate repo proof. |
 | `worker_jobs` lifecycle schema or RPCs | `supabase db reset`; run `supabase/tests/20260531_worker_jobs_foundation.sql` | add any job-family-specific coordinator SQL tests affected by the change | Prove claim/reclaim, lease-token fencing, idempotency, concurrency keys, status transitions, and RLS/direct-access boundaries. |
 | legacy lifecycle cleanup after `worker_jobs` cutover | `supabase db reset`; run `supabase/tests/20260531_worker_jobs_foundation.sql`, `supabase/tests/20260531_worker_jobs_legacy_lifecycle_cleanup.sql`, and `supabase/tests/20260602_worker_legacy_table_retirement_audit.sql` | verify production queue drain/cutover and archive availability separately before applying the cleanup migration to `main` | The cleanup disables legacy pgmq delivery surfaces, archives `public.lca_jobs`, `public.lca_package_jobs`, and `public.dataset_review_submit_jobs` into `archive.worker_legacy_job_table_rows`, and physically retires those legacy tables with `DROP TABLE ... RESTRICT`. |
