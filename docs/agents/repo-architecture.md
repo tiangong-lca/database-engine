@@ -27,8 +27,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-06-26
-lastReviewedCommit: 8fff106adf1e559b5fd4df6ad8ac578e8c8e57de
+lastReviewedAt: 2026-07-11
+lastReviewedCommit: 48ff38bb941710df93195c827b68170ac67f8317
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -75,7 +75,7 @@ The current migration and test history clusters around these themes:
 
 1. access control and policy hardening
 2. review workflow command/query RPCs
-3. dataset lifecycle and publish/delete flows
+3. dataset lifecycle, guarded maintenance support publishing, and publish/delete flows
 4. notification and membership query boundaries
 5. lifecycle bundle cleanup and embedding-related compatibility
 6. remote schema reconciliation and preview-branch validation
@@ -120,6 +120,7 @@ Do not leave durable manual edits only inside generated paths.
 This repo owns database truth, but not every runtime consequence:
 
 - `database-engine` owns persisted review-submit gate runs, `worker_jobs` lifecycle schema/RPCs, review-submit job coordinator state, access checks, idempotent gate lookup, result recording, legacy lifecycle cutover cleanup, retired legacy job-table archives under `archive.worker_legacy_job_table_rows`, and the final submit-review assertion
+- `database-engine` owns the guarded `unitgroups` / `flowproperties` maintenance publish RPC, including an owner-scoped row lock, locked optimistic preconditions, indexed audit lookup, and audit-proven replay after a lost client response
 - `tiangong-lca-worker` owns numeric-stability checks and the calculator report payload semantics
 - `tiangong-lca-next` owns frontend env selection and app-side Supabase clients
 - `tiangong-lca-edge-functions` owns Edge Function runtime orchestration, worker invocation, and API response shape

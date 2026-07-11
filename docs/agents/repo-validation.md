@@ -29,8 +29,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-06-26
-lastReviewedCommit: 8fff106adf1e559b5fd4df6ad8ac578e8c8e57de
+lastReviewedAt: 2026-07-11
+lastReviewedCommit: 48ff38bb941710df93195c827b68170ac67f8317
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -60,6 +60,7 @@ supabase migration list
 | Change type | Minimum local proof | Stronger proof when risk is higher | Notes |
 | --- | --- | --- | --- |
 | `supabase/migrations/**` | `supabase db reset` succeeds | run the relevant SQL assertions under `supabase/tests/**`; inspect affected workspace objects if the migration was authored from workspace files | Record which migration and which SQL test files were exercised. |
+| guarded dataset maintenance publish RPC | `supabase db reset`; run `supabase/tests/20260711_guarded_dataset_publish.sql` and the legacy `supabase/tests/20260404_dataset_command_rpcs.sql` | include owner-scoped lock/non-disclosure, draft-state rejection, stale `modified_at` and `json_ordered` preconditions, authenticated-only execute grants, indexed audit correlation bound to the expected timestamp and payload, same-action replay, independently published row rejection, and rollback after a forced audit-insert failure | The guarded RPC is limited to `unitgroups` and `flowproperties`. Its row update and `command_audit_log` insert must remain one transaction so a retry after a lost response can be proven by the committed audit row. |
 | review-submit gate / job coordinator schema or RPCs | `supabase db reset`; run `supabase/tests/20260404_review_submit_rpc.sql`, `supabase/tests/20260529_review_submit_jobs.sql`, and the relevant `supabase/tests/*review_submit_gate*.sql` file | include owner-access, service-role result recording, worker job result mapping, stale checksum, and `cmd_review_submit` rejection/acceptance assertions | Database proof covers persisted gate runs, `worker_jobs` coordinator links, and final submit assertions. Worker report heuristics and Edge orchestration need separate repo proof. |
 | `worker_jobs` lifecycle schema or RPCs | `supabase db reset`; run `supabase/tests/20260531_worker_jobs_foundation.sql` | add any job-family-specific coordinator SQL tests affected by the change | Prove claim/reclaim, lease-token fencing, idempotency, concurrency keys, status transitions, and RLS/direct-access boundaries. |
 | legacy lifecycle cleanup after `worker_jobs` cutover | `supabase db reset`; run `supabase/tests/20260531_worker_jobs_foundation.sql`, `supabase/tests/20260531_worker_jobs_legacy_lifecycle_cleanup.sql`, and `supabase/tests/20260602_worker_legacy_table_retirement_audit.sql` | verify production queue drain/cutover and archive availability separately before applying the cleanup migration to `main` | The cleanup disables legacy pgmq delivery surfaces, archives `public.lca_jobs`, `public.lca_package_jobs`, and `public.dataset_review_submit_jobs` into `archive.worker_legacy_job_table_rows`, and physically retires those legacy tables with `DROP TABLE ... RESTRICT`. |
