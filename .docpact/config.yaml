@@ -1,7 +1,7 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-06-26"
-lastReviewedCommit: "8fff106adf1e559b5fd4df6ad8ac578e8c8e57de"
+lastReviewedAt: "2026-07-12"
+lastReviewedCommit: "3e20f25d3ac1f840c8742f433399b74ccd92ec9a"
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
