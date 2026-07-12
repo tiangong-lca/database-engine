@@ -27,8 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-11
-lastReviewedCommit: feab0033c234c2a22520b983b513062326a3488d
+lastReviewedAt: 2026-07-12
+lastReviewedCommit: 4c8276d04d729f596587bb6a211efbc8c7db8d23
+lastReviewedNote: "Reviewed guarded support publication architecture after separating independent reviewer approval from the owner publication command."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -120,7 +121,7 @@ Do not leave durable manual edits only inside generated paths.
 This repo owns database truth, but not every runtime consequence:
 
 - `database-engine` owns persisted review-submit gate runs, `worker_jobs` lifecycle schema/RPCs, review-submit job coordinator state, access checks, idempotent gate lookup, result recording, legacy lifecycle cutover cleanup, retired legacy job-table archives under `archive.worker_legacy_job_table_rows`, and the final submit-review assertion
-- `database-engine` owns the guarded `unitgroups` / `flowproperties` maintenance publish RPC, including an owner-scoped row lock, locked optimistic preconditions, indexed audit lookup, and audit-proven replay after a lost client response
+- `database-engine` owns guarded `unitgroups` / `flowproperties` maintenance publication as two distinct commands: an independent system-team `review-admin` records an exact draft-snapshot approval, then the dataset owner publishes only by presenting that immutable approval audit id. The publish path revalidates reviewer role, owner, target, plan/action, timestamp, payload, owner-scoped row lock, indexed audit lookup, and audit-proven replay after a lost client response. Authenticated clients cannot write the audit table directly.
 - `tiangong-lca-worker` owns numeric-stability checks and the calculator report payload semantics
 - `tiangong-lca-next` owns frontend env selection and app-side Supabase clients
 - `tiangong-lca-edge-functions` owns Edge Function runtime orchestration, worker invocation, and API response shape

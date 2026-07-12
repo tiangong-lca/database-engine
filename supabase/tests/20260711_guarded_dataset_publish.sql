@@ -49,7 +49,7 @@ as $$
   );
 $$;
 
-select plan(37);
+select plan(51);
 
 select ok(
   has_function_privilege(
@@ -71,7 +71,29 @@ select ok(
 );
 
 select ok(
+  has_function_privilege(
+    'authenticated',
+    'public.cmd_dataset_support_approve_guarded(text,uuid,text,timestamptz,jsonb,jsonb)',
+    'execute'
+  )
+  and has_function_privilege(
+    'service_role',
+    'public.cmd_dataset_support_approve_guarded(text,uuid,text,timestamptz,jsonb,jsonb)',
+    'execute'
+  )
+  and not has_function_privilege(
+    'anon',
+    'public.cmd_dataset_support_approve_guarded(text,uuid,text,timestamptz,jsonb,jsonb)',
+    'execute'
+  ),
+  'support approval is executable only by authenticated and service roles'
+);
+
+select ok(
   to_regprocedure('public.cmd_dataset_publish(text,uuid,text,jsonb)') is not null
+  and to_regprocedure(
+    'public.cmd_dataset_support_approve_guarded(text,uuid,text,timestamptz,jsonb,jsonb)'
+  ) is not null
   and to_regprocedure(
     'public.cmd_dataset_publish_guarded(text,uuid,text,timestamptz,jsonb,jsonb)'
   ) is not null,
@@ -133,6 +155,37 @@ select ok(
   'guarded replay has a valid partial expression index for its narrowed audit correlation lookup'
 );
 
+select ok(
+  to_regclass('public.command_audit_log_support_approval_replay_idx') is not null
+  and (
+    select index_meta.indisvalid
+      and index_meta.indisready
+      and index_meta.indisunique
+      and strpos(
+        pg_get_expr(index_meta.indpred, index_meta.indrelid),
+        'cmd_dataset_support_approve_guarded'
+      ) > 0
+      and strpos(pg_get_indexdef(index_meta.indexrelid), 'actor_user_id') > 0
+      and strpos(pg_get_indexdef(index_meta.indexrelid), 'target_table') > 0
+      and strpos(pg_get_indexdef(index_meta.indexrelid), 'target_id') > 0
+      and strpos(pg_get_indexdef(index_meta.indexrelid), 'target_version') > 0
+      and strpos(pg_get_indexdef(index_meta.indexrelid), 'plan_sha256') > 0
+      and strpos(pg_get_indexdef(index_meta.indexrelid), 'operation_id') > 0
+      and strpos(pg_get_indexdef(index_meta.indexrelid), 'action_id') > 0
+    from pg_catalog.pg_index as index_meta
+    where index_meta.indexrelid =
+      'public.command_audit_log_support_approval_replay_idx'::regclass
+  ),
+  'support approval replay has a valid narrowed partial expression index'
+);
+
+select ok(
+  not has_table_privilege('authenticated', 'public.command_audit_log', 'insert')
+  and not has_table_privilege('authenticated', 'public.command_audit_log', 'update')
+  and not has_table_privilege('authenticated', 'public.command_audit_log', 'delete'),
+  'dataset owners cannot forge or alter approval audit rows through raw table writes'
+);
+
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
 insert into auth.users (
@@ -180,7 +233,82 @@ values
     now(),
     false,
     false
+  ),
+  (
+    '00000000-0000-0000-0000-000000000000',
+    'b1000000-0000-0000-0000-000000000003',
+    'authenticated',
+    'authenticated',
+    'guarded-publish-reviewer@example.com',
+    'test-password-hash',
+    now(),
+    '{"provider":"email","providers":["email"]}'::jsonb,
+    '{"sub":"b1000000-0000-0000-0000-000000000003","email":"guarded-publish-reviewer@example.com"}'::jsonb,
+    now(),
+    now(),
+    false,
+    false
   );
+
+insert into public.users (id, raw_user_meta_data, contact)
+values
+  (
+    'b1000000-0000-0000-0000-000000000001',
+    '{"email":"guarded-publish-owner@example.com"}'::jsonb,
+    null
+  ),
+  (
+    'b1000000-0000-0000-0000-000000000002',
+    '{"email":"guarded-publish-other@example.com"}'::jsonb,
+    null
+  ),
+  (
+    'b1000000-0000-0000-0000-000000000003',
+    '{"email":"guarded-publish-reviewer@example.com"}'::jsonb,
+    null
+  )
+on conflict (id) do nothing;
+
+insert into public.teams (id, json, rank, is_public)
+values (
+  '00000000-0000-0000-0000-000000000000',
+  '{"name":"System Team"}'::jsonb,
+  0,
+  false
+)
+on conflict (id) do nothing;
+
+insert into public.roles (user_id, team_id, role)
+values
+  (
+    'b1000000-0000-0000-0000-000000000001',
+    '00000000-0000-0000-0000-000000000000',
+    'review-admin'
+  ),
+  (
+    'b1000000-0000-0000-0000-000000000003',
+    '00000000-0000-0000-0000-000000000000',
+    'review-admin'
+  );
+
+create temporary table approval_results (
+  action_key text primary key,
+  response jsonb not null
+);
+
+grant select, insert, update, delete on table pg_temp.approval_results to authenticated;
+
+create or replace function pg_temp.approval_id(p_action_key text)
+returns text
+language sql
+stable
+as $$
+  select response->'data'->>'approval_audit_id'
+  from pg_temp.approval_results
+  where action_key = p_action_key
+$$;
+
+grant execute on function pg_temp.approval_id(text) to authenticated;
 
 insert into public.unitgroups (
   id,
@@ -293,33 +421,11 @@ values (
   '2026-07-11 00:00:00+00'
 );
 
-insert into public.command_audit_log (
-  command,
-  actor_user_id,
-  target_table,
-  target_id,
-  target_version,
-  payload
-)
-values (
-  'cmd_dataset_publish_guarded',
-  'b1000000-0000-0000-0000-000000000001',
-  'unitgroups',
-  'b2000000-0000-0000-0000-000000000007',
-  '01.00.000',
-  jsonb_build_object(
-    'plan_sha256', repeat('c', 64),
-    'operation_id', 'maintenance-audit-conflict',
-    'action_id', 'publish-audit-conflict',
-    'expected_modified_at', '2026-07-11 00:00:00+00'::timestamptz,
-    'expected_json_ordered', pg_temp.unitgroup_payload('audit state conflict')
-  )
-);
-
 alter table public.command_audit_log
   add constraint command_audit_log_test_force_guarded_publish_failure
   check (
-    (payload ->> 'operation_id') is distinct from 'maintenance-force-audit-failure'
+    command is distinct from 'cmd_dataset_publish_guarded'
+    or (payload ->> 'operation_id') is distinct from 'maintenance-force-audit-failure'
   );
 
 set local role authenticated;
@@ -342,7 +448,379 @@ select is(
   'guarded publish requires an authenticated actor identity'
 );
 
+select is(
+  public.cmd_dataset_support_approve_guarded(
+    'unitgroups',
+    'b2000000-0000-0000-0000-000000000001',
+    '01.00.000',
+    '2026-07-11 00:00:00+00',
+    pg_temp.unitgroup_payload('publish success'),
+    jsonb_build_object(
+      'plan_sha256', repeat('a', 64),
+      'operation_id', 'maintenance-success',
+      'action_id', 'publish-unitgroup'
+    )
+  )->>'code',
+  'AUTH_REQUIRED',
+  'support approval requires an authenticated reviewer identity'
+);
+
+select set_config('request.jwt.claim.sub', 'b1000000-0000-0000-0000-000000000002', true);
+
+select is(
+  public.cmd_dataset_support_approve_guarded(
+    'unitgroups',
+    'b2000000-0000-0000-0000-000000000001',
+    '01.00.000',
+    '2026-07-11 00:00:00+00',
+    pg_temp.unitgroup_payload('publish success'),
+    jsonb_build_object(
+      'plan_sha256', repeat('a', 64),
+      'operation_id', 'maintenance-success',
+      'action_id', 'publish-unitgroup'
+    )
+  )->>'code',
+  'REVIEW_ADMIN_REQUIRED',
+  'an ordinary authenticated user cannot approve support publication'
+);
+
 select set_config('request.jwt.claim.sub', 'b1000000-0000-0000-0000-000000000001', true);
+
+select is(
+  public.cmd_dataset_support_approve_guarded(
+    'unitgroups',
+    'b2000000-0000-0000-0000-000000000001',
+    '01.00.000',
+    '2026-07-11 00:00:00+00',
+    pg_temp.unitgroup_payload('publish success'),
+    jsonb_build_object(
+      'plan_sha256', repeat('a', 64),
+      'operation_id', 'maintenance-success',
+      'action_id', 'publish-unitgroup'
+    )
+  )->>'code',
+  'INDEPENDENT_REVIEWER_REQUIRED',
+  'a review admin cannot approve a support dataset they own'
+);
+
+select set_config('request.jwt.claim.sub', 'b1000000-0000-0000-0000-000000000003', true);
+
+select is(
+  public.cmd_dataset_support_approve_guarded(
+    'unitgroups',
+    'b2000000-0000-0000-0000-000000000002',
+    '01.00.000',
+    '2026-07-11 00:00:01+00',
+    pg_temp.unitgroup_payload('stale timestamp'),
+    jsonb_build_object(
+      'plan_sha256', repeat('2', 64),
+      'operation_id', 'approval-stale-time',
+      'action_id', 'approve-stale-time'
+    )
+  )->>'code',
+  'DATASET_SUPPORT_APPROVAL_PRECONDITION_FAILED',
+  'reviewer approval is bound to the exact planned modified_at snapshot'
+);
+
+select is(
+  public.cmd_dataset_support_approve_guarded(
+    'unitgroups',
+    'b2000000-0000-0000-0000-000000000005',
+    '01.00.000',
+    '2026-07-11 00:00:00+00',
+    pg_temp.unitgroup_payload('under review'),
+    jsonb_build_object(
+      'plan_sha256', repeat('5', 64),
+      'operation_id', 'approval-non-draft',
+      'action_id', 'approve-non-draft'
+    )
+  )->>'code',
+  'DATASET_SUPPORT_APPROVAL_REQUIRES_DRAFT',
+  'reviewer approval applies only to an exact state_code=0 support dataset'
+);
+
+insert into pg_temp.approval_results (action_key, response)
+values
+  (
+    'success',
+    public.cmd_dataset_support_approve_guarded(
+      'unitgroups',
+      'b2000000-0000-0000-0000-000000000001',
+      '01.00.000',
+      '2026-07-11 00:00:00+00',
+      pg_temp.unitgroup_payload('publish success'),
+      jsonb_build_object(
+        'plan_sha256', repeat('a', 64),
+        'operation_id', 'maintenance-success',
+        'action_id', 'publish-unitgroup'
+      )
+    )
+  ),
+  (
+    'audit-conflict',
+    public.cmd_dataset_support_approve_guarded(
+      'unitgroups',
+      'b2000000-0000-0000-0000-000000000007',
+      '01.00.000',
+      '2026-07-11 00:00:00+00',
+      pg_temp.unitgroup_payload('audit state conflict'),
+      jsonb_build_object(
+        'plan_sha256', repeat('c', 64),
+        'operation_id', 'maintenance-audit-conflict',
+        'action_id', 'publish-audit-conflict'
+      )
+    )
+  ),
+  (
+    'force-failure',
+    public.cmd_dataset_support_approve_guarded(
+      'unitgroups',
+      'b2000000-0000-0000-0000-000000000009',
+      '01.00.000',
+      '2026-07-11 00:00:00+00',
+      pg_temp.unitgroup_payload('forced audit failure'),
+      jsonb_build_object(
+        'plan_sha256', repeat('f', 64),
+        'operation_id', 'maintenance-force-audit-failure',
+        'action_id', 'publish-force-audit-failure'
+      )
+    )
+  ),
+  (
+    'replay-bound',
+    public.cmd_dataset_support_approve_guarded(
+      'unitgroups',
+      'b2000000-0000-0000-0000-000000000008',
+      '01.00.000',
+      '2026-07-11 00:00:00+00',
+      pg_temp.unitgroup_payload('replay-bound payload'),
+      jsonb_build_object(
+        'plan_sha256', repeat('e', 64),
+        'operation_id', 'maintenance-replay-bound',
+        'action_id', 'publish-replay-bound'
+      )
+    )
+  ),
+  (
+    'flowproperty',
+    public.cmd_dataset_support_approve_guarded(
+      'flowproperties',
+      'b3000000-0000-0000-0000-000000000001',
+      '01.00.000',
+      '2026-07-11 00:00:00+00',
+      pg_temp.flowproperty_payload('flow property success'),
+      jsonb_build_object(
+        'plan_sha256', repeat('d', 64),
+        'operation_id', 'maintenance-flowproperty',
+        'action_id', 'publish-flowproperty'
+      )
+    )
+  );
+
+select ok(
+  (
+    select count(*) = 5
+      and bool_and(response @> '{"ok":true,"idempotent_replay":false}'::jsonb)
+      and bool_and(jsonb_typeof(response->'audit_id') = 'string')
+      and bool_and(jsonb_typeof(response->'data'->'approval_audit_id') = 'string')
+      and bool_and((response->'data'->>'reviewer_user_id')::uuid =
+        'b1000000-0000-0000-0000-000000000003'::uuid)
+    from pg_temp.approval_results
+  ),
+  'independent review-admin approvals are recorded for every exact frozen action with lossless text ids'
+);
+
+select ok(
+  (
+    select replay @> '{"ok":true,"idempotent_replay":true}'::jsonb
+      and replay->'data'->>'approval_audit_id' = original.response->'data'->>'approval_audit_id'
+    from pg_temp.approval_results as original
+    cross join lateral (
+      select public.cmd_dataset_support_approve_guarded(
+        'unitgroups',
+        'b2000000-0000-0000-0000-000000000001',
+        '01.00.000',
+        '2026-07-11 00:00:00+00',
+        pg_temp.unitgroup_payload('publish success'),
+        jsonb_build_object(
+          'plan_sha256', repeat('a', 64),
+          'operation_id', 'maintenance-success',
+          'action_id', 'publish-unitgroup'
+        )
+      ) as replay
+    ) as replay_call
+    where original.action_key = 'success'
+  ),
+  'repeating the same reviewer decision returns the same durable approval audit id'
+);
+
+reset role;
+
+select ok(
+  (
+    select count(*) = 1
+    from public.command_audit_log
+    where id = (
+        select (response->'data'->>'approval_audit_id')::bigint
+        from pg_temp.approval_results
+        where action_key = 'success'
+      )
+      and command = 'cmd_dataset_support_approve_guarded'
+      and actor_user_id = 'b1000000-0000-0000-0000-000000000003'
+      and target_table = 'unitgroups'
+      and target_id = 'b2000000-0000-0000-0000-000000000001'
+      and target_version = '01.00.000'
+      and payload->>'decision' = 'approved_for_publication'
+      and payload->>'reviewer_role' = 'review-admin'
+      and payload->>'target_owner_user_id' = 'b1000000-0000-0000-0000-000000000001'
+      and payload->>'plan_sha256' = repeat('a', 64)
+      and payload->>'operation_id' = 'maintenance-success'
+      and payload->>'action_id' = 'publish-unitgroup'
+      and payload->'expected_modified_at' = to_jsonb('2026-07-11 00:00:00+00'::timestamptz)
+      and payload->'expected_json_ordered' = pg_temp.unitgroup_payload('publish success')
+  ),
+  'approval audit immutably binds reviewer role, explicit decision, owner, target, plan, action, and snapshot'
+);
+
+with inserted as (
+  insert into public.command_audit_log (
+    command,
+    actor_user_id,
+    target_table,
+    target_id,
+    target_version,
+    payload
+  ) values (
+    'cmd_dataset_support_approve_guarded',
+    'b1000000-0000-0000-0000-000000000003',
+    'unitgroups',
+    'b2000000-0000-0000-0000-000000000006',
+    '01.00.000',
+    jsonb_build_object(
+      'plan_sha256', repeat('b', 64),
+      'operation_id', 'maintenance-independent',
+      'action_id', 'publish-independent',
+      'decision', 'approved_for_publication',
+      'reviewer_role', 'review-admin',
+      'target_owner_user_id', 'b1000000-0000-0000-0000-000000000001',
+      'expected_modified_at', '2026-07-11 00:00:00+00'::timestamptz,
+      'expected_json_ordered', pg_temp.unitgroup_payload('independently published')
+    )
+  )
+  returning id
+)
+insert into pg_temp.approval_results (action_key, response)
+select
+  'independent',
+  jsonb_build_object(
+    'data', jsonb_build_object('approval_audit_id', id::text)
+  )
+from inserted;
+
+insert into public.command_audit_log (
+  command,
+  actor_user_id,
+  target_table,
+  target_id,
+  target_version,
+  payload
+)
+values (
+  'cmd_dataset_publish_guarded',
+  'b1000000-0000-0000-0000-000000000001',
+  'unitgroups',
+  'b2000000-0000-0000-0000-000000000007',
+  '01.00.000',
+  jsonb_build_object(
+    'plan_sha256', repeat('c', 64),
+    'operation_id', 'maintenance-audit-conflict',
+    'action_id', 'publish-audit-conflict',
+    'approval_audit_id', (
+      select response->'data'->>'approval_audit_id'
+      from pg_temp.approval_results
+      where action_key = 'audit-conflict'
+    ),
+    'expected_modified_at', '2026-07-11 00:00:00+00'::timestamptz,
+    'expected_json_ordered', pg_temp.unitgroup_payload('audit state conflict')
+  )
+);
+
+delete from public.roles
+where user_id = 'b1000000-0000-0000-0000-000000000003'
+  and team_id = '00000000-0000-0000-0000-000000000000'
+  and role = 'review-admin';
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'b1000000-0000-0000-0000-000000000001', true);
+
+select is(
+  public.cmd_dataset_publish_guarded(
+    'unitgroups',
+    'b2000000-0000-0000-0000-000000000001',
+    '01.00.000',
+    '2026-07-11 00:00:00+00',
+    pg_temp.unitgroup_payload('publish success'),
+    jsonb_build_object(
+      'plan_sha256', repeat('a', 64),
+      'operation_id', 'maintenance-success',
+      'action_id', 'publish-unitgroup',
+      'approval_audit_id', (
+        select response->'data'->>'approval_audit_id'
+        from pg_temp.approval_results
+        where action_key = 'success'
+      )
+    )
+  )->>'code',
+  'DATASET_PUBLISH_APPROVAL_INVALID',
+  'publication revalidates that the independent approver still holds the review-admin role'
+);
+
+reset role;
+
+insert into public.roles (user_id, team_id, role)
+values (
+  'b1000000-0000-0000-0000-000000000003',
+  '00000000-0000-0000-0000-000000000000',
+  'review-admin'
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', 'b1000000-0000-0000-0000-000000000001', true);
+
+select is(
+  public.cmd_dataset_publish_guarded(
+    'unitgroups',
+    'b2000000-0000-0000-0000-000000000001',
+    '01.00.000',
+    '2026-07-11 00:00:00+00',
+    pg_temp.unitgroup_payload('publish success'),
+    jsonb_build_object(
+      'plan_sha256', repeat('a', 64),
+      'operation_id', 'maintenance-success',
+      'action_id', 'publish-unitgroup'
+    )
+  )->>'code',
+  'DATASET_PUBLISH_APPROVAL_REQUIRED',
+  'dataset owner cannot publish a valid frozen draft without the independent approval id'
+);
+
+select is(
+  public.cmd_dataset_publish_guarded(
+    'unitgroups',
+    'b2000000-0000-0000-0000-000000000001',
+    '01.00.000',
+    '2026-07-11 00:00:00+00',
+    pg_temp.unitgroup_payload('publish success'),
+    jsonb_build_object(
+      'plan_sha256', repeat('a', 64),
+      'operation_id', 'maintenance-success',
+      'action_id', 'publish-unitgroup',
+      'approval_audit_id', '999999999999999999'
+    )
+  )->>'code',
+  'DATASET_PUBLISH_APPROVAL_INVALID',
+  'dataset owner cannot forge an approval by supplying an arbitrary audit id'
+);
 
 select is(
   public.cmd_dataset_publish_guarded(
@@ -537,7 +1015,8 @@ select is(
     jsonb_build_object(
       'plan_sha256', repeat('c', 64),
       'operation_id', 'maintenance-audit-conflict',
-      'action_id', 'publish-audit-conflict'
+      'action_id', 'publish-audit-conflict',
+      'approval_audit_id', pg_temp.approval_id('audit-conflict')
     )
   )->>'code',
   'DATASET_PUBLISH_AUDIT_STATE_CONFLICT',
@@ -555,7 +1034,8 @@ select throws_ok(
       jsonb_build_object(
         'plan_sha256', repeat('f', 64),
         'operation_id', 'maintenance-force-audit-failure',
-        'action_id', 'publish-force-audit-failure'
+        'action_id', 'publish-force-audit-failure',
+        'approval_audit_id', pg_temp.approval_id('force-failure')
       )
     )
   $$,
@@ -589,6 +1069,11 @@ select set_config('request.jwt.claim.sub', 'b1000000-0000-0000-0000-000000000001
 select ok(
   (
     select result @> '{"ok":true,"idempotent_replay":false}'::jsonb
+      and jsonb_typeof(result->'audit_id') = 'string'
+      and jsonb_typeof(result->'approval_audit_id') = 'string'
+      and result->>'approval_audit_id' = pg_temp.approval_id('success')
+      and result->>'approval_reviewer_user_id' =
+        'b1000000-0000-0000-0000-000000000003'
     from (
       select public.cmd_dataset_publish_guarded(
         'unitgroups',
@@ -600,7 +1085,8 @@ select ok(
           'plan_sha256', repeat('a', 64),
           'operation_id', 'maintenance-success',
           'action_id', 'publish-unitgroup',
-          'reason_code', 'FPUG-001'
+          'reason_code', 'FPUG-001',
+          'approval_audit_id', pg_temp.approval_id('success')
         )
       ) as result
     ) as committed
@@ -619,7 +1105,8 @@ select is(
       'plan_sha256', repeat('a', 64),
       'operation_id', 'maintenance-success',
       'action_id', 'publish-unitgroup',
-      'reason_code', 'FPUG-001'
+      'reason_code', 'FPUG-001',
+      'approval_audit_id', pg_temp.approval_id('success')
     )
   )->>'idempotent_replay',
   'true',
@@ -636,11 +1123,12 @@ select is(
     jsonb_build_object(
       'plan_sha256', repeat('a', 64),
       'operation_id', 'maintenance-success',
-      'action_id', 'publish-unitgroup'
+      'action_id', 'publish-unitgroup',
+      'approval_audit_id', pg_temp.approval_id('success')
     )
   )->>'code',
-  'DATASET_PUBLISH_REPLAY_UNPROVEN',
-  'same correlation cannot prove replay with a different expected timestamp'
+  'DATASET_PUBLISH_APPROVAL_INVALID',
+  'a timestamp-drifted replay cannot reuse approval for the original frozen snapshot'
 );
 
 select is(
@@ -653,11 +1141,12 @@ select is(
     jsonb_build_object(
       'plan_sha256', repeat('a', 64),
       'operation_id', 'maintenance-success',
-      'action_id', 'different-action'
+      'action_id', 'different-action',
+      'approval_audit_id', pg_temp.approval_id('success')
     )
   )->>'code',
-  'DATASET_PUBLISH_REPLAY_UNPROVEN',
-  'published row cannot be claimed by a different action correlation'
+  'DATASET_PUBLISH_APPROVAL_INVALID',
+  'published row cannot be claimed by an action that the reviewer did not approve'
 );
 
 select is(
@@ -670,7 +1159,8 @@ select is(
     jsonb_build_object(
       'plan_sha256', repeat('a', 64),
       'operation_id', 'maintenance-success',
-      'action_id', 'publish-unitgroup'
+      'action_id', 'publish-unitgroup',
+      'approval_audit_id', pg_temp.approval_id('success')
     )
   )->>'code',
   'DATASET_PUBLISH_REPLAY_PAYLOAD_MISMATCH',
@@ -687,7 +1177,8 @@ select is(
     jsonb_build_object(
       'plan_sha256', repeat('b', 64),
       'operation_id', 'maintenance-independent',
-      'action_id', 'publish-independent'
+      'action_id', 'publish-independent',
+      'approval_audit_id', pg_temp.approval_id('independent')
     )
   )->>'code',
   'DATASET_PUBLISH_REPLAY_UNPROVEN',
@@ -704,7 +1195,8 @@ select is(
     jsonb_build_object(
       'plan_sha256', repeat('e', 64),
       'operation_id', 'maintenance-replay-bound',
-      'action_id', 'publish-replay-bound'
+      'action_id', 'publish-replay-bound',
+      'approval_audit_id', pg_temp.approval_id('replay-bound')
     )
   )->>'ok',
   'true',
@@ -731,11 +1223,12 @@ select is(
     jsonb_build_object(
       'plan_sha256', repeat('e', 64),
       'operation_id', 'maintenance-replay-bound',
-      'action_id', 'publish-replay-bound'
+      'action_id', 'publish-replay-bound',
+      'approval_audit_id', pg_temp.approval_id('replay-bound')
     )
   )->>'code',
-  'DATASET_PUBLISH_REPLAY_UNPROVEN',
-  'same correlation cannot prove replay after a privileged payload change'
+  'DATASET_PUBLISH_APPROVAL_INVALID',
+  'same correlation cannot reuse reviewer approval after a privileged payload change'
 );
 
 select is(
@@ -749,7 +1242,8 @@ select is(
       'plan_sha256', repeat('d', 64),
       'operation_id', 'maintenance-flowproperty',
       'action_id', 'publish-flowproperty',
-      'reason_code', 'FPUG-001'
+      'reason_code', 'FPUG-001',
+      'approval_audit_id', pg_temp.approval_id('flowproperty')
     )
   )->>'ok',
   'true',
@@ -803,6 +1297,9 @@ select is(
       and payload->>'operation_id' = 'maintenance-success'
       and payload->>'action_id' = 'publish-unitgroup'
       and payload->>'reason_code' = 'FPUG-001'
+      and payload->>'approval_audit_id' = pg_temp.approval_id('success')
+      and payload->>'approval_reviewer_user_id' =
+        'b1000000-0000-0000-0000-000000000003'
       and payload->'expected_modified_at' = to_jsonb('2026-07-11 00:00:00+00'::timestamptz)
       and payload->'expected_json_ordered' = pg_temp.unitgroup_payload('publish success')
   ),
@@ -866,6 +1363,9 @@ select is(
       and payload->>'plan_sha256' = repeat('d', 64)
       and payload->>'operation_id' = 'maintenance-flowproperty'
       and payload->>'action_id' = 'publish-flowproperty'
+      and payload->>'approval_audit_id' = pg_temp.approval_id('flowproperty')
+      and payload->>'approval_reviewer_user_id' =
+        'b1000000-0000-0000-0000-000000000003'
   ),
   '1',
   'guarded flow property publish writes its own exact audit correlation'
