@@ -118,6 +118,7 @@ declare
   v_live_process_closure_count integer;
   v_live_exchange_closure_count integer;
   v_closure_exact boolean;
+  v_forbidden_closure_exists boolean;
   v_request_sha256 text;
   v_action jsonb;
   v_action_id text;
@@ -1508,6 +1509,8 @@ begin
     select
       dataset_flow.id,
       btrim(dataset_flow.version::text) as version,
+      dataset_flow.user_id,
+      dataset_flow.state_code,
       flow_property.value->>'@dataSetInternalID' as internal_id
     from public.flows as dataset_flow
     cross join lateral jsonb_array_elements(
@@ -1524,9 +1527,7 @@ begin
         else '[]'::jsonb
       end
     ) as flow_property(value)
-    where dataset_flow.user_id = v_actor
-      and dataset_flow.state_code = 0
-      and flow_property.value
+    where flow_property.value
         #>> '{referenceToFlowPropertyDataSet,@refObjectId}' =
         v_source_flowproperty_id::text
       and flow_property.value
@@ -1534,29 +1535,41 @@ begin
         v_source_flowproperty_version
   )
   select
-    count(*),
-    coalesce(bool_and(exists (
-      select 1
-      from submitted_flows
-      where submitted_flows.id = live_flows.id
-        and submitted_flows.version = live_flows.version
-        and submitted_flows.internal_id = live_flows.internal_id
-    )), true)
-  into v_live_flow_closure_count, v_closure_exact
+    count(*) filter (
+      where live_flows.user_id = v_actor
+        and live_flows.state_code = 0
+    ),
+    coalesce(bool_and(
+      case
+        when live_flows.user_id = v_actor
+          and live_flows.state_code = 0 then exists (
+            select 1
+            from submitted_flows
+            where submitted_flows.id = live_flows.id
+              and submitted_flows.version = live_flows.version
+              and submitted_flows.internal_id = live_flows.internal_id
+          )
+        else true
+      end
+    ), true),
+    coalesce(bool_or(
+      live_flows.user_id is distinct from v_actor
+        or live_flows.state_code is distinct from 0
+    ), false)
+  into
+    v_live_flow_closure_count,
+    v_closure_exact,
+    v_forbidden_closure_exists
   from live_flows;
 
-  if v_live_flow_closure_count not in (0, v_flow_count)
+  if v_forbidden_closure_exists
+    or v_live_flow_closure_count not in (0, v_flow_count)
     or not v_closure_exact then
     return jsonb_build_object(
       'ok', false,
-      'code', 'ALIAS_BATCH_FLOW_CLOSURE_MISMATCH',
+      'code', 'ALIAS_BATCH_CLOSURE_MISMATCH',
       'status', 409,
-      'message', 'Live owner flow closure does not match the exact submitted flow actions',
-      'details', jsonb_build_object(
-        'expected_flow_count', v_flow_count,
-        'replay_flow_count', 0,
-        'live_flow_count', v_live_flow_closure_count
-      )
+      'message', 'Live owner-draft closure does not match the exact submitted batch'
     );
   end if;
 
@@ -1575,7 +1588,9 @@ begin
       exchange_item.value->>'@dataSetInternalID' as internal_id,
       exchange_item.value#>>'{referenceToFlowDataSet,@refObjectId}' as flow_id,
       exchange_item.value#>>'{referenceToFlowDataSet,@version}' as flow_version,
-      exchange_item.value->>'exchangeDirection' as direction
+      exchange_item.value->>'exchangeDirection' as direction,
+      dataset_process.user_id,
+      dataset_process.state_code
     from public.processes as dataset_process
     cross join lateral jsonb_array_elements(
       case jsonb_typeof(
@@ -1596,47 +1611,60 @@ begin
         exchange_item.value#>>'{referenceToFlowDataSet,@refObjectId}'
       and submitted_flows.version =
         exchange_item.value#>>'{referenceToFlowDataSet,@version}'
-    where dataset_process.user_id = v_actor
-      and dataset_process.state_code = 0
   )
   select
-    count(distinct (live_exchanges.process_id, live_exchanges.process_version)),
-    count(*),
-    coalesce(bool_and(exists (
-      select 1
-      from jsonb_array_elements(p_batch->'actions') as process_action(value)
-      cross join lateral jsonb_array_elements(
-        process_action.value#>'{mutation,exchanges}'
-      ) as submitted_exchange(value)
-      where process_action.value->>'table' = 'processes'
-        and process_action.value->>'id' = live_exchanges.process_id::text
-        and process_action.value->>'version' = live_exchanges.process_version
-        and (submitted_exchange.value->>'index')::integer = live_exchanges.exchange_index
-        and submitted_exchange.value->>'internal_id' = live_exchanges.internal_id
-        and submitted_exchange.value->>'flow_id' = live_exchanges.flow_id
-        and submitted_exchange.value->>'flow_version' = live_exchanges.flow_version
-        and submitted_exchange.value->>'direction' = live_exchanges.direction
-    )), true)
+    count(distinct (
+      live_exchanges.process_id,
+      live_exchanges.process_version
+    )) filter (
+      where live_exchanges.user_id = v_actor
+        and live_exchanges.state_code = 0
+    ),
+    count(*) filter (
+      where live_exchanges.user_id = v_actor
+        and live_exchanges.state_code = 0
+    ),
+    coalesce(bool_and(
+      case
+        when live_exchanges.user_id = v_actor
+          and live_exchanges.state_code = 0 then exists (
+            select 1
+            from jsonb_array_elements(p_batch->'actions') as process_action(value)
+            cross join lateral jsonb_array_elements(
+              process_action.value#>'{mutation,exchanges}'
+            ) as submitted_exchange(value)
+            where process_action.value->>'table' = 'processes'
+              and process_action.value->>'id' = live_exchanges.process_id::text
+              and process_action.value->>'version' = live_exchanges.process_version
+              and (submitted_exchange.value->>'index')::integer = live_exchanges.exchange_index
+              and submitted_exchange.value->>'internal_id' = live_exchanges.internal_id
+              and submitted_exchange.value->>'flow_id' = live_exchanges.flow_id
+              and submitted_exchange.value->>'flow_version' = live_exchanges.flow_version
+              and submitted_exchange.value->>'direction' = live_exchanges.direction
+          )
+        else true
+      end
+    ), true),
+    coalesce(bool_or(
+      live_exchanges.user_id is distinct from v_actor
+        or live_exchanges.state_code is distinct from 0
+    ), false)
   into
     v_live_process_closure_count,
     v_live_exchange_closure_count,
-    v_closure_exact
+    v_closure_exact,
+    v_forbidden_closure_exists
   from live_exchanges;
 
-  if v_live_process_closure_count <> v_process_count
+  if v_forbidden_closure_exists
+    or v_live_process_closure_count <> v_process_count
     or v_live_exchange_closure_count <> v_exchange_count
     or not v_closure_exact then
     return jsonb_build_object(
       'ok', false,
-      'code', 'ALIAS_BATCH_PROCESS_CLOSURE_MISMATCH',
+      'code', 'ALIAS_BATCH_CLOSURE_MISMATCH',
       'status', 409,
-      'message', 'Live owner process/exchange closure does not match the exact submitted evidence',
-      'details', jsonb_build_object(
-        'expected_process_count', v_process_count,
-        'live_process_count', v_live_process_closure_count,
-        'expected_exchange_count', v_exchange_count,
-        'live_exchange_count', v_live_exchange_closure_count
-      )
+      'message', 'Live owner-draft closure does not match the exact submitted batch'
     );
   end if;
 

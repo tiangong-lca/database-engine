@@ -519,7 +519,7 @@ begin
 end;
 $$;
 
-select plan(54);
+select plan(63);
 
 alter table public.flowproperties
   disable trigger zz_flowproperties_extracted_text_sync_trigger;
@@ -772,6 +772,7 @@ alter table public.command_audit_log
     not (
       payload->>'record_type' = 'row'
       and payload->>'batch_id' = 'length-time-force-audit-failure'
+      and payload->>'action_id' = 'process-13'
     )
   );
 
@@ -811,6 +812,18 @@ select is(
   )->>'code',
   'ALIAS_BATCH_INVALID_REQUEST',
   'guarded alias batch requires target_visibility in the exact request shape'
+);
+
+select is(
+  public.cmd_dataset_alias_batch_guarded(
+    jsonb_set(
+      pg_temp.alias_batch('time', 'time-invalid-factor'),
+      '{factor}',
+      '"1"'::jsonb
+    )
+  )->>'code',
+  'ALIAS_BATCH_INVALID_FACTOR',
+  'guarded alias batch rejects any factor outside the frozen dimension conversion'
 );
 
 reset role;
@@ -853,7 +866,7 @@ select is(
   public.cmd_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-extra-flow-closure')
   )->>'code',
-  'ALIAS_BATCH_FLOW_CLOSURE_MISMATCH',
+  'ALIAS_BATCH_CLOSURE_MISMATCH',
   'guarded alias batch rejects an omitted legacy array-shaped owner flow that still references the source flow property'
 );
 
@@ -861,6 +874,91 @@ reset role;
 
 delete from public.flows
 where id = pg_temp.alias_entity_id('time', 'flow', 999)
+  and version = '01.00.000';
+
+insert into public.flows (
+  id,
+  version,
+  json_ordered,
+  user_id,
+  state_code,
+  rule_verification,
+  modified_at
+)
+values (
+  pg_temp.alias_entity_id('time', 'flow', 997),
+  '01.00.000',
+  pg_temp.alias_dataset_flow_payload('time', 997, false),
+  'c1000000-0000-0000-0000-000000000001',
+  100,
+  true,
+  '2026-07-11 00:00:00+00'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select is(
+  public.cmd_dataset_alias_batch_guarded(
+    pg_temp.alias_batch('time', 'time-public-flow-closure')
+  ),
+  jsonb_build_object(
+    'ok', false,
+    'code', 'ALIAS_BATCH_CLOSURE_MISMATCH',
+    'status', 409,
+    'message', 'Live owner-draft closure does not match the exact submitted batch'
+  ),
+  'guarded alias batch rejects an omitted public flow reference without disclosing closure details'
+);
+
+reset role;
+
+delete from public.flows
+where id = pg_temp.alias_entity_id('time', 'flow', 997)
+  and version = '01.00.000';
+
+insert into public.flows (
+  id,
+  version,
+  json_ordered,
+  user_id,
+  state_code,
+  rule_verification,
+  modified_at
+)
+values (
+  pg_temp.alias_entity_id('time', 'flow', 998),
+  '01.00.000',
+  pg_temp.alias_dataset_flow_payload('time', 998, false),
+  'c1000000-0000-0000-0000-000000000002',
+  0,
+  true,
+  '2026-07-11 00:00:00+00'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select is(
+  public.cmd_dataset_alias_batch_guarded(
+    pg_temp.alias_batch('time', 'time-foreign-flow-closure')
+  )->>'code',
+  'ALIAS_BATCH_CLOSURE_MISMATCH',
+  'guarded alias batch rejects an omitted foreign-owner flow reference without disclosing closure details'
+);
+
+reset role;
+
+delete from public.flows
+where id = pg_temp.alias_entity_id('time', 'flow', 998)
   and version = '01.00.000';
 
 insert into public.processes (
@@ -893,7 +991,7 @@ select is(
   public.cmd_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-extra-process-closure')
   )->>'code',
-  'ALIAS_BATCH_PROCESS_CLOSURE_MISMATCH',
+  'ALIAS_BATCH_CLOSURE_MISMATCH',
   'guarded alias batch rejects an omitted owner process exchange that references an affected flow'
 );
 
@@ -901,6 +999,86 @@ reset role;
 
 delete from public.processes
 where id = pg_temp.alias_entity_id('time', 'process', 999)
+  and version = '01.00.000';
+
+insert into public.processes (
+  id,
+  version,
+  json_ordered,
+  user_id,
+  state_code,
+  rule_verification,
+  modified_at
+)
+values (
+  pg_temp.alias_entity_id('time', 'process', 997),
+  '01.00.000',
+  pg_temp.alias_process_payload('time', 997, false),
+  'c1000000-0000-0000-0000-000000000001',
+  100,
+  true,
+  '2026-07-11 00:00:00+00'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select is(
+  public.cmd_dataset_alias_batch_guarded(
+    pg_temp.alias_batch('time', 'time-public-process-closure')
+  )->>'code',
+  'ALIAS_BATCH_CLOSURE_MISMATCH',
+  'guarded alias batch rejects an omitted public process reference without disclosing closure details'
+);
+
+reset role;
+
+delete from public.processes
+where id = pg_temp.alias_entity_id('time', 'process', 997)
+  and version = '01.00.000';
+
+insert into public.processes (
+  id,
+  version,
+  json_ordered,
+  user_id,
+  state_code,
+  rule_verification,
+  modified_at
+)
+values (
+  pg_temp.alias_entity_id('time', 'process', 998),
+  '01.00.000',
+  pg_temp.alias_process_payload('time', 998, false),
+  'c1000000-0000-0000-0000-000000000002',
+  0,
+  true,
+  '2026-07-11 00:00:00+00'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select is(
+  public.cmd_dataset_alias_batch_guarded(
+    pg_temp.alias_batch('time', 'time-foreign-process-closure')
+  )->>'code',
+  'ALIAS_BATCH_CLOSURE_MISMATCH',
+  'guarded alias batch rejects an omitted foreign-owner process reference without disclosing closure details'
+);
+
+reset role;
+
+delete from public.processes
+where id = pg_temp.alias_entity_id('time', 'process', 998)
   and version = '01.00.000';
 
 set local role authenticated;
@@ -1452,8 +1630,14 @@ select set_config(
 );
 
 select ok(
-  committed.result @> '{"ok":true,"target_visibility":"owner_draft","idempotent_replay":false,"row_count":25,"exchange_count":20}'::jsonb,
-  'time dimension commits all 25 rows and 20 exchange mutations atomically: '
+  committed.result @> '{"ok":true,"target_visibility":"owner_draft","idempotent_replay":false,"row_count":25,"exchange_count":20}'::jsonb
+    and jsonb_typeof(committed.result->'summary_audit_id') = 'string'
+    and not exists (
+      select 1
+      from jsonb_array_elements(committed.result->'audit') as audit_item(value)
+      where jsonb_typeof(audit_item.value->'audit_id') <> 'string'
+    ),
+  'time dimension commits atomically and returns lossless decimal-string audit IDs: '
     || committed.result::text
 )
 from (
@@ -1523,6 +1707,122 @@ select is(
   'time audit set contains one exact summary and 25 row proofs'
 );
 
+savepoint alias_mixed_partial_state;
+
+update public.processes
+set json_ordered = pg_temp.alias_process_payload('time', 1, false)::json,
+    modified_at = '2026-07-11 00:00:00+00'
+where id = pg_temp.alias_entity_id('time', 'process', 1)
+  and version = '01.00.000';
+
+delete from public.command_audit_log
+where command = 'cmd_dataset_alias_batch_guarded'
+  and payload->>'batch_id' = 'time-success'
+  and payload->>'action_id' = 'process-01';
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select is(
+  public.cmd_dataset_alias_batch_guarded(
+    pg_temp.alias_batch('time', 'time-success')
+  )->>'code',
+  'ALIAS_BATCH_PARTIAL_STATE',
+  'replay rejects a mixed before/desired batch even when the remaining desired rows retain exact audits'
+);
+
+reset role;
+rollback to savepoint alias_mixed_partial_state;
+release savepoint alias_mixed_partial_state;
+
+savepoint alias_missing_row_audit;
+
+delete from public.command_audit_log
+where command = 'cmd_dataset_alias_batch_guarded'
+  and payload->>'batch_id' = 'time-success'
+  and payload->>'action_id' = 'process-01';
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select is(
+  public.cmd_dataset_alias_batch_guarded(
+    pg_temp.alias_batch('time', 'time-success')
+  )->>'code',
+  'ALIAS_BATCH_REPLAY_UNPROVEN',
+  'replay rejects a desired-state row when its exact row audit is missing'
+);
+
+reset role;
+rollback to savepoint alias_missing_row_audit;
+release savepoint alias_missing_row_audit;
+
+savepoint alias_tampered_row_audit;
+
+update public.command_audit_log
+set payload = jsonb_set(
+  payload,
+  '{desired_json_ordered_sha256}',
+  to_jsonb(repeat('f', 64)),
+  false
+)
+where command = 'cmd_dataset_alias_batch_guarded'
+  and payload->>'batch_id' = 'time-success'
+  and payload->>'action_id' = 'process-01';
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select is(
+  public.cmd_dataset_alias_batch_guarded(
+    pg_temp.alias_batch('time', 'time-success')
+  )->>'code',
+  'ALIAS_BATCH_REPLAY_UNPROVEN',
+  'replay rejects a row audit whose semantic hash was tampered'
+);
+
+reset role;
+rollback to savepoint alias_tampered_row_audit;
+release savepoint alias_tampered_row_audit;
+
+savepoint alias_missing_summary_audit;
+
+delete from public.command_audit_log
+where command = 'cmd_dataset_alias_batch_guarded'
+  and payload->>'batch_id' = 'time-success'
+  and target_table is null;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select is(
+  public.cmd_dataset_alias_batch_guarded(
+    pg_temp.alias_batch('time', 'time-success')
+  )->>'code',
+  'ALIAS_BATCH_REPLAY_UNPROVEN',
+  'replay rejects a complete desired row set when the exact summary audit is missing'
+);
+
+reset role;
+rollback to savepoint alias_missing_summary_audit;
+release savepoint alias_missing_summary_audit;
+
 set local role authenticated;
 select set_config(
   'request.jwt.claim.sub',
@@ -1544,7 +1844,7 @@ select ok(
     from jsonb_array_elements(replay.result->'audit') as audit_item(value)
     where jsonb_typeof(audit_item.value->'audit_id') <> 'string'
   ),
-  'success and replay responses expose bigint audit IDs as lossless decimal strings'
+  'replay responses expose bigint audit IDs as lossless decimal strings'
 )
 from (
   select public.cmd_dataset_alias_batch_guarded(
