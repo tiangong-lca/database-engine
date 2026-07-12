@@ -27,8 +27,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-06-26
-lastReviewedCommit: 8fff106adf1e559b5fd4df6ad8ac578e8c8e57de
+lastReviewedAt: 2026-07-12
+lastReviewedCommit: 42cb7d2a4d5d5ea43c02d98b88528518c9114eca
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -75,7 +75,7 @@ The current migration and test history clusters around these themes:
 
 1. access control and policy hardening
 2. review workflow command/query RPCs
-3. dataset lifecycle and publish/delete flows
+3. dataset lifecycle, private owner-draft FP/UG full-plan alias rewrites, and publish/delete flows
 4. notification and membership query boundaries
 5. lifecycle bundle cleanup and embedding-related compatibility
 6. remote schema reconciliation and preview-branch validation
@@ -120,6 +120,7 @@ Do not leave durable manual edits only inside generated paths.
 This repo owns database truth, but not every runtime consequence:
 
 - `database-engine` owns persisted review-submit gate runs, `worker_jobs` lifecycle schema/RPCs, review-submit job coordinator state, access checks, idempotent gate lookup, result recording, legacy lifecycle cutover cleanup, retired legacy job-table archives under `archive.worker_legacy_job_table_rows`, and the final submit-review assertion
+- `database-engine` owns the single authenticated atomic owner-draft FP/UG alias plan RPC. Its exact `dataset-alias-plan.v1` request contains time followed by length-time, one shared plan hash and operation ID, `target_visibility=owner_draft`, 52 distinct action rows, and 59 exchange mutations. The RPC performs a uniform, non-locking actor-owned `state_code=0` support/action preflight before invoking the non-public dimension executor; the executor then repeats frozen support, embedded identity, canonical exchange-hash, public/foreign/non-draft parent, exact closure, stable row-lock, table-specific allowed-path, and exact-factor validation under short write-excluding locks. Both dimensions and their row/batch audits run inside one exception subtransaction and are bound by one plan audit, so a second-dimension failure rolls back the first and an identical lost-response retry requires both complete batch proofs plus the exact plan proof. Authenticated callers cannot execute a dimension independently.
 - `tiangong-lca-worker` owns numeric-stability checks and the calculator report payload semantics
 - `tiangong-lca-next` owns frontend env selection and app-side Supabase clients
 - `tiangong-lca-edge-functions` owns Edge Function runtime orchestration, worker invocation, and API response shape

@@ -34,8 +34,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-06-26
-lastReviewedCommit: 8fff106adf1e559b5fd4df6ad8ac578e8c8e57de
+lastReviewedAt: 2026-07-12
+lastReviewedCommit: 42cb7d2a4d5d5ea43c02d98b88528518c9114eca
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -128,6 +128,7 @@ At a human-readable level, this repo owns:
 - `supabase/seeds/**`
 - `supabase/tests/**`
 - database-side review-submit gate state and final submit-review assertion RPCs
+- the single authenticated guarded dataset maintenance RPC for the exact two-dimension owner-draft FP/UG alias plan; its per-dimension executor is not an authenticated API, and time plus length-time must commit or roll back together
 - `tiangong-lca-worker` `worker_jobs` queue schema/RPCs, legacy lifecycle cutover cleanup, and review-submit coordinator links to worker job results
 - `scripts/**` for schema export, workspace refresh, change copying, and migration generation
 - `.github/workflows/supabase-dev.yml`
