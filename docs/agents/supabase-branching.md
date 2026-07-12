@@ -139,9 +139,15 @@ Normal PR path:
    Supabase `dev` branch.
 5. After the PR merges, the resulting push to Git `dev` triggers
    `.github/workflows/supabase-dev.yml`.
-6. The workflow links to `SUPABASE_DEV_PROJECT_ID` and runs `supabase db push`.
+6. The workflow links to `SUPABASE_DEV_PROJECT_ID` and runs `supabase db push --include-all`.
 7. Pending checked-in migrations are then applied to the persistent Supabase
    `dev` branch.
+
+`--include-all` means every committed migration absent from remote history is
+eligible for application. It is required when a governed `main -> dev`
+backmerge introduces a migration whose timestamp precedes newer migrations
+already recorded on persistent `dev`; migrations already present in remote
+history are still skipped.
 
 Promote path:
 
@@ -196,7 +202,7 @@ Rules:
 ### Persistent `dev` branch deployment
 
 - Pushes to Git `dev` trigger `.github/workflows/supabase-dev.yml`.
-- That workflow links to the persistent Supabase `dev` branch and runs `supabase db push`.
+- That workflow links to the persistent Supabase `dev` branch and runs `supabase db push --include-all` so governed backmerges can apply every committed migration missing from remote history, including older-timestamped entries.
 - Do not add a second automation path that pushes the same target.
 
 ### Production `main` deployment

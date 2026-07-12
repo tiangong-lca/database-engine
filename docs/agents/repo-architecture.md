@@ -64,7 +64,7 @@ This repo is organized around one checked-in Supabase project plus a generated s
 - Git `dev` is the daily integration trunk
 - Git `main` is the promoted release line
 - PR branches map to Supabase preview branches
-- `.github/workflows/supabase-dev.yml` pushes committed migrations to the persistent remote `dev` branch on Git `dev`
+- `.github/workflows/supabase-dev.yml` pushes every committed migration missing from remote history to the persistent remote `dev` branch on Git `dev`, including an older-timestamped migration introduced by a governed `main -> dev` backmerge
 - the production Supabase project is migrated automatically by the Supabase GitHub integration when Git `main` advances
 
 This means branch behavior is part of the repo architecture, not just delivery process.
