@@ -519,7 +519,62 @@ begin
 end;
 $$;
 
-select plan(67);
+create or replace function pg_temp.alias_plan(
+  p_operation_id text,
+  p_time_batch_id text,
+  p_length_time_batch_id text
+) returns jsonb
+language plpgsql
+stable
+as $$
+declare
+  v_plan_sha256 constant text := repeat('c', 64);
+  v_time_batch jsonb;
+  v_length_time_batch jsonb;
+begin
+  v_time_batch := jsonb_set(
+    jsonb_set(
+      pg_temp.alias_batch('time', p_time_batch_id),
+      '{plan_sha256}',
+      to_jsonb(v_plan_sha256)
+    ),
+    '{operation_id}',
+    to_jsonb(p_operation_id)
+  );
+  v_length_time_batch := jsonb_set(
+    jsonb_set(
+      pg_temp.alias_batch('length_time', p_length_time_batch_id),
+      '{plan_sha256}',
+      to_jsonb(v_plan_sha256)
+    ),
+    '{operation_id}',
+    to_jsonb(p_operation_id)
+  );
+
+  return jsonb_build_object(
+    'schema_version', 'dataset-alias-plan.v1',
+    'plan_sha256', v_plan_sha256,
+    'operation_id', p_operation_id,
+    'target_visibility', 'owner_draft',
+    'batches', jsonb_build_array(v_time_batch, v_length_time_batch)
+  );
+end;
+$$;
+
+-- The production dimension executor is owner-only after the plan migration.
+-- This postgres-owned, transaction-local helper keeps the exhaustive inner
+-- validation assertions below reachable without restoring an API bypass.
+create or replace function pg_temp.call_dataset_alias_batch_guarded(
+  p_batch jsonb
+) returns jsonb
+language sql
+security definer
+set search_path = ''
+as $$
+  select public.cmd_dataset_alias_batch_guarded(p_batch);
+$$;
+
+select plan(78);
 
 alter table public.flowproperties
   disable trigger zz_flowproperties_extracted_text_sync_trigger;
@@ -551,7 +606,7 @@ alter table public.processes
   disable trigger processes_set_modified_at_trigger;
 
 select ok(
-  has_function_privilege(
+  not has_function_privilege(
     'authenticated',
     'public.cmd_dataset_alias_batch_guarded(jsonb)',
     'execute'
@@ -565,9 +620,37 @@ select ok(
     'service_role',
     'public.cmd_dataset_alias_batch_guarded(jsonb)',
     'execute'
+  )
+  and has_function_privilege(
+    'authenticated',
+    'public.cmd_dataset_alias_plan_guarded(jsonb)',
+    'execute'
+  )
+  and not has_function_privilege(
+    'anon',
+    'public.cmd_dataset_alias_plan_guarded(jsonb)',
+    'execute'
+  )
+  and not has_function_privilege(
+    'service_role',
+    'public.cmd_dataset_alias_plan_guarded(jsonb)',
+    'execute'
   ),
-  'guarded alias batch is executable only by authenticated callers'
+  'authenticated callers can execute only the full-plan alias RPC'
 );
+
+set local role authenticated;
+
+select throws_ok(
+  $$
+    select public.cmd_dataset_alias_batch_guarded('{}'::jsonb)
+  $$,
+  '42501',
+  null,
+  'authenticated callers cannot bypass full-plan atomicity through the dimension executor'
+);
+
+reset role;
 
 select ok(
   strpos(
@@ -583,6 +666,26 @@ select ok(
     'set lock_timeout to ''5s'''
   ) > 0,
   'guarded alias batch hardens its definer search path and lock timeout'
+);
+
+select ok(
+  strpos(
+    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    'security definer'
+  ) > 0
+  and strpos(
+    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    'set search_path to '''''
+  ) > 0
+  and strpos(
+    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    'set lock_timeout to ''5s'''
+  ) > 0
+  and strpos(
+    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    'set statement_timeout to ''30s'''
+  ) > 0,
+  'guarded alias plan hardens its definer path, lock wait, and statement duration'
 );
 
 select ok(
@@ -620,15 +723,17 @@ select ok(
 select ok(
   to_regclass('public.command_audit_log_guarded_alias_batch_row_replay_idx') is not null
   and to_regclass('public.command_audit_log_guarded_alias_batch_summary_replay_idx') is not null
+  and to_regclass('public.command_audit_log_guarded_alias_plan_summary_replay_idx') is not null
   and (
     select bool_and(index_meta.indisvalid and index_meta.indisready)
     from pg_catalog.pg_index as index_meta
     where index_meta.indexrelid in (
       'public.command_audit_log_guarded_alias_batch_row_replay_idx'::regclass,
-      'public.command_audit_log_guarded_alias_batch_summary_replay_idx'::regclass
+      'public.command_audit_log_guarded_alias_batch_summary_replay_idx'::regclass,
+      'public.command_audit_log_guarded_alias_plan_summary_replay_idx'::regclass
     )
   ),
-  'guarded alias replay indexes are valid and ready'
+  'guarded alias batch and plan replay indexes are valid and ready'
 );
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -776,11 +881,112 @@ alter table public.command_audit_log
     )
   );
 
+insert into public.flows (
+  id,
+  version,
+  json_ordered,
+  user_id,
+  state_code,
+  rule_verification,
+  modified_at
+)
+values (
+  'e4000000-0000-0000-0000-000000000001',
+  '01.00.000',
+  pg_temp.alias_dataset_flow_payload('time', 1, false),
+  'c1000000-0000-0000-0000-000000000002',
+  0,
+  true,
+  '2026-07-11 00:00:00+00'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select is(
+  public.cmd_dataset_alias_plan_guarded(
+    jsonb_set(
+      pg_temp.alias_plan(
+        'maintenance-alias-reversed-batches',
+        'time-reversed-batches',
+        'length-time-reversed-batches'
+      ),
+      '{batches}',
+      jsonb_build_array(
+        pg_temp.alias_plan(
+          'maintenance-alias-reversed-batches',
+          'time-reversed-batches',
+          'length-time-reversed-batches'
+        )#>'{batches,1}',
+        pg_temp.alias_plan(
+          'maintenance-alias-reversed-batches',
+          'time-reversed-batches',
+          'length-time-reversed-batches'
+        )#>'{batches,0}'
+      )
+    )
+  )->>'code',
+  'ALIAS_PLAN_INVALID_BATCH_SET',
+  'full-plan RPC requires exactly time followed by length_time'
+);
+
+select is(
+  public.cmd_dataset_alias_plan_guarded(
+    jsonb_set(
+      pg_temp.alias_plan(
+        'maintenance-alias-foreign-preflight',
+        'time-foreign-preflight',
+        'length-time-foreign-preflight'
+      ),
+      '{batches,0,actions,1,id}',
+      '"e4000000-0000-0000-0000-000000000001"'::jsonb
+    )
+  )->>'code',
+  'ALIAS_PLAN_SCOPE_MISMATCH',
+  'foreign submitted row keys fail the owner-draft preflight uniformly'
+);
+
+select ok(
+  strpos(
+    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    'into v_support_owned'
+  ) > 0
+  and strpos(
+    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    'into v_owned_action_count'
+  ) > 0
+  and strpos(
+    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    'into v_support_owned'
+  ) < strpos(
+    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    'v_time_result := public.cmd_dataset_alias_batch_guarded'
+  )
+  and strpos(
+    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    'into v_owned_action_count'
+  ) < strpos(
+    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    'v_time_result := public.cmd_dataset_alias_batch_guarded'
+  ),
+  'support and action ownership preflights precede the internal global-lock executor'
+);
+
+reset role;
+
+delete from public.flows
+where id = 'e4000000-0000-0000-0000-000000000001'
+  and version = '01.00.000';
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '', true);
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-success')
   )->>'code',
   'AUTH_REQUIRED',
@@ -794,7 +1000,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     jsonb_set(
       pg_temp.alias_batch('time', 'time-invalid-target-visibility'),
       '{target_visibility}',
@@ -806,7 +1012,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-missing-target-visibility')
       - 'target_visibility'
   )->>'code',
@@ -815,7 +1021,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     jsonb_set(
       pg_temp.alias_batch('time', 'time-invalid-factor'),
       '{factor}',
@@ -863,7 +1069,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-extra-flow-closure')
   )->>'code',
   'ALIAS_BATCH_CLOSURE_MISMATCH',
@@ -903,7 +1109,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-public-flow-closure')
   ),
   jsonb_build_object(
@@ -948,7 +1154,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-foreign-flow-closure')
   )->>'code',
   'ALIAS_BATCH_CLOSURE_MISMATCH',
@@ -988,7 +1194,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-public-target-flow-parent')
   )->>'code',
   'ALIAS_BATCH_CLOSURE_MISMATCH',
@@ -1033,7 +1239,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-public-target-unitgroup-parent')
   )->>'code',
   'ALIAS_BATCH_CLOSURE_MISMATCH',
@@ -1078,7 +1284,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-foreign-source-unitgroup-parent')
   )->>'code',
   'ALIAS_BATCH_CLOSURE_MISMATCH',
@@ -1144,7 +1350,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-owner-draft-extra-support-parents')
   )->>'ok',
   'true',
@@ -1182,7 +1388,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-extra-process-closure')
   )->>'code',
   'ALIAS_BATCH_CLOSURE_MISMATCH',
@@ -1222,7 +1428,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-public-process-closure')
   )->>'code',
   'ALIAS_BATCH_CLOSURE_MISMATCH',
@@ -1262,7 +1468,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-foreign-process-closure')
   )->>'code',
   'ALIAS_BATCH_CLOSURE_MISMATCH',
@@ -1283,7 +1489,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-bad-count') #- '{actions,24}'
   )->>'code',
   'ALIAS_BATCH_INVALID_COUNTS',
@@ -1291,7 +1497,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     jsonb_set(
       pg_temp.alias_batch('time', 'time-bad-table'),
       '{actions,1,table}',
@@ -1303,7 +1509,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     jsonb_set(
       pg_temp.alias_batch('time', 'time-target-drift'),
       '{target,flowproperty,expected_modified_at}',
@@ -1315,7 +1521,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     jsonb_set(
       pg_temp.alias_batch('time', 'time-source-support-drift'),
       '{target,source_unitgroup,expected_modified_at}',
@@ -1341,7 +1547,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-public-target-flowproperty')
   )->>'code',
   'ALIAS_BATCH_DATASET_NOT_FOUND',
@@ -1364,7 +1570,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-foreign-target-flowproperty')
   )->>'code',
   'ALIAS_BATCH_DATASET_NOT_FOUND',
@@ -1391,7 +1597,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-public-target-unitgroup')
   )->>'code',
   'ALIAS_BATCH_DATASET_NOT_FOUND',
@@ -1414,7 +1620,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-foreign-target-unitgroup')
   )->>'code',
   'ALIAS_BATCH_DATASET_NOT_FOUND',
@@ -1441,7 +1647,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-public-source-unitgroup')
   )->>'code',
   'ALIAS_BATCH_DATASET_NOT_FOUND',
@@ -1464,7 +1670,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-foreign-source-unitgroup')
   )->>'code',
   'ALIAS_BATCH_DATASET_NOT_FOUND',
@@ -1491,7 +1697,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-public-source-flowproperty')
   )->>'code',
   'ALIAS_BATCH_DATASET_NOT_FOUND',
@@ -1518,7 +1724,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-public-flow')
   )->>'code',
   'ALIAS_BATCH_DATASET_NOT_FOUND',
@@ -1545,7 +1751,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-public-process')
   )->>'code',
   'ALIAS_BATCH_DATASET_NOT_FOUND',
@@ -1568,7 +1774,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-foreign-process')
   )->>'code',
   'ALIAS_BATCH_DATASET_NOT_FOUND',
@@ -1600,7 +1806,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     jsonb_set(
       pg_temp.alias_batch('time', 'time-fp-extra-change'),
       '{actions,0,desired_json_ordered,flowPropertyDataSet,extra}',
@@ -1613,7 +1819,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     jsonb_set(
       pg_temp.alias_batch('time', 'time-embedded-uuid-mismatch'),
       '{actions,0,desired_json_ordered,flowPropertyDataSet,flowPropertiesInformation,dataSetInformation,common:UUID}',
@@ -1625,7 +1831,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     jsonb_set(
       pg_temp.alias_batch('time', 'time-flow-ref-extra'),
       '{actions,1,desired_json_ordered,flowDataSet,flowProperties,flowProperty,referenceToFlowPropertyDataSet,extra}',
@@ -1638,7 +1844,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     jsonb_set(
       pg_temp.alias_batch('time', 'time-process-extra-change'),
       '{actions,11,desired_json_ordered,processDataSet,extra}',
@@ -1651,7 +1857,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     jsonb_set(
       pg_temp.alias_batch('time', 'time-bad-factor-amount'),
       '{actions,11,desired_json_ordered,processDataSet,exchanges,exchange,0,meanAmount}',
@@ -1663,7 +1869,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     jsonb_set(
       pg_temp.alias_batch('time', 'time-bad-exchange-evidence'),
       '{actions,11,mutation,exchanges,0,direction}',
@@ -1675,7 +1881,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     jsonb_set(
       pg_temp.alias_batch('time', 'time-bad-exchange-hash'),
       '{actions,11,mutation,exchanges,0,before_exchange_sha256}',
@@ -1687,7 +1893,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     jsonb_set(
       pg_temp.alias_batch('time', 'time-oversized-exchange-index'),
       '{actions,11,mutation,exchanges,0,index}',
@@ -1713,7 +1919,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-row-drift')
   )->>'code',
   'ALIAS_BATCH_PRECONDITION_FAILED',
@@ -1740,7 +1946,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-other-owner')
   )->>'code',
   'ALIAS_BATCH_DATASET_NOT_FOUND',
@@ -1761,21 +1967,56 @@ select set_config(
   true
 );
 
-select throws_ok(
-  $$
-    select public.cmd_dataset_alias_batch_guarded(
-      pg_temp.alias_batch('length_time', 'length-time-force-audit-failure')
+select ok(
+  failed.result @> '{
+    "ok": false,
+    "code": "ALIAS_PLAN_EXECUTION_FAILED",
+    "failed_dimension": "length_time",
+    "plan_rolled_back": true
+  }'::jsonb,
+  'forced second-dimension audit failure returns a rolled-back full-plan result: '
+    || failed.result::text
+)
+from (
+  select public.cmd_dataset_alias_plan_guarded(
+    pg_temp.alias_plan(
+      'maintenance-alias-force-second-failure',
+      'time-force-second-failure',
+      'length-time-force-audit-failure'
     )
-  $$,
-  '23514',
-  null,
-  'forced row-audit failure aborts the guarded alias batch statement'
-);
+  ) as result
+) as failed;
 
 reset role;
 
 select is(
   (
+    select count(*)::text
+    from public.flowproperties
+    where id = pg_temp.alias_entity_id('time', 'source_flowproperty')
+      and json_ordered::jsonb = pg_temp.alias_flowproperty_payload('time', false)
+  )
+  || ':' || (
+    select count(*)::text
+    from public.flows
+    where id::text like 'c4000000-%'
+      and json_ordered::jsonb = pg_temp.alias_dataset_flow_payload(
+        'time',
+        right(id::text, 12)::integer,
+        false
+      )
+  )
+  || ':' || (
+    select count(*)::text
+    from public.processes
+    where id::text like 'c5000000-%'
+      and json_ordered::jsonb = pg_temp.alias_process_payload(
+        'time',
+        right(id::text, 12)::integer,
+        false
+      )
+  )
+  || ':' || (
     select count(*)::text
     from public.flowproperties
     where id = pg_temp.alias_entity_id('length_time', 'source_flowproperty')
@@ -1801,8 +2042,121 @@ select is(
         false
       )
   ),
-  '1:13:13',
-  'forced row-audit failure rolls back every prior row update in the dimension'
+  '1:10:14:1:13:13',
+  'second-dimension failure rolls back all 52 first- and second-dimension rows'
+);
+
+select is(
+  (
+    select count(*)::text
+    from public.command_audit_log
+    where (
+      command = 'cmd_dataset_alias_batch_guarded'
+      and payload->>'batch_id' in (
+        'time-force-second-failure',
+        'length-time-force-audit-failure'
+      )
+    ) or (
+      command = 'cmd_dataset_alias_plan_guarded'
+      and payload->>'operation_id' =
+        'maintenance-alias-force-second-failure'
+    )
+  ),
+  '0',
+  'second-dimension failure also rolls back both batch audit sets and plan proof'
+);
+
+savepoint full_plan_success_and_replay;
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select ok(
+  committed.result @> '{
+    "ok": true,
+    "command": "cmd_dataset_alias_plan_guarded",
+    "schema_version": "dataset-alias-plan.v1",
+    "target_visibility": "owner_draft",
+    "batch_count": 2,
+    "row_count": 52,
+    "exchange_count": 59,
+    "idempotent_replay": false
+  }'::jsonb
+  and jsonb_typeof(committed.result->'summary_audit_id') = 'string'
+  and jsonb_typeof(committed.result->'plan_request_sha256') = 'string'
+  and jsonb_array_length(committed.result->'batches') = 2
+  and committed.result#>>'{batches,0,dimension}' = 'time'
+  and committed.result#>>'{batches,0,idempotent_replay}' = 'false'
+  and jsonb_array_length(committed.result#>'{batches,0,audit}') = 25
+  and committed.result#>>'{batches,1,dimension}' = 'length_time'
+  and committed.result#>>'{batches,1,idempotent_replay}' = 'false'
+  and jsonb_array_length(committed.result#>'{batches,1,audit}') = 27,
+  'one public RPC commits the exact 52-row/59-exchange plan with both batch proofs: '
+    || committed.result::text
+)
+from (
+  select public.cmd_dataset_alias_plan_guarded(
+    pg_temp.alias_plan(
+      'maintenance-alias-plan-success',
+      'time-plan-success',
+      'length-time-plan-success'
+    )
+  ) as result
+) as committed;
+
+reset role;
+
+select is(
+  (
+    select count(*)::text
+    from public.flowproperties
+    where id = pg_temp.alias_entity_id('time', 'source_flowproperty')
+      and json_ordered::jsonb = pg_temp.alias_flow_after_payload('time')
+  )
+  || ':' || (
+    select count(*)::text
+    from public.flows
+    where id::text like 'c4000000-%'
+      and json_ordered::jsonb = pg_temp.alias_dataset_flow_payload(
+        'time', right(id::text, 12)::integer, true
+      )
+  )
+  || ':' || (
+    select count(*)::text
+    from public.processes
+    where id::text like 'c5000000-%'
+      and json_ordered::jsonb = pg_temp.alias_process_payload(
+        'time', right(id::text, 12)::integer, true
+      )
+  )
+  || ':' || (
+    select count(*)::text
+    from public.flowproperties
+    where id = pg_temp.alias_entity_id('length_time', 'source_flowproperty')
+      and json_ordered::jsonb = pg_temp.alias_flow_after_payload('length_time')
+  )
+  || ':' || (
+    select count(*)::text
+    from public.flows
+    where id::text like 'd4000000-%'
+      and json_ordered::jsonb = pg_temp.alias_dataset_flow_payload(
+        'length_time', right(id::text, 12)::integer, true
+      )
+  )
+  || ':' || (
+    select count(*)::text
+    from public.processes
+    where id::text like 'd5000000-%'
+      and json_ordered::jsonb = pg_temp.alias_process_payload(
+        'length_time', right(id::text, 12)::integer, true
+      )
+  ),
+  '1:10:14:1:13:13',
+  'full-plan success commits every row in both dimensions'
 );
 
 select is(
@@ -1810,11 +2164,93 @@ select is(
     select count(*)::text
     from public.command_audit_log
     where command = 'cmd_dataset_alias_batch_guarded'
-      and payload->>'batch_id' = 'length-time-force-audit-failure'
+      and payload->>'operation_id' = 'maintenance-alias-plan-success'
+  )
+  || ':' || (
+    select count(*)::text
+    from public.command_audit_log
+    where command = 'cmd_dataset_alias_plan_guarded'
+      and payload->>'operation_id' = 'maintenance-alias-plan-success'
   ),
-  '0',
-  'forced row-audit failure also rolls back the batch summary audit'
+  '54:1',
+  'full-plan success writes both complete batch audit sets and one plan summary'
 );
+
+select is(
+  (
+    select count(*)::text
+    from public.command_audit_log
+    where command = 'cmd_dataset_alias_plan_guarded'
+      and target_table is null
+      and payload->>'record_type' = 'plan_summary'
+      and payload->>'schema_version' = 'dataset-alias-plan.v1'
+      and payload->>'target_visibility' = 'owner_draft'
+      and payload->>'batch_count' = '2'
+      and payload->>'row_count' = '52'
+      and payload->>'exchange_count' = '59'
+      and payload->>'support_owner_user_id' =
+        'c1000000-0000-0000-0000-000000000001'
+      and payload->>'plan_request_sha256' ~ '^[a-f0-9]{64}$'
+      and payload->>'time_batch_request_sha256' ~ '^[a-f0-9]{64}$'
+      and payload->>'length_time_batch_request_sha256' ~ '^[a-f0-9]{64}$'
+      and payload->>'time_batch_summary_audit_id' ~ '^[0-9]+$'
+      and payload->>'length_time_batch_summary_audit_id' ~ '^[0-9]+$'
+  ),
+  '1',
+  'plan summary binds the immutable plan request to both lossless batch audit proofs'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select ok(
+  replay.result @> '{
+    "ok": true,
+    "row_count": 52,
+    "exchange_count": 59,
+    "idempotent_replay": true
+  }'::jsonb
+  and replay.result#>>'{batches,0,idempotent_replay}' = 'true'
+  and replay.result#>>'{batches,1,idempotent_replay}' = 'true'
+  and jsonb_typeof(replay.result->'summary_audit_id') = 'string',
+  'identical lost-response retry replays the whole plan from both batches and one plan proof: '
+    || replay.result::text
+)
+from (
+  select public.cmd_dataset_alias_plan_guarded(
+    pg_temp.alias_plan(
+      'maintenance-alias-plan-success',
+      'time-plan-success',
+      'length-time-plan-success'
+    )
+  ) as result
+) as replay;
+
+reset role;
+
+select is(
+  (
+    select count(*)::text
+    from public.command_audit_log
+    where command = 'cmd_dataset_alias_batch_guarded'
+      and payload->>'operation_id' = 'maintenance-alias-plan-success'
+  )
+  || ':' || (
+    select count(*)::text
+    from public.command_audit_log
+    where command = 'cmd_dataset_alias_plan_guarded'
+      and payload->>'operation_id' = 'maintenance-alias-plan-success'
+  ),
+  '54:1',
+  'full-plan replay creates no duplicate row, batch, or plan audit records'
+);
+
+rollback to savepoint full_plan_success_and_replay;
+release savepoint full_plan_success_and_replay;
 
 set local role authenticated;
 select set_config(
@@ -1835,7 +2271,7 @@ select ok(
     || committed.result::text
 )
 from (
-  select public.cmd_dataset_alias_batch_guarded(
+  select pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-success')
   ) as result
 ) as committed;
@@ -1922,7 +2358,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-success')
   )->>'code',
   'ALIAS_BATCH_PARTIAL_STATE',
@@ -1948,7 +2384,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-success')
   )->>'code',
   'ALIAS_BATCH_REPLAY_UNPROVEN',
@@ -1980,7 +2416,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-success')
   )->>'code',
   'ALIAS_BATCH_REPLAY_UNPROVEN',
@@ -2006,7 +2442,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-success')
   )->>'code',
   'ALIAS_BATCH_REPLAY_UNPROVEN',
@@ -2025,7 +2461,7 @@ select set_config(
 );
 
 select ok(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-success')
   ) @> '{"ok":true,"target_visibility":"owner_draft","idempotent_replay":true,"row_count":25,"exchange_count":20}'::jsonb,
   'identical time request replays from one summary and every exact row audit'
@@ -2041,7 +2477,7 @@ select ok(
   'replay responses expose bigint audit IDs as lossless decimal strings'
 )
 from (
-  select public.cmd_dataset_alias_batch_guarded(
+  select pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('time', 'time-success')
   ) as result
 ) as replay;
@@ -2067,7 +2503,7 @@ select set_config(
 );
 
 select ok(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('length_time', 'length-time-success')
   ) @> '{"ok":true,"target_visibility":"owner_draft","idempotent_replay":false,"row_count":27,"exchange_count":39}'::jsonb,
   'length_time dimension commits all 27 rows and 39 exchange mutations atomically'
@@ -2110,7 +2546,7 @@ select set_config(
 );
 
 select ok(
-  public.cmd_dataset_alias_batch_guarded(
+  pg_temp.call_dataset_alias_batch_guarded(
     pg_temp.alias_batch('length_time', 'length-time-success')
   ) @> '{"ok":true,"target_visibility":"owner_draft","idempotent_replay":true,"row_count":27,"exchange_count":39}'::jsonb,
   'identical length_time request is audit-proven replay'

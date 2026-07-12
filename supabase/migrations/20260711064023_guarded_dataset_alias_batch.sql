@@ -1326,8 +1326,9 @@ begin
 
   -- Stable table-level write locks close the phantom window between the
   -- support-parent and exact flow/process closure scans and the batch commit.
-  -- This command is intentionally a short, one-dimension transaction with a
-  -- 5 second limit.
+  -- This internal dimension executor holds these locks only inside the public
+  -- full-plan call, whose exception subtransaction covers both dimensions. The
+  -- lock wait remains capped at 5 seconds.
   lock table public.flowproperties, public.flows, public.processes
     in share row exclusive mode;
 
@@ -2152,8 +2153,5 @@ alter function public.cmd_dataset_alias_batch_guarded(jsonb)
 revoke all on function public.cmd_dataset_alias_batch_guarded(jsonb)
   from public, anon, authenticated, service_role;
 
-grant execute on function public.cmd_dataset_alias_batch_guarded(jsonb)
-  to authenticated;
-
 comment on function public.cmd_dataset_alias_batch_guarded(jsonb) is
-  'Atomically rewrites one frozen owner_draft FP/UG alias dimension batch; source support, target support, flows, and processes must all be state-code-0 rows owned by the authenticated actor, with exact closure checks and audit-proven replay.';
+  'Internal owner-draft dimension executor used only by the guarded full-plan RPC. Direct API execution is revoked so time and length_time cannot commit independently; the executor retains exact actor, state, closure, hash, audit, and replay checks for its dimension.';
