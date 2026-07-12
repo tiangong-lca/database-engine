@@ -681,11 +681,17 @@ select ok(
     lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
     'set lock_timeout to ''5s'''
   ) > 0
-  and strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
-    'set statement_timeout to ''30s'''
-  ) > 0,
-  'guarded alias plan hardens its definer path, lock wait, and statement duration'
+  and not exists (
+    select 1
+    from pg_catalog.pg_proc as function_meta
+    cross join lateral unnest(
+      coalesce(function_meta.proconfig, array[]::text[])
+    ) as function_config(value)
+    where function_meta.oid =
+      'public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure
+      and function_config.value like 'statement_timeout=%'
+  ),
+  'guarded alias plan hardens its definer path and 5-second lock wait without an ineffective function-level statement cap'
 );
 
 select ok(

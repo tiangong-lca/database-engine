@@ -23,7 +23,6 @@ language plpgsql
 security definer
 set search_path = ''
 set lock_timeout = '5s'
-set statement_timeout = '30s'
 as $$
 declare
   v_actor uuid := auth.uid();
