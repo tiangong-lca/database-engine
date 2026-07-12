@@ -24,6 +24,8 @@ set search_path to 'public', 'pg_temp'
 as $$
 declare
   v_actor uuid := auth.uid();
+  v_current_reviewer_email text;
+  v_recorded_reviewer_email text;
   v_owner uuid;
   v_state_code integer;
   v_modified_at timestamptz;
@@ -52,6 +54,21 @@ begin
       'code', 'REVIEW_ADMIN_REQUIRED',
       'status', 403,
       'message', 'Only review admins can approve support publication'
+    );
+  end if;
+
+  select lower(nullif(btrim(auth_user.email), ''))
+    into v_current_reviewer_email
+    from auth.users as auth_user
+   where auth_user.id = v_actor
+     and auth_user.email_confirmed_at is not null;
+
+  if v_current_reviewer_email is null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'REVIEWER_EMAIL_REQUIRED',
+      'status', 409,
+      'message', 'The authenticated reviewer must have a verified account email'
     );
   end if;
 
@@ -180,13 +197,16 @@ begin
     'action_id', v_action_id,
     'decision', 'approved_for_publication',
     'reviewer_role', 'review-admin',
+    'reviewer_email', v_current_reviewer_email,
     'target_owner_user_id', v_owner,
     'expected_modified_at', p_expected_modified_at,
     'expected_json_ordered', p_expected_json_ordered
   );
 
-  select audit_log.id
-    into v_prior_audit_id
+  select
+    audit_log.id,
+    audit_log.payload->>'reviewer_email'
+    into v_prior_audit_id, v_recorded_reviewer_email
     from public.command_audit_log as audit_log
    where audit_log.command = 'cmd_dataset_support_approve_guarded'
      and audit_log.actor_user_id = v_actor
@@ -210,6 +230,7 @@ begin
       'data', jsonb_build_object(
         'approval_audit_id', v_prior_audit_id::text,
         'reviewer_user_id', v_actor,
+        'reviewer_email', v_recorded_reviewer_email,
         'target_owner_user_id', v_owner,
         'target', v_current_row
       ),
@@ -238,8 +259,10 @@ begin
   returning id into v_audit_id;
 
   if v_audit_id is null then
-    select audit_log.id
-      into v_prior_audit_id
+    select
+      audit_log.id,
+      audit_log.payload->>'reviewer_email'
+      into v_prior_audit_id, v_recorded_reviewer_email
       from public.command_audit_log as audit_log
      where audit_log.command = 'cmd_dataset_support_approve_guarded'
        and audit_log.actor_user_id = v_actor
@@ -270,6 +293,7 @@ begin
       'data', jsonb_build_object(
         'approval_audit_id', v_prior_audit_id::text,
         'reviewer_user_id', v_actor,
+        'reviewer_email', v_recorded_reviewer_email,
         'target_owner_user_id', v_owner,
         'target', v_current_row
       ),
@@ -283,6 +307,7 @@ begin
     'data', jsonb_build_object(
       'approval_audit_id', v_audit_id::text,
       'reviewer_user_id', v_actor,
+      'reviewer_email', v_current_reviewer_email,
       'target_owner_user_id', v_owner,
       'target', v_current_row
     ),
@@ -341,8 +366,11 @@ declare
   v_operation_id text;
   v_action_id text;
   v_approval_audit_id_text text;
+  v_expected_approval_reviewer_user_id text;
+  v_expected_approval_reviewer_email text;
   v_approval_audit_id bigint;
   v_approval_reviewer_id uuid;
+  v_approval_reviewer_email text;
   v_audit_payload jsonb;
   v_prior_audit_id bigint;
   v_audit_id bigint;
@@ -406,6 +434,14 @@ begin
   v_operation_id := nullif(btrim(p_audit->>'operation_id'), '');
   v_action_id := nullif(btrim(p_audit->>'action_id'), '');
   v_approval_audit_id_text := nullif(btrim(p_audit->>'approval_audit_id'), '');
+  v_expected_approval_reviewer_user_id := nullif(
+    btrim(p_audit->>'approval_reviewer_user_id'),
+    ''
+  );
+  v_expected_approval_reviewer_email := lower(nullif(
+    btrim(p_audit->>'approval_reviewer_email'),
+    ''
+  ));
 
   if v_plan_sha256 is null
     or v_plan_sha256 !~ '^[a-f0-9]{64}$'
@@ -490,13 +526,20 @@ begin
   end if;
 
   if v_approval_audit_id_text is null
+    or jsonb_typeof(p_audit->'approval_audit_id') is distinct from 'string'
     or octet_length(v_approval_audit_id_text) > 18
-    or v_approval_audit_id_text !~ '^[1-9][0-9]*$' then
+    or v_approval_audit_id_text !~ '^[1-9][0-9]*$'
+    or v_expected_approval_reviewer_user_id is null
+    or jsonb_typeof(p_audit->'approval_reviewer_user_id') is distinct from 'string'
+    or octet_length(v_expected_approval_reviewer_user_id) > 36
+    or v_expected_approval_reviewer_email is null
+    or jsonb_typeof(p_audit->'approval_reviewer_email') is distinct from 'string'
+    or octet_length(v_expected_approval_reviewer_email) > 320 then
     return jsonb_build_object(
       'ok', false,
       'code', 'DATASET_PUBLISH_APPROVAL_REQUIRED',
       'status', 409,
-      'message', 'A durable independent support approval audit id is required'
+      'message', 'A durable approval audit id and its exact reviewer identity are required'
     );
   end if;
 
@@ -506,7 +549,7 @@ begin
     'plan_sha256', v_plan_sha256,
     'operation_id', v_operation_id,
     'action_id', v_action_id,
-    'approval_audit_id', v_approval_audit_id,
+    'approval_audit_id', v_approval_audit_id::text,
     'expected_modified_at', p_expected_modified_at,
     'expected_json_ordered', p_expected_json_ordered
   );
@@ -537,8 +580,10 @@ begin
     );
   end if;
 
-  select audit_log.actor_user_id
-    into v_approval_reviewer_id
+  select
+    audit_log.actor_user_id,
+    audit_log.payload->>'reviewer_email'
+    into v_approval_reviewer_id, v_approval_reviewer_email
     from public.command_audit_log as audit_log
    where audit_log.id = v_approval_audit_id
      and audit_log.command = 'cmd_dataset_support_approve_guarded'
@@ -552,11 +597,14 @@ begin
      and audit_log.payload->>'action_id' = v_action_id
      and audit_log.payload->>'decision' = 'approved_for_publication'
      and audit_log.payload->>'reviewer_role' = 'review-admin'
+     and nullif(btrim(audit_log.payload->>'reviewer_email'), '') is not null
      and audit_log.payload->>'target_owner_user_id' = v_actor::text
      and audit_log.payload->'expected_modified_at' = to_jsonb(p_expected_modified_at)
      and audit_log.payload->'expected_json_ordered' = p_expected_json_ordered;
 
-  if v_approval_reviewer_id is null then
+  if v_approval_reviewer_id is null
+    or v_approval_reviewer_id::text <> v_expected_approval_reviewer_user_id
+    or lower(v_approval_reviewer_email) <> v_expected_approval_reviewer_email then
     return jsonb_build_object(
       'ok', false,
       'code', 'DATASET_PUBLISH_APPROVAL_INVALID',
@@ -566,8 +614,9 @@ begin
   end if;
 
   v_audit_payload := v_audit_payload || jsonb_build_object(
-    'approval_audit_id', v_approval_audit_id,
-    'approval_reviewer_user_id', v_approval_reviewer_id
+    'approval_audit_id', v_approval_audit_id::text,
+    'approval_reviewer_user_id', v_approval_reviewer_id,
+    'approval_reviewer_email', v_approval_reviewer_email
   );
 
   if v_state_code = 100 then
@@ -586,6 +635,7 @@ begin
       'audit_id', v_prior_audit_id::text,
       'approval_audit_id', v_approval_audit_id::text,
       'approval_reviewer_user_id', v_approval_reviewer_id,
+      'approval_reviewer_email', v_approval_reviewer_email,
       'idempotent_replay', true
     );
   end if;
@@ -626,6 +676,7 @@ begin
     'audit_id', v_audit_id::text,
     'approval_audit_id', v_approval_audit_id::text,
     'approval_reviewer_user_id', v_approval_reviewer_id,
+    'approval_reviewer_email', v_approval_reviewer_email,
     'idempotent_replay', false
   );
 end;
@@ -642,3 +693,221 @@ grant execute on function public.cmd_dataset_publish_guarded(text, uuid, text, t
 
 comment on function public.cmd_dataset_publish_guarded(text, uuid, text, timestamptz, jsonb, jsonb) is
   'Publishes an owned draft unit group or flow property only with an exact independent review-admin approval, locked optimistic preconditions, and audit-proven idempotent replay.';
+
+create or replace function public.qry_dataset_publish_guarded_proof(
+  p_table text,
+  p_id uuid,
+  p_version text,
+  p_expected_modified_at timestamptz,
+  p_expected_json_ordered jsonb,
+  p_audit jsonb
+) returns jsonb
+language plpgsql
+stable
+security definer
+set search_path to 'public', 'pg_temp'
+as $$
+declare
+  v_actor uuid := auth.uid();
+  v_state_code integer;
+  v_json_ordered jsonb;
+  v_current_row jsonb;
+  v_plan_sha256 text;
+  v_operation_id text;
+  v_action_id text;
+  v_approval_audit_id_text text;
+  v_publish_audit_id_text text;
+  v_approval_audit_id bigint;
+  v_publish_audit_id bigint;
+  v_publish_reviewer_user_id text;
+  v_publish_reviewer_email text;
+  v_approval_reviewer_user_id text;
+  v_approval_reviewer_email text;
+begin
+  if v_actor is null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'AUTH_REQUIRED',
+      'status', 401,
+      'message', 'Authentication required'
+    );
+  end if;
+
+  if p_table is null or p_table not in ('unitgroups', 'flowproperties') then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'INVALID_DATASET_TABLE',
+      'status', 400,
+      'message', 'Guarded publish proof supports only unitgroups and flowproperties'
+    );
+  end if;
+
+  if p_expected_modified_at is null
+    or p_expected_json_ordered is null
+    or jsonb_typeof(p_expected_json_ordered) <> 'object' then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'DATASET_PUBLISH_PROOF_SNAPSHOT_REQUIRED',
+      'status', 400,
+      'message', 'The exact planned modified_at and JSON object are required'
+    );
+  end if;
+
+  if jsonb_typeof(p_audit) is distinct from 'object' then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'DATASET_PUBLISH_PROOF_CORRELATION_REQUIRED',
+      'status', 400,
+      'message', 'The exact approval and publication audit correlation is required'
+    );
+  end if;
+
+  v_plan_sha256 := nullif(btrim(p_audit->>'plan_sha256'), '');
+  v_operation_id := nullif(btrim(p_audit->>'operation_id'), '');
+  v_action_id := nullif(btrim(p_audit->>'action_id'), '');
+  v_approval_audit_id_text := nullif(btrim(p_audit->>'approval_audit_id'), '');
+  v_publish_audit_id_text := nullif(btrim(p_audit->>'publish_audit_id'), '');
+
+  if v_plan_sha256 is null
+    or v_plan_sha256 !~ '^[a-f0-9]{64}$'
+    or v_operation_id is null
+    or octet_length(v_operation_id) > 512
+    or v_action_id is null
+    or octet_length(v_action_id) > 512
+    or v_approval_audit_id_text is null
+    or jsonb_typeof(p_audit->'approval_audit_id') is distinct from 'string'
+    or octet_length(v_approval_audit_id_text) > 18
+    or v_approval_audit_id_text !~ '^[1-9][0-9]*$'
+    or v_publish_audit_id_text is null
+    or jsonb_typeof(p_audit->'publish_audit_id') is distinct from 'string'
+    or octet_length(v_publish_audit_id_text) > 18
+    or v_publish_audit_id_text !~ '^[1-9][0-9]*$' then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'DATASET_PUBLISH_PROOF_CORRELATION_REQUIRED',
+      'status', 400,
+      'message', 'plan_sha256, operation_id, action_id, approval_audit_id, and publish_audit_id are required'
+    );
+  end if;
+
+  v_approval_audit_id := v_approval_audit_id_text::bigint;
+  v_publish_audit_id := v_publish_audit_id_text::bigint;
+
+  execute format(
+    'select t.state_code,
+            t.json_ordered::jsonb,
+            to_jsonb(t)
+       from public.%I as t
+      where t.id = $1
+        and t.version = $2
+        and t.user_id = $3',
+    p_table
+  )
+    into v_state_code, v_json_ordered, v_current_row
+    using p_id, p_version, v_actor;
+
+  if v_current_row is null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'DATASET_NOT_FOUND',
+      'status', 404,
+      'message', 'Dataset not found'
+    );
+  end if;
+
+  if v_state_code is distinct from 100
+    or v_json_ordered is distinct from p_expected_json_ordered then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'DATASET_PUBLISH_PROOF_STATE_MISMATCH',
+      'status', 409,
+      'message', 'The owner dataset is not the exact published payload from the frozen action'
+    );
+  end if;
+
+  select
+    audit_log.payload->>'approval_reviewer_user_id',
+    audit_log.payload->>'approval_reviewer_email'
+    into v_publish_reviewer_user_id, v_publish_reviewer_email
+    from public.command_audit_log as audit_log
+   where audit_log.id = v_publish_audit_id
+     and audit_log.command = 'cmd_dataset_publish_guarded'
+     and audit_log.actor_user_id = v_actor
+     and audit_log.target_table = p_table
+     and audit_log.target_id = p_id
+     and audit_log.target_version = p_version
+     and audit_log.payload->>'plan_sha256' = v_plan_sha256
+     and audit_log.payload->>'operation_id' = v_operation_id
+     and audit_log.payload->>'action_id' = v_action_id
+     and audit_log.payload->>'approval_audit_id' = v_approval_audit_id::text
+     and audit_log.payload->'expected_modified_at' = to_jsonb(p_expected_modified_at)
+     and audit_log.payload->'expected_json_ordered' = p_expected_json_ordered
+     and nullif(btrim(audit_log.payload->>'approval_reviewer_user_id'), '') is not null
+     and nullif(btrim(audit_log.payload->>'approval_reviewer_email'), '') is not null;
+
+  if v_publish_reviewer_user_id is null or v_publish_reviewer_email is null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'DATASET_PUBLISH_PROOF_INVALID',
+      'status', 409,
+      'message', 'No exact committed guarded publication audit proof exists'
+    );
+  end if;
+
+  select
+    audit_log.actor_user_id::text,
+    audit_log.payload->>'reviewer_email'
+    into v_approval_reviewer_user_id, v_approval_reviewer_email
+    from public.command_audit_log as audit_log
+   where audit_log.id = v_approval_audit_id
+     and audit_log.command = 'cmd_dataset_support_approve_guarded'
+     and audit_log.actor_user_id::text = v_publish_reviewer_user_id
+     and audit_log.actor_user_id <> v_actor
+     and audit_log.target_table = p_table
+     and audit_log.target_id = p_id
+     and audit_log.target_version = p_version
+     and audit_log.payload->>'plan_sha256' = v_plan_sha256
+     and audit_log.payload->>'operation_id' = v_operation_id
+     and audit_log.payload->>'action_id' = v_action_id
+     and audit_log.payload->>'decision' = 'approved_for_publication'
+     and audit_log.payload->>'reviewer_role' = 'review-admin'
+     and audit_log.payload->>'reviewer_email' = v_publish_reviewer_email
+     and audit_log.payload->>'target_owner_user_id' = v_actor::text
+     and audit_log.payload->'expected_modified_at' = to_jsonb(p_expected_modified_at)
+     and audit_log.payload->'expected_json_ordered' = p_expected_json_ordered;
+
+  if v_approval_reviewer_user_id is null
+    or v_approval_reviewer_email is null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'DATASET_PUBLISH_PROOF_INVALID',
+      'status', 409,
+      'message', 'The publication audit is not bound to an exact independent approval audit'
+    );
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'data', jsonb_build_object(
+      'proof_verified', true,
+      'publish_audit_id', v_publish_audit_id::text,
+      'approval_audit_id', v_approval_audit_id::text,
+      'approval_reviewer_user_id', v_approval_reviewer_user_id,
+      'approval_reviewer_email', v_approval_reviewer_email,
+      'target', v_current_row
+    )
+  );
+end;
+$$;
+
+alter function public.qry_dataset_publish_guarded_proof(text, uuid, text, timestamptz, jsonb, jsonb)
+  owner to postgres;
+
+revoke all on function public.qry_dataset_publish_guarded_proof(text, uuid, text, timestamptz, jsonb, jsonb)
+  from public, anon, authenticated, service_role;
+
+grant execute on function public.qry_dataset_publish_guarded_proof(text, uuid, text, timestamptz, jsonb, jsonb)
+  to authenticated;
+
+comment on function public.qry_dataset_publish_guarded_proof(text, uuid, text, timestamptz, jsonb, jsonb) is
+  'Read-only owner-scoped proof that an exact published support payload is bound to one exact independent approval audit and guarded publication audit.';
