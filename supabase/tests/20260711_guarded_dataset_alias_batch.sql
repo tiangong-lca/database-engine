@@ -519,7 +519,7 @@ begin
 end;
 $$;
 
-select plan(63);
+select plan(67);
 
 alter table public.flowproperties
   disable trigger zz_flowproperties_extracted_text_sync_trigger;
@@ -612,7 +612,7 @@ select ok(
   ) > 0
   and strpos(
     lower(pg_get_functiondef('public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
-    'lock table public.flows, public.processes in share row exclusive mode'
+    'lock table public.flowproperties, public.flows, public.processes'
   ) > 0,
   'guarded alias batch uses stable closure locks and owner-scoped row locks'
 );
@@ -960,6 +960,200 @@ reset role;
 delete from public.flows
 where id = pg_temp.alias_entity_id('time', 'flow', 998)
   and version = '01.00.000';
+
+insert into public.flows (
+  id,
+  version,
+  json_ordered,
+  user_id,
+  state_code,
+  rule_verification,
+  modified_at
+)
+values (
+  pg_temp.alias_entity_id('time', 'flow', 996),
+  '01.00.000',
+  pg_temp.alias_dataset_flow_payload('time', 996, true),
+  'c1000000-0000-0000-0000-000000000001',
+  100,
+  true,
+  '2026-07-11 00:00:00+00'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select is(
+  public.cmd_dataset_alias_batch_guarded(
+    pg_temp.alias_batch('time', 'time-public-target-flow-parent')
+  )->>'code',
+  'ALIAS_BATCH_CLOSURE_MISMATCH',
+  'guarded alias batch rejects a public flow parent of the private target flow property'
+);
+
+reset role;
+
+delete from public.flows
+where id = pg_temp.alias_entity_id('time', 'flow', 996)
+  and version = '01.00.000';
+
+insert into public.flowproperties (
+  id,
+  version,
+  json_ordered,
+  user_id,
+  state_code,
+  rule_verification,
+  modified_at
+)
+values (
+  'c3300000-0000-0000-0000-000000000997'::uuid,
+  '01.00.000',
+  jsonb_set(
+    pg_temp.alias_flowproperty_payload('time', true),
+    '{flowPropertyDataSet,flowPropertiesInformation,dataSetInformation,common:UUID}',
+    to_jsonb('c3300000-0000-0000-0000-000000000997'::text),
+    false
+  ),
+  'c1000000-0000-0000-0000-000000000001',
+  100,
+  true,
+  '2026-07-11 00:00:00+00'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select is(
+  public.cmd_dataset_alias_batch_guarded(
+    pg_temp.alias_batch('time', 'time-public-target-unitgroup-parent')
+  )->>'code',
+  'ALIAS_BATCH_CLOSURE_MISMATCH',
+  'guarded alias batch rejects a public flow-property parent of the private target unit group'
+);
+
+reset role;
+
+delete from public.flowproperties
+where id = 'c3300000-0000-0000-0000-000000000997'::uuid
+  and version = '01.00.000';
+
+insert into public.flowproperties (
+  id,
+  version,
+  json_ordered,
+  user_id,
+  state_code,
+  rule_verification,
+  modified_at
+)
+values (
+  'c3300000-0000-0000-0000-000000000998'::uuid,
+  '00.00.000',
+  jsonb_set(
+    pg_temp.alias_flowproperty_payload('time', false),
+    '{flowPropertyDataSet,flowPropertiesInformation,dataSetInformation,common:UUID}',
+    to_jsonb('c3300000-0000-0000-0000-000000000998'::text),
+    false
+  ),
+  'c1000000-0000-0000-0000-000000000002',
+  0,
+  true,
+  '2026-07-11 00:00:00+00'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select is(
+  public.cmd_dataset_alias_batch_guarded(
+    pg_temp.alias_batch('time', 'time-foreign-source-unitgroup-parent')
+  )->>'code',
+  'ALIAS_BATCH_CLOSURE_MISMATCH',
+  'guarded alias batch rejects a foreign flow-property parent of the private source unit group'
+);
+
+reset role;
+
+delete from public.flowproperties
+where id = 'c3300000-0000-0000-0000-000000000998'::uuid
+  and version = '00.00.000';
+
+savepoint owner_draft_extra_support_parents;
+
+insert into public.flows (
+  id,
+  version,
+  json_ordered,
+  user_id,
+  state_code,
+  rule_verification,
+  modified_at
+)
+values (
+  pg_temp.alias_entity_id('time', 'flow', 995),
+  '01.00.000',
+  pg_temp.alias_dataset_flow_payload('time', 995, true),
+  'c1000000-0000-0000-0000-000000000001',
+  0,
+  true,
+  '2026-07-11 00:00:00+00'
+);
+
+insert into public.flowproperties (
+  id,
+  version,
+  json_ordered,
+  user_id,
+  state_code,
+  rule_verification,
+  modified_at
+)
+values (
+  'c3300000-0000-0000-0000-000000000995'::uuid,
+  '01.00.000',
+  jsonb_set(
+    pg_temp.alias_flowproperty_payload('time', true),
+    '{flowPropertyDataSet,flowPropertiesInformation,dataSetInformation,common:UUID}',
+    to_jsonb('c3300000-0000-0000-0000-000000000995'::text),
+    false
+  ),
+  'c1000000-0000-0000-0000-000000000001',
+  0,
+  true,
+  '2026-07-11 00:00:00+00'
+);
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select is(
+  public.cmd_dataset_alias_batch_guarded(
+    pg_temp.alias_batch('time', 'time-owner-draft-extra-support-parents')
+  )->>'ok',
+  'true',
+  'guarded alias batch permits additional same-owner draft parents of target support'
+);
+
+reset role;
+rollback to savepoint owner_draft_extra_support_parents;
+release savepoint owner_draft_extra_support_parents;
 
 insert into public.processes (
   id,

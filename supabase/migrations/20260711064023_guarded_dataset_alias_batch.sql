@@ -1324,10 +1324,12 @@ begin
     'hex'
   );
 
-  -- Stable table-level write locks close the phantom window between the exact
-  -- flow/process closure scans and the batch commit. This command is
-  -- intentionally a short, one-dimension transaction with a 5 second limit.
-  lock table public.flows, public.processes in share row exclusive mode;
+  -- Stable table-level write locks close the phantom window between the
+  -- support-parent and exact flow/process closure scans and the batch commit.
+  -- This command is intentionally a short, one-dimension transaction with a
+  -- 5 second limit.
+  lock table public.flowproperties, public.flows, public.processes
+    in share row exclusive mode;
 
   v_current_row := null;
   v_target_actual_modified_at := null;
@@ -1496,6 +1498,86 @@ begin
       )
     );
   end loop;
+
+  -- A private support row must not already participate in a public, foreign,
+  -- or otherwise non-draft parent closure. The source flow-property closure
+  -- is checked exactly below because those flows are rewritten. Target-FP and
+  -- source/target-UG parents may include additional same-owner draft rows that
+  -- are outside this mutation, but no mixed-visibility parent is allowed.
+  select
+    exists (
+      select 1
+      from public.flows as support_parent_flow
+      cross join lateral jsonb_array_elements(
+        case jsonb_typeof(
+          support_parent_flow.json_ordered::jsonb
+            #> '{flowDataSet,flowProperties,flowProperty}'
+        )
+          when 'array' then support_parent_flow.json_ordered::jsonb
+            #> '{flowDataSet,flowProperties,flowProperty}'
+          when 'object' then jsonb_build_array(
+            support_parent_flow.json_ordered::jsonb
+              #> '{flowDataSet,flowProperties,flowProperty}'
+          )
+          else '[]'::jsonb
+        end
+      ) as support_parent_property(value)
+      where (
+          (
+            support_parent_property.value
+              #>> '{referenceToFlowPropertyDataSet,@refObjectId}' =
+              v_source_flowproperty_id::text
+            and support_parent_property.value
+              #>> '{referenceToFlowPropertyDataSet,@version}' =
+              v_source_flowproperty_version
+          ) or (
+            support_parent_property.value
+              #>> '{referenceToFlowPropertyDataSet,@refObjectId}' =
+              v_target_flowproperty_id::text
+            and support_parent_property.value
+              #>> '{referenceToFlowPropertyDataSet,@version}' =
+              v_target_flowproperty_version
+          )
+        )
+        and (
+          support_parent_flow.user_id is distinct from v_actor
+          or support_parent_flow.state_code is distinct from 0
+        )
+    ) or exists (
+      select 1
+      from public.flowproperties as support_parent_fp
+      where (
+          (
+            support_parent_fp.json_ordered::jsonb
+              #>> '{flowPropertyDataSet,flowPropertiesInformation,quantitativeReference,referenceToReferenceUnitGroup,@refObjectId}' =
+              v_source_unitgroup_id::text
+            and support_parent_fp.json_ordered::jsonb
+              #>> '{flowPropertyDataSet,flowPropertiesInformation,quantitativeReference,referenceToReferenceUnitGroup,@version}' =
+              v_source_unitgroup_version
+          ) or (
+            support_parent_fp.json_ordered::jsonb
+              #>> '{flowPropertyDataSet,flowPropertiesInformation,quantitativeReference,referenceToReferenceUnitGroup,@refObjectId}' =
+              v_target_unitgroup_id::text
+            and support_parent_fp.json_ordered::jsonb
+              #>> '{flowPropertyDataSet,flowPropertiesInformation,quantitativeReference,referenceToReferenceUnitGroup,@version}' =
+              v_target_unitgroup_version
+          )
+        )
+        and (
+          support_parent_fp.user_id is distinct from v_actor
+          or support_parent_fp.state_code is distinct from 0
+        )
+    )
+  into v_forbidden_closure_exists;
+
+  if v_forbidden_closure_exists then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'ALIAS_BATCH_CLOSURE_MISMATCH',
+      'status', 409,
+      'message', 'Live owner-draft closure does not match the exact submitted batch'
+    );
+  end if;
 
   with submitted_flows as (
     select
