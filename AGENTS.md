@@ -111,7 +111,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - local baseline: `supabase start`, `supabase db reset`, `supabase migration list`
 - migration authoring starts from Git `dev`, not GitHub default-branch UI
 - preview-branch proof belongs to the repo PR
-- persistent `dev` proof belongs after merge into Git `dev`
+- persistent `dev` proof belongs after merge into Git `dev`; its single workflow uses `supabase db push --include-all` so a governed `main -> dev` backmerge can install committed migrations whose timestamps precede newer migrations already recorded on `dev`
 - production `main` proof belongs after `dev -> main` promote and should confirm Supabase GitHub integration applied migrations automatically
 - root workspace proof belongs later in `lca-workspace`
 - generated workspace helpers are low-risk to inspect with `python scripts/<name>.py --help`

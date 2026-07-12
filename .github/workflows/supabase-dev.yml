@@ -28,4 +28,4 @@ jobs:
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
 
       - name: Push migrations to Supabase dev branch
-        run: supabase db push
+        run: supabase db push --include-all
