@@ -34,8 +34,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-04
-lastReviewedCommit: a8aef0bc7bb89333a30d22da10d7269107d38f44
+lastReviewedAt: 2026-07-12
+lastReviewedCommit: ce99778b79134aaa7d4318be054ddc1bd98ea6ac
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -111,7 +111,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - local baseline: `supabase start`, `supabase db reset`, `supabase migration list`
 - migration authoring starts from Git `dev`, not GitHub default-branch UI
 - preview-branch proof belongs to the repo PR
-- persistent `dev` proof belongs after merge into Git `dev`
+- persistent `dev` proof belongs after merge into Git `dev`; its single workflow uses `supabase db push --include-all` so a governed `main -> dev` backmerge can install committed migrations whose timestamps precede newer migrations already recorded on `dev`
 - production `main` proof belongs after `dev -> main` promote and should confirm Supabase GitHub integration applied migrations automatically
 - root workspace proof belongs later in `lca-workspace`
 - generated workspace helpers are low-risk to inspect with `python scripts/<name>.py --help`
@@ -128,6 +128,7 @@ At a human-readable level, this repo owns:
 - `supabase/seeds/**`
 - `supabase/tests/**`
 - database-side review-submit gate state and final submit-review assertion RPCs
+- the single authenticated guarded dataset maintenance RPC for the exact two-dimension owner-draft FP/UG alias plan; its per-dimension executor is not an authenticated API, and time plus length-time must commit or roll back together
 - `tiangong-lca-worker` `worker_jobs` queue schema/RPCs, legacy lifecycle cutover cleanup, and review-submit coordinator links to worker job results
 - `scripts/**` for schema export, workspace refresh, change copying, and migration generation
 - `.github/workflows/supabase-dev.yml`

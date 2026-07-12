@@ -27,8 +27,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-04
-lastReviewedCommit: a8aef0bc7bb89333a30d22da10d7269107d38f44
+lastReviewedAt: 2026-07-12
+lastReviewedCommit: ce99778b79134aaa7d4318be054ddc1bd98ea6ac
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -64,7 +64,7 @@ This repo is organized around one checked-in Supabase project plus a generated s
 - Git `dev` is the daily integration trunk
 - Git `main` is the promoted release line
 - PR branches map to Supabase preview branches
-- `.github/workflows/supabase-dev.yml` pushes committed migrations to the persistent remote `dev` branch on Git `dev`
+- `.github/workflows/supabase-dev.yml` pushes every committed migration missing from remote history to the persistent remote `dev` branch on Git `dev`, including an older-timestamped migration introduced by a governed `main -> dev` backmerge
 - the production Supabase project is migrated automatically by the Supabase GitHub integration when Git `main` advances
 
 This means branch behavior is part of the repo architecture, not just delivery process.
@@ -75,7 +75,7 @@ The current migration and test history clusters around these themes:
 
 1. access control and policy hardening
 2. review workflow command/query RPCs
-3. dataset lifecycle and publish/delete flows
+3. dataset lifecycle, private owner-draft FP/UG full-plan alias rewrites, and publish/delete flows
 4. notification and membership query boundaries
 5. lifecycle bundle cleanup and embedding-related compatibility
 6. remote schema reconciliation and preview-branch validation
@@ -120,6 +120,7 @@ Do not leave durable manual edits only inside generated paths.
 This repo owns database truth, but not every runtime consequence:
 
 - `database-engine` owns persisted review-submit gate runs, `worker_jobs` lifecycle schema/RPCs, review-submit job coordinator state, access checks, idempotent gate lookup, result recording, legacy lifecycle cutover cleanup, retired legacy job-table archives under `archive.worker_legacy_job_table_rows`, and the final submit-review assertion
+- `database-engine` owns the single authenticated atomic owner-draft FP/UG alias plan RPC. Its exact `dataset-alias-plan.v1` request contains time followed by length-time, one shared plan hash and operation ID, `target_visibility=owner_draft`, 52 distinct action rows, and 59 exchange mutations. The RPC performs a uniform, non-locking actor-owned `state_code=0` support/action preflight before invoking the non-public dimension executor; the executor then repeats frozen support, embedded identity, canonical exchange-hash, public/foreign/non-draft parent, exact closure, stable row-lock, table-specific allowed-path, and exact-factor validation under short write-excluding locks. Both dimensions and their row/batch audits run inside one exception subtransaction and are bound by one plan audit, so a second-dimension failure rolls back the first and an identical lost-response retry requires both complete batch proofs plus the exact plan proof. Authenticated callers cannot execute a dimension independently.
 - `tiangong-lca-worker` owns numeric-stability checks and the calculator report payload semantics
 - `tiangong-lca-next` owns frontend env selection and app-side Supabase clients
 - `tiangong-lca-edge-functions` owns Edge Function runtime orchestration, worker invocation, and API response shape
