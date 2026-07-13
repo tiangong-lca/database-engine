@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(42);
+select plan(46);
 
 select ok(to_regclass('public.worker_job_kinds') is not null, 'worker job kind registry exists');
 select ok(to_regclass('public.worker_jobs') is not null, 'worker_jobs table exists');
@@ -219,6 +219,102 @@ from (
     p_concurrency_key => 'snapshot-gc:test:dry-run'
   ) as result
 ) as enqueue;
+
+insert into worker_job_test_ids (label, job_id)
+select
+  'nested_null_payload',
+  (result->'data'->>'id')::uuid
+from (
+  select public.worker_enqueue_job(
+    p_job_kind => 'lca.build_snapshot',
+    p_payload_json => '{
+      "scope_manifest": {
+        "schema_version": "lca.data_scope.manifest.v1",
+        "scope": "public_plus_owner_draft",
+        "actor": {
+          "kind": "authenticated_user",
+          "user_id": "96000000-0000-4000-8000-000000000001"
+        },
+        "owner_draft_collaboration_guards": {
+          "processes": {
+            "team_id": {"is": null},
+            "review_id": {"is": null}
+          },
+          "flows": {
+            "team_id": {"is": null},
+            "review_id": {"is": null}
+          }
+        }
+      }
+    }'::jsonb,
+    p_payload_schema_version => 'lca.build_snapshot.request.v2',
+    p_requested_by => '96000000-0000-4000-8000-000000000001',
+    p_visibility => 'operator',
+    p_idempotency_key => 'worker-job:nested-null-payload'
+  ) as result
+) as enqueue;
+
+update public.worker_jobs
+set payload_ref = '{"nested":{"is":null}}'::jsonb,
+    result_json = '{"nested":{"is":null}}'::jsonb,
+    result_ref = '{"nested":{"is":null}}'::jsonb,
+    diagnostics = '{"nested":{"is":null}}'::jsonb,
+    error_details = '{"nested":{"is":null}}'::jsonb
+where id = (select job_id from worker_job_test_ids where label = 'nested_null_payload');
+
+select is(
+  (
+    select public.worker_job_payload(j, true)->'payload'
+    from public.worker_jobs as j
+    where id = (select job_id from worker_job_test_ids where label = 'nested_null_payload')
+  ),
+  (
+    select payload_json
+    from public.worker_jobs
+    where id = (select job_id from worker_job_test_ids where label = 'nested_null_payload')
+  ),
+  'internal projection preserves the exact payload including frozen nested null guards'
+);
+
+select is(
+  (
+    select
+      public.worker_job_payload(j, true) #> '{payloadRef,nested,is}' = 'null'::jsonb
+      and public.worker_job_payload(j, true) #> '{result,nested,is}' = 'null'::jsonb
+      and public.worker_job_payload(j, true) #> '{resultRef,nested,is}' = 'null'::jsonb
+      and public.worker_job_payload(j, true) #> '{diagnostics,nested,is}' = 'null'::jsonb
+      and public.worker_job_payload(j, true) #> '{errorDetails,nested,is}' = 'null'::jsonb
+    from public.worker_jobs as j
+    where id = (select job_id from worker_job_test_ids where label = 'nested_null_payload')
+  ),
+  true,
+  'internal projection preserves nested nulls in other internal JSON documents'
+);
+
+select is(
+  (
+    select public.worker_job_payload(j, true) ? 'teamId'
+    from public.worker_jobs as j
+    where id = (select job_id from worker_job_test_ids where label = 'nested_null_payload')
+  ),
+  false,
+  'internal projection still omits optional top-level null fields'
+);
+
+select is(
+  public.worker_claim_jobs(
+    p_worker_queue => 'solver',
+    p_worker_id => 'worker-null-preservation',
+    p_limit => 1,
+    p_lease_seconds => 300
+  )->'data'->0->'payload',
+  (
+    select payload_json
+    from public.worker_jobs
+    where id = (select job_id from worker_job_test_ids where label = 'nested_null_payload')
+  ),
+  'claim preserves the exact payload including frozen nested null guards'
+);
 
 select is(
   jsonb_array_length(
