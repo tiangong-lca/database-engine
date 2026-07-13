@@ -574,7 +574,32 @@ as $$
   select public.cmd_dataset_alias_batch_guarded(p_batch);
 $$;
 
-select plan(78);
+create temporary table alias_derivative_webhook_calls (
+  edge_function text not null,
+  body jsonb not null,
+  timeout_milliseconds integer not null
+) on commit drop;
+
+create or replace function util.invoke_edge_function(
+  name text,
+  body jsonb,
+  timeout_milliseconds integer default ((5 * 60) * 1000)
+) returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into pg_temp.alias_derivative_webhook_calls (
+    edge_function,
+    body,
+    timeout_milliseconds
+  )
+  values (name, body, timeout_milliseconds);
+end;
+$$;
+
+select plan(81);
 
 alter table public.flowproperties
   disable trigger zz_flowproperties_extracted_text_sync_trigger;
@@ -589,8 +614,6 @@ alter table public.flows
 alter table public.flows
   disable trigger flow_embedding_ft_on_extract_md_update;
 alter table public.flows
-  disable trigger flow_extract_md_trigger_update;
-alter table public.flows
   disable trigger zz_flows_extracted_text_sync_trigger;
 alter table public.flows
   disable trigger flows_set_modified_at_trigger;
@@ -598,8 +621,6 @@ alter table public.processes
   disable trigger process_embedding_ft_on_extract_md_update;
 alter table public.processes
   disable trigger process_extract_md_trigger_insert;
-alter table public.processes
-  disable trigger process_extract_md_trigger_update;
 alter table public.processes
   disable trigger zz_processes_extracted_text_sync_trigger;
 alter table public.processes
@@ -1966,6 +1987,8 @@ set user_id = 'c1000000-0000-0000-0000-000000000001'
 where id = pg_temp.alias_entity_id('time', 'flow', 1)
   and version = '01.00.000';
 
+truncate pg_temp.alias_derivative_webhook_calls;
+
 set local role authenticated;
 select set_config(
   'request.jwt.claim.sub',
@@ -1994,6 +2017,12 @@ from (
 ) as failed;
 
 reset role;
+
+select is(
+  (select count(*)::integer from pg_temp.alias_derivative_webhook_calls),
+  0,
+  'forced second-dimension failure rolls back every queued derivative webhook'
+);
 
 select is(
   (
@@ -2119,6 +2148,19 @@ reset role;
 select is(
   (
     select count(*)::text
+      || ':' || count(*) filter (where body->>'table' = 'flows')::text
+      || ':' || count(*) filter (where body->>'table' = 'processes')::text
+    from pg_temp.alias_derivative_webhook_calls
+    where body->>'type' = 'UPDATE'
+      and timeout_milliseconds = 1000
+  ),
+  '50:23:27',
+  'full-plan success queues exactly 23 flow and 27 process derivative webhooks'
+);
+
+select is(
+  (
+    select count(*)::text
     from public.flowproperties
     where id = pg_temp.alias_entity_id('time', 'source_flowproperty')
       and json_ordered::jsonb = pg_temp.alias_flow_after_payload('time')
@@ -2237,6 +2279,12 @@ from (
 ) as replay;
 
 reset role;
+
+select is(
+  (select count(*)::integer from pg_temp.alias_derivative_webhook_calls),
+  50,
+  'full-plan replay queues no duplicate derivative webhooks'
+);
 
 select is(
   (
