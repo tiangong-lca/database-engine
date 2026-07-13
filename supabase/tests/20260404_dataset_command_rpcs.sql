@@ -20,7 +20,34 @@ begin
 end;
 $$;
 
-select plan(13);
+create temporary table command_derivative_webhook_calls (
+  edge_function text not null,
+  body jsonb not null,
+  timeout_milliseconds integer not null
+) on commit drop;
+
+grant select on pg_temp.command_derivative_webhook_calls to authenticated;
+
+create or replace function util.invoke_edge_function(
+  name text,
+  body jsonb,
+  timeout_milliseconds integer default ((5 * 60) * 1000)
+) returns void
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  insert into pg_temp.command_derivative_webhook_calls (
+    edge_function,
+    body,
+    timeout_milliseconds
+  )
+  values (name, body, timeout_milliseconds);
+end;
+$$;
+
+select plan(15);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -143,9 +170,7 @@ values (
   true
 );
 
-alter table public.processes disable trigger "processes_json_sync_trigger";
 alter table public.processes disable trigger "process_extract_md_trigger_insert";
-alter table public.processes disable trigger "process_extract_md_trigger_update";
 select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_extract_text_trigger_insert');
 select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_extract_text_trigger_update');
 
@@ -296,6 +321,49 @@ select is(
 );
 
 select is(
+  (
+    select count(*)::text
+    from pg_temp.command_derivative_webhook_calls
+    where edge_function = 'webhook_process_embedding_ft'
+      and body->>'table' = 'processes'
+      and body->>'type' = 'UPDATE'
+      and timeout_milliseconds = 1000
+  ),
+  '1',
+  'changed process draft save invokes markdown extraction exactly once'
+);
+
+with replay as materialized (
+  select public.cmd_dataset_save_draft(
+    p_table => 'processes',
+    p_id => '31000000-0000-0000-0000-000000000003',
+    p_version => '01.00.000',
+    p_json_ordered => '{
+      "processDataSet": {
+        "administrativeInformation": {
+          "publicationAndOwnership": {
+            "common:dataSetVersion": "01.00.000"
+          }
+        }
+      }
+    }'::jsonb,
+    p_audit => '{}'::jsonb
+  ) as result
+)
+select ok(
+  (select result->>'ok' = 'true' from replay)
+  and (
+    select count(*) = 1
+    from pg_temp.command_derivative_webhook_calls
+    where edge_function = 'webhook_process_embedding_ft'
+      and body->>'table' = 'processes'
+      and body->>'type' = 'UPDATE'
+      and timeout_milliseconds = 1000
+  ),
+  'same-payload draft save succeeds without duplicating markdown extraction'
+);
+
+select is(
   public.cmd_dataset_save_draft(
     'sources',
     '31000000-0000-0000-0000-000000000002',
@@ -370,7 +438,7 @@ select is(
      'cmd_dataset_assign_team',
      'cmd_dataset_publish'
    )),
-  '4',
+  '5',
   'successful dataset commands write command_audit_log entries'
 );
 
