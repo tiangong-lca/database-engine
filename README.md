@@ -80,6 +80,14 @@ Minimal operator sequence:
 
 Use `paused` only as a stopgap when no new backfill should be enqueued. Jobs that exceed retry policy are recorded in `util.embedding_job_failures`.
 
+## Guarded process derivative rebuilds
+
+`cmd_dataset_derivative_rebuild_snapshot`, `cmd_dataset_derivative_rebuild_plan_guarded`, and `cmd_dataset_derivative_rebuild_read` are the complete authenticated V1 surface. They accept exactly one current-owner `state_code=0` process and rebuild only `extracted_md` plus `embedding_ft`.
+
+Admission is asynchronous and reports `queued`, never completion. While active, the private coordinator freezes primary writes, quarantines both queued PGMQ work and already-claimed `pg_net` batches, and keeps the fence for at least 420 seconds around any possibly in-flight hosted Edge invocation. An already-claimed HTTP batch that mixes the target with unrelated rows is canceled as one worker batch; unrelated PGMQ messages are not deleted and retry after their visibility timeout, but may be delayed. Markdown remains private staging input until its request-correlated vector is ready; freshness is validated before the final Markdown/vector pair is exposed in one database update, while failure retains the prior pair. Admission takes a short `SHARE ROW EXCLUSIVE` lock on `processes` to serialize pre-fence writers, with a five-second lock timeout. Waiting requests are fairly rotated and one request-scoped coordinator error cannot roll back the rest of the batch.
+
+Operators must use the owner read RPC to distinguish pending, completed, and fully drained failure states. Admission and terminal outcomes each append correlated audit records. Raw queue writes, worker helpers, and private coordinator calls are not supported client paths.
+
 ## Docs
 
 - AI entrypoint: `AGENTS.md`
