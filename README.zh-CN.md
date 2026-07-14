@@ -98,6 +98,14 @@ related:
 
 仅在不应继续入队回填时使用 `paused` 作为止血手段。超过重试策略的 job 会记录到 `util.embedding_job_failures`。
 
+## 受保护的 process derivative 重建
+
+`cmd_dataset_derivative_rebuild_snapshot`、`cmd_dataset_derivative_rebuild_plan_guarded` 和 `cmd_dataset_derivative_rebuild_read` 是 V1 唯一完整的 authenticated 接口。它们一次只接受当前账号一个 `state_code=0` process，并且只重建 `extracted_md` 与 `embedding_ft`。
+
+Admission 是异步的，只表示 `queued`，不表示已经完成。请求活跃期间，私有 coordinator 会冻结 primary 写入，同时隔离 PGMQ 中待处理的任务和已转入 `pg_net` 的 embedding batch；对可能已在运行的 hosted Edge 调用，fence 至少保留 420 秒。若一个已领取的 HTTP batch 同时包含目标行和无关行，该 worker batch 会整体取消；无关行的 PGMQ 消息不会被删除，并会在 visibility timeout 后重试，但可能被延迟。Markdown 先作为私有暂存输入供向量生成；新鲜度会在写入前验证，直到 Markdown 与向量都就绪后才通过同一条数据库 UPDATE 原子公开，失败时保留原来的 Markdown/向量组合。Admission 会短暂获取 `processes` 的 `SHARE ROW EXCLUSIVE` 锁来串行化 fence 之前的写入，锁等待上限为 5 秒。等待中的请求会公平轮转，单个请求级异常不会回滚同批其他请求。
+
+运维或 CLI 必须通过 owner read RPC 区分 pending、completed 和已经完成 drain 的 failure。Admission 与 terminal 结果都会追加关联审计记录；客户端不应直接写 queue、调用 worker helper 或调用私有 coordinator。
+
 ## 文档
 
 - AI 入口：`AGENTS.md`

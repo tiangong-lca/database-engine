@@ -75,7 +75,7 @@ The current migration and test history clusters around these themes:
 
 1. access control and policy hardening
 2. review workflow command/query RPCs
-3. dataset lifecycle, private owner-draft FP/UG full-plan alias rewrites, and publish/delete flows
+3. dataset lifecycle, private owner-draft FP/UG full-plan alias rewrites, guarded process derivative rebuild coordination, and publish/delete flows
 4. notification and membership query boundaries
 5. lifecycle bundle cleanup and embedding-related compatibility
 6. remote schema reconciliation and preview-branch validation
