@@ -599,7 +599,109 @@ begin
 end;
 $$;
 
-select plan(88);
+select plan(94);
+
+select ok(
+  (
+    select pg_get_userbyid(sort_helper.proowner) = 'postgres'
+      and sort_helper.provolatile = 'i'
+      and sort_helper.proparallel = 's'
+      and sort_helper.prosecdef is false
+      and sort_helper.proconfig = array['search_path=""']::text[]
+    from pg_proc as sort_helper
+    where sort_helper.oid =
+      'private.dataset_alias_js_object_key_sort_key_v1(text)'::regprocedure
+  )
+  and not has_function_privilege(
+    'anon',
+    'private.dataset_alias_js_object_key_sort_key_v1(text)',
+    'execute'
+  )
+  and not has_function_privilege(
+    'authenticated',
+    'private.dataset_alias_js_object_key_sort_key_v1(text)',
+    'execute'
+  )
+  and not has_function_privilege(
+    'service_role',
+    'private.dataset_alias_js_object_key_sort_key_v1(text)',
+    'execute'
+  ),
+  'canonical key sort helper is immutable, parallel-safe, search-path pinned, owner-only, and invoker-rights'
+);
+
+select is(
+  private.dataset_alias_canonical_jsonb_v1(jsonb_build_object(
+    '@xml:lang', 'en',
+    '#text', 'x',
+    'z', jsonb_build_object('@v', '1', '#text', 'nested')
+  )),
+  '{"#text":"x","@xml:lang":"en","z":{"#text":"nested","@v":"1"}}',
+  'canonical exchange hashing uses CLI order for hash and attribute keys regardless of database locale'
+);
+
+select is(
+  encode(extensions.digest(
+    convert_to(private.dataset_alias_canonical_jsonb_v1(jsonb_build_object(
+      '@xml:lang', 'en',
+      '#text', 'x',
+      'z', jsonb_build_object('@v', '1', '#text', 'nested')
+    )), 'UTF8'),
+    'sha256'
+  ), 'hex'),
+  '768b5931d940e7d09735a0c8b257047d592316a2f905d9b09e1638bc126b1915',
+  'canonical exchange evidence SHA matches CLI stableJsonText output'
+);
+
+select is(
+  encode(extensions.digest(
+    convert_to(private.dataset_alias_canonical_jsonb_v1(jsonb_build_object(
+      '@dataSetInternalID', '1',
+      'dataDerivationTypeStatus', 'Unknown derivation',
+      'exchangeDirection', 'Output',
+      'generalComment', jsonb_build_object(
+        '#text', 'Source EcoSpold1 exchange number: 532055.',
+        '@xml:lang', 'en'
+      ),
+      'meanAmount', '1',
+      'referenceToFlowDataSet', jsonb_build_object(
+        '@refObjectId', '9b33a9a0-ed3f-54a3-9ffe-8eb82f0580f8',
+        '@type', 'flow data set',
+        '@uri', '../flows/9b33a9a0-ed3f-54a3-9ffe-8eb82f0580f8.json',
+        '@version', '00.00.001',
+        'common:shortDescription', jsonb_build_object(
+          '#text', 'Use, smartphone, high intensity per hour',
+          '@xml:lang', 'en'
+        )
+      ),
+      'resultingAmount', '1',
+      'uncertaintyDistributionType', 'undefined'
+    )), 'UTF8'),
+    'sha256'
+  ), 'hex'),
+  'ef6710274390c6497dde3b180e8ab9813dcfc0a4cb2b48c25c15fbdc82a79e81',
+  'production BAFU exchange evidence SHA matches the frozen CLI golden vector'
+);
+
+select is(
+  private.dataset_alias_canonical_jsonb_v1(jsonb_build_object(
+    U&'\+01F600', 'astral',
+    U&'\E000', 'bmp'
+  )),
+  '{"😀":"astral","":"bmp"}',
+  'canonical object keys follow JavaScript UTF-16 order for supplementary characters'
+);
+
+select is(
+  private.dataset_alias_canonical_jsonb_v1(jsonb_build_object(
+    '10', 'ten',
+    '2', 'two',
+    '01', 'leading-zero',
+    '#text', 'hash'
+  )),
+  '{"2":"two","10":"ten","#text":"hash","01":"leading-zero"}',
+  'canonical object keys follow JSON.stringify array-index enumeration before sorted string keys'
+);
 
 alter table public.flowproperties
   disable trigger zz_flowproperties_extracted_text_sync_trigger;
