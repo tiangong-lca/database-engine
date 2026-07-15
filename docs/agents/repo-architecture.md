@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-15
-lastReviewedCommit: 541563d145096170cf1d18f402763aff25af6254
-lastReviewedNote: "Reviewed the shared seed path after hosted Preview rejected a comments-only SQL batch; an executable no-op is part of the stable deployment contract when no shared rows are needed."
+lastReviewedCommit: 6b0ac12a7d2587b323d6360b97b0c2ed38971843
+lastReviewedNote: "Reviewed the protected-runner hosted Preview path: exact-ref disposable fixtures are validation assets only and never migration, seed, Dev replay, or production execution inputs."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -50,6 +50,7 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | `supabase/seed.sql` | shared seed data; when no rows are needed, retain an executable no-op statement instead of a comments-only file so hosted Preview seeding has a valid SQL batch |
 | `supabase/seeds/dev.sql` | persistent dev-only seed overlay |
 | `supabase/tests/**` | PGTAP-style regression and access-control assertions |
+| `supabase/tests/preview/**` | exact-ref-bound, disposable hosted Preview mutation E2E fixtures, cleanup, and rollback-only fault assertions; test-only and excluded from migrations, seeds, Dev data rehearsal, and production execution |
 | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |
 | `scripts/**` | export, refresh, change-copy, and migration-generation helpers |
 | `.github/workflows/supabase-dev.yml` | only checked-in GitHub Actions automation for pushing committed migrations to the persistent remote `dev` branch |

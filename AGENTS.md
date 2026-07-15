@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-15
-lastReviewedCommit: 541563d145096170cf1d18f402763aff25af6254
-lastReviewedNote: "Reviewed the repo contract after hosted Preview rejected a comments-only shared seed; data-neutral seeds must still provide one executable SQL statement."
+lastReviewedCommit: 6b0ac12a7d2587b323d6360b97b0c2ed38971843
+lastReviewedNote: "Reviewed the repo contract for protected-runner hosted Preview fixtures; they are disposable test assets, never schema/seed delivery inputs or production data paths."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -111,6 +111,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 
 - local baseline: `supabase start`, `supabase db reset`, `supabase migration list`
 - `supabase/seed.sql` must remain an executable SQL batch even when it seeds no rows; retain a data-neutral no-op rather than comments only
+- hosted mutation E2E assets under `supabase/tests/preview/**` must hard-bind the exact Preview project ref, use disposable actors and UUID namespaces, clean up only their own effects, and never become migrations, seeds, Dev data rehearsals, or production execution paths
 - migration authoring starts from Git `dev`, not GitHub default-branch UI
 - preview-branch proof belongs to the repo PR
 - persistent `dev` proof belongs after merge into Git `dev`; its single workflow uses `supabase db push --include-all` so a governed `main -> dev` backmerge can install committed migrations whose timestamps precede newer migrations already recorded on `dev`
