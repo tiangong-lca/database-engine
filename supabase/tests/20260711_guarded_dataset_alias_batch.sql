@@ -685,8 +685,24 @@ select ok(
   and strpos(
     lower(pg_get_functiondef('public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
     'set lock_timeout to ''5s'''
-  ) > 0,
-  'guarded alias batch hardens its definer search path and lock timeout'
+  ) > 0
+  and (
+    select pg_catalog.pg_get_userbyid(function_meta.proowner)
+    from pg_catalog.pg_proc as function_meta
+    where function_meta.oid =
+      'public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure
+  ) = 'postgres'
+  and not exists (
+    select 1
+    from pg_catalog.pg_proc as function_meta
+    cross join lateral unnest(
+      coalesce(function_meta.proconfig, array[]::text[])
+    ) as function_config(value)
+    where function_meta.oid =
+      'public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure
+      and function_config.value like 'statement_timeout=%'
+  ),
+  'guarded alias batch hardens its definer path and lock wait without a separate statement budget'
 );
 
 select ok(
@@ -702,6 +718,22 @@ select ok(
     lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
     'set lock_timeout to ''5s'''
   ) > 0
+  and (
+    select pg_catalog.pg_get_userbyid(function_meta.proowner)
+    from pg_catalog.pg_proc as function_meta
+    where function_meta.oid =
+      'public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure
+  ) = 'postgres'
+  and (
+    select count(*)
+    from pg_catalog.pg_proc as function_meta
+    cross join lateral unnest(
+      coalesce(function_meta.proconfig, array[]::text[])
+    ) as function_config(value)
+    where function_meta.oid =
+      'public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure
+      and function_config.value = 'statement_timeout=45s'
+  ) = 1
   and not exists (
     select 1
     from pg_catalog.pg_proc as function_meta
@@ -711,8 +743,9 @@ select ok(
     where function_meta.oid =
       'public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure
       and function_config.value like 'statement_timeout=%'
+      and function_config.value <> 'statement_timeout=45s'
   ),
-  'guarded alias plan hardens its definer path and 5-second lock wait without an ineffective function-level statement cap'
+  'guarded alias plan keeps its definer protections and one 45-second REST statement budget'
 );
 
 select ok(
