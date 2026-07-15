@@ -1,7 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-07-15"
-lastReviewedCommit: "85ec31fc414768de1e4e0cef423bd304aaffbade"
+lastReviewedCommit: "6b0ac12a7d2587b323d6360b97b0c2ed38971843"
+lastReviewedNote: "Reviewed the hosted Preview test contract for protected one-shot execution: fixtures remain test-only, exact-preview-bound, disposable, actor-scoped, and cleanup-verified."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -117,6 +118,14 @@ routing:
         - supabase/tests/*review_submit_gate*.sql
         - supabase/tests/*review_submit_jobs*.sql
         - supabase/tests/*review_submit_rpc*.sql
+        - docs/agents/repo-validation.md
+        - docs/agents/repo-architecture.md
+    guarded-derivative-rebuild:
+      paths:
+        - supabase/migrations/*derivative_rebuild*.sql
+        - supabase/migrations/*protected_dataset_alias*.sql
+        - supabase/tests/*derivative_rebuild*.sql
+        - supabase/tests/*protected_dataset_alias*.sql
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
     worker-jobs:

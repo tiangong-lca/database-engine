@@ -574,6 +574,19 @@ as $$
   select public.cmd_dataset_alias_batch_guarded(p_batch);
 $$;
 
+-- The legacy full-plan function is also internal after the protected
+-- one-shot migration.  Keep its exhaustive transaction tests through a
+-- postgres-owned temporary wrapper without restoring API execution grants.
+create or replace function pg_temp.call_dataset_alias_plan_guarded(
+  p_plan jsonb
+) returns jsonb
+language sql
+security definer
+set search_path = ''
+as $$
+  select public.cmd_dataset_alias_plan_guarded(p_plan);
+$$;
+
 create temporary table alias_derivative_webhook_calls (
   edge_function text not null,
   body jsonb not null,
@@ -744,7 +757,7 @@ select ok(
     'public.cmd_dataset_alias_batch_guarded(jsonb)',
     'execute'
   )
-  and has_function_privilege(
+  and not has_function_privilege(
     'authenticated',
     'public.cmd_dataset_alias_plan_guarded(jsonb)',
     'execute'
@@ -759,7 +772,7 @@ select ok(
     'public.cmd_dataset_alias_plan_guarded(jsonb)',
     'execute'
   ),
-  'authenticated callers can execute only the full-plan alias RPC'
+  'legacy batch and replay-capable full-plan alias RPCs are both internal after protected cutover'
 );
 
 set local role authenticated;
@@ -1183,7 +1196,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_alias_plan_guarded(
+  pg_temp.call_dataset_alias_plan_guarded(
     jsonb_set(
       pg_temp.alias_plan(
         'maintenance-alias-reversed-batches',
@@ -1210,7 +1223,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_plan_guarded(
+  pg_temp.call_dataset_alias_plan_guarded(
     jsonb_set(
       pg_temp.alias_plan(
         'maintenance-alias-foreign-preflight',
@@ -2313,7 +2326,7 @@ select ok(
     || failed.result::text
 )
 from (
-  select public.cmd_dataset_alias_plan_guarded(
+  select pg_temp.call_dataset_alias_plan_guarded(
     pg_temp.alias_plan(
       'maintenance-alias-force-second-failure',
       'time-force-second-failure',
@@ -2440,7 +2453,7 @@ select ok(
     || committed.result::text
 )
 from (
-  select public.cmd_dataset_alias_plan_guarded(
+  select pg_temp.call_dataset_alias_plan_guarded(
     pg_temp.alias_plan(
       'maintenance-alias-plan-success',
       'time-plan-success',
@@ -2575,7 +2588,7 @@ select ok(
     || replay.result::text
 )
 from (
-  select public.cmd_dataset_alias_plan_guarded(
+  select pg_temp.call_dataset_alias_plan_guarded(
     pg_temp.alias_plan(
       'maintenance-alias-plan-success',
       'time-plan-success',
