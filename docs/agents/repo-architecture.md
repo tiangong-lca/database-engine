@@ -28,7 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-15
-lastReviewedCommit: 85ec31fc414768de1e4e0cef423bd304aaffbade
+lastReviewedCommit: 541563d145096170cf1d18f402763aff25af6254
+lastReviewedNote: "Reviewed the shared seed path after hosted Preview rejected a comments-only SQL batch; an executable no-op is part of the stable deployment contract when no shared rows are needed."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -46,7 +47,7 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | --- | --- |
 | `supabase/config.toml` | shared local baseline plus branch-specific remote bindings |
 | `supabase/migrations/**` | authoritative migration history and durable schema changes |
-| `supabase/seed.sql` | shared seed data |
+| `supabase/seed.sql` | shared seed data; when no rows are needed, retain an executable no-op statement instead of a comments-only file so hosted Preview seeding has a valid SQL batch |
 | `supabase/seeds/dev.sql` | persistent dev-only seed overlay |
 | `supabase/tests/**` | PGTAP-style regression and access-control assertions |
 | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |

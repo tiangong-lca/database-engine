@@ -1,2 +1,4 @@
 -- Shared seed data for the production baseline, local development, and preview branches.
--- Leave this file empty until the repo needs global seed data.
+-- Keep one executable no-op statement so hosted Preview seeding never sends a
+-- comments-only batch, which some deployment clients reject as an empty query.
+select 1;

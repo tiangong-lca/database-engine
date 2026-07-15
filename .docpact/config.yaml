@@ -1,7 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-07-15"
-lastReviewedCommit: "85ec31fc414768de1e4e0cef423bd304aaffbade"
+lastReviewedCommit: "541563d145096170cf1d18f402763aff25af6254"
+lastReviewedNote: "Reviewed the shared seed contract after hosted Preview rejected a comments-only seed batch; the seed remains data-neutral but must contain an executable no-op statement."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

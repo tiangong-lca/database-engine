@@ -35,7 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-15
-lastReviewedCommit: 85ec31fc414768de1e4e0cef423bd304aaffbade
+lastReviewedCommit: 541563d145096170cf1d18f402763aff25af6254
+lastReviewedNote: "Reviewed the repo contract after hosted Preview rejected a comments-only shared seed; data-neutral seeds must still provide one executable SQL statement."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -109,6 +110,7 @@ Do not start from generated schema workspace files, long migration history, or G
 Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md` and the narrow source docs for the full details.
 
 - local baseline: `supabase start`, `supabase db reset`, `supabase migration list`
+- `supabase/seed.sql` must remain an executable SQL batch even when it seeds no rows; retain a data-neutral no-op rather than comments only
 - migration authoring starts from Git `dev`, not GitHub default-branch UI
 - preview-branch proof belongs to the repo PR
 - persistent `dev` proof belongs after merge into Git `dev`; its single workflow uses `supabase db push --include-all` so a governed `main -> dev` backmerge can install committed migrations whose timestamps precede newer migrations already recorded on `dev`
