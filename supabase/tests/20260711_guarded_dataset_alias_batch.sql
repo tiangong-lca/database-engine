@@ -599,7 +599,7 @@ begin
 end;
 $$;
 
-select plan(81);
+select plan(88);
 
 alter table public.flowproperties
   disable trigger zz_flowproperties_extracted_text_sync_trigger;
@@ -796,6 +796,88 @@ select ok(
   'guarded alias batch and plan replay indexes are valid and ready'
 );
 
+select ok(
+  (
+    select
+      pg_catalog.pg_get_userbyid(function_meta.proowner) = 'postgres'
+      and function_meta.provolatile = 'i'
+      and function_meta.proparallel = 's'
+      and function_meta.proisstrict
+      and not function_meta.prosecdef
+      and coalesce(function_meta.proconfig, array[]::text[])
+        @> array['search_path=""']::text[]
+    from pg_catalog.pg_proc as function_meta
+    where function_meta.oid =
+      'private.dataset_alias_jsonb_array_v1(jsonb)'::regprocedure
+  )
+  and not has_function_privilege(
+    'anon',
+    'private.dataset_alias_jsonb_array_v1(jsonb)',
+    'execute'
+  )
+  and not has_function_privilege(
+    'authenticated',
+    'private.dataset_alias_jsonb_array_v1(jsonb)',
+    'execute'
+  )
+  and has_function_privilege(
+    'service_role',
+    'private.dataset_alias_jsonb_array_v1(jsonb)',
+    'execute'
+  ),
+  'candidate-array helper is immutable, strict, parallel-safe, denied to API users, and executable only by service_role maintenance DML'
+);
+
+select ok(
+  (
+    select
+      count(*) = 2
+      and bool_and(index_meta.indisvalid and index_meta.indisready)
+      and bool_and(index_meta.indnkeyatts = 1)
+      and bool_and(operator_class.opcname = 'jsonb_path_ops')
+    from pg_catalog.pg_index as index_meta
+    join pg_catalog.pg_class as index_relation
+      on index_relation.oid = index_meta.indexrelid
+    join pg_catalog.pg_opclass as operator_class
+      on operator_class.oid = index_meta.indclass[0]
+    where index_relation.relnamespace = 'public'::regnamespace
+      and index_relation.relname in (
+        'flows_json_ordered_alias_flowproperty_gin_idx',
+        'processes_json_ordered_alias_exchange_gin_idx'
+      )
+  ),
+  'json_ordered flow-property and exchange candidate indexes are valid, ready, and use jsonb_path_ops'
+);
+
+select ok(
+  optimized.body like
+    '%support_parent_flow_keys as materialized (%@> jsonb_build_array(jsonb_build_object(%'
+  and optimized.body like
+    '%from support_parent_flow_keys%cross join lateral (%from public.flows as candidate_parent%where candidate_parent.id = support_parent_flow_keys.id%and candidate_parent.version = support_parent_flow_keys.version%limit 1%) as support_parent_flow%cross join lateral jsonb_array_elements(%'
+  and optimized.body like
+    '%candidate_flow_keys as materialized (%from public.flows as dataset_flow%dataset_flow.json_ordered::jsonb%@> jsonb_build_array(jsonb_build_object(%live_flows as (%'
+  and optimized.body like
+    '%live_flows as (%from candidate_flow_keys%cross join lateral (%from public.flows as candidate_flow%where candidate_flow.id = candidate_flow_keys.id%and candidate_flow.version = candidate_flow_keys.version%limit 1%) as dataset_flow%cross join lateral jsonb_array_elements(%dataset_flow.json_ordered::jsonb%'
+  and optimized.body like
+    '%candidate_process_keys as materialized (%from submitted_flows%cross join lateral (%from public.processes as dataset_process%dataset_process.json_ordered::jsonb%@> jsonb_build_array(jsonb_build_object(%live_exchanges as (%'
+  and optimized.body like
+    '%live_exchanges as (%from candidate_process_keys%cross join lateral (%from public.processes as candidate_process%where candidate_process.id = candidate_process_keys.id%and candidate_process.version = candidate_process_keys.version%limit 1%) as dataset_process%cross join lateral jsonb_array_elements(%dataset_process.json_ordered::jsonb%',
+  'guarded alias closure drives exact json_ordered array rechecks through candidate-key primary-key lateral lookups'
+)
+from (
+  select lower(
+    pg_get_functiondef(
+      'public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure
+    )
+  ) as body
+) as optimized;
+
+select is(
+  private.dataset_alias_jsonb_array_v1('{"singleton":true}'::jsonb),
+  '[{"singleton":true}]'::jsonb,
+  'candidate-array helper normalizes a singleton reference object into one array element'
+);
+
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
 insert into auth.users (
@@ -930,6 +1012,37 @@ select
   '2026-07-11 00:00:00+00'
 from (values ('time', 14), ('length_time', 13)) as dimensions(dimension, process_count)
 cross join lateral generate_series(1, dimensions.process_count) as process_index;
+
+set local role service_role;
+
+select lives_ok(
+  $$
+    insert into public.flows (
+      id,
+      version,
+      json_ordered,
+      user_id,
+      state_code,
+      rule_verification,
+      modified_at
+    ) values (
+      pg_temp.alias_entity_id('time', 'flow', 778),
+      '01.00.000',
+      pg_temp.alias_dataset_flow_payload('time', 778, false),
+      'c1000000-0000-0000-0000-000000000001',
+      0,
+      true,
+      '2026-07-11 00:00:00+00'
+    );
+
+    delete from public.flows
+    where id = pg_temp.alias_entity_id('time', 'flow', 778)
+      and version = '01.00.000';
+  $$,
+  'service_role direct DML can maintain the private-helper expression index without exposing helper execution to API users'
+);
+
+reset role;
 
 alter table public.command_audit_log
   add constraint command_audit_log_test_force_alias_batch_row_failure
@@ -1134,6 +1247,35 @@ select is(
   )->>'code',
   'ALIAS_BATCH_CLOSURE_MISMATCH',
   'guarded alias batch rejects an omitted legacy array-shaped owner flow that still references the source flow property'
+);
+
+reset role;
+
+update public.flows
+set json = '{}'::jsonb
+where id = pg_temp.alias_entity_id('time', 'flow', 999)
+  and version = '01.00.000';
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select is(
+  case when (
+    select dataset_flow.json is distinct from dataset_flow.json_ordered::jsonb
+    from public.flows as dataset_flow
+    where dataset_flow.id = pg_temp.alias_entity_id('time', 'flow', 999)
+      and dataset_flow.version = '01.00.000'
+  ) then pg_temp.call_dataset_alias_batch_guarded(
+    pg_temp.alias_batch('time', 'time-json-drift-extra-flow-closure')
+  )->>'code'
+  else 'TEST_FIXTURE_NOT_DRIFTED'
+  end,
+  'ALIAS_BATCH_CLOSURE_MISMATCH',
+  'json_ordered candidate closure fails closed for an omitted flow even when legacy json has drifted'
 );
 
 reset role;
@@ -1453,6 +1595,35 @@ select is(
   )->>'code',
   'ALIAS_BATCH_CLOSURE_MISMATCH',
   'guarded alias batch rejects an omitted owner process exchange that references an affected flow'
+);
+
+reset role;
+
+update public.processes
+set json = '{}'::jsonb
+where id = pg_temp.alias_entity_id('time', 'process', 999)
+  and version = '01.00.000';
+
+set local role authenticated;
+select set_config(
+  'request.jwt.claim.sub',
+  'c1000000-0000-0000-0000-000000000001',
+  true
+);
+
+select is(
+  case when (
+    select dataset_process.json is distinct from dataset_process.json_ordered::jsonb
+    from public.processes as dataset_process
+    where dataset_process.id = pg_temp.alias_entity_id('time', 'process', 999)
+      and dataset_process.version = '01.00.000'
+  ) then pg_temp.call_dataset_alias_batch_guarded(
+    pg_temp.alias_batch('time', 'time-json-drift-extra-process-closure')
+  )->>'code'
+  else 'TEST_FIXTURE_NOT_DRIFTED'
+  end,
+  'ALIAS_BATCH_CLOSURE_MISMATCH',
+  'json_ordered candidate closure fails closed for an omitted process even when legacy json has drifted'
 );
 
 reset role;
