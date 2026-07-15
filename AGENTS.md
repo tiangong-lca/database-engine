@@ -128,8 +128,8 @@ At a human-readable level, this repo owns:
 - `supabase/seeds/**`
 - `supabase/tests/**`
 - database-side review-submit gate state and final submit-review assertion RPCs
-- the single authenticated guarded dataset maintenance RPC for the exact two-dimension owner-draft FP/UG alias plan; its per-dimension executor is not an authenticated API, and time plus length-time must commit or roll back together
-- the three authenticated process derivative-rebuild RPCs: one action-scoped owner-draft snapshot, one immutable queued admission, and one owner-only status read; the private coordinator, queue access, proposals, permits, and active target fence are never authenticated APIs
+- the protected owner-draft FP/UG alias execution surface: authenticated preflight, ordered live-gate, admission, and readback RPCs plus one nonce-bound service executor; the replay-capable whole-plan and per-dimension primitives are internal, and time plus length-time plus all 50 derivative child admissions must commit or roll back together before asynchronous derivative completion is assessed
+- the authenticated guarded derivative-rebuild surface: one flow/process owner-draft snapshot, the compatible single-process v1 queued admission, and one owner-only child status read; the private flow/process coordinator, 1..50 batch admission, exact 23-flow + 27-process aggregate proof, queue access, proposals, permits, and active target fences are never authenticated APIs
 - `tiangong-lca-worker` `worker_jobs` queue schema/RPCs, legacy lifecycle cutover cleanup, and review-submit coordinator links to worker job results
 - `scripts/**` for schema export, workspace refresh, change copying, and migration generation
 - `.github/workflows/supabase-dev.yml`

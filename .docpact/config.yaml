@@ -119,6 +119,14 @@ routing:
         - supabase/tests/*review_submit_rpc*.sql
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
+    guarded-derivative-rebuild:
+      paths:
+        - supabase/migrations/*derivative_rebuild*.sql
+        - supabase/migrations/*protected_dataset_alias*.sql
+        - supabase/tests/*derivative_rebuild*.sql
+        - supabase/tests/*protected_dataset_alias*.sql
+        - docs/agents/repo-validation.md
+        - docs/agents/repo-architecture.md
     worker-jobs:
       paths:
         - supabase/migrations/*worker_jobs*.sql
