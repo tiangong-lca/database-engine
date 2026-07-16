@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(96);
+select plan(107);
 
 create or replace function pg_temp.flow_identity_id(p_kind text)
 returns uuid
@@ -960,6 +960,28 @@ begin
 end;
 $$;
 
+create or replace function pg_temp.flow_identity_cancel_request(
+  p_request_id uuid,
+  p_reason text
+) returns jsonb
+language sql
+stable
+as $$
+  select jsonb_build_object(
+    'schema_version', 'dataset-flow-identity-scope-cancel.v2',
+    'request_id', p_request_id,
+    'receipt_id', state.value->>'receipt_id',
+    'receipt_proof_sha256', state.value->>'receipt_proof_sha256',
+    'operation_id', state.value->>'operation_id',
+    'plan_sha256', state.value->>'plan_sha256',
+    'scope_proof_sha256', state.value->>'scope_proof_sha256',
+    'reason', p_reason,
+    'evidence_sha256', repeat('3', 64)
+  )
+  from flow_identity_state as state
+  where state.key = 'preflight'
+$$;
+
 create or replace function pg_temp.flow_identity_bad_capture()
 returns jsonb
 language sql
@@ -994,6 +1016,11 @@ select has_function(
   'scope finalize RPC exists'
 );
 select has_function(
+    'public', 'cmd_dataset_flow_identity_scope_cancel_guarded',
+    array['uuid', 'jsonb'],
+  'zero-write scope cancel RPC exists'
+);
+select has_function(
     'public', 'cmd_dataset_flow_identity_capture_attest_guarded',
     array['jsonb'],
   'v2 database capture/attestation RPC exists'
@@ -1017,6 +1044,11 @@ select function_privs_are(
   'public', 'cmd_dataset_flow_identity_scope_finalize_guarded',
   array['uuid', 'jsonb'], 'authenticated', array['EXECUTE'],
   'finalize is authenticated-only'
+);
+select function_privs_are(
+  'public', 'cmd_dataset_flow_identity_scope_cancel_guarded',
+  array['uuid', 'jsonb'], 'authenticated', array['EXECUTE'],
+  'zero-write cancel is authenticated-only'
 );
 select function_privs_are(
   'public', 'cmd_dataset_flow_identity_capture_attest_guarded',
@@ -1277,6 +1309,95 @@ select is(
 );
 
 insert into flow_identity_state(key, value)
+select 'cancel_request', pg_temp.flow_identity_cancel_request(
+  'fa000000-0000-4000-8000-000000000010'::uuid,
+  'abandon untouched test scope'
+);
+insert into flow_identity_state(key, value)
+select 'cancel_result',
+  public.cmd_dataset_flow_identity_scope_cancel_guarded(
+    (select (value->>'scope_id')::uuid
+      from flow_identity_state where key = 'preflight'),
+    (select value from flow_identity_state where key = 'cancel_request')
+  );
+select is(
+  (select value->>'status' from flow_identity_state where key = 'cancel_result'),
+  'cancelled',
+  'an untouched sealed scope can be cancelled without a primary write'
+);
+select is(
+  (
+    select jsonb_build_object(
+      'replay', replay.value->>'replay',
+      'audit_count', (
+        select count(*)::integer
+        from public.command_audit_log as audit
+        where audit.command = 'cmd_dataset_flow_identity_scope_cancel_guarded'
+          and audit.payload->>'scope_id' = preflight.value->>'scope_id'
+      )
+    )
+    from flow_identity_state as preflight
+    cross join lateral public.cmd_dataset_flow_identity_scope_cancel_guarded(
+      (preflight.value->>'scope_id')::uuid,
+      (select value from flow_identity_state where key = 'cancel_request')
+    ) as replay(value)
+    where preflight.key = 'preflight'
+  ),
+  jsonb_build_object('replay', 'true', 'audit_count', 1),
+  'exact cancel replay is read-only and retains one authoritative audit'
+);
+select is(
+  public.cmd_dataset_flow_identity_scope_cancel_guarded(
+    (select (value->>'scope_id')::uuid
+      from flow_identity_state where key = 'preflight'),
+    jsonb_set(
+      (select value from flow_identity_state where key = 'cancel_request'),
+      '{reason}', '"different abandon reason"'::jsonb, false
+    )
+  )->>'code',
+  'FLOW_IDENTITY_CANCEL_REPLAY_MISMATCH',
+  'a cancelled scope rejects a different request instead of writing again'
+);
+reset role;
+select lives_ok(
+  $$update public.processes
+      set json_ordered = json_ordered
+    where id = pg_temp.flow_identity_id('process')
+      and version = '01.00.000'$$,
+  'zero-write cancel releases the owner process fence'
+);
+set local role authenticated;
+
+update flow_identity_state
+set value = public.cmd_dataset_flow_identity_capture_attest_guarded(
+  pg_temp.flow_identity_capture() || jsonb_build_object(
+    'request_id', 'fb000000-0000-4000-8000-000000000011',
+    'operation_id', 'flow-identity-test-operation-after-cancel'
+  )
+)
+where key = 'capture';
+update flow_identity_state
+set value = public.cmd_dataset_flow_identity_scope_preflight_guarded(
+  pg_temp.flow_identity_preflight() || jsonb_build_object(
+    'request_id', 'fa000000-0000-4000-8000-000000000011',
+    'operation_id', 'flow-identity-test-operation-after-cancel',
+    'plan_sha256', repeat('2', 64)
+  )
+)
+where key = 'preflight';
+select is(
+  (select jsonb_build_object(
+    'capture_ok', capture.value->>'ok',
+    'preflight_status', preflight.value->>'status'
+  )
+  from flow_identity_state as capture
+  cross join flow_identity_state as preflight
+  where capture.key = 'capture' and preflight.key = 'preflight'),
+  jsonb_build_object('capture_ok', 'true', 'preflight_status', 'sealed'),
+  'a fresh receipt and plan can seal after zero-write cancellation'
+);
+
+insert into flow_identity_state(key, value)
 select 'process_request', request || jsonb_build_object(
   'process_request_sha256',
     util.dataset_flow_identity_restricted_sha256_v2(request)
@@ -1374,6 +1495,44 @@ select is(
     )),
   1,
   'one protected derivative child is admitted atomically'
+);
+select is(
+  public.cmd_dataset_flow_identity_scope_cancel_guarded(
+    (select (value->>'scope_id')::uuid
+      from flow_identity_state where key = 'preflight'),
+    pg_temp.flow_identity_cancel_request(
+      'fa000000-0000-4000-8000-000000000012'::uuid,
+      'must not abandon after primary commit'
+    )
+  )->>'code',
+  'FLOW_IDENTITY_CANCEL_REQUIRES_ZERO_WRITE_SEAL',
+  'cancel rejects a scope after its first primary transaction commits'
+);
+select is(
+  (select jsonb_build_object(
+    'scope_status', scope.status,
+    'ledger_status', ledger.status,
+    'ledger_active', ledger.active,
+    'primary_audit_count', (
+      select count(*)::integer from public.command_audit_log as audit
+      where audit.command = 'cmd_dataset_flow_identity_process_rewrite_guarded'
+        and audit.payload->>'scope_id' = scope.id::text
+    )
+  )
+  from util.dataset_flow_identity_scopes as scope
+  join util.dataset_flow_identity_process_ledger as ledger
+    on ledger.scope_id = scope.id and ledger.ordinal = 1
+  where scope.id = (
+    select (value->>'scope_id')::uuid
+    from flow_identity_state where key = 'preflight'
+  )),
+  jsonb_build_object(
+    'scope_status', 'derivatives_pending',
+    'ledger_status', 'completed',
+    'ledger_active', true,
+    'primary_audit_count', 1
+  ),
+  'rejected post-primary cancel preserves scope, ledger, fence, and audit proof'
 );
 select is(
   util.read_dataset_derivative_rebuild_batch_any(
@@ -2132,6 +2291,18 @@ select is(
   'FLOW_IDENTITY_SCOPE_NOT_FOUND',
   'foreign actor cannot read another owner scope'
 );
+select is(
+  public.cmd_dataset_flow_identity_scope_cancel_guarded(
+    (select (value->>'scope_id')::uuid
+      from flow_identity_state where key = 'preflight'),
+    pg_temp.flow_identity_cancel_request(
+      'fa000000-0000-4000-8000-000000000013'::uuid,
+      'foreign actor must not abandon owner scope'
+    )
+  )->>'code',
+  'FLOW_IDENTITY_SCOPE_NOT_FOUND',
+  'foreign actor cannot cancel another owner scope'
+);
 
 select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claim.email', '', true);
@@ -2141,6 +2312,18 @@ select is(
   )->>'code',
   'AUTH_REQUIRED',
   'preflight requires an authenticated actor'
+);
+select is(
+  public.cmd_dataset_flow_identity_scope_cancel_guarded(
+    (select (value->>'scope_id')::uuid
+      from flow_identity_state where key = 'preflight'),
+    pg_temp.flow_identity_cancel_request(
+      'fa000000-0000-4000-8000-000000000014'::uuid,
+      'unauthenticated actor must not abandon scope'
+    )
+  )->>'code',
+  'AUTH_REQUIRED',
+  'cancel requires an authenticated actor'
 );
 
 reset role;

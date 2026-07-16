@@ -36,7 +36,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-16
 lastReviewedCommit: 31c586c
-lastReviewedNote: "Reviewed ownership for durable process-atomic Step 3 owner-draft public-flow identity rewrites and their dynamic derivative closure proof."
+lastReviewedNote: "Reviewed durable Step 3 flow-identity execution, dynamic derivative closure, and the actor-bound zero-primary-write cancel path."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -133,7 +133,7 @@ At a human-readable level, this repo owns:
 - database-side review-submit gate state and final submit-review assertion RPCs
 - the protected owner-draft FP/UG alias execution surface: authenticated preflight, ordered live-gate, admission, and readback RPCs plus one nonce-bound service executor; the replay-capable whole-plan and per-dimension primitives are internal, and time plus length-time plus all 50 derivative child admissions must commit or roll back together before asynchronous derivative completion is assessed
 - the authenticated guarded derivative-rebuild surface: one flow/process owner-draft snapshot, the compatible single-process v1 queued admission, and one owner-only child status read; the private flow/process coordinator, 1..50 batch admission, exact 23-flow + 27-process aggregate proof, queue access, proposals, permits, and active target fences are never authenticated APIs
-- the authenticated guarded Step 3 flow-identity surface: one immutable actor-owned scope seal, one scope-serialized owner-draft process rewrite at a time, read-only resume/status, and terminal finalization; each process transaction may replace only the five sealed flow-reference identity fields, must preserve exchange rows/order/amounts/direction/comments/uncertainty/internal IDs and exact pending/blocker occurrences, and must atomically bind one protected derivative child while every source/public/support row remains read-only; a terminal derivative failure exposes an exact derivative-only compensation target but never replays primary, and compensation requires a distinct plan/freeze/approval before finalization can consume its causal proof
+- the authenticated guarded Step 3 flow-identity surface: one immutable actor-owned scope seal, one scope-serialized owner-draft process rewrite at a time, read-only resume/status, terminal finalization, and one actor-bound cancel that may release a scope only while it is still sealed with zero primary/audit/derivative/permit evidence; each process transaction may replace only the five sealed flow-reference identity fields, must preserve exchange rows/order/amounts/direction/comments/uncertainty/internal IDs and exact pending/blocker occurrences, and must atomically bind one protected derivative child while every source/public/support row remains read-only; a terminal derivative failure exposes an exact derivative-only compensation target but never replays primary, and compensation requires a distinct plan/freeze/approval before finalization can consume its causal proof
 - `tiangong-lca-worker` `worker_jobs` queue schema/RPCs, legacy lifecycle cutover cleanup, and review-submit coordinator links to worker job results
 - `scripts/**` for schema export, workspace refresh, change copying, and migration generation
 - `.github/workflows/supabase-dev.yml`

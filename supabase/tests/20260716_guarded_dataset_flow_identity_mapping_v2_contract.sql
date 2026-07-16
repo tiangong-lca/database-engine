@@ -257,7 +257,8 @@ select ok(
 );
 
 -- The only public v2 entrypoints are authenticated security-definer RPCs
--- with an empty search_path.  The legacy v1 cancel surface is retired.
+-- with an empty search_path.  Cancel is a zero-primary-write abandon path;
+-- its legacy v1 implementation remains private and non-executable.
 select function_privs_are(
   'public', 'cmd_dataset_flow_identity_capture_attest_guarded',
   array['jsonb'], 'authenticated', array['EXECUTE'],
@@ -283,13 +284,10 @@ select function_privs_are(
   array['uuid', 'jsonb'], 'authenticated', array['EXECUTE'],
   'v2 finalize is executable through the authenticated role'
 );
-select ok(
-  not has_function_privilege(
-    'authenticated',
-    'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)',
-    'EXECUTE'
-  ),
-  'authenticated cannot invoke the retired v1 cancel RPC'
+select function_privs_are(
+  'public', 'cmd_dataset_flow_identity_scope_cancel_guarded',
+  array['uuid', 'jsonb'], 'authenticated', array['EXECUTE'],
+  'v2 zero-write cancel is executable through the authenticated role'
 );
 select is(
   (
@@ -299,7 +297,8 @@ select is(
       'public.cmd_dataset_flow_identity_scope_preflight_guarded(jsonb)'::regprocedure,
       'public.cmd_dataset_flow_identity_process_rewrite_guarded(uuid,jsonb)'::regprocedure,
       'public.cmd_dataset_flow_identity_scope_read(uuid)'::regprocedure,
-      'public.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb)'::regprocedure
+      'public.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb)'::regprocedure,
+      'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
     ]) as function_oid(oid)
     where has_function_privilege('anon', function_oid.oid, 'EXECUTE')
        or has_function_privilege('service_role', function_oid.oid, 'EXECUTE')
@@ -319,7 +318,8 @@ select ok(
       'public.cmd_dataset_flow_identity_scope_preflight_guarded(jsonb)'::regprocedure,
       'public.cmd_dataset_flow_identity_process_rewrite_guarded(uuid,jsonb)'::regprocedure,
       'public.cmd_dataset_flow_identity_scope_read(uuid)'::regprocedure,
-      'public.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb)'::regprocedure
+      'public.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb)'::regprocedure,
+      'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
     ]::oid[])
   ),
   'every public v2 RPC is security definer with an empty search_path'
@@ -339,6 +339,34 @@ select ok(
     'EXECUTE'
   ),
   'authenticated cannot call the private STMultiLang primitive directly'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'private.dataset_flow_identity_scope_cancel_core_v1(uuid,jsonb)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'service_role',
+    'private.dataset_flow_identity_scope_cancel_core_v1(uuid,jsonb)',
+    'EXECUTE'
+  ),
+  'the legacy cancel core is private to the v2 database implementation'
+);
+select ok(
+  pg_get_functiondef(
+    'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
+  ) like '%v_scope.status <> ''sealed''%'
+  and pg_get_functiondef(
+    'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
+  ) like '%v_completed_count <> 0%'
+  and pg_get_functiondef(
+    'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
+  ) like '%v_scope.status = ''cancelled''%'
+  and pg_get_functiondef(
+    'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
+  ) like '%v_audit_count <> 1%',
+  'v2 cancel is sealed-zero-write-only and exact replay verifies one audit'
 );
 
 -- Receipt rows and their relation-shaped children are immutable, and the
