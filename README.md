@@ -39,8 +39,8 @@ Those stay in consumer repos such as:
 
 ## LCI/LCIA release control plane
 
-The database stores durable release-run, exact dataset-version index, artifact,
-approval, publication, and readback facts. Canonical generated TIDAS datasets
+The database stores durable release-run, exact source-Process-bound
+dataset-version index, artifact, approval, publication, and readback facts. Canonical generated TIDAS datasets
 and ZIP bytes remain in immutable object storage and are not inserted into the
 editable Process or LifecycleModel authoring tables. User commands authenticate
 with a real user session and are authorized here against the current

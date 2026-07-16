@@ -48,6 +48,10 @@ select has_function(
 select has_function('public', 'get_lca_release_run', array['uuid'], 'release run query exists');
 select has_function('public', 'get_current_lca_release', array[]::text[], 'current release query exists');
 select has_function(
+  'public', 'get_current_lca_release_process', array['uuid', 'text'],
+  'current release process identity projection exists'
+);
+select has_function(
   'public', 'get_lca_release_artifact_download', array['uuid'],
   'release artifact download projection exists'
 );
@@ -165,6 +169,10 @@ as $$
       'role', 'unit_process',
       'uuid', 'a7160000-0000-4000-8000-000000003001',
       'version', '01.00.000',
+      'sourceProcess', jsonb_build_object(
+        'id', 'a7160000-0000-4000-8000-000000003001',
+        'version', '01.00.000'
+      ),
       'canonicalContentHash', repeat('7', 64)
     )),
     'packages', jsonb_build_array(
@@ -214,6 +222,7 @@ as $$
       jsonb_build_object(
         'datasetType', 'process', 'role', 'unit_process',
         'uuid', 'a7160000-0000-4000-8000-000000003001', 'version', '01.00.000',
+        'sourceProcess', jsonb_build_object('id', 'a7160000-0000-4000-8000-000000003001', 'version', '01.00.000'),
         'versionSignificantHash', repeat('7', 64), 'semanticHash', repeat('7', 64),
         'canonicalContentHash', repeat('7', 64),
         'artifact', jsonb_build_object('path', 'processes/unit.json', 'sha256', repeat('7', 64), 'byteSize', 100, 'mediaType', 'application/json')
@@ -221,6 +230,7 @@ as $$
       jsonb_build_object(
         'datasetType', 'lifecyclemodel', 'role', 'lifecycle_model',
         'uuid', 'a7160000-0000-4000-8000-000000003002', 'version', '01.00.000',
+        'sourceProcess', jsonb_build_object('id', 'a7160000-0000-4000-8000-000000003001', 'version', '01.00.000'),
         'versionSignificantHash', repeat('8', 64), 'semanticHash', repeat('8', 64),
         'canonicalContentHash', repeat('8', 64),
         'artifact', jsonb_build_object('path', 'lifecyclemodels/model.json', 'sha256', repeat('8', 64), 'byteSize', 110, 'mediaType', 'application/json')
@@ -228,6 +238,7 @@ as $$
       jsonb_build_object(
         'datasetType', 'process', 'role', 'result_process',
         'uuid', 'a7160000-0000-4000-8000-000000003003', 'version', '01.00.000',
+        'sourceProcess', jsonb_build_object('id', 'a7160000-0000-4000-8000-000000003001', 'version', '01.00.000'),
         'versionSignificantHash', repeat('9', 64), 'semanticHash', repeat('9', 64),
         'canonicalContentHash', repeat('9', 64),
         'artifact', jsonb_build_object('path', 'processes/result.json', 'sha256', repeat('9', 64), 'byteSize', 120, 'mediaType', 'application/json')
@@ -405,6 +416,30 @@ select is(
 );
 select is(
   public.cmd_lca_release_artifacts_finalize_service(
+    'a7160000-0000-4000-8000-000000002001', repeat('e', 64),
+    jsonb_set(
+      pg_temp.release_manifest(), '{datasets,0,sourceProcess,id}',
+      '"a7160000-0000-4000-8000-000000009999"'::jsonb
+    ),
+    repeat('9', 64), pg_temp.uploaded_artifacts(), '{}'::jsonb
+  )->>'code',
+  'dataset_index_invalid',
+  'service finalize requires each Unit Process source identity to map to itself'
+);
+select is(
+  public.cmd_lca_release_artifacts_finalize_service(
+    'a7160000-0000-4000-8000-000000002001', repeat('e', 64),
+    jsonb_set(
+      pg_temp.release_manifest(), '{datasets,1,sourceProcess,id}',
+      '"a7160000-0000-4000-8000-000000009999"'::jsonb
+    ),
+    repeat('9', 64), pg_temp.uploaded_artifacts(), '{}'::jsonb
+  )->>'code',
+  'dataset_source_process_set_invalid',
+  'service finalize requires one complete Unit Process, LifecycleModel, and Result identity set per source Process'
+);
+select is(
+  public.cmd_lca_release_artifacts_finalize_service(
     'a7160000-0000-4000-8000-000000002001', repeat('e', 64), pg_temp.release_manifest(),
     repeat('9', 64), pg_temp.uploaded_artifacts(), '{}'::jsonb
   )->'data'->>'status',
@@ -554,6 +589,56 @@ select is(
   public.get_current_lca_release()->'data'->>'releaseVersion',
   '01.00.000',
   'anonymous consumer can read the current public release projection'
+);
+select is(
+  public.get_current_lca_release()->'data'->>'createdBy',
+  null,
+  'public release projection does not expose the manager user id'
+);
+select is(
+  public.get_current_lca_release()->'data'->'validation'->>'semanticRoundtrip',
+  'passed',
+  'public release projection exposes sanitized validation status'
+);
+select is(
+  (public.get_current_lca_release()->'data'->'datasetCounts'->>'result_process')::integer,
+  1,
+  'public release projection exposes role counts without dataset object locators'
+);
+select is(
+  jsonb_array_length(
+    public.get_current_lca_release_process(
+      'a7160000-0000-4000-8000-000000003001', '01.00.000'
+    )->'data'->'datasets'
+  ),
+  3,
+  'process projection resolves Unit Process, LifecycleModel, and Result Process identities'
+);
+select is(
+  jsonb_path_query_first(
+    public.get_current_lca_release_process(
+      'a7160000-0000-4000-8000-000000003001', '01.00.000'
+    ),
+    '$.data.datasets[*] ? (@.role == "lifecycle_model").uuid'
+  ) #>> '{}',
+  'a7160000-0000-4000-8000-000000003002',
+  'process projection exposes the generated LifecycleModel identity'
+);
+select ok(
+  public.get_current_lca_release_process(
+    'a7160000-0000-4000-8000-000000003001', '01.00.000'
+  )::text not like '%objectKey%'
+  and public.get_current_lca_release_process(
+    'a7160000-0000-4000-8000-000000003001', '01.00.000'
+  )::text not like '%artifact_ref%',
+  'process projection does not expose internal storage locators'
+);
+select is(
+  public.get_current_lca_release_process(
+    'a7160000-0000-4000-8000-000000009999', '01.00.000'
+  )->>'code',
+  'release_process_not_found',
+  'process projection has an explicit legacy or out-of-scope empty state'
 );
 select ok(
   (public.get_lca_release_artifact_download(

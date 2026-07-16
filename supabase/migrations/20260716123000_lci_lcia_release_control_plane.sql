@@ -78,6 +78,8 @@ create table if not exists public.lca_release_dataset_versions (
   dataset_role text not null,
   dataset_uuid uuid not null,
   dataset_version text not null,
+  source_process_uuid uuid,
+  source_process_version text,
   version_significant_hash text not null,
   semantic_hash text not null,
   canonical_content_hash text not null,
@@ -95,6 +97,30 @@ create table if not exists public.lca_release_dataset_versions (
   constraint lca_release_dataset_version_chk check (
     dataset_version ~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$'
   ),
+  constraint lca_release_dataset_role_type_chk check (
+    (dataset_role in ('unit_process', 'result_process') and dataset_type = 'process')
+    or (dataset_role = 'lifecycle_model' and dataset_type = 'lifecyclemodel')
+    or dataset_role = 'support'
+  ),
+  constraint lca_release_dataset_source_process_chk check (
+    (
+      dataset_role in ('unit_process', 'result_process', 'lifecycle_model')
+      and source_process_uuid is not null
+      and source_process_version ~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$'
+    )
+    or (
+      dataset_role = 'support'
+      and source_process_uuid is null
+      and source_process_version is null
+    )
+  ),
+  constraint lca_release_unit_source_self_chk check (
+    dataset_role <> 'unit_process'
+    or (
+      source_process_uuid = dataset_uuid
+      and source_process_version = dataset_version
+    )
+  ),
   constraint lca_release_dataset_hashes_chk check (
     version_significant_hash ~ '^[0-9a-f]{64}$'
     and semantic_hash ~ '^[0-9a-f]{64}$'
@@ -110,6 +136,12 @@ create table if not exists public.lca_release_dataset_versions (
 
 create index if not exists lca_release_dataset_lookup_idx
   on public.lca_release_dataset_versions (dataset_type, dataset_uuid, dataset_version);
+
+create unique index if not exists lca_release_dataset_source_role_uidx
+  on public.lca_release_dataset_versions (
+    release_run_id, source_process_uuid, source_process_version, dataset_role
+  )
+  where source_process_uuid is not null;
 
 create table if not exists public.lca_release_artifacts (
   id uuid primary key default gen_random_uuid(),
@@ -855,7 +887,28 @@ begin
           'lciamethod', 'source', 'contact'
         )
      or value->>'role' not in ('unit_process', 'result_process', 'lifecycle_model', 'support')
+     or (value->>'role' in ('unit_process', 'result_process') and value->>'datasetType' <> 'process')
+     or (value->>'role' = 'lifecycle_model' and value->>'datasetType' <> 'lifecyclemodel')
      or value->>'version' !~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$'
+     or (
+       value->>'role' in ('unit_process', 'result_process', 'lifecycle_model')
+       and (
+         jsonb_typeof(value->'sourceProcess') is distinct from 'object'
+         or coalesce(value->'sourceProcess'->>'id', '') = ''
+         or value->'sourceProcess'->>'version' !~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$'
+       )
+     )
+     or (
+       value->>'role' = 'unit_process'
+       and (
+         value->'sourceProcess'->>'id' is distinct from value->>'uuid'
+         or value->'sourceProcess'->>'version' is distinct from value->>'version'
+       )
+     )
+     or (
+       value->>'role' = 'support'
+       and value ? 'sourceProcess'
+     )
      or value->>'versionSignificantHash' !~ '^[0-9a-f]{64}$'
      or value->>'semanticHash' !~ '^[0-9a-f]{64}$'
      or value->>'canonicalContentHash' !~ '^[0-9a-f]{64}$'
@@ -865,8 +918,35 @@ begin
     return public.lca_release_error('dataset_index_invalid', 400, 'Release dataset index contains invalid identities, versions, or hashes');
   end if;
 
+  with process_datasets as (
+    select
+      dataset.value->>'role' as dataset_role,
+      dataset.value->'sourceProcess'->>'id' as source_process_uuid,
+      dataset.value->'sourceProcess'->>'version' as source_process_version
+    from jsonb_array_elements(p_release_manifest->'datasets') as dataset(value)
+    where dataset.value->>'role' in ('unit_process', 'lifecycle_model', 'result_process')
+  ),
+  invalid_source_sets as (
+    select source_process_uuid, source_process_version
+    from process_datasets
+    group by source_process_uuid, source_process_version
+    having count(*) filter (where dataset_role = 'unit_process') <> 1
+       or count(*) filter (where dataset_role = 'lifecycle_model') <> 1
+       or count(*) filter (where dataset_role = 'result_process') <> 1
+  )
+  select count(*) into v_invalid_count
+  from invalid_source_sets;
+
+  if v_invalid_count <> 0 then
+    return public.lca_release_error(
+      'dataset_source_process_set_invalid', 400,
+      'Each source Process requires exactly one Unit Process, LifecycleModel, and Result Process identity'
+    );
+  end if;
+
   insert into public.lca_release_dataset_versions (
     release_run_id, dataset_type, dataset_role, dataset_uuid, dataset_version,
+    source_process_uuid, source_process_version,
     version_significant_hash, semantic_hash, canonical_content_hash, artifact_ref
   )
   select
@@ -875,6 +955,8 @@ begin
     dataset.value->>'role',
     (dataset.value->>'uuid')::uuid,
     dataset.value->>'version',
+    (dataset.value->'sourceProcess'->>'id')::uuid,
+    dataset.value->'sourceProcess'->>'version',
     dataset.value->>'versionSignificantHash',
     dataset.value->>'semanticHash',
     dataset.value->>'canonicalContentHash',
@@ -1485,12 +1567,41 @@ begin
       'publishPlanHash', v_run.publish_plan_hash,
       'releaseManifestHash', v_run.release_manifest_hash,
       'artifactSetHash', v_run.artifact_set_hash,
-      'createdBy', v_run.created_by,
+      'createdBy', case when public.lca_release_is_manager() then v_run.created_by else null end,
       'createdAt', v_run.created_at,
       'approvedAt', v_run.approved_at,
       'publishedAt', v_run.published_at,
       'readbackVerifiedAt', v_run.readback_verified_at,
       'calculationBundle', case when public.lca_release_is_manager() then v_run.calculation_bundle_ref else null end,
+      'datasetCounts', (
+        select coalesce(jsonb_object_agg(counts.dataset_role, counts.dataset_count), '{}'::jsonb)
+        from (
+          select dataset.dataset_role, count(*) as dataset_count
+          from public.lca_release_dataset_versions as dataset
+          where dataset.release_run_id = v_run.id
+          group by dataset.dataset_role
+        ) as counts
+      ),
+      'validation', jsonb_build_object(
+        'tidas', v_run.release_manifest->'validation'->'tidas'->>'status',
+        'ilcd', v_run.release_manifest->'validation'->'ilcd'->>'status',
+        'semanticRoundtrip', v_run.release_manifest->'validation'->'semanticRoundtrip'->>'status',
+        'referenceClosure', v_run.release_manifest->'validation'->'referenceClosure'->>'status',
+        'numericParity', v_run.release_manifest->'validation'->'numericParity'->>'status'
+      ),
+      'publication', (
+        select jsonb_build_object(
+          'publicationId', publication.id,
+          'status', publication.status,
+          'isCurrent', publication.is_current,
+          'publishedAt', publication.published_at,
+          'unpublishedAt', publication.unpublished_at
+        )
+        from public.lca_release_publications as publication
+        where publication.release_run_id = v_run.id
+        order by publication.published_at desc
+        limit 1
+      ),
       'artifacts', (
         select coalesce(jsonb_agg(jsonb_build_object(
           'artifactId', artifact.id,
@@ -1536,6 +1647,70 @@ begin
   end if;
 
   return public.get_lca_release_run(v_publication.release_run_id);
+end;
+$$;
+
+create or replace function public.get_current_lca_release_process(
+  p_process_uuid uuid,
+  p_process_version text
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_release_run_id uuid;
+  v_release jsonb;
+  v_datasets jsonb;
+begin
+  if coalesce(p_process_version, '') !~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$' then
+    return public.lca_release_error('process_version_invalid', 400, 'Process version must use XX.XX.XXX');
+  end if;
+
+  select publication.release_run_id into v_release_run_id
+  from public.lca_release_publications as publication
+  where publication.is_current = true and publication.status = 'current'
+  order by publication.published_at desc
+  limit 1;
+
+  if v_release_run_id is null then
+    return public.lca_release_error('publication_not_found', 404, 'No current public LCA release exists');
+  end if;
+
+  v_release := public.get_lca_release_run(v_release_run_id);
+  if coalesce((v_release->>'ok')::boolean, false) is not true then
+    return v_release;
+  end if;
+
+  select coalesce(jsonb_agg(jsonb_build_object(
+    'datasetType', dataset.dataset_type,
+    'role', dataset.dataset_role,
+    'uuid', dataset.dataset_uuid,
+    'version', dataset.dataset_version,
+    'sourceProcess', jsonb_build_object(
+      'id', dataset.source_process_uuid,
+      'version', dataset.source_process_version
+    ),
+    'versionSignificantHash', dataset.version_significant_hash,
+    'semanticHash', dataset.semantic_hash,
+    'canonicalContentHash', dataset.canonical_content_hash
+  ) order by dataset.dataset_role, dataset.dataset_uuid), '[]'::jsonb)
+  into v_datasets
+  from public.lca_release_dataset_versions as dataset
+  where dataset.release_run_id = v_release_run_id
+    and dataset.source_process_uuid = p_process_uuid
+    and dataset.source_process_version = p_process_version
+    and dataset.dataset_role in ('unit_process', 'lifecycle_model', 'result_process');
+
+  if jsonb_array_length(v_datasets) = 0 then
+    return public.lca_release_error(
+      'release_process_not_found', 404,
+      'Process is not included in the current public LCA release'
+    );
+  end if;
+
+  return jsonb_set(v_release, '{data,datasets}', v_datasets, true);
 end;
 $$;
 
@@ -1653,6 +1828,7 @@ revoke all on function public.cmd_lca_release_readback_verify(uuid, text, jsonb,
 revoke all on function public.cmd_lca_release_unpublish(uuid, text, jsonb) from public, anon, authenticated, service_role;
 revoke all on function public.get_lca_release_run(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.get_current_lca_release() from public, anon, authenticated, service_role;
+revoke all on function public.get_current_lca_release_process(uuid, text) from public, anon, authenticated, service_role;
 revoke all on function public.get_lca_release_artifact_download(uuid) from public, anon, authenticated, service_role;
 revoke all on function public.get_lcia_result_calculation_bundle(uuid) from public, anon, authenticated, service_role;
 
@@ -1664,6 +1840,7 @@ grant execute on function public.cmd_lca_release_readback_verify(uuid, text, jso
 grant execute on function public.cmd_lca_release_unpublish(uuid, text, jsonb) to authenticated;
 grant execute on function public.get_lca_release_run(uuid) to anon, authenticated, service_role;
 grant execute on function public.get_current_lca_release() to anon, authenticated, service_role;
+grant execute on function public.get_current_lca_release_process(uuid, text) to anon, authenticated, service_role;
 grant execute on function public.get_lca_release_artifact_download(uuid) to anon, authenticated, service_role;
 grant execute on function public.get_lcia_result_calculation_bundle(uuid) to authenticated;
 grant execute on function public.cmd_lca_release_artifacts_finalize_service(uuid, text, jsonb, text, jsonb, jsonb) to service_role;

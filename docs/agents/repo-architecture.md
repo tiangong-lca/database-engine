@@ -29,7 +29,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-16
 lastReviewedCommit: 910cce78a892a64b4c2bdfb94e598a2c96649e6f
-lastReviewedNote: "Reviewed the LCI/LCIA release control plane: generated datasets stay outside authoring tables, user mutations are manager-authorized RPCs, and service identity can only finalize exact artifact refs."
+lastReviewedNote: "Reviewed the LCI/LCIA release control plane and source-Process projection: each source identity has exactly one Unit Process, LifecycleModel, and Result Process while generated datasets stay outside authoring tables."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -97,7 +97,7 @@ Use `public.worker_domain_traceability_cutoffs` and `public.worker_domain_tracea
 
 ## LCI/LCIA Release Control Plane
 
-`lca_release_runs` is the durable release state machine; `lca_release_dataset_versions`, `lca_release_artifacts`, `lca_release_approvals`, and `lca_release_publications` are immutable/indexed release facts. Generated LifecycleModel and Result Process documents are referenced from canonical object artifacts and never inserted into editable `lifecyclemodels` or `processes` authoring rows.
+`lca_release_runs` is the durable release state machine; `lca_release_dataset_versions`, `lca_release_artifacts`, `lca_release_approvals`, and `lca_release_publications` are immutable/indexed release facts. The dataset index binds every generated identity to its exact source Process and requires exactly one Unit Process, LifecycleModel, and Result Process per source identity; the Unit Process mapping must point to itself. Generated LifecycleModel and Result Process documents are referenced from canonical object artifacts and never inserted into editable `lifecyclemodels` or `processes` authoring rows.
 
 Authenticated prepare, approve, publish, readback, and unpublish commands re-check `auth.uid()` against the live `data_product_manager` platform role. The separate service-only finalize command binds four uploaded package refs to the exact prepared plan and validated release manifest, but service identity has neither direct table writes nor approval/publication function grants. Public and private read/download projections remain RPC-owned so Edge can issue signed downloads without exposing database mutation capability.
 
