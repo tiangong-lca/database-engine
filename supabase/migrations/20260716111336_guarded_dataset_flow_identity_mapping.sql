@@ -163,6 +163,8 @@ create table util.dataset_flow_identity_scopes (
   environment text not null,
   project_ref text not null,
   target_visibility text not null,
+  user_state_claim text not null default
+    'authenticated_actor_state_100_plus_own_state_0',
   operation_id text not null,
   plan_sha256 text not null,
   freeze_sha256 text not null,
@@ -197,6 +199,8 @@ create table util.dataset_flow_identity_scopes (
   final_request_sha256 text,
   cancel_request_sha256 text,
   terminal_proof_sha256 text,
+  final_wrapper_invocation_id uuid,
+  final_permit_generation_before integer,
   last_error jsonb,
   sealed_at timestamp with time zone not null default clock_timestamp(),
   primary_completed_at timestamp with time zone,
@@ -204,6 +208,9 @@ create table util.dataset_flow_identity_scopes (
   updated_at timestamp with time zone not null default clock_timestamp(),
   constraint dataset_flow_identity_scope_visibility_chk
     check (target_visibility = 'owner_draft'),
+  constraint dataset_flow_identity_scope_user_state_claim_chk check (
+    user_state_claim = 'authenticated_actor_state_100_plus_own_state_0'
+  ),
   constraint dataset_flow_identity_scope_environment_chk
     check (environment in ('local', 'preview', 'production')),
   constraint dataset_flow_identity_scope_status_chk
@@ -247,6 +254,9 @@ create table util.dataset_flow_identity_scopes (
   ),
   constraint dataset_flow_identity_scope_universe_chk
     check (source_universe_count = 305),
+  constraint dataset_flow_identity_scope_final_permit_generation_chk
+    check (final_permit_generation_before is null
+      or final_permit_generation_before >= 0),
   unique (actor_user_id, request_id),
   unique (actor_user_id, operation_id),
   unique (actor_user_id, plan_sha256)
@@ -294,6 +304,8 @@ create table util.dataset_flow_identity_process_ledger (
   after_exchange_set_sha256 text,
   derivative_batch_id uuid,
   derivative_admission jsonb,
+  wrapper_invocation_id uuid,
+  permit_generation_before integer,
   completed_at timestamp with time zone,
   last_error jsonb,
   primary key (scope_id, ordinal),
@@ -315,7 +327,9 @@ create table util.dataset_flow_identity_process_ledger (
   constraint dataset_flow_identity_process_rewrite_count_chk
     check (rewrite_count > 0),
   constraint dataset_flow_identity_process_status_chk
-    check (status in ('pending', 'completed', 'failed'))
+    check (status in ('pending', 'completed', 'failed')),
+  constraint dataset_flow_identity_process_permit_generation_chk
+    check (permit_generation_before is null or permit_generation_before >= 0)
 );
 
 -- A permit is minted only inside the private rewrite core immediately before
@@ -342,6 +356,76 @@ create table util.dataset_flow_identity_mutation_permits (
   )
 );
 
+-- A human approval may start exactly one CLI execution wrapper.  The raw
+-- bearer token is returned only by the fresh preflight/recovery call and is
+-- never persisted; only its SHA-256 is stored.  Every successful process or
+-- finalize transaction rotates the token atomically with its business result.
+-- A replayed admission returns no token, so another process/outDir/machine
+-- cannot turn the same approval into a second write-capable wrapper.
+create table util.dataset_flow_identity_wrapper_invocations (
+  id uuid primary key default gen_random_uuid(),
+  scope_id uuid not null
+    references util.dataset_flow_identity_scopes(id) on delete restrict,
+  actor_user_id uuid not null,
+  approval_kind text not null,
+  approval_request_sha256 text not null,
+  approval_text_sha256 text not null,
+  approval_identity_sha256 text not null,
+  admission_request_sha256 text not null,
+  baseline_whole_scope_proof_sha256 text not null,
+  generation integer not null default 0,
+  token_sha256 text not null,
+  maximum_process_posts integer not null,
+  successful_process_posts integer not null default 0,
+  maximum_finalize_posts integer not null default 1,
+  successful_finalize_posts integer not null default 0,
+  status text not null default 'active',
+  admitted_at timestamp with time zone not null default clock_timestamp(),
+  updated_at timestamp with time zone not null default clock_timestamp(),
+  closed_at timestamp with time zone,
+  constraint dataset_flow_identity_invocation_kind_chk
+    check (approval_kind in ('initial', 'recovery')),
+  constraint dataset_flow_identity_invocation_status_chk
+    check (status in ('active', 'superseded', 'completed', 'cancelled')),
+  constraint dataset_flow_identity_invocation_counts_chk check (
+    generation >= 0
+    and maximum_process_posts >= 0
+    and successful_process_posts >= 0
+    and successful_process_posts <= maximum_process_posts
+    and maximum_finalize_posts = 1
+    and successful_finalize_posts >= 0
+    and successful_finalize_posts <= maximum_finalize_posts
+  ),
+  constraint dataset_flow_identity_invocation_hashes_chk check (
+    approval_request_sha256 ~ '^[a-f0-9]{64}$'
+    and approval_text_sha256 ~ '^[a-f0-9]{64}$'
+    and approval_identity_sha256 ~ '^[a-f0-9]{64}$'
+    and admission_request_sha256 ~ '^[a-f0-9]{64}$'
+    and baseline_whole_scope_proof_sha256 ~ '^[a-f0-9]{64}$'
+    and token_sha256 ~ '^[a-f0-9]{64}$'
+  ),
+  constraint dataset_flow_identity_invocation_approval_domains_chk check (
+    approval_request_sha256 <> approval_text_sha256
+    and approval_request_sha256 <> approval_identity_sha256
+    and approval_text_sha256 <> approval_identity_sha256
+  ),
+  unique (actor_user_id, approval_request_sha256),
+  unique (actor_user_id, approval_text_sha256),
+  unique (actor_user_id, approval_identity_sha256)
+);
+
+alter table util.dataset_flow_identity_process_ledger
+  add constraint dataset_flow_identity_process_invocation_fk
+  foreign key (wrapper_invocation_id)
+  references util.dataset_flow_identity_wrapper_invocations(id)
+  on delete restrict;
+
+alter table util.dataset_flow_identity_scopes
+  add constraint dataset_flow_identity_scope_final_invocation_fk
+  foreign key (final_wrapper_invocation_id)
+  references util.dataset_flow_identity_wrapper_invocations(id)
+  on delete restrict;
+
 create unique index dataset_flow_identity_process_active_uidx
   on util.dataset_flow_identity_process_ledger (process_id, process_version)
   where active;
@@ -351,6 +435,16 @@ create unique index dataset_flow_identity_scope_actor_active_uidx
   where status in (
     'sealed', 'running', 'primary_complete', 'derivatives_pending'
   );
+
+create unique index dataset_flow_identity_invocation_scope_active_uidx
+  on util.dataset_flow_identity_wrapper_invocations (scope_id)
+  where status = 'active';
+
+create unique index dataset_flow_identity_process_invocation_generation_uidx
+  on util.dataset_flow_identity_process_ledger (
+    wrapper_invocation_id, permit_generation_before
+  )
+  where wrapper_invocation_id is not null;
 
 create index dataset_flow_identity_process_scope_read_idx
   on util.dataset_flow_identity_process_ledger (scope_id, ordinal)
@@ -370,6 +464,15 @@ create unique index command_audit_log_flow_identity_process_uidx
   )
   where command = 'cmd_dataset_flow_identity_process_rewrite_guarded'
     and target_table = 'processes';
+
+create unique index command_audit_log_flow_identity_recovery_uidx
+  on public.command_audit_log (
+    actor_user_id,
+    (payload ->> 'scope_id'),
+    (payload ->> 'recovery_approval_identity_sha256')
+  )
+  where command = 'cmd_dataset_flow_identity_scope_recover_guarded'
+    and target_table is null;
 
 create index dataset_derivative_rebuild_flow_identity_compensation_idx
   on util.dataset_derivative_rebuild_requests (
@@ -402,11 +505,15 @@ revoke all on util.dataset_flow_identity_mappings
   from public, anon, authenticated, service_role;
 revoke all on util.dataset_flow_identity_process_ledger
   from public, anon, authenticated, service_role;
+revoke all on util.dataset_flow_identity_wrapper_invocations
+  from public, anon, authenticated, service_role;
 
 comment on table util.dataset_flow_identity_scopes is
   'Private durable Step 3 scope seals. approval_identity_sha256 and approval_text_sha256 are execution-approval hashes; policy_approval_text_sha256 is independently bound from the capture receipt. Scope rows bind exact mapping, process, and protected pending/blocker closure evidence.';
 comment on table util.dataset_flow_identity_process_ledger is
   'Private ordered one-process Step 3 replay ledger. Active rows exclude overlapping live scopes; completed rows bind one primary audit and one protected derivative batch.';
+comment on table util.dataset_flow_identity_wrapper_invocations is
+  'Private one-wrapper approval-consumption ledger. Fresh initial/recovery admission returns one memory-only bearer token; replay returns no token, successful writes rotate it, and superseded/terminal tokens can never write.';
 
 create or replace function private.dataset_flow_identity_exact_keys(
   p_value jsonb,
@@ -588,6 +695,174 @@ $$;
 
 alter function util.dataset_flow_identity_sha256(jsonb) owner to postgres;
 revoke all on function util.dataset_flow_identity_sha256(jsonb)
+  from public, anon, authenticated, service_role;
+
+create or replace function private.dataset_flow_identity_permit_token_sha256_v1(
+  p_token text
+) returns text
+language sql
+immutable
+strict
+set search_path = ''
+as $$
+  select pg_catalog.encode(
+    extensions.digest(pg_catalog.convert_to(p_token, 'UTF8'), 'sha256'),
+    'hex'
+  )
+$$;
+
+alter function private.dataset_flow_identity_permit_token_sha256_v1(text)
+  owner to postgres;
+revoke all on function private.dataset_flow_identity_permit_token_sha256_v1(text)
+  from public, anon, authenticated, service_role;
+
+create or replace function private.dataset_flow_identity_validate_wrapper_permit_v1(
+  p_actor uuid,
+  p_scope_id uuid,
+  p_authorization jsonb,
+  p_post_kind text
+) returns uuid
+language plpgsql
+stable
+set search_path = ''
+as $$
+declare
+  v_invocation_id uuid;
+  v_generation numeric;
+begin
+  if p_actor is null or p_scope_id is null
+    or p_post_kind not in ('process', 'finalize')
+    or not coalesce(private.dataset_flow_identity_exact_keys(
+      p_authorization,
+      array['schema_version', 'invocation_id', 'generation', 'token']
+    ), false)
+    or p_authorization->>'schema_version'
+      <> 'dataset-flow-identity-execution-permit.v1'
+    or p_authorization->>'invocation_id'
+      !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    or jsonb_typeof(p_authorization->'generation') <> 'number'
+    or p_authorization->>'token' !~ '^[a-f0-9]{64}$' then
+    return null;
+  end if;
+  v_generation := (p_authorization->>'generation')::numeric;
+  if v_generation < 0 or v_generation > 2147483647
+    or v_generation <> trunc(v_generation) then
+    return null;
+  end if;
+  select invocation.id into v_invocation_id
+  from util.dataset_flow_identity_wrapper_invocations as invocation
+  where invocation.id = (p_authorization->>'invocation_id')::uuid
+    and invocation.scope_id = p_scope_id
+    and invocation.actor_user_id = p_actor
+    and invocation.status = 'active'
+    and invocation.generation = v_generation::integer
+    and invocation.token_sha256 =
+      private.dataset_flow_identity_permit_token_sha256_v1(
+        p_authorization->>'token'
+      )
+    and case p_post_kind
+      when 'process' then invocation.successful_process_posts
+        < invocation.maximum_process_posts
+      when 'finalize' then invocation.successful_finalize_posts
+        < invocation.maximum_finalize_posts
+      else false
+    end;
+  return v_invocation_id;
+exception when invalid_text_representation or numeric_value_out_of_range then
+  return null;
+end;
+$$;
+
+alter function private.dataset_flow_identity_validate_wrapper_permit_v1(
+  uuid, uuid, jsonb, text
+) owner to postgres;
+revoke all on function private.dataset_flow_identity_validate_wrapper_permit_v1(
+  uuid, uuid, jsonb, text
+) from public, anon, authenticated, service_role;
+
+create or replace function private.dataset_flow_identity_rotate_wrapper_permit_v1(
+  p_invocation_id uuid,
+  p_post_kind text,
+  p_terminal boolean default false
+) returns jsonb
+language plpgsql
+volatile
+set search_path = ''
+as $$
+declare
+  v_invocation util.dataset_flow_identity_wrapper_invocations%rowtype;
+  v_token text;
+begin
+  select invocation.* into v_invocation
+  from util.dataset_flow_identity_wrapper_invocations as invocation
+  where invocation.id = p_invocation_id and invocation.status = 'active'
+  for update;
+  if v_invocation.id is null
+    or p_post_kind not in ('process', 'finalize') then
+    raise exception using errcode = 'P0001',
+      message = 'FLOW_IDENTITY_WRAPPER_PERMIT_ROTATE_INVALID';
+  end if;
+  v_token := pg_catalog.encode(extensions.gen_random_bytes(32), 'hex');
+  update util.dataset_flow_identity_wrapper_invocations
+  set generation = generation + 1,
+    token_sha256 =
+      private.dataset_flow_identity_permit_token_sha256_v1(v_token),
+    successful_process_posts = successful_process_posts
+      + case when p_post_kind = 'process' then 1 else 0 end,
+    successful_finalize_posts = successful_finalize_posts
+      + case when p_post_kind = 'finalize' then 1 else 0 end,
+    status = case when p_terminal then 'completed' else status end,
+    updated_at = clock_timestamp(),
+    closed_at = case when p_terminal then clock_timestamp() else closed_at end
+  where id = v_invocation.id
+  returning * into v_invocation;
+  if p_terminal then
+    return null;
+  end if;
+  return jsonb_build_object(
+    'schema_version', 'dataset-flow-identity-execution-permit.v1',
+    'invocation_id', v_invocation.id,
+    'generation', v_invocation.generation,
+    'token', v_token
+  );
+end;
+$$;
+
+alter function private.dataset_flow_identity_rotate_wrapper_permit_v1(
+  uuid, text, boolean
+) owner to postgres;
+revoke all on function private.dataset_flow_identity_rotate_wrapper_permit_v1(
+  uuid, text, boolean
+) from public, anon, authenticated, service_role;
+
+create or replace function private.dataset_flow_identity_invalidate_wrapper_permit_v1(
+  p_invocation_id uuid
+) returns void
+language plpgsql
+volatile
+set search_path = ''
+as $$
+declare
+  v_token text := pg_catalog.encode(extensions.gen_random_bytes(32), 'hex');
+begin
+  update util.dataset_flow_identity_wrapper_invocations
+  set generation = generation + 1,
+    token_sha256 =
+      private.dataset_flow_identity_permit_token_sha256_v1(v_token),
+    status = 'superseded',
+    updated_at = clock_timestamp(),
+    closed_at = clock_timestamp()
+  where id = p_invocation_id and status = 'active';
+  if not found then
+    raise exception using errcode = 'P0001',
+      message = 'FLOW_IDENTITY_WRAPPER_PERMIT_INVALIDATE_FAILED';
+  end if;
+end;
+$$;
+
+alter function private.dataset_flow_identity_invalidate_wrapper_permit_v1(uuid)
+  owner to postgres;
+revoke all on function private.dataset_flow_identity_invalidate_wrapper_permit_v1(uuid)
   from public, anon, authenticated, service_role;
 
 create or replace function private.dataset_flow_identity_exchanges(
@@ -5331,7 +5606,9 @@ begin
       'version', process_version,
       'json_ordered_sha256', after_payload_sha256,
       'exchange_set_sha256', after_exchange_set_sha256,
-      'audit_id', audit_id::text
+      'audit_id', audit_id::text,
+      'wrapper_invocation_id', wrapper_invocation_id,
+      'permit_generation_before', permit_generation_before
     ) order by ordinal), '[]'::jsonb),
     coalesce(jsonb_agg(jsonb_build_object(
       'ordinal', ordinal,
@@ -7373,6 +7650,7 @@ declare
   v_expected_terminal_proof_sha256 text;
   v_expected_terminal_audit_payload jsonb;
   v_terminal_audit_payload jsonb;
+  v_terminal_invocation util.dataset_flow_identity_wrapper_invocations%rowtype;
   v_terminal_audit_count integer := 0;
   v_proof jsonb;
   v_proof_sha256 text;
@@ -7554,6 +7832,13 @@ begin
         'execution_approval_identity_sha256',
           v_scope.approval_identity_sha256,
         'toolchain_evidence_sha256', v_scope.toolchain_evidence_sha256,
+        'user_state_claim', v_scope.user_state_claim,
+        'maximum_wrapper_invocations', 1,
+        'maximum_process_posts', v_scope.process_count,
+        'maximum_finalize_posts', 1,
+        'maximum_cli_apply_spawns', 1,
+        'approval_reusable', false,
+        'automatic_retry', false,
         'preflight_request_sha256', v_scope.preflight_request_sha256,
         'scope_request_sha256', v_scope.scope_request_sha256,
         'scope_proof_sha256', v_scope.scope_proof_sha256,
@@ -7579,7 +7864,14 @@ begin
           private.dataset_flow_identity_exchanges(process.json_ordered::jsonb)
         ) as live_exchange_sha256,
         audit.id as live_audit_id,
-        audit.payload as live_audit_payload
+        audit.payload as live_audit_payload,
+        invocation.id as live_invocation_id,
+        invocation.generation as live_invocation_generation,
+        invocation.approval_kind as live_approval_kind,
+        invocation.approval_identity_sha256
+          as live_approval_identity_sha256,
+        invocation.admission_request_sha256
+          as live_admission_request_sha256
       from util.dataset_flow_identity_process_ledger as ledger
       left join public.processes as process
         on process.id = ledger.process_id
@@ -7597,6 +7889,10 @@ begin
         and audit.payload->>'scope_id' = p_scope_id::text
         and audit.payload->>'process_request_sha256'
           = ledger.process_request_sha256
+      left join util.dataset_flow_identity_wrapper_invocations as invocation
+        on invocation.id = ledger.wrapper_invocation_id
+        and invocation.scope_id = ledger.scope_id
+        and invocation.actor_user_id = p_actor
       where ledger.scope_id = p_scope_id
     )
     select
@@ -7612,6 +7908,9 @@ begin
       ),
       bool_and(case when status = 'completed' then
         live_audit_id is not null
+        and live_invocation_id is not null
+        and permit_generation_before is not null
+        and live_invocation_generation > permit_generation_before
         and live_audit_payload = jsonb_build_object(
           'record_type', 'process_rewrite',
           'schema_version', 'dataset-flow-identity-process-rewrite.v2',
@@ -7624,6 +7923,13 @@ begin
           'scope_proof_sha256', v_scope.scope_proof_sha256,
           'operation_id', v_scope.operation_id,
           'plan_sha256', v_scope.plan_sha256,
+          'wrapper_invocation_id', live_invocation_id,
+          'wrapper_approval_kind', live_approval_kind,
+          'wrapper_approval_identity_sha256',
+            live_approval_identity_sha256,
+          'wrapper_admission_request_sha256',
+            live_admission_request_sha256,
+          'permit_generation_before', permit_generation_before,
           'ordinal', ordinal,
           'process_intent_proof_sha256', process_intent_proof_sha256,
           'process_request_sha256', process_request_sha256,
@@ -7652,7 +7958,9 @@ begin
         'version', process_version,
         'json_ordered_sha256', after_payload_sha256,
         'exchange_set_sha256', after_exchange_set_sha256,
-        'audit_id', case when audit_id is null then null else audit_id::text end
+        'audit_id', case when audit_id is null then null else audit_id::text end,
+        'wrapper_invocation_id', wrapper_invocation_id,
+        'permit_generation_before', permit_generation_before
       ) order by ordinal) filter (where status = 'completed'), '[]'::jsonb)
     into v_process_count, v_completed, v_primary_current,
       v_audit_current, v_expected_residue, v_primary_entries
@@ -7740,6 +8048,11 @@ begin
   );
   v_proof_sha256 := util.dataset_flow_identity_restricted_sha256_v2(v_proof);
   if p_scope_id is not null and v_scope.status = 'completed' then
+    select invocation.* into v_terminal_invocation
+    from util.dataset_flow_identity_wrapper_invocations as invocation
+    where invocation.id = v_scope.final_wrapper_invocation_id
+      and invocation.scope_id = v_scope.id
+      and invocation.actor_user_id = p_actor;
     select coalesce(jsonb_agg(jsonb_build_object(
       'ordinal', ledger.ordinal,
       'id', ledger.process_id,
@@ -7770,6 +8083,14 @@ begin
         'scope_proof_sha256', v_scope.scope_proof_sha256,
         'plan_sha256', v_scope.plan_sha256,
         'final_request_sha256', v_scope.final_request_sha256,
+        'wrapper_invocation_id', v_terminal_invocation.id,
+        'wrapper_approval_kind', v_terminal_invocation.approval_kind,
+        'wrapper_approval_identity_sha256',
+          v_terminal_invocation.approval_identity_sha256,
+        'wrapper_admission_request_sha256',
+          v_terminal_invocation.admission_request_sha256,
+        'permit_generation_before',
+          v_scope.final_permit_generation_before,
         'whole_scope_proof_sha256',
           v_terminal_audit_payload->>'whole_scope_proof_sha256',
         'mapping_guard_set_sha256', v_receipt.mapping_guard_set_sha256,
@@ -7790,6 +8111,13 @@ begin
       'plan_sha256', v_scope.plan_sha256,
       'scope_proof_sha256', v_scope.scope_proof_sha256,
       'final_request_sha256', v_scope.final_request_sha256,
+      'wrapper_invocation_id', v_terminal_invocation.id,
+      'wrapper_approval_kind', v_terminal_invocation.approval_kind,
+      'wrapper_approval_identity_sha256',
+        v_terminal_invocation.approval_identity_sha256,
+      'wrapper_admission_request_sha256',
+        v_terminal_invocation.admission_request_sha256,
+      'permit_generation_before', v_scope.final_permit_generation_before,
       'mapping_guard_set_sha256', v_receipt.mapping_guard_set_sha256,
       'process_intent_set_sha256', v_receipt.process_intent_set_sha256,
       'protected_closure_sha256', v_receipt.protected_closure_sha256,
@@ -7809,6 +8137,12 @@ begin
     -- current derivative proof: a later stale child must become compensation,
     -- not masquerade as primary/audit drift.
     v_terminal_audit_current := v_terminal_audit_count = 1
+      and v_terminal_invocation.id is not null
+      and v_scope.final_permit_generation_before is not null
+      and v_terminal_invocation.status = 'completed'
+      and v_terminal_invocation.successful_finalize_posts = 1
+      and v_terminal_invocation.generation =
+        v_scope.final_permit_generation_before + 1
       and v_terminal_audit_payload = v_expected_terminal_audit_payload
       and v_terminal_audit_payload->>'whole_scope_proof_sha256'
         ~ '^[a-f0-9]{64}$'
@@ -7929,6 +8263,9 @@ declare
   v_audit_id bigint;
   v_audit_payload jsonb;
   v_expected_audit_payload jsonb;
+  v_invocation_id uuid;
+  v_permit_token text;
+  v_execution_permit jsonb := null;
 begin
   if v_actor is null then
     return jsonb_build_object(
@@ -7942,10 +8279,14 @@ begin
     or not private.dataset_flow_identity_exact_keys(v_request, array[
       'schema_version', 'request_id', 'receipt_id', 'receipt_proof_sha256',
       'environment', 'project_ref', 'actor', 'target_visibility',
+      'user_state_claim',
       'operation_id', 'plan_sha256', 'freeze_sha256',
       'policy_approval_text_sha256', 'execution_approval_request_sha256',
       'execution_approval_text_sha256',
-      'execution_approval_identity_sha256', 'toolchain_evidence_sha256'
+      'execution_approval_identity_sha256', 'toolchain_evidence_sha256',
+      'maximum_wrapper_invocations', 'maximum_process_posts',
+      'maximum_finalize_posts', 'maximum_cli_apply_spawns',
+      'approval_reusable', 'automatic_retry'
     ])
     or v_request->>'schema_version'
       <> 'dataset-flow-identity-scope-preflight.v2'
@@ -7954,6 +8295,8 @@ begin
     or v_request->>'receipt_id'
       !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
     or v_request->>'target_visibility' <> 'owner_draft'
+    or v_request->>'user_state_claim'
+      <> 'authenticated_actor_state_100_plus_own_state_0'
     or not private.dataset_flow_identity_exact_keys(
       v_request->'actor', array['user_id', 'email']
     )
@@ -7962,6 +8305,17 @@ begin
       is distinct from v_actor_email
     or nullif(btrim(v_request->>'operation_id'), '') is null
     or octet_length(v_request->>'operation_id') > 512
+    or jsonb_typeof(v_request->'maximum_wrapper_invocations') <> 'number'
+    or (v_request->>'maximum_wrapper_invocations')::numeric <> 1
+    or jsonb_typeof(v_request->'maximum_process_posts') <> 'number'
+    or (v_request->>'maximum_process_posts')::numeric <= 0
+    or (v_request->>'maximum_process_posts')::numeric > 2147483647
+    or jsonb_typeof(v_request->'maximum_finalize_posts') <> 'number'
+    or (v_request->>'maximum_finalize_posts')::numeric <> 1
+    or jsonb_typeof(v_request->'maximum_cli_apply_spawns') <> 'number'
+    or (v_request->>'maximum_cli_apply_spawns')::numeric <> 1
+    or v_request->'approval_reusable' is distinct from 'false'::jsonb
+    or v_request->'automatic_retry' is distinct from 'false'::jsonb
     or exists (
       select 1 from unnest(array[
         'receipt_proof_sha256', 'plan_sha256', 'freeze_sha256',
@@ -8010,7 +8364,9 @@ begin
     or v_receipt.policy_approval_text_sha256
       is distinct from v_request->>'policy_approval_text_sha256'
     or v_receipt.artifact_evidence->>'toolchain_evidence_sha256'
-      is distinct from v_request->>'toolchain_evidence_sha256' then
+      is distinct from v_request->>'toolchain_evidence_sha256'
+    or (v_request->>'maximum_process_posts')::integer
+      is distinct from v_receipt.process_count then
     return jsonb_build_object(
       'ok', false, 'command', v_command,
       'code', 'FLOW_IDENTITY_PREFLIGHT_RECEIPT_BINDING_MISMATCH',
@@ -8048,6 +8404,27 @@ begin
       );
     end if;
   else
+    if exists (
+      select 1
+      from util.dataset_flow_identity_wrapper_invocations as invocation
+      where invocation.actor_user_id = v_actor
+        and array[
+          v_request->>'execution_approval_request_sha256',
+          v_request->>'execution_approval_text_sha256',
+          v_request->>'execution_approval_identity_sha256'
+        ] && array[
+          invocation.approval_request_sha256,
+          invocation.approval_text_sha256,
+          invocation.approval_identity_sha256
+        ]
+    ) then
+      return jsonb_build_object(
+        'ok', false, 'command', v_command,
+        'code', 'FLOW_IDENTITY_PREFLIGHT_APPROVAL_REUSE_MISMATCH',
+        'status', 409,
+        'message', 'Execution approval hash was already consumed'
+      );
+    end if;
     if v_receipt.expires_at <= clock_timestamp() then
       return jsonb_build_object(
         'ok', false, 'command', v_command,
@@ -8211,6 +8588,13 @@ begin
       'execution_approval_identity_sha256',
         v_scope.approval_identity_sha256,
       'toolchain_evidence_sha256', v_scope.toolchain_evidence_sha256,
+      'user_state_claim', v_scope.user_state_claim,
+      'maximum_wrapper_invocations', 1,
+      'maximum_process_posts', v_scope.process_count,
+      'maximum_finalize_posts', 1,
+      'maximum_cli_apply_spawns', 1,
+      'approval_reusable', false,
+      'automatic_retry', false,
       'preflight_request_sha256', v_scope.preflight_request_sha256,
       'scope_request_sha256', v_scope.scope_request_sha256,
       'scope_proof_sha256', v_scope.scope_proof_sha256,
@@ -8255,6 +8639,31 @@ begin
       'message', 'Sealed scope no longer matches live database state'
     );
   end if;
+  if v_core_result is not null then
+    v_permit_token := pg_catalog.encode(extensions.gen_random_bytes(32), 'hex');
+    insert into util.dataset_flow_identity_wrapper_invocations (
+      scope_id, actor_user_id, approval_kind,
+      approval_request_sha256, approval_text_sha256,
+      approval_identity_sha256, admission_request_sha256,
+      baseline_whole_scope_proof_sha256,
+      token_sha256, maximum_process_posts, maximum_finalize_posts
+    ) values (
+      v_scope.id, v_actor, 'initial',
+      v_scope.execution_approval_request_sha256,
+      v_scope.approval_text_sha256,
+      v_scope.approval_identity_sha256,
+      v_scope.preflight_request_sha256,
+      v_live->>'whole_scope_proof_sha256',
+      private.dataset_flow_identity_permit_token_sha256_v1(v_permit_token),
+      v_scope.process_count, 1
+    ) returning id into v_invocation_id;
+    v_execution_permit := jsonb_build_object(
+      'schema_version', 'dataset-flow-identity-execution-permit.v1',
+      'invocation_id', v_invocation_id,
+      'generation', 0,
+      'token', v_permit_token
+    );
+  end if;
   return jsonb_build_object(
     'ok', true, 'command', v_command,
     'schema_version', 'dataset-flow-identity-scope-preflight-result.v2',
@@ -8278,7 +8687,8 @@ begin
       where ledger.scope_id = v_scope.id and ledger.status = 'pending'
     ), v_scope.process_count + 1),
     'audit_id', v_audit_id::text,
-    'replay', v_core_result is null
+    'replay', v_core_result is null,
+    'execution_permit', v_execution_permit
   );
 exception when lock_not_available then
   return jsonb_build_object(
@@ -8298,9 +8708,183 @@ grant execute on function public.cmd_dataset_flow_identity_scope_preflight_guard
   jsonb
 ) to authenticated;
 
+-- Read-only recovery for the narrow case where fresh preflight committed but
+-- its HTTP response was lost.  Exact actor/artifact bindings locate the
+-- already sealed scope; this surface never creates or returns a permit.
+create or replace function public.cmd_dataset_flow_identity_scope_lookup(
+  p_request jsonb
+) returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+set statement_timeout = '180s'
+as $$
+declare
+  v_command constant text := 'cmd_dataset_flow_identity_scope_lookup';
+  v_actor uuid := auth.uid();
+  v_actor_email text := lower(btrim(auth.email()));
+  v_request jsonb;
+  v_scope util.dataset_flow_identity_scopes%rowtype;
+  v_receipt util.dataset_flow_identity_capture_receipts%rowtype;
+  v_whole_result jsonb;
+  v_audit_id bigint;
+  v_next_ordinal integer;
+begin
+  if v_actor is null then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command, 'code', 'AUTH_REQUIRED',
+      'status', 401, 'message', 'Authentication required'
+    );
+  end if;
+  v_request := private.dataset_flow_identity_safe_json_v2(p_request);
+  if v_request is null or pg_column_size(v_request) > 65536
+    or not private.dataset_flow_identity_exact_keys(v_request, array[
+      'schema_version', 'request_id', 'receipt_id', 'receipt_proof_sha256',
+      'environment', 'project_ref', 'actor', 'target_visibility',
+      'user_state_claim', 'operation_id', 'plan_sha256', 'freeze_sha256',
+      'policy_approval_text_sha256', 'execution_approval_request_sha256',
+      'execution_approval_text_sha256',
+      'execution_approval_identity_sha256', 'toolchain_evidence_sha256'
+    ])
+    or v_request->>'schema_version'
+      <> 'dataset-flow-identity-scope-lookup.v1'
+    or v_request->>'request_id'
+      !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    or v_request->>'receipt_id'
+      !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    or v_request->>'target_visibility' <> 'owner_draft'
+    or v_request->>'user_state_claim'
+      <> 'authenticated_actor_state_100_plus_own_state_0'
+    or not private.dataset_flow_identity_exact_keys(
+      v_request->'actor', array['user_id', 'email']
+    )
+    or v_request #>> '{actor,user_id}' is distinct from v_actor::text
+    or lower(btrim(v_request #>> '{actor,email}')) is distinct from v_actor_email
+    or nullif(btrim(v_request->>'operation_id'), '') is null
+    or octet_length(v_request->>'operation_id') > 512
+    or exists (
+      select 1 from unnest(array[
+        'receipt_proof_sha256', 'plan_sha256', 'freeze_sha256',
+        'policy_approval_text_sha256', 'execution_approval_request_sha256',
+        'execution_approval_text_sha256',
+        'execution_approval_identity_sha256', 'toolchain_evidence_sha256'
+      ]) as field(name)
+      where v_request->>field.name !~ '^[a-f0-9]{64}$'
+    ) then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_SCOPE_LOOKUP_INVALID_REQUEST', 'status', 400,
+      'message', 'Scope lookup request schema mismatch'
+    );
+  end if;
+  select scope.* into v_scope
+  from util.dataset_flow_identity_scopes as scope
+  where scope.actor_user_id = v_actor
+    and scope.request_id = (v_request->>'request_id')::uuid
+    and scope.receipt_id = (v_request->>'receipt_id')::uuid
+    and scope.receipt_proof_sha256 = v_request->>'receipt_proof_sha256'
+    and scope.environment = v_request->>'environment'
+    and scope.project_ref = v_request->>'project_ref'
+    and scope.target_visibility = v_request->>'target_visibility'
+    and scope.user_state_claim = v_request->>'user_state_claim'
+    and scope.operation_id = v_request->>'operation_id'
+    and scope.plan_sha256 = v_request->>'plan_sha256'
+    and scope.freeze_sha256 = v_request->>'freeze_sha256'
+    and scope.policy_approval_text_sha256 =
+      v_request->>'policy_approval_text_sha256'
+    and scope.execution_approval_request_sha256 =
+      v_request->>'execution_approval_request_sha256'
+    and scope.approval_text_sha256 =
+      v_request->>'execution_approval_text_sha256'
+    and scope.approval_identity_sha256 =
+      v_request->>'execution_approval_identity_sha256'
+    and scope.toolchain_evidence_sha256 =
+      v_request->>'toolchain_evidence_sha256';
+  if v_scope.id is null then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_SCOPE_LOOKUP_NOT_FOUND', 'status', 404,
+      'message', 'No exactly bound actor-owned Step 3 scope exists'
+    );
+  end if;
+  select receipt.* into v_receipt
+  from util.dataset_flow_identity_capture_receipts as receipt
+  where receipt.id = v_scope.receipt_id and receipt.actor_user_id = v_actor
+    and receipt.receipt_proof_sha256 = v_scope.receipt_proof_sha256;
+  if v_receipt.id is null then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_SCOPE_LOOKUP_RECEIPT_DRIFT', 'status', 409,
+      'message', 'Scope receipt relation is missing or drifted'
+    );
+  end if;
+  v_whole_result := private.dataset_flow_identity_whole_scope_proof_v2(
+    v_actor, v_receipt.id, v_scope.id, false
+  );
+  if coalesce((v_whole_result->>'ok')::boolean, false) is false then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_PRIMARY_OR_GUARD_DRIFT', 'status', 409,
+      'message', 'Located scope no longer matches live database state'
+    );
+  end if;
+  select audit.id into v_audit_id
+  from public.command_audit_log as audit
+  where audit.command = 'cmd_dataset_flow_identity_scope_preflight_guarded'
+    and audit.actor_user_id = v_actor and audit.target_table is null
+    and audit.payload->>'scope_id' = v_scope.id::text;
+  if v_audit_id is null then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_SCOPE_LOOKUP_AUDIT_DRIFT', 'status', 409,
+      'message', 'Authoritative scope-seal audit is missing'
+    );
+  end if;
+  select coalesce(min(ledger.ordinal) filter (
+    where ledger.status = 'pending'
+  ), v_scope.process_count + 1)
+  into v_next_ordinal
+  from util.dataset_flow_identity_process_ledger as ledger
+  where ledger.scope_id = v_scope.id;
+  return jsonb_build_object(
+    'ok', true, 'command', v_command,
+    'schema_version', 'dataset-flow-identity-scope-lookup-result.v1',
+    'read_only', true,
+    'scope_id', v_scope.id,
+    'receipt_id', v_receipt.id,
+    'receipt_proof_sha256', v_receipt.receipt_proof_sha256,
+    'mapping_guard_set_sha256', v_receipt.mapping_guard_set_sha256,
+    'process_intent_set_sha256', v_receipt.process_intent_set_sha256,
+    'operation_id', v_scope.operation_id,
+    'plan_sha256', v_scope.plan_sha256,
+    'scope_proof_sha256', v_scope.scope_proof_sha256,
+    'status', v_scope.status,
+    'process_count', v_scope.process_count,
+    'mapping_count', v_scope.mapping_count,
+    'support_snapshot_count', v_receipt.support_count,
+    'source_universe_count', 305,
+    'rewrite_count', v_scope.rewrite_count,
+    'next_ordinal', v_next_ordinal,
+    'audit_id', v_audit_id::text,
+    'whole_scope_proof_sha256',
+      v_whole_result->>'whole_scope_proof_sha256',
+    'execution_permit', null
+  );
+end;
+$$;
+
+alter function public.cmd_dataset_flow_identity_scope_lookup(jsonb)
+  owner to postgres;
+revoke all on function public.cmd_dataset_flow_identity_scope_lookup(jsonb)
+  from public, anon, authenticated, service_role;
+grant execute on function public.cmd_dataset_flow_identity_scope_lookup(jsonb)
+  to authenticated;
+
 create or replace function public.cmd_dataset_flow_identity_process_rewrite_guarded(
   p_scope_id uuid,
-  p_request jsonb
+  p_request jsonb,
+  p_authorization jsonb
 ) returns jsonb
 language plpgsql
 security definer
@@ -8326,6 +8910,9 @@ declare
   v_completed_process_count integer;
   v_next_ordinal integer;
   v_primary_complete boolean;
+  v_invocation_id uuid;
+  v_invocation util.dataset_flow_identity_wrapper_invocations%rowtype;
+  v_execution_permit jsonb;
 begin
   if v_actor is null then
     return jsonb_build_object(
@@ -8397,12 +8984,31 @@ begin
       'message', 'Scope proof is invalid or scope is not executable'
     );
   end if;
+  v_invocation_id := private.dataset_flow_identity_validate_wrapper_permit_v1(
+    v_actor, p_scope_id, p_authorization, 'process'
+  );
+  if v_invocation_id is null then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_WRAPPER_PERMIT_REQUIRED', 'status', 409,
+      'message', 'A fresh one-wrapper execution permit is required'
+    );
+  end if;
+  select invocation.* into strict v_invocation
+  from util.dataset_flow_identity_wrapper_invocations as invocation
+  where invocation.id = v_invocation_id
+    and invocation.scope_id = v_scope.id
+    and invocation.actor_user_id = v_actor
+  for update;
   select receipt.* into v_receipt
   from util.dataset_flow_identity_capture_receipts as receipt
   where receipt.id = v_scope.receipt_id and receipt.actor_user_id = v_actor;
   if v_receipt.id is null
     or v_receipt.receipt_proof_sha256
       is distinct from v_scope.receipt_proof_sha256 then
+    perform private.dataset_flow_identity_invalidate_wrapper_permit_v1(
+      v_invocation_id
+    );
     return jsonb_build_object(
       'ok', false, 'command', v_command,
       'code', 'FLOW_IDENTITY_PROCESS_RECEIPT_DRIFT', 'status', 409,
@@ -8417,10 +9023,24 @@ begin
   if v_ledger.scope_id is null
     or v_ledger.process_intent_proof_sha256
       is distinct from v_request->>'process_intent_proof_sha256' then
+    perform private.dataset_flow_identity_invalidate_wrapper_permit_v1(
+      v_invocation_id
+    );
     return jsonb_build_object(
       'ok', false, 'command', v_command,
       'code', 'FLOW_IDENTITY_PROCESS_INTENT_PROOF_MISMATCH', 'status', 409,
       'message', 'Thin request does not bind the receipt process intent'
+    );
+  end if;
+  if v_ledger.status = 'completed' then
+    perform private.dataset_flow_identity_invalidate_wrapper_permit_v1(
+      v_invocation_id
+    );
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_PROCESS_ALREADY_COMPLETED_READ_SCOPE',
+      'status', 409,
+      'message', 'Completed process proof is available only through scope read'
     );
   end if;
   -- Full-scope reproof is reserved for ambiguous replay/recovery.  A normal
@@ -8431,6 +9051,9 @@ begin
       v_actor, v_scope.receipt_id, v_scope.id, true
     );
     if coalesce((v_live->>'ok')::boolean, false) is false then
+      perform private.dataset_flow_identity_invalidate_wrapper_permit_v1(
+        v_invocation_id
+      );
       return jsonb_build_object(
         'ok', false, 'command', v_command,
         'code', 'FLOW_IDENTITY_PRIMARY_OR_GUARD_DRIFT', 'status', 409,
@@ -8465,12 +9088,23 @@ begin
     p_scope_id, v_internal
   );
   if coalesce((v_core_result->>'ok')::boolean, false) is false then
+    perform private.dataset_flow_identity_invalidate_wrapper_permit_v1(
+      v_invocation_id
+    );
     return v_core_result;
   end if;
-  select ledger.* into v_ledger
-  from util.dataset_flow_identity_process_ledger as ledger
+  update util.dataset_flow_identity_process_ledger as ledger
+  set wrapper_invocation_id = v_invocation.id,
+    permit_generation_before = v_invocation.generation
   where ledger.scope_id = v_scope.id
-    and ledger.ordinal = (v_request->>'ordinal')::integer;
+    and ledger.ordinal = (v_request->>'ordinal')::integer
+    and ledger.wrapper_invocation_id is null
+    and ledger.permit_generation_before is null
+  returning ledger.* into v_ledger;
+  if not found then
+    raise exception using errcode = 'P0001',
+      message = 'FLOW_IDENTITY_PROCESS_INVOCATION_BINDING_FAILED';
+  end if;
   if v_ledger.status <> 'completed'
     or v_ledger.process_request_sha256 is distinct from v_request_sha256
     or v_ledger.after_payload_sha256
@@ -8503,6 +9137,13 @@ begin
       'scope_proof_sha256', v_scope.scope_proof_sha256,
       'operation_id', v_scope.operation_id,
       'plan_sha256', v_scope.plan_sha256,
+      'wrapper_invocation_id', v_invocation.id,
+      'wrapper_approval_kind', v_invocation.approval_kind,
+      'wrapper_approval_identity_sha256',
+        v_invocation.approval_identity_sha256,
+      'wrapper_admission_request_sha256',
+        v_invocation.admission_request_sha256,
+      'permit_generation_before', v_invocation.generation,
       'ordinal', v_ledger.ordinal,
       'process_intent_proof_sha256',
         v_ledger.process_intent_proof_sha256,
@@ -8537,6 +9178,9 @@ begin
         message = 'FLOW_IDENTITY_PROCESS_V2_AUDIT_PROMOTION_FAILED';
     end if;
   elsif v_audit_payload is distinct from v_expected_audit_payload then
+    perform private.dataset_flow_identity_invalidate_wrapper_permit_v1(
+      v_invocation_id
+    );
     return jsonb_build_object(
       'ok', false, 'command', v_command,
       'code', 'FLOW_IDENTITY_PROCESS_V2_AUDIT_DRIFT', 'status', 409,
@@ -8557,6 +9201,10 @@ begin
   end if;
   v_primary_complete := v_next_ordinal is null
     and v_completed_process_count = v_scope.process_count;
+  v_execution_permit :=
+    private.dataset_flow_identity_rotate_wrapper_permit_v1(
+      v_invocation_id, 'process', false
+    );
   return jsonb_build_object(
     'ok', true, 'command', v_command,
     'schema_version', 'dataset-flow-identity-process-rewrite-result.v2',
@@ -8565,6 +9213,8 @@ begin
     'receipt_proof_sha256', v_receipt.receipt_proof_sha256,
     'mapping_guard_set_sha256', v_receipt.mapping_guard_set_sha256,
     'process_intent_set_sha256', v_receipt.process_intent_set_sha256,
+    'invocation_id', v_invocation.id,
+    'permit_generation_before', v_invocation.generation,
     'ordinal', v_ledger.ordinal,
     'process_id', v_ledger.process_id,
     'process_version', v_ledger.process_version,
@@ -8587,7 +9237,8 @@ begin
     'next_ordinal', v_next_ordinal,
     'primary_complete', v_primary_complete,
     'status', v_ledger.status,
-    'replay', coalesce((v_core_result->>'replay')::boolean, false)
+    'replay', coalesce((v_core_result->>'replay')::boolean, false),
+    'execution_permit', v_execution_permit
   );
 exception when lock_not_available then
   return jsonb_build_object(
@@ -8599,13 +9250,13 @@ end;
 $$;
 
 alter function public.cmd_dataset_flow_identity_process_rewrite_guarded(
-  uuid, jsonb
+  uuid, jsonb, jsonb
 ) owner to postgres;
 revoke all on function public.cmd_dataset_flow_identity_process_rewrite_guarded(
-  uuid, jsonb
+  uuid, jsonb, jsonb
 ) from public, anon, authenticated, service_role;
 grant execute on function public.cmd_dataset_flow_identity_process_rewrite_guarded(
-  uuid, jsonb
+  uuid, jsonb, jsonb
 ) to authenticated;
 
 create or replace function public.cmd_dataset_flow_identity_scope_read(
@@ -8805,9 +9456,476 @@ revoke all on function public.cmd_dataset_flow_identity_scope_read(uuid)
 grant execute on function public.cmd_dataset_flow_identity_scope_read(uuid)
   to authenticated;
 
-create or replace function public.cmd_dataset_flow_identity_scope_finalize_guarded(
+create or replace function public.cmd_dataset_flow_identity_scope_recover_guarded(
   p_scope_id uuid,
   p_request jsonb
+) returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+set lock_timeout = '5s'
+set statement_timeout = '180s'
+as $$
+declare
+  v_command constant text :=
+    'cmd_dataset_flow_identity_scope_recover_guarded';
+  v_actor uuid := auth.uid();
+  v_actor_email text := lower(btrim(auth.email()));
+  v_request jsonb;
+  v_wire_request_sha256 text;
+  v_approved_at timestamp with time zone;
+  v_scope util.dataset_flow_identity_scopes%rowtype;
+  v_receipt util.dataset_flow_identity_capture_receipts%rowtype;
+  v_existing util.dataset_flow_identity_wrapper_invocations%rowtype;
+  v_invocation_id uuid;
+  v_whole_result jsonb;
+  v_completed_count integer;
+  v_next_ordinal integer;
+  v_remaining_count integer;
+  v_mode text;
+  v_token text;
+  v_audit_id bigint;
+  v_audit_payload jsonb;
+  v_expected_audit_payload jsonb;
+begin
+  if v_actor is null then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command, 'code', 'AUTH_REQUIRED',
+      'status', 401, 'message', 'Authentication required'
+    );
+  end if;
+  v_request := private.dataset_flow_identity_safe_json_v2(p_request);
+  if p_scope_id is null or v_request is null
+    or pg_column_size(v_request) > 65536
+    or not private.dataset_flow_identity_exact_keys(v_request, array[
+      'schema_version', 'request_id', 'approved_at_utc',
+      'environment', 'project_ref', 'actor', 'target_visibility',
+      'user_state_claim', 'operation_id', 'plan_sha256', 'freeze_sha256',
+      'original_execution_approval_identity_sha256', 'scope_proof_sha256',
+      'observed_scope_status', 'observed_completed_process_count',
+      'observed_next_ordinal', 'observed_whole_scope_proof_sha256',
+      'recovery_mode', 'recovery_reason', 'toolchain_evidence_sha256',
+      'maximum_wrapper_invocations', 'maximum_process_posts',
+      'maximum_finalize_posts', 'maximum_cli_apply_spawns',
+      'approval_reusable', 'automatic_retry',
+      'recovery_approval_request_sha256',
+      'recovery_approval_text_sha256',
+      'recovery_approval_identity_sha256'
+    ])
+    or v_request->>'schema_version'
+      <> 'dataset-flow-identity-scope-recovery.v1'
+    or v_request->>'request_id'
+      !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    or v_request->>'target_visibility' <> 'owner_draft'
+    or v_request->>'user_state_claim'
+      <> 'authenticated_actor_state_100_plus_own_state_0'
+    or not private.dataset_flow_identity_exact_keys(
+      v_request->'actor', array['user_id', 'email']
+    )
+    or v_request #>> '{actor,user_id}' is distinct from v_actor::text
+    or lower(btrim(v_request #>> '{actor,email}')) is distinct from v_actor_email
+    or v_request->>'observed_scope_status' not in (
+      'sealed', 'running', 'primary_complete', 'derivatives_pending'
+    )
+    or v_request->>'recovery_mode' not in (
+      'resume_and_finalize', 'finalize_only'
+    )
+    or v_request->>'recovery_reason' not in (
+      'wrapper_exited_without_permit', 'process_response_ambiguous',
+      'process_domain_rejected', 'finalize_response_ambiguous',
+      'derivatives_became_ready_after_wrapper_exit'
+    )
+    or jsonb_typeof(v_request->'observed_completed_process_count') <> 'number'
+    or (v_request->>'observed_completed_process_count')::numeric < 0
+    or (v_request->>'observed_completed_process_count')::numeric > 2147483647
+    or jsonb_typeof(v_request->'observed_next_ordinal') <> 'number'
+    or (v_request->>'observed_next_ordinal')::numeric < 1
+    or (v_request->>'observed_next_ordinal')::numeric > 2147483647
+    or (v_request->>'observed_next_ordinal')::numeric <>
+      trunc((v_request->>'observed_next_ordinal')::numeric)
+    or jsonb_typeof(v_request->'maximum_wrapper_invocations') <> 'number'
+    or (v_request->>'maximum_wrapper_invocations')::numeric <> 1
+    or jsonb_typeof(v_request->'maximum_process_posts') <> 'number'
+    or (v_request->>'maximum_process_posts')::numeric < 0
+    or (v_request->>'maximum_process_posts')::numeric > 2147483647
+    or jsonb_typeof(v_request->'maximum_finalize_posts') <> 'number'
+    or (v_request->>'maximum_finalize_posts')::numeric <> 1
+    or jsonb_typeof(v_request->'maximum_cli_apply_spawns') <> 'number'
+    or (v_request->>'maximum_cli_apply_spawns')::numeric <> 1
+    or v_request->'approval_reusable' is distinct from 'false'::jsonb
+    or v_request->'automatic_retry' is distinct from 'false'::jsonb
+    or exists (
+      select 1 from unnest(array[
+        'plan_sha256', 'freeze_sha256',
+        'original_execution_approval_identity_sha256', 'scope_proof_sha256',
+        'observed_whole_scope_proof_sha256', 'toolchain_evidence_sha256',
+        'recovery_approval_request_sha256',
+        'recovery_approval_text_sha256',
+        'recovery_approval_identity_sha256'
+      ]) as field(name)
+      where v_request->>field.name !~ '^[a-f0-9]{64}$'
+    ) then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_RECOVERY_INVALID_REQUEST', 'status', 400,
+      'message', 'Recovery approval request schema mismatch'
+    );
+  end if;
+  begin
+    v_approved_at := (v_request->>'approved_at_utc')::timestamp with time zone;
+  exception when others then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_RECOVERY_INVALID_APPROVAL_TIME', 'status', 400,
+      'message', 'Recovery approval timestamp is invalid'
+    );
+  end;
+  v_wire_request_sha256 :=
+    util.dataset_flow_identity_restricted_sha256_v2(v_request);
+  if cardinality(array[
+      v_request->>'recovery_approval_request_sha256',
+      v_request->>'recovery_approval_text_sha256',
+      v_request->>'recovery_approval_identity_sha256'
+    ]) <> (
+      select count(distinct value)
+      from unnest(array[
+        v_request->>'recovery_approval_request_sha256',
+        v_request->>'recovery_approval_text_sha256',
+        v_request->>'recovery_approval_identity_sha256'
+      ]) as approval(value)
+    ) then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_RECOVERY_APPROVAL_HASH_MISMATCH', 'status', 409,
+      'message', 'Recovery approval artifact hashes must be distinct'
+    );
+  end if;
+
+  perform pg_advisory_xact_lock(hashtextextended(
+    'dataset-flow-identity-actor:' || v_actor::text, 0
+  ));
+  if not pg_try_advisory_xact_lock(hashtextextended(
+    'dataset-flow-identity:' || p_scope_id::text, 0
+  )) then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_RECOVERY_SCOPE_BUSY', 'status', 409,
+      'message', 'Another transaction owns this scope'
+    );
+  end if;
+  select scope.* into v_scope
+  from util.dataset_flow_identity_scopes as scope
+  where scope.id = p_scope_id and scope.actor_user_id = v_actor
+  for update;
+  if v_scope.id is null then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_SCOPE_NOT_FOUND', 'status', 404,
+      'message', 'No actor-owned Step 3 scope exists'
+    );
+  end if;
+  if v_scope.status in ('completed', 'failed', 'cancelled')
+    or v_scope.scope_proof_sha256 is distinct from
+      v_request->>'scope_proof_sha256'
+    or v_scope.environment is distinct from v_request->>'environment'
+    or v_scope.project_ref is distinct from v_request->>'project_ref'
+    or v_scope.target_visibility is distinct from
+      v_request->>'target_visibility'
+    or v_scope.user_state_claim is distinct from
+      v_request->>'user_state_claim'
+    or v_scope.operation_id is distinct from v_request->>'operation_id'
+    or v_scope.plan_sha256 is distinct from v_request->>'plan_sha256'
+    or v_scope.freeze_sha256 is distinct from v_request->>'freeze_sha256'
+    or v_scope.approval_identity_sha256 is distinct from
+      v_request->>'original_execution_approval_identity_sha256'
+    or v_approved_at < v_scope.sealed_at
+    or exists (
+      select 1 from unnest(array[
+        v_request->>'recovery_approval_request_sha256',
+        v_request->>'recovery_approval_text_sha256',
+        v_request->>'recovery_approval_identity_sha256'
+      ]) as recovery(value)
+      where recovery.value = any(array[
+        v_scope.policy_approval_text_sha256,
+        v_scope.execution_approval_request_sha256,
+        v_scope.approval_text_sha256,
+        v_scope.approval_identity_sha256
+      ])
+    ) then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_RECOVERY_SCOPE_BINDING_MISMATCH', 'status', 409,
+      'message', 'Recovery approval does not bind this active scope'
+    );
+  end if;
+
+  select invocation.* into v_existing
+  from util.dataset_flow_identity_wrapper_invocations as invocation
+  where invocation.actor_user_id = v_actor
+    and array[
+      v_request->>'recovery_approval_request_sha256',
+      v_request->>'recovery_approval_text_sha256',
+      v_request->>'recovery_approval_identity_sha256'
+    ] && array[
+      invocation.approval_request_sha256,
+      invocation.approval_text_sha256,
+      invocation.approval_identity_sha256
+    ]
+  order by invocation.admitted_at, invocation.id
+  limit 1;
+  if v_existing.id is not null then
+    if v_existing.scope_id is distinct from v_scope.id
+      or v_existing.approval_kind <> 'recovery'
+      or v_existing.approval_request_sha256 is distinct from
+        v_request->>'recovery_approval_request_sha256'
+      or v_existing.approval_text_sha256 is distinct from
+        v_request->>'recovery_approval_text_sha256'
+      or v_existing.approval_identity_sha256 is distinct from
+        v_request->>'recovery_approval_identity_sha256'
+      or v_existing.admission_request_sha256 is distinct from
+        v_wire_request_sha256
+      or v_existing.baseline_whole_scope_proof_sha256 is distinct from
+        v_request->>'observed_whole_scope_proof_sha256' then
+      return jsonb_build_object(
+        'ok', false, 'command', v_command,
+        'code', 'FLOW_IDENTITY_RECOVERY_APPROVAL_REUSE_MISMATCH',
+        'status', 409,
+        'message', 'Recovery approval was already consumed differently'
+      );
+    end if;
+    select audit.id, audit.payload into v_audit_id, v_audit_payload
+    from public.command_audit_log as audit
+    where audit.command = v_command and audit.actor_user_id = v_actor
+      and audit.target_table is null
+      and audit.payload->>'scope_id' = v_scope.id::text
+      and audit.payload->>'recovery_approval_identity_sha256'
+        = v_existing.approval_identity_sha256;
+    if v_audit_id is null then
+      raise exception using errcode = 'P0001',
+        message = 'FLOW_IDENTITY_RECOVERY_REPLAY_AUDIT_MISSING';
+    end if;
+    v_expected_audit_payload := jsonb_build_object(
+      'record_type', 'scope_recovery_admission',
+      'schema_version', 'dataset-flow-identity-scope-recovery.v1',
+      'scope_id', v_scope.id,
+      'scope_proof_sha256', v_scope.scope_proof_sha256,
+      'operation_id', v_scope.operation_id,
+      'plan_sha256', v_scope.plan_sha256,
+      'freeze_sha256', v_scope.freeze_sha256,
+      'original_execution_approval_identity_sha256',
+        v_scope.approval_identity_sha256,
+      'observed_whole_scope_proof_sha256',
+        v_request->>'observed_whole_scope_proof_sha256',
+      'observed_scope_status', v_request->>'observed_scope_status',
+      'observed_completed_process_count',
+        (v_request->>'observed_completed_process_count')::integer,
+      'observed_next_ordinal',
+        (v_request->>'observed_next_ordinal')::integer,
+      'recovery_mode', v_request->>'recovery_mode',
+      'recovery_reason', v_request->>'recovery_reason',
+      'toolchain_evidence_sha256', v_request->>'toolchain_evidence_sha256',
+      'recovery_approval_request_sha256',
+        v_request->>'recovery_approval_request_sha256',
+      'recovery_approval_text_sha256',
+        v_request->>'recovery_approval_text_sha256',
+      'recovery_approval_identity_sha256',
+        v_request->>'recovery_approval_identity_sha256',
+      'recovery_wire_request_sha256', v_wire_request_sha256,
+      'invocation_id', v_existing.id,
+      'maximum_wrapper_invocations', 1,
+      'maximum_process_posts',
+        (v_request->>'maximum_process_posts')::integer,
+      'maximum_finalize_posts', 1,
+      'maximum_cli_apply_spawns', 1,
+      'approval_reusable', false,
+      'automatic_retry', false,
+      'hash_algorithm', 'restricted-safe-json-v2-sha256'
+    );
+    if v_audit_payload is distinct from v_expected_audit_payload then
+      return jsonb_build_object(
+        'ok', false, 'command', v_command,
+        'code', 'FLOW_IDENTITY_RECOVERY_AUDIT_DRIFT', 'status', 409,
+        'message', 'Authoritative recovery admission audit drifted'
+      );
+    end if;
+    return jsonb_build_object(
+      'ok', true, 'command', v_command,
+      'schema_version', 'dataset-flow-identity-scope-recovery-result.v1',
+      'scope_id', v_scope.id,
+      'scope_proof_sha256', v_scope.scope_proof_sha256,
+      'status', v_audit_payload->>'observed_scope_status',
+      'completed_process_count',
+        (v_audit_payload->>'observed_completed_process_count')::integer,
+      'next_ordinal', (v_audit_payload->>'observed_next_ordinal')::integer,
+      'whole_scope_proof_sha256',
+        v_existing.baseline_whole_scope_proof_sha256,
+      'recovery_wire_request_sha256',
+        v_existing.admission_request_sha256,
+      'recovery_approval_identity_sha256',
+        v_existing.approval_identity_sha256,
+      'invocation_id', v_existing.id,
+      'audit_id', case when v_audit_id is null then null else v_audit_id::text end,
+      'replay', true,
+      'execution_permit', null
+    );
+  end if;
+
+  select receipt.* into v_receipt
+  from util.dataset_flow_identity_capture_receipts as receipt
+  where receipt.id = v_scope.receipt_id and receipt.actor_user_id = v_actor;
+  if v_receipt.id is null then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_RECOVERY_RECEIPT_DRIFT', 'status', 409,
+      'message', 'Scope receipt relation is missing'
+    );
+  end if;
+  v_whole_result := private.dataset_flow_identity_whole_scope_proof_v2(
+    v_actor, v_receipt.id, v_scope.id, true
+  );
+  if coalesce((v_whole_result->>'ok')::boolean, false) is false
+    or v_whole_result->>'whole_scope_proof_sha256' is distinct from
+      v_request->>'observed_whole_scope_proof_sha256' then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_RECOVERY_LIVE_PROOF_MISMATCH', 'status', 409,
+      'message', 'Current whole-scope proof does not match the approval'
+    );
+  end if;
+  select count(*) filter (where ledger.status = 'completed')::integer,
+    coalesce(
+      min(ledger.ordinal) filter (where ledger.status = 'pending')::integer,
+      v_scope.process_count + 1
+    )
+  into v_completed_count, v_next_ordinal
+  from util.dataset_flow_identity_process_ledger as ledger
+  where ledger.scope_id = v_scope.id;
+  v_remaining_count := v_scope.process_count - v_completed_count;
+  v_mode := case when v_remaining_count = 0
+    then 'finalize_only' else 'resume_and_finalize' end;
+  if v_scope.status is distinct from v_request->>'observed_scope_status'
+    or v_completed_count is distinct from
+      (v_request->>'observed_completed_process_count')::integer
+    or (v_request->>'observed_next_ordinal')::integer <> v_next_ordinal
+    or v_mode is distinct from v_request->>'recovery_mode'
+    or v_remaining_count is distinct from
+      (v_request->>'maximum_process_posts')::integer then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_RECOVERY_PROGRESS_MISMATCH', 'status', 409,
+      'message', 'Recovery approval does not match current durable progress'
+    );
+  end if;
+
+  update util.dataset_flow_identity_wrapper_invocations
+  set status = 'superseded', generation = generation + 1,
+    token_sha256 = private.dataset_flow_identity_permit_token_sha256_v1(
+      pg_catalog.encode(extensions.gen_random_bytes(32), 'hex')
+    ),
+    updated_at = clock_timestamp(), closed_at = clock_timestamp()
+  where scope_id = v_scope.id and status = 'active';
+  v_token := pg_catalog.encode(extensions.gen_random_bytes(32), 'hex');
+  insert into util.dataset_flow_identity_wrapper_invocations (
+    scope_id, actor_user_id, approval_kind,
+    approval_request_sha256, approval_text_sha256,
+    approval_identity_sha256, admission_request_sha256,
+    baseline_whole_scope_proof_sha256,
+    token_sha256, maximum_process_posts, maximum_finalize_posts
+  ) values (
+    v_scope.id, v_actor, 'recovery',
+    v_request->>'recovery_approval_request_sha256',
+    v_request->>'recovery_approval_text_sha256',
+    v_request->>'recovery_approval_identity_sha256',
+    v_wire_request_sha256,
+    v_request->>'observed_whole_scope_proof_sha256',
+    private.dataset_flow_identity_permit_token_sha256_v1(v_token),
+    v_remaining_count, 1
+  ) returning id into v_invocation_id;
+  v_audit_payload := jsonb_build_object(
+    'record_type', 'scope_recovery_admission',
+    'schema_version', 'dataset-flow-identity-scope-recovery.v1',
+    'scope_id', v_scope.id,
+    'scope_proof_sha256', v_scope.scope_proof_sha256,
+    'operation_id', v_scope.operation_id,
+    'plan_sha256', v_scope.plan_sha256,
+    'freeze_sha256', v_scope.freeze_sha256,
+    'original_execution_approval_identity_sha256',
+      v_scope.approval_identity_sha256,
+    'observed_whole_scope_proof_sha256',
+      v_request->>'observed_whole_scope_proof_sha256',
+    'observed_scope_status', v_scope.status,
+    'observed_completed_process_count', v_completed_count,
+    'observed_next_ordinal', v_next_ordinal,
+    'recovery_mode', v_mode,
+    'recovery_reason', v_request->>'recovery_reason',
+    'toolchain_evidence_sha256', v_request->>'toolchain_evidence_sha256',
+    'recovery_approval_request_sha256',
+      v_request->>'recovery_approval_request_sha256',
+    'recovery_approval_text_sha256',
+      v_request->>'recovery_approval_text_sha256',
+    'recovery_approval_identity_sha256',
+      v_request->>'recovery_approval_identity_sha256',
+    'recovery_wire_request_sha256', v_wire_request_sha256,
+    'invocation_id', v_invocation_id,
+    'maximum_wrapper_invocations', 1,
+    'maximum_process_posts', v_remaining_count,
+    'maximum_finalize_posts', 1,
+    'maximum_cli_apply_spawns', 1,
+    'approval_reusable', false,
+    'automatic_retry', false,
+    'hash_algorithm', 'restricted-safe-json-v2-sha256'
+  );
+  insert into public.command_audit_log (
+    command, actor_user_id, target_table, target_id, target_version, payload
+  ) values (
+    v_command, v_actor, null, null, null, v_audit_payload
+  ) returning id into v_audit_id;
+  return jsonb_build_object(
+    'ok', true, 'command', v_command,
+    'schema_version', 'dataset-flow-identity-scope-recovery-result.v1',
+    'scope_id', v_scope.id,
+    'scope_proof_sha256', v_scope.scope_proof_sha256,
+    'status', v_scope.status,
+    'completed_process_count', v_completed_count,
+    'next_ordinal', v_next_ordinal,
+    'whole_scope_proof_sha256',
+      v_request->>'observed_whole_scope_proof_sha256',
+    'recovery_wire_request_sha256', v_wire_request_sha256,
+    'recovery_approval_identity_sha256',
+      v_request->>'recovery_approval_identity_sha256',
+    'invocation_id', v_invocation_id,
+    'audit_id', v_audit_id::text,
+    'replay', false,
+    'execution_permit', jsonb_build_object(
+      'schema_version', 'dataset-flow-identity-execution-permit.v1',
+      'invocation_id', v_invocation_id,
+      'generation', 0,
+      'token', v_token
+    )
+  );
+exception when lock_not_available then
+  return jsonb_build_object(
+    'ok', false, 'command', v_command,
+    'code', 'FLOW_IDENTITY_RECOVERY_LOCK_BUSY', 'status', 409,
+    'message', 'Recovery could not acquire its deterministic fence'
+  );
+end;
+$$;
+
+alter function public.cmd_dataset_flow_identity_scope_recover_guarded(
+  uuid, jsonb
+) owner to postgres;
+revoke all on function public.cmd_dataset_flow_identity_scope_recover_guarded(
+  uuid, jsonb
+) from public, anon, authenticated, service_role;
+grant execute on function public.cmd_dataset_flow_identity_scope_recover_guarded(
+  uuid, jsonb
+) to authenticated;
+
+create or replace function public.cmd_dataset_flow_identity_scope_finalize_guarded(
+  p_scope_id uuid,
+  p_request jsonb,
+  p_authorization jsonb
 ) returns jsonb
 language plpgsql
 security definer
@@ -8837,6 +9955,10 @@ declare
   v_live_guard_current boolean;
   v_was_completed boolean;
   v_result jsonb;
+  v_invocation_id uuid;
+  v_invocation util.dataset_flow_identity_wrapper_invocations%rowtype;
+  v_execution_permit jsonb;
+  v_permit_consumed boolean := false;
 begin
   if v_actor is null then
     return jsonb_build_object(
@@ -8908,6 +10030,22 @@ begin
       'message', 'Finalize request does not bind the actor scope and counts'
     );
   end if;
+  v_invocation_id := private.dataset_flow_identity_validate_wrapper_permit_v1(
+    v_actor, p_scope_id, p_authorization, 'finalize'
+  );
+  if v_invocation_id is null then
+    return jsonb_build_object(
+      'ok', false, 'command', v_command,
+      'code', 'FLOW_IDENTITY_WRAPPER_PERMIT_REQUIRED', 'status', 409,
+      'message', 'A fresh one-wrapper execution permit is required'
+    );
+  end if;
+  select invocation.* into strict v_invocation
+  from util.dataset_flow_identity_wrapper_invocations as invocation
+  where invocation.id = v_invocation_id
+    and invocation.scope_id = v_scope.id
+    and invocation.actor_user_id = v_actor
+  for update;
   v_was_completed := v_scope.status = 'completed';
   select receipt.* into v_receipt
   from util.dataset_flow_identity_capture_receipts as receipt
@@ -8915,6 +10053,9 @@ begin
   if v_receipt.id is null
     or v_receipt.receipt_proof_sha256
       is distinct from v_scope.receipt_proof_sha256 then
+    perform private.dataset_flow_identity_invalidate_wrapper_permit_v1(
+      v_invocation_id
+    );
     return jsonb_build_object(
       'ok', false, 'command', v_command,
       'code', 'FLOW_IDENTITY_FINALIZE_RECEIPT_DRIFT', 'status', 409,
@@ -9036,6 +10177,13 @@ begin
         'scope_proof_sha256', v_scope.scope_proof_sha256,
         'plan_sha256', v_scope.plan_sha256,
         'final_request_sha256', v_request_sha256,
+        'wrapper_invocation_id', v_invocation.id,
+        'wrapper_approval_kind', v_invocation.approval_kind,
+        'wrapper_approval_identity_sha256',
+          v_invocation.approval_identity_sha256,
+        'wrapper_admission_request_sha256',
+          v_invocation.admission_request_sha256,
+        'permit_generation_before', v_invocation.generation,
         'whole_scope_proof_sha256',
           v_whole_result->>'whole_scope_proof_sha256',
         'mapping_guard_set_sha256', v_receipt.mapping_guard_set_sha256,
@@ -9047,6 +10195,8 @@ begin
       ));
     update util.dataset_flow_identity_scopes
     set terminal_proof_sha256 = v_terminal_proof_sha256,
+      final_wrapper_invocation_id = v_invocation.id,
+      final_permit_generation_before = v_invocation.generation,
       updated_at = clock_timestamp()
     where id = v_scope.id;
     v_scope.terminal_proof_sha256 := v_terminal_proof_sha256;
@@ -9072,6 +10222,13 @@ begin
         'plan_sha256', v_scope.plan_sha256,
         'scope_proof_sha256', v_scope.scope_proof_sha256,
         'final_request_sha256', v_request_sha256,
+        'wrapper_invocation_id', v_invocation.id,
+        'wrapper_approval_kind', v_invocation.approval_kind,
+        'wrapper_approval_identity_sha256',
+          v_invocation.approval_identity_sha256,
+        'wrapper_admission_request_sha256',
+          v_invocation.admission_request_sha256,
+        'permit_generation_before', v_invocation.generation,
         'mapping_guard_set_sha256', v_receipt.mapping_guard_set_sha256,
         'process_intent_set_sha256', v_receipt.process_intent_set_sha256,
         'protected_closure_sha256', v_receipt.protected_closure_sha256,
@@ -9096,6 +10253,14 @@ begin
       raise exception using errcode = 'P0001',
         message = 'FLOW_IDENTITY_FINALIZE_V2_AUDIT_PROMOTION_FAILED';
     end if;
+    -- Terminal consumption is part of the same transaction and precedes the
+    -- durable post-promotion proof.  The proof therefore requires the exact
+    -- N -> N+1 terminal rotation and one successful finalize post.
+    v_execution_permit :=
+      private.dataset_flow_identity_rotate_wrapper_permit_v1(
+        v_invocation_id, 'finalize', true
+      );
+    v_permit_consumed := true;
     v_whole_result := private.dataset_flow_identity_whole_scope_proof_v2(
       v_actor, v_receipt.id, v_scope.id, true
     );
@@ -9132,6 +10297,8 @@ begin
     'receipt_proof_sha256', v_receipt.receipt_proof_sha256,
     'mapping_guard_set_sha256', v_receipt.mapping_guard_set_sha256,
     'process_intent_set_sha256', v_receipt.process_intent_set_sha256,
+    'invocation_id', v_invocation.id,
+    'permit_generation_before', v_invocation.generation,
     'operation_id', v_scope.operation_id,
     'plan_sha256', v_scope.plan_sha256,
     'scope_proof_sha256', v_scope.scope_proof_sha256,
@@ -9160,6 +10327,21 @@ begin
       then null else v_final_audit_id::text end,
     'replay', v_was_completed
   );
+  if coalesce((v_result->>'ok')::boolean, false) then
+    if not v_permit_consumed then
+      v_execution_permit :=
+        private.dataset_flow_identity_rotate_wrapper_permit_v1(
+          v_invocation_id, 'finalize', false
+        );
+    end if;
+    v_result := v_result || jsonb_build_object(
+      'execution_permit', v_execution_permit
+    );
+  else
+    perform private.dataset_flow_identity_invalidate_wrapper_permit_v1(
+      v_invocation_id
+    );
+  end if;
   if v_live_drift then
     return v_result || jsonb_build_object(
       'code', 'FLOW_IDENTITY_PRIMARY_OR_GUARD_DRIFT',
@@ -9195,13 +10377,13 @@ end;
 $$;
 
 alter function public.cmd_dataset_flow_identity_scope_finalize_guarded(
-  uuid, jsonb
+  uuid, jsonb, jsonb
 ) owner to postgres;
 revoke all on function public.cmd_dataset_flow_identity_scope_finalize_guarded(
-  uuid, jsonb
+  uuid, jsonb, jsonb
 ) from public, anon, authenticated, service_role;
 grant execute on function public.cmd_dataset_flow_identity_scope_finalize_guarded(
-  uuid, jsonb
+  uuid, jsonb, jsonb
 ) to authenticated;
 
 create or replace function public.cmd_dataset_flow_identity_scope_cancel_guarded(

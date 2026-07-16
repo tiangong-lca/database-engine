@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-07-16"
-lastReviewedCommit: "31c586c"
-lastReviewedNote: "Reviewed guarded-flow-identity routing for durable Step 3 scope/process/finalize/cancel migrations, tests, and governance docs."
+lastReviewedAt: "2026-07-17"
+lastReviewedCommit: "966474e"
+lastReviewedNote: "Reviewed guarded-flow-identity routing for strict wrapper invocation, rotating permit, exact lookup, and fresh approved recovery contracts."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

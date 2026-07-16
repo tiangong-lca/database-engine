@@ -4,7 +4,7 @@ create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(107);
+select no_plan();
 
 create or replace function pg_temp.flow_identity_id(p_kind text)
 returns uuid
@@ -948,6 +948,8 @@ begin
       'email', 'flow-owner@example.com'
     ),
     'target_visibility', 'owner_draft',
+    'user_state_claim',
+      'authenticated_actor_state_100_plus_own_state_0',
     'operation_id', 'flow-identity-test-operation',
     'plan_sha256', repeat('6', 64),
     'freeze_sha256', repeat('7', 64),
@@ -955,9 +957,154 @@ begin
     'execution_approval_request_sha256', repeat('8', 64),
     'execution_approval_text_sha256', repeat('c', 64),
     'execution_approval_identity_sha256', repeat('d', 64),
-    'toolchain_evidence_sha256', repeat('a', 64)
+    'toolchain_evidence_sha256', repeat('a', 64),
+    'maximum_wrapper_invocations', 1,
+    'maximum_process_posts', 1,
+    'maximum_finalize_posts', 1,
+    'maximum_cli_apply_spawns', 1,
+    'approval_reusable', false,
+    'automatic_retry', false
   );
 end;
+$$;
+
+create or replace function pg_temp.flow_identity_lookup()
+returns jsonb
+language sql
+stable
+as $$
+  select jsonb_set(
+    pg_temp.flow_identity_preflight(),
+    '{schema_version}', '"dataset-flow-identity-scope-lookup.v1"'::jsonb,
+    false
+  )
+    - 'maximum_wrapper_invocations'
+    - 'maximum_process_posts'
+    - 'maximum_finalize_posts'
+    - 'maximum_cli_apply_spawns'
+    - 'approval_reusable'
+    - 'automatic_retry'
+$$;
+
+create or replace function pg_temp.flow_identity_recovery_request(
+  p_scope_id uuid,
+  p_reason text,
+  p_nonce uuid
+) returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = pg_temp, public, util
+as $$
+declare
+  v_scope util.dataset_flow_identity_scopes%rowtype;
+  v_status jsonb;
+  v_completed integer;
+begin
+  select scope.* into strict v_scope
+  from util.dataset_flow_identity_scopes as scope
+  where scope.id = p_scope_id and scope.actor_user_id = auth.uid();
+  v_status := public.cmd_dataset_flow_identity_scope_read(p_scope_id);
+  if v_status->>'status' in ('failed', 'live_drift')
+    or v_status->>'whole_scope_proof_sha256' !~ '^[a-f0-9]{64}$' then
+    raise exception 'test recovery status proof failed: %', v_status;
+  end if;
+  v_completed := (v_status->>'completed_process_count')::integer;
+  return jsonb_build_object(
+    'schema_version', 'dataset-flow-identity-scope-recovery.v1',
+    'request_id', p_nonce,
+    'approved_at_utc', clock_timestamp(),
+    'environment', v_scope.environment,
+    'project_ref', v_scope.project_ref,
+    'actor', jsonb_build_object(
+      'user_id', v_scope.actor_user_id,
+      'email', v_scope.actor_email
+    ),
+    'target_visibility', v_scope.target_visibility,
+    'user_state_claim', v_scope.user_state_claim,
+    'operation_id', v_scope.operation_id,
+    'plan_sha256', v_scope.plan_sha256,
+    'freeze_sha256', v_scope.freeze_sha256,
+    'original_execution_approval_identity_sha256',
+      v_scope.approval_identity_sha256,
+    'scope_proof_sha256', v_scope.scope_proof_sha256,
+    'observed_scope_status', v_scope.status,
+    'observed_completed_process_count', v_completed,
+    'observed_next_ordinal', (v_status->>'next_ordinal')::integer,
+    'observed_whole_scope_proof_sha256',
+      v_status->>'whole_scope_proof_sha256',
+    'recovery_mode', case when v_completed = v_scope.process_count
+      then 'finalize_only' else 'resume_and_finalize' end,
+    'recovery_reason', p_reason,
+    'toolchain_evidence_sha256', v_scope.toolchain_evidence_sha256,
+    'maximum_wrapper_invocations', 1,
+    'maximum_process_posts', v_scope.process_count - v_completed,
+    'maximum_finalize_posts', 1,
+    'maximum_cli_apply_spawns', 1,
+    'approval_reusable', false,
+    'automatic_retry', false,
+    'recovery_approval_request_sha256',
+      util.dataset_flow_identity_restricted_sha256_v2(jsonb_build_object(
+        'nonce', p_nonce, 'domain', 'artifact-request'
+      )),
+    'recovery_approval_text_sha256',
+      util.dataset_flow_identity_restricted_sha256_v2(jsonb_build_object(
+        'nonce', p_nonce, 'domain', 'approval-text'
+      )),
+    'recovery_approval_identity_sha256',
+      util.dataset_flow_identity_restricted_sha256_v2(jsonb_build_object(
+        'nonce', p_nonce, 'domain', 'approval-identity'
+      ))
+  );
+end;
+$$;
+
+create or replace function pg_temp.flow_identity_recover(
+  p_scope_id uuid,
+  p_reason text
+) returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = pg_temp, public
+as $$
+begin
+  return public.cmd_dataset_flow_identity_scope_recover_guarded(
+    p_scope_id,
+    pg_temp.flow_identity_recovery_request(
+      p_scope_id, p_reason, gen_random_uuid()
+    )
+  );
+end;
+$$;
+
+create or replace function pg_temp.flow_identity_private_counts()
+returns jsonb
+language sql
+stable
+security definer
+set search_path = public, util
+as $$
+  select jsonb_build_object(
+    'scope_count', (select count(*)
+      from util.dataset_flow_identity_scopes),
+    'invocation_count', (select count(*)
+      from util.dataset_flow_identity_wrapper_invocations),
+    'audit_count', (select count(*) from public.command_audit_log)
+  )
+$$;
+
+create or replace function pg_temp.flow_identity_invocation(
+  p_invocation_id uuid
+) returns jsonb
+language sql
+stable
+security definer
+set search_path = util
+as $$
+  select to_jsonb(invocation)
+  from util.dataset_flow_identity_wrapper_invocations as invocation
+  where invocation.id = p_invocation_id
 $$;
 
 create or replace function pg_temp.flow_identity_cancel_request(
@@ -1003,7 +1150,7 @@ select has_function(
 );
 select has_function(
     'public', 'cmd_dataset_flow_identity_process_rewrite_guarded',
-    array['uuid', 'jsonb'],
+    array['uuid', 'jsonb', 'jsonb'],
   'one-process rewrite RPC exists'
 );
 select has_function(
@@ -1012,8 +1159,17 @@ select has_function(
 );
 select has_function(
     'public', 'cmd_dataset_flow_identity_scope_finalize_guarded',
-    array['uuid', 'jsonb'],
+    array['uuid', 'jsonb', 'jsonb'],
   'scope finalize RPC exists'
+);
+select has_function(
+    'public', 'cmd_dataset_flow_identity_scope_recover_guarded',
+    array['uuid', 'jsonb'],
+  'fresh approved recovery RPC exists'
+);
+select has_function(
+    'public', 'cmd_dataset_flow_identity_scope_lookup', array['jsonb'],
+  'read-only lost-response scope lookup RPC exists'
 );
 select has_function(
     'public', 'cmd_dataset_flow_identity_scope_cancel_guarded',
@@ -1032,7 +1188,7 @@ select function_privs_are(
 );
 select function_privs_are(
   'public', 'cmd_dataset_flow_identity_process_rewrite_guarded',
-  array['uuid', 'jsonb'], 'authenticated', array['EXECUTE'],
+  array['uuid', 'jsonb', 'jsonb'], 'authenticated', array['EXECUTE'],
   'process mutation is authenticated-only'
 );
 select function_privs_are(
@@ -1042,8 +1198,18 @@ select function_privs_are(
 );
 select function_privs_are(
   'public', 'cmd_dataset_flow_identity_scope_finalize_guarded',
-  array['uuid', 'jsonb'], 'authenticated', array['EXECUTE'],
+  array['uuid', 'jsonb', 'jsonb'], 'authenticated', array['EXECUTE'],
   'finalize is authenticated-only'
+);
+select function_privs_are(
+  'public', 'cmd_dataset_flow_identity_scope_recover_guarded',
+  array['uuid', 'jsonb'], 'authenticated', array['EXECUTE'],
+  'recovery admission is authenticated-only'
+);
+select function_privs_are(
+  'public', 'cmd_dataset_flow_identity_scope_lookup',
+  array['jsonb'], 'authenticated', array['EXECUTE'],
+  'scope lookup is authenticated-only'
 );
 select function_privs_are(
   'public', 'cmd_dataset_flow_identity_scope_cancel_guarded',
@@ -1177,7 +1343,7 @@ select ok(
 );
 select ok(
   pg_get_functiondef(
-    'public.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb)'::regprocedure
+    'public.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb,jsonb)'::regprocedure
   ) not like '%read_dataset_derivative_rebuild_batch_any%',
   'installed finalize contains no per-child derivative reader'
 );
@@ -1270,12 +1436,52 @@ select is(
   (select value->>'receipt_id' from flow_identity_state where key = 'capture'),
   'sealed scope response exactly binds the DB capture receipt'
 );
+insert into flow_identity_state(key, value)
+select 'lookup_before', pg_temp.flow_identity_private_counts();
+insert into flow_identity_state(key, value)
+select 'lookup_result',
+  public.cmd_dataset_flow_identity_scope_lookup(pg_temp.flow_identity_lookup());
+insert into flow_identity_state(key, value)
+select 'lookup_after', pg_temp.flow_identity_private_counts();
 select is(
-  public.cmd_dataset_flow_identity_scope_preflight_guarded(
+  (select jsonb_build_object(
+    'ok', value->>'ok',
+    'read_only', value->>'read_only',
+    'scope_id', value->>'scope_id',
+    'scope_proof_sha256', value->>'scope_proof_sha256',
+    'permit_is_null', value->'execution_permit' = 'null'::jsonb
+  ) from flow_identity_state where key = 'lookup_result'),
+  (select jsonb_build_object(
+    'ok', 'true', 'read_only', 'true',
+    'scope_id', value->>'scope_id',
+    'scope_proof_sha256', value->>'scope_proof_sha256',
+    'permit_is_null', true
+  ) from flow_identity_state where key = 'preflight'),
+  'exact scope lookup recovers sanitized preflight proof without a permit'
+);
+select is(
+  (select value from flow_identity_state where key = 'lookup_after'),
+  (select value from flow_identity_state where key = 'lookup_before'),
+  'scope lookup changes no scope, invocation, or audit row count'
+);
+select is(
+  public.cmd_dataset_flow_identity_scope_lookup(jsonb_set(
+    pg_temp.flow_identity_lookup(),
+    '{freeze_sha256}', to_jsonb(repeat('0', 64)), false
+  ))->>'code',
+  'FLOW_IDENTITY_SCOPE_LOOKUP_NOT_FOUND',
+  'one-field lookup mismatch returns the same non-leaking not-found result'
+);
+select is(
+  (select jsonb_build_object(
+    'replay', replay.value->>'replay',
+    'permit_is_null', replay.value->'execution_permit' = 'null'::jsonb
+  )
+  from public.cmd_dataset_flow_identity_scope_preflight_guarded(
     pg_temp.flow_identity_preflight()
-  )->>'replay',
-  'true',
-  'exact preflight replay returns the durable scope without duplication'
+  ) as replay(value)),
+  jsonb_build_object('replay', 'true', 'permit_is_null', true),
+  'exact preflight replay is proof-only and cannot mint a second permit'
 );
 select is(
   public.cmd_dataset_flow_identity_scope_preflight_guarded(
@@ -1376,13 +1582,33 @@ set value = public.cmd_dataset_flow_identity_capture_attest_guarded(
   )
 )
 where key = 'capture';
-update flow_identity_state
-set value = public.cmd_dataset_flow_identity_scope_preflight_guarded(
+select is(
+  public.cmd_dataset_flow_identity_scope_preflight_guarded(
+    pg_temp.flow_identity_preflight() || jsonb_build_object(
+      'request_id', 'fa000000-0000-4000-8000-000000000011',
+      'operation_id', 'flow-identity-test-operation-after-cancel',
+      'plan_sha256', repeat('2', 64),
+      'execution_approval_request_sha256', repeat('c', 64),
+      'execution_approval_text_sha256', repeat('3', 64),
+      'execution_approval_identity_sha256', repeat('4', 64)
+    )
+  )->>'code',
+  'FLOW_IDENTITY_PREFLIGHT_APPROVAL_REUSE_MISMATCH',
+  'fresh preflight rejects historical approval hash reuse across domains'
+);
+insert into flow_identity_state(key, value)
+select 'preflight_request_2',
   pg_temp.flow_identity_preflight() || jsonb_build_object(
     'request_id', 'fa000000-0000-4000-8000-000000000011',
     'operation_id', 'flow-identity-test-operation-after-cancel',
-    'plan_sha256', repeat('2', 64)
-  )
+    'plan_sha256', repeat('2', 64),
+    'execution_approval_request_sha256', repeat('1', 64),
+    'execution_approval_text_sha256', repeat('3', 64),
+    'execution_approval_identity_sha256', repeat('4', 64)
+  );
+update flow_identity_state
+set value = public.cmd_dataset_flow_identity_scope_preflight_guarded(
+  (select value from flow_identity_state where key = 'preflight_request_2')
 )
 where key = 'preflight';
 select is(
@@ -1417,12 +1643,29 @@ from (
   where preflight.key = 'preflight'
 ) as prepared;
 
+select is(
+  public.cmd_dataset_flow_identity_process_rewrite_guarded(
+    (select (value->>'scope_id')::uuid
+      from flow_identity_state where key = 'preflight'),
+    (select value from flow_identity_state where key = 'process_request'),
+    jsonb_set(
+      (select value->'execution_permit'
+       from flow_identity_state where key = 'preflight'),
+      '{generation}', '0.5'::jsonb, false
+    )
+  )->>'code',
+  'FLOW_IDENTITY_WRAPPER_PERMIT_REQUIRED',
+  'fractional permit generation is rejected without consuming the live permit'
+);
+
 insert into flow_identity_state(key, value)
 select 'process_result',
   public.cmd_dataset_flow_identity_process_rewrite_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
-    value
+    value,
+    (select value->'execution_permit'
+      from flow_identity_state where key = 'preflight')
   )
 from flow_identity_state where key = 'process_request';
 
@@ -1547,10 +1790,20 @@ select is(
   public.cmd_dataset_flow_identity_process_rewrite_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
-    (select value from flow_identity_state where key = 'process_request')
-  )->>'replay',
-  'true',
-  'exact lost-response replay is proof-only'
+    (select value from flow_identity_state where key = 'process_request'),
+    (select value->'execution_permit'
+      from flow_identity_state where key = 'process_result')
+  )->>'code',
+  'FLOW_IDENTITY_WRAPPER_PERMIT_REQUIRED',
+  'process capacity is exhausted after its single approved process post'
+);
+select is(
+  pg_temp.flow_identity_invocation((
+    select (value #>> '{execution_permit,invocation_id}')::uuid
+    from flow_identity_state where key = 'process_result'
+  ))->>'status',
+  'active',
+  'an exhausted process permit remains non-process-capable until recovery supersedes it'
 );
 select is(
   (select count(*)::integer from public.command_audit_log
@@ -1592,11 +1845,107 @@ where preflight.key = 'preflight'
 ;
 
 insert into flow_identity_state(key, value)
+select 'recovery_request_1', pg_temp.flow_identity_recovery_request(
+  (value->>'scope_id')::uuid,
+  'wrapper_exited_without_permit',
+  'fa000000-0000-4000-8000-000000000020'::uuid
+)
+from flow_identity_state where key = 'preflight';
+insert into flow_identity_state(key, value)
+select 'recovery_result_1',
+  public.cmd_dataset_flow_identity_scope_recover_guarded(
+    (select (value->>'scope_id')::uuid
+      from flow_identity_state where key = 'preflight'),
+    value
+  )
+from flow_identity_state where key = 'recovery_request_1';
+select is(
+  (select jsonb_build_object(
+    'ok', value->>'ok',
+    'replay', value->>'replay',
+    'permit_schema', value #>> '{execution_permit,schema_version}',
+    'wire_hash_bound', value->>'recovery_wire_request_sha256' =
+      pg_temp.flow_identity_invocation(
+        (value->>'invocation_id')::uuid
+      )->>'admission_request_sha256'
+  )
+  from flow_identity_state
+  where key = 'recovery_result_1'),
+  jsonb_build_object(
+    'ok', 'true', 'replay', 'false',
+    'permit_schema', 'dataset-flow-identity-execution-permit.v1',
+    'wire_hash_bound', true
+  ),
+  'fresh exact recovery consumes one approval and returns one memory-only permit'
+);
+select is(
+  (select jsonb_build_object(
+    'replay', replay.value->>'replay',
+    'permit_is_null', replay.value->'execution_permit' = 'null'::jsonb
+  )
+  from public.cmd_dataset_flow_identity_scope_recover_guarded(
+    (select (value->>'scope_id')::uuid
+      from flow_identity_state where key = 'preflight'),
+    (select value from flow_identity_state where key = 'recovery_request_1')
+  ) as replay(value)),
+  jsonb_build_object('replay', 'true', 'permit_is_null', true),
+  'exact recovery replay returns the same proof but never another permit'
+);
+select is(
+  public.cmd_dataset_flow_identity_scope_recover_guarded(
+    (select (value->>'scope_id')::uuid
+      from flow_identity_state where key = 'preflight'),
+    jsonb_set(
+      pg_temp.flow_identity_recovery_request(
+        (select (value->>'scope_id')::uuid
+          from flow_identity_state where key = 'preflight'),
+        'wrapper_exited_without_permit',
+        'fa000000-0000-4000-8000-000000000022'::uuid
+      ),
+      '{recovery_approval_request_sha256}',
+      (select to_jsonb(value->>'recovery_approval_text_sha256')
+       from flow_identity_state where key = 'recovery_request_1'),
+      false
+    )
+  )->>'code',
+  'FLOW_IDENTITY_RECOVERY_APPROVAL_REUSE_MISMATCH',
+  'recovery rejects actor approval hash reuse across request/text domains'
+);
+insert into flow_identity_state(key, value)
+select 'recovery_request_2', pg_temp.flow_identity_recovery_request(
+  (value->>'scope_id')::uuid,
+  'wrapper_exited_without_permit',
+  'fa000000-0000-4000-8000-000000000021'::uuid
+)
+from flow_identity_state where key = 'preflight';
+insert into flow_identity_state(key, value)
+select 'recovery_result_2',
+  public.cmd_dataset_flow_identity_scope_recover_guarded(
+    (select (value->>'scope_id')::uuid
+      from flow_identity_state where key = 'preflight'),
+    value
+  )
+from flow_identity_state where key = 'recovery_request_2';
+select is(
+  public.cmd_dataset_flow_identity_scope_finalize_guarded(
+    (select (value->>'scope_id')::uuid
+      from flow_identity_state where key = 'preflight'),
+    (select value from flow_identity_state where key = 'finalize_request'),
+    (select value->'execution_permit'
+      from flow_identity_state where key = 'recovery_result_1')
+  )->>'code',
+  'FLOW_IDENTITY_WRAPPER_PERMIT_REQUIRED',
+  'a newer recovery atomically invalidates the prior wrapper permit'
+);
+
+insert into flow_identity_state(key, value)
 select 'finalize_result',
   public.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
-    (select value from flow_identity_state where key = 'finalize_request')
+    (select value from flow_identity_state where key = 'finalize_request'),
+    (select value->'execution_permit'
+      from flow_identity_state where key = 'recovery_result_2')
   );
 
 select is(
@@ -1703,7 +2052,12 @@ select 'failed_finalize',
   public.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
-    (select value from flow_identity_state where key = 'finalize_request')
+    (select value from flow_identity_state where key = 'finalize_request'),
+    pg_temp.flow_identity_recover(
+      (select (value->>'scope_id')::uuid
+        from flow_identity_state where key = 'preflight'),
+      'finalize_response_ambiguous'
+    )->'execution_permit'
   );
 select is(
   (select value->>'code'
@@ -1777,7 +2131,12 @@ select 'stale_finalize',
   public.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
-    (select value from flow_identity_state where key = 'finalize_request')
+    (select value from flow_identity_state where key = 'finalize_request'),
+    pg_temp.flow_identity_recover(
+      (select (value->>'scope_id')::uuid
+        from flow_identity_state where key = 'preflight'),
+      'finalize_response_ambiguous'
+    )->'execution_permit'
   );
 select is(
   (select jsonb_build_object(
@@ -1854,7 +2213,12 @@ select 'compensation_finalize',
   public.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
-    (select value from flow_identity_state where key = 'finalize_request')
+    (select value from flow_identity_state where key = 'finalize_request'),
+    pg_temp.flow_identity_recover(
+      (select (value->>'scope_id')::uuid
+        from flow_identity_state where key = 'preflight'),
+      'derivatives_became_ready_after_wrapper_exit'
+    )->'execution_permit'
   );
 select is(
   (select value->>'code'
@@ -1885,7 +2249,12 @@ select 'completed_finalize',
   public.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
-    (select value from flow_identity_state where key = 'finalize_request')
+    (select value from flow_identity_state where key = 'finalize_request'),
+    pg_temp.flow_identity_recover(
+      (select (value->>'scope_id')::uuid
+        from flow_identity_state where key = 'preflight'),
+      'derivatives_became_ready_after_wrapper_exit'
+    )->'execution_permit'
   );
 select is(
   (select value->>'status'
@@ -1912,14 +2281,38 @@ where audit.command = 'cmd_dataset_flow_identity_scope_finalize_guarded'
   )
 order by audit.id desc limit 1;
 
+insert into flow_identity_state(key, value)
+select 'completed_lookup', public.cmd_dataset_flow_identity_scope_lookup(
+  jsonb_set(
+    value, '{schema_version}',
+    '"dataset-flow-identity-scope-lookup.v1"'::jsonb, false
+  )
+    - 'maximum_wrapper_invocations'
+    - 'maximum_process_posts'
+    - 'maximum_finalize_posts'
+    - 'maximum_cli_apply_spawns'
+    - 'approval_reusable'
+    - 'automatic_retry'
+)
+from flow_identity_state where key = 'preflight_request_2';
+select is(
+  (select jsonb_build_object(
+    'status', value->>'status',
+    'permit_is_null', value->'execution_permit' = 'null'::jsonb
+  ) from flow_identity_state where key = 'completed_lookup'),
+  jsonb_build_object('status', 'completed', 'permit_is_null', true),
+  'exact completed-scope lookup remains read-only and returns no permit'
+);
+
 select is(
   public.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
-    (select value from flow_identity_state where key = 'finalize_request')
-  )->>'replay',
-  'true',
-  'completed finalize replay is proof-only'
+    (select value from flow_identity_state where key = 'finalize_request'),
+    '{}'::jsonb
+  )->>'code',
+  'FLOW_IDENTITY_WRAPPER_PERMIT_REQUIRED',
+  'completed finalize cannot replay without a fresh write-capable permit'
 );
 select is(
   (select to_jsonb(scope)
@@ -2041,20 +2434,14 @@ select 'completed_drift_finalize',
   public.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
-    (select value from flow_identity_state where key = 'finalize_request')
+    (select value from flow_identity_state where key = 'finalize_request'),
+    '{}'::jsonb
   );
 select is(
-  (select jsonb_build_object(
-    'status', value->>'status',
-    'code', value->>'code',
-    'replay', value->>'replay'
-  ) from flow_identity_state where key = 'completed_drift_finalize'),
-  jsonb_build_object(
-    'status', 'derivatives_pending',
-    'code', 'FLOW_IDENTITY_DERIVATIVE_COMPENSATION_REQUIRED',
-    'replay', 'true'
-  ),
-  'completed finalize dynamically reports derivative compensation without writing'
+  (select value->>'code'
+   from flow_identity_state where key = 'completed_drift_finalize'),
+  'FLOW_IDENTITY_WRAPPER_PERMIT_REQUIRED',
+  'completed drift remains readable but cannot reopen finalize without a permit'
 );
 select is(
   (select to_jsonb(scope)
@@ -2160,21 +2547,14 @@ select 'missing_child_finalize',
   public.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
-    (select value from flow_identity_state where key = 'finalize_request')
+    (select value from flow_identity_state where key = 'finalize_request'),
+    '{}'::jsonb
   );
 select is(
-  (select jsonb_build_object(
-    'status', value->>'status', 'code', value->>'code',
-    'compensation_required', value->>'compensation_required',
-    'replay', value->>'replay'
-  ) from flow_identity_state where key = 'missing_child_finalize'),
-  jsonb_build_object(
-    'status', 'derivatives_pending',
-    'code', 'FLOW_IDENTITY_DERIVATIVE_COMPENSATION_REQUIRED',
-    'compensation_required', 'true',
-    'replay', 'true'
-  ),
-  'completed finalize exposes missing-child compensation without history writes'
+  (select value->>'code'
+   from flow_identity_state where key = 'missing_child_finalize'),
+  'FLOW_IDENTITY_WRAPPER_PERMIT_REQUIRED',
+  'completed missing-child proof cannot reopen finalize without a permit'
 );
 
 insert into flow_identity_state(key, value)
@@ -2238,20 +2618,14 @@ select 'recovered_completed_finalize',
   public.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
-    (select value from flow_identity_state where key = 'finalize_request')
+    (select value from flow_identity_state where key = 'finalize_request'),
+    '{}'::jsonb
   );
 select is(
-  (select jsonb_build_object(
-    'status', value->>'status',
-    'derivatives_current', value->>'derivatives_current',
-    'replay', value->>'replay'
-  ) from flow_identity_state where key = 'recovered_completed_finalize'),
-  jsonb_build_object(
-    'status', 'completed',
-    'derivatives_current', 'true',
-    'replay', 'true'
-  ),
-  'completed separate compensation restores dynamic terminal proof on replay'
+  (select value->>'code'
+   from flow_identity_state where key = 'recovered_completed_finalize'),
+  'FLOW_IDENTITY_WRAPPER_PERMIT_REQUIRED',
+  'recovered terminal proof remains read-only without a new permit'
 );
 select is(
   (select to_jsonb(scope)
@@ -2282,6 +2656,18 @@ select set_config(
 );
 select set_config(
   'request.jwt.claim.email', 'flow-other@example.com', true
+);
+select is(
+  public.cmd_dataset_flow_identity_scope_lookup(jsonb_set(
+    jsonb_set(
+      pg_temp.flow_identity_lookup(),
+      '{actor,user_id}',
+      to_jsonb(pg_temp.flow_identity_id('other')::text), false
+    ),
+    '{actor,email}', '"flow-other@example.com"'::jsonb, false
+  ))->>'code',
+  'FLOW_IDENTITY_SCOPE_LOOKUP_NOT_FOUND',
+  'foreign actor lookup returns the same non-leaking not-found result'
 );
 select is(
   public.cmd_dataset_flow_identity_scope_read(

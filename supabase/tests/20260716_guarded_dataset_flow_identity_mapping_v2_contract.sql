@@ -271,7 +271,7 @@ select function_privs_are(
 );
 select function_privs_are(
   'public', 'cmd_dataset_flow_identity_process_rewrite_guarded',
-  array['uuid', 'jsonb'], 'authenticated', array['EXECUTE'],
+  array['uuid', 'jsonb', 'jsonb'], 'authenticated', array['EXECUTE'],
   'v2 process rewrite is executable through the authenticated role'
 );
 select function_privs_are(
@@ -281,8 +281,18 @@ select function_privs_are(
 );
 select function_privs_are(
   'public', 'cmd_dataset_flow_identity_scope_finalize_guarded',
-  array['uuid', 'jsonb'], 'authenticated', array['EXECUTE'],
+  array['uuid', 'jsonb', 'jsonb'], 'authenticated', array['EXECUTE'],
   'v2 finalize is executable through the authenticated role'
+);
+select function_privs_are(
+  'public', 'cmd_dataset_flow_identity_scope_recover_guarded',
+  array['uuid', 'jsonb'], 'authenticated', array['EXECUTE'],
+  'fresh scope recovery is executable through the authenticated role'
+);
+select function_privs_are(
+  'public', 'cmd_dataset_flow_identity_scope_lookup',
+  array['jsonb'], 'authenticated', array['EXECUTE'],
+  'lost-response scope lookup is executable through the authenticated role'
 );
 select function_privs_are(
   'public', 'cmd_dataset_flow_identity_scope_cancel_guarded',
@@ -295,9 +305,11 @@ select is(
     from unnest(array[
       'public.cmd_dataset_flow_identity_capture_attest_guarded(jsonb)'::regprocedure,
       'public.cmd_dataset_flow_identity_scope_preflight_guarded(jsonb)'::regprocedure,
-      'public.cmd_dataset_flow_identity_process_rewrite_guarded(uuid,jsonb)'::regprocedure,
+      'public.cmd_dataset_flow_identity_process_rewrite_guarded(uuid,jsonb,jsonb)'::regprocedure,
       'public.cmd_dataset_flow_identity_scope_read(uuid)'::regprocedure,
-      'public.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb)'::regprocedure,
+      'public.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb,jsonb)'::regprocedure,
+      'public.cmd_dataset_flow_identity_scope_recover_guarded(uuid,jsonb)'::regprocedure,
+      'public.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure,
       'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
     ]) as function_oid(oid)
     where has_function_privilege('anon', function_oid.oid, 'EXECUTE')
@@ -316,9 +328,11 @@ select ok(
     where function.oid = any(array[
       'public.cmd_dataset_flow_identity_capture_attest_guarded(jsonb)'::regprocedure,
       'public.cmd_dataset_flow_identity_scope_preflight_guarded(jsonb)'::regprocedure,
-      'public.cmd_dataset_flow_identity_process_rewrite_guarded(uuid,jsonb)'::regprocedure,
+      'public.cmd_dataset_flow_identity_process_rewrite_guarded(uuid,jsonb,jsonb)'::regprocedure,
       'public.cmd_dataset_flow_identity_scope_read(uuid)'::regprocedure,
-      'public.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb)'::regprocedure,
+      'public.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb,jsonb)'::regprocedure,
+      'public.cmd_dataset_flow_identity_scope_recover_guarded(uuid,jsonb)'::regprocedure,
+      'public.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure,
       'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
     ]::oid[])
   ),
@@ -352,6 +366,35 @@ select ok(
     'EXECUTE'
   ),
   'the legacy cancel core is private to the v2 database implementation'
+);
+select ok(
+  not has_function_privilege(
+    'authenticated',
+    'private.dataset_flow_identity_validate_wrapper_permit_v1(uuid,uuid,jsonb,text)',
+    'EXECUTE'
+  )
+  and not has_function_privilege(
+    'service_role',
+    'private.dataset_flow_identity_rotate_wrapper_permit_v1(uuid,text,boolean)',
+    'EXECUTE'
+  ),
+  'permit validation and rotation remain private database capabilities'
+);
+select ok(
+  (select provolatile = 's'
+   from pg_proc
+   where oid =
+     'public.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure)
+  and pg_get_functiondef(
+    'public.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure
+  ) not ilike '%insert into%'
+  and pg_get_functiondef(
+    'public.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure
+  ) not ilike '%update %'
+  and pg_get_functiondef(
+    'public.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure
+  ) ilike '%''execution_permit'', null%',
+  'scope lookup is STABLE, write-free, and always returns a null permit'
 );
 select ok(
   pg_get_functiondef(
@@ -470,6 +513,18 @@ select ok(
     'service_role', 'util.dataset_flow_identity_mutation_permits', 'INSERT'
   ),
   'authenticated and service_role cannot inspect or mint private mutation permits'
+);
+select ok(
+  not has_table_privilege(
+    'authenticated', 'util.dataset_flow_identity_wrapper_invocations', 'SELECT'
+  )
+  and not has_table_privilege(
+    'authenticated', 'util.dataset_flow_identity_wrapper_invocations', 'INSERT'
+  )
+  and not has_table_privilege(
+    'service_role', 'util.dataset_flow_identity_wrapper_invocations', 'SELECT'
+  ),
+  'wrapper invocation tokens and approval consumption remain private'
 );
 select ok(
   not has_table_privilege(
