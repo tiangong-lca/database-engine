@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-15
-lastReviewedCommit: 6b0ac12a7d2587b323d6360b97b0c2ed38971843
-lastReviewedNote: "Reviewed the protected-runner hosted Preview path: exact-ref disposable fixtures are validation assets only and never migration, seed, Dev replay, or production execution inputs."
+lastReviewedAt: 2026-07-16
+lastReviewedCommit: 31c586c5063811c3aedc8fc653d282ec626c8f2f
+lastReviewedNote: "Reviewed the LCI/LCIA release control plane: generated datasets stay outside authoring tables, user mutations are manager-authorized RPCs, and service identity can only finalize exact artifact refs."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -83,6 +83,7 @@ The current migration and test history clusters around these themes:
 6. remote schema reconciliation and preview-branch validation
 7. review-submit gate persistence, `worker_jobs` queue state, final submit-review assertions, and retired legacy job-table archives
 8. worker-produced domain artifact/state contracts for retained `lca_package_*`, LCA result/cache/projection, and review-submit report/coordinator tables
+9. canonical LCI/LCIA release runs, exact dataset-version indexes, immutable four-package artifact refs, durable approval, publication, and readback
 
 If the task touches one of those areas, expect both schema truth and regression assertions to matter.
 
@@ -93,6 +94,12 @@ If the task touches one of those areas, expect both schema truth and regression 
 Retained domain tables such as `lca_package_artifacts`, `lca_package_export_items`, `lca_package_request_cache`, `lca_results`, `lca_result_cache`, `lca_latest_all_unit_results`, `lca_network_snapshots`, `dataset_review_submit_requests`, and `dataset_review_submit_gate_runs` are not replacement job tables. They store worker-produced artifacts, caches, projections, reports, or coordinator domain state. Post-cutover rows should be traceable back to `worker_jobs` through the appropriate worker job reference columns, except for explicitly documented exceptions such as snapshot identity rows that are traced through downstream worker-linked records.
 
 Use `public.worker_domain_traceability_cutoffs` and `public.worker_domain_traceability_violations` for DB-side audit checks when validating that new worker-produced domain rows remain traceable.
+
+## LCI/LCIA Release Control Plane
+
+`lca_release_runs` is the durable release state machine; `lca_release_dataset_versions`, `lca_release_artifacts`, `lca_release_approvals`, and `lca_release_publications` are immutable/indexed release facts. Generated LifecycleModel and Result Process documents are referenced from canonical object artifacts and never inserted into editable `lifecyclemodels` or `processes` authoring rows.
+
+Authenticated prepare, approve, publish, readback, and unpublish commands re-check `auth.uid()` against the live `data_product_manager` platform role. The separate service-only finalize command binds four uploaded package refs to the exact prepared plan and validated release manifest, but service identity has neither direct table writes nor approval/publication function grants. Public and private read/download projections remain RPC-owned so Edge can issue signed downloads without exposing database mutation capability.
 
 ## Generated Workspace Workflow
 
@@ -122,6 +129,7 @@ Do not leave durable manual edits only inside generated paths.
 This repo owns database truth, but not every runtime consequence:
 
 - `database-engine` owns persisted review-submit gate runs, `worker_jobs` lifecycle schema/RPCs, review-submit job coordinator state, access checks, idempotent gate lookup, result recording, legacy lifecycle cutover cleanup, retired legacy job-table archives under `archive.worker_legacy_job_table_rows`, and the final submit-review assertion
+- `database-engine` owns durable LCI/LCIA release facts and final authorization: exact plan/artifact hashes, manager approval/publication, service-only artifact finalization, immutable pinning, and readback; it does not materialize TIDAS/ILCD bytes or place generated datasets in authoring tables
 - `database-engine` owns the protected one-shot owner-draft FP/UG alias execution contract. Authenticated callers may only run the guarded preflight, three ordered live gates, one admission, and read-only status polling; a nonce-bound service executor alone can invoke the private replay-capable whole-plan and per-dimension primitives. The sealed `dataset-alias-plan.v1` request keeps time followed by length-time, one plan hash and operation ID, `target_visibility=owner_draft`, 52 distinct action rows, 59 exchange mutations, 55 immutable alias audits, and atomic admission of all 23-flow plus 27-process derivative children. Preflight and execution independently enforce actor-owned `state_code=0`, unchanged support, embedded identity, canonical exchange hashes, no public/foreign/non-draft parent, exact closure, stable row locks, table-specific allowed paths, and exact factors; indexed `json_ordered` subtrees provide candidates, while legacy `json` is never evidence. A timeout or any primary, audit, or derivative-admission mismatch rolls back every business effect, and the sealed approval permits no redispatch or replay. Production owner-draft data execution is allowed only against a freshly frozen production state with exact human approval; Preview/Dev validate the toolchain rather than replaying that production mutation. Status polling defers the full 50-target causal proof until terminal evidence is available and returns an explicit read-only conflict if the parent ledger changes while evidence is assembled.
 - `tiangong-lca-worker` owns numeric-stability checks and the calculator report payload semantics
 - `tiangong-lca-next` owns frontend env selection and app-side Supabase clients

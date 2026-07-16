@@ -37,6 +37,16 @@ Those stay in consumer repos such as:
 - `tiangong-lca-next` for frontend envs and app integration
 - `tiangong-lca-edge-functions` for Edge Function runtime code
 
+## LCI/LCIA release control plane
+
+The database stores durable release-run, exact dataset-version index, artifact,
+approval, publication, and readback facts. Canonical generated TIDAS datasets
+and ZIP bytes remain in immutable object storage and are not inserted into the
+editable Process or LifecycleModel authoring tables. User commands authenticate
+with a real user session and are authorized here against the current
+`data_product_manager` role; the internal service callback may only finalize
+already-verified artifact refs and cannot approve, publish, or unpublish.
+
 ## Branch model
 
 - GitHub default branch: `main`
