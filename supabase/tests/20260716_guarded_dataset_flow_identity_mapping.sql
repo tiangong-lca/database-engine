@@ -20,6 +20,7 @@ as $$
     when 'target_flow' then 'f4000000-0000-4000-8000-000000000002'
     when 'pending_flow' then 'f4000000-0000-4000-8000-000000000003'
     when 'process' then 'f5000000-0000-4000-8000-000000000001'
+    when 'process_2' then 'f5000000-0000-4000-8000-000000000002'
   end)::uuid
 $$;
 
@@ -169,7 +170,8 @@ as $$
 $$;
 
 create or replace function pg_temp.flow_identity_process_payload(
-  p_after boolean default false
+  p_after boolean default false,
+  p_process_id uuid default null
 ) returns jsonb
 language sql
 immutable
@@ -178,7 +180,9 @@ as $$
     'processDataSet', jsonb_build_object(
       'processInformation', jsonb_build_object(
         'dataSetInformation', jsonb_build_object(
-          'common:UUID', pg_temp.flow_identity_id('process'),
+          'common:UUID', coalesce(
+            p_process_id, pg_temp.flow_identity_id('process')
+          ),
           'name', jsonb_build_object('baseName', jsonb_build_object(
             '@xml:lang', 'en', '#text', 'Step 3 test process'
           ))
@@ -334,13 +338,25 @@ from generate_series(1, 303) as n;
 insert into public.processes (
   id, version, user_id, state_code, json, json_ordered, modified_at,
   extracted_text, extracted_md, model_id, rule_verification
-) values (
-  pg_temp.flow_identity_id('process'), '01.00.000',
-  pg_temp.flow_identity_id('owner'), 0,
-  pg_temp.flow_identity_process_payload(false),
-  pg_temp.flow_identity_process_payload(false)::json,
-  '2026-07-16T01:00:00Z', 'process text', 'process markdown', null, null
-);
+) values
+  (
+    pg_temp.flow_identity_id('process'), '01.00.000',
+    pg_temp.flow_identity_id('owner'), 0,
+    pg_temp.flow_identity_process_payload(false),
+    pg_temp.flow_identity_process_payload(false)::json,
+    '2026-07-16T01:00:00Z', 'process text', 'process markdown', null, null
+  ),
+  (
+    pg_temp.flow_identity_id('process_2'), '01.00.000',
+    pg_temp.flow_identity_id('owner'), 0,
+    pg_temp.flow_identity_process_payload(
+      false, pg_temp.flow_identity_id('process_2')
+    ),
+    pg_temp.flow_identity_process_payload(
+      false, pg_temp.flow_identity_id('process_2')
+    )::json,
+    '2026-07-16T01:00:00Z', 'process 2 text', 'process 2 markdown', null, null
+  );
 
 alter table public.flows enable trigger user;
 alter table public.processes enable trigger user;
@@ -576,24 +592,41 @@ declare
   v_exchange jsonb := private.dataset_flow_identity_exchanges(
     pg_temp.flow_identity_process_payload(false)
   )->2;
+  v_exchange_2 jsonb := private.dataset_flow_identity_exchanges(
+    pg_temp.flow_identity_process_payload(
+      false, pg_temp.flow_identity_id('process_2')
+    )
+  )->2;
   v_occurrences jsonb;
   v_pending jsonb;
   v_orphans jsonb;
 begin
-  v_occurrences := jsonb_build_array(jsonb_build_object(
-    'process_id', pg_temp.flow_identity_id('process'),
-    'process_version', '01.00.000',
-    'exchange_index', 2,
-    'internal_id', '3',
-    'direction', 'Input',
-    'reference_sha256', util.dataset_flow_identity_sha256(
-      private.dataset_flow_identity_reference(v_exchange)
+  v_occurrences := jsonb_build_array(
+    jsonb_build_object(
+      'process_id', pg_temp.flow_identity_id('process'),
+      'process_version', '01.00.000',
+      'exchange_index', 2,
+      'internal_id', '3',
+      'direction', 'Input',
+      'reference_sha256', util.dataset_flow_identity_sha256(
+        private.dataset_flow_identity_reference(v_exchange)
+      )
+    ),
+    jsonb_build_object(
+      'process_id', pg_temp.flow_identity_id('process_2'),
+      'process_version', '01.00.000',
+      'exchange_index', 2,
+      'internal_id', '3',
+      'direction', 'Input',
+      'reference_sha256', util.dataset_flow_identity_sha256(
+        private.dataset_flow_identity_reference(v_exchange_2)
+      )
     )
-  ));
+  );
   v_pending := jsonb_build_array(jsonb_build_object(
     'source_id', pg_temp.flow_identity_id('pending_flow'),
     'source_version', '01.00.000',
-    'expected_reference_count', 1,
+    'expected_reference_count', 2,
     'occurrences', v_occurrences,
     'occurrence_set_sha256', util.dataset_flow_identity_sha256(v_occurrences),
     'evidence_sha256', repeat('4', 64)
@@ -613,7 +646,7 @@ begin
     'pending_set_sha256', util.dataset_flow_identity_sha256(v_pending),
     'blocker_set_sha256', util.dataset_flow_identity_sha256('[]'::jsonb),
     'orphan_set_sha256', util.dataset_flow_identity_sha256(v_orphans),
-    'total_expected_reference_count', 1
+    'total_expected_reference_count', 2
   );
 end;
 $$;
@@ -875,14 +908,17 @@ as $$
   )
 $$;
 
-create or replace function pg_temp.flow_identity_process_intent()
+create or replace function pg_temp.flow_identity_process_intent(
+  p_process_id uuid default null,
+  p_ordinal integer default 1
+)
 returns jsonb
 language sql
 stable
 as $$
   select jsonb_build_object(
-    'ordinal', 1,
-    'id', pg_temp.flow_identity_id('process'),
+    'ordinal', p_ordinal,
+    'id', coalesce(p_process_id, pg_temp.flow_identity_id('process')),
     'version', '01.00.000',
     'rewrites', jsonb_build_array(jsonb_build_object(
       'ordinal', 1, 'exchange_index', 0, 'internal_id', '1',
@@ -923,7 +959,12 @@ as $$
       'toolchain_evidence_sha256', repeat('a', 64)
     ),
     'mappings', jsonb_build_array(pg_temp.flow_identity_mapping_intent()),
-    'process_intents', jsonb_build_array(pg_temp.flow_identity_process_intent()),
+    'process_intents', jsonb_build_array(
+      pg_temp.flow_identity_process_intent(),
+      pg_temp.flow_identity_process_intent(
+        pg_temp.flow_identity_id('process_2'), 2
+      )
+    ),
     'protected_closure', pg_temp.flow_identity_protected_intent()
   );
 $$;
@@ -959,7 +1000,7 @@ begin
     'execution_approval_identity_sha256', repeat('d', 64),
     'toolchain_evidence_sha256', repeat('a', 64),
     'maximum_wrapper_invocations', 1,
-    'maximum_process_posts', 1,
+    'maximum_process_posts', 2,
     'maximum_finalize_posts', 1,
     'maximum_cli_apply_spawns', 1,
     'approval_reusable', false,
@@ -1643,6 +1684,79 @@ from (
   where preflight.key = 'preflight'
 ) as prepared;
 
+insert into flow_identity_state(key, value)
+select 'process_request_2', request || jsonb_build_object(
+  'process_request_sha256',
+    util.dataset_flow_identity_restricted_sha256_v2(request)
+)
+from (
+  select jsonb_build_object(
+    'schema_version', 'dataset-flow-identity-process-rewrite.v2',
+    'request_id', 'fa000000-0000-4000-8000-000000000004',
+    'scope_proof_sha256', preflight.value->>'scope_proof_sha256',
+    'ordinal', 2,
+    'process_intent_proof_sha256', ledger.process_intent_proof_sha256
+  ) as request
+  from flow_identity_state as preflight
+  join util.dataset_flow_identity_process_ledger as ledger
+    on ledger.scope_id = (preflight.value->>'scope_id')::uuid
+    and ledger.ordinal = 2
+  where preflight.key = 'preflight'
+) as prepared;
+
+select is(
+  (select (value #>> '{execution_permit,generation}')::integer
+   from flow_identity_state where key = 'preflight'),
+  0,
+  'fresh preflight starts the one-wrapper permit at generation zero'
+);
+
+-- This fixture is transaction-local, so the second connection cannot see its
+-- uncommitted rows.  It can still own the exact scope advisory lock and prove
+-- that a concurrent same-scope process call fails before touching the permit,
+-- ledger, primary JSON, audit, or derivative child.
+reset role;
+select extensions.dblink_connect(
+  'flow_identity_scope_lock',
+  'host=db port=5432 dbname=' || current_database()
+    || ' user=postgres password=postgres'
+);
+select extensions.dblink_exec('flow_identity_scope_lock', 'begin');
+select extensions.dblink_exec(
+  'flow_identity_scope_lock',
+  format(
+    'do $lock$ begin perform pg_advisory_xact_lock(hashtextextended(%L, 0)); end $lock$',
+    'dataset-flow-identity:' || (
+      select value->>'scope_id'
+      from flow_identity_state where key = 'preflight'
+    )
+  )
+);
+set local role authenticated;
+select is(
+  public.cmd_dataset_flow_identity_process_rewrite_guarded(
+    (select (value->>'scope_id')::uuid
+      from flow_identity_state where key = 'preflight'),
+    (select value from flow_identity_state where key = 'process_request'),
+    (select value->'execution_permit'
+      from flow_identity_state where key = 'preflight')
+  )->>'code',
+  'FLOW_IDENTITY_PROCESS_SCOPE_BUSY',
+  'a real second connection serializes a concurrent same-scope process call'
+);
+select is(
+  pg_temp.flow_identity_invocation((
+    select (value #>> '{execution_permit,invocation_id}')::uuid
+    from flow_identity_state where key = 'preflight'
+  ))->>'generation',
+  '0',
+  'scope-lock rejection does not consume or rotate the live permit'
+);
+reset role;
+select extensions.dblink_exec('flow_identity_scope_lock', 'rollback');
+select extensions.dblink_disconnect('flow_identity_scope_lock');
+set local role authenticated;
+
 select is(
   public.cmd_dataset_flow_identity_process_rewrite_guarded(
     (select (value->>'scope_id')::uuid
@@ -1656,6 +1770,14 @@ select is(
   )->>'code',
   'FLOW_IDENTITY_WRAPPER_PERMIT_REQUIRED',
   'fractional permit generation is rejected without consuming the live permit'
+);
+select is(
+  pg_temp.flow_identity_invocation((
+    select (value #>> '{execution_permit,invocation_id}')::uuid
+    from flow_identity_state where key = 'preflight'
+  ))->>'generation',
+  '0',
+  'malformed authorization leaves generation zero available for the wrapper'
 );
 
 insert into flow_identity_state(key, value)
@@ -1684,6 +1806,36 @@ select is(
    from flow_identity_state where key = 'process_result'),
   '1',
   'process success returns the exact post-commit completed count'
+);
+select is(
+  (select jsonb_build_object(
+    'permit_generation_before', result.value->>'permit_generation_before',
+    'returned_generation', result.value #>> '{execution_permit,generation}',
+    'same_invocation', result.value->>'invocation_id' =
+      preflight.value #>> '{execution_permit,invocation_id}',
+    'token_changed', result.value #>> '{execution_permit,token}' <>
+      preflight.value #>> '{execution_permit,token}',
+    'stored_generation', invocation.value->>'generation',
+    'stored_hash_matches', invocation.value->>'token_sha256' =
+      pg_catalog.encode(extensions.digest(pg_catalog.convert_to(
+        result.value #>> '{execution_permit,token}', 'UTF8'
+      ), 'sha256'), 'hex')
+  )
+  from flow_identity_state as result
+  join flow_identity_state as preflight on preflight.key = 'preflight'
+  cross join lateral pg_temp.flow_identity_invocation(
+    (result.value->>'invocation_id')::uuid
+  ) as invocation(value)
+  where result.key = 'process_result'),
+  jsonb_build_object(
+    'permit_generation_before', '0',
+    'returned_generation', '1',
+    'same_invocation', true,
+    'token_changed', true,
+    'stored_generation', '1',
+    'stored_hash_matches', true
+  ),
+  'ordinal one atomically rotates generation zero to one and persists only its token hash'
 );
 select is(
   (select json #>>
@@ -1770,7 +1922,7 @@ select is(
     from flow_identity_state where key = 'preflight'
   )),
   jsonb_build_object(
-    'scope_status', 'derivatives_pending',
+    'scope_status', 'running',
     'ledger_status', 'completed',
     'ledger_active', true,
     'primary_audit_count', 1
@@ -1790,20 +1942,144 @@ select is(
   public.cmd_dataset_flow_identity_process_rewrite_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
-    (select value from flow_identity_state where key = 'process_request'),
+    (select value from flow_identity_state where key = 'process_request_2'),
+    (select value->'execution_permit'
+      from flow_identity_state where key = 'preflight')
+  )->>'code',
+  'FLOW_IDENTITY_WRAPPER_PERMIT_REQUIRED',
+  'ordinal two rejects the stale generation-zero permit after ordinal one commits'
+);
+select is(
+  (select jsonb_build_object(
+    'invocation_generation', invocation.value->>'generation',
+    'successful_process_posts', invocation.value->>'successful_process_posts',
+    'ordinal_two_status', ledger.status,
+    'ordinal_two_audit_is_null', ledger.audit_id is null
+  )
+  from flow_identity_state as preflight
+  cross join lateral pg_temp.flow_identity_invocation(
+    (preflight.value #>> '{execution_permit,invocation_id}')::uuid
+  ) as invocation(value)
+  join util.dataset_flow_identity_process_ledger as ledger
+    on ledger.scope_id = (preflight.value->>'scope_id')::uuid
+    and ledger.ordinal = 2
+  where preflight.key = 'preflight'),
+  jsonb_build_object(
+    'invocation_generation', '1',
+    'successful_process_posts', '1',
+    'ordinal_two_status', 'pending',
+    'ordinal_two_audit_is_null', true
+  ),
+  'stale permit rejection leaves ordinal two and generation one unchanged'
+);
+
+insert into flow_identity_state(key, value)
+select 'process_result_2',
+  public.cmd_dataset_flow_identity_process_rewrite_guarded(
+    (select (value->>'scope_id')::uuid
+      from flow_identity_state where key = 'preflight'),
+    value,
+    (select value->'execution_permit'
+      from flow_identity_state where key = 'process_result')
+  )
+from flow_identity_state where key = 'process_request_2';
+select is(
+  (select jsonb_build_object(
+    'ok', second.value->>'ok',
+    'completed_process_count', second.value->>'completed_process_count',
+    'next_ordinal_is_null', second.value->'next_ordinal' = 'null'::jsonb,
+    'primary_complete', second.value->>'primary_complete',
+    'permit_generation_before', second.value->>'permit_generation_before',
+    'returned_generation', second.value #>> '{execution_permit,generation}',
+    'token_changed', second.value #>> '{execution_permit,token}' <>
+      first.value #>> '{execution_permit,token}',
+    'stored_generation', invocation.value->>'generation',
+    'stored_process_posts', invocation.value->>'successful_process_posts',
+    'stored_hash_matches', invocation.value->>'token_sha256' =
+      pg_catalog.encode(extensions.digest(pg_catalog.convert_to(
+        second.value #>> '{execution_permit,token}', 'UTF8'
+      ), 'sha256'), 'hex')
+  )
+  from flow_identity_state as second
+  join flow_identity_state as first on first.key = 'process_result'
+  cross join lateral pg_temp.flow_identity_invocation(
+    (second.value->>'invocation_id')::uuid
+  ) as invocation(value)
+  where second.key = 'process_result_2'),
+  jsonb_build_object(
+    'ok', 'true',
+    'completed_process_count', '2',
+    'next_ordinal_is_null', true,
+    'primary_complete', 'true',
+    'permit_generation_before', '1',
+    'returned_generation', '2',
+    'token_changed', true,
+    'stored_generation', '2',
+    'stored_process_posts', '2',
+    'stored_hash_matches', true
+  ),
+  'ordinal two atomically rotates generation one to two on the same invocation'
+);
+select is(
+  (select json #>>
+    '{processDataSet,exchanges,exchange,0,referenceToFlowDataSet,@refObjectId}'
+   from public.processes
+   where id = pg_temp.flow_identity_id('process_2')),
+  pg_temp.flow_identity_id('target_flow')::text,
+  'ordinal two rewrites its exact owner-draft process reference'
+);
+select is(
+  public.cmd_dataset_flow_identity_process_rewrite_guarded(
+    (select (value->>'scope_id')::uuid
+      from flow_identity_state where key = 'preflight'),
+    (select value from flow_identity_state where key = 'process_request_2'),
     (select value->'execution_permit'
       from flow_identity_state where key = 'process_result')
   )->>'code',
   'FLOW_IDENTITY_WRAPPER_PERMIT_REQUIRED',
-  'process capacity is exhausted after its single approved process post'
+  'ordinal two rejects its stale generation-one permit after rotation'
+);
+select is(
+  public.cmd_dataset_flow_identity_process_rewrite_guarded(
+    (select (value->>'scope_id')::uuid
+      from flow_identity_state where key = 'preflight'),
+    (select value from flow_identity_state where key = 'process_request_2'),
+    (select value->'execution_permit'
+      from flow_identity_state where key = 'process_result_2')
+  )->>'code',
+  'FLOW_IDENTITY_WRAPPER_PERMIT_REQUIRED',
+  'current generation-two permit has no process capacity after two approved posts'
 );
 select is(
   pg_temp.flow_identity_invocation((
     select (value #>> '{execution_permit,invocation_id}')::uuid
-    from flow_identity_state where key = 'process_result'
+    from flow_identity_state where key = 'process_result_2'
   ))->>'status',
   'active',
   'an exhausted process permit remains non-process-capable until recovery supersedes it'
+);
+select is(
+  (select count(*)::integer
+   from public.command_audit_log as audit
+   where audit.command = 'cmd_dataset_flow_identity_process_rewrite_guarded'
+     and audit.payload->>'scope_id' = (
+       select value->>'scope_id'
+       from flow_identity_state where key = 'preflight'
+     )),
+  2,
+  'two ordered process transactions produce exactly two primary audits'
+);
+select is(
+  (select count(*)::integer
+   from util.dataset_derivative_rebuild_requests as child
+   join util.dataset_flow_identity_process_ledger as ledger
+     on child.batch_id = ledger.derivative_batch_id
+   where ledger.scope_id = (
+     select (value->>'scope_id')::uuid
+     from flow_identity_state where key = 'preflight'
+   )),
+  2,
+  'two ordered process transactions admit exactly two causal derivative children'
 );
 select is(
   (select count(*)::integer from public.command_audit_log
@@ -1835,9 +2111,9 @@ select 'finalize_request', jsonb_build_object(
   'request_id', 'fa000000-0000-4000-8000-000000000003',
   'scope_proof_sha256', preflight.value->>'scope_proof_sha256',
   'expected', jsonb_build_object(
-    'process_count', 1,
-    'rewrite_count', 1,
-    'completed_process_count', 1
+    'process_count', 2,
+    'rewrite_count', 2,
+    'completed_process_count', 2
   )
 )
 from flow_identity_state as preflight
@@ -1972,6 +2248,15 @@ select is(
 -- target; admission still requires a separate plan/freeze/approval outside
 -- this scope.
 reset role;
+select pg_temp.complete_flow_identity_derivative(
+  (select child.id
+   from util.dataset_derivative_rebuild_requests as child
+   where child.batch_id = (
+     select (value->>'derivative_batch_id')::uuid
+     from flow_identity_state where key = 'process_result_2'
+   )),
+  'second ordered process'
+);
 update util.dataset_derivative_rebuild_requests
 set
   status = 'failed',
