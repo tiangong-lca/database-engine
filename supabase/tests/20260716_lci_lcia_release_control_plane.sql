@@ -17,6 +17,10 @@ select has_function(
   'release prepare command exists'
 );
 select has_function(
+  'public', 'assert_lca_release_manager', array[]::text[],
+  'side-effect-free release manager assertion exists'
+);
+select has_function(
   'public', 'cmd_lca_release_artifacts_finalize_service',
   array['uuid', 'text', 'jsonb', 'text', 'jsonb', 'jsonb'],
   'service artifact finalize command exists'
@@ -95,6 +99,12 @@ select ok(
     'EXECUTE'
   ),
   'service role cannot approve or publish releases'
+);
+select ok(
+  has_function_privilege('authenticated', 'public.assert_lca_release_manager()', 'EXECUTE')
+  and not has_function_privilege('anon', 'public.assert_lca_release_manager()', 'EXECUTE')
+  and not has_function_privilege('service_role', 'public.assert_lca_release_manager()', 'EXECUTE'),
+  'only authenticated user sessions can invoke the release manager assertion'
 );
 
 insert into auth.users (
@@ -276,6 +286,12 @@ select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 select set_config('request.jwt.claim.sub', '', true);
 
 select is(
+  public.assert_lca_release_manager()->>'code',
+  'auth_required',
+  'publishable-key context without a user fails the manager assertion'
+);
+
+select is(
   public.cmd_lca_release_prepare(
     'a7160000-0000-4000-8000-000000002001', '01.00.000', repeat('a', 64), repeat('b', 64),
     jsonb_build_object('manifestUrl', 's3://bundle/manifest.json'), repeat('c', 64), repeat('d', 64),
@@ -286,6 +302,12 @@ select is(
 );
 
 select set_config('request.jwt.claim.sub', 'a7160000-0000-4000-8000-000000001002', true);
+
+select is(
+  public.assert_lca_release_manager()->>'code',
+  'not_data_product_manager',
+  'ordinary authenticated user fails the side-effect-free manager assertion'
+);
 
 select is(
   public.cmd_lca_release_prepare(
@@ -310,6 +332,12 @@ select is(
 );
 
 select set_config('request.jwt.claim.sub', 'a7160000-0000-4000-8000-000000001001', true);
+
+select is(
+  public.assert_lca_release_manager()->'data'->>'userId',
+  'a7160000-0000-4000-8000-000000001001',
+  'manager assertion returns the live authenticated manager identity'
+);
 
 select is(
   public.cmd_lca_release_prepare(

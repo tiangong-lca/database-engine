@@ -28,7 +28,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-16
-lastReviewedCommit: 31c586c5063811c3aedc8fc653d282ec626c8f2f
+lastReviewedCommit: 910cce78a892a64b4c2bdfb94e598a2c96649e6f
 lastReviewedNote: "Reviewed the LCI/LCIA release control plane: generated datasets stay outside authoring tables, user mutations are manager-authorized RPCs, and service identity can only finalize exact artifact refs."
 related:
   - ../../AGENTS.md

@@ -471,6 +471,37 @@ as $$
      )
 $$;
 
+create or replace function public.assert_lca_release_manager()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+declare
+  v_actor uuid := auth.uid();
+begin
+  if v_actor is null then
+    return public.lca_release_error('auth_required', 401, 'Authentication required');
+  end if;
+  if not public.lca_release_is_manager() then
+    return public.lca_release_error(
+      'not_data_product_manager',
+      403,
+      'Data product manager role is required'
+    );
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'data', jsonb_build_object(
+      'userId', v_actor,
+      'role', 'data_product_manager'
+    )
+  );
+end;
+$$;
+
 create or replace function public.lca_release_is_service_request()
 returns boolean
 language sql
@@ -1612,6 +1643,7 @@ revoke all on function public.lca_release_guard_approval_update() from public, a
 revoke all on function public.lca_release_guard_publication_update() from public, anon, authenticated, service_role;
 revoke all on function public.lca_release_error(text, integer, text) from public, anon, authenticated, service_role;
 revoke all on function public.lca_release_is_manager() from public, anon, authenticated, service_role;
+revoke all on function public.assert_lca_release_manager() from public, anon, authenticated, service_role;
 revoke all on function public.lca_release_is_service_request() from public, anon, authenticated, service_role;
 revoke all on function public.cmd_lca_release_prepare(uuid, text, text, text, jsonb, text, text, jsonb, text, text, jsonb) from public, anon, authenticated, service_role;
 revoke all on function public.cmd_lca_release_artifacts_finalize_service(uuid, text, jsonb, text, jsonb, jsonb) from public, anon, authenticated, service_role;
@@ -1625,6 +1657,7 @@ revoke all on function public.get_lca_release_artifact_download(uuid) from publi
 revoke all on function public.get_lcia_result_calculation_bundle(uuid) from public, anon, authenticated, service_role;
 
 grant execute on function public.cmd_lca_release_prepare(uuid, text, text, text, jsonb, text, text, jsonb, text, text, jsonb) to authenticated;
+grant execute on function public.assert_lca_release_manager() to authenticated;
 grant execute on function public.cmd_lca_release_approve(uuid, text, timestamptz, text, jsonb) to authenticated;
 grant execute on function public.cmd_lca_release_publish(uuid, uuid, text, text, text, text, text, jsonb) to authenticated;
 grant execute on function public.cmd_lca_release_readback_verify(uuid, text, jsonb, jsonb) to authenticated;

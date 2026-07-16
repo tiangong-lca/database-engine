@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-16
-lastReviewedCommit: 31c586c5063811c3aedc8fc653d282ec626c8f2f
+lastReviewedCommit: 910cce78a892a64b4c2bdfb94e598a2c96649e6f
 lastReviewedNote: "Reviewed LCI/LCIA release proof: reset migrations, exercise 401/403 and service capability isolation, exact approval/publication hashes, immutability, public projection, and independent readback."
 related:
   - ../../AGENTS.md
