@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-07-15"
-lastReviewedCommit: "6b0ac12a7d2587b323d6360b97b0c2ed38971843"
-lastReviewedNote: "Reviewed the hosted Preview test contract for protected one-shot execution: fixtures remain test-only, exact-preview-bound, disposable, actor-scoped, and cleanup-verified."
+lastReviewedAt: "2026-07-16"
+lastReviewedCommit: "31c586c"
+lastReviewedNote: "Added guarded-flow-identity routing for durable Step 3 scope/process/finalize migrations, tests, and governance docs."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -128,6 +128,14 @@ routing:
         - supabase/tests/*protected_dataset_alias*.sql
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
+    guarded-flow-identity-rewrite:
+      paths:
+        - supabase/migrations/*flow_identity*.sql
+        - supabase/tests/*flow_identity*.sql
+        - supabase/migrations/*derivative_rebuild*.sql
+        - docs/agents/repo-validation.md
+        - docs/agents/repo-architecture.md
+        - AGENTS.md
     worker-jobs:
       paths:
         - supabase/migrations/*worker_jobs*.sql
