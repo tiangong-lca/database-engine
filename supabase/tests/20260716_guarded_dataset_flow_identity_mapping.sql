@@ -1148,6 +1148,357 @@ as $$
   where invocation.id = p_invocation_id
 $$;
 
+create or replace function pg_temp.flow_identity_business_state(
+  p_scope_id uuid
+) returns jsonb
+language sql
+stable
+security definer
+set search_path = pg_temp, public, util
+as $$
+  select jsonb_build_object(
+    'process_rows_sha256', util.dataset_flow_identity_sha256(coalesce((
+      select jsonb_agg(to_jsonb(process) order by process.id)
+      from public.processes as process
+      where process.id in (
+        pg_temp.flow_identity_id('process'),
+        pg_temp.flow_identity_id('process_2')
+      )
+    ), '[]'::jsonb)),
+    'flow_guard_rows_sha256', util.dataset_flow_identity_sha256(coalesce((
+      select jsonb_agg(to_jsonb(flow) order by flow.id)
+      from public.flows as flow
+      where flow.id in (
+        pg_temp.flow_identity_id('source_flow'),
+        pg_temp.flow_identity_id('target_flow'),
+        pg_temp.flow_identity_id('pending_flow')
+      )
+    ), '[]'::jsonb)),
+    'flowproperty_guard_row_sha256',
+      util.dataset_flow_identity_sha256(coalesce((
+        select to_jsonb(flowproperty)
+        from public.flowproperties as flowproperty
+        where flowproperty.id = pg_temp.flow_identity_id('flowproperty')
+          and btrim(flowproperty.version::text) = '01.00.000'
+      ), '{}'::jsonb)),
+    'unitgroup_guard_row_sha256',
+      util.dataset_flow_identity_sha256(coalesce((
+        select to_jsonb(unitgroup)
+        from public.unitgroups as unitgroup
+        where unitgroup.id = pg_temp.flow_identity_id('unitgroup')
+          and btrim(unitgroup.version::text) = '01.00.000'
+      ), '{}'::jsonb)),
+    'ledger_rows_sha256', util.dataset_flow_identity_sha256(coalesce((
+      select jsonb_agg(to_jsonb(ledger) order by ledger.ordinal)
+      from util.dataset_flow_identity_process_ledger as ledger
+      where ledger.scope_id = p_scope_id
+    ), '[]'::jsonb)),
+    'audit_rows_sha256', util.dataset_flow_identity_sha256(coalesce((
+      select jsonb_agg(to_jsonb(audit) order by audit.id)
+      from public.command_audit_log as audit
+      where audit.payload->>'scope_id' = p_scope_id::text
+    ), '[]'::jsonb)),
+    'derivative_rows_sha256', util.dataset_flow_identity_sha256(coalesce((
+      select jsonb_agg(to_jsonb(child) order by child.id)
+      from util.dataset_derivative_rebuild_requests as child
+      join util.dataset_flow_identity_scopes as scope
+        on scope.id = p_scope_id
+        and child.actor_user_id = scope.actor_user_id
+        and child.plan_sha256 = scope.plan_sha256
+        and child.operation_id = scope.operation_id
+      where child.target_table = 'processes'
+        and exists (
+          select 1
+          from util.dataset_flow_identity_process_ledger as ledger
+          where ledger.scope_id = scope.id
+            and child.target_id = ledger.process_id
+            and child.target_version = ledger.process_version
+            and child.reason_code = 'FLOW_IDENTITY_SCOPE:'
+              || scope.id::text || ':' || ledger.ordinal::text
+        )
+    ), '[]'::jsonb)),
+    'mutation_permit_rows_sha256',
+      util.dataset_flow_identity_sha256(coalesce((
+        select jsonb_agg(to_jsonb(mutation) order by mutation.ordinal)
+        from util.dataset_flow_identity_mutation_permits as mutation
+        where mutation.scope_id = p_scope_id
+      ), '[]'::jsonb)),
+    'scope_row_sha256', util.dataset_flow_identity_sha256(coalesce((
+      select to_jsonb(scope)
+      from util.dataset_flow_identity_scopes as scope
+      where scope.id = p_scope_id
+    ), '{}'::jsonb))
+  )
+$$;
+
+create or replace function pg_temp.flow_identity_atomic_state(
+  p_scope_id uuid,
+  p_invocation_id uuid
+) returns jsonb
+language sql
+stable
+security definer
+set search_path = pg_temp, public, util
+as $$
+  select jsonb_build_object(
+    'business', pg_temp.flow_identity_business_state(p_scope_id),
+    'flow_rows_sha256', util.dataset_flow_identity_sha256(coalesce((
+      select jsonb_agg(to_jsonb(flow) order by flow.id)
+      from public.flows as flow
+      where flow.id in (
+        pg_temp.flow_identity_id('source_flow'),
+        pg_temp.flow_identity_id('target_flow'),
+        pg_temp.flow_identity_id('pending_flow')
+      )
+    ), '[]'::jsonb)),
+    'flowproperty_row_sha256',
+      util.dataset_flow_identity_sha256(coalesce((
+        select to_jsonb(flowproperty)
+        from public.flowproperties as flowproperty
+        where flowproperty.id = pg_temp.flow_identity_id('flowproperty')
+          and btrim(flowproperty.version::text) = '01.00.000'
+      ), '{}'::jsonb)),
+    'unitgroup_row_sha256', util.dataset_flow_identity_sha256(coalesce((
+      select to_jsonb(unitgroup)
+      from public.unitgroups as unitgroup
+      where unitgroup.id = pg_temp.flow_identity_id('unitgroup')
+        and btrim(unitgroup.version::text) = '01.00.000'
+    ), '{}'::jsonb)),
+    'invocation_row_sha256', util.dataset_flow_identity_sha256(coalesce((
+      select to_jsonb(invocation)
+      from util.dataset_flow_identity_wrapper_invocations as invocation
+      where invocation.id = p_invocation_id
+    ), '{}'::jsonb))
+  )
+$$;
+
+create or replace function pg_temp.flow_identity_drift_probe(
+  p_phase text,
+  p_kind text,
+  p_authorization jsonb
+) returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = pg_temp, public, util
+as $$
+declare
+  v_scope_id uuid := (
+    select (value->>'scope_id')::uuid
+    from pg_temp.flow_identity_state where key = 'preflight'
+  );
+  v_invocation_id uuid := (p_authorization->>'invocation_id')::uuid;
+  v_before jsonb;
+  v_injected jsonb;
+  v_during jsonb;
+  v_after jsonb;
+  v_result jsonb;
+  v_payload jsonb;
+  v_scope_status text;
+  v_derivative_request_id uuid;
+  v_derivative_status text;
+  v_derivative_terminal_at timestamp with time zone;
+begin
+  if p_phase not in ('process', 'finalize')
+    or p_kind not in (
+      'process', 'source', 'target', 'flowproperty', 'unitgroup', 'occurrence'
+    ) then
+    raise exception 'unsupported drift probe: %/%', p_phase, p_kind;
+  end if;
+  v_before := pg_temp.flow_identity_atomic_state(
+    v_scope_id, v_invocation_id
+  );
+  select scope.status into strict v_scope_status
+  from util.dataset_flow_identity_scopes as scope
+  where scope.id = v_scope_id;
+  begin
+    -- Active fences make these drifts impossible to ordinary callers.  The
+    -- definer-only test probe temporarily removes this scope from the active
+    -- fence set solely to prove that the process/finalize revalidators still
+    -- fail closed if a row ever drifts.
+    update util.dataset_flow_identity_scopes
+    set status = 'failed'
+    where id = v_scope_id;
+    if p_phase = 'finalize' and p_kind in ('process', 'occurrence') then
+      select child.id, child.status, child.terminal_at
+      into strict v_derivative_request_id, v_derivative_status,
+        v_derivative_terminal_at
+      from util.dataset_derivative_rebuild_requests as child
+      where child.target_table = 'processes'
+        and child.target_id = pg_temp.flow_identity_id('process')
+        and child.target_version = '01.00.000';
+      update util.dataset_derivative_rebuild_requests
+      set status = 'stale', terminal_at = clock_timestamp()
+      where id = v_derivative_request_id;
+    end if;
+    case p_kind
+      when 'process' then
+        select jsonb_set(
+          process.json_ordered::jsonb,
+          '{processDataSet,exchanges,exchange,0,generalComment,#text}',
+          '"drifted"'::jsonb,
+          false
+        ) into strict v_payload
+        from public.processes as process
+        where process.id = pg_temp.flow_identity_id('process')
+          and btrim(process.version::text) = '01.00.000';
+        update public.processes as process
+        set json = v_payload,
+          json_ordered = v_payload::json
+        where process.id = pg_temp.flow_identity_id('process')
+          and btrim(process.version::text) = '01.00.000';
+      when 'source' then
+        update public.flows as flow
+        set modified_at = flow.modified_at + interval '1 microsecond'
+        where flow.id = pg_temp.flow_identity_id('source_flow')
+          and btrim(flow.version::text) = '01.00.000';
+      when 'target' then
+        update public.flows as flow
+        set modified_at = flow.modified_at + interval '1 microsecond'
+        where flow.id = pg_temp.flow_identity_id('target_flow')
+          and btrim(flow.version::text) = '01.00.000';
+      when 'flowproperty' then
+        update public.flowproperties as flowproperty
+        set modified_at = flowproperty.modified_at + interval '1 microsecond'
+        where flowproperty.id = pg_temp.flow_identity_id('flowproperty')
+          and btrim(flowproperty.version::text) = '01.00.000';
+      when 'unitgroup' then
+        update public.unitgroups as unitgroup
+        set modified_at = unitgroup.modified_at + interval '1 microsecond'
+        where unitgroup.id = pg_temp.flow_identity_id('unitgroup')
+          and btrim(unitgroup.version::text) = '01.00.000';
+      when 'occurrence' then
+        select jsonb_set(
+          process.json_ordered::jsonb,
+          '{processDataSet,exchanges,exchange,2,exchangeDirection}',
+          '"Output"'::jsonb,
+          false
+        ) into strict v_payload
+        from public.processes as process
+        where process.id = pg_temp.flow_identity_id('process')
+          and btrim(process.version::text) = '01.00.000';
+        update public.processes as process
+        set json = v_payload,
+          json_ordered = v_payload::json
+        where process.id = pg_temp.flow_identity_id('process')
+          and btrim(process.version::text) = '01.00.000';
+    end case;
+    if v_derivative_request_id is not null then
+      update util.dataset_derivative_rebuild_requests
+      set status = v_derivative_status,
+        terminal_at = v_derivative_terminal_at
+      where id = v_derivative_request_id;
+    end if;
+    update util.dataset_flow_identity_scopes
+    set status = v_scope_status
+    where id = v_scope_id;
+    v_injected := pg_temp.flow_identity_business_state(v_scope_id);
+    if p_phase = 'process' then
+      v_result := public.cmd_dataset_flow_identity_process_rewrite_guarded(
+        v_scope_id,
+        (select value from pg_temp.flow_identity_state
+          where key = 'process_request'),
+        p_authorization
+      );
+    else
+      v_result := public.cmd_dataset_flow_identity_scope_finalize_guarded(
+        v_scope_id,
+        (select value from pg_temp.flow_identity_state
+          where key = 'finalize_request'),
+        p_authorization
+      );
+    end if;
+    v_during := pg_temp.flow_identity_business_state(v_scope_id);
+    raise exception using errcode = 'P7001',
+      message = 'FLOW_IDENTITY_TEST_DRIFT_PROBE_ROLLBACK';
+  exception when sqlstate 'P7001' then
+    null;
+  end;
+  v_after := pg_temp.flow_identity_atomic_state(v_scope_id, v_invocation_id);
+  return jsonb_build_object(
+    'phase', p_phase,
+    'kind', p_kind,
+    'result', v_result,
+    'business_unchanged_during_rejection', v_injected = v_during,
+    'probe_rolled_back_exactly', v_before = v_after
+  );
+end;
+$$;
+
+create or replace function pg_temp.flow_identity_post_primary_fault()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if old.command = 'cmd_dataset_flow_identity_process_rewrite_guarded'
+    and old.payload->>'schema_version'
+      = 'dataset-flow-identity-process-rewrite.v1'
+    and new.payload->>'schema_version'
+      = 'dataset-flow-identity-process-rewrite.v2' then
+    raise exception using errcode = 'P0001',
+      message = 'FLOW_IDENTITY_TEST_POST_PRIMARY_FAULT';
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function pg_temp.flow_identity_orphan_derivative_probe(
+  p_scope_id uuid
+) returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = pg_temp, public, util
+as $$
+declare
+  v_before jsonb := pg_temp.flow_identity_business_state(p_scope_id);
+  v_during jsonb;
+  v_after jsonb;
+  v_orphan_id uuid := gen_random_uuid();
+  v_orphan_batch_id uuid := gen_random_uuid();
+begin
+  begin
+    insert into util.dataset_derivative_rebuild_requests
+    select (jsonb_populate_record(
+      null::util.dataset_derivative_rebuild_requests,
+      to_jsonb(child) || jsonb_build_object(
+        'id', v_orphan_id,
+        'batch_id', v_orphan_batch_id,
+        'batch_ordinal', 1,
+        'batch_target_count', 1,
+        'action_id', child.action_id || ':orphan-proof',
+        'plan_request_sha256', util.dataset_flow_identity_sha256(
+          jsonb_build_object('orphan_id', v_orphan_id, 'domain', 'plan')
+        ),
+        'action_request_sha256', util.dataset_flow_identity_sha256(
+          jsonb_build_object('orphan_id', v_orphan_id, 'domain', 'action')
+        ),
+        'status', 'stale',
+        'terminal_at', clock_timestamp(),
+        'last_error', jsonb_build_object('code', 'TEST_ORPHAN_CAUSAL_CHILD')
+      )
+    )).*
+    from util.dataset_derivative_rebuild_requests as child
+    join util.dataset_flow_identity_process_ledger as ledger
+      on ledger.scope_id = p_scope_id
+      and ledger.ordinal = 1
+      and child.batch_id = ledger.derivative_batch_id;
+    v_during := pg_temp.flow_identity_business_state(p_scope_id);
+    raise exception using errcode = 'P7002',
+      message = 'FLOW_IDENTITY_TEST_ORPHAN_DERIVATIVE_ROLLBACK';
+  exception when sqlstate 'P7002' then
+    null;
+  end;
+  v_after := pg_temp.flow_identity_business_state(p_scope_id);
+  return jsonb_build_object(
+    'orphan_causal_child_captured', v_before <> v_during,
+    'probe_rolled_back_exactly', v_before = v_after
+  );
+end;
+$$;
+
 create or replace function pg_temp.flow_identity_cancel_request(
   p_request_id uuid,
   p_reason text
@@ -1781,6 +2132,83 @@ select is(
 );
 
 insert into flow_identity_state(key, value)
+select 'process_drift_' || probe.kind,
+  pg_temp.flow_identity_drift_probe(
+    'process', probe.kind,
+    (select value->'execution_permit'
+      from flow_identity_state where key = 'preflight')
+  )
+from unnest(array[
+  'process', 'source', 'target', 'flowproperty', 'unitgroup', 'occurrence'
+]) with ordinality as probe(kind, ordinal);
+
+select is(
+  jsonb_build_object(
+    'code', state.value #>> '{result,code}',
+    'business_unchanged_during_rejection',
+      (state.value->>'business_unchanged_during_rejection')::boolean,
+    'probe_rolled_back_exactly',
+      (state.value->>'probe_rolled_back_exactly')::boolean
+  ),
+  jsonb_build_object(
+    'code', case split_part(state.key, 'process_drift_', 2)
+      when 'process' then 'FLOW_IDENTITY_PROCESS_BASELINE_DRIFT'
+      when 'occurrence' then 'FLOW_IDENTITY_PROCESS_BASELINE_DRIFT'
+      else 'FLOW_IDENTITY_PROCESS_MAPPING_DRIFT' end,
+    'business_unchanged_during_rejection', true,
+    'probe_rolled_back_exactly', true
+  ),
+  split_part(state.key, 'process_drift_', 2)
+    || ' drift fails closed before a process transaction and writes no business state'
+)
+from flow_identity_state as state
+where state.key like 'process_drift_%'
+order by state.key;
+
+insert into flow_identity_state(key, value)
+select 'post_primary_fault_before', pg_temp.flow_identity_atomic_state(
+  (preflight.value->>'scope_id')::uuid,
+  (preflight.value #>> '{execution_permit,invocation_id}')::uuid
+)
+from flow_identity_state as preflight
+where preflight.key = 'preflight';
+
+reset role;
+create trigger dataset_flow_identity_test_post_primary_fault
+before update on public.command_audit_log
+for each row execute function pg_temp.flow_identity_post_primary_fault();
+set local role authenticated;
+
+select throws_ok(
+  $$select public.cmd_dataset_flow_identity_process_rewrite_guarded(
+      (select (value->>'scope_id')::uuid
+        from flow_identity_state where key = 'preflight'),
+      (select value from flow_identity_state where key = 'process_request'),
+      (select value->'execution_permit'
+        from flow_identity_state where key = 'preflight')
+    )$$,
+  'P0001',
+  'FLOW_IDENTITY_TEST_POST_PRIMARY_FAULT',
+  'a post-primary audit-promotion fault aborts the whole guarded RPC'
+);
+select is(
+  pg_temp.flow_identity_atomic_state(
+    (select (value->>'scope_id')::uuid
+      from flow_identity_state where key = 'preflight'),
+    (select (value #>> '{execution_permit,invocation_id}')::uuid
+      from flow_identity_state where key = 'preflight')
+  ),
+  (select value from flow_identity_state
+    where key = 'post_primary_fault_before'),
+  'post-primary fault rolls back process JSON, ledger, audit, derivative child, permit, scope, and active fence'
+);
+
+reset role;
+drop trigger dataset_flow_identity_test_post_primary_fault
+  on public.command_audit_log;
+set local role authenticated;
+
+insert into flow_identity_state(key, value)
 select 'process_result',
   public.cmd_dataset_flow_identity_process_rewrite_guarded(
     (select (value->>'scope_id')::uuid
@@ -2082,6 +2510,17 @@ select is(
   'two ordered process transactions admit exactly two causal derivative children'
 );
 select is(
+  pg_temp.flow_identity_orphan_derivative_probe((
+    select (value->>'scope_id')::uuid
+    from flow_identity_state where key = 'preflight'
+  )),
+  jsonb_build_object(
+    'orphan_causal_child_captured', true,
+    'probe_rolled_back_exactly', true
+  ),
+  'atomic snapshot includes a same-actor/reason/target orphan causal child without a ledger batch link'
+);
+select is(
   (select count(*)::integer from public.command_audit_log
     where command = 'cmd_dataset_flow_identity_process_rewrite_guarded'
       and target_id = pg_temp.flow_identity_id('process')),
@@ -2119,6 +2558,62 @@ select 'finalize_request', jsonb_build_object(
 from flow_identity_state as preflight
 where preflight.key = 'preflight'
 ;
+
+insert into flow_identity_state(key, value)
+select 'finalize_drift_' || probe.kind,
+  pg_temp.flow_identity_drift_probe(
+    'finalize', probe.kind,
+    (select value->'execution_permit'
+      from flow_identity_state where key = 'process_result_2')
+  )
+from unnest(array[
+  'process', 'source', 'target', 'flowproperty', 'unitgroup', 'occurrence'
+]) with ordinality as probe(kind, ordinal);
+
+select is(
+  jsonb_build_object(
+    'code', state.value #>> '{result,code}',
+    'guard_current', case split_part(state.key, 'finalize_drift_', 2)
+      when 'process' then
+        (state.value #>> '{result,whole_scope_proof,primary_current}')::boolean
+      when 'source' then
+        (state.value #>>
+          '{result,whole_scope_proof,source_guards_current}')::boolean
+      when 'target' then
+        (state.value #>>
+          '{result,whole_scope_proof,target_guards_current}')::boolean
+      when 'flowproperty' then
+        (state.value #>>
+          '{result,whole_scope_proof,support_guards_current}')::boolean
+      when 'unitgroup' then
+        (state.value #>>
+          '{result,whole_scope_proof,support_guards_current}')::boolean
+      when 'occurrence' then
+        (state.value #>>
+          '{result,whole_scope_proof,protected_closure_current}')::boolean
+      end,
+    'occurrence_closure_current',
+      (state.value #>>
+        '{result,whole_scope_proof,occurrence_closure_current}')::boolean,
+    'business_unchanged_during_rejection',
+      (state.value->>'business_unchanged_during_rejection')::boolean,
+    'probe_rolled_back_exactly',
+      (state.value->>'probe_rolled_back_exactly')::boolean
+  ),
+  jsonb_build_object(
+    'code', 'FLOW_IDENTITY_PRIMARY_OR_GUARD_DRIFT',
+    'guard_current', false,
+    'occurrence_closure_current',
+      split_part(state.key, 'finalize_drift_', 2) <> 'occurrence',
+    'business_unchanged_during_rejection', true,
+    'probe_rolled_back_exactly', true
+  ),
+  split_part(state.key, 'finalize_drift_', 2)
+    || ' drift fails closed before finalize and writes no business state'
+)
+from flow_identity_state as state
+where state.key like 'finalize_drift_%'
+order by state.key;
 
 insert into flow_identity_state(key, value)
 select 'recovery_request_1', pg_temp.flow_identity_recovery_request(

@@ -259,6 +259,16 @@ select ok(
 -- The only public v2 entrypoints are authenticated security-definer RPCs
 -- with an empty search_path.  Cancel is a zero-primary-write abandon path;
 -- its legacy v1 implementation remains private and non-executable.
+select hasnt_function(
+  'public', 'cmd_dataset_flow_identity_process_rewrite_guarded',
+  array['uuid', 'jsonb'],
+  'the former two-argument process rewrite surface is no longer public'
+);
+select hasnt_function(
+  'public', 'cmd_dataset_flow_identity_scope_finalize_guarded',
+  array['uuid', 'jsonb'],
+  'the former two-argument finalize surface is no longer public'
+);
 select function_privs_are(
   'public', 'cmd_dataset_flow_identity_capture_attest_guarded',
   array['jsonb'], 'authenticated', array['EXECUTE'],
@@ -338,48 +348,84 @@ select ok(
   ),
   'every public v2 RPC is security definer with an empty search_path'
 );
-select ok(
-  not has_function_privilege(
-    'authenticated',
-    'private.dataset_flow_identity_safe_json_v2(jsonb)',
-    'EXECUTE'
-  ),
-  'authenticated cannot call the private safe-JSON primitive directly'
+
+-- Moving the v1 implementations out of public must not leave a second
+-- callable name behind.  The public names above are the v2 wrappers; these
+-- core names exist only in private.
+select hasnt_function(
+  'public', 'dataset_flow_identity_scope_preflight_core_v1', array['jsonb'],
+  'the v1 preflight core has no public-schema alias'
 );
-select ok(
-  not has_function_privilege(
-    'authenticated',
-    'private.dataset_flow_identity_short_description_v2(jsonb)',
-    'EXECUTE'
-  ),
-  'authenticated cannot call the private STMultiLang primitive directly'
+select hasnt_function(
+  'public', 'dataset_flow_identity_process_rewrite_core_v1',
+  array['uuid', 'jsonb'],
+  'the v1 process core has no public-schema alias'
 );
-select ok(
-  not has_function_privilege(
-    'authenticated',
-    'private.dataset_flow_identity_scope_cancel_core_v1(uuid,jsonb)',
-    'EXECUTE'
+select hasnt_function(
+  'public', 'dataset_flow_identity_scope_read_core_v1', array['uuid'],
+  'the v1 scope-read core has no public-schema alias'
+);
+select hasnt_function(
+  'public', 'dataset_flow_identity_scope_finalize_core_v1',
+  array['uuid', 'jsonb'],
+  'the v1 finalize core has no public-schema alias'
+);
+select hasnt_function(
+  'public', 'dataset_flow_identity_scope_cancel_core_v1',
+  array['uuid', 'jsonb'],
+  'the v1 cancel core has no public-schema alias'
+);
+
+-- Every v1 materializer and every bearer-permit primitive is a postgres-only
+-- implementation capability.  Use exact empty privilege sets for each API
+-- role so a future grant on any one function cannot hide inside a combined
+-- boolean assertion.
+select function_privs_are(
+  'private', function_contract.name, function_contract.arguments,
+  api_role.name, array[]::text[],
+  format(
+    '%s has no EXECUTE privilege on private.%s(%s)',
+    api_role.name, function_contract.name,
+    array_to_string(function_contract.arguments, ',')
   )
-  and not has_function_privilege(
-    'service_role',
-    'private.dataset_flow_identity_scope_cancel_core_v1(uuid,jsonb)',
-    'EXECUTE'
-  ),
-  'the legacy cancel core is private to the v2 database implementation'
-);
-select ok(
-  not has_function_privilege(
-    'authenticated',
-    'private.dataset_flow_identity_validate_wrapper_permit_v1(uuid,uuid,jsonb,text)',
-    'EXECUTE'
+)
+from (values
+  ('dataset_flow_identity_scope_preflight_core_v1', array['jsonb']::text[]),
+  ('dataset_flow_identity_process_rewrite_core_v1',
+    array['uuid', 'jsonb']::text[]),
+  ('dataset_flow_identity_scope_read_core_v1', array['uuid']::text[]),
+  ('dataset_flow_identity_scope_finalize_core_v1',
+    array['uuid', 'jsonb']::text[]),
+  ('dataset_flow_identity_scope_cancel_core_v1',
+    array['uuid', 'jsonb']::text[]),
+  ('dataset_flow_identity_permit_token_sha256_v1', array['text']::text[]),
+  ('dataset_flow_identity_validate_wrapper_permit_v1',
+    array['uuid', 'uuid', 'jsonb', 'text']::text[]),
+  ('dataset_flow_identity_rotate_wrapper_permit_v1',
+    array['uuid', 'text', 'boolean']::text[]),
+  ('dataset_flow_identity_invalidate_wrapper_permit_v1',
+    array['uuid']::text[])
+) as function_contract(name, arguments)
+cross join (values ('anon'), ('authenticated'), ('service_role'))
+  as api_role(name);
+
+-- Retain the narrower v2 primitive ACL coverage alongside the exhaustive v1
+-- core/permit matrix above.
+select function_privs_are(
+  'private', function_contract.name, function_contract.arguments,
+  api_role.name, array[]::text[],
+  format(
+    '%s has no EXECUTE privilege on private.%s(%s)',
+    api_role.name, function_contract.name,
+    array_to_string(function_contract.arguments, ',')
   )
-  and not has_function_privilege(
-    'service_role',
-    'private.dataset_flow_identity_rotate_wrapper_permit_v1(uuid,text,boolean)',
-    'EXECUTE'
-  ),
-  'permit validation and rotation remain private database capabilities'
-);
+)
+from (values
+  ('dataset_flow_identity_safe_json_v2', array['jsonb']::text[]),
+  ('dataset_flow_identity_short_description_v2', array['jsonb']::text[])
+) as function_contract(name, arguments)
+cross join (values ('anon'), ('authenticated'), ('service_role'))
+  as api_role(name);
 select ok(
   (select provolatile = 's'
    from pg_proc
@@ -499,47 +545,174 @@ select is(
   0,
   'forging the legacy GUC does not mint a transaction-bound mutation permit'
 );
-select ok(
-  not has_table_privilege(
-    'authenticated', 'util.dataset_flow_identity_mutation_permits', 'SELECT'
-  )
-  and not has_table_privilege(
-    'authenticated', 'util.dataset_flow_identity_mutation_permits', 'INSERT'
-  )
-  and not has_table_privilege(
-    'service_role', 'util.dataset_flow_identity_mutation_permits', 'SELECT'
-  )
-  and not has_table_privilege(
-    'service_role', 'util.dataset_flow_identity_mutation_permits', 'INSERT'
+
+-- Pin the full relation inventory as well as its ACLs.  The catalog assertion
+-- fails if a later migration adds another dataset_flow_identity table, forcing
+-- the expected list and privilege matrix to be extended together.
+select is(
+  (
+    select array_agg(class.relname::text order by class.relname)
+    from pg_class as class
+    join pg_namespace as namespace on namespace.oid = class.relnamespace
+    where namespace.nspname = 'util'
+      and class.relkind in ('r', 'p')
+      and class.relname like 'dataset_flow_identity_%'
   ),
-  'authenticated and service_role cannot inspect or mint private mutation permits'
+  array[
+    'dataset_flow_identity_capture_mapping_guards',
+    'dataset_flow_identity_capture_process_intents',
+    'dataset_flow_identity_capture_receipts',
+    'dataset_flow_identity_capture_source_guards',
+    'dataset_flow_identity_capture_support_guards',
+    'dataset_flow_identity_capture_target_guards',
+    'dataset_flow_identity_mappings',
+    'dataset_flow_identity_mutation_permits',
+    'dataset_flow_identity_process_ledger',
+    'dataset_flow_identity_scopes',
+    'dataset_flow_identity_wrapper_invocations'
+  ]::text[],
+  'the v2 migration owns the exact eleven private util relations'
 );
-select ok(
-  not has_table_privilege(
-    'authenticated', 'util.dataset_flow_identity_wrapper_invocations', 'SELECT'
+select table_privs_are(
+  'util', relation.name, api_role.name, array[]::text[],
+  format(
+    '%s has no table privilege on util.%s', api_role.name, relation.name
   )
-  and not has_table_privilege(
-    'authenticated', 'util.dataset_flow_identity_wrapper_invocations', 'INSERT'
-  )
-  and not has_table_privilege(
-    'service_role', 'util.dataset_flow_identity_wrapper_invocations', 'SELECT'
-  ),
-  'wrapper invocation tokens and approval consumption remain private'
+)
+from (values
+  ('dataset_flow_identity_capture_mapping_guards'),
+  ('dataset_flow_identity_capture_process_intents'),
+  ('dataset_flow_identity_capture_receipts'),
+  ('dataset_flow_identity_capture_source_guards'),
+  ('dataset_flow_identity_capture_support_guards'),
+  ('dataset_flow_identity_capture_target_guards'),
+  ('dataset_flow_identity_mappings'),
+  ('dataset_flow_identity_mutation_permits'),
+  ('dataset_flow_identity_process_ledger'),
+  ('dataset_flow_identity_scopes'),
+  ('dataset_flow_identity_wrapper_invocations')
+) as relation(name)
+cross join (values ('anon'), ('authenticated'), ('service_role'))
+  as api_role(name);
+
+-- This fixture-free contract suite can prove anonymous rejection at the ACL
+-- boundary.  Foreign-actor semantics require a sealed owner scope and are
+-- exercised by 20260716_guarded_dataset_flow_identity_mapping.sql; real
+-- PostgREST/JWT behavior remains hosted Preview E2E evidence.  Snapshot every
+-- private relation plus command audits here so each rejected anonymous call
+-- is also proved state-neutral.
+create function pg_temp.dataset_flow_identity_acl_state()
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $$
+declare
+  v_relation text;
+  v_rows jsonb;
+  v_state jsonb := '{}'::jsonb;
+begin
+  for v_relation in
+    select unnest(array[
+      'dataset_flow_identity_capture_mapping_guards',
+      'dataset_flow_identity_capture_process_intents',
+      'dataset_flow_identity_capture_receipts',
+      'dataset_flow_identity_capture_source_guards',
+      'dataset_flow_identity_capture_support_guards',
+      'dataset_flow_identity_capture_target_guards',
+      'dataset_flow_identity_mappings',
+      'dataset_flow_identity_mutation_permits',
+      'dataset_flow_identity_process_ledger',
+      'dataset_flow_identity_scopes',
+      'dataset_flow_identity_wrapper_invocations'
+    ]::text[])
+  loop
+    execute format(
+      'select coalesce('
+        || 'jsonb_agg(to_jsonb(snapshot) order by to_jsonb(snapshot)::text),'
+        || '''[]''::jsonb) from util.%I as snapshot',
+      v_relation
+    ) into v_rows;
+    v_state := v_state || jsonb_build_object(v_relation, v_rows);
+  end loop;
+  select coalesce(
+    jsonb_agg(to_jsonb(audit) order by audit.id), '[]'::jsonb
+  ) into v_rows
+  from public.command_audit_log as audit
+  where audit.command like 'cmd_dataset_flow_identity_%';
+  return v_state || jsonb_build_object('command_audit_log', v_rows);
+end;
+$$;
+
+create temporary table flow_identity_anon_acl_before on commit drop as
+select pg_temp.dataset_flow_identity_acl_state() as state;
+
+set local role anon;
+select throws_ok(
+  $$select public.cmd_dataset_flow_identity_capture_attest_guarded('{}')$$,
+  '42501',
+  'permission denied for function cmd_dataset_flow_identity_capture_attest_guarded',
+  'anon cannot execute capture attestation'
 );
-select ok(
-  not has_table_privilege(
-    'authenticated', 'util.dataset_flow_identity_capture_receipts', 'SELECT'
-  )
-  and not has_table_privilege(
-    'service_role', 'util.dataset_flow_identity_capture_receipts', 'SELECT'
-  )
-  and not has_table_privilege(
-    'authenticated', 'util.dataset_flow_identity_capture_process_intents', 'SELECT'
-  )
-  and not has_table_privilege(
-    'service_role', 'util.dataset_flow_identity_capture_process_intents', 'SELECT'
-  ),
-  'receipt and process-intent proofs are not exposed as directly readable tables'
+select throws_ok(
+  $$select public.cmd_dataset_flow_identity_scope_preflight_guarded('{}')$$,
+  '42501',
+  'permission denied for function cmd_dataset_flow_identity_scope_preflight_guarded',
+  'anon cannot execute scope preflight'
+);
+select throws_ok(
+  $$select public.cmd_dataset_flow_identity_process_rewrite_guarded(
+      'ffffffff-ffff-4fff-8fff-ffffffffffff', '{}', '{}'
+    )$$,
+  '42501',
+  'permission denied for function cmd_dataset_flow_identity_process_rewrite_guarded',
+  'anon cannot execute a process rewrite'
+);
+select throws_ok(
+  $$select public.cmd_dataset_flow_identity_scope_read(
+      'ffffffff-ffff-4fff-8fff-ffffffffffff'
+    )$$,
+  '42501',
+  'permission denied for function cmd_dataset_flow_identity_scope_read',
+  'anon cannot read a scope'
+);
+select throws_ok(
+  $$select public.cmd_dataset_flow_identity_scope_finalize_guarded(
+      'ffffffff-ffff-4fff-8fff-ffffffffffff', '{}', '{}'
+    )$$,
+  '42501',
+  'permission denied for function cmd_dataset_flow_identity_scope_finalize_guarded',
+  'anon cannot finalize a scope'
+);
+select throws_ok(
+  $$select public.cmd_dataset_flow_identity_scope_recover_guarded(
+      'ffffffff-ffff-4fff-8fff-ffffffffffff', '{}'
+    )$$,
+  '42501',
+  'permission denied for function cmd_dataset_flow_identity_scope_recover_guarded',
+  'anon cannot recover a scope'
+);
+select throws_ok(
+  $$select public.cmd_dataset_flow_identity_scope_lookup('{}')$$,
+  '42501',
+  'permission denied for function cmd_dataset_flow_identity_scope_lookup',
+  'anon cannot look up a scope'
+);
+select throws_ok(
+  $$select public.cmd_dataset_flow_identity_scope_cancel_guarded(
+      'ffffffff-ffff-4fff-8fff-ffffffffffff', '{}'
+    )$$,
+  '42501',
+  'permission denied for function cmd_dataset_flow_identity_scope_cancel_guarded',
+  'anon cannot cancel a scope'
+);
+reset role;
+
+select is(
+  pg_temp.dataset_flow_identity_acl_state(),
+  (select state from flow_identity_anon_acl_before),
+  'all eight rejected anonymous RPC calls leave private and audit state byte-identical'
 );
 
 select * from finish();
