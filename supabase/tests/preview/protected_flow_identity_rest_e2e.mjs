@@ -1312,11 +1312,16 @@ async function concurrentProcessPosts(context, scopeId, processRequest, permit) 
     });
     for (const worker of workers) worker.child.stdin.end(`${payload}\n`);
     const results = await Promise.all(workers.map((worker) => worker.result));
+    const responseSummary = (item) => ({
+      status: item.status,
+      code: item.body.code ?? null,
+      ok: typeof item.body.ok === 'boolean' ? item.body.ok : null,
+    });
     const successes = results.filter((item) => item.status === 200 && item.body.ok === true);
     const rejections = results.filter((item) => item.body.ok === false);
     assertCondition(successes.length === 1 && rejections.length === 1, 'RACE_CARDINALITY_INVALID', {
       success_count: successes.length, rejection_count: rejections.length,
-      response_set_sha256: sha256(results.map((item) => ({ status: item.status, code: item.body.code, ok: item.body.ok }))),
+      response_set_sha256: sha256(results.map(responseSummary)),
     });
     const rejectionCode = requireString(rejections[0].body.code, 'RACE_REJECTION_CODE_MISSING', SAFE_CODE_RE);
     assertCondition(ALLOWED_RACE_REJECTIONS.has(rejectionCode), 'RACE_REJECTION_CODE_INVALID', {
@@ -1325,7 +1330,7 @@ async function concurrentProcessPosts(context, scopeId, processRequest, permit) 
     return {
       success: successes[0].body,
       rejectionCode,
-      responseSetSha256: sha256(results.map((item) => ({ status: item.status, code: item.body.code, ok: item.body.ok }))),
+      responseSetSha256: sha256(results.map(responseSummary)),
     };
   } finally {
     for (const worker of workers) {
