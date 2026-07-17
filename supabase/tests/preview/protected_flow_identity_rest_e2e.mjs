@@ -33,6 +33,11 @@ const MANIFEST_SCHEMA = 'protected-flow-identity-preview-fixture.v1';
 const EVIDENCE_SCHEMA = 'protected-flow-identity-rest-e2e-evidence.v1';
 const TRANSPORT_EVIDENCE_SCHEMA = 'protected-flow-identity-transport-preflight-evidence.v1';
 const SUPABASE_CLI_VERSION = '2.109.1';
+const PG_PROVE_IMAGE_REPOSITORY = 'public.ecr.aws/supabase/pg_prove';
+const PG_PROVE_IMAGE_REF = `${PG_PROVE_IMAGE_REPOSITORY}:3.36`;
+const PG_PROVE_IMAGE_PLATFORM = 'linux/arm64';
+const PG_PROVE_INSPECT_TEMPLATE = '{"id":{{json .Id}},"repo_digests":{{json .RepoDigests}},"architecture":{{json .Architecture}},"os":{{json .Os}}}';
+const DOCKER_INSPECT_TIMEOUT_MS = 15_000;
 const PRODUCTION_REF = 'qgzvkongdjqiiamzbbts';
 const DB_TEST_CHILD_ENV_NAMES = Object.freeze([
   'PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'LC_ALL',
@@ -64,6 +69,7 @@ const PLACEHOLDERS = Object.freeze([
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const SHA256_RE = /^[0-9a-f]{64}$/;
+const IMAGE_ID_RE = /^sha256:[0-9a-f]{64}$/;
 const REF_RE = /^[a-z0-9]{15,64}$/;
 const NAMESPACE_RE = /^fie2e-hosted-[0-9a-f]{24}$/;
 const SAFE_CODE_RE = /^[A-Z][A-Z0-9_]{2,127}$/;
@@ -258,6 +264,12 @@ function helpText() {
     '  PREVIEW_DB_URL=<percent-encoded Preview PostgreSQL URL>',
     '  PREVIEW_SUPABASE_CLI_PATH=<exact absolute native Supabase CLI path>',
     '  PREVIEW_SUPABASE_CLI_SHA256=<exact native Supabase CLI file SHA-256>',
+    '  PREVIEW_DOCKER_CLI_PATH=<exact absolute regular docker executable path>',
+    '  PREVIEW_DOCKER_CLI_SHA256=<exact docker executable file SHA-256>',
+    `  PREVIEW_PG_PROVE_IMAGE_REF=${PG_PROVE_IMAGE_REF}`,
+    '  PREVIEW_PG_PROVE_IMAGE_ID=<exact cached sha256: image ID>',
+    '  PREVIEW_PG_PROVE_IMAGE_REPO_DIGEST=<exact cached repository@sha256: digest>',
+    `  PREVIEW_PG_PROVE_IMAGE_PLATFORM=${PG_PROVE_IMAGE_PLATFORM}`,
     '',
     'Optional bounded timings:',
     '  PREVIEW_RPC_TIMEOUT_MS (default 90000)',
@@ -296,6 +308,20 @@ function loadConfig(expectedPreviewRef) {
     envRequired('PREVIEW_SUPABASE_CLI_SHA256'),
     'PREVIEW_SUPABASE_CLI_SHA256_INVALID',
   );
+  const dockerCliPath = envRequired('PREVIEW_DOCKER_CLI_PATH');
+  const dockerCliSha256 = requireSha(
+    envRequired('PREVIEW_DOCKER_CLI_SHA256'),
+    'PREVIEW_DOCKER_CLI_SHA256_INVALID',
+  );
+  const pgProveImageRef = envRequired('PREVIEW_PG_PROVE_IMAGE_REF');
+  const pgProveImageId = requireString(
+    envRequired('PREVIEW_PG_PROVE_IMAGE_ID'),
+    'PREVIEW_PG_PROVE_IMAGE_ID_INVALID',
+    IMAGE_ID_RE,
+  );
+  const pgProveImageRepoDigest = envRequired('PREVIEW_PG_PROVE_IMAGE_REPO_DIGEST');
+  const pgProveImagePlatform = envRequired('PREVIEW_PG_PROVE_IMAGE_PLATFORM');
+  const childPath = envRequired('PATH');
 
   assertCondition(environment === 'preview', 'PREVIEW_ENVIRONMENT_MISMATCH');
   assertCondition(projectRef === expectedPreviewRef, 'PREVIEW_REF_ENV_ARG_MISMATCH');
@@ -315,6 +341,28 @@ function loadConfig(expectedPreviewRef) {
   assertCondition(parsed.pathname === '/' && !parsed.search && !parsed.hash, 'PREVIEW_SUPABASE_URL_PATH_INVALID');
   assertCondition(urlContainsExactRef(dbUrl, projectRef), 'PREVIEW_DB_URL_REF_MISMATCH');
   assertCondition(path.isAbsolute(supabaseCliPath), 'PREVIEW_SUPABASE_CLI_PATH_NOT_ABSOLUTE');
+  assertCondition(path.isAbsolute(dockerCliPath), 'PREVIEW_DOCKER_CLI_PATH_NOT_ABSOLUTE');
+  assertCondition(path.basename(dockerCliPath) === 'docker', 'PREVIEW_DOCKER_CLI_BASENAME_INVALID');
+  const childPathEntries = childPath.split(path.delimiter);
+  assertCondition(
+    childPathEntries.length > 0
+      && childPathEntries.every((entry) => entry.length > 0 && path.isAbsolute(entry)),
+    'PREVIEW_CHILD_PATH_INVALID',
+  );
+  assertCondition(
+    childPathEntries[0] === path.dirname(dockerCliPath),
+    'PREVIEW_DOCKER_CLI_NOT_FIRST_IN_PATH',
+  );
+  assertCondition(dockerCliPath !== supabaseCliPath, 'PREVIEW_EXECUTABLE_PATHS_MUST_DIFFER');
+  assertCondition(pgProveImageRef === PG_PROVE_IMAGE_REF, 'PREVIEW_PG_PROVE_IMAGE_REF_MISMATCH');
+  assertCondition(
+    pgProveImageRepoDigest === `${PG_PROVE_IMAGE_REPOSITORY}@${pgProveImageId}`,
+    'PREVIEW_PG_PROVE_IMAGE_REPO_DIGEST_INVALID',
+  );
+  assertCondition(
+    pgProveImagePlatform === PG_PROVE_IMAGE_PLATFORM,
+    'PREVIEW_PG_PROVE_IMAGE_PLATFORM_MISMATCH',
+  );
 
   return Object.freeze({
     environment,
@@ -325,6 +373,12 @@ function loadConfig(expectedPreviewRef) {
     dbUrl,
     supabaseCliPath,
     supabaseCliSha256,
+    dockerCliPath,
+    dockerCliSha256,
+    pgProveImageRef,
+    pgProveImageId,
+    pgProveImageRepoDigest,
+    pgProveImagePlatform,
     rpcTimeoutMs: parseBoundedInteger(
       process.env.PREVIEW_RPC_TIMEOUT_MS, 90_000, 5_000, 180_000,
       'PREVIEW_RPC_TIMEOUT_INVALID',
@@ -404,7 +458,7 @@ function dbDiagnosticCodes(stdoutText, stderrText, config) {
   let diagnostic = `${stdoutText}\n${stderrText}`;
   for (const sensitive of [
     config.dbUrl, config.supabaseUrl, config.anonKey,
-    config.serviceRoleKey, config.projectRef, config.supabaseCliPath,
+    config.serviceRoleKey, config.projectRef, config.supabaseCliPath, config.dockerCliPath,
   ]) diagnostic = diagnostic.replaceAll(sensitive, ' REDACTED ');
   diagnostic = diagnostic
     .replace(/postgres(?:ql)?:\/\/\S+/gi, ' REDACTED ')
@@ -422,49 +476,186 @@ function dbDiagnosticCodes(stdoutText, stderrText, config) {
     .filter((code) => SAFE_CODE_RE.test(code)))].slice(-12);
 }
 
-async function runDbTest(config, tempDir, name, sql) {
-  const filePath = path.join(tempDir, `${name}.sql`);
-  await writeFile(filePath, sql, { mode: 0o600, flag: 'wx' });
-  let cliStatBefore;
-  let cliRealPathBefore;
-  let cliBytes;
+async function verifyBoundExecutable(filePath, expectedSha256, codePrefix) {
+  const executablePathSha256 = sha256(filePath);
+  let statBefore;
+  let realPathBefore;
   try {
-    cliStatBefore = await lstat(config.supabaseCliPath);
-    cliRealPathBefore = await realpath(config.supabaseCliPath);
+    statBefore = await lstat(filePath);
+    realPathBefore = await realpath(filePath);
   } catch {
-    fail('PREVIEW_SUPABASE_CLI_READ_FAILED', {
-      executable_path_sha256: sha256(config.supabaseCliPath),
-    });
+    fail(`${codePrefix}_READ_FAILED`, { executable_path_sha256: executablePathSha256 });
   }
   assertCondition(
-    cliStatBefore.isFile() && !cliStatBefore.isSymbolicLink()
-      && (cliStatBefore.mode & 0o111) !== 0,
-    'PREVIEW_SUPABASE_CLI_FILE_INVALID',
-    { executable_path_sha256: sha256(config.supabaseCliPath) },
+    statBefore.isFile() && !statBefore.isSymbolicLink() && (statBefore.mode & 0o111) !== 0,
+    `${codePrefix}_FILE_INVALID`,
+    { executable_path_sha256: executablePathSha256 },
   );
   assertCondition(
-    cliRealPathBefore === config.supabaseCliPath,
-    'PREVIEW_SUPABASE_CLI_PATH_NOT_CANONICAL',
-    { executable_path_sha256: sha256(config.supabaseCliPath) },
+    realPathBefore === filePath,
+    `${codePrefix}_PATH_NOT_CANONICAL`,
+    { executable_path_sha256: executablePathSha256 },
   );
+  let executableBytes;
   try {
-    cliBytes = await readFile(config.supabaseCliPath);
+    executableBytes = await readFile(filePath);
   } catch {
-    fail('PREVIEW_SUPABASE_CLI_READ_FAILED', {
-      executable_path_sha256: sha256(config.supabaseCliPath),
-    });
+    fail(`${codePrefix}_READ_FAILED`, { executable_path_sha256: executablePathSha256 });
   }
-  const executablePathSha256 = sha256(config.supabaseCliPath);
-  const executableFileSha256 = sha256(cliBytes);
+  const executableFileSha256 = sha256(executableBytes);
   assertCondition(
-    executableFileSha256 === config.supabaseCliSha256,
-    'PREVIEW_SUPABASE_CLI_SHA256_MISMATCH',
+    executableFileSha256 === expectedSha256,
+    `${codePrefix}_SHA256_MISMATCH`,
     {
       executable_path_sha256: executablePathSha256,
-      expected_sha256: config.supabaseCliSha256,
+      expected_sha256: expectedSha256,
       observed_sha256: executableFileSha256,
     },
   );
+  let statAfter;
+  let realPathAfter;
+  try {
+    statAfter = await lstat(filePath);
+    realPathAfter = await realpath(filePath);
+  } catch {
+    fail(`${codePrefix}_CHANGED_BEFORE_SPAWN`, {
+      executable_path_sha256: executablePathSha256,
+    });
+  }
+  assertCondition(
+    realPathAfter === realPathBefore
+      && statAfter.isFile()
+      && !statAfter.isSymbolicLink()
+      && statAfter.dev === statBefore.dev
+      && statAfter.ino === statBefore.ino
+      && statAfter.mode === statBefore.mode
+      && statAfter.size === statBefore.size
+      && statAfter.mtimeMs === statBefore.mtimeMs
+      && statAfter.ctimeMs === statBefore.ctimeMs,
+    `${codePrefix}_CHANGED_BEFORE_SPAWN`,
+    { executable_path_sha256: executablePathSha256 },
+  );
+  return { executablePathSha256, executableFileSha256 };
+}
+
+async function inspectBoundPgProveImage(config, childEnv) {
+  const args = [
+    'image', 'inspect', config.pgProveImageRef,
+    '--format', PG_PROVE_INSPECT_TEMPLATE,
+  ];
+  const stdoutHash = createHash('sha256');
+  const stderrHash = createHash('sha256');
+  const stdoutChunks = [];
+  const stderrChunks = [];
+  let stdoutBytes = 0;
+  let stderrBytes = 0;
+  let timedOut = false;
+  let outputTooLarge = false;
+  let spawnFailed = false;
+
+  const result = await new Promise((resolve) => {
+    let settled = false;
+    const finish = (value) => {
+      if (settled) return;
+      settled = true;
+      resolve(value);
+    };
+    const child = spawn(config.dockerCliPath, args, {
+      cwd: REPO_ROOT, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'], shell: false,
+    });
+    const timeout = setTimeout(() => {
+      timedOut = true;
+      child.kill('SIGTERM');
+      setTimeout(() => child.kill('SIGKILL'), 2_000).unref();
+    }, DOCKER_INSPECT_TIMEOUT_MS);
+    timeout.unref();
+    const collect = (hash, chunks, kind) => (chunk) => {
+      hash.update(chunk);
+      if (kind === 'stdout') stdoutBytes += chunk.length;
+      else stderrBytes += chunk.length;
+      const retained = chunks.reduce((total, item) => total + item.length, 0);
+      if (retained < 64 * 1024) chunks.push(chunk.subarray(0, 64 * 1024 - retained));
+      if (stdoutBytes + stderrBytes > 64 * 1024 && !outputTooLarge) {
+        outputTooLarge = true;
+        child.kill('SIGTERM');
+      }
+    };
+    child.stdout.on('data', collect(stdoutHash, stdoutChunks, 'stdout'));
+    child.stderr.on('data', collect(stderrHash, stderrChunks, 'stderr'));
+    child.once('error', () => {
+      clearTimeout(timeout);
+      spawnFailed = true;
+      finish({ exitCode: null, signal: null });
+    });
+    child.once('close', (exitCode, signal) => {
+      clearTimeout(timeout);
+      finish({ exitCode, signal: signal ?? null });
+    });
+  });
+
+  const stdout = Buffer.concat(stdoutChunks).toString('utf8');
+  const stderr = Buffer.concat(stderrChunks).toString('utf8');
+  const proof = {
+    pg_prove_image_ref_sha256: sha256(config.pgProveImageRef),
+    pg_prove_image_id_sha256: sha256(config.pgProveImageId),
+    pg_prove_image_repo_digest_sha256: sha256(config.pgProveImageRepoDigest),
+    pg_prove_image_platform_sha256: sha256(config.pgProveImagePlatform),
+    pg_prove_image_inspect_argv_sha256: sha256(args),
+    pg_prove_image_inspect_stdout_sha256: stdoutHash.digest('hex'),
+    pg_prove_image_inspect_stderr_sha256: stderrHash.digest('hex'),
+    pg_prove_image_inspect_stdout_bytes: stdoutBytes,
+    pg_prove_image_inspect_stderr_bytes: stderrBytes,
+  };
+  if (
+    spawnFailed || timedOut || outputTooLarge
+    || result.exitCode !== 0 || result.signal !== null
+  ) {
+    fail('PREVIEW_PG_PROVE_IMAGE_INSPECT_FAILED', {
+      ...proof,
+      inspect_exit_code: result.exitCode,
+      inspect_signal: result.signal,
+      inspect_spawn_failed: spawnFailed,
+      inspect_timed_out: timedOut,
+      inspect_output_too_large: outputTooLarge,
+    });
+  }
+
+  let inspected;
+  try {
+    inspected = JSON.parse(stdout.trim());
+  } catch {
+    fail('PREVIEW_PG_PROVE_IMAGE_IDENTITY_MISMATCH', {
+      ...proof,
+      inspect_output_json: false,
+    });
+  }
+  const observedId = typeof inspected?.id === 'string' ? inspected.id : '<invalid>';
+  const observedRepoDigests = Array.isArray(inspected?.repo_digests)
+    ? inspected.repo_digests
+    : ['<invalid>'];
+  const observedPlatform = typeof inspected?.os === 'string'
+    && typeof inspected?.architecture === 'string'
+    ? `${inspected.os}/${inspected.architecture}`
+    : '<invalid>';
+  const identityMatches = isPlainObject(inspected)
+    && observedId === config.pgProveImageId
+    && observedRepoDigests.includes(config.pgProveImageRepoDigest)
+    && observedPlatform === config.pgProveImagePlatform;
+  if (!identityMatches) {
+    fail('PREVIEW_PG_PROVE_IMAGE_IDENTITY_MISMATCH', {
+      ...proof,
+      observed_image_id_sha256: sha256(observedId),
+      observed_repo_digest_set_sha256: sha256(observedRepoDigests),
+      observed_platform_sha256: sha256(observedPlatform),
+    });
+  }
+  assertCondition(stderr.length === 0, 'PREVIEW_PG_PROVE_IMAGE_INSPECT_STDERR', proof);
+  return proof;
+}
+
+async function runDbTest(config, tempDir, name, sql) {
+  const filePath = path.join(tempDir, `${name}.sql`);
+  await writeFile(filePath, sql, { mode: 0o600, flag: 'wx' });
   const args = [
     '--log-level', 'error',
     'test', 'db', '--db-url', config.dbUrl, filePath,
@@ -485,29 +676,17 @@ async function runDbTest(config, tempDir, name, sql) {
     Object.keys(childEnv).sort().map((name) => [name, sha256(childEnv[name])]),
   ));
   const workingDirectorySha256 = sha256(REPO_ROOT);
-  let cliStatAfter;
-  let cliRealPathAfter;
-  try {
-    cliStatAfter = await lstat(config.supabaseCliPath);
-    cliRealPathAfter = await realpath(config.supabaseCliPath);
-  } catch {
-    fail('PREVIEW_SUPABASE_CLI_CHANGED_BEFORE_SPAWN', {
-      executable_path_sha256: executablePathSha256,
-    });
-  }
-  assertCondition(
-    cliRealPathAfter === cliRealPathBefore
-      && cliStatAfter.isFile()
-      && !cliStatAfter.isSymbolicLink()
-      && cliStatAfter.dev === cliStatBefore.dev
-      && cliStatAfter.ino === cliStatBefore.ino
-      && cliStatAfter.mode === cliStatBefore.mode
-      && cliStatAfter.size === cliStatBefore.size
-      && cliStatAfter.mtimeMs === cliStatBefore.mtimeMs
-      && cliStatAfter.ctimeMs === cliStatBefore.ctimeMs,
-    'PREVIEW_SUPABASE_CLI_CHANGED_BEFORE_SPAWN',
-    { executable_path_sha256: executablePathSha256 },
+  const dockerExecutable = await verifyBoundExecutable(
+    config.dockerCliPath,
+    config.dockerCliSha256,
+    'PREVIEW_DOCKER_CLI',
   );
+  const supabaseExecutable = await verifyBoundExecutable(
+    config.supabaseCliPath,
+    config.supabaseCliSha256,
+    'PREVIEW_SUPABASE_CLI',
+  );
+  const pgProveImage = await inspectBoundPgProveImage(config, childEnv);
 
   const result = await new Promise((resolve, reject) => {
     const child = spawn(config.supabaseCliPath, args, {
@@ -546,8 +725,11 @@ async function runDbTest(config, tempDir, name, sql) {
     stderr_bytes: stderrBytes,
     exit_code: result.exitCode,
     signal: result.signal,
-    executable_path_sha256: executablePathSha256,
-    executable_file_sha256: executableFileSha256,
+    executable_path_sha256: supabaseExecutable.executablePathSha256,
+    executable_file_sha256: supabaseExecutable.executableFileSha256,
+    docker_executable_path_sha256: dockerExecutable.executablePathSha256,
+    docker_executable_file_sha256: dockerExecutable.executableFileSha256,
+    ...pgProveImage,
     child_env_sha256: childEnvSha256,
     working_directory_sha256: workingDirectorySha256,
   };
@@ -588,8 +770,17 @@ async function runTransportPreflight(config, tempDir) {
           .filter((name) => typeof process.env[name] === 'string')
           .sort(),
         child_env_sha256: proof.child_env_sha256,
+        docker_executable_file_sha256: proof.docker_executable_file_sha256,
+        docker_executable_path_sha256: proof.docker_executable_path_sha256,
         executable_file_sha256: proof.executable_file_sha256,
         executable_path_sha256: proof.executable_path_sha256,
+        pg_prove_image_id_sha256: proof.pg_prove_image_id_sha256,
+        pg_prove_image_inspect_argv_sha256: proof.pg_prove_image_inspect_argv_sha256,
+        pg_prove_image_inspect_stderr_sha256: proof.pg_prove_image_inspect_stderr_sha256,
+        pg_prove_image_inspect_stdout_sha256: proof.pg_prove_image_inspect_stdout_sha256,
+        pg_prove_image_platform_sha256: proof.pg_prove_image_platform_sha256,
+        pg_prove_image_ref_sha256: proof.pg_prove_image_ref_sha256,
+        pg_prove_image_repo_digest_sha256: proof.pg_prove_image_repo_digest_sha256,
         supabase_cli_version: SUPABASE_CLI_VERSION,
         transport_target_sha256: transportTargetSha256,
         working_directory_sha256: proof.working_directory_sha256,
@@ -617,6 +808,15 @@ async function executeTransportPreflightOnly(config) {
         stderr_sha256: proof.stderr_sha256,
         executable_path_sha256: proof.executable_path_sha256,
         executable_file_sha256: proof.executable_file_sha256,
+        docker_executable_path_sha256: proof.docker_executable_path_sha256,
+        docker_executable_file_sha256: proof.docker_executable_file_sha256,
+        pg_prove_image_ref_sha256: proof.pg_prove_image_ref_sha256,
+        pg_prove_image_id_sha256: proof.pg_prove_image_id_sha256,
+        pg_prove_image_repo_digest_sha256: proof.pg_prove_image_repo_digest_sha256,
+        pg_prove_image_platform_sha256: proof.pg_prove_image_platform_sha256,
+        pg_prove_image_inspect_argv_sha256: proof.pg_prove_image_inspect_argv_sha256,
+        pg_prove_image_inspect_stdout_sha256: proof.pg_prove_image_inspect_stdout_sha256,
+        pg_prove_image_inspect_stderr_sha256: proof.pg_prove_image_inspect_stderr_sha256,
         child_env_sha256: proof.child_env_sha256,
         working_directory_sha256: proof.working_directory_sha256,
         transport_target_sha256: proof.transport_target_sha256,
@@ -1786,6 +1986,15 @@ async function execute(config) {
         stderr_sha256: proof.stderr_sha256,
         executable_path_sha256: proof.executable_path_sha256,
         executable_file_sha256: proof.executable_file_sha256,
+        docker_executable_path_sha256: proof.docker_executable_path_sha256,
+        docker_executable_file_sha256: proof.docker_executable_file_sha256,
+        pg_prove_image_ref_sha256: proof.pg_prove_image_ref_sha256,
+        pg_prove_image_id_sha256: proof.pg_prove_image_id_sha256,
+        pg_prove_image_repo_digest_sha256: proof.pg_prove_image_repo_digest_sha256,
+        pg_prove_image_platform_sha256: proof.pg_prove_image_platform_sha256,
+        pg_prove_image_inspect_argv_sha256: proof.pg_prove_image_inspect_argv_sha256,
+        pg_prove_image_inspect_stdout_sha256: proof.pg_prove_image_inspect_stdout_sha256,
+        pg_prove_image_inspect_stderr_sha256: proof.pg_prove_image_inspect_stderr_sha256,
         child_env_sha256: proof.child_env_sha256,
         working_directory_sha256: proof.working_directory_sha256,
         ...(proof.transport_target_sha256

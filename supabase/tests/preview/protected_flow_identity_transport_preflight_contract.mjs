@@ -11,6 +11,10 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const RUNNER = path.join(HERE, 'protected_flow_identity_rest_e2e.mjs');
 const REF = 'aaaaaaaaaaaaaaa';
+const PG_PROVE_IMAGE_REF = 'public.ecr.aws/supabase/pg_prove:3.36';
+const PG_PROVE_IMAGE_ID = `sha256:${'1'.repeat(64)}`;
+const PG_PROVE_IMAGE_REPO_DIGEST = `public.ecr.aws/supabase/pg_prove@${PG_PROVE_IMAGE_ID}`;
+const PG_PROVE_IMAGE_PLATFORM = 'linux/arm64';
 
 async function fileSha256(filePath) {
   return createHash('sha256').update(await readFile(filePath)).digest('hex');
@@ -42,21 +46,49 @@ async function main() {
   try {
     const binDir = path.join(tempDir, 'bin');
     const exactDir = path.join(tempDir, 'exact');
+    const dockerDir = path.join(tempDir, 'docker-exact');
     const invocationLog = path.join(tempDir, 'supabase-cli-invocations.log');
+    const dockerInvocationLog = path.join(tempDir, 'docker-cli-invocations.log');
     const decoyInvocationLog = path.join(tempDir, 'decoy-invocations.log');
     const fakeSupabaseCli = path.join(exactDir, 'supabase');
+    const fakeDockerCli = path.join(dockerDir, 'docker');
     await mkdir(binDir, { mode: 0o700 });
     await mkdir(exactDir, { mode: 0o700 });
-    for (const name of ['supabase', 'npx']) {
+    await mkdir(dockerDir, { mode: 0o700 });
+    for (const name of ['supabase', 'npx', 'docker']) {
       await writeFile(path.join(binDir, name), `#!/bin/sh
 set -eu
 printf '%s\\n' '${name} $*' >> "$HOME/decoy-invocations.log"
 exit 97
 `, { mode: 0o700, flag: 'wx' });
     }
+    await writeFile(fakeDockerCli, `#!/bin/sh
+set -eu
+printf '%s\\n' "$*" >> "$HOME/docker-cli-invocations.log"
+if [ "$1" = 'image' ] && [ "$2" = 'inspect' ]; then
+  [ "$3" = '${PG_PROVE_IMAGE_REF}' ]
+  [ "$4" = '--format' ]
+  [ -n "$5" ]
+  if [ -f "$HOME/docker-image-missing" ]; then
+    printf '%s\\n' 'No such image' >&2
+    exit 44
+  fi
+  printf '%s\\n' '${JSON.stringify({
+    id: PG_PROVE_IMAGE_ID,
+    repo_digests: [PG_PROVE_IMAGE_REPO_DIGEST],
+    architecture: 'arm64',
+    os: 'linux',
+  })}'
+elif [ "$*" = 'version --format nested-runtime-ok' ]; then
+  printf '%s\\n' '29.4.0'
+else
+  exit 43
+fi
+`, { mode: 0o700, flag: 'wx' });
     await writeFile(fakeSupabaseCli, `#!/bin/sh
 set -eu
 printf '%s\\n' "$*" >> "$HOME/supabase-cli-invocations.log"
+docker version --format nested-runtime-ok >/dev/null
 case "$*" in
   *"--log-level error test db --db-url "*) ;;
   *) exit 41 ;;
@@ -79,7 +111,13 @@ printf '%s\\n' 'TAP version 13' '1..1' 'ok 1 - fake authenticated read-only tran
       PREVIEW_DB_URL: `postgresql://postgres.${REF}:dummy@pooler.example.invalid:6543/postgres`,
       PREVIEW_SUPABASE_CLI_PATH: fakeSupabaseCli,
       PREVIEW_SUPABASE_CLI_SHA256: await fileSha256(fakeSupabaseCli),
-      PATH: `${binDir}:${process.env.PATH ?? ''}`,
+      PREVIEW_DOCKER_CLI_PATH: fakeDockerCli,
+      PREVIEW_DOCKER_CLI_SHA256: await fileSha256(fakeDockerCli),
+      PREVIEW_PG_PROVE_IMAGE_REF: PG_PROVE_IMAGE_REF,
+      PREVIEW_PG_PROVE_IMAGE_ID: PG_PROVE_IMAGE_ID,
+      PREVIEW_PG_PROVE_IMAGE_REPO_DIGEST: PG_PROVE_IMAGE_REPO_DIGEST,
+      PREVIEW_PG_PROVE_IMAGE_PLATFORM: PG_PROVE_IMAGE_PLATFORM,
+      PATH: `${dockerDir}:${binDir}:${process.env.PATH ?? ''}`,
       HOME: tempDir,
       TMPDIR: tempDir,
       LANG: 'C',
@@ -105,6 +143,21 @@ printf '%s\\n' 'TAP version 13' '1..1' 'ok 1 - fake authenticated read-only tran
       createHash('sha256').update(fakeSupabaseCli).digest('hex'));
     assert.equal(evidence.transport_proof.executable_file_sha256,
       await fileSha256(fakeSupabaseCli));
+    assert.equal(evidence.transport_proof.docker_executable_path_sha256,
+      createHash('sha256').update(fakeDockerCli).digest('hex'));
+    assert.equal(evidence.transport_proof.docker_executable_file_sha256,
+      await fileSha256(fakeDockerCli));
+    assert.equal(evidence.transport_proof.pg_prove_image_ref_sha256,
+      createHash('sha256').update(PG_PROVE_IMAGE_REF).digest('hex'));
+    assert.equal(evidence.transport_proof.pg_prove_image_id_sha256,
+      createHash('sha256').update(PG_PROVE_IMAGE_ID).digest('hex'));
+    assert.equal(evidence.transport_proof.pg_prove_image_repo_digest_sha256,
+      createHash('sha256').update(PG_PROVE_IMAGE_REPO_DIGEST).digest('hex'));
+    assert.equal(evidence.transport_proof.pg_prove_image_platform_sha256,
+      createHash('sha256').update(PG_PROVE_IMAGE_PLATFORM).digest('hex'));
+    assert.match(evidence.transport_proof.pg_prove_image_inspect_argv_sha256, /^[0-9a-f]{64}$/);
+    assert.match(evidence.transport_proof.pg_prove_image_inspect_stdout_sha256, /^[0-9a-f]{64}$/);
+    assert.match(evidence.transport_proof.pg_prove_image_inspect_stderr_sha256, /^[0-9a-f]{64}$/);
     assert.match(evidence.transport_proof.child_env_sha256, /^[0-9a-f]{64}$/);
     assert.match(evidence.transport_proof.working_directory_sha256, /^[0-9a-f]{64}$/);
     assert.match(evidence.transport_proof.transport_target_sha256, /^[0-9a-f]{64}$/);
@@ -125,9 +178,54 @@ printf '%s\\n' 'TAP version 13' '1..1' 'ok 1 - fake authenticated read-only tran
       evidence.transport_proof.transport_binding_sha256,
     );
 
+    const pathMisbound = await runRunner([
+      '--transport-preflight-only',
+      '--expected-preview-ref', REF,
+    ], { ...runnerEnv, PATH: `${binDir}:${dockerDir}:${process.env.PATH ?? ''}` });
+    assert.equal(pathMisbound.code, 1);
+    assert.equal(pathMisbound.signal, null);
+    assert.equal(pathMisbound.stdout, '');
+    const pathMisboundFailure = JSON.parse(pathMisbound.stderr);
+    assert.equal(pathMisboundFailure.status, 'failed');
+    assert.equal(pathMisboundFailure.code, 'PREVIEW_DOCKER_CLI_NOT_FIRST_IN_PATH');
+
+    const mismatchedImageId = `sha256:${'2'.repeat(64)}`;
+    const imageMismatched = await runRunner([
+      '--transport-preflight-only',
+      '--expected-preview-ref', REF,
+    ], {
+      ...runnerEnv,
+      PREVIEW_PG_PROVE_IMAGE_ID: mismatchedImageId,
+      PREVIEW_PG_PROVE_IMAGE_REPO_DIGEST:
+        `public.ecr.aws/supabase/pg_prove@${mismatchedImageId}`,
+    });
+    assert.equal(imageMismatched.code, 1);
+    assert.equal(imageMismatched.signal, null);
+    assert.equal(imageMismatched.stdout, '');
+    const imageMismatchFailure = JSON.parse(imageMismatched.stderr);
+    assert.equal(imageMismatchFailure.status, 'failed');
+    assert.equal(imageMismatchFailure.code, 'PREVIEW_PG_PROVE_IMAGE_IDENTITY_MISMATCH');
+    assert.equal(imageMismatchFailure.details.stage, 'transport_preflight');
+
+    const missingImageMarker = path.join(tempDir, 'docker-image-missing');
+    await writeFile(missingImageMarker, '', { mode: 0o600, flag: 'wx' });
+    const imageMissing = await runRunner([
+      '--transport-preflight-only',
+      '--expected-preview-ref', REF,
+    ], runnerEnv);
+    await rm(missingImageMarker);
+    assert.equal(imageMissing.code, 1);
+    assert.equal(imageMissing.signal, null);
+    assert.equal(imageMissing.stdout, '');
+    const imageMissingFailure = JSON.parse(imageMissing.stderr);
+    assert.equal(imageMissingFailure.status, 'failed');
+    assert.equal(imageMissingFailure.code, 'PREVIEW_PG_PROVE_IMAGE_INSPECT_FAILED');
+    assert.equal(imageMissingFailure.details.stage, 'transport_preflight');
+
     await writeFile(fakeSupabaseCli, `#!/bin/sh
 set -eu
 printf '%s\\n' "$*" >> "$HOME/supabase-cli-invocations.log"
+docker version --format nested-runtime-ok >/dev/null
 printf '%s\\n' 'failed to connect to fake transport' >&2
 exit 31
 `, { mode: 0o700 });
@@ -162,6 +260,21 @@ exit 31
     assert.equal(driftFailure.code, 'PREVIEW_SUPABASE_CLI_SHA256_MISMATCH');
     assert.equal(driftFailure.details.stage, 'transport_preflight');
 
+    runnerEnv.PREVIEW_SUPABASE_CLI_SHA256 = await fileSha256(fakeSupabaseCli);
+    runnerEnv.PREVIEW_DOCKER_CLI_SHA256 = '0'.repeat(64);
+    const dockerDrifted = await runRunner([
+      '--transport-preflight-only',
+      '--expected-preview-ref', REF,
+    ], runnerEnv);
+    assert.equal(dockerDrifted.code, 1);
+    assert.equal(dockerDrifted.signal, null);
+    assert.equal(dockerDrifted.stdout, '');
+    const dockerDriftFailure = JSON.parse(dockerDrifted.stderr);
+    assert.equal(dockerDriftFailure.status, 'failed');
+    assert.equal(dockerDriftFailure.code, 'PREVIEW_DOCKER_CLI_SHA256_MISMATCH');
+    assert.equal(dockerDriftFailure.details.stage, 'transport_preflight');
+    runnerEnv.PREVIEW_DOCKER_CLI_SHA256 = await fileSha256(fakeDockerCli);
+
     const symlinkCli = path.join(tempDir, 'supabase-symlink');
     await symlink(fakeSupabaseCli, symlinkCli);
     const symlinked = await runRunner([
@@ -186,6 +299,16 @@ exit 31
       assert.doesNotMatch(invocation, /npx|--yes|supabase@/);
       assert.match(invocation, /test db/);
     }
+    const dockerInvocations = (await readFile(dockerInvocationLog, 'utf8')).trim().split('\n');
+    assert.equal(dockerInvocations.length, 8);
+    assert.equal(
+      dockerInvocations.filter((invocation) => invocation.startsWith('image inspect ')).length,
+      5,
+    );
+    assert.equal(
+      dockerInvocations.filter((invocation) => invocation === 'version --format nested-runtime-ok').length,
+      3,
+    );
     let decoyUsed = false;
     try {
       await readFile(decoyInvocationLog, 'utf8');
@@ -197,8 +320,14 @@ exit 31
     process.stdout.write(`${JSON.stringify({
       status: 'passed',
       fake_supabase_cli_invocations: 3,
+      fake_docker_cli_invocations: 8,
+      pg_prove_image_inspections: 5,
+      pg_prove_image_identity_rejections: 1,
+      pg_prove_image_missing_rejections: 1,
       child_env_rebindings: 1,
       cli_sha_drift_rejections: 1,
+      docker_sha_drift_rejections: 1,
+      docker_path_order_rejections: 1,
       symlink_rejections: 1,
       path_decoy_invocations: 0,
       actor_before_transport_failure: 0,

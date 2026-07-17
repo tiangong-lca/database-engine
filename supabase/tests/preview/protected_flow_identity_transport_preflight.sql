@@ -1,7 +1,8 @@
 -- Read-only transport preflight for the guarded Step 3 Hosted Preview E2E.
 --
--- Run this through the exact pinned Supabase CLI, database URL, cache, child
--- environment, and network path that the full runner will use.  It must run
+-- Run this through the exact pinned Supabase CLI, exact regular nested Docker
+-- executable, exact cached pg_prove image ID/digest/platform, database URL,
+-- child environment, and network path that the full runner will use. It must run
 -- before approval is requested and the full runner repeats it before creating
 -- disposable auth actors.  Never point it at production.
 

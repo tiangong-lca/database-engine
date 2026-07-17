@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-07-17"
-lastReviewedCommit: "80e33c0bd8fe6d288e3209f547269e69046ddb4e"
+lastReviewedCommit: "bbec7c120bd66044e8535b6a16b765ee243a4ff8"
 lastReviewedNote: "Reviewed guarded-flow-identity and disposable Hosted Preview proof routing together with the LCI/LCIA release-control contracts now present on dev."
 
 # Keep deterministic governance facts here.
