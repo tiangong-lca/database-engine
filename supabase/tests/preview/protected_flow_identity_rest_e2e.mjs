@@ -13,7 +13,7 @@
 
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { lstat, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -37,7 +37,7 @@ const PRODUCTION_REF = 'qgzvkongdjqiiamzbbts';
 const DB_TEST_CHILD_ENV_NAMES = Object.freeze([
   'PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'LC_ALL',
   'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy',
-  'no_proxy', 'NPM_CONFIG_CACHE', 'npm_config_cache',
+  'no_proxy',
 ]);
 
 const EXPECTED = Object.freeze({
@@ -256,6 +256,8 @@ function helpText() {
     '  PREVIEW_SUPABASE_ANON_KEY=<Preview anon/publishable key>',
     '  PREVIEW_SUPABASE_SERVICE_ROLE_KEY=<Preview service role/secret key>',
     '  PREVIEW_DB_URL=<percent-encoded Preview PostgreSQL URL>',
+    '  PREVIEW_SUPABASE_CLI_PATH=<exact absolute native Supabase CLI path>',
+    '  PREVIEW_SUPABASE_CLI_SHA256=<exact native Supabase CLI file SHA-256>',
     '',
     'Optional bounded timings:',
     '  PREVIEW_RPC_TIMEOUT_MS (default 90000)',
@@ -289,6 +291,11 @@ function loadConfig(expectedPreviewRef) {
   const anonKey = envRequired('PREVIEW_SUPABASE_ANON_KEY');
   const serviceRoleKey = envRequired('PREVIEW_SUPABASE_SERVICE_ROLE_KEY');
   const dbUrl = envRequired('PREVIEW_DB_URL');
+  const supabaseCliPath = envRequired('PREVIEW_SUPABASE_CLI_PATH');
+  const supabaseCliSha256 = requireSha(
+    envRequired('PREVIEW_SUPABASE_CLI_SHA256'),
+    'PREVIEW_SUPABASE_CLI_SHA256_INVALID',
+  );
 
   assertCondition(environment === 'preview', 'PREVIEW_ENVIRONMENT_MISMATCH');
   assertCondition(projectRef === expectedPreviewRef, 'PREVIEW_REF_ENV_ARG_MISMATCH');
@@ -307,6 +314,7 @@ function loadConfig(expectedPreviewRef) {
   assertCondition(parsed.hostname === `${projectRef}.supabase.co`, 'PREVIEW_SUPABASE_URL_REF_MISMATCH');
   assertCondition(parsed.pathname === '/' && !parsed.search && !parsed.hash, 'PREVIEW_SUPABASE_URL_PATH_INVALID');
   assertCondition(urlContainsExactRef(dbUrl, projectRef), 'PREVIEW_DB_URL_REF_MISMATCH');
+  assertCondition(path.isAbsolute(supabaseCliPath), 'PREVIEW_SUPABASE_CLI_PATH_NOT_ABSOLUTE');
 
   return Object.freeze({
     environment,
@@ -315,6 +323,8 @@ function loadConfig(expectedPreviewRef) {
     anonKey,
     serviceRoleKey,
     dbUrl,
+    supabaseCliPath,
+    supabaseCliSha256,
     rpcTimeoutMs: parseBoundedInteger(
       process.env.PREVIEW_RPC_TIMEOUT_MS, 90_000, 5_000, 180_000,
       'PREVIEW_RPC_TIMEOUT_INVALID',
@@ -394,7 +404,7 @@ function dbDiagnosticCodes(stdoutText, stderrText, config) {
   let diagnostic = `${stdoutText}\n${stderrText}`;
   for (const sensitive of [
     config.dbUrl, config.supabaseUrl, config.anonKey,
-    config.serviceRoleKey, config.projectRef,
+    config.serviceRoleKey, config.projectRef, config.supabaseCliPath,
   ]) diagnostic = diagnostic.replaceAll(sensitive, ' REDACTED ');
   diagnostic = diagnostic
     .replace(/postgres(?:ql)?:\/\/\S+/gi, ' REDACTED ')
@@ -415,8 +425,48 @@ function dbDiagnosticCodes(stdoutText, stderrText, config) {
 async function runDbTest(config, tempDir, name, sql) {
   const filePath = path.join(tempDir, `${name}.sql`);
   await writeFile(filePath, sql, { mode: 0o600, flag: 'wx' });
+  let cliStatBefore;
+  let cliRealPathBefore;
+  let cliBytes;
+  try {
+    cliStatBefore = await lstat(config.supabaseCliPath);
+    cliRealPathBefore = await realpath(config.supabaseCliPath);
+  } catch {
+    fail('PREVIEW_SUPABASE_CLI_READ_FAILED', {
+      executable_path_sha256: sha256(config.supabaseCliPath),
+    });
+  }
+  assertCondition(
+    cliStatBefore.isFile() && !cliStatBefore.isSymbolicLink()
+      && (cliStatBefore.mode & 0o111) !== 0,
+    'PREVIEW_SUPABASE_CLI_FILE_INVALID',
+    { executable_path_sha256: sha256(config.supabaseCliPath) },
+  );
+  assertCondition(
+    cliRealPathBefore === config.supabaseCliPath,
+    'PREVIEW_SUPABASE_CLI_PATH_NOT_CANONICAL',
+    { executable_path_sha256: sha256(config.supabaseCliPath) },
+  );
+  try {
+    cliBytes = await readFile(config.supabaseCliPath);
+  } catch {
+    fail('PREVIEW_SUPABASE_CLI_READ_FAILED', {
+      executable_path_sha256: sha256(config.supabaseCliPath),
+    });
+  }
+  const executablePathSha256 = sha256(config.supabaseCliPath);
+  const executableFileSha256 = sha256(cliBytes);
+  assertCondition(
+    executableFileSha256 === config.supabaseCliSha256,
+    'PREVIEW_SUPABASE_CLI_SHA256_MISMATCH',
+    {
+      executable_path_sha256: executablePathSha256,
+      expected_sha256: config.supabaseCliSha256,
+      observed_sha256: executableFileSha256,
+    },
+  );
   const args = [
-    '--yes', `supabase@${SUPABASE_CLI_VERSION}`, '--log-level', 'error',
+    '--log-level', 'error',
     'test', 'db', '--db-url', config.dbUrl, filePath,
   ];
   const stdoutHash = createHash('sha256');
@@ -431,9 +481,36 @@ async function runDbTest(config, tempDir, name, sql) {
   for (const name of DB_TEST_CHILD_ENV_NAMES) {
     if (typeof process.env[name] === 'string') childEnv[name] = process.env[name];
   }
+  const childEnvSha256 = sha256(Object.fromEntries(
+    Object.keys(childEnv).sort().map((name) => [name, sha256(childEnv[name])]),
+  ));
+  const workingDirectorySha256 = sha256(REPO_ROOT);
+  let cliStatAfter;
+  let cliRealPathAfter;
+  try {
+    cliStatAfter = await lstat(config.supabaseCliPath);
+    cliRealPathAfter = await realpath(config.supabaseCliPath);
+  } catch {
+    fail('PREVIEW_SUPABASE_CLI_CHANGED_BEFORE_SPAWN', {
+      executable_path_sha256: executablePathSha256,
+    });
+  }
+  assertCondition(
+    cliRealPathAfter === cliRealPathBefore
+      && cliStatAfter.isFile()
+      && !cliStatAfter.isSymbolicLink()
+      && cliStatAfter.dev === cliStatBefore.dev
+      && cliStatAfter.ino === cliStatBefore.ino
+      && cliStatAfter.mode === cliStatBefore.mode
+      && cliStatAfter.size === cliStatBefore.size
+      && cliStatAfter.mtimeMs === cliStatBefore.mtimeMs
+      && cliStatAfter.ctimeMs === cliStatBefore.ctimeMs,
+    'PREVIEW_SUPABASE_CLI_CHANGED_BEFORE_SPAWN',
+    { executable_path_sha256: executablePathSha256 },
+  );
 
   const result = await new Promise((resolve, reject) => {
-    const child = spawn('npx', args, {
+    const child = spawn(config.supabaseCliPath, args, {
       cwd: REPO_ROOT, env: childEnv, stdio: ['ignore', 'pipe', 'pipe'], shell: false,
     });
     const timeout = setTimeout(() => {
@@ -469,6 +546,10 @@ async function runDbTest(config, tempDir, name, sql) {
     stderr_bytes: stderrBytes,
     exit_code: result.exitCode,
     signal: result.signal,
+    executable_path_sha256: executablePathSha256,
+    executable_file_sha256: executableFileSha256,
+    child_env_sha256: childEnvSha256,
+    working_directory_sha256: workingDirectorySha256,
   };
   if (result.exitCode !== 0 || timedOut || outputTooLarge) {
     evidence.diagnostic_codes = dbDiagnosticCodes(
@@ -500,15 +581,18 @@ async function runTransportPreflight(config, tempDir) {
       transport_target_sha256: transportTargetSha256,
       transport_binding_sha256: sha256({
         argv_template: [
-          '--yes', `supabase@${SUPABASE_CLI_VERSION}`, '--log-level', 'error',
+          '--log-level', 'error',
           'test', 'db', '--db-url', '<transport-target>', '<private-sql-file>',
         ],
         child_env_names: DB_TEST_CHILD_ENV_NAMES
           .filter((name) => typeof process.env[name] === 'string')
           .sort(),
-        executable: 'npx',
-        repo_root: REPO_ROOT,
+        child_env_sha256: proof.child_env_sha256,
+        executable_file_sha256: proof.executable_file_sha256,
+        executable_path_sha256: proof.executable_path_sha256,
+        supabase_cli_version: SUPABASE_CLI_VERSION,
         transport_target_sha256: transportTargetSha256,
+        working_directory_sha256: proof.working_directory_sha256,
       }),
     };
   } catch (error) {
@@ -531,6 +615,10 @@ async function executeTransportPreflightOnly(config) {
         sql_sha256: proof.sql_sha256,
         stdout_sha256: proof.stdout_sha256,
         stderr_sha256: proof.stderr_sha256,
+        executable_path_sha256: proof.executable_path_sha256,
+        executable_file_sha256: proof.executable_file_sha256,
+        child_env_sha256: proof.child_env_sha256,
+        working_directory_sha256: proof.working_directory_sha256,
         transport_target_sha256: proof.transport_target_sha256,
         transport_binding_sha256: proof.transport_binding_sha256,
       },
@@ -1696,6 +1784,10 @@ async function execute(config) {
         sql_sha256: proof.sql_sha256,
         stdout_sha256: proof.stdout_sha256,
         stderr_sha256: proof.stderr_sha256,
+        executable_path_sha256: proof.executable_path_sha256,
+        executable_file_sha256: proof.executable_file_sha256,
+        child_env_sha256: proof.child_env_sha256,
+        working_directory_sha256: proof.working_directory_sha256,
         ...(proof.transport_target_sha256
           ? { transport_target_sha256: proof.transport_target_sha256 }
           : {}),

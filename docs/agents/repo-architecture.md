@@ -28,7 +28,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-17
-lastReviewedCommit: caf7e1b4e14229701d7e94d861cbda2baef63e0a
+lastReviewedCommit: 80e33c0bd8fe6d288e3209f547269e69046ddb4e
 lastReviewedNote: "Reviewed strict Step 3 wrapper, recovery, and disposable Hosted Preview proof ownership together with the LCI/LCIA release-control and source-Process projection architecture now present on dev."
 related:
   - ../../AGENTS.md
