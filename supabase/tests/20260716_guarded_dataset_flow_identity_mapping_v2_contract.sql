@@ -649,62 +649,72 @@ create temporary table flow_identity_anon_acl_before on commit drop as
 select pg_temp.dataset_flow_identity_acl_state() as state;
 
 set local role anon;
-select throws_ok(
-  $$select public.cmd_dataset_flow_identity_capture_attest_guarded('{}')$$,
-  '42501',
-  'permission denied for function cmd_dataset_flow_identity_capture_attest_guarded',
+-- Supabase Postgres image 17.6.1.106 crashes in supautils while formatting
+-- permission hints for reserved roles (supabase/postgres#2112).  Prove the
+-- anonymous boundary from the privilege catalog instead of invoking a revoked
+-- function; authenticated transport behavior is covered by Hosted Preview E2E.
+select ok(
+  not has_function_privilege(
+    current_user,
+    'public.cmd_dataset_flow_identity_capture_attest_guarded(jsonb)'::regprocedure,
+    'EXECUTE'
+  ),
   'anon cannot execute capture attestation'
 );
-select throws_ok(
-  $$select public.cmd_dataset_flow_identity_scope_preflight_guarded('{}')$$,
-  '42501',
-  'permission denied for function cmd_dataset_flow_identity_scope_preflight_guarded',
+select ok(
+  not has_function_privilege(
+    current_user,
+    'public.cmd_dataset_flow_identity_scope_preflight_guarded(jsonb)'::regprocedure,
+    'EXECUTE'
+  ),
   'anon cannot execute scope preflight'
 );
-select throws_ok(
-  $$select public.cmd_dataset_flow_identity_process_rewrite_guarded(
-      'ffffffff-ffff-4fff-8fff-ffffffffffff', '{}', '{}'
-    )$$,
-  '42501',
-  'permission denied for function cmd_dataset_flow_identity_process_rewrite_guarded',
+select ok(
+  not has_function_privilege(
+    current_user,
+    'public.cmd_dataset_flow_identity_process_rewrite_guarded(uuid,jsonb,jsonb)'::regprocedure,
+    'EXECUTE'
+  ),
   'anon cannot execute a process rewrite'
 );
-select throws_ok(
-  $$select public.cmd_dataset_flow_identity_scope_read(
-      'ffffffff-ffff-4fff-8fff-ffffffffffff'
-    )$$,
-  '42501',
-  'permission denied for function cmd_dataset_flow_identity_scope_read',
+select ok(
+  not has_function_privilege(
+    current_user,
+    'public.cmd_dataset_flow_identity_scope_read(uuid)'::regprocedure,
+    'EXECUTE'
+  ),
   'anon cannot read a scope'
 );
-select throws_ok(
-  $$select public.cmd_dataset_flow_identity_scope_finalize_guarded(
-      'ffffffff-ffff-4fff-8fff-ffffffffffff', '{}', '{}'
-    )$$,
-  '42501',
-  'permission denied for function cmd_dataset_flow_identity_scope_finalize_guarded',
+select ok(
+  not has_function_privilege(
+    current_user,
+    'public.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb,jsonb)'::regprocedure,
+    'EXECUTE'
+  ),
   'anon cannot finalize a scope'
 );
-select throws_ok(
-  $$select public.cmd_dataset_flow_identity_scope_recover_guarded(
-      'ffffffff-ffff-4fff-8fff-ffffffffffff', '{}'
-    )$$,
-  '42501',
-  'permission denied for function cmd_dataset_flow_identity_scope_recover_guarded',
+select ok(
+  not has_function_privilege(
+    current_user,
+    'public.cmd_dataset_flow_identity_scope_recover_guarded(uuid,jsonb)'::regprocedure,
+    'EXECUTE'
+  ),
   'anon cannot recover a scope'
 );
-select throws_ok(
-  $$select public.cmd_dataset_flow_identity_scope_lookup('{}')$$,
-  '42501',
-  'permission denied for function cmd_dataset_flow_identity_scope_lookup',
+select ok(
+  not has_function_privilege(
+    current_user,
+    'public.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure,
+    'EXECUTE'
+  ),
   'anon cannot look up a scope'
 );
-select throws_ok(
-  $$select public.cmd_dataset_flow_identity_scope_cancel_guarded(
-      'ffffffff-ffff-4fff-8fff-ffffffffffff', '{}'
-    )$$,
-  '42501',
-  'permission denied for function cmd_dataset_flow_identity_scope_cancel_guarded',
+select ok(
+  not has_function_privilege(
+    current_user,
+    'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure,
+    'EXECUTE'
+  ),
   'anon cannot cancel a scope'
 );
 reset role;
@@ -712,7 +722,7 @@ reset role;
 select is(
   pg_temp.dataset_flow_identity_acl_state(),
   (select state from flow_identity_anon_acl_before),
-  'all eight rejected anonymous RPC calls leave private and audit state byte-identical'
+  'all eight anonymous privilege checks leave private and audit state byte-identical'
 );
 
 select * from finish();

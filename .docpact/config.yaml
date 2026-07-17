@@ -2,7 +2,7 @@ version: 1
 layout: repo
 lastReviewedAt: "2026-07-17"
 lastReviewedCommit: "caf7e1b4e14229701d7e94d861cbda2baef63e0a"
-lastReviewedNote: "Reviewed guarded-flow-identity routing together with the LCI/LCIA release-control routing and proof contracts now present on dev."
+lastReviewedNote: "Reviewed guarded-flow-identity and disposable Hosted Preview proof routing together with the LCI/LCIA release-control contracts now present on dev."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
