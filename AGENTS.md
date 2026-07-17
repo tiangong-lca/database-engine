@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-15
-lastReviewedCommit: 6b0ac12a7d2587b323d6360b97b0c2ed38971843
-lastReviewedNote: "Reviewed the repo contract for protected-runner hosted Preview fixtures; they are disposable test assets, never schema/seed delivery inputs or production data paths."
+lastReviewedAt: 2026-07-16
+lastReviewedCommit: 910cce78a892a64b4c2bdfb94e598a2c96649e6f
+lastReviewedNote: "Reviewed repo ownership for the LCI/LCIA release migration: database-engine owns durable release authorization/state facts, not materialization or frontend orchestration."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
