@@ -22,6 +22,7 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(HERE, '../../..');
 const SCRIPT_PATH = fileURLToPath(import.meta.url);
+const TRANSPORT_PREFLIGHT = path.join(HERE, 'protected_flow_identity_transport_preflight.sql');
 const FIXTURE_TEMPLATE = path.join(HERE, 'protected_flow_identity_fixture.sql');
 const CLEANUP_TEMPLATE = path.join(HERE, 'protected_flow_identity_cleanup.sql');
 
@@ -30,8 +31,14 @@ const FIXTURE_TARGET_TABLE = 'preview_e2e_flow_identity';
 const FIXTURE_TARGET_VERSION = '00.00.001';
 const MANIFEST_SCHEMA = 'protected-flow-identity-preview-fixture.v1';
 const EVIDENCE_SCHEMA = 'protected-flow-identity-rest-e2e-evidence.v1';
+const TRANSPORT_EVIDENCE_SCHEMA = 'protected-flow-identity-transport-preflight-evidence.v1';
 const SUPABASE_CLI_VERSION = '2.109.1';
 const PRODUCTION_REF = 'qgzvkongdjqiiamzbbts';
+const DB_TEST_CHILD_ENV_NAMES = Object.freeze([
+  'PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'LC_ALL',
+  'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy',
+  'no_proxy', 'NPM_CONFIG_CACHE', 'npm_config_cache',
+]);
 
 const EXPECTED = Object.freeze({
   source_count: 305,
@@ -211,27 +218,36 @@ function parseBoundedInteger(value, fallback, minimum, maximum, code) {
 
 function parseArgs(argv) {
   if (argv.length === 1 && argv[0] === '--race-worker') {
-    return { raceWorker: true, help: false, expectedPreviewRef: null };
+    return {
+      raceWorker: true, transportPreflightOnly: false, help: false, expectedPreviewRef: null,
+    };
   }
   if (argv.includes('--help') || argv.includes('-h')) {
-    return { raceWorker: false, help: true, expectedPreviewRef: null };
+    return {
+      raceWorker: false, transportPreflightOnly: false, help: true, expectedPreviewRef: null,
+    };
   }
   let expectedPreviewRef = null;
+  let transportPreflightOnly = false;
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === '--expected-preview-ref' && index + 1 < argv.length) {
       expectedPreviewRef = argv[index + 1];
       index += 1;
+    } else if (argv[index] === '--transport-preflight-only') {
+      assertCondition(!transportPreflightOnly, 'ARG_TRANSPORT_PREFLIGHT_DUPLICATE');
+      transportPreflightOnly = true;
     } else {
       fail('ARG_UNKNOWN');
     }
   }
   requireString(expectedPreviewRef, 'ARG_EXPECTED_PREVIEW_REF_REQUIRED', REF_RE);
-  return { raceWorker: false, help: false, expectedPreviewRef };
+  return { raceWorker: false, transportPreflightOnly, help: false, expectedPreviewRef };
 }
 
 function helpText() {
   return [
     'Usage: node supabase/tests/preview/protected_flow_identity_rest_e2e.mjs --expected-preview-ref <ref>',
+    '       node supabase/tests/preview/protected_flow_identity_rest_e2e.mjs --transport-preflight-only --expected-preview-ref <ref>',
     '',
     'Required environment:',
     '  PREVIEW_ENVIRONMENT=preview',
@@ -412,11 +428,9 @@ async function runDbTest(config, tempDir, name, sql) {
   let timedOut = false;
   let outputTooLarge = false;
   const childEnv = {};
-  for (const name of [
-    'PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'LC_ALL',
-    'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy',
-    'no_proxy', 'NPM_CONFIG_CACHE', 'npm_config_cache',
-  ]) if (typeof process.env[name] === 'string') childEnv[name] = process.env[name];
+  for (const name of DB_TEST_CHILD_ENV_NAMES) {
+    if (typeof process.env[name] === 'string') childEnv[name] = process.env[name];
+  }
 
   const result = await new Promise((resolve, reject) => {
     const child = spawn('npx', args, {
@@ -467,6 +481,65 @@ async function runDbTest(config, tempDir, name, sql) {
   if (outputTooLarge) fail('DB_TEST_OUTPUT_TOO_LARGE', evidence);
   if (result.exitCode !== 0) fail('DB_TEST_FAILED', evidence);
   return evidence;
+}
+
+async function runTransportPreflight(config, tempDir) {
+  let sql;
+  try {
+    sql = await readFile(TRANSPORT_PREFLIGHT, 'utf8');
+  } catch {
+    fail('TRANSPORT_PREFLIGHT_READ_FAILED', {
+      preflight_path_sha256: sha256(path.basename(TRANSPORT_PREFLIGHT)),
+    });
+  }
+  try {
+    const proof = await runDbTest(config, tempDir, 'transport-preflight', sql);
+    const transportTargetSha256 = sha256(config.dbUrl);
+    return {
+      ...proof,
+      transport_target_sha256: transportTargetSha256,
+      transport_binding_sha256: sha256({
+        argv_template: [
+          '--yes', `supabase@${SUPABASE_CLI_VERSION}`, '--log-level', 'error',
+          'test', 'db', '--db-url', '<transport-target>', '<private-sql-file>',
+        ],
+        child_env_names: DB_TEST_CHILD_ENV_NAMES
+          .filter((name) => typeof process.env[name] === 'string')
+          .sort(),
+        executable: 'npx',
+        repo_root: REPO_ROOT,
+        transport_target_sha256: transportTargetSha256,
+      }),
+    };
+  } catch (error) {
+    const safe = error instanceof SafeError ? error : new SafeError('TRANSPORT_PREFLIGHT_FAILED');
+    safe.details = sanitizeEvidence({ ...safe.details, stage: 'transport_preflight' });
+    throw safe;
+  }
+}
+
+async function executeTransportPreflightOnly(config) {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), 'flow-identity-preview-transport-'));
+  try {
+    const proof = await runTransportPreflight(config, tempDir);
+    return {
+      schema_version: TRANSPORT_EVIDENCE_SCHEMA,
+      status: 'passed',
+      environment: 'preview',
+      project_ref_sha256: sha256(config.projectRef),
+      transport_proof: {
+        sql_sha256: proof.sql_sha256,
+        stdout_sha256: proof.stdout_sha256,
+        stderr_sha256: proof.stderr_sha256,
+        transport_target_sha256: proof.transport_target_sha256,
+        transport_binding_sha256: proof.transport_binding_sha256,
+      },
+      disposable_actor_count: 0,
+      primary_write_count: 0,
+    };
+  } finally {
+    await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+  }
 }
 
 async function fetchJson(url, options, timeoutMs, expectedStatuses = [200]) {
@@ -1365,6 +1438,7 @@ async function execute(config) {
 
   try {
     tempDir = await mkdtemp(path.join(os.tmpdir(), 'flow-identity-preview-'));
+    dbProofs.transport_preflight = await runTransportPreflight(config, tempDir);
     context.owner = await createDisposableActor(config, 'owner');
     context.foreign = await createDisposableActor(config, 'foreign');
     const fixture = await renderSqlTemplate(FIXTURE_TEMPLATE, templateValues(context));
@@ -1622,6 +1696,12 @@ async function execute(config) {
         sql_sha256: proof.sql_sha256,
         stdout_sha256: proof.stdout_sha256,
         stderr_sha256: proof.stderr_sha256,
+        ...(proof.transport_target_sha256
+          ? { transport_target_sha256: proof.transport_target_sha256 }
+          : {}),
+        ...(proof.transport_binding_sha256
+          ? { transport_binding_sha256: proof.transport_binding_sha256 }
+          : {}),
       }])),
     };
   } catch (error) {
@@ -1712,6 +1792,16 @@ async function main() {
   assertCondition(typeof fetch === 'function', 'NODE_FETCH_UNAVAILABLE');
   const config = loadConfig(args.expectedPreviewRef);
   const startedAt = new Date().toISOString();
+  if (args.transportPreflightOnly) {
+    const evidence = await executeTransportPreflightOnly(config);
+    process.stdout.write(`${JSON.stringify(sanitizeEvidence({
+      ...evidence,
+      started_at_sha256: sha256(startedAt),
+      completed_at_sha256: sha256(new Date().toISOString()),
+      cli_version_sha256: sha256(SUPABASE_CLI_VERSION),
+    }))}\n`);
+    return;
+  }
   const evidence = await execute(config);
   process.stdout.write(`${JSON.stringify(sanitizeEvidence({
     ...evidence,
