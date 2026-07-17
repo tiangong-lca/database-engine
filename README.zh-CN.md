@@ -55,6 +55,14 @@ related:
 - `tiangong-lca-next`：前端环境文件与应用集成
 - `tiangong-lca-edge-functions`：Edge Function 运行时代码
 
+## LCI/LCIA Release 控制面
+
+数据库只保存持久化的 Release Run、精确绑定源 Process 的 dataset version 索引、
+artifact、审批、publication 与 readback 事实。生成后的 canonical TIDAS 数据集和 ZIP 字节保存在
+不可变对象存储中，不写入可编辑的 Process 或 LifecycleModel authoring 表。用户命令
+必须使用真实用户 session，并由数据库按当前 `data_product_manager` 角色最终授权；
+内部 service callback 只能 finalize 已验证的 artifact ref，不能审批、发布或撤回发布。
+
 ## 分支模型
 
 - GitHub 默认分支：`main`

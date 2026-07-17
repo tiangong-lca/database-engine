@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-17
-lastReviewedCommit: 966474e
-lastReviewedNote: "Reviewed strict Step 3 wrapper invocation, rotating permit, exact lookup, and fresh approved recovery contracts."
+lastReviewedCommit: caf7e1b4e14229701d7e94d861cbda2baef63e0a
+lastReviewedNote: "Reviewed strict Step 3 wrapper and recovery ownership together with the LCI/LCIA release-control ownership now present on dev."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
