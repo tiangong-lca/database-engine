@@ -2,6 +2,12 @@
 
 import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
+import { EventEmitter } from 'node:events';
+import {
+  chmod, mkdtemp, realpath, rm, symlink, writeFile,
+} from 'node:fs/promises';
+import os from 'node:os';
+import path from 'node:path';
 import { afterEach, test } from 'node:test';
 
 import { __test } from './protected_flow_identity_rest_e2e.mjs';
@@ -20,6 +26,20 @@ const OTHER_ID = '33333333-3333-4333-8333-333333333333';
 const FIXTURE_SHA256 = createHash('sha256')
   .update('database-engine#269')
   .digest('hex');
+
+function canonicalJson(value) {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(',')}]`;
+  if (value !== null && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map((key) => (
+      `${JSON.stringify(key)}:${canonicalJson(value[key])}`
+    )).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
+
+function canonicalSha256(value) {
+  return createHash('sha256').update(canonicalJson(value)).digest('hex');
+}
 
 afterEach(() => {
   globalThis.fetch = ORIGINAL_FETCH;
@@ -67,13 +87,43 @@ function installFetchScript(steps) {
   return () => assert.equal(index, steps.length, 'not every expected fetch ran');
 }
 
+class FakeIpc extends EventEmitter {
+  constructor(onSend) {
+    super();
+    this.connected = true;
+    this.onSend = onSend;
+  }
+
+  send(message, callback) {
+    callback?.(null);
+    this.onSend(message, this);
+  }
+}
+
 function context() {
-  return {
+  const checkpointStages = [];
+  const value = {
     requestId: REQUEST_ID,
     namespace: NAMESPACE,
     actorCandidates: [],
     authCensusBaselineTotal: null,
+    checkpointStages,
+    recoverySelectors: null,
+    recoveryCheckpointClient: {
+      async checkpoint(stage) {
+        checkpointStages.push(stage);
+        return { stage };
+      },
+      summary() {
+        return {
+          checkpoint_count: checkpointStages.length,
+          last_checkpoint_sha256: '0'.repeat(64),
+        };
+      },
+    },
   };
+  value.recoverySelectors = __test.createRecoverySelectors(value);
+  return value;
 }
 
 function exactUser(email, overrides = {}) {
@@ -107,6 +157,7 @@ function candidateFixture(overrides = {}) {
     preCreateAbsenceConfirmed: true,
     lookupAttempted: true,
     lastUserListTotal: 1,
+    actorBoundCheckpointAcknowledged: true,
     signInRequested: true,
     signInComplete: true,
     cleanupSignInAttempted: false,
@@ -115,6 +166,8 @@ function candidateFixture(overrides = {}) {
     sessionRevoked: false,
     deleteAttempted: false,
     deleteAcknowledged: false,
+    deleteHttpStatus: null,
+    deleteAlreadyAbsent: false,
     absenceReadbackAttempted: false,
     selectorAbsenceReadbackAttempted: false,
     selectorAbsenceConfirmed: false,
@@ -212,6 +265,10 @@ test('lost create response remains recoverable from exact metadata and is delete
 
   const assertCleanupComplete = installFetchScript([
     () => userListResponse([exactUser(candidate.email)]),
+    () => jsonResponse(200, {
+      user: { id: OWNER_ID }, access_token: 'cleanup-access-token',
+    }),
+    () => jsonResponse(204),
     (url, options) => {
       assert.equal(options.method, 'DELETE');
       return jsonResponse(204);
@@ -396,6 +453,10 @@ test('create response identity mismatch fails closed and deletes only the exact 
   const candidate = lifecycle.actorCandidates[0];
   const assertCleanupComplete = installFetchScript([
     () => userListResponse([exactUser(candidate.email)]),
+    () => jsonResponse(200, {
+      user: { id: OWNER_ID }, access_token: 'cleanup-access-token',
+    }),
+    () => jsonResponse(204),
     (url, options) => {
       assert.equal(options.method, 'DELETE');
       assert.equal(url, `${CONFIG.supabaseUrl}/auth/v1/admin/users/${OWNER_ID}`);
@@ -454,6 +515,10 @@ test('post-delete GET 404 is insufficient when the exact selector still matches'
     signInComplete: false,
   });
   const assertScriptComplete = installFetchScript([
+    () => jsonResponse(200, {
+      user: { id: OWNER_ID }, access_token: 'cleanup-access-token',
+    }),
+    () => jsonResponse(204),
     () => jsonResponse(204),
     () => jsonResponse(404),
     () => userListResponse([exactUser(candidate.email)]),
@@ -581,4 +646,290 @@ test('bounded response reader aborts before retaining an oversized body', async 
     (error) => error.code === 'TEST_RESPONSE_TOO_LARGE',
   );
   assert.equal(controller.signal.aborted, true);
+});
+
+test('recovery checkpoint client requires an exact ACK and rejects disconnects', async () => {
+  const sentFrames = [];
+  const safePayload = {
+    actors: [],
+    recovery_selectors: __test.createRecoverySelectors({
+      requestId: REQUEST_ID,
+      namespace: NAMESPACE,
+    }),
+  };
+  const ipc = new FakeIpc((message, emitter) => {
+    sentFrames.push(message.frame);
+    queueMicrotask(() => emitter.emit('message', {
+      type: 'protected-flow-identity-recovery-checkpoint-ack',
+      schema_version: 'protected-flow-identity-recovery-checkpoint-ack.v1',
+      sequence: message.frame.sequence,
+      frame_sha256: message.frame.frame_sha256,
+    }));
+  });
+  const client = __test.createRecoveryCheckpointClient({
+    requestId: REQUEST_ID,
+    namespace: NAMESPACE,
+    ipc,
+    timeoutMs: 1_000,
+  });
+  const frame = await client.checkpoint('runner_ready', safePayload);
+  assert.equal(frame.sequence, 1);
+  assert.equal(
+    frame.previous_sha256,
+    createHash('sha256')
+      .update('protected-flow-identity-recovery-checkpoint-genesis.v1')
+      .digest('hex'),
+  );
+  const { frame_sha256: firstFrameSha256, ...firstFramePayload } = frame;
+  assert.equal(firstFrameSha256, canonicalSha256(firstFramePayload));
+  assert.equal(client.summary().checkpoint_count, 1);
+  const secondFrame = await client.checkpoint('owner_actor_registered', safePayload);
+  assert.equal(secondFrame.sequence, 2);
+  assert.equal(secondFrame.previous_sha256, frame.frame_sha256);
+  const { frame_sha256: secondFrameSha256, ...secondFramePayload } = secondFrame;
+  assert.equal(secondFrameSha256, canonicalSha256(secondFramePayload));
+  assert.deepEqual(sentFrames, [frame, secondFrame]);
+  await assert.rejects(
+    client.checkpoint('owner_actor_create_requested', {
+      ...safePayload,
+      jwt: 'forbidden',
+      anon_key: 'forbidden',
+      connection_string: 'forbidden',
+    }),
+    (error) => error.code === 'RECOVERY_CHECKPOINT_PAYLOAD_SCHEMA_INVALID',
+  );
+  await assert.rejects(
+    client.checkpoint('unexpected_stage', safePayload),
+    (error) => error.code === 'RECOVERY_CHECKPOINT_STAGE_FORBIDDEN',
+  );
+
+  const wrongAck = new FakeIpc((message, emitter) => {
+    queueMicrotask(() => emitter.emit('message', {
+      type: 'protected-flow-identity-recovery-checkpoint-ack',
+      schema_version: 'protected-flow-identity-recovery-checkpoint-ack.v1',
+      sequence: message.frame.sequence,
+      frame_sha256: 'f'.repeat(64),
+    }));
+  });
+  const wrongClient = __test.createRecoveryCheckpointClient({
+    requestId: REQUEST_ID, namespace: NAMESPACE, ipc: wrongAck, timeoutMs: 1_000,
+  });
+  await assert.rejects(
+    wrongClient.checkpoint('runner_ready', safePayload),
+    (error) => error.code === 'RECOVERY_CHECKPOINT_ACK_INVALID',
+  );
+
+  const extraAckField = new FakeIpc((message, emitter) => {
+    queueMicrotask(() => emitter.emit('message', {
+      type: 'protected-flow-identity-recovery-checkpoint-ack',
+      schema_version: 'protected-flow-identity-recovery-checkpoint-ack.v1',
+      sequence: message.frame.sequence,
+      frame_sha256: message.frame.frame_sha256,
+      unexpected: true,
+    }));
+  });
+  const extraFieldClient = __test.createRecoveryCheckpointClient({
+    requestId: REQUEST_ID,
+    namespace: NAMESPACE,
+    ipc: extraAckField,
+    timeoutMs: 1_000,
+  });
+  await assert.rejects(
+    extraFieldClient.checkpoint('runner_ready', safePayload),
+    (error) => error.code === 'RECOVERY_CHECKPOINT_ACK_INVALID',
+  );
+
+  const disconnected = new FakeIpc((_message, emitter) => {
+    queueMicrotask(() => {
+      emitter.connected = false;
+      emitter.emit('disconnect');
+    });
+  });
+  const disconnectedClient = __test.createRecoveryCheckpointClient({
+    requestId: REQUEST_ID,
+    namespace: NAMESPACE,
+    ipc: disconnected,
+    timeoutMs: 1_000,
+  });
+  await assert.rejects(
+    disconnectedClient.checkpoint('runner_ready', safePayload),
+    (error) => error.code === 'RECOVERY_CHECKPOINT_IPC_DISCONNECTED',
+  );
+});
+
+test('actor sign-in cannot begin before the actor-bound checkpoint is acknowledged', async () => {
+  const lifecycle = context();
+  let releaseActorBound;
+  const actorBoundGate = new Promise((resolve) => { releaseActorBound = resolve; });
+  lifecycle.recoveryCheckpointClient.checkpoint = async (stage, payload) => {
+    lifecycle.checkpointStages.push(stage);
+    if (stage === 'owner_actor_registered') {
+      assert.deepEqual(payload.actors[0], {
+        role: 'owner',
+        email: 'flow-identity-owner-0123456789abcdef01234567@example.invalid',
+        fixture_sha256: createHash('sha256').update('database-engine#269').digest('hex'),
+        request_id: REQUEST_ID,
+        namespace: NAMESPACE,
+        user_id: null,
+        create_requested: false,
+        actor_bound_checkpoint_acknowledged: false,
+        locator_sha256: createHash('sha256')
+          .update('flow-identity-owner-0123456789abcdef01234567@example.invalid')
+          .digest('hex'),
+      });
+    }
+    if (stage === 'owner_actor_bound') await actorBoundGate;
+    return { stage };
+  };
+  let fetchCount = 0;
+  let createdEmail;
+  globalThis.fetch = async (_input, options = {}) => {
+    fetchCount += 1;
+    if (fetchCount === 1) return userListResponse([]);
+    if (fetchCount === 2) {
+      createdEmail = JSON.parse(options.body).email;
+      return jsonResponse(201, { id: OWNER_ID });
+    }
+    if (fetchCount === 3) return jsonResponse(200, exactUser(createdEmail));
+    if (fetchCount === 4) {
+      return jsonResponse(200, {
+        user: { id: OWNER_ID }, access_token: 'actor-access-token',
+      });
+    }
+    throw new Error('unexpected fetch');
+  };
+  const actorPromise = __test.createDisposableActor(CONFIG, 'owner', lifecycle);
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.equal(fetchCount, 3);
+  assert.equal(lifecycle.actorCandidates[0].signInRequested, false);
+  releaseActorBound();
+  const actor = await actorPromise;
+  assert.equal(fetchCount, 4);
+  assert.equal(actor.candidate.actorBoundCheckpointAcknowledged, true);
+});
+
+test('actor-bound checkpoint rejection fails before sign-in and hard delete', async () => {
+  const lifecycle = context();
+  lifecycle.recoveryCheckpointClient.checkpoint = async (stage) => {
+    lifecycle.checkpointStages.push(stage);
+    if (stage === 'owner_actor_bound') {
+      throw new __test.SafeError('RECOVERY_CHECKPOINT_ACK_INVALID');
+    }
+    return { stage };
+  };
+  let createdEmail;
+  const assertScriptComplete = installFetchScript([
+    () => userListResponse([]),
+    (_url, options) => {
+      createdEmail = JSON.parse(options.body).email;
+      return jsonResponse(201, { id: OWNER_ID });
+    },
+    () => jsonResponse(200, exactUser(createdEmail)),
+  ]);
+  await assert.rejects(
+    __test.createDisposableActor(CONFIG, 'owner', lifecycle),
+    (error) => error.code === 'RECOVERY_CHECKPOINT_ACK_INVALID',
+  );
+  assertScriptComplete();
+  const candidate = lifecycle.actorCandidates[0];
+  assert.equal(candidate.signInRequested, false);
+  assert.equal(candidate.deleteAttempted, false);
+  assert.equal(candidate.actorBoundCheckpointAcknowledged, false);
+});
+
+test('cleanup sign-in wrong actor retains the exact actor without logout or delete', async () => {
+  const candidate = candidateFixture({
+    accessToken: null,
+    signInRequested: false,
+    signInComplete: false,
+  });
+  const assertScriptComplete = installFetchScript([
+    () => jsonResponse(200, {
+      user: { id: OTHER_ID },
+      access_token: 'wrong-actor-access-token',
+    }),
+  ]);
+  await assert.rejects(
+    __test.cleanupActorCandidate(CONFIG, candidate),
+    (error) => error.code === 'AUTH_CLEANUP_SIGN_IN_FAILED',
+  );
+  assertScriptComplete();
+  assert.equal(candidate.sessionRevokeAttempted, false);
+  assert.equal(candidate.deleteAttempted, false);
+  assert.equal(candidate.absenceConfirmed, false);
+});
+
+test('global logout failure retains the actor and forbids hard delete', async () => {
+  const candidate = candidateFixture();
+  const assertScriptComplete = installFetchScript([
+    (_url, options) => {
+      assert.equal(options.method, 'POST');
+      return jsonResponse(500, { code: 'logout_failed' });
+    },
+  ]);
+  await assert.rejects(
+    __test.cleanupActorCandidate(CONFIG, candidate),
+    (error) => error.code === 'AUTH_SESSION_REVOKE_FAILED',
+  );
+  assertScriptComplete();
+  assert.equal(candidate.sessionRevoked, false);
+  assert.equal(candidate.deleteAttempted, false);
+  assert.equal(candidate.absenceConfirmed, false);
+});
+
+test('one actor logout failure does not prevent exact cleanup of the other actor', async () => {
+  const owner = candidateFixture();
+  const foreign = candidateFixture({
+    role: 'foreign',
+    email: 'fixture-foreign@example.invalid',
+    userId: OTHER_ID,
+    accessToken: 'foreign-access-token',
+  });
+  const assertScriptComplete = installFetchScript([
+    () => jsonResponse(500, { code: 'owner_logout_failed' }),
+    () => jsonResponse(204),
+    () => jsonResponse(204),
+    () => jsonResponse(404),
+    () => userListResponse([]),
+  ]);
+  const failures = await __test.cleanupActorCandidates(CONFIG, [owner, foreign]);
+  assertScriptComplete();
+  assert.equal(failures.length, 1);
+  assert.equal(owner.deleteAttempted, false);
+  assert.equal(foreign.sessionRevoked, true);
+  assert.equal(foreign.absenceConfirmed, true);
+});
+
+test('private temp directory must be exact, empty, owner-only, and non-symlink', async () => {
+  const directory = await mkdtemp(path.join(
+    await realpath(os.tmpdir()),
+    'fi269-private-',
+  ));
+  const link = `${directory}-link`;
+  try {
+    assert.equal(await __test.validatePrivateTempDir(directory), directory);
+    await writeFile(path.join(directory, 'residue'), 'x');
+    await assert.rejects(
+      __test.validatePrivateTempDir(directory),
+      (error) => error.code === 'PRIVATE_TEMP_DIR_NOT_EMPTY',
+    );
+    await rm(path.join(directory, 'residue'));
+    await chmod(directory, 0o755);
+    await assert.rejects(
+      __test.validatePrivateTempDir(directory),
+      (error) => error.code === 'PRIVATE_TEMP_DIR_MODE_INVALID',
+    );
+    await chmod(directory, 0o700);
+    await symlink(directory, link);
+    await assert.rejects(
+      __test.validatePrivateTempDir(link),
+      (error) => [
+        'PRIVATE_TEMP_DIR_TYPE_INVALID',
+        'PRIVATE_TEMP_DIR_NOT_CANONICAL',
+      ].includes(error.code),
+    );
+  } finally {
+    await rm(link, { force: true });
+    await rm(directory, { recursive: true, force: true });
+  }
 });

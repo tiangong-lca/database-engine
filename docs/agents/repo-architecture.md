@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-18
-lastReviewedCommit: f964217811feaac43f7eb44c428e3eea7e21f1b4
-lastReviewedNote: "Reviewed PR269 deterministic actor recovery, hard-delete Auth absence, pre-dispatch derivative cleanup lock, and transaction-external 39-surface closure; exact-head Hosted execution remains deferred."
+lastReviewedCommit: 04b85de6311260d92237c2472eb5cee57cc30baa
+lastReviewedNote: "Reviewed PR269 outer-owned private temp, fsync-before-ACK recovery checkpoints, logout-before-delete Auth retention, and transaction-external 39-surface closure; exact-head Hosted execution remains deferred."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -73,7 +73,7 @@ This means branch behavior is part of the repo architecture, not just delivery p
 
 ## Test Proof Layers
 
-SQL assertions own database semantics and ACL regressions. Offline Node contracts own runner-only control flow, including outer-frozen request/namespace selectors, deterministic role emails, exact filtered metadata recovery, global logout, hard DELETE followed by GET-404 plus a fresh empty filtered census, in-connection application-name binding, and fail-closed rendering/parsing of the 39-surface read-only residue proof. Cleanup shares the derivative coordinator advisory lock and is allowed only before either exact child crosses external dispatch; otherwise it fails into separately authorized durable recovery. Those offline contracts use no Hosted database authority and do not replace the later exact-head Hosted mutation proof or independent Auth/SQL readback execution.
+SQL assertions own database semantics and ACL regressions. Offline Node contracts own runner-only control flow, including outer-frozen request/namespace selectors, deterministic role emails, an outer-created exact empty mode-0700 private temp directory, fsync-before-ACK secret-free recovery checkpoints, exact filtered metadata recovery, global logout, hard DELETE followed by GET-404 plus a fresh empty filtered census, in-connection application-name binding, and fail-closed rendering/parsing of the 39-surface read-only residue proof. The inner runner may not begin actor sign-in or fixture mutation until the outer process has durably acknowledged the exact actor/selectors checkpoint. Cleanup shares the derivative coordinator advisory lock and is allowed only before either exact child crosses external dispatch; otherwise it fails into separately authorized durable recovery. A missing or ambiguous global logout always retains the actor and forbids hard DELETE. Those offline contracts use no Hosted database authority and do not replace the later exact-head Hosted mutation proof or independent Auth/SQL readback execution.
 
 ## Current Hotspot Themes
 

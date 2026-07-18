@@ -15,7 +15,9 @@
 
 import { spawn } from 'node:child_process';
 import { createHash, randomBytes, randomUUID } from 'node:crypto';
-import { lstat, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises';
+import {
+  lstat, mkdtemp, readFile, readdir, realpath, rm, writeFile,
+} from 'node:fs/promises';
 import os from 'node:os';
 import path from 'node:path';
 import readline from 'node:readline';
@@ -36,7 +38,7 @@ const FIXTURE_COMMAND = 'preview_e2e_flow_identity_fixture';
 const FIXTURE_TARGET_TABLE = 'preview_e2e_flow_identity';
 const FIXTURE_TARGET_VERSION = '00.00.001';
 const MANIFEST_SCHEMA = 'protected-flow-identity-preview-fixture.v1';
-const EVIDENCE_SCHEMA = 'protected-flow-identity-rest-e2e-evidence.v2';
+const EVIDENCE_SCHEMA = 'protected-flow-identity-rest-e2e-evidence.v3';
 const TRANSPORT_EVIDENCE_SCHEMA = 'protected-flow-identity-transport-preflight-evidence.v2';
 const SUPABASE_CLI_VERSION = '2.109.1';
 const PG_PROVE_IMAGE_REPOSITORY = 'public.ecr.aws/supabase/pg_prove';
@@ -55,6 +57,69 @@ const AUTH_USER_LIST_PAGE_SIZE = 200;
 const AUTH_USER_LIST_MAX_PAGES = 50;
 const AUTH_USER_LIST_MAX_TOTAL =
   AUTH_USER_LIST_PAGE_SIZE * AUTH_USER_LIST_MAX_PAGES;
+const RECOVERY_CHECKPOINT_SCHEMA =
+  'protected-flow-identity-recovery-checkpoint.v1';
+const RECOVERY_CHECKPOINT_ACK_SCHEMA =
+  'protected-flow-identity-recovery-checkpoint-ack.v1';
+const RECOVERY_CHECKPOINT_MAX_BYTES = 16 * 1024;
+const RECOVERY_CHECKPOINT_TIMEOUT_MS = 10_000;
+const RECOVERY_CHECKPOINT_STAGES = new Set([
+  'runner_ready',
+  'owner_actor_registered',
+  'owner_actor_create_requested',
+  'owner_actor_bound',
+  'owner_actor_bound_cleanup',
+  'foreign_actor_registered',
+  'foreign_actor_create_requested',
+  'foreign_actor_bound',
+  'foreign_actor_bound_cleanup',
+  'actors_bound',
+  'fixture_committed',
+  'fixture_manifest_bound',
+  'capture_receipt_bound',
+  'scope_bound',
+  'process_1_committed',
+  'process_2_committed',
+  'finalize_selectors_bound',
+  'cleanup_sql_committed',
+]);
+const RECOVERY_CHECKPOINT_ACTOR_KEYS = Object.freeze([
+  'actor_bound_checkpoint_acknowledged',
+  'create_requested',
+  'email',
+  'fixture_sha256',
+  'locator_sha256',
+  'namespace',
+  'request_id',
+  'role',
+  'user_id',
+]);
+const RECOVERY_SELECTOR_UUID_KEYS = Object.freeze([
+  'actor_user_ids',
+  'derivative_batch_ids',
+  'derivative_request_ids',
+  'process_ids',
+  'receipt_ids',
+  'scope_ids',
+  'support_entity_ids',
+  'wrapper_invocation_ids',
+]);
+const RECOVERY_SELECTOR_DECIMAL_KEYS = Object.freeze([
+  'audit_ids',
+  'derivative_proposal_ids',
+  'embedding_pending_job_ids',
+  'embedding_queue_msg_ids',
+  'fixture_backend_pids',
+  'http_request_ids',
+]);
+const RECOVERY_SELECTOR_KEYS = Object.freeze([
+  'schema_version',
+  'request_id',
+  'namespace',
+  'operation_id',
+  ...RECOVERY_SELECTOR_UUID_KEYS,
+  ...RECOVERY_SELECTOR_DECIMAL_KEYS,
+]);
 
 const EXPECTED = Object.freeze({
   source_count: 305,
@@ -301,6 +366,261 @@ function normalizedRecoverySelectors(selectors) {
   ]));
 }
 
+async function validatePrivateTempDir(privateTempDir) {
+  requireString(privateTempDir, 'PRIVATE_TEMP_DIR_INVALID');
+  assertCondition(path.isAbsolute(privateTempDir), 'PRIVATE_TEMP_DIR_NOT_ABSOLUTE');
+  assertCondition(path.normalize(privateTempDir) === privateTempDir, 'PRIVATE_TEMP_DIR_NOT_CANONICAL');
+  let stat;
+  let resolved;
+  let entries;
+  try {
+    stat = await lstat(privateTempDir);
+    resolved = await realpath(privateTempDir);
+    entries = await readdir(privateTempDir);
+  } catch {
+    fail('PRIVATE_TEMP_DIR_READ_FAILED');
+  }
+  assertCondition(
+    stat.isDirectory() && !stat.isSymbolicLink(),
+    'PRIVATE_TEMP_DIR_TYPE_INVALID',
+  );
+  assertCondition(resolved === privateTempDir, 'PRIVATE_TEMP_DIR_NOT_CANONICAL');
+  assertCondition((stat.mode & 0o777) === 0o700, 'PRIVATE_TEMP_DIR_MODE_INVALID');
+  if (typeof process.getuid === 'function') {
+    assertCondition(stat.uid === process.getuid(), 'PRIVATE_TEMP_DIR_OWNER_INVALID');
+  }
+  assertCondition(entries.length === 0, 'PRIVATE_TEMP_DIR_NOT_EMPTY');
+  return privateTempDir;
+}
+
+function assertExactKeys(value, expectedKeys, code) {
+  assertCondition(isPlainObject(value), code);
+  const observed = Object.keys(value).sort();
+  const expected = [...expectedKeys].sort();
+  assertCondition(
+    observed.length === expected.length
+      && observed.every((key, index) => key === expected[index]),
+    code,
+    { key_set_sha256: sha256(observed) },
+  );
+}
+
+function validateRecoveryCheckpointPayload(payload, requestId, namespace) {
+  assertExactKeys(
+    payload,
+    ['actors', 'recovery_selectors'],
+    'RECOVERY_CHECKPOINT_PAYLOAD_SCHEMA_INVALID',
+  );
+  assertCondition(
+    Array.isArray(payload.actors) && payload.actors.length <= 2,
+    'RECOVERY_CHECKPOINT_ACTOR_SET_INVALID',
+  );
+  const expectedRoles = ['owner', 'foreign'];
+  for (const [index, actor] of payload.actors.entries()) {
+    assertExactKeys(
+      actor,
+      RECOVERY_CHECKPOINT_ACTOR_KEYS,
+      'RECOVERY_CHECKPOINT_ACTOR_SCHEMA_INVALID',
+    );
+    const expectedRole = expectedRoles[index];
+    assertCondition(actor.role === expectedRole, 'RECOVERY_CHECKPOINT_ACTOR_ROLE_INVALID');
+    const expectedEmail = `flow-identity-${expectedRole}-${namespace.slice('fie2e-hosted-'.length)}@example.invalid`;
+    assertCondition(
+      typeof actor.email === 'string'
+        && actor.email.length <= 320
+        && EMAIL_RE.test(actor.email)
+        && actor.email === expectedEmail,
+      'RECOVERY_CHECKPOINT_ACTOR_EMAIL_INVALID',
+    );
+    assertCondition(
+      actor.fixture_sha256 === sha256('database-engine#269'),
+      'RECOVERY_CHECKPOINT_ACTOR_FIXTURE_INVALID',
+    );
+    assertCondition(
+      actor.request_id === requestId && actor.namespace === namespace,
+      'RECOVERY_CHECKPOINT_ACTOR_BINDING_INVALID',
+    );
+    assertCondition(
+      actor.user_id === null || (typeof actor.user_id === 'string' && UUID_RE.test(actor.user_id)),
+      'RECOVERY_CHECKPOINT_ACTOR_ID_INVALID',
+    );
+    assertCondition(
+      typeof actor.create_requested === 'boolean'
+        && typeof actor.actor_bound_checkpoint_acknowledged === 'boolean',
+      'RECOVERY_CHECKPOINT_ACTOR_STATE_INVALID',
+    );
+    assertCondition(
+      (actor.user_id === null || actor.create_requested)
+        && (!actor.actor_bound_checkpoint_acknowledged || actor.user_id !== null),
+      'RECOVERY_CHECKPOINT_ACTOR_STATE_INVALID',
+    );
+    assertCondition(
+      actor.locator_sha256 === sha256(actor.email),
+      'RECOVERY_CHECKPOINT_ACTOR_LOCATOR_INVALID',
+    );
+  }
+
+  const selectors = payload.recovery_selectors;
+  assertExactKeys(
+    selectors,
+    RECOVERY_SELECTOR_KEYS,
+    'RECOVERY_CHECKPOINT_SELECTOR_SCHEMA_INVALID',
+  );
+  assertCondition(
+    selectors.schema_version === 'protected-flow-identity-recovery-selectors.v2'
+      && selectors.request_id === requestId
+      && selectors.namespace === namespace
+      && selectors.operation_id === `preview-flow-identity-${requestId}`,
+    'RECOVERY_CHECKPOINT_SELECTOR_BINDING_INVALID',
+  );
+  for (const key of RECOVERY_SELECTOR_UUID_KEYS) {
+    const values = selectors[key];
+    assertCondition(
+      Array.isArray(values)
+        && values.length <= 200
+        && values.every((value) => typeof value === 'string' && UUID_RE.test(value))
+        && values.every((value, index) => index === 0 || values[index - 1] < value),
+      'RECOVERY_CHECKPOINT_SELECTOR_UUID_SET_INVALID',
+      { selector_key_sha256: sha256(key) },
+    );
+  }
+  for (const key of RECOVERY_SELECTOR_DECIMAL_KEYS) {
+    const values = selectors[key];
+    assertCondition(
+      Array.isArray(values)
+        && values.length <= 200
+        && values.every((value) => typeof value === 'string' && /^(?:0|[1-9][0-9]*)$/.test(value))
+        && values.every((value, index) => index === 0 || values[index - 1] < value),
+      'RECOVERY_CHECKPOINT_SELECTOR_DECIMAL_SET_INVALID',
+      { selector_key_sha256: sha256(key) },
+    );
+  }
+  return payload;
+}
+
+function createRecoveryCheckpointClient({
+  requestId,
+  namespace,
+  ipc = process,
+  timeoutMs = RECOVERY_CHECKPOINT_TIMEOUT_MS,
+} = {}) {
+  requireUuid(requestId, 'RECOVERY_CHECKPOINT_REQUEST_INVALID');
+  requireString(namespace, 'RECOVERY_CHECKPOINT_NAMESPACE_INVALID', NAMESPACE_RE);
+  assertCondition(
+    ipc?.connected === true
+      && typeof ipc.send === 'function'
+      && typeof ipc.on === 'function'
+      && typeof ipc.off === 'function',
+    'RECOVERY_CHECKPOINT_IPC_UNAVAILABLE',
+  );
+  assertCondition(
+    Number.isInteger(timeoutMs) && timeoutMs >= 100 && timeoutMs <= 60_000,
+    'RECOVERY_CHECKPOINT_TIMEOUT_INVALID',
+  );
+  let sequence = 0;
+  let previousSha256 = sha256('protected-flow-identity-recovery-checkpoint-genesis.v1');
+  let inFlight = false;
+
+  const checkpoint = async (stage, payload) => {
+    requireString(stage, 'RECOVERY_CHECKPOINT_STAGE_INVALID', /^[a-z][a-z0-9_]{2,63}$/);
+    assertCondition(
+      RECOVERY_CHECKPOINT_STAGES.has(stage),
+      'RECOVERY_CHECKPOINT_STAGE_FORBIDDEN',
+    );
+    assertCondition(!inFlight, 'RECOVERY_CHECKPOINT_CONCURRENT');
+    validateRecoveryCheckpointPayload(payload, requestId, namespace);
+    const nextSequence = sequence + 1;
+    const framePayload = {
+      schema_version: RECOVERY_CHECKPOINT_SCHEMA,
+      sequence: nextSequence,
+      previous_sha256: previousSha256,
+      request_id: requestId,
+      namespace,
+      stage,
+      payload,
+    };
+    const frame = {
+      ...framePayload,
+      frame_sha256: sha256(canonicalJson(framePayload)),
+    };
+    const message = {
+      type: 'protected-flow-identity-recovery-checkpoint',
+      frame,
+    };
+    assertCondition(
+      Buffer.byteLength(canonicalJson(message)) <= RECOVERY_CHECKPOINT_MAX_BYTES,
+      'RECOVERY_CHECKPOINT_TOO_LARGE',
+    );
+    inFlight = true;
+    try {
+      await new Promise((resolve, reject) => {
+        let settled = false;
+        const finish = (error = null) => {
+          if (settled) return;
+          settled = true;
+          clearTimeout(timer);
+          ipc.off('message', onMessage);
+          ipc.off('disconnect', onDisconnect);
+          if (error) reject(error);
+          else resolve();
+        };
+        const onMessage = (ack) => {
+          if (ack?.type !== 'protected-flow-identity-recovery-checkpoint-ack') return;
+          try {
+            assertExactKeys(
+              ack,
+              ['type', 'schema_version', 'sequence', 'frame_sha256'],
+              'RECOVERY_CHECKPOINT_ACK_INVALID',
+            );
+          } catch {
+            finish(new SafeError('RECOVERY_CHECKPOINT_ACK_INVALID'));
+            return;
+          }
+          if (
+            ack.schema_version !== RECOVERY_CHECKPOINT_ACK_SCHEMA
+              || ack.sequence !== nextSequence
+              || ack.frame_sha256 !== frame.frame_sha256
+          ) {
+            finish(new SafeError('RECOVERY_CHECKPOINT_ACK_INVALID'));
+            return;
+          }
+          finish();
+        };
+        const onDisconnect = () => finish(
+          new SafeError('RECOVERY_CHECKPOINT_IPC_DISCONNECTED'),
+        );
+        const timer = setTimeout(
+          () => finish(new SafeError('RECOVERY_CHECKPOINT_ACK_TIMEOUT')),
+          timeoutMs,
+        );
+        timer.unref();
+        ipc.on('message', onMessage);
+        ipc.on('disconnect', onDisconnect);
+        try {
+          ipc.send(message, (error) => {
+            if (error) finish(new SafeError('RECOVERY_CHECKPOINT_SEND_FAILED'));
+          });
+        } catch {
+          finish(new SafeError('RECOVERY_CHECKPOINT_SEND_FAILED'));
+        }
+      });
+      sequence = nextSequence;
+      previousSha256 = frame.frame_sha256;
+      return frame;
+    } finally {
+      inFlight = false;
+    }
+  };
+
+  return Object.freeze({
+    checkpoint,
+    summary: () => ({
+      checkpoint_count: sequence,
+      last_checkpoint_sha256: previousSha256,
+    }),
+  });
+}
+
 function parseBoundedInteger(value, fallback, minimum, maximum, code) {
   if (value === undefined || value === '') return fallback;
   const parsed = Number(value);
@@ -313,18 +633,22 @@ function parseArgs(argv) {
     return {
       raceWorker: true, transportPreflightOnly: false, help: false,
       expectedPreviewRef: null, scenarioNamespace: null, requestId: null,
+      privateTempDir: null, recoveryIpc: false,
     };
   }
   if (argv.includes('--help') || argv.includes('-h')) {
     return {
       raceWorker: false, transportPreflightOnly: false, help: true,
       expectedPreviewRef: null, scenarioNamespace: null, requestId: null,
+      privateTempDir: null, recoveryIpc: false,
     };
   }
   let expectedPreviewRef = null;
   let transportPreflightOnly = false;
   let scenarioNamespace = null;
   let requestId = null;
+  let privateTempDir = null;
+  let recoveryIpc = false;
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === '--expected-preview-ref' && index + 1 < argv.length) {
       expectedPreviewRef = argv[index + 1];
@@ -340,6 +664,13 @@ function parseArgs(argv) {
       assertCondition(requestId === null, 'ARG_REQUEST_ID_DUPLICATE');
       requestId = argv[index + 1];
       index += 1;
+    } else if (argv[index] === '--private-temp-dir' && index + 1 < argv.length) {
+      assertCondition(privateTempDir === null, 'ARG_PRIVATE_TEMP_DIR_DUPLICATE');
+      privateTempDir = argv[index + 1];
+      index += 1;
+    } else if (argv[index] === '--recovery-ipc') {
+      assertCondition(!recoveryIpc, 'ARG_RECOVERY_IPC_DUPLICATE');
+      recoveryIpc = true;
     } else {
       fail('ARG_UNKNOWN');
     }
@@ -347,7 +678,8 @@ function parseArgs(argv) {
   requireString(expectedPreviewRef, 'ARG_EXPECTED_PREVIEW_REF_REQUIRED', REF_RE);
   if (transportPreflightOnly) {
     assertCondition(
-      scenarioNamespace === null && requestId === null,
+      scenarioNamespace === null && requestId === null
+        && privateTempDir === null && recoveryIpc === false,
       'ARG_TRANSPORT_PREFLIGHT_SCOPE_INVALID',
     );
   } else {
@@ -357,6 +689,9 @@ function parseArgs(argv) {
       NAMESPACE_RE,
     );
     requireUuid(requestId, 'ARG_REQUEST_ID_REQUIRED');
+    requireString(privateTempDir, 'ARG_PRIVATE_TEMP_DIR_REQUIRED');
+    assertCondition(path.isAbsolute(privateTempDir), 'ARG_PRIVATE_TEMP_DIR_NOT_ABSOLUTE');
+    assertCondition(recoveryIpc, 'ARG_RECOVERY_IPC_REQUIRED');
   }
   return {
     raceWorker: false,
@@ -365,12 +700,14 @@ function parseArgs(argv) {
     expectedPreviewRef,
     scenarioNamespace,
     requestId,
+    privateTempDir,
+    recoveryIpc,
   };
 }
 
 function helpText() {
   return [
-    'Usage: node supabase/tests/preview/protected_flow_identity_rest_e2e.mjs --expected-preview-ref <ref> --scenario-namespace <fie2e-hosted-24hex> --request-id <uuid>',
+    'Usage: node supabase/tests/preview/protected_flow_identity_rest_e2e.mjs --expected-preview-ref <ref> --scenario-namespace <fie2e-hosted-24hex> --request-id <uuid> --private-temp-dir <absolute-0700-empty-dir> --recovery-ipc',
     '       node supabase/tests/preview/protected_flow_identity_rest_e2e.mjs --transport-preflight-only --expected-preview-ref <ref>',
     '',
     'Required environment:',
@@ -1252,6 +1589,8 @@ function actorRecoverySummary(candidate) {
     pre_create_absence_confirmed: candidate.preCreateAbsenceConfirmed,
     lookup_attempted: candidate.lookupAttempted,
     lookup_match_found: candidate.userId !== null,
+    actor_bound_checkpoint_acknowledged:
+      candidate.actorBoundCheckpointAcknowledged,
     sign_in_requested: candidate.signInRequested,
     sign_in_complete: candidate.signInComplete,
     cleanup_sign_in_attempted: candidate.cleanupSignInAttempted,
@@ -1260,6 +1599,8 @@ function actorRecoverySummary(candidate) {
     session_revoked: candidate.sessionRevoked,
     delete_attempted: candidate.deleteAttempted,
     delete_acknowledged: candidate.deleteAcknowledged,
+    delete_http_status: candidate.deleteHttpStatus,
+    delete_already_absent: candidate.deleteAlreadyAbsent,
     absence_readback_attempted: candidate.absenceReadbackAttempted,
     selector_absence_readback_attempted:
       candidate.selectorAbsenceReadbackAttempted,
@@ -1268,6 +1609,33 @@ function actorRecoverySummary(candidate) {
     retained: !candidate.absenceConfirmed,
     cleanup_failure_codes: candidate.cleanupFailureCodes,
   };
+}
+
+function recoveryCheckpointPayload(context) {
+  return {
+    actors: context.actorCandidates.map((candidate) => ({
+      role: candidate.role,
+      email: candidate.email,
+      fixture_sha256: candidate.fixtureSha256,
+      request_id: candidate.requestId,
+      namespace: candidate.namespace,
+      user_id: candidate.userId,
+      create_requested: candidate.createRequested,
+      actor_bound_checkpoint_acknowledged:
+        candidate.actorBoundCheckpointAcknowledged,
+      locator_sha256: sha256(candidate.email),
+    })),
+    recovery_selectors: normalizedRecoverySelectors(
+      context.recoverySelectors,
+    ),
+  };
+}
+
+async function checkpointRecovery(context, stage) {
+  return context.recoveryCheckpointClient.checkpoint(
+    stage,
+    recoveryCheckpointPayload(context),
+  );
 }
 
 function attachCleanupDetails(error, cleanup, actorCandidates) {
@@ -1459,6 +1827,7 @@ async function createDisposableActor(config, roleLabel, context) {
     preCreateAbsenceConfirmed: false,
     lookupAttempted: false,
     lastUserListTotal: null,
+    actorBoundCheckpointAcknowledged: false,
     signInRequested: false,
     signInComplete: false,
     cleanupSignInAttempted: false,
@@ -1467,13 +1836,17 @@ async function createDisposableActor(config, roleLabel, context) {
     sessionRevoked: false,
     deleteAttempted: false,
     deleteAcknowledged: false,
+    deleteHttpStatus: null,
+    deleteAlreadyAbsent: false,
     absenceReadbackAttempted: false,
     selectorAbsenceReadbackAttempted: false,
     selectorAbsenceConfirmed: false,
     absenceConfirmed: false,
     cleanupFailureCodes: [],
+    recoveryContext: context,
   };
   context.actorCandidates.push(candidate);
+  await checkpointRecovery(context, `${roleLabel}_actor_registered`);
   candidate.preCreateAbsenceReadbackAttempted = true;
   const preexisting = await listExactDisposableActors(config, candidate);
   assertCondition(preexisting.length === 0, 'AUTH_ACTOR_PREEXISTING', {
@@ -1482,6 +1855,7 @@ async function createDisposableActor(config, roleLabel, context) {
   });
   candidate.preCreateAbsenceConfirmed = true;
   candidate.createRequested = true;
+  await checkpointRecovery(context, `${roleLabel}_actor_create_requested`);
   const created = await fetchJson(
     `${config.supabaseUrl}/auth/v1/admin/users`,
     {
@@ -1511,6 +1885,8 @@ async function createDisposableActor(config, roleLabel, context) {
   assertCondition(candidate.userId !== null, 'AUTH_CREATE_RESPONSE_INVALID', {
     locator_sha256: sha256(candidate.email),
   });
+  await checkpointRecovery(context, `${roleLabel}_actor_bound`);
+  candidate.actorBoundCheckpointAcknowledged = true;
   candidate.signInRequested = true;
   const signedIn = await fetchJson(
     `${config.supabaseUrl}/auth/v1/token?grant_type=password`,
@@ -1608,7 +1984,13 @@ async function confirmDisposableActorSelectorAbsent(config, candidate) {
   candidate.selectorAbsenceConfirmed = true;
 }
 
-async function cleanupActorCandidate(config, candidate, deleteAllowed = true) {
+async function cleanupActorCandidate(
+  config,
+  candidate,
+  deleteAllowed = true,
+  recoveryContext = null,
+) {
+  const checkpointContext = recoveryContext ?? candidate.recoveryContext ?? null;
   const failures = [];
   const recordFailure = (error, fallbackCode) => {
     const cause = error instanceof SafeError ? error : new SafeError('UNHANDLED_FAILURE');
@@ -1620,28 +2002,16 @@ async function cleanupActorCandidate(config, candidate, deleteAllowed = true) {
     candidate.cleanupFailureCodes.push(fallbackCode);
     if (cause.code !== fallbackCode) candidate.cleanupFailureCodes.push(cause.code);
   };
-  if (
-    candidate.accessToken === null
-      && candidate.signInRequested
-      && !candidate.signInComplete
-      && candidate.userId !== null
-  ) {
-    try {
-      await reacquireActorSessionForCleanup(config, candidate);
-    } catch (error) {
-      recordFailure(error, 'AUTH_CLEANUP_SIGN_IN_FAILED');
-    }
-  }
-  if (candidate.accessToken !== null) {
-    candidate.sessionRevokeAttempted = true;
-    try {
-      await revokeActorSession(config, candidate);
-      candidate.sessionRevoked = true;
-    } catch (error) {
-      recordFailure(error, 'AUTH_SESSION_REVOKE_FAILED');
-    }
-  }
   if (!deleteAllowed) {
+    if (candidate.accessToken !== null) {
+      candidate.sessionRevokeAttempted = true;
+      try {
+        await revokeActorSession(config, candidate);
+        candidate.sessionRevoked = true;
+      } catch (error) {
+        recordFailure(error, 'AUTH_SESSION_REVOKE_FAILED');
+      }
+    }
     if (failures.length > 0) {
       failures[0].details = sanitizeEvidence({
         ...failures[0].details,
@@ -1658,6 +2028,25 @@ async function cleanupActorCandidate(config, candidate, deleteAllowed = true) {
       recordFailure(error, 'AUTH_ACTOR_RECOVERY_FAILED');
     }
   }
+  if (
+    candidate.userId !== null
+      && !candidate.actorBoundCheckpointAcknowledged
+      && failures.length === 0
+  ) {
+    try {
+      assertCondition(
+        checkpointContext !== null,
+        'AUTH_ACTOR_BOUND_CHECKPOINT_REQUIRED',
+      );
+      await checkpointRecovery(
+        checkpointContext,
+        `${candidate.role}_actor_bound_cleanup`,
+      );
+      candidate.actorBoundCheckpointAcknowledged = true;
+    } catch (error) {
+      recordFailure(error, 'AUTH_ACTOR_BOUND_CHECKPOINT_FAILED');
+    }
+  }
   if (candidate.lookupAttempted && candidate.userId === null && failures.length === 0) {
     candidate.selectorAbsenceReadbackAttempted = true;
     candidate.selectorAbsenceConfirmed = true;
@@ -1665,10 +2054,36 @@ async function cleanupActorCandidate(config, candidate, deleteAllowed = true) {
       new SafeError('AUTH_ACTOR_RECOVERY_UNRESOLVED'),
       'AUTH_ACTOR_RECOVERY_FAILED',
     );
-  } else if (candidate.userId !== null) {
+  } else if (candidate.userId !== null && failures.length === 0) {
+    if (candidate.accessToken === null) {
+      try {
+        await reacquireActorSessionForCleanup(config, candidate);
+      } catch (error) {
+        recordFailure(error, 'AUTH_CLEANUP_SIGN_IN_FAILED');
+      }
+    }
+    if (candidate.accessToken !== null && failures.length === 0) {
+      candidate.sessionRevokeAttempted = true;
+      try {
+        await revokeActorSession(config, candidate);
+        candidate.sessionRevoked = true;
+      } catch (error) {
+        recordFailure(error, 'AUTH_SESSION_REVOKE_FAILED');
+      }
+    }
+    if (!candidate.sessionRevoked && failures.length === 0) {
+      recordFailure(
+        new SafeError('AUTH_SESSION_REVOKE_REQUIRED'),
+        'AUTH_SESSION_REVOKE_FAILED',
+      );
+    }
+  }
+  if (failures.length === 0 && candidate.userId !== null) {
     candidate.deleteAttempted = true;
     try {
-      await deleteDisposableActor(config, candidate.userId);
+      const deletion = await deleteDisposableActor(config, candidate.userId);
+      candidate.deleteHttpStatus = deletion.status;
+      candidate.deleteAlreadyAbsent = deletion.status === 404;
       candidate.deleteAcknowledged = true;
     } catch (error) {
       recordFailure(error, 'AUTH_ACTOR_DELETE_FAILED');
@@ -1697,11 +2112,21 @@ async function cleanupActorCandidate(config, candidate, deleteAllowed = true) {
   }
 }
 
-async function cleanupActorCandidates(config, candidates, deleteAllowed = true) {
+async function cleanupActorCandidates(
+  config,
+  candidates,
+  deleteAllowed = true,
+  recoveryContext = null,
+) {
   const failures = [];
   for (const candidate of candidates) {
     try {
-      await cleanupActorCandidate(config, candidate, deleteAllowed);
+      await cleanupActorCandidate(
+        config,
+        candidate,
+        deleteAllowed,
+        recoveryContext,
+      );
     } catch (error) {
       failures.push(error instanceof SafeError
         ? error
@@ -2626,10 +3051,17 @@ async function execute(config, args) {
     owner: null,
     foreign: null,
     actorCandidates: [],
+    recoverySelectors: null,
+    recoveryCheckpointClient: null,
   };
   context.applicationName = `fi269-${context.namespace}`;
+  context.recoveryCheckpointClient = createRecoveryCheckpointClient({
+    requestId: context.requestId,
+    namespace: context.namespace,
+  });
   const dbOptions = Object.freeze({ applicationName: context.applicationName });
   const recoverySelectors = createRecoverySelectors(context);
+  context.recoverySelectors = recoverySelectors;
   let tempDir = null;
   let fixtureAttempted = false;
   let cleanupFailure = null;
@@ -2653,6 +3085,7 @@ async function execute(config, args) {
     recovery_actors: [],
     cleanup_closed: false,
     cleanup_failure_codes: [],
+    cleanup_checkpoint_acknowledged: false,
     recovery_selectors: null,
     recovery_selector_set_sha256: null,
     residue_readback_ran: false,
@@ -2668,12 +3101,14 @@ async function execute(config, args) {
   };
 
   try {
-    tempDir = await mkdtemp(path.join(os.tmpdir(), 'flow-identity-preview-'));
+    tempDir = await validatePrivateTempDir(args.privateTempDir);
+    await checkpointRecovery(context, 'runner_ready');
     dbProofs.transport_preflight = await runTransportPreflight(config, tempDir);
     context.owner = await createDisposableActor(config, 'owner', context);
     context.foreign = await createDisposableActor(config, 'foreign', context);
     addSelector(recoverySelectors, 'actor_user_ids', context.owner.userId);
     addSelector(recoverySelectors, 'actor_user_ids', context.foreign.userId);
+    await checkpointRecovery(context, 'actors_bound');
     const fixture = await renderSqlTemplate(FIXTURE_TEMPLATE, templateValues(context));
     fixtureAttempted = true;
     dbProofs.fixture = await runDbTest(
@@ -2683,6 +3118,7 @@ async function execute(config, args) {
       fixture.sql,
       dbOptions,
     );
+    await checkpointRecovery(context, 'fixture_committed');
 
     const manifestRows = await readFixtureManifest(config, context.owner.userId, context.requestId);
     assertCondition(manifestRows.length === 1, 'FIXTURE_MANIFEST_CARDINALITY_INVALID', { observed: manifestRows.length });
@@ -2698,6 +3134,7 @@ async function execute(config, args) {
     for (const processId of manifest.entities.process_ids) {
       addSelector(recoverySelectors, 'process_ids', processId);
     }
+    await checkpointRecovery(context, 'fixture_manifest_bound');
 
     const foreignResult = await rpc(
       config, context.foreign,
@@ -2717,6 +3154,7 @@ async function execute(config, args) {
       { p_request: manifest.capture_request },
     ));
     addSelector(recoverySelectors, 'receipt_ids', capture.receipt_id);
+    await checkpointRecovery(context, 'capture_receipt_bound');
 
     const preflightRequest = buildPreflightRequest(manifest, capture);
     dbProofs.drift = await runDbTest(
@@ -2766,6 +3204,7 @@ async function execute(config, args) {
     const invocationId = permit0.invocation_id;
     addSelector(recoverySelectors, 'scope_ids', scopeId);
     addSelector(recoverySelectors, 'wrapper_invocation_ids', invocationId);
+    await checkpointRecovery(context, 'scope_bound');
 
     const scopeRead = await rpc(
       config, context.owner, 'cmd_dataset_flow_identity_scope_read',
@@ -2859,6 +3298,7 @@ async function execute(config, args) {
       recoverySelectors,
       1,
     );
+    await checkpointRecovery(context, 'process_1_committed');
 
     const stale = await rpc(
       config, context.owner,
@@ -2912,6 +3352,7 @@ async function execute(config, args) {
       recoverySelectors,
       2,
     );
+    await checkpointRecovery(context, 'process_2_committed');
 
     const finalize = await rpc(
       config, context.owner,
@@ -2964,6 +3405,7 @@ async function execute(config, args) {
       recoverySelectors,
       2,
     );
+    await checkpointRecovery(context, 'finalize_selectors_bound');
 
     dbProofs.lifecycle = await runDbTest(
       config,
@@ -3039,6 +3481,8 @@ async function execute(config, args) {
         const remaining = await readFixtureManifest(config, context.owner.userId, context.requestId);
         cleanup.manifest_rows_after_cleanup = remaining.length;
         assertCondition(remaining.length === 0, 'CLEANUP_MANIFEST_RESIDUE');
+        await checkpointRecovery(context, 'cleanup_sql_committed');
+        cleanup.cleanup_checkpoint_acknowledged = true;
       } catch (error) {
         recordCleanupFailure(error, 'FIXTURE_CLEANUP_FAILED');
       }
@@ -3047,11 +3491,13 @@ async function execute(config, args) {
     const fixtureCleanupClosed = !fixtureAttempted || (
       cleanup.fixture_cleanup_ran
       && cleanup.manifest_rows_after_cleanup === 0
+      && cleanup.cleanup_checkpoint_acknowledged
     );
     const actorCleanupFailures = await cleanupActorCandidates(
       config,
       context.actorCandidates,
       fixtureCleanupClosed,
+      context,
     );
     for (const error of actorCleanupFailures) {
       recordCleanupFailure(error, 'AUTH_ACTOR_CLEANUP_FAILED');
@@ -3109,6 +3555,10 @@ async function execute(config, args) {
       ...cleanupFailures.map((error) => error.code),
       ...context.actorCandidates.flatMap((candidate) => candidate.cleanupFailureCodes),
     ])];
+    const checkpointSummary = context.recoveryCheckpointClient.summary();
+    cleanup.recovery_checkpoint_count = checkpointSummary.checkpoint_count;
+    cleanup.last_recovery_checkpoint_sha256 =
+      checkpointSummary.last_checkpoint_sha256;
     cleanup.cleanup_closed = fixtureCleanupClosed
       && cleanupFailure === null
       && context.actorCandidates.every((candidate) => candidate.absenceConfirmed)
@@ -3189,6 +3639,7 @@ export const __test = Object.freeze({
   bindDbApplicationName,
   cleanupActorCandidate,
   cleanupActorCandidates,
+  createRecoveryCheckpointClient,
   confirmDisposableActorAbsent,
   confirmDisposableActorSelectorAbsent,
   createRecoverySelectors,
@@ -3201,6 +3652,7 @@ export const __test = Object.freeze({
   reacquireActorSessionForCleanup,
   renderCleanupTemplate,
   renderResidueReadback,
+  validatePrivateTempDir,
 });
 
 const IS_MAIN = typeof process.argv[1] === 'string'

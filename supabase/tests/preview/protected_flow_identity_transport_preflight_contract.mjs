@@ -22,14 +22,29 @@ async function fileSha256(filePath) {
   return createHash('sha256').update(await readFile(filePath)).digest('hex');
 }
 
-async function runRunner(args, env) {
+async function runRunner(args, env, { acknowledgeRecoveryCheckpoints = false } = {}) {
   return new Promise((resolve, reject) => {
     const child = spawn(process.execPath, [RUNNER, ...args], {
       env,
-      stdio: ['ignore', 'pipe', 'pipe'],
+      stdio: acknowledgeRecoveryCheckpoints
+        ? ['ignore', 'pipe', 'pipe', 'ipc']
+        : ['ignore', 'pipe', 'pipe'],
     });
     const stdout = [];
     const stderr = [];
+    const checkpointMessages = [];
+    if (acknowledgeRecoveryCheckpoints) {
+      child.on('message', (message) => {
+        if (message?.type !== 'protected-flow-identity-recovery-checkpoint') return;
+        checkpointMessages.push(message);
+        child.send({
+          type: 'protected-flow-identity-recovery-checkpoint-ack',
+          schema_version: 'protected-flow-identity-recovery-checkpoint-ack.v1',
+          sequence: message.frame?.sequence,
+          frame_sha256: message.frame?.frame_sha256,
+        });
+      });
+    }
     child.stdout.on('data', (chunk) => stdout.push(chunk));
     child.stderr.on('data', (chunk) => stderr.push(chunk));
     child.once('error', reject);
@@ -38,6 +53,7 @@ async function runRunner(args, env) {
       signal,
       stdout: Buffer.concat(stdout).toString('utf8'),
       stderr: Buffer.concat(stderr).toString('utf8'),
+      checkpointMessages,
     }));
   });
 }
@@ -239,16 +255,20 @@ printf '%s\\n' 'failed to connect to fake transport' >&2
 exit 31
 `, { mode: 0o700 });
     runnerEnv.PREVIEW_SUPABASE_CLI_SHA256 = await fileSha256(fakeSupabaseCli);
+    const privateRunDir = path.join(tempDir, 'private-full-run');
+    await mkdir(privateRunDir, { mode: 0o700 });
     const failed = await runRunner([
       '--expected-preview-ref', REF,
       '--scenario-namespace', SCENARIO_NAMESPACE,
       '--request-id', REQUEST_ID,
-    ], runnerEnv);
+      '--private-temp-dir', await realpath(privateRunDir),
+      '--recovery-ipc',
+    ], runnerEnv, { acknowledgeRecoveryCheckpoints: true });
     assert.equal(failed.code, 1);
     assert.equal(failed.signal, null);
     assert.equal(failed.stdout, '');
     const failure = JSON.parse(failed.stderr);
-    assert.equal(failure.schema_version, 'protected-flow-identity-rest-e2e-evidence.v2');
+    assert.equal(failure.schema_version, 'protected-flow-identity-rest-e2e-evidence.v3');
     assert.equal(failure.status, 'failed');
     assert.equal(failure.code, 'DB_TEST_FAILED');
     assert.equal(failure.details.stage, 'transport_preflight');
@@ -258,7 +278,22 @@ exit 31
     assert.equal(failure.details.cleanup.owner_deleted, false);
     assert.equal(failure.details.cleanup.foreign_deleted, false);
     assert.equal(failure.details.cleanup.actors_retained_for_cleanup, false);
+    assert.equal(failure.details.cleanup.temp_dir_removed, true);
+    assert.equal(failure.details.cleanup.recovery_checkpoint_count, 1);
     assert.equal(failure.details.cleanup_failure_code, null);
+    assert.equal(failed.checkpointMessages.length, 1);
+    assert.equal(
+      failed.checkpointMessages[0].frame.schema_version,
+      'protected-flow-identity-recovery-checkpoint.v1',
+    );
+    assert.equal(failed.checkpointMessages[0].frame.sequence, 1);
+    assert.equal(failed.checkpointMessages[0].frame.request_id, REQUEST_ID);
+    assert.equal(failed.checkpointMessages[0].frame.namespace, SCENARIO_NAMESPACE);
+    assert.equal(failed.checkpointMessages[0].frame.stage, 'runner_ready');
+    await assert.rejects(
+      realpath(privateRunDir),
+      (error) => error.code === 'ENOENT',
+    );
 
     runnerEnv.PREVIEW_SUPABASE_CLI_SHA256 = '0'.repeat(64);
     const drifted = await runRunner([
