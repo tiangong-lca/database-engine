@@ -7,7 +7,9 @@
  * stay in memory and cross the race-worker boundary only over stdin. Rendered
  * SQL containing branch credentials is held in a private mode-0600 temporary
  * file for the pinned Supabase CLI and removed in finally; the DB URL is a
- * bounded child argv value. Emitted evidence contains hashes and counts only.
+ * bounded child argv value. The outer one-shot wrapper must durably freeze the
+ * request/namespace CLI selectors before launch so crash recovery never relies
+ * on child memory or output. Emitted evidence contains hashes and counts only.
  * The matching SQL cleanup is mandatory even after a failure.
  */
 
@@ -25,13 +27,17 @@ const SCRIPT_PATH = fileURLToPath(import.meta.url);
 const TRANSPORT_PREFLIGHT = path.join(HERE, 'protected_flow_identity_transport_preflight.sql');
 const FIXTURE_TEMPLATE = path.join(HERE, 'protected_flow_identity_fixture.sql');
 const CLEANUP_TEMPLATE = path.join(HERE, 'protected_flow_identity_cleanup.sql');
+const RESIDUE_READBACK_TEMPLATE = path.join(
+  HERE,
+  'protected_flow_identity_residue_readback.sql',
+);
 
 const FIXTURE_COMMAND = 'preview_e2e_flow_identity_fixture';
 const FIXTURE_TARGET_TABLE = 'preview_e2e_flow_identity';
 const FIXTURE_TARGET_VERSION = '00.00.001';
 const MANIFEST_SCHEMA = 'protected-flow-identity-preview-fixture.v1';
-const EVIDENCE_SCHEMA = 'protected-flow-identity-rest-e2e-evidence.v1';
-const TRANSPORT_EVIDENCE_SCHEMA = 'protected-flow-identity-transport-preflight-evidence.v1';
+const EVIDENCE_SCHEMA = 'protected-flow-identity-rest-e2e-evidence.v2';
+const TRANSPORT_EVIDENCE_SCHEMA = 'protected-flow-identity-transport-preflight-evidence.v2';
 const SUPABASE_CLI_VERSION = '2.109.1';
 const PG_PROVE_IMAGE_REPOSITORY = 'public.ecr.aws/supabase/pg_prove';
 const PG_PROVE_IMAGE_REF = `${PG_PROVE_IMAGE_REPOSITORY}:3.36`;
@@ -39,11 +45,16 @@ const PG_PROVE_IMAGE_PLATFORM = 'linux/arm64';
 const PG_PROVE_INSPECT_TEMPLATE = '{"id":{{json .Id}},"repo_digests":{{json .RepoDigests}},"architecture":{{json .Architecture}},"os":{{json .Os}}}';
 const DOCKER_INSPECT_TIMEOUT_MS = 15_000;
 const PRODUCTION_REF = 'qgzvkongdjqiiamzbbts';
+const TRANSPORT_APPLICATION_NAME = 'fi269-transport-preflight';
 const DB_TEST_CHILD_ENV_NAMES = Object.freeze([
   'PATH', 'HOME', 'TMPDIR', 'TMP', 'TEMP', 'LANG', 'LC_ALL',
   'HTTP_PROXY', 'HTTPS_PROXY', 'NO_PROXY', 'http_proxy', 'https_proxy',
   'no_proxy',
 ]);
+const AUTH_USER_LIST_PAGE_SIZE = 200;
+const AUTH_USER_LIST_MAX_PAGES = 50;
+const AUTH_USER_LIST_MAX_TOTAL =
+  AUTH_USER_LIST_PAGE_SIZE * AUTH_USER_LIST_MAX_PAGES;
 
 const EXPECTED = Object.freeze({
   source_count: 305,
@@ -65,6 +76,36 @@ const PLACEHOLDERS = Object.freeze([
   'PREVIEW_REF_SQL',
   'PREVIEW_URL_SQL',
   'SERVICE_ROLE_KEY_SQL',
+]);
+const RESIDUE_PLACEHOLDERS = Object.freeze([
+  'ACTOR_UUID_SQL',
+  'FOREIGN_UUID_SQL',
+  'SCENARIO_NAMESPACE_SQL',
+  'REQUEST_ID_SQL',
+  'PREVIEW_REF_SQL',
+  'OPERATION_ID_SQL',
+  'CAPTURE_RECEIPT_IDS_JSON_SQL',
+  'SCOPE_IDS_JSON_SQL',
+  'DERIVATIVE_REQUEST_IDS_JSON_SQL',
+  'DERIVATIVE_BATCH_IDS_JSON_SQL',
+  'HTTP_REQUEST_IDS_JSON_SQL',
+  'FIXTURE_BACKEND_PIDS_JSON_SQL',
+]);
+const RESIDUE_COUNT_NAMES = Object.freeze([
+  'auth_users', 'auth_identities', 'auth_sessions', 'auth_refresh_tokens',
+  'capture_receipts', 'capture_source_guards', 'capture_target_guards',
+  'capture_support_guards', 'capture_mapping_guards',
+  'capture_process_intents', 'flow_identity_scopes',
+  'flow_identity_mappings', 'flow_identity_process_ledger',
+  'flow_identity_mutation_permits', 'flow_identity_wrapper_invocations',
+  'derivative_requests', 'derivative_proposals', 'derivative_permits',
+  'dataset_extraction_queue', 'dataset_extraction_archive',
+  'dataset_extraction_failures', 'embedding_queue', 'embedding_archive',
+  'pending_embedding_jobs', 'embedding_failures', 'pg_net_request_queue',
+  'pg_net_responses', 'fixture_manifest_audits', 'scenario_command_audits',
+  'processes', 'flows', 'flowproperties', 'unitgroups', 'vault_project_url',
+  'vault_project_secret_key', 'fault_trigger', 'fault_function',
+  'active_fixture_sessions', 'retained_fixture_sessions',
 ]);
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -121,6 +162,15 @@ function requireInteger(value, expected, code) {
     expected,
     observed: Number.isSafeInteger(value) ? value : null,
   });
+}
+
+function requireDecimalId(value, code) {
+  return requireString(value, code, /^(?:0|[1-9][0-9]*)$/);
+}
+
+function optionalDecimalId(value, code) {
+  if (value === null || value === undefined) return null;
+  return requireDecimalId(value, code);
 }
 
 function sha256(value) {
@@ -215,6 +265,42 @@ function sanitizeEvidence(value) {
   return null;
 }
 
+function createRecoverySelectors(context) {
+  return {
+    schema_version: 'protected-flow-identity-recovery-selectors.v2',
+    request_id: context.requestId,
+    namespace: context.namespace,
+    operation_id: `preview-flow-identity-${context.requestId}`,
+    actor_user_ids: [],
+    support_entity_ids: [],
+    process_ids: [],
+    receipt_ids: [],
+    scope_ids: [],
+    wrapper_invocation_ids: [],
+    derivative_batch_ids: [],
+    derivative_request_ids: [],
+    derivative_proposal_ids: [],
+    http_request_ids: [],
+    embedding_pending_job_ids: [],
+    embedding_queue_msg_ids: [],
+    audit_ids: [],
+    fixture_backend_pids: [],
+  };
+}
+
+function addSelector(selectors, key, value) {
+  if (value === null || value === undefined) return;
+  assertCondition(Array.isArray(selectors[key]), 'RECOVERY_SELECTOR_KEY_INVALID');
+  if (!selectors[key].includes(value)) selectors[key].push(value);
+}
+
+function normalizedRecoverySelectors(selectors) {
+  return Object.fromEntries(Object.entries(selectors).map(([key, value]) => [
+    key,
+    Array.isArray(value) ? [...new Set(value)].sort() : value,
+  ]));
+}
+
 function parseBoundedInteger(value, fallback, minimum, maximum, code) {
   if (value === undefined || value === '') return fallback;
   const parsed = Number(value);
@@ -225,16 +311,20 @@ function parseBoundedInteger(value, fallback, minimum, maximum, code) {
 function parseArgs(argv) {
   if (argv.length === 1 && argv[0] === '--race-worker') {
     return {
-      raceWorker: true, transportPreflightOnly: false, help: false, expectedPreviewRef: null,
+      raceWorker: true, transportPreflightOnly: false, help: false,
+      expectedPreviewRef: null, scenarioNamespace: null, requestId: null,
     };
   }
   if (argv.includes('--help') || argv.includes('-h')) {
     return {
-      raceWorker: false, transportPreflightOnly: false, help: true, expectedPreviewRef: null,
+      raceWorker: false, transportPreflightOnly: false, help: true,
+      expectedPreviewRef: null, scenarioNamespace: null, requestId: null,
     };
   }
   let expectedPreviewRef = null;
   let transportPreflightOnly = false;
+  let scenarioNamespace = null;
+  let requestId = null;
   for (let index = 0; index < argv.length; index += 1) {
     if (argv[index] === '--expected-preview-ref' && index + 1 < argv.length) {
       expectedPreviewRef = argv[index + 1];
@@ -242,17 +332,45 @@ function parseArgs(argv) {
     } else if (argv[index] === '--transport-preflight-only') {
       assertCondition(!transportPreflightOnly, 'ARG_TRANSPORT_PREFLIGHT_DUPLICATE');
       transportPreflightOnly = true;
+    } else if (argv[index] === '--scenario-namespace' && index + 1 < argv.length) {
+      assertCondition(scenarioNamespace === null, 'ARG_SCENARIO_NAMESPACE_DUPLICATE');
+      scenarioNamespace = argv[index + 1];
+      index += 1;
+    } else if (argv[index] === '--request-id' && index + 1 < argv.length) {
+      assertCondition(requestId === null, 'ARG_REQUEST_ID_DUPLICATE');
+      requestId = argv[index + 1];
+      index += 1;
     } else {
       fail('ARG_UNKNOWN');
     }
   }
   requireString(expectedPreviewRef, 'ARG_EXPECTED_PREVIEW_REF_REQUIRED', REF_RE);
-  return { raceWorker: false, transportPreflightOnly, help: false, expectedPreviewRef };
+  if (transportPreflightOnly) {
+    assertCondition(
+      scenarioNamespace === null && requestId === null,
+      'ARG_TRANSPORT_PREFLIGHT_SCOPE_INVALID',
+    );
+  } else {
+    requireString(
+      scenarioNamespace,
+      'ARG_SCENARIO_NAMESPACE_REQUIRED',
+      NAMESPACE_RE,
+    );
+    requireUuid(requestId, 'ARG_REQUEST_ID_REQUIRED');
+  }
+  return {
+    raceWorker: false,
+    transportPreflightOnly,
+    help: false,
+    expectedPreviewRef,
+    scenarioNamespace,
+    requestId,
+  };
 }
 
 function helpText() {
   return [
-    'Usage: node supabase/tests/preview/protected_flow_identity_rest_e2e.mjs --expected-preview-ref <ref>',
+    'Usage: node supabase/tests/preview/protected_flow_identity_rest_e2e.mjs --expected-preview-ref <ref> --scenario-namespace <fie2e-hosted-24hex> --request-id <uuid>',
     '       node supabase/tests/preview/protected_flow_identity_rest_e2e.mjs --transport-preflight-only --expected-preview-ref <ref>',
     '',
     'Required environment:',
@@ -454,6 +572,156 @@ async function renderSqlTemplate(templatePath, values) {
   };
 }
 
+function validateResidueJsonSelector(name, value, maximum, pattern) {
+  let parsed;
+  try { parsed = JSON.parse(value); } catch { fail(`RESIDUE_${name}_JSON_INVALID`); }
+  assertCondition(
+    Array.isArray(parsed)
+      && parsed.length <= maximum
+      && new Set(parsed).size === parsed.length
+      && parsed.every((item) => typeof item === 'string' && pattern.test(item)),
+    `RESIDUE_${name}_INVALID`,
+  );
+}
+
+function validateResidueTemplateValue(name, value, context) {
+  if (['ACTOR_UUID_SQL', 'FOREIGN_UUID_SQL', 'REQUEST_ID_SQL'].includes(name)) {
+    requireUuid(value, `RESIDUE_${name}_INVALID`);
+  } else if (name === 'SCENARIO_NAMESPACE_SQL') {
+    requireString(value, `RESIDUE_${name}_INVALID`, NAMESPACE_RE);
+  } else if (name === 'PREVIEW_REF_SQL') {
+    requireString(value, `RESIDUE_${name}_INVALID`, REF_RE);
+    assertCondition(value !== PRODUCTION_REF, `RESIDUE_${name}_INVALID`);
+  } else if (name === 'OPERATION_ID_SQL') {
+    assertCondition(
+      value === `preview-flow-identity-${context.requestId}`,
+      'RESIDUE_OPERATION_ID_INVALID',
+    );
+  } else if (name === 'CAPTURE_RECEIPT_IDS_JSON_SQL') {
+    validateResidueJsonSelector(name, value, 1, UUID_RE);
+  } else if (name === 'SCOPE_IDS_JSON_SQL') {
+    validateResidueJsonSelector(name, value, 1, UUID_RE);
+  } else if (name === 'DERIVATIVE_REQUEST_IDS_JSON_SQL') {
+    validateResidueJsonSelector(name, value, 2, UUID_RE);
+  } else if (name === 'DERIVATIVE_BATCH_IDS_JSON_SQL') {
+    validateResidueJsonSelector(name, value, 2, UUID_RE);
+  } else if (name === 'HTTP_REQUEST_IDS_JSON_SQL') {
+    validateResidueJsonSelector(name, value, 2, /^[1-9][0-9]{0,18}$/);
+  } else if (name === 'FIXTURE_BACKEND_PIDS_JSON_SQL') {
+    validateResidueJsonSelector(name, value, 64, /^[1-9][0-9]{0,9}$/);
+  } else {
+    fail('RESIDUE_TEMPLATE_UNKNOWN_PLACEHOLDER');
+  }
+}
+
+async function renderResidueReadback(context, selectors) {
+  const normalized = normalizedRecoverySelectors(selectors);
+  const values = {
+    ACTOR_UUID_SQL: context.owner.userId,
+    FOREIGN_UUID_SQL: context.foreign.userId,
+    SCENARIO_NAMESPACE_SQL: context.namespace,
+    REQUEST_ID_SQL: context.requestId,
+    PREVIEW_REF_SQL: context.config.projectRef,
+    OPERATION_ID_SQL: normalized.operation_id,
+    CAPTURE_RECEIPT_IDS_JSON_SQL: canonicalJson(normalized.receipt_ids),
+    SCOPE_IDS_JSON_SQL: canonicalJson(normalized.scope_ids),
+    DERIVATIVE_REQUEST_IDS_JSON_SQL: canonicalJson(
+      normalized.derivative_request_ids,
+    ),
+    DERIVATIVE_BATCH_IDS_JSON_SQL: canonicalJson(normalized.derivative_batch_ids),
+    HTTP_REQUEST_IDS_JSON_SQL: canonicalJson(normalized.http_request_ids),
+    FIXTURE_BACKEND_PIDS_JSON_SQL: canonicalJson(
+      normalized.fixture_backend_pids ?? [],
+    ),
+  };
+  let source;
+  try { source = await readFile(RESIDUE_READBACK_TEMPLATE, 'utf8'); } catch {
+    fail('RESIDUE_TEMPLATE_READ_FAILED', {
+      template_path_sha256: sha256(path.basename(RESIDUE_READBACK_TEMPLATE)),
+    });
+  }
+  let rendered = source;
+  for (const placeholder of RESIDUE_PLACEHOLDERS) {
+    const marker = `{{${placeholder}}}`;
+    assertCondition(rendered.includes(marker), 'RESIDUE_TEMPLATE_PLACEHOLDER_MISSING', {
+      placeholder_sha256: sha256(placeholder),
+    });
+    validateResidueTemplateValue(placeholder, values[placeholder], context);
+    rendered = rendered.replaceAll(marker, sqlLiteral(values[placeholder]));
+  }
+  assertCondition(
+    !/{{[A-Z0-9_]+}}/.test(rendered),
+    'RESIDUE_TEMPLATE_UNRESOLVED_PLACEHOLDER',
+  );
+  return {
+    sql: rendered,
+    templateSha256: sha256(source),
+    renderedSha256: sha256(rendered),
+  };
+}
+
+function parseResidueCounts(stdoutText) {
+  const matches = [
+    ...stdoutText.matchAll(/^# residue_counts=(\{[^\r\n]+\})\r?$/gm),
+  ];
+  assertCondition(matches.length === 1, 'RESIDUE_COUNT_OUTPUT_INVALID', {
+    match_count: matches.length,
+  });
+  let counts;
+  try { counts = JSON.parse(matches[0][1]); } catch { fail('RESIDUE_COUNT_JSON_INVALID'); }
+  assertCondition(isPlainObject(counts), 'RESIDUE_COUNT_JSON_INVALID');
+  const names = Object.keys(counts).sort();
+  assertCondition(
+    canonicalJson(names) === canonicalJson([...RESIDUE_COUNT_NAMES].sort()),
+    'RESIDUE_COUNT_NAME_SET_INVALID',
+    { observed_name_set_sha256: sha256(names) },
+  );
+  for (const name of RESIDUE_COUNT_NAMES) {
+    assertCondition(
+      Number.isSafeInteger(counts[name]) && counts[name] === 0,
+      'RESIDUE_COUNT_NONZERO',
+      { count_name_sha256: sha256(name), observed: counts[name] },
+    );
+  }
+  return counts;
+}
+
+function summarizeDbProof(proof) {
+  return {
+    sql_sha256: proof.sql_sha256,
+    stdout_sha256: proof.stdout_sha256,
+    stderr_sha256: proof.stderr_sha256,
+    executable_path_sha256: proof.executable_path_sha256,
+    executable_file_sha256: proof.executable_file_sha256,
+    docker_executable_path_sha256: proof.docker_executable_path_sha256,
+    docker_executable_file_sha256: proof.docker_executable_file_sha256,
+    pg_prove_image_ref_sha256: proof.pg_prove_image_ref_sha256,
+    pg_prove_image_id_sha256: proof.pg_prove_image_id_sha256,
+    pg_prove_image_repo_digest_sha256: proof.pg_prove_image_repo_digest_sha256,
+    pg_prove_image_platform_sha256: proof.pg_prove_image_platform_sha256,
+    pg_prove_image_inspect_argv_sha256: proof.pg_prove_image_inspect_argv_sha256,
+    pg_prove_image_inspect_stdout_sha256:
+      proof.pg_prove_image_inspect_stdout_sha256,
+    pg_prove_image_inspect_stderr_sha256:
+      proof.pg_prove_image_inspect_stderr_sha256,
+    child_env_sha256: proof.child_env_sha256,
+    application_name_sha256: proof.application_name_sha256,
+    working_directory_sha256: proof.working_directory_sha256,
+    ...(proof.transport_target_sha256
+      ? { transport_target_sha256: proof.transport_target_sha256 }
+      : {}),
+    ...(proof.transport_binding_sha256
+      ? { transport_binding_sha256: proof.transport_binding_sha256 }
+      : {}),
+  };
+}
+
+function summarizeDbProofs(proofs) {
+  return Object.fromEntries(
+    Object.entries(proofs).map(([name, proof]) => [name, summarizeDbProof(proof)]),
+  );
+}
+
 function dbDiagnosticCodes(stdoutText, stderrText, config) {
   let diagnostic = `${stdoutText}\n${stderrText}`;
   for (const sensitive of [
@@ -653,9 +921,34 @@ async function inspectBoundPgProveImage(config, childEnv) {
   return proof;
 }
 
-async function runDbTest(config, tempDir, name, sql) {
+function bindDbApplicationName(sql, applicationName) {
+  if (applicationName !== null) {
+    requireString(
+      applicationName,
+      'DB_APPLICATION_NAME_INVALID',
+      /^fi269-(?:transport-preflight|fie2e-hosted-[0-9a-f]{24})$/,
+    );
+  }
+  if (applicationName === null) return sql;
+  const applicationNameSql = sqlLiteral(applicationName);
+  return `\\set ON_ERROR_STOP on
+set application_name = ${applicationNameSql};
+do $assert_fixture_application_name$
+begin
+  if current_setting('application_name') is distinct from ${applicationNameSql} then
+    raise exception 'DB_APPLICATION_NAME_BINDING_FAILED';
+  end if;
+end
+$assert_fixture_application_name$;
+${sql}`;
+}
+
+async function runDbTest(config, tempDir, name, sql, options = {}) {
+  const applicationName = options.applicationName ?? null;
+  const captureStdout = options.captureStdout === true;
+  const effectiveSql = bindDbApplicationName(sql, applicationName);
   const filePath = path.join(tempDir, `${name}.sql`);
-  await writeFile(filePath, sql, { mode: 0o600, flag: 'wx' });
+  await writeFile(filePath, effectiveSql, { mode: 0o600, flag: 'wx' });
   const args = [
     '--log-level', 'error',
     'test', 'db', '--db-url', config.dbUrl, filePath,
@@ -672,8 +965,9 @@ async function runDbTest(config, tempDir, name, sql) {
   for (const name of DB_TEST_CHILD_ENV_NAMES) {
     if (typeof process.env[name] === 'string') childEnv[name] = process.env[name];
   }
+  const childEnvNames = Object.keys(childEnv).sort();
   const childEnvSha256 = sha256(Object.fromEntries(
-    Object.keys(childEnv).sort().map((name) => [name, sha256(childEnv[name])]),
+    childEnvNames.map((name) => [name, sha256(childEnv[name])]),
   ));
   const workingDirectorySha256 = sha256(REPO_ROOT);
   const dockerExecutable = await verifyBoundExecutable(
@@ -718,7 +1012,7 @@ async function runDbTest(config, tempDir, name, sql) {
     });
   });
   const evidence = {
-    sql_sha256: sha256(sql),
+    sql_sha256: sha256(effectiveSql),
     stdout_sha256: stdoutHash.digest('hex'),
     stderr_sha256: stderrHash.digest('hex'),
     stdout_bytes: stdoutBytes,
@@ -731,6 +1025,8 @@ async function runDbTest(config, tempDir, name, sql) {
     docker_executable_file_sha256: dockerExecutable.executableFileSha256,
     ...pgProveImage,
     child_env_sha256: childEnvSha256,
+    child_env_names: childEnvNames,
+    application_name_sha256: applicationName === null ? null : sha256(applicationName),
     working_directory_sha256: workingDirectorySha256,
   };
   if (result.exitCode !== 0 || timedOut || outputTooLarge) {
@@ -743,6 +1039,9 @@ async function runDbTest(config, tempDir, name, sql) {
   if (timedOut) fail('DB_TEST_TIMEOUT', evidence);
   if (outputTooLarge) fail('DB_TEST_OUTPUT_TOO_LARGE', evidence);
   if (result.exitCode !== 0) fail('DB_TEST_FAILED', evidence);
+  if (captureStdout) {
+    evidence.stdout_text = Buffer.concat(stdoutChunks).toString('utf8');
+  }
   return evidence;
 }
 
@@ -756,7 +1055,13 @@ async function runTransportPreflight(config, tempDir) {
     });
   }
   try {
-    const proof = await runDbTest(config, tempDir, 'transport-preflight', sql);
+    const proof = await runDbTest(
+      config,
+      tempDir,
+      'transport-preflight',
+      sql,
+      { applicationName: TRANSPORT_APPLICATION_NAME },
+    );
     const transportTargetSha256 = sha256(config.dbUrl);
     return {
       ...proof,
@@ -766,10 +1071,9 @@ async function runTransportPreflight(config, tempDir) {
           '--log-level', 'error',
           'test', 'db', '--db-url', '<transport-target>', '<private-sql-file>',
         ],
-        child_env_names: DB_TEST_CHILD_ENV_NAMES
-          .filter((name) => typeof process.env[name] === 'string')
-          .sort(),
+        child_env_names: proof.child_env_names,
         child_env_sha256: proof.child_env_sha256,
+        application_name_sha256: proof.application_name_sha256,
         docker_executable_file_sha256: proof.docker_executable_file_sha256,
         docker_executable_path_sha256: proof.docker_executable_path_sha256,
         executable_file_sha256: proof.executable_file_sha256,
@@ -818,6 +1122,7 @@ async function executeTransportPreflightOnly(config) {
         pg_prove_image_inspect_stdout_sha256: proof.pg_prove_image_inspect_stdout_sha256,
         pg_prove_image_inspect_stderr_sha256: proof.pg_prove_image_inspect_stderr_sha256,
         child_env_sha256: proof.child_env_sha256,
+        application_name_sha256: proof.application_name_sha256,
         working_directory_sha256: proof.working_directory_sha256,
         transport_target_sha256: proof.transport_target_sha256,
         transport_binding_sha256: proof.transport_binding_sha256,
@@ -826,8 +1131,44 @@ async function executeTransportPreflightOnly(config) {
       primary_write_count: 0,
     };
   } finally {
-    await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    await rm(tempDir, { recursive: true, force: true });
   }
+}
+
+async function readResponseTextBounded(
+  response,
+  maximumBytes,
+  controller,
+  tooLargeCode,
+) {
+  if (typeof response.body?.getReader !== 'function') {
+    const text = await response.text();
+    if (Buffer.byteLength(text) > maximumBytes) {
+      controller.abort();
+      fail(tooLargeCode);
+    }
+    return text;
+  }
+  const reader = response.body.getReader();
+  const chunks = [];
+  let bytes = 0;
+  try {
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      assertCondition(value instanceof Uint8Array, 'HTTP_RESPONSE_CHUNK_INVALID');
+      bytes += value.byteLength;
+      if (bytes > maximumBytes) {
+        controller.abort();
+        await reader.cancel().catch(() => {});
+        fail(tooLargeCode);
+      }
+      chunks.push(Buffer.from(value));
+    }
+  } finally {
+    reader.releaseLock();
+  }
+  return Buffer.concat(chunks, bytes).toString('utf8');
 }
 
 async function fetchJson(url, options, timeoutMs, expectedStatuses = [200]) {
@@ -841,12 +1182,20 @@ async function fetchJson(url, options, timeoutMs, expectedStatuses = [200]) {
     clearTimeout(timeout);
     fail('HTTP_TRANSPORT_FAILED');
   }
-  clearTimeout(timeout);
   let textBody;
-  try { textBody = await response.text(); } catch {
+  try {
+    textBody = await readResponseTextBounded(
+      response,
+      16 * 1024 * 1024,
+      controller,
+      'HTTP_RESPONSE_TOO_LARGE',
+    );
+  } catch (error) {
+    clearTimeout(timeout);
+    if (error instanceof SafeError) throw error;
     fail('HTTP_RESPONSE_READ_FAILED', { http_status: response.status });
   }
-  assertCondition(Buffer.byteLength(textBody) <= 16 * 1024 * 1024, 'HTTP_RESPONSE_TOO_LARGE');
+  clearTimeout(timeout);
   let body = null;
   if (textBody) {
     try { body = JSON.parse(textBody); } catch {
@@ -860,7 +1209,15 @@ async function fetchJson(url, options, timeoutMs, expectedStatuses = [200]) {
       remote_code: safeRemoteCode(body?.code ?? body?.error_code),
     });
   }
-  return { body, status: response.status, bodySha256: sha256(textBody) };
+  return {
+    body,
+    status: response.status,
+    bodySha256: sha256(textBody),
+    pagination: {
+      link: response.headers?.get?.('link') ?? null,
+      totalCount: response.headers?.get?.('x-total-count') ?? null,
+    },
+  };
 }
 
 function serviceHeaders(config, json = true) {
@@ -881,42 +1238,301 @@ function actorHeaders(config, actor) {
   };
 }
 
-async function createDisposableActor(config, roleLabel) {
-  const suffix = randomBytes(18).toString('hex');
+function actorRecoverySummary(candidate) {
+  return {
+    role: candidate.role,
+    user_id: candidate.userId,
+    request_id: candidate.requestId,
+    namespace: candidate.namespace,
+    locator_sha256: sha256(candidate.email),
+    create_requested: candidate.createRequested,
+    create_acknowledged: candidate.createAcknowledged,
+    pre_create_absence_readback_attempted:
+      candidate.preCreateAbsenceReadbackAttempted,
+    pre_create_absence_confirmed: candidate.preCreateAbsenceConfirmed,
+    lookup_attempted: candidate.lookupAttempted,
+    lookup_match_found: candidate.userId !== null,
+    sign_in_requested: candidate.signInRequested,
+    sign_in_complete: candidate.signInComplete,
+    cleanup_sign_in_attempted: candidate.cleanupSignInAttempted,
+    cleanup_sign_in_complete: candidate.cleanupSignInComplete,
+    session_revoke_attempted: candidate.sessionRevokeAttempted,
+    session_revoked: candidate.sessionRevoked,
+    delete_attempted: candidate.deleteAttempted,
+    delete_acknowledged: candidate.deleteAcknowledged,
+    absence_readback_attempted: candidate.absenceReadbackAttempted,
+    selector_absence_readback_attempted:
+      candidate.selectorAbsenceReadbackAttempted,
+    selector_absence_confirmed: candidate.selectorAbsenceConfirmed,
+    absence_confirmed: candidate.absenceConfirmed,
+    retained: !candidate.absenceConfirmed,
+    cleanup_failure_codes: candidate.cleanupFailureCodes,
+  };
+}
+
+function attachCleanupDetails(error, cleanup, actorCandidates) {
+  const safe = error instanceof SafeError ? error : new SafeError('HOSTED_PREVIEW_E2E_FAILED');
+  safe.details = sanitizeEvidence({
+    ...safe.details,
+    cleanup,
+    cleanup_failure_code: cleanup.cleanup_failure_code ?? null,
+    cleanup_failure_codes: cleanup.cleanup_failure_codes ?? [],
+    recovery_actors: actorCandidates.map(actorRecoverySummary),
+  });
+  return safe;
+}
+
+function nextAuthUserListPage(
+  config,
+  result,
+  page,
+  observedCount,
+  expectedFilter,
+) {
+  const totalText = result.pagination?.totalCount;
+  assertCondition(
+    typeof totalText === 'string' && /^(?:0|[1-9][0-9]{0,8})$/.test(totalText),
+    'AUTH_USER_LIST_TOTAL_INVALID',
+  );
+  const total = Number(totalText);
+  assertCondition(total >= observedCount && total <= AUTH_USER_LIST_MAX_TOTAL,
+    'AUTH_USER_LIST_TOTAL_INVALID');
+
+  const link = result.pagination?.link;
+  if (link === null || link === '') {
+    assertCondition(
+      observedCount === total
+        && result.body.users.length <= AUTH_USER_LIST_PAGE_SIZE,
+      'AUTH_USER_LIST_PAGINATION_INCOMPLETE',
+    );
+    return null;
+  }
+  assertCondition(typeof link === 'string' && link.length <= 16 * 1024,
+    'AUTH_USER_LIST_LINK_INVALID');
+  let nextPage = null;
+  for (const part of link.split(',')) {
+    const match = part.match(/^\s*<([^>]+)>\s*;\s*rel="(first|prev|next|last)"\s*$/);
+    assertCondition(match !== null, 'AUTH_USER_LIST_LINK_INVALID');
+    if (match[2] !== 'next') continue;
+    assertCondition(nextPage === null, 'AUTH_USER_LIST_LINK_INVALID');
+    let nextUrl;
+    try { nextUrl = new URL(match[1], config.supabaseUrl); } catch {
+      fail('AUTH_USER_LIST_LINK_INVALID');
+    }
+    const expectedBase = new URL('/auth/v1/admin/users', config.supabaseUrl);
+    assertCondition(
+      nextUrl.origin === expectedBase.origin
+        && [expectedBase.pathname, '/admin/users'].includes(nextUrl.pathname)
+        && nextUrl.searchParams.get('per_page')
+          === String(AUTH_USER_LIST_PAGE_SIZE)
+        && nextUrl.searchParams.get('filter') === expectedFilter
+        && [...nextUrl.searchParams.keys()].every((key) =>
+          key === 'page' || key === 'per_page' || key === 'filter'),
+      'AUTH_USER_LIST_LINK_INVALID',
+    );
+    const parsed = Number(nextUrl.searchParams.get('page'));
+    assertCondition(
+      Number.isSafeInteger(parsed)
+        && parsed === page + 1
+        && parsed <= AUTH_USER_LIST_MAX_PAGES,
+      parsed > AUTH_USER_LIST_MAX_PAGES
+        ? 'AUTH_USER_LIST_PAGE_LIMIT'
+        : 'AUTH_USER_LIST_PAGE_INVALID',
+    );
+    nextPage = parsed;
+  }
+  if (nextPage === null) {
+    assertCondition(observedCount === total, 'AUTH_USER_LIST_PAGINATION_INCOMPLETE');
+  } else {
+    assertCondition(
+      result.body.users.length === AUTH_USER_LIST_PAGE_SIZE
+        && observedCount === page * AUTH_USER_LIST_PAGE_SIZE
+        && observedCount < total,
+      'AUTH_USER_LIST_PAGINATION_INVALID',
+    );
+  }
+  return nextPage;
+}
+
+function disposableActorMatches(user, candidate) {
+  return user?.email === candidate.email
+    && user?.app_metadata?.preview_e2e === true
+    && user?.app_metadata?.fixture_sha256 === candidate.fixtureSha256
+    && user?.app_metadata?.preview_e2e_request_id === candidate.requestId
+    && user?.app_metadata?.preview_e2e_namespace === candidate.namespace
+    && user?.app_metadata?.preview_e2e_role === candidate.role;
+}
+
+async function listExactDisposableActors(config, candidate) {
+  candidate.lookupAttempted = true;
+  const matches = [];
+  let observedCount = 0;
+  let expectedTotal = null;
+  let page = 1;
+  for (;;) {
+    const url = new URL('/auth/v1/admin/users', config.supabaseUrl);
+    url.searchParams.set('page', String(page));
+    url.searchParams.set('per_page', String(AUTH_USER_LIST_PAGE_SIZE));
+    url.searchParams.set('filter', candidate.email);
+    const result = await fetchJson(
+      url,
+      { method: 'GET', headers: serviceHeaders(config, false) },
+      config.rpcTimeoutMs,
+    );
+    assertCondition(Array.isArray(result.body?.users), 'AUTH_USER_LIST_RESPONSE_INVALID');
+    assertCondition(
+      result.body.users.length <= AUTH_USER_LIST_PAGE_SIZE,
+      'AUTH_USER_LIST_RESPONSE_INVALID',
+    );
+    observedCount += result.body.users.length;
+    const totalText = result.pagination?.totalCount;
+    assertCondition(
+      typeof totalText === 'string' && /^(?:0|[1-9][0-9]{0,8})$/.test(totalText),
+      'AUTH_USER_LIST_TOTAL_INVALID',
+    );
+    const pageTotal = Number(totalText);
+    if (expectedTotal === null) expectedTotal = pageTotal;
+    assertCondition(
+      pageTotal === expectedTotal && pageTotal <= AUTH_USER_LIST_MAX_TOTAL,
+      'AUTH_USER_LIST_TOTAL_DRIFT',
+    );
+    for (const user of result.body.users) {
+      if (disposableActorMatches(user, candidate)) matches.push(user);
+    }
+    const nextPage = nextAuthUserListPage(
+      config,
+      result,
+      page,
+      observedCount,
+      candidate.email,
+    );
+    if (nextPage === null) break;
+    page = nextPage;
+  }
+  candidate.lastUserListTotal = expectedTotal;
+  return matches;
+}
+
+async function findDisposableActor(config, candidate) {
+  const matches = await listExactDisposableActors(config, candidate);
+  assertCondition(matches.length <= 1, 'AUTH_ACTOR_RECOVERY_AMBIGUOUS', {
+    match_count: matches.length,
+    locator_sha256: sha256(candidate.email),
+  });
+  if (matches.length === 0) return null;
+  return requireUuid(matches[0]?.id, 'AUTH_ACTOR_RECOVERY_ID_INVALID');
+}
+
+async function verifyDisposableActorById(config, candidate, userId) {
+  const result = await fetchJson(
+    `${config.supabaseUrl}/auth/v1/admin/users/${encodeURIComponent(userId)}`,
+    { method: 'GET', headers: serviceHeaders(config, false) },
+    config.rpcTimeoutMs,
+    [200, 404],
+  );
+  const user = result.body?.user ?? result.body;
+  assertCondition(
+    result.status === 200
+      && disposableActorMatches(user, candidate)
+      && requireUuid(user?.id, 'AUTH_CREATE_RESPONSE_ACTOR_MISMATCH') === userId,
+    'AUTH_CREATE_RESPONSE_ACTOR_MISMATCH',
+  );
+  return userId;
+}
+
+async function createDisposableActor(config, roleLabel, context) {
+  const suffix = context.namespace.slice('fie2e-hosted-'.length);
   const email = `flow-identity-${roleLabel}-${suffix}@example.invalid`;
   const password = randomBytes(36).toString('base64url');
+  const candidate = {
+    role: roleLabel,
+    email,
+    password,
+    fixtureSha256: sha256('database-engine#269'),
+    requestId: context.requestId,
+    namespace: context.namespace,
+    userId: null,
+    accessToken: null,
+    createRequested: false,
+    createAcknowledged: false,
+    preCreateAbsenceReadbackAttempted: false,
+    preCreateAbsenceConfirmed: false,
+    lookupAttempted: false,
+    lastUserListTotal: null,
+    signInRequested: false,
+    signInComplete: false,
+    cleanupSignInAttempted: false,
+    cleanupSignInComplete: false,
+    sessionRevokeAttempted: false,
+    sessionRevoked: false,
+    deleteAttempted: false,
+    deleteAcknowledged: false,
+    absenceReadbackAttempted: false,
+    selectorAbsenceReadbackAttempted: false,
+    selectorAbsenceConfirmed: false,
+    absenceConfirmed: false,
+    cleanupFailureCodes: [],
+  };
+  context.actorCandidates.push(candidate);
+  candidate.preCreateAbsenceReadbackAttempted = true;
+  const preexisting = await listExactDisposableActors(config, candidate);
+  assertCondition(preexisting.length === 0, 'AUTH_ACTOR_PREEXISTING', {
+    match_count: preexisting.length,
+    locator_sha256: sha256(candidate.email),
+  });
+  candidate.preCreateAbsenceConfirmed = true;
+  candidate.createRequested = true;
   const created = await fetchJson(
     `${config.supabaseUrl}/auth/v1/admin/users`,
     {
       method: 'POST', headers: serviceHeaders(config),
       body: JSON.stringify({
         email, password, email_confirm: true,
-        app_metadata: { preview_e2e: true, fixture_sha256: sha256('database-engine#269') },
+        app_metadata: {
+          preview_e2e: true,
+          fixture_sha256: candidate.fixtureSha256,
+          preview_e2e_request_id: context.requestId,
+          preview_e2e_namespace: context.namespace,
+          preview_e2e_role: roleLabel,
+        },
       }),
     },
     config.rpcTimeoutMs,
     [200, 201],
   );
-  const userId = requireUuid(created.body?.id ?? created.body?.user?.id, 'AUTH_CREATE_RESPONSE_INVALID');
-  try {
-    const signedIn = await fetchJson(
-      `${config.supabaseUrl}/auth/v1/token?grant_type=password`,
-      {
-        method: 'POST',
-        headers: { apikey: config.anonKey, accept: 'application/json', 'content-type': 'application/json' },
-        body: JSON.stringify({ email, password }),
-      },
-      config.rpcTimeoutMs,
-    );
-    assertCondition(requireUuid(signedIn.body?.user?.id, 'AUTH_SIGN_IN_RESPONSE_INVALID') === userId, 'AUTH_SIGN_IN_ACTOR_MISMATCH');
-    return {
-      userId, email,
-      accessToken: requireString(signedIn.body?.access_token, 'AUTH_ACCESS_TOKEN_MISSING'),
-    };
-  } catch (error) {
-    await deleteDisposableActor(config, userId).catch(() => {});
-    throw error;
-  }
+  candidate.createAcknowledged = true;
+  const responseId = created.body?.id ?? created.body?.user?.id;
+  const responseUserId = typeof responseId === 'string' && UUID_RE.test(responseId)
+    ? responseId.toLowerCase()
+    : null;
+  candidate.userId = responseUserId === null
+    ? await findDisposableActor(config, candidate)
+    : await verifyDisposableActorById(config, candidate, responseUserId);
+  assertCondition(candidate.userId !== null, 'AUTH_CREATE_RESPONSE_INVALID', {
+    locator_sha256: sha256(candidate.email),
+  });
+  candidate.signInRequested = true;
+  const signedIn = await fetchJson(
+    `${config.supabaseUrl}/auth/v1/token?grant_type=password`,
+    {
+      method: 'POST',
+      headers: { apikey: config.anonKey, accept: 'application/json', 'content-type': 'application/json' },
+      body: JSON.stringify({ email, password }),
+    },
+    config.rpcTimeoutMs,
+  );
+  assertCondition(
+    requireUuid(signedIn.body?.user?.id, 'AUTH_SIGN_IN_RESPONSE_INVALID') === candidate.userId,
+    'AUTH_SIGN_IN_ACTOR_MISMATCH',
+  );
+  candidate.accessToken = requireString(signedIn.body?.access_token, 'AUTH_ACCESS_TOKEN_MISSING');
+  candidate.signInComplete = true;
+  return {
+    userId: candidate.userId,
+    email: candidate.email,
+    accessToken: candidate.accessToken,
+    candidate,
+  };
 }
 
 async function revokeActorSession(config, actor) {
@@ -929,13 +1545,170 @@ async function revokeActorSession(config, actor) {
   );
 }
 
-async function deleteDisposableActor(config, userId) {
-  await fetchJson(
-    `${config.supabaseUrl}/auth/v1/admin/users/${encodeURIComponent(userId)}`,
-    { method: 'DELETE', headers: serviceHeaders(config, false) },
+async function reacquireActorSessionForCleanup(config, candidate) {
+  candidate.cleanupSignInAttempted = true;
+  const signedIn = await fetchJson(
+    `${config.supabaseUrl}/auth/v1/token?grant_type=password`,
+    {
+      method: 'POST',
+      headers: {
+        apikey: config.anonKey,
+        accept: 'application/json',
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({ email: candidate.email, password: candidate.password }),
+    },
     config.rpcTimeoutMs,
-    [200, 204],
   );
+  assertCondition(
+    requireUuid(signedIn.body?.user?.id, 'AUTH_CLEANUP_SIGN_IN_RESPONSE_INVALID')
+      === candidate.userId,
+    'AUTH_CLEANUP_SIGN_IN_ACTOR_MISMATCH',
+  );
+  candidate.accessToken = requireString(
+    signedIn.body?.access_token,
+    'AUTH_CLEANUP_ACCESS_TOKEN_MISSING',
+  );
+  candidate.cleanupSignInComplete = true;
+}
+
+async function deleteDisposableActor(config, userId) {
+  return fetchJson(
+    `${config.supabaseUrl}/auth/v1/admin/users/${encodeURIComponent(userId)}`,
+    {
+      method: 'DELETE',
+      headers: serviceHeaders(config),
+      body: JSON.stringify({ should_soft_delete: false }),
+    },
+    config.rpcTimeoutMs,
+    [200, 204, 404],
+  );
+}
+
+async function confirmDisposableActorAbsent(config, userId) {
+  const result = await fetchJson(
+    `${config.supabaseUrl}/auth/v1/admin/users/${encodeURIComponent(userId)}`,
+    { method: 'GET', headers: serviceHeaders(config, false) },
+    config.rpcTimeoutMs,
+    [200, 404],
+  );
+  assertCondition(result.status === 404, 'AUTH_ACTOR_DELETE_READBACK_FAILED', {
+    user_id: userId,
+    http_status: result.status,
+  });
+}
+
+async function confirmDisposableActorSelectorAbsent(config, candidate) {
+  candidate.selectorAbsenceReadbackAttempted = true;
+  const matches = await listExactDisposableActors(config, candidate);
+  assertCondition(matches.length === 0, 'AUTH_ACTOR_SELECTOR_RESIDUE', {
+    match_count: matches.length,
+    locator_sha256: sha256(candidate.email),
+  });
+  candidate.selectorAbsenceConfirmed = true;
+}
+
+async function cleanupActorCandidate(config, candidate, deleteAllowed = true) {
+  const failures = [];
+  const recordFailure = (error, fallbackCode) => {
+    const cause = error instanceof SafeError ? error : new SafeError('UNHANDLED_FAILURE');
+    const safe = new SafeError(fallbackCode, {
+      cause_code: cause.code,
+      ...cause.details,
+    });
+    failures.push(safe);
+    candidate.cleanupFailureCodes.push(fallbackCode);
+    if (cause.code !== fallbackCode) candidate.cleanupFailureCodes.push(cause.code);
+  };
+  if (
+    candidate.accessToken === null
+      && candidate.signInRequested
+      && !candidate.signInComplete
+      && candidate.userId !== null
+  ) {
+    try {
+      await reacquireActorSessionForCleanup(config, candidate);
+    } catch (error) {
+      recordFailure(error, 'AUTH_CLEANUP_SIGN_IN_FAILED');
+    }
+  }
+  if (candidate.accessToken !== null) {
+    candidate.sessionRevokeAttempted = true;
+    try {
+      await revokeActorSession(config, candidate);
+      candidate.sessionRevoked = true;
+    } catch (error) {
+      recordFailure(error, 'AUTH_SESSION_REVOKE_FAILED');
+    }
+  }
+  if (!deleteAllowed) {
+    if (failures.length > 0) {
+      failures[0].details = sanitizeEvidence({
+        ...failures[0].details,
+        cleanup_failure_codes: candidate.cleanupFailureCodes,
+      });
+      throw failures[0];
+    }
+    return;
+  }
+  if (candidate.userId === null && candidate.createRequested) {
+    try {
+      candidate.userId = await findDisposableActor(config, candidate);
+    } catch (error) {
+      recordFailure(error, 'AUTH_ACTOR_RECOVERY_FAILED');
+    }
+  }
+  if (candidate.lookupAttempted && candidate.userId === null && failures.length === 0) {
+    candidate.selectorAbsenceReadbackAttempted = true;
+    candidate.selectorAbsenceConfirmed = true;
+    recordFailure(
+      new SafeError('AUTH_ACTOR_RECOVERY_UNRESOLVED'),
+      'AUTH_ACTOR_RECOVERY_FAILED',
+    );
+  } else if (candidate.userId !== null) {
+    candidate.deleteAttempted = true;
+    try {
+      await deleteDisposableActor(config, candidate.userId);
+      candidate.deleteAcknowledged = true;
+    } catch (error) {
+      recordFailure(error, 'AUTH_ACTOR_DELETE_FAILED');
+    }
+    candidate.absenceReadbackAttempted = true;
+    try {
+      await confirmDisposableActorAbsent(config, candidate.userId);
+    } catch (error) {
+      recordFailure(error, 'AUTH_ACTOR_DELETE_READBACK_FAILED');
+    }
+    try {
+      await confirmDisposableActorSelectorAbsent(config, candidate);
+    } catch (error) {
+      recordFailure(error, 'AUTH_ACTOR_SELECTOR_READBACK_FAILED');
+    }
+    candidate.absenceConfirmed = candidate.deleteAcknowledged
+      && candidate.selectorAbsenceConfirmed
+      && !candidate.cleanupFailureCodes.includes('AUTH_ACTOR_DELETE_READBACK_FAILED');
+  }
+  if (failures.length > 0) {
+    failures[0].details = sanitizeEvidence({
+      ...failures[0].details,
+      cleanup_failure_codes: candidate.cleanupFailureCodes,
+    });
+    throw failures[0];
+  }
+}
+
+async function cleanupActorCandidates(config, candidates, deleteAllowed = true) {
+  const failures = [];
+  for (const candidate of candidates) {
+    try {
+      await cleanupActorCandidate(config, candidate, deleteAllowed);
+    } catch (error) {
+      failures.push(error instanceof SafeError
+        ? error
+        : new SafeError('AUTH_ACTOR_CLEANUP_FAILED'));
+    }
+  }
+  return failures;
 }
 
 async function rpc(config, actor, functionName, parameters) {
@@ -1035,6 +1808,120 @@ function validateCapture(result, replay = false) {
     process_count: 2, rewrite_count: 2,
   })) requireInteger(result[key], expected, 'CAPTURE_COUNT_MISMATCH');
   return result;
+}
+
+async function captureDerivativeRecoverySelectors(
+  context,
+  scopeRead,
+  selectors,
+  expectedCompletedCount,
+) {
+  assertCondition(
+    Array.isArray(scopeRead.processes) && scopeRead.processes.length === 2,
+    'RECOVERY_SELECTOR_PROCESS_SET_INVALID',
+  );
+  assertCondition(
+    scopeRead.processes.filter((process) => process.status === 'completed').length
+      === expectedCompletedCount,
+    'RECOVERY_SELECTOR_COMPLETED_COUNT_INVALID',
+  );
+  for (const process of scopeRead.processes) {
+    const processId = requireUuid(process.id, 'RECOVERY_SELECTOR_PROCESS_ID_INVALID');
+    const processVersion = requireString(
+      process.version,
+      'RECOVERY_SELECTOR_PROCESS_VERSION_INVALID',
+    );
+    addSelector(selectors, 'process_ids', processId);
+    if (process.status !== 'completed') continue;
+    const derivativeBatchId = requireUuid(
+      process.derivative_batch_id,
+      'RECOVERY_SELECTOR_DERIVATIVE_BATCH_INVALID',
+    );
+    const derivativeRequestId = requireUuid(
+      process.derivative_request_id,
+      'RECOVERY_SELECTOR_DERIVATIVE_REQUEST_INVALID',
+    );
+    addSelector(selectors, 'derivative_batch_ids', derivativeBatchId);
+    addSelector(selectors, 'derivative_request_ids', derivativeRequestId);
+    addSelector(
+      selectors,
+      'audit_ids',
+      requireDecimalId(process.audit_id, 'RECOVERY_SELECTOR_PROCESS_AUDIT_INVALID'),
+    );
+
+    const derivative = await rpc(
+      context.config,
+      context.owner,
+      'cmd_dataset_derivative_rebuild_read',
+      { p_request_id: derivativeRequestId },
+    );
+    assertCondition(
+      derivative.ok === true
+        && derivative.schema_version === 'dataset-derivative-rebuild-status.v1'
+        && derivative.request_id === derivativeRequestId
+        && derivative.table === 'processes'
+        && derivative.id === processId
+        && derivative.version === processVersion,
+      'RECOVERY_SELECTOR_DERIVATIVE_READ_INVALID',
+      { remote_code: safeRemoteCode(derivative.code) },
+    );
+    addSelector(
+      selectors,
+      'audit_ids',
+      requireDecimalId(
+        derivative.database_audit_id,
+        'RECOVERY_SELECTOR_DERIVATIVE_AUDIT_INVALID',
+      ),
+    );
+    addSelector(
+      selectors,
+      'audit_ids',
+      requireDecimalId(
+        derivative.summary_audit_id,
+        'RECOVERY_SELECTOR_DERIVATIVE_SUMMARY_AUDIT_INVALID',
+      ),
+    );
+    addSelector(
+      selectors,
+      'http_request_ids',
+      optionalDecimalId(
+        derivative.markdown?.request_id,
+        'RECOVERY_SELECTOR_HTTP_REQUEST_INVALID',
+      ),
+    );
+    addSelector(
+      selectors,
+      'derivative_proposal_ids',
+      optionalDecimalId(
+        derivative.markdown?.proposal_id,
+        'RECOVERY_SELECTOR_MARKDOWN_PROPOSAL_INVALID',
+      ),
+    );
+    addSelector(
+      selectors,
+      'embedding_pending_job_ids',
+      optionalDecimalId(
+        derivative.embedding?.pending_job_id,
+        'RECOVERY_SELECTOR_PENDING_EMBEDDING_INVALID',
+      ),
+    );
+    addSelector(
+      selectors,
+      'embedding_queue_msg_ids',
+      optionalDecimalId(
+        derivative.embedding?.queue_msg_id,
+        'RECOVERY_SELECTOR_EMBEDDING_MESSAGE_INVALID',
+      ),
+    );
+    addSelector(
+      selectors,
+      'derivative_proposal_ids',
+      optionalDecimalId(
+        derivative.embedding?.proposal_id,
+        'RECOVERY_SELECTOR_EMBEDDING_PROPOSAL_INVALID',
+      ),
+    );
+  }
 }
 
 function buildPreflightRequest(manifest, capture) {
@@ -1310,6 +2197,21 @@ do $gate$
 declare source text;
 begin
 ${contextSqlGate(context.config)}
+  if to_regprocedure(
+      'private.preview_flow_identity_post_primary_fault_v1()'
+    ) is null
+    or (select count(*)
+        from pg_trigger as fault_trigger
+        where fault_trigger.tgname =
+            'preview_flow_identity_post_primary_fault_v1'
+          and fault_trigger.tgrelid = 'public.command_audit_log'::regclass
+          and not fault_trigger.tgisinternal
+          and fault_trigger.tgenabled = 'O'
+          and fault_trigger.tgfoid = to_regprocedure(
+            'private.preview_flow_identity_post_primary_fault_v1()'
+          )::oid) <> 1 then
+    raise exception 'FAULT_HOOK_BINDING_MISMATCH';
+  end if;
   select procedure.prosrc into source
   from pg_proc as procedure
   join pg_namespace as namespace on namespace.oid = procedure.pronamespace
@@ -1550,6 +2452,10 @@ function templateValues(context) {
   };
 }
 
+async function renderCleanupTemplate(context) {
+  return renderSqlTemplate(CLEANUP_TEMPLATE, templateValues(context));
+}
+
 async function raceWorkerMain() {
   assertCondition(typeof fetch === 'function', 'NODE_FETCH_UNAVAILABLE');
   process.stdout.write('READY\n');
@@ -1587,9 +2493,20 @@ async function raceWorkerMain() {
     clearTimeout(timeout);
     fail('RACE_WORKER_TRANSPORT_FAILED');
   }
+  let text;
+  try {
+    text = await readResponseTextBounded(
+      response,
+      1024 * 1024,
+      controller,
+      'RACE_WORKER_RESPONSE_TOO_LARGE',
+    );
+  } catch (error) {
+    clearTimeout(timeout);
+    if (error instanceof SafeError) throw error;
+    fail('RACE_WORKER_RESPONSE_READ_FAILED');
+  }
   clearTimeout(timeout);
-  const text = await response.text();
-  assertCondition(Buffer.byteLength(text) <= 1024 * 1024, 'RACE_WORKER_RESPONSE_TOO_LARGE');
   let body;
   try { body = JSON.parse(text); } catch { fail('RACE_WORKER_RESPONSE_INVALID'); }
   process.stdout.write(`${JSON.stringify({ status: response.status, body })}\n`);
@@ -1700,17 +2617,23 @@ async function concurrentProcessPosts(context, scopeId, processRequest, permit) 
   }
 }
 
-async function execute(config) {
+async function execute(config, args) {
   const context = {
     config,
-    namespace: `fie2e-hosted-${randomBytes(12).toString('hex')}`,
-    requestId: randomUUID(),
+    namespace: args.scenarioNamespace,
+    requestId: args.requestId,
+    applicationName: null,
     owner: null,
     foreign: null,
+    actorCandidates: [],
   };
+  context.applicationName = `fi269-${context.namespace}`;
+  const dbOptions = Object.freeze({ applicationName: context.applicationName });
+  const recoverySelectors = createRecoverySelectors(context);
   let tempDir = null;
   let fixtureAttempted = false;
   let cleanupFailure = null;
+  const cleanupFailures = [];
   let primaryError = null;
   let resultEvidence = null;
   const dbProofs = {};
@@ -1721,21 +2644,60 @@ async function execute(config) {
     foreign_session_revoked: false,
     owner_deleted: false,
     foreign_deleted: false,
+    owner_absence_confirmed: false,
+    foreign_absence_confirmed: false,
+    owner_retained: false,
+    foreign_retained: false,
     actors_retained_for_cleanup: false,
+    recovery_actor_count: 0,
+    recovery_actors: [],
+    cleanup_closed: false,
+    cleanup_failure_codes: [],
+    recovery_selectors: null,
+    recovery_selector_set_sha256: null,
+    residue_readback_ran: false,
+    residue_readback_passed: false,
+    residue_count: null,
+    residue_count_set_sha256: null,
+    temp_dir_removed: false,
+  };
+  const recordCleanupFailure = (error, fallbackCode) => {
+    const safe = error instanceof SafeError ? error : new SafeError(fallbackCode);
+    cleanupFailures.push(safe);
+    cleanupFailure ??= safe;
   };
 
   try {
     tempDir = await mkdtemp(path.join(os.tmpdir(), 'flow-identity-preview-'));
     dbProofs.transport_preflight = await runTransportPreflight(config, tempDir);
-    context.owner = await createDisposableActor(config, 'owner');
-    context.foreign = await createDisposableActor(config, 'foreign');
+    context.owner = await createDisposableActor(config, 'owner', context);
+    context.foreign = await createDisposableActor(config, 'foreign', context);
+    addSelector(recoverySelectors, 'actor_user_ids', context.owner.userId);
+    addSelector(recoverySelectors, 'actor_user_ids', context.foreign.userId);
     const fixture = await renderSqlTemplate(FIXTURE_TEMPLATE, templateValues(context));
     fixtureAttempted = true;
-    dbProofs.fixture = await runDbTest(config, tempDir, 'fixture', fixture.sql);
+    dbProofs.fixture = await runDbTest(
+      config,
+      tempDir,
+      'fixture',
+      fixture.sql,
+      dbOptions,
+    );
 
     const manifestRows = await readFixtureManifest(config, context.owner.userId, context.requestId);
     assertCondition(manifestRows.length === 1, 'FIXTURE_MANIFEST_CARDINALITY_INVALID', { observed: manifestRows.length });
     const manifest = validateManifest(manifestRows[0].payload, context);
+    recoverySelectors.operation_id = requireString(
+      manifest.operation_id,
+      'RECOVERY_SELECTOR_OPERATION_INVALID',
+    );
+    for (const key of [
+      'unitgroup_id', 'flowproperty_id', 'source_flow_id',
+      'target_flow_id', 'pending_flow_id',
+    ]) addSelector(recoverySelectors, 'support_entity_ids', manifest.entities[key]);
+    for (const processId of manifest.entities.process_ids) {
+      addSelector(recoverySelectors, 'process_ids', processId);
+    }
 
     const foreignResult = await rpc(
       config, context.foreign,
@@ -1754,9 +2716,16 @@ async function execute(config) {
       'cmd_dataset_flow_identity_capture_attest_guarded',
       { p_request: manifest.capture_request },
     ));
+    addSelector(recoverySelectors, 'receipt_ids', capture.receipt_id);
 
     const preflightRequest = buildPreflightRequest(manifest, capture);
-    dbProofs.drift = await runDbTest(config, tempDir, 'drift', driftSql(context, manifest));
+    dbProofs.drift = await runDbTest(
+      config,
+      tempDir,
+      'drift',
+      driftSql(context, manifest),
+      dbOptions,
+    );
     const driftRejected = await rpc(
       config, context.owner,
       'cmd_dataset_flow_identity_scope_preflight_guarded',
@@ -1771,8 +2740,15 @@ async function execute(config) {
     dbProofs.driftRejected = await runDbTest(
       config, tempDir, 'drift-rejected-proof',
       driftRejectedProofSql(context, manifest),
+      dbOptions,
     );
-    dbProofs.restore = await runDbTest(config, tempDir, 'restore', restoreSql(context, manifest));
+    dbProofs.restore = await runDbTest(
+      config,
+      tempDir,
+      'restore',
+      restoreSql(context, manifest),
+      dbOptions,
+    );
 
     const preflight = await rpc(
       config, context.owner,
@@ -1788,6 +2764,8 @@ async function execute(config) {
     const scopeProof = requireSha(preflight.scope_proof_sha256, 'PREFLIGHT_SCOPE_PROOF_INVALID');
     const permit0 = validatePermit(preflight.execution_permit, 0);
     const invocationId = permit0.invocation_id;
+    addSelector(recoverySelectors, 'scope_ids', scopeId);
+    addSelector(recoverySelectors, 'wrapper_invocation_ids', invocationId);
 
     const scopeRead = await rpc(
       config, context.owner, 'cmd_dataset_flow_identity_scope_read',
@@ -1836,6 +2814,7 @@ async function execute(config) {
 
     dbProofs.faultInstall = await runDbTest(
       config, tempDir, 'fault-install', faultInstallSql(context, manifest, scopeId),
+      dbOptions,
     );
     const faultResponse = await rpcThrown(
       config, context.owner,
@@ -1851,15 +2830,35 @@ async function execute(config) {
     dbProofs.rollback = await runDbTest(
       config, tempDir, 'rollback-proof',
       rollbackProofSql(context, manifest, scopeId, invocationId),
+      dbOptions,
     );
     dbProofs.faultRemove = await runDbTest(
       config, tempDir, 'fault-remove', faultRemoveSql(context),
+      dbOptions,
     );
 
     const race = await concurrentProcessPosts(context, scopeId, requests[0], permit0);
     assertCondition(race.success.ordinal === 1 && race.success.replay === false, 'RACE_SUCCESS_INVALID');
     const permit1 = validatePermit(race.success.execution_permit, 1, invocationId);
     assertCondition(permit1.token !== permit0.token, 'RACE_PERMIT_NOT_ROTATED');
+
+    const postFirstMutationRead = await rpc(
+      config, context.owner, 'cmd_dataset_flow_identity_scope_read',
+      { p_scope_id: scopeId },
+    );
+    assertCondition(
+      postFirstMutationRead.ok === true
+        && postFirstMutationRead.completed_process_count === 1
+        && postFirstMutationRead.pending_process_count === 1,
+      'POST_FIRST_MUTATION_SCOPE_READ_INVALID',
+      { remote_code: safeRemoteCode(postFirstMutationRead.code) },
+    );
+    await captureDerivativeRecoverySelectors(
+      context,
+      postFirstMutationRead,
+      recoverySelectors,
+      1,
+    );
 
     const stale = await rpc(
       config, context.owner,
@@ -1876,6 +2875,7 @@ async function execute(config) {
     dbProofs.race = await runDbTest(
       config, tempDir, 'race-proof',
       raceProofSql(context, manifest, scopeId, invocationId, tokenSha256),
+      dbOptions,
     );
 
     const secondProcess = await rpc(
@@ -1905,6 +2905,12 @@ async function execute(config) {
         && preFinalizeRead.processes?.[1]?.status === 'completed',
       'PRE_FINALIZE_SCOPE_READ_INVALID',
       { remote_code: safeRemoteCode(preFinalizeRead.code) },
+    );
+    await captureDerivativeRecoverySelectors(
+      context,
+      preFinalizeRead,
+      recoverySelectors,
+      2,
     );
 
     const finalize = await rpc(
@@ -1936,6 +2942,28 @@ async function execute(config) {
     } else {
       assertCondition(finalize.execution_permit === null, 'TERMINAL_FINALIZE_PERMIT_NOT_CONSUMED');
     }
+    addSelector(
+      recoverySelectors,
+      'audit_ids',
+      optionalDecimalId(finalize.audit_id, 'RECOVERY_SELECTOR_FINALIZE_AUDIT_INVALID'),
+    );
+    const postFinalizeRead = await rpc(
+      config, context.owner, 'cmd_dataset_flow_identity_scope_read',
+      { p_scope_id: scopeId },
+    );
+    assertCondition(
+      postFinalizeRead.ok === true
+        && postFinalizeRead.completed_process_count === 2
+        && postFinalizeRead.pending_process_count === 0,
+      'POST_FINALIZE_SCOPE_READ_INVALID',
+      { remote_code: safeRemoteCode(postFinalizeRead.code) },
+    );
+    await captureDerivativeRecoverySelectors(
+      context,
+      postFinalizeRead,
+      recoverySelectors,
+      2,
+    );
 
     dbProofs.lifecycle = await runDbTest(
       config,
@@ -1950,6 +2978,7 @@ async function execute(config) {
         sha256(permit2.token),
         finalizeTokenSha256,
       ),
+      dbOptions,
     );
 
     resultEvidence = {
@@ -1980,38 +3009,28 @@ async function execute(config) {
       pending_process_count: preFinalizeRead.pending_process_count,
       final_read_sha256: sha256(preFinalizeRead),
       finalize_result_sha256: sha256(finalize),
-      db_proofs: Object.fromEntries(Object.entries(dbProofs).map(([name, proof]) => [name, {
-        sql_sha256: proof.sql_sha256,
-        stdout_sha256: proof.stdout_sha256,
-        stderr_sha256: proof.stderr_sha256,
-        executable_path_sha256: proof.executable_path_sha256,
-        executable_file_sha256: proof.executable_file_sha256,
-        docker_executable_path_sha256: proof.docker_executable_path_sha256,
-        docker_executable_file_sha256: proof.docker_executable_file_sha256,
-        pg_prove_image_ref_sha256: proof.pg_prove_image_ref_sha256,
-        pg_prove_image_id_sha256: proof.pg_prove_image_id_sha256,
-        pg_prove_image_repo_digest_sha256: proof.pg_prove_image_repo_digest_sha256,
-        pg_prove_image_platform_sha256: proof.pg_prove_image_platform_sha256,
-        pg_prove_image_inspect_argv_sha256: proof.pg_prove_image_inspect_argv_sha256,
-        pg_prove_image_inspect_stdout_sha256: proof.pg_prove_image_inspect_stdout_sha256,
-        pg_prove_image_inspect_stderr_sha256: proof.pg_prove_image_inspect_stderr_sha256,
-        child_env_sha256: proof.child_env_sha256,
-        working_directory_sha256: proof.working_directory_sha256,
-        ...(proof.transport_target_sha256
-          ? { transport_target_sha256: proof.transport_target_sha256 }
-          : {}),
-        ...(proof.transport_binding_sha256
-          ? { transport_binding_sha256: proof.transport_binding_sha256 }
-          : {}),
-      }])),
+      recovery_selectors: normalizedRecoverySelectors(recoverySelectors),
+      recovery_selector_set_sha256: sha256(
+        normalizedRecoverySelectors(recoverySelectors),
+      ),
+      db_proofs: summarizeDbProofs(dbProofs),
     };
   } catch (error) {
     primaryError = error instanceof SafeError ? error : new SafeError('HOSTED_PREVIEW_E2E_FAILED');
   } finally {
+    cleanup.recovery_selectors = normalizedRecoverySelectors(recoverySelectors);
+    cleanup.recovery_selector_set_sha256 = sha256(cleanup.recovery_selectors);
     if (context.owner && context.foreign && fixtureAttempted && tempDir) {
       try {
-        const cleanupTemplate = await renderSqlTemplate(CLEANUP_TEMPLATE, templateValues(context));
-        const proof = await runDbTest(config, tempDir, 'cleanup', cleanupTemplate.sql);
+        const cleanupTemplate = await renderCleanupTemplate(context);
+        const proof = await runDbTest(
+          config,
+          tempDir,
+          'cleanup',
+          cleanupTemplate.sql,
+          dbOptions,
+        );
+        dbProofs.cleanup = proof;
         cleanup.fixture_cleanup_ran = true;
         cleanup.cleanup_template_sha256 = cleanupTemplate.templateSha256;
         cleanup.cleanup_rendered_sha256 = cleanupTemplate.renderedSha256;
@@ -2021,61 +3040,111 @@ async function execute(config) {
         cleanup.manifest_rows_after_cleanup = remaining.length;
         assertCondition(remaining.length === 0, 'CLEANUP_MANIFEST_RESIDUE');
       } catch (error) {
-        cleanupFailure = error instanceof SafeError ? error : new SafeError('FIXTURE_CLEANUP_FAILED');
+        recordCleanupFailure(error, 'FIXTURE_CLEANUP_FAILED');
       }
     }
 
-    for (const [label, actor] of [['owner', context.owner], ['foreign', context.foreign]]) {
-      if (!actor) continue;
-      try {
-        await revokeActorSession(config, actor);
-        cleanup[`${label}_session_revoked`] = true;
-      } catch (error) {
-        cleanupFailure ??= error instanceof SafeError ? error : new SafeError('AUTH_SESSION_REVOKE_FAILED');
-      }
-    }
-
-    const cleanupClosed = !fixtureAttempted || (
-      cleanupFailure === null
-      && cleanup.fixture_cleanup_ran
+    const fixtureCleanupClosed = !fixtureAttempted || (
+      cleanup.fixture_cleanup_ran
       && cleanup.manifest_rows_after_cleanup === 0
     );
-    if (cleanupClosed) {
-      for (const [label, actor] of [['owner', context.owner], ['foreign', context.foreign]]) {
-        if (!actor) continue;
-        try {
-          await deleteDisposableActor(config, actor.userId);
-          cleanup[`${label}_deleted`] = true;
-        } catch (error) {
-          cleanup.actors_retained_for_cleanup = true;
-          cleanupFailure ??= error instanceof SafeError ? error : new SafeError('AUTH_ACTOR_DELETE_FAILED');
-        }
-      }
-    } else if (context.owner || context.foreign) {
-      cleanup.actors_retained_for_cleanup = true;
+    const actorCleanupFailures = await cleanupActorCandidates(
+      config,
+      context.actorCandidates,
+      fixtureCleanupClosed,
+    );
+    for (const error of actorCleanupFailures) {
+      recordCleanupFailure(error, 'AUTH_ACTOR_CLEANUP_FAILED');
     }
-    if (tempDir) await rm(tempDir, { recursive: true, force: true }).catch(() => {});
+    for (const candidate of context.actorCandidates) {
+      cleanup[`${candidate.role}_session_revoked`] = candidate.sessionRevoked;
+      cleanup[`${candidate.role}_deleted`] = candidate.deleteAcknowledged
+        && candidate.absenceConfirmed;
+      cleanup[`${candidate.role}_absence_confirmed`] = candidate.absenceConfirmed;
+      cleanup[`${candidate.role}_retained`] = !candidate.absenceConfirmed;
+    }
+    cleanup.recovery_actor_count = context.actorCandidates.length;
+    cleanup.recovery_actors = context.actorCandidates.map(actorRecoverySummary);
+    cleanup.actors_retained_for_cleanup = context.actorCandidates.some(
+      (candidate) => !candidate.absenceConfirmed,
+    );
+    if (context.owner && context.foreign && fixtureAttempted && tempDir) {
+      try {
+        const residueTemplate = await renderResidueReadback(
+          context,
+          recoverySelectors,
+        );
+        cleanup.residue_readback_ran = true;
+        const proof = await runDbTest(
+          config,
+          tempDir,
+          'residue-readback',
+          residueTemplate.sql,
+          { ...dbOptions, captureStdout: true },
+        );
+        dbProofs.residue_readback = proof;
+        const counts = parseResidueCounts(proof.stdout_text);
+        cleanup.residue_template_sha256 = residueTemplate.templateSha256;
+        cleanup.residue_rendered_sha256 = residueTemplate.renderedSha256;
+        cleanup.residue_stdout_sha256 = proof.stdout_sha256;
+        cleanup.residue_stderr_sha256 = proof.stderr_sha256;
+        cleanup.residue_count = Object.keys(counts).length;
+        cleanup.residue_count_set_sha256 = sha256(counts);
+        cleanup.residue_readback_passed = true;
+      } catch (error) {
+        recordCleanupFailure(error, 'RESIDUE_READBACK_FAILED');
+      }
+    }
+    if (tempDir) {
+      try {
+        await rm(tempDir, { recursive: true, force: true });
+        cleanup.temp_dir_removed = true;
+      } catch {
+        recordCleanupFailure(new SafeError('TEMP_DIR_REMOVE_FAILED', {
+          temp_dir_path_sha256: sha256(tempDir),
+        }), 'TEMP_DIR_REMOVE_FAILED');
+      }
+    }
+    cleanup.cleanup_failure_codes = [...new Set([
+      ...cleanupFailures.map((error) => error.code),
+      ...context.actorCandidates.flatMap((candidate) => candidate.cleanupFailureCodes),
+    ])];
+    cleanup.cleanup_closed = fixtureCleanupClosed
+      && cleanupFailure === null
+      && context.actorCandidates.every((candidate) => candidate.absenceConfirmed)
+      && (!fixtureAttempted || cleanup.residue_readback_passed)
+      && cleanup.temp_dir_removed;
   }
 
   if (primaryError) {
-    primaryError.details = sanitizeEvidence({
-      ...primaryError.details,
-      cleanup,
+    throw attachCleanupDetails(primaryError, {
+      ...cleanup,
       cleanup_failure_code: cleanupFailure?.code ?? null,
-    });
-    throw primaryError;
+    }, context.actorCandidates);
   }
-  if (cleanupFailure) throw cleanupFailure;
+  if (cleanupFailure) {
+    throw attachCleanupDetails(cleanupFailure, {
+      ...cleanup,
+      cleanup_failure_code: cleanupFailure.code,
+    }, context.actorCandidates);
+  }
   assertCondition(
     cleanup.fixture_cleanup_ran
       && cleanup.manifest_rows_after_cleanup === 0
       && cleanup.owner_session_revoked
       && cleanup.foreign_session_revoked
       && cleanup.owner_deleted
-      && cleanup.foreign_deleted,
+      && cleanup.foreign_deleted
+      && cleanup.owner_absence_confirmed
+      && cleanup.foreign_absence_confirmed
+      && cleanup.residue_readback_ran
+      && cleanup.residue_readback_passed
+      && cleanup.residue_count === RESIDUE_COUNT_NAMES.length
+      && cleanup.cleanup_closed,
     'CLEANUP_PROOF_INCOMPLETE',
     cleanup,
   );
+  resultEvidence.db_proofs = summarizeDbProofs(dbProofs);
   resultEvidence.cleanup = cleanup;
   return resultEvidence;
 }
@@ -2103,7 +3172,7 @@ async function main() {
     }))}\n`);
     return;
   }
-  const evidence = await execute(config);
+  const evidence = await execute(config, args);
   process.stdout.write(`${JSON.stringify(sanitizeEvidence({
     ...evidence,
     started_at_sha256: sha256(startedAt),
@@ -2112,13 +3181,40 @@ async function main() {
   }))}\n`);
 }
 
-main().catch((error) => {
-  const safe = error instanceof SafeError ? error : new SafeError('UNHANDLED_FAILURE');
-  process.stderr.write(`${JSON.stringify(sanitizeEvidence({
-    schema_version: EVIDENCE_SCHEMA,
-    status: 'failed',
-    code: safe.code,
-    details: safe.details,
-  }))}\n`);
-  process.exitCode = 1;
+export const __test = Object.freeze({
+  RESIDUE_COUNT_NAMES,
+  SafeError,
+  actorRecoverySummary,
+  attachCleanupDetails,
+  bindDbApplicationName,
+  cleanupActorCandidate,
+  cleanupActorCandidates,
+  confirmDisposableActorAbsent,
+  confirmDisposableActorSelectorAbsent,
+  createRecoverySelectors,
+  createDisposableActor,
+  findDisposableActor,
+  listExactDisposableActors,
+  normalizedRecoverySelectors,
+  parseResidueCounts,
+  readResponseTextBounded,
+  reacquireActorSessionForCleanup,
+  renderCleanupTemplate,
+  renderResidueReadback,
 });
+
+const IS_MAIN = typeof process.argv[1] === 'string'
+  && path.resolve(process.argv[1]) === path.resolve(SCRIPT_PATH);
+
+if (IS_MAIN) {
+  main().catch((error) => {
+    const safe = error instanceof SafeError ? error : new SafeError('UNHANDLED_FAILURE');
+    process.stderr.write(`${JSON.stringify(sanitizeEvidence({
+      schema_version: EVIDENCE_SCHEMA,
+      status: 'failed',
+      code: safe.code,
+      details: safe.details,
+    }))}\n`);
+    process.exitCode = 1;
+  });
+}

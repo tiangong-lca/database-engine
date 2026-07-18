@@ -280,6 +280,215 @@ where exists (
   )
 );
 
+-- Fast-path cleanup is safe only before any exact derivative request has
+-- crossed an external dispatch boundary.  Serialize with the durable
+-- coordinator first, lock every captured request, and refuse cleanup if any
+-- downstream proposal, permit, transport, queue, or failure evidence exists.
+-- A refusal rolls back this whole transaction; durable recovery must take over
+-- and callers must not retry this cleanup automatically.
+do $derivative_cleanup_fast_path_gate$
+declare
+  expected_request_count integer;
+  locked_request_count integer;
+begin
+  if not pg_catalog.pg_try_advisory_xact_lock(
+    pg_catalog.hashtext('util.process_dataset_derivative_rebuilds')
+  ) then
+    raise exception using
+      errcode = '55P03',
+      message = 'derivative cleanup coordinator is active; durable recovery required and automatic retry is forbidden';
+  end if;
+
+  select count(*)::integer into expected_request_count
+  from pg_temp.preview_flow_identity_cleanup_derivatives;
+
+  perform request.id
+  from util.dataset_derivative_rebuild_requests as request
+  where request.id in (
+    select id from pg_temp.preview_flow_identity_cleanup_derivatives
+  )
+  order by request.id
+  for update;
+  get diagnostics locked_request_count = row_count;
+
+  if locked_request_count is distinct from expected_request_count then
+    raise exception using
+      errcode = '40001',
+      message = 'exact derivative request set changed before cleanup lock; durable recovery required and automatic retry is forbidden';
+  end if;
+
+  if exists (
+    select 1
+    from util.dataset_derivative_rebuild_requests as request
+    where request.id in (
+        select id from pg_temp.preview_flow_identity_cleanup_derivatives
+      )
+      and not (
+        (request.status = 'queued' and request.phase = 'admitted')
+        or (
+          request.status = 'dispatching'
+          and request.phase = 'quarantining'
+          and pg_catalog.clock_timestamp() < request.drain_not_before
+        )
+      )
+  ) or exists (
+    select 1
+    from util.dataset_derivative_rebuild_requests as request
+    where request.id in (
+        select id from pg_temp.preview_flow_identity_cleanup_derivatives
+      )
+      and (
+        request.markdown_request_id is not null
+        or request.markdown_dispatched_at is not null
+        or request.markdown_deadline_at is not null
+        or request.markdown_response_status is not null
+        or request.markdown_response_received_at is not null
+        or request.markdown_proposal_id is not null
+        or request.accepted_extracted_md_sha256 is not null
+        or request.embedding_pending_job_id is not null
+        or request.embedding_queue_msg_id is not null
+        or request.embedding_queued_at is not null
+        or request.embedding_deadline_at is not null
+        or request.embedding_proposal_id is not null
+        or request.completed_snapshot_sha256 is not null
+        or request.completed_at is not null
+        or request.terminal_at is not null
+        or request.drained_at is not null
+        or request.failure_release_not_before is not null
+        or request.last_error is not null
+      )
+  ) or exists (
+    select 1
+    from util.dataset_derivative_rebuild_proposals as proposal
+    where proposal.request_id in (
+      select id from pg_temp.preview_flow_identity_cleanup_derivatives
+    )
+  ) or exists (
+    select 1
+    from util.dataset_derivative_rebuild_permits as permit
+    where permit.request_id in (
+      select id from pg_temp.preview_flow_identity_cleanup_derivatives
+    )
+  ) or exists (
+    select 1
+    from public.command_audit_log as audit
+    where audit.command = 'cmd_dataset_derivative_rebuild_terminal'
+      and audit.payload->>'request_id' in (
+        select id::text from pg_temp.preview_flow_identity_cleanup_derivatives
+      )
+  ) or exists (
+    select 1
+    from net.http_request_queue
+    where id in (select id from pg_temp.preview_flow_identity_cleanup_http_ids)
+  ) or exists (
+    select 1
+    from net._http_response
+    where id in (select id from pg_temp.preview_flow_identity_cleanup_http_ids)
+  ) or exists (
+    select 1
+    from pgmq.q_dataset_extraction_jobs as queued
+    where queued.message->>'requestId' in (
+        select id::text from pg_temp.preview_flow_identity_cleanup_derivatives
+      )
+      or exists (
+        select 1
+        from pg_temp.preview_flow_identity_cleanup_processes as target
+        where queued.message->>'schema' = 'public'
+          and queued.message->>'table' = 'processes'
+          and queued.message->>'id' = target.id::text
+          and btrim(queued.message->>'version') = target.version
+      )
+  ) or exists (
+    select 1
+    from pgmq.a_dataset_extraction_jobs as archived
+    where archived.message->>'requestId' in (
+        select id::text from pg_temp.preview_flow_identity_cleanup_derivatives
+      )
+      or exists (
+        select 1
+        from pg_temp.preview_flow_identity_cleanup_processes as target
+        where archived.message->>'schema' = 'public'
+          and archived.message->>'table' = 'processes'
+          and archived.message->>'id' = target.id::text
+          and btrim(archived.message->>'version') = target.version
+      )
+  ) or exists (
+    select 1
+    from util.dataset_extraction_job_failures as failure
+    where failure.message->>'requestId' in (
+        select id::text from pg_temp.preview_flow_identity_cleanup_derivatives
+      )
+      or exists (
+        select 1
+        from pg_temp.preview_flow_identity_cleanup_processes as target
+        where failure.message->>'schema' = 'public'
+          and failure.message->>'table' = 'processes'
+          and failure.message->>'id' = target.id::text
+          and btrim(failure.message->>'version') = target.version
+      )
+  ) or exists (
+    select 1
+    from pgmq.q_embedding_jobs as queued
+    where queued.message->>'requestId' in (
+        select id::text from pg_temp.preview_flow_identity_cleanup_derivatives
+      )
+      or exists (
+        select 1
+        from pg_temp.preview_flow_identity_cleanup_processes as target
+        where queued.message->>'schema' = 'public'
+          and queued.message->>'table' = 'processes'
+          and queued.message->>'id' = target.id::text
+          and btrim(queued.message->>'version') = target.version
+      )
+  ) or exists (
+    select 1
+    from pgmq.a_embedding_jobs as archived
+    where archived.message->>'requestId' in (
+        select id::text from pg_temp.preview_flow_identity_cleanup_derivatives
+      )
+      or exists (
+        select 1
+        from pg_temp.preview_flow_identity_cleanup_processes as target
+        where archived.message->>'schema' = 'public'
+          and archived.message->>'table' = 'processes'
+          and archived.message->>'id' = target.id::text
+          and btrim(archived.message->>'version') = target.version
+      )
+  ) or exists (
+    select 1
+    from util.pending_embedding_jobs as pending
+    where pending.message->>'requestId' in (
+        select id::text from pg_temp.preview_flow_identity_cleanup_derivatives
+      )
+      or exists (
+        select 1
+        from pg_temp.preview_flow_identity_cleanup_processes as target
+        where pending.schema_name = 'public'
+          and pending.table_name = 'processes'
+          and pending.record_id = target.id::text
+          and btrim(pending.record_version) = target.version
+      )
+  ) or exists (
+    select 1
+    from util.embedding_job_failures as failure
+    where failure.message->>'requestId' in (
+        select id::text from pg_temp.preview_flow_identity_cleanup_derivatives
+      )
+      or exists (
+        select 1
+        from pg_temp.preview_flow_identity_cleanup_processes as target
+        where failure.message->>'table' = 'processes'
+          and failure.message->>'id' = target.id::text
+          and btrim(failure.message->>'version') = target.version
+      )
+  ) then
+    raise exception using
+      errcode = '55000',
+      message = 'exact derivative request crossed the fast-path cleanup boundary; durable recovery required and automatic retry is forbidden';
+  end if;
+end
+$derivative_cleanup_fast_path_gate$;
+
 -- A failed test may leave its exact fault hook behind.  Refuse to drop any
 -- same-named object unless the function carries this fixture's marker.
 do $remove_fault_hook$
@@ -298,6 +507,23 @@ begin
       and tgrelid = 'public.command_audit_log'::regclass
       and not tgisinternal
   ) then
+    if to_regprocedure(
+      'private.preview_flow_identity_post_primary_fault_v1()'
+    ) is null or exists (
+      select 1
+      from pg_trigger as fault_trigger
+      where fault_trigger.tgname =
+          'preview_flow_identity_post_primary_fault_v1'
+        and fault_trigger.tgrelid = 'public.command_audit_log'::regclass
+        and not fault_trigger.tgisinternal
+        and fault_trigger.tgfoid is distinct from to_regprocedure(
+          'private.preview_flow_identity_post_primary_fault_v1()'
+        )::oid
+    ) then
+      raise exception
+        'cleanup refuses a fault trigger bound to a foreign function';
+    end if;
+
     select procedure.prosrc into function_source
     from pg_proc as procedure
     join pg_namespace as namespace on namespace.oid = procedure.pronamespace
@@ -332,6 +558,32 @@ where queued.message->>'requestId' in (
       and btrim(queued.message->>'version') = target.version
   );
 
+delete from pgmq.a_dataset_extraction_jobs as archived
+where archived.message->>'requestId' in (
+    select id::text from pg_temp.preview_flow_identity_cleanup_derivatives
+  )
+  or exists (
+    select 1
+    from pg_temp.preview_flow_identity_cleanup_processes as target
+    where archived.message->>'schema' = 'public'
+      and archived.message->>'table' = 'processes'
+      and archived.message->>'id' = target.id::text
+      and btrim(archived.message->>'version') = target.version
+  );
+
+delete from util.dataset_extraction_job_failures as failure
+where failure.message->>'requestId' in (
+    select id::text from pg_temp.preview_flow_identity_cleanup_derivatives
+  )
+  or exists (
+    select 1
+    from pg_temp.preview_flow_identity_cleanup_processes as target
+    where failure.message->>'schema' = 'public'
+      and failure.message->>'table' = 'processes'
+      and failure.message->>'id' = target.id::text
+      and btrim(failure.message->>'version') = target.version
+  );
+
 delete from pgmq.q_embedding_jobs as queued
 where queued.message->>'requestId' in (
     select id::text from pg_temp.preview_flow_identity_cleanup_derivatives
@@ -343,6 +595,19 @@ where queued.message->>'requestId' in (
       and queued.message->>'table' = 'processes'
       and queued.message->>'id' = target.id::text
       and btrim(queued.message->>'version') = target.version
+  );
+
+delete from pgmq.a_embedding_jobs as archived
+where archived.message->>'requestId' in (
+    select id::text from pg_temp.preview_flow_identity_cleanup_derivatives
+  )
+  or exists (
+    select 1
+    from pg_temp.preview_flow_identity_cleanup_processes as target
+    where archived.message->>'schema' = 'public'
+      and archived.message->>'table' = 'processes'
+      and archived.message->>'id' = target.id::text
+      and btrim(archived.message->>'version') = target.version
   );
 
 delete from util.pending_embedding_jobs as pending
@@ -388,6 +653,55 @@ where scope_id in (select id from pg_temp.preview_flow_identity_cleanup_scopes);
 delete from util.dataset_flow_identity_mappings
 where scope_id in (select id from pg_temp.preview_flow_identity_cleanup_scopes);
 
+-- The scope points back to its terminal wrapper with ON DELETE RESTRICT while
+-- every wrapper also points to the scope.  Lock the selected relation, prove
+-- that any terminal wrapper belongs to that same exact scope, and only then
+-- sever the nullable back-reference so the two exact rows can be removed.
+do $unlink_final_wrapper_invocations$
+begin
+  perform scope.id
+  from util.dataset_flow_identity_scopes as scope
+  where scope.id in (
+    select id from pg_temp.preview_flow_identity_cleanup_scopes
+  )
+  for update;
+
+  perform invocation.id
+  from util.dataset_flow_identity_wrapper_invocations as invocation
+  where invocation.id in (
+    select scope.final_wrapper_invocation_id
+    from util.dataset_flow_identity_scopes as scope
+    where scope.id in (
+        select id from pg_temp.preview_flow_identity_cleanup_scopes
+      )
+      and scope.final_wrapper_invocation_id is not null
+  )
+  for update;
+
+  if exists (
+    select 1
+    from util.dataset_flow_identity_scopes as scope
+    left join util.dataset_flow_identity_wrapper_invocations as invocation
+      on invocation.id = scope.final_wrapper_invocation_id
+    where scope.id in (
+        select id from pg_temp.preview_flow_identity_cleanup_scopes
+      )
+      and scope.final_wrapper_invocation_id is not null
+      and invocation.scope_id is distinct from scope.id
+  ) then
+    raise exception
+      'cleanup refuses a terminal wrapper outside its exact selected scope';
+  end if;
+
+  update util.dataset_flow_identity_scopes as scope
+  set final_wrapper_invocation_id = null
+  where scope.id in (
+      select id from pg_temp.preview_flow_identity_cleanup_scopes
+    )
+    and scope.final_wrapper_invocation_id is not null;
+end
+$unlink_final_wrapper_invocations$;
+
 delete from util.dataset_flow_identity_wrapper_invocations
 where scope_id in (select id from pg_temp.preview_flow_identity_cleanup_scopes);
 
@@ -397,6 +711,34 @@ where id in (select id from pg_temp.preview_flow_identity_cleanup_scopes);
 -- Capture receipts are intentionally immutable in normal operation.  Cleanup
 -- disables only the six exact immutability triggers, deletes the exact sealed
 -- relation, and restores every trigger before commit.
+do $immutable_trigger_gate$
+begin
+  if (select count(*)
+      from pg_trigger as immutable_trigger
+      join (values
+        ('util.dataset_flow_identity_capture_source_guards'::regclass,
+          'dataset_flow_identity_capture_sources_immutable'),
+        ('util.dataset_flow_identity_capture_target_guards'::regclass,
+          'dataset_flow_identity_capture_targets_immutable'),
+        ('util.dataset_flow_identity_capture_support_guards'::regclass,
+          'dataset_flow_identity_capture_support_immutable'),
+        ('util.dataset_flow_identity_capture_mapping_guards'::regclass,
+          'dataset_flow_identity_capture_mappings_immutable'),
+        ('util.dataset_flow_identity_capture_process_intents'::regclass,
+          'dataset_flow_identity_capture_processes_immutable'),
+        ('util.dataset_flow_identity_capture_receipts'::regclass,
+          'dataset_flow_identity_capture_receipts_immutable')
+      ) as expected(relation_id, trigger_name)
+        on immutable_trigger.tgrelid = expected.relation_id
+       and immutable_trigger.tgname = expected.trigger_name
+      where not immutable_trigger.tgisinternal
+        and immutable_trigger.tgenabled = 'O') <> 6 then
+    raise exception
+      'cleanup requires all exact capture immutability triggers enabled';
+  end if;
+end
+$immutable_trigger_gate$;
+
 alter table util.dataset_flow_identity_capture_source_guards
   disable trigger dataset_flow_identity_capture_sources_immutable;
 alter table util.dataset_flow_identity_capture_target_guards
@@ -610,6 +952,39 @@ begin
           and queued.message->>'table' = 'processes'
           and queued.message->>'id' = target.id::text
           and btrim(queued.message->>'version') = target.version
+      ))
+    or exists (select 1 from pgmq.a_dataset_extraction_jobs as archived
+      where archived.message->>'requestId' in (
+        select id::text from pg_temp.preview_flow_identity_cleanup_derivatives
+      ) or exists (
+        select 1
+        from pg_temp.preview_flow_identity_cleanup_processes as target
+        where archived.message->>'schema' = 'public'
+          and archived.message->>'table' = 'processes'
+          and archived.message->>'id' = target.id::text
+          and btrim(archived.message->>'version') = target.version
+      ))
+    or exists (select 1 from util.dataset_extraction_job_failures as failure
+      where failure.message->>'requestId' in (
+        select id::text from pg_temp.preview_flow_identity_cleanup_derivatives
+      ) or exists (
+        select 1
+        from pg_temp.preview_flow_identity_cleanup_processes as target
+        where failure.message->>'schema' = 'public'
+          and failure.message->>'table' = 'processes'
+          and failure.message->>'id' = target.id::text
+          and btrim(failure.message->>'version') = target.version
+      ))
+    or exists (select 1 from pgmq.a_embedding_jobs as archived
+      where archived.message->>'requestId' in (
+        select id::text from pg_temp.preview_flow_identity_cleanup_derivatives
+      ) or exists (
+        select 1
+        from pg_temp.preview_flow_identity_cleanup_processes as target
+        where archived.message->>'schema' = 'public'
+          and archived.message->>'table' = 'processes'
+          and archived.message->>'id' = target.id::text
+          and btrim(archived.message->>'version') = target.version
       ))
     or exists (select 1 from util.pending_embedding_jobs as pending
       where pending.message->>'requestId' in (

@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-17
-lastReviewedCommit: bbec7c120bd66044e8535b6a16b765ee243a4ff8
-lastReviewedNote: "Reviewed strict Step 3 wrapper, recovery, and disposable Hosted Preview proof ownership together with the LCI/LCIA release-control ownership now present on dev."
+lastReviewedAt: 2026-07-18
+lastReviewedCommit: f964217811feaac43f7eb44c428e3eea7e21f1b4
+lastReviewedNote: "Reviewed PR269 deterministic actor recovery, hard-delete plus GET/census absence, pre-dispatch derivative cleanup lock, and 39-surface residue closure; exact-head Hosted execution remains deferred."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -112,6 +112,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - local baseline: `supabase start`, `supabase db reset`, `supabase migration list`
 - `supabase/seed.sql` must remain an executable SQL batch even when it seeds no rows; retain a data-neutral no-op rather than comments only
 - hosted mutation E2E assets under `supabase/tests/preview/**` must hard-bind the exact Preview project ref, use disposable actors and UUID namespaces, clean up only their own effects, and never become migrations, seeds, Dev data rehearsals, or production execution paths
+- disposable Hosted actors must use an outer-frozen request/namespace and deterministic role email, be registered before creation, carry exact fixture/request/namespace/role metadata, recover only one exact filtered metadata match, use global logout, and treat hard admin DELETE as incomplete until both GET-by-ID returns 404 and a fresh exact filtered census is empty; cleanup must hold the derivative coordinator lock and remain before external dispatch, and temporary credential files must be proven removed; offline lifecycle and 39-surface residue contracts prove the local control/readback shape without replacing the later exact-head Hosted run and independent Auth/SQL readback execution
 - migration authoring starts from Git `dev`, not GitHub default-branch UI
 - preview-branch proof belongs to the repo PR
 - persistent `dev` proof belongs after merge into Git `dev`; its single workflow uses `supabase db push --include-all` so a governed `main -> dev` backmerge can install committed migrations whose timestamps precede newer migrations already recorded on `dev`

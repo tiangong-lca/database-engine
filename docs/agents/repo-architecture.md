@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-17
-lastReviewedCommit: bbec7c120bd66044e8535b6a16b765ee243a4ff8
-lastReviewedNote: "Reviewed strict Step 3 wrapper, recovery, and disposable Hosted Preview proof ownership together with the LCI/LCIA release-control and source-Process projection architecture now present on dev."
+lastReviewedAt: 2026-07-18
+lastReviewedCommit: f964217811feaac43f7eb44c428e3eea7e21f1b4
+lastReviewedNote: "Reviewed PR269 deterministic actor recovery, hard-delete Auth absence, pre-dispatch derivative cleanup lock, and transaction-external 39-surface closure; exact-head Hosted execution remains deferred."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -49,8 +49,8 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | `supabase/migrations/**` | authoritative migration history and durable schema changes |
 | `supabase/seed.sql` | shared seed data; when no rows are needed, retain an executable no-op statement instead of a comments-only file so hosted Preview seeding has a valid SQL batch |
 | `supabase/seeds/dev.sql` | persistent dev-only seed overlay |
-| `supabase/tests/**` | PGTAP-style regression and access-control assertions |
-| `supabase/tests/preview/**` | exact-ref-bound, disposable hosted Preview mutation E2E fixtures, cleanup, and rollback-only fault assertions; test-only and excluded from migrations, seeds, Dev data rehearsal, and production execution |
+| `supabase/tests/**` | PGTAP-style database assertions plus narrow offline Node contracts for test-runner control flow |
+| `supabase/tests/preview/**` | exact-ref-bound disposable Hosted Preview mutation fixtures, cleanup, rollback-only fault assertions, and offline transport/lifecycle contracts; test-only and excluded from migrations, seeds, Dev data rehearsal, and production execution |
 | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |
 | `scripts/**` | export, refresh, change-copy, and migration-generation helpers |
 | `.github/workflows/supabase-dev.yml` | only checked-in GitHub Actions automation for pushing committed migrations to the persistent remote `dev` branch |
@@ -70,6 +70,10 @@ This repo is organized around one checked-in Supabase project plus a generated s
 - the production Supabase project is migrated automatically by the Supabase GitHub integration when Git `main` advances
 
 This means branch behavior is part of the repo architecture, not just delivery process.
+
+## Test Proof Layers
+
+SQL assertions own database semantics and ACL regressions. Offline Node contracts own runner-only control flow, including outer-frozen request/namespace selectors, deterministic role emails, exact filtered metadata recovery, global logout, hard DELETE followed by GET-404 plus a fresh empty filtered census, in-connection application-name binding, and fail-closed rendering/parsing of the 39-surface read-only residue proof. Cleanup shares the derivative coordinator advisory lock and is allowed only before either exact child crosses external dispatch; otherwise it fails into separately authorized durable recovery. Those offline contracts use no Hosted database authority and do not replace the later exact-head Hosted mutation proof or independent Auth/SQL readback execution.
 
 ## Current Hotspot Themes
 

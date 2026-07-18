@@ -11,6 +11,8 @@ import { fileURLToPath } from 'node:url';
 const HERE = path.dirname(fileURLToPath(import.meta.url));
 const RUNNER = path.join(HERE, 'protected_flow_identity_rest_e2e.mjs');
 const REF = 'aaaaaaaaaaaaaaa';
+const SCENARIO_NAMESPACE = 'fie2e-hosted-0123456789abcdef01234567';
+const REQUEST_ID = '11111111-1111-4111-8111-111111111111';
 const PG_PROVE_IMAGE_REF = 'public.ecr.aws/supabase/pg_prove:3.36';
 const PG_PROVE_IMAGE_ID = `sha256:${'1'.repeat(64)}`;
 const PG_PROVE_IMAGE_REPO_DIGEST = `public.ecr.aws/supabase/pg_prove@${PG_PROVE_IMAGE_ID}`;
@@ -99,6 +101,9 @@ for arg do
 done
 grep -qi '^begin read only;' "$sql_file"
 grep -qi '^rollback;' "$sql_file"
+grep -q "^set application_name = 'fi269-transport-preflight';" "$sql_file"
+grep -q "current_setting('application_name')" "$sql_file"
+grep -q 'DB_APPLICATION_NAME_BINDING_FAILED' "$sql_file"
 printf '%s\\n' 'TAP version 13' '1..1' 'ok 1 - fake authenticated read-only transport'
 `, { mode: 0o700, flag: 'wx' });
 
@@ -131,7 +136,7 @@ printf '%s\\n' 'TAP version 13' '1..1' 'ok 1 - fake authenticated read-only tran
     assert.equal(result.signal, null);
     assert.equal(result.stderr, '');
     const evidence = JSON.parse(result.stdout);
-    assert.equal(evidence.schema_version, 'protected-flow-identity-transport-preflight-evidence.v1');
+    assert.equal(evidence.schema_version, 'protected-flow-identity-transport-preflight-evidence.v2');
     assert.equal(evidence.status, 'passed');
     assert.equal(evidence.environment, 'preview');
     assert.equal(evidence.disposable_actor_count, 0);
@@ -159,6 +164,10 @@ printf '%s\\n' 'TAP version 13' '1..1' 'ok 1 - fake authenticated read-only tran
     assert.match(evidence.transport_proof.pg_prove_image_inspect_stdout_sha256, /^[0-9a-f]{64}$/);
     assert.match(evidence.transport_proof.pg_prove_image_inspect_stderr_sha256, /^[0-9a-f]{64}$/);
     assert.match(evidence.transport_proof.child_env_sha256, /^[0-9a-f]{64}$/);
+    assert.equal(
+      evidence.transport_proof.application_name_sha256,
+      createHash('sha256').update('fi269-transport-preflight').digest('hex'),
+    );
     assert.match(evidence.transport_proof.working_directory_sha256, /^[0-9a-f]{64}$/);
     assert.match(evidence.transport_proof.transport_target_sha256, /^[0-9a-f]{64}$/);
     assert.match(evidence.transport_proof.transport_binding_sha256, /^[0-9a-f]{64}$/);
@@ -230,12 +239,16 @@ printf '%s\\n' 'failed to connect to fake transport' >&2
 exit 31
 `, { mode: 0o700 });
     runnerEnv.PREVIEW_SUPABASE_CLI_SHA256 = await fileSha256(fakeSupabaseCli);
-    const failed = await runRunner(['--expected-preview-ref', REF], runnerEnv);
+    const failed = await runRunner([
+      '--expected-preview-ref', REF,
+      '--scenario-namespace', SCENARIO_NAMESPACE,
+      '--request-id', REQUEST_ID,
+    ], runnerEnv);
     assert.equal(failed.code, 1);
     assert.equal(failed.signal, null);
     assert.equal(failed.stdout, '');
     const failure = JSON.parse(failed.stderr);
-    assert.equal(failure.schema_version, 'protected-flow-identity-rest-e2e-evidence.v1');
+    assert.equal(failure.schema_version, 'protected-flow-identity-rest-e2e-evidence.v2');
     assert.equal(failure.status, 'failed');
     assert.equal(failure.code, 'DB_TEST_FAILED');
     assert.equal(failure.details.stage, 'transport_preflight');
