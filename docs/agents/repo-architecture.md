@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-21
-lastReviewedCommit: 7215b23a56118f203f8826839227af2d6a849ef1
-lastReviewedNote: "Reviewed issue #274 migration authoring through the stable workspace overlay and review-submit final assertion boundary; the path map remains accurate."
+lastReviewedCommit: c86556d46a311c3f3f7c2723f5093eb46ecda2d9
+lastReviewedNote: "Reviewed issue #277 production-only migration recovery through the authoritative migration path and main hotfix flow; the path map remains accurate."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
