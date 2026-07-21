@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-21
-lastReviewedCommit: 7215b23a56118f203f8826839227af2d6a849ef1
-lastReviewedNote: "Reviewed issue #274 final review-submit boundary; root duplicate protection, comment-submit protection, and repo ownership remain unchanged."
+lastReviewedCommit: c86556d46a311c3f3f7c2723f5093eb46ecda2d9
+lastReviewedNote: "Reviewed issue #277 production migration-history recovery; source-of-truth ownership, main hotfix, dev back-merge, and workspace integration rules remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
