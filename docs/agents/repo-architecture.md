@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-18
-lastReviewedCommit: 04b85de6311260d92237c2472eb5cee57cc30baa
-lastReviewedNote: "Reviewed PR269 outer-owned private temp, fsync-before-ACK recovery checkpoints, logout-before-delete Auth retention, and transaction-external 39-surface closure; exact-head Hosted execution remains deferred."
+lastReviewedAt: 2026-07-21
+lastReviewedCommit: 7215b23a56118f203f8826839227af2d6a849ef1
+lastReviewedNote: "Reviewed issue #274 migration authoring through the stable workspace overlay and review-submit final assertion boundary; the path map remains accurate."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

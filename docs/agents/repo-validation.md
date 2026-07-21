@@ -29,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-18
-lastReviewedCommit: 04b85de6311260d92237c2472eb5cee57cc30baa
-lastReviewedNote: "Reviewed PR269 outer-owned private temp, durable recovery checkpoint/ACK, logout-before-delete retention, and 39-surface residue contracts; exact-head Hosted execution remains deferred."
+lastReviewedAt: 2026-07-21
+lastReviewedCommit: 7215b23a56118f203f8826839227af2d6a849ef1
+lastReviewedNote: "Reviewed issue #274 review-submit proof; the existing db reset plus RPC, job coordinator, and gate suites remain sufficient."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
