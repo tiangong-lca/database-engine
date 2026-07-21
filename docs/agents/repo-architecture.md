@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-16
-lastReviewedCommit: 910cce78a892a64b4c2bdfb94e598a2c96649e6f
-lastReviewedNote: "Reviewed the LCI/LCIA release control plane and source-Process projection: each source identity has exactly one Unit Process, LifecycleModel, and Result Process while generated datasets stay outside authoring tables."
+lastReviewedAt: 2026-07-21
+lastReviewedCommit: 7215b23a56118f203f8826839227af2d6a849ef1
+lastReviewedNote: "Reviewed issue #274 migration authoring through the stable workspace overlay and review-submit final assertion boundary; the path map remains accurate."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -49,8 +49,8 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | `supabase/migrations/**` | authoritative migration history and durable schema changes |
 | `supabase/seed.sql` | shared seed data; when no rows are needed, retain an executable no-op statement instead of a comments-only file so hosted Preview seeding has a valid SQL batch |
 | `supabase/seeds/dev.sql` | persistent dev-only seed overlay |
-| `supabase/tests/**` | PGTAP-style regression and access-control assertions |
-| `supabase/tests/preview/**` | exact-ref-bound, disposable hosted Preview mutation E2E fixtures, cleanup, and rollback-only fault assertions; test-only and excluded from migrations, seeds, Dev data rehearsal, and production execution |
+| `supabase/tests/**` | PGTAP-style database assertions plus narrow offline Node contracts for test-runner control flow |
+| `supabase/tests/preview/**` | exact-ref-bound disposable Hosted Preview mutation fixtures, cleanup, rollback-only fault assertions, and offline transport/lifecycle contracts; test-only and excluded from migrations, seeds, Dev data rehearsal, and production execution |
 | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |
 | `scripts/**` | export, refresh, change-copy, and migration-generation helpers |
 | `.github/workflows/supabase-dev.yml` | only checked-in GitHub Actions automation for pushing committed migrations to the persistent remote `dev` branch |
@@ -71,13 +71,17 @@ This repo is organized around one checked-in Supabase project plus a generated s
 
 This means branch behavior is part of the repo architecture, not just delivery process.
 
+## Test Proof Layers
+
+SQL assertions own database semantics and ACL regressions. Offline Node contracts own runner-only control flow, including outer-frozen request/namespace selectors, deterministic role emails, an outer-created exact empty mode-0700 private temp directory, fsync-before-ACK secret-free recovery checkpoints, exact filtered metadata recovery, global logout, hard DELETE followed by GET-404 plus a fresh empty filtered census, in-connection application-name binding, and fail-closed rendering/parsing of the 39-surface read-only residue proof. The inner runner may not begin actor sign-in or fixture mutation until the outer process has durably acknowledged the exact actor/selectors checkpoint. Cleanup shares the derivative coordinator advisory lock and is allowed only before either exact child crosses external dispatch; otherwise it fails into separately authorized durable recovery. A missing or ambiguous global logout always retains the actor and forbids hard DELETE. Those offline contracts use no Hosted database authority and do not replace the later exact-head Hosted mutation proof or independent Auth/SQL readback execution.
+
 ## Current Hotspot Themes
 
 The current migration and test history clusters around these themes:
 
 1. access control and policy hardening
 2. review workflow command/query RPCs
-3. dataset lifecycle, protected one-shot private owner-draft FP/UG alias rewrites, guarded flow/process derivative rebuild coordination with private bounded 23+27 closure proof, and publish/delete flows
+3. dataset lifecycle, protected one-shot private owner-draft FP/UG alias rewrites, durable process-atomic Step 3 public-flow identity rewrites, guarded flow/process derivative rebuild coordination with dynamic 1..50 and retained fixed 23+27 closure proofs, and publish/delete flows
 4. notification and membership query boundaries
 5. lifecycle bundle cleanup and embedding-related compatibility
 6. remote schema reconciliation and preview-branch validation
@@ -131,6 +135,7 @@ This repo owns database truth, but not every runtime consequence:
 - `database-engine` owns persisted review-submit gate runs, `worker_jobs` lifecycle schema/RPCs, review-submit job coordinator state, access checks, idempotent gate lookup, result recording, legacy lifecycle cutover cleanup, retired legacy job-table archives under `archive.worker_legacy_job_table_rows`, and the final submit-review assertion
 - `database-engine` owns durable LCI/LCIA release facts and final authorization: exact plan/artifact hashes, manager approval/publication, service-only artifact finalization, immutable pinning, and readback; it does not materialize TIDAS/ILCD bytes or place generated datasets in authoring tables
 - `database-engine` owns the protected one-shot owner-draft FP/UG alias execution contract. Authenticated callers may only run the guarded preflight, three ordered live gates, one admission, and read-only status polling; a nonce-bound service executor alone can invoke the private replay-capable whole-plan and per-dimension primitives. The sealed `dataset-alias-plan.v1` request keeps time followed by length-time, one plan hash and operation ID, `target_visibility=owner_draft`, 52 distinct action rows, 59 exchange mutations, 55 immutable alias audits, and atomic admission of all 23-flow plus 27-process derivative children. Preflight and execution independently enforce actor-owned `state_code=0`, unchanged support, embedded identity, canonical exchange hashes, no public/foreign/non-draft parent, exact closure, stable row locks, table-specific allowed paths, and exact factors; indexed `json_ordered` subtrees provide candidates, while legacy `json` is never evidence. A timeout or any primary, audit, or derivative-admission mismatch rolls back every business effect, and the sealed approval permits no redispatch or replay. Production owner-draft data execution is allowed only against a freshly frozen production state with exact human approval; Preview/Dev validate the toolchain rather than replaying that production mutation. Status polling defers the full 50-target causal proof until terminal evidence is available and returns an explicit read-only conflict if the parent ledger changes while evidence is assembled.
+- `database-engine` owns the guarded Step 3 public-flow identity rewrite contract. Preflight seals exact source/public/support guards, compatibility policy/evidence, ordered process templates, five-field rewrite locators, collision rows, derivative baselines, and exact pending/blocker occurrences. Initial and recovery approval artifacts are actor-wide non-reusable across request/text/identity hash domains. Each fresh preflight creates exactly one wrapper invocation and returns one memory-only rotating permit; the database persists only its generation and token hash, every successful process or finalize rotates it atomically, and exact preflight replay returns no permit. The public process/finalize RPCs require this authorization as their third argument. Scope read remains read-only status/resume evidence, while an exact read-only scope lookup resolves a lost preflight response without minting or disclosing a permit. If the wrapper loses its permit or exits after an ambiguous/domain-rejected call, continuation requires a fresh exact human-approved recovery artifact bound to observed scope state and whole-scope proof; recovery supersedes the old invocation and permit and never constitutes automatic retry. Each authenticated process call acquires the scope advisory lock, revalidates the next owner-draft process and every used mapping, reconstructs the desired JSON from live data, changes only `@refObjectId`, `@type`, `@uri`, `@version`, and `common:shortDescription`, records one unique audit, and admits one protected derivative child in the same transaction. An authenticated cancel request is actor/receipt/operation/plan/scope-proof bound and may release active fences only for an untouched `sealed` scope whose ledger, primary audits, derivative references, and mutation permits all prove zero writes; exact replay is read-only, while any post-primary scope is immutable to cancel. A terminal failed/stale derivative exposes the exact current single-target snapshot for a distinct derivative-only plan/freeze/approval; it never replays primary or auto-admits compensation. Finalize may consume only the newest exact approved-compensation request and retains active fences until all desired primaries, zero approved-source residue, unchanged source/public/support and protected occurrences, dynamic causal derivative proofs, and the completed final wrapper invocation/generation proof are current. The CLI/foundry own semantic review, canonical approval artifacts, raw in-memory permit custody, live plan/freeze/approval, and process-schema evidence; this repo never turns a historical oracle into execution authority.
 - `tiangong-lca-worker` owns numeric-stability checks and the calculator report payload semantics
 - `tiangong-lca-next` owns frontend env selection and app-side Supabase clients
 - `tiangong-lca-edge-functions` owns Edge Function runtime orchestration, worker invocation, and API response shape
