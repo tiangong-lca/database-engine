@@ -20,7 +20,7 @@ begin
 end;
 $$;
 
-select plan(14);
+select plan(15);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -804,7 +804,7 @@ values (
         "dataSetInformation": {
           "name": {
             "baseName": [
-              { "@xml:lang": "en", "#text": "Blocked Process" }
+              { "@xml:lang": "en", "#text": "Shared Reference Process" }
             ]
           }
         }
@@ -828,7 +828,7 @@ values (
         "dataSetInformation": {
           "name": {
             "baseName": [
-              { "@xml:lang": "en", "#text": "Blocked Process" }
+              { "@xml:lang": "en", "#text": "Shared Reference Process" }
             ]
           }
         }
@@ -858,7 +858,7 @@ select set_config('request.jwt.claim.sub', '12000000-0000-0000-0000-000000000001
 
 insert into review_submit_gate_ids (label, gate_run_id)
 select
-  'blocked_process',
+  'shared_reference_process',
   (
     public.cmd_dataset_review_submit_gate(
       p_table => 'processes',
@@ -875,9 +875,9 @@ reset role;
 set local role service_role;
 
 select public.cmd_dataset_review_submit_gate_record_result(
-  p_gate_run_id => (select gate_run_id from review_submit_gate_ids where label = 'blocked_process'),
+  p_gate_run_id => (select gate_run_id from review_submit_gate_ids where label = 'shared_reference_process'),
   p_status => 'passed',
-  p_calculator_report => '{"reportId":"blocked-process-gate-test","generatedAt":"2026-05-25T00:00:00Z"}'::jsonb,
+  p_calculator_report => '{"reportId":"shared-reference-process-gate-test","generatedAt":"2026-05-25T00:00:00Z"}'::jsonb,
   p_audit => '{"command":"dataset_review_submit_gate_record_result"}'::jsonb
 );
 
@@ -892,13 +892,13 @@ select is(
     p_id => '32000000-0000-0000-0000-000000000022',
     p_version => '01.00.000',
     p_audit => '{}'::jsonb,
-    p_review_submit_gate_run_id => (select gate_run_id from review_submit_gate_ids where label = 'blocked_process'),
+    p_review_submit_gate_run_id => (select gate_run_id from review_submit_gate_ids where label = 'shared_reference_process'),
     p_review_submit_revision_checksum => repeat('b', 64),
     p_review_submit_policy_profile => 'review_submit_fast.v1',
     p_review_submit_report_schema_version => 'review_submit_gate_report.v1'
-  )->>'code',
-  'REFERENCED_DATA_UNDER_REVIEW',
-  'review submission is blocked when a referenced dataset is already under review'
+  )->>'ok',
+  'true',
+  'review submission succeeds when a referenced dataset is already under review'
 );
 
 select is(
@@ -906,8 +906,17 @@ select is(
    from public.reviews
    where data_id = '32000000-0000-0000-0000-000000000022'
      and data_version = '01.00.000'),
-  '0',
-  'blocked review submission does not create a review row'
+  '1',
+  'review submission with an under-review reference creates one review row'
+);
+
+select is(
+  (select state_code::text
+   from public.flows
+   where id = '32000000-0000-0000-0000-000000000021'
+     and version = '01.00.000'),
+  '20',
+  'review submission preserves the referenced dataset under-review state'
 );
 
 select * from finish();
