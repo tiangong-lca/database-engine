@@ -117,6 +117,130 @@ select ok((select count(*)=1 from public.worker_jobs j join closure_build_ids b 
 insert into closure_build_ids select 'build-b',(r->'data'->>'buildId')::uuid from (select public.cmd_lcia_result_build_request_v2('frozen build two',null,'subset',null,'[]'::jsonb,'closure-e2e-build-b',(select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),(select requested_scope_hash from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),(select policy_fingerprint from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'{}') r) q;
 select ok((select count(*)=2 and count(distinct subject_id)=2 from public.worker_jobs where job_kind='lcia_result.package_build' and payload_json->>'closure_check_id'=(select id::text from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')),'two explicit Build V2 requests create independent jobs bound to the same certificate');
 
+-- Exercise the real package-ready boundary using the certificate's pinned
+-- snapshot and output rows.  This is intentionally not a trigger-only unit
+-- test: the package is created through the service command a Worker uses.
+insert into public.lca_network_snapshots (id,scope,process_filter,source_hash,status,created_by)
+values ('c7220000-0000-4000-8000-000000000301','data_product','{"release":"77.00.001"}'::jsonb,'snapshot-a','ready','c7220000-0000-4000-8000-000000000001'),
+       ('c7220000-0000-4000-8000-000000000302','data_product','{"release":"77.00.001","wrong":true}'::jsonb,'snapshot-wrong','ready','c7220000-0000-4000-8000-000000000001');
+insert into public.lca_results (id,job_id,snapshot_id,payload,diagnostics,artifact_url,artifact_sha256,artifact_byte_size,artifact_format,worker_job_id,is_pinned)
+values ('c7220000-0000-4000-8000-000000000401',(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')),'c7220000-0000-4000-8000-000000000301','{}'::jsonb,'{}'::jsonb,'s3://test/closure-e2e-result.json',repeat('c',64),128,'application/json',(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')),false);
+insert into public.lca_latest_all_unit_results (id,snapshot_id,job_id,result_id,query_artifact_url,query_artifact_sha256,query_artifact_byte_size,query_artifact_format,status,worker_job_id)
+values ('c7220000-0000-4000-8000-000000000402','c7220000-0000-4000-8000-000000000301',(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')),'c7220000-0000-4000-8000-000000000401','s3://test/closure-e2e-query.json',repeat('d',64),64,'application/json','ready',(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')));
+
+create temporary table closure_e2e_package_ids (label text primary key,id uuid) on commit drop;
+select set_config('request.jwt.claim.role','service_role',true);
+insert into closure_e2e_package_ids
+select 'package-a',(r->'data'->>'packageId')::uuid
+from (
+  select public.cmd_lcia_result_package_mark_ready(
+    (select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')),
+    'closure-e2e-package-a',
+    'c7220000-0000-4000-8000-000000000301',
+    'c7220000-0000-4000-8000-000000000401',
+    'c7220000-0000-4000-8000-000000000402',
+    '{}'::jsonb,'{}'::jsonb,jsonb_build_object('persistenceMode','pinned'),jsonb_build_array('climate-change'),'climate-change','closure-e2e-package-result','{}'::jsonb
+  ) r
+) q;
+select ok((
+  select p.closure_check_id=c.id
+     and p.closure_certificate_hash=c.certificate_hash
+     and p.closure_snapshot_hash=c.snapshot_hash
+  from public.lcia_result_packages p
+  join public.lcia_scope_closure_checks c on c.id=p.closure_check_id
+  where p.id=(select id from closure_e2e_package_ids where label='package-a')
+),'mark_ready persists closure check, certificate hash and snapshot hash from the bound build');
+select is(public.cmd_lcia_result_package_mark_ready(
+  (select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-b')),
+  'closure-e2e-package-wrong-snapshot',
+  'c7220000-0000-4000-8000-000000000302',
+  'c7220000-0000-4000-8000-000000000401',
+  null,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,jsonb_build_array('climate-change'),'climate-change','wrong-snapshot','{}'::jsonb
+)->>'code','invalid_package_payload','mark_ready fails closed when a build supplies a snapshot other than its certificate snapshot');
+update public.worker_jobs
+set payload_json=jsonb_set(payload_json,'{snapshot_hash}','"tampered-snapshot-hash"'::jsonb)
+where subject_id=(select id from closure_build_ids where label='build-b');
+select is(public.cmd_lcia_result_package_mark_ready(
+  (select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-b')),
+  'closure-e2e-package-tampered-hash',
+  'c7220000-0000-4000-8000-000000000301',
+  'c7220000-0000-4000-8000-000000000401',
+  null,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,jsonb_build_array('climate-change'),'climate-change','tampered-snapshot-hash','{}'::jsonb
+)->>'code','invalid_package_payload','mark_ready fails closed when the queued certificate snapshot hash is tampered');
+
+-- The global Task Center consumes the server projection.  Assert a true
+-- keyset page, then an event-driven update that leaves worker lifecycle and
+-- certificate validity as independent axes.
+select set_config('request.jwt.claim.role','authenticated',true);
+create temporary table closure_e2e_task_feed (label text primary key,result jsonb) on commit drop;
+insert into closure_e2e_task_feed
+values ('page-1',public.get_task_summary_v2_feed('data_product',array['lcia.scope_closure_check','lcia_result.package_build']::text[],null,null,null,null,1,false));
+insert into closure_e2e_task_feed
+select 'page-2',public.get_task_summary_v2_feed(
+  'data_product',array['lcia.scope_closure_check','lcia_result.package_build']::text[],null,null,
+  (result#>>'{data,nextCursor,updatedAt}')::timestamptz,
+  (result#>>'{data,nextCursor,jobId}')::uuid,1,false
+)
+from closure_e2e_task_feed where label='page-1';
+select ok((select result#>'{data,nextCursor}' is not null from closure_e2e_task_feed where label='page-1'),'task feed returns a stable keyset cursor when more data-product tasks exist');
+select ok((select (p1.result#>>'{data,items,0,jobId}')<>(p2.result#>>'{data,items,0,jobId}') from closure_e2e_task_feed p1 join closure_e2e_task_feed p2 on true where p1.label='page-1' and p2.label='page-2'),'task feed cursor advances without repeating the first task');
+
+create temporary table closure_e2e_projection_before (updated_at timestamptz not null) on commit drop;
+insert into closure_e2e_projection_before
+select (item->>'projectionUpdatedAt')::timestamptz
+from jsonb_array_elements(public.get_task_summary_v2_feed('data_product',array['lcia.scope_closure_check']::text[],null,null,null,null,50,false)->'data'->'items') item
+where item->>'closureCheckId'=(select id::text from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a');
+select is((select count(*) from closure_e2e_projection_before),1::bigint,'completed closure task is present before a validity event');
+
+select set_config('request.jwt.claim.role','service_role',true);
+select is(public.svc_lcia_scope_closure_certificate_event(
+  (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
+  'stale','scope content was superseded'
+)->>'ok','true','certificate event marks a completed closure certificate stale');
+select set_config('request.jwt.claim.role','authenticated',true);
+insert into closure_e2e_task_feed
+select 'after-stale',public.get_task_summary_v2_feed(
+  'data_product',array['lcia.scope_closure_check']::text[],null,
+  (select updated_at + interval '1 microsecond' from closure_e2e_projection_before),null,null,50,false
+);
+select ok((select exists(
+  select 1 from jsonb_array_elements(result->'data'->'items') item
+  where item->>'closureCheckId'=(select id::text from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')
+    and item->>'workerStatus'='completed'
+    and item->>'domainValidity'='stale'
+    and (item->>'projectionUpdatedAt')::timestamptz>(select updated_at from closure_e2e_projection_before)
+) from closure_e2e_task_feed where label='after-stale'),'certificate staleness advances the projection and reappears after updatedSince without changing completed worker status');
+
+select set_config('request.jwt.claim.role','service_role',true);
+select is(public.svc_lcia_scope_closure_certificate_event(
+  (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
+  'revoked','operator revoked stale certificate'
+)->>'ok','true','stale certificate can be revoked by a second append-only event');
+update public.worker_jobs set status='stale',updated_at=clock_timestamp()
+where id=(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b');
+select set_config('request.jwt.claim.role','authenticated',true);
+insert into closure_e2e_task_feed
+values ('after-revoked',public.get_task_summary_v2_feed('data_product',array['lcia.scope_closure_check','lcia_result.package_build']::text[],null,null,null,null,50,false));
+select ok((select exists(
+  select 1 from jsonb_array_elements(result->'data'->'items') item
+  where item->>'closureCheckId'=(select id::text from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')
+    and item->>'workerStatus'='completed'
+    and item->>'domainValidity'='revoked'
+) from closure_e2e_task_feed where label='after-revoked'),'task feed projects revoked certificate validity without rewriting the completed worker lifecycle');
+select ok((select exists(
+  select 1 from jsonb_array_elements(result->'data'->'items') item
+  where item->>'closureCheckId'=(select id::text from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b')
+    and item->>'workerStatus'='stale'
+    and item->>'domainValidity'='valid'
+) from closure_e2e_task_feed where label='after-revoked'),'runtime worker staleness remains distinct from a valid closure certificate');
+select ok((select exists(
+  select 1 from jsonb_array_elements(result->'data'->'items') item
+  where item->>'resultPackageId'=(select id::text from closure_e2e_package_ids where label='package-a')
+    and item#>>'{capabilities,canPreviewResult}'='true'
+    and item#>>'{capabilities,canOpenWorkbench}'='true'
+    and item#>>'{deepLink,routeKey}'='data_product.package'
+    and item#>>'{deepLink,params,closureCheckId}'=(select id::text from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')
+) from closure_e2e_task_feed where label='after-revoked'),'package ready advances the task projection with preview capability and a certificate-aware package deep link');
 
 select * from finish();
 rollback;

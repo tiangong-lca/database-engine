@@ -28,7 +28,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-22
-lastReviewedCommit: 08e8dd1dc08aa7757154074154f116817ba9742f
+lastReviewedCommit: 7de6c325bed4c52272539a556b02b1e8600a4333
 lastReviewedNote: "Reviewed issue #277 production-only migration recovery through the authoritative migration path and main hotfix flow; the path map remains accurate."
 related:
   - ../../AGENTS.md
