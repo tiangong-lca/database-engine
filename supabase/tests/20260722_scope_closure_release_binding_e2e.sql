@@ -105,5 +105,13 @@ select set_config('request.jwt.claim.role','authenticated',true);
 select public.cmd_lcia_scope_closure_check_request_v2('{"coverageMode":"subset","processes":[{"id":"c7220000-0000-4000-8000-000000000020","version":"01.00.000"}],"lciaMethods":[{"id":"c7220000-0000-4000-8000-000000000021","version":"01.00.000"}]}'::jsonb,'closure-e2e-after-release','{}');
 select ok((select a.data_snapshot_token<>n.data_snapshot_token and a.request_fingerprint<>n.request_fingerprint and a.certificate_status='valid' from public.lcia_scope_closure_checks a join public.lcia_scope_closure_checks n on true where a.request_idempotency_token='closure-e2e-a' and n.request_idempotency_token='closure-e2e-after-release'),'same identity with changed released content creates a new snapshot/fingerprint while frozen certificate remains valid');
 
+alter table public.processes disable trigger user;
+insert into public.processes(id,version,json,user_id,state_code) values ('c7220000-0000-4000-8000-000000000020','01.00.000','{"processDataSet":{"name":"release process"}}','c7220000-0000-4000-8000-000000000001',100);
+alter table public.processes enable trigger user;
+create temporary table closure_build_ids(label text primary key,id uuid) on commit drop;
+insert into closure_build_ids select 'build-a',(r->'data'->>'buildId')::uuid from (select public.cmd_lcia_result_build_request_v2('frozen build',null,'subset',null,'[]'::jsonb,'closure-e2e-build-a',(select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),(select requested_scope_hash from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),(select policy_fingerprint from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'{}') r) q;
+select ok((select count(*)=1 from public.worker_jobs j join closure_build_ids b on j.subject_id=b.id where j.job_kind='lcia_result.package_build' and j.payload_json->>'closure_check_id'=(select id::text from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')),'Build V2 atomically persists a certificate-bound worker payload');
+
+
 select * from finish();
 rollback;
