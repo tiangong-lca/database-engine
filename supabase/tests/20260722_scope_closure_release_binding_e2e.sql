@@ -9,8 +9,12 @@ select no_plan();
 insert into auth.users (instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at,is_sso_user,is_anonymous)
 values ('00000000-0000-0000-0000-000000000000','c7220000-0000-4000-8000-000000000001','authenticated','authenticated','closure-e2e@example.com','x',now(),'{}','{}',now(),now(),false,false);
 insert into public.users(id,raw_user_meta_data,contact) values ('c7220000-0000-4000-8000-000000000001','{}',null);
+insert into auth.users (instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at,is_sso_user,is_anonymous)
+values ('00000000-0000-0000-0000-000000000000','c7220000-0000-4000-8000-000000000002','authenticated','authenticated','closure-e2e-other-manager@example.com','x',now(),'{}','{}',now(),now(),false,false);
+insert into public.users(id,raw_user_meta_data,contact) values ('c7220000-0000-4000-8000-000000000002','{}',null);
 insert into public.teams(id,json,rank,is_public) values ('00000000-0000-0000-0000-000000000000','{"name":"System"}',0,false) on conflict(id) do nothing;
 insert into public.roles(user_id,team_id,role) values ('c7220000-0000-4000-8000-000000000001','00000000-0000-0000-0000-000000000000','data_product_manager');
+insert into public.roles(user_id,team_id,role) values ('c7220000-0000-4000-8000-000000000002','00000000-0000-0000-0000-000000000000','data_product_manager');
 
 insert into public.lca_release_runs(id,release_version,selection_manifest_hash,input_manifest_hash,calculation_bundle_hash,calculation_bundle_ref,profile_lock_hash,publish_plan_hash,publish_plan,artifact_set_hash,release_manifest_hash,release_manifest,status,idempotency_key,request_hash,created_by)
 values ('c7220000-0000-4000-8000-000000000010','77.00.001',repeat('a',64),repeat('b',64),repeat('c',64),'{}',repeat('d',64),repeat('e',64),'{}',repeat('f',64),repeat('9',64),'{}','published','closure-e2e-release',repeat('1',64),'c7220000-0000-4000-8000-000000000001');
@@ -80,6 +84,22 @@ select is(public.svc_lcia_scope_closure_finalize_reused_scan(
   'c7220000-0000-4000-8000-000000000202',jsonb_build_object('scan','reused-target')
 )->>'ok','true','second run finalizes with a target-owned report');
 select ok((select a.certificate_hash<>b.certificate_hash and b.reused_from_check_id=a.id and b.report_artifact_id='c7220000-0000-4000-8000-000000000202'::uuid and b.result_summary->>'scan'='reused-target' from public.lcia_scope_closure_checks a join public.lcia_scope_closure_checks b on true where a.request_idempotency_token='closure-e2e-a' and b.request_idempotency_token='closure-e2e-b'),'reuse creates a distinct certificate, report and target summary with source-run linkage');
+
+-- Operator visibility is strictly owner-scoped.  A second valid DPM cannot
+-- use SECURITY DEFINER reads, report lookup, or the task feed to enumerate
+-- the first manager's closure run.
+select set_config('request.jwt.claim.role','authenticated',true);
+select set_config('request.jwt.claim.sub','c7220000-0000-4000-8000-000000000001',true);
+select is(public.get_lcia_scope_closure_check((select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'))->>'ok','true','closure owner can read its check');
+select is(public.list_lcia_scope_closure_issues((select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'))->>'ok','true','closure owner can read its issue page');
+select is((public.list_lcia_scope_closure_issues((select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'))#>>'{data,totalCount}')::integer,0,'closure owner issue page reports an accurate total count');
+select is(public.get_lcia_scope_closure_report_download((select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'))->>'ok','true','closure owner can read its report download metadata');
+select set_config('request.jwt.claim.sub','c7220000-0000-4000-8000-000000000002',true);
+select is(public.get_lcia_scope_closure_check((select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'))->>'code','closure_check_not_found','second manager cannot read another manager closure check');
+select is(public.list_lcia_scope_closure_issues((select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'))->>'code','closure_check_not_found','second manager cannot read another manager closure issues');
+select is(public.get_lcia_scope_closure_report_download((select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'))->>'code','closure_check_not_found','second manager cannot read another manager closure report');
+select is(jsonb_array_length(public.get_task_summary_v2_feed('data_product',array['lcia.scope_closure_check','lcia_result.package_build']::text[],null,null,null,null,50,false)->'data'->'items'),0,'second manager task feed excludes another manager closure work');
+select set_config('request.jwt.claim.sub','c7220000-0000-4000-8000-000000000001',true);
 
 select set_config('request.jwt.claim.role','authenticated',true);
 select public.cmd_lcia_scope_closure_check_request_v2('{"coverageMode":"subset","processes":[{"id":"c7220000-0000-4000-8000-000000000020","version":"01.00.000"}],"lciaMethods":[{"id":"c7220000-0000-4000-8000-000000000021","version":"01.00.000"}]}'::jsonb,'closure-e2e-fail','{}');

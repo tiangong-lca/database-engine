@@ -35,7 +35,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-22
-lastReviewedCommit: 7de6c325bed4c52272539a556b02b1e8600a4333
+lastReviewedCommit: 8e7034f6dbaf46974e5198d25420586793c639f4
 lastReviewedNote: "Reviewed issue #277 production migration-history recovery; source-of-truth ownership, main hotfix, dev back-merge, and workspace integration rules remain unchanged."
 related:
   - .docpact/config.yaml
