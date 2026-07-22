@@ -29,8 +29,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-21
-lastReviewedCommit: c86556d46a311c3f3f7c2723f5093eb46ecda2d9
+lastReviewedAt: 2026-07-22
+lastReviewedCommit: 08e8dd1dc08aa7757154074154f116817ba9742f
 lastReviewedNote: "Reviewed issue #277 migration-history recovery proof; exact SQL fingerprinting, db reset, and migration-list verification remain sufficient."
 related:
   - ../../AGENTS.md
