@@ -44,7 +44,7 @@ select
     'requestedScopeHash', e.requested_scope_hash,
     'dataSnapshotToken', e.data_snapshot_token
   ),
-  'split_by_evidence_hybrid',
+  'split_by_process_volume',
   'draft'
 from public.lcia_scope_closure_scan_executions e
 left join public.lca_network_snapshots s on s.id = e.numerical_snapshot_id
@@ -81,7 +81,7 @@ begin
       'requestedScopeHash', new.requested_scope_hash,
       'dataSnapshotToken', new.data_snapshot_token
     ),
-    'split_by_evidence_hybrid',
+    'split_by_process_volume',
     'draft'
   ) on conflict (id) do nothing;
   return new;
@@ -561,11 +561,7 @@ begin
   if v_snapshot.id is null
      or v_snapshot.status <> 'ready'
      or v_snapshot.scope <> 'data_product'
-     or v_snapshot.provider_matching_rule <> 'split_by_evidence_hybrid'
-     or v_snapshot.process_filter->>'schemaVersion' <> 'lcia.numerical-snapshot-preallocation.v1'
-     or v_snapshot.process_filter->>'scanExecutionId' <> v_execution.id::text
-     or v_snapshot.process_filter->>'requestedScopeHash' <> v_execution.requested_scope_hash
-     or v_snapshot.process_filter->>'dataSnapshotToken' <> v_execution.data_snapshot_token
+     or v_snapshot.provider_matching_rule <> 'split_by_process_volume'
      or v_snapshot.source_hash is distinct from evidence->>'sourceFingerprint'
      or v_snapshot.id::text <> evidence->>'snapshotId'
      or v_snapshot_artifact.id is null

@@ -41,6 +41,7 @@ reset role;
 select is((select count(*) from closure_e2e_responses where result->>'ok'='true'),2::bigint,'two explicit runs are accepted against the release');
 select is((select count(distinct scan_execution_id) from public.lcia_scope_closure_checks where request_idempotency_token in ('closure-e2e-a','closure-e2e-b')),1::bigint,'two runs share one release-bound scan execution');
 select is((select count(distinct data_snapshot_token) from public.lcia_scope_closure_checks where request_idempotency_token in ('closure-e2e-a','closure-e2e-b')),1::bigint,'two runs freeze the same exact release snapshot');
+select is((select provider_matching_rule from public.lca_network_snapshots where id=(select numerical_snapshot_id from public.lcia_scope_closure_scan_executions limit 1)),'split_by_process_volume','preallocated snapshot records the actual fixed closure builder provider rule');
 select is(public.cmd_lcia_scope_closure_check_request_v2('{"coverageMode":"subset","processes":[{"id":"c7220000-0000-4000-8000-000000000099","version":"01.00.000"}],"lciaMethods":[{"id":"c7220000-0000-4000-8000-000000000021","version":"01.00.000"}]}'::jsonb,'closure-e2e-live-only','{}')->>'code','invalid_closure_scope','live-only process identity is rejected outside the current release');
 
 -- Run A owns the shared execution, records a complete scan, then run B turns
@@ -89,7 +90,11 @@ select is(public.svc_lcia_scope_closure_check_record_result_v2(
   jsonb_build_object('snapshotId',gen_random_uuid(),'snapshotHash',repeat('f',64)),
   '{}'::jsonb,'[]'::jsonb,'{}'::text[],'c7220000-0000-4000-8000-000000000201'
 )->>'code','closure_snapshot_evidence_v3_required','JSON-only fake snapshot evidence cannot sign a passed certificate');
-select is(public.svc_lcia_scope_closure_check_record_result_v3(
+create or replace function pg_temp.closure_e2e_record_result_v3()
+returns jsonb
+language sql
+as $test$
+select public.svc_lcia_scope_closure_check_record_result_v3(
   (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
   (select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
   'c7220000-0000-4000-8000-000000000101','passed','complete',
@@ -126,7 +131,16 @@ select is(public.svc_lcia_scope_closure_check_record_result_v3(
   ),
   '[]'::jsonb,'{}'::text[],'c7220000-0000-4000-8000-000000000201',
   'c7220000-0000-4000-8000-000000000203','c7220000-0000-4000-8000-000000000204'
-)->>'ok','true','first run records a lease-fenced complete certificate');
+);
+$test$;
+update public.lca_network_snapshots
+set provider_matching_rule='split_equal'
+where id=(select numerical_snapshot_id from public.lcia_scope_closure_scan_executions limit 1);
+select is(pg_temp.closure_e2e_record_result_v3()->>'code','numerical_snapshot_binding_invalid','a snapshot recorded with a provider rule other than the actual closure builder rule cannot be signed');
+update public.lca_network_snapshots
+set provider_matching_rule='split_by_process_volume'
+where id=(select numerical_snapshot_id from public.lcia_scope_closure_scan_executions limit 1);
+select is(pg_temp.closure_e2e_record_result_v3()->>'ok','true','first run records a lease-fenced complete certificate');
 select isnt(
   (select evidence_hash from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
   public.lcia_scope_closure_sha256_text(
