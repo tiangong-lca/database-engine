@@ -3,16 +3,20 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(34);
+select plan(39);
 
 select has_table('public', 'lcia_scope_closure_checks', 'closure checks are persisted');
 select has_table('public', 'lcia_scope_closure_issues', 'closure issues are persisted');
 select has_table('public', 'lcia_scope_closure_config', 'server-owned closure configuration is persisted');
 select has_table('public', 'lcia_scope_closure_certificate_events', 'certificate invalidation is append-only');
+select has_table('public', 'lcia_scope_closure_issue_occurrences', 'closure issue occurrences preserve source-level provenance');
+select has_table('public', 'lcia_scope_closure_issue_roots', 'closure issue roots preserve affected-scope provenance');
 select col_is_pk('public', 'lcia_scope_closure_checks', 'id', 'closure check has a primary key');
 select col_is_pk('public', 'lcia_scope_closure_issues', 'id', 'closure issue has a primary key');
 select ok((select relrowsecurity from pg_class where oid = 'public.lcia_scope_closure_checks'::regclass), 'closure checks enable RLS');
 select ok((select relrowsecurity from pg_class where oid = 'public.lcia_scope_closure_issues'::regclass), 'closure issues enable RLS');
+select ok((select relrowsecurity from pg_class where oid = 'public.lcia_scope_closure_issue_occurrences'::regclass), 'closure issue occurrences enable RLS');
+select ok((select relrowsecurity from pg_class where oid = 'public.lcia_scope_closure_issue_roots'::regclass), 'closure issue roots enable RLS');
 select ok(not has_table_privilege('authenticated', 'public.lcia_scope_closure_checks', 'select'), 'authenticated cannot directly read closure checks');
 select ok(not has_table_privilege('authenticated', 'public.lcia_scope_closure_issues', 'select'), 'authenticated cannot directly read closure issues');
 
@@ -42,6 +46,7 @@ select ok(exists (select 1 from public.worker_job_kinds where job_kind = 'lcia_r
 select ok(exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'lcia_scope_closure_checks_requested_updated_idx'), 'closure requester feed index exists');
 select ok(exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'lcia_scope_closure_issues_check_id_idx'), 'closure issue keyset index exists');
 select ok(exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'lcia_scope_closure_certificate_events_check_created_idx'), 'certificate event readback index exists');
+select ok(exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'lcia_scope_closure_issue_occurrences_issue_idx'), 'occurrence pagination index exists');
 
 select * from finish();
 rollback;

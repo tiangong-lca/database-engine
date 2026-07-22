@@ -16,6 +16,46 @@ alter table public.lcia_scope_closure_checks
   add column if not exists report_artifact_manifest_hash text,
   add column if not exists evidence_hash text;
 
+alter table public.lcia_scope_closure_issues
+  add column if not exists details jsonb not null default '{}'::jsonb;
+
+create table if not exists public.lcia_scope_closure_issue_occurrences (
+  id uuid primary key default gen_random_uuid(),
+  closure_issue_id uuid not null references public.lcia_scope_closure_issues(id) on delete cascade,
+  occurrence_key text not null,
+  source_dataset_type text,
+  source_dataset_id uuid,
+  source_dataset_version text,
+  json_path text,
+  reference_role text,
+  details jsonb not null default '{}'::jsonb,
+  created_at timestamptz not null default now(),
+  unique (closure_issue_id, occurrence_key),
+  check (jsonb_typeof(details) = 'object')
+);
+
+create table if not exists public.lcia_scope_closure_issue_roots (
+  closure_issue_id uuid not null references public.lcia_scope_closure_issues(id) on delete cascade,
+  root_dataset_type text not null,
+  root_dataset_id uuid not null,
+  root_dataset_version text not null,
+  impact_role text not null default 'root',
+  witness_path jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  primary key (closure_issue_id, root_dataset_type, root_dataset_id, root_dataset_version, impact_role),
+  check (jsonb_typeof(witness_path) = 'array')
+);
+
+create index if not exists lcia_scope_closure_issue_occurrences_issue_idx
+  on public.lcia_scope_closure_issue_occurrences (closure_issue_id, id);
+create index if not exists lcia_scope_closure_issue_roots_issue_idx
+  on public.lcia_scope_closure_issue_roots (closure_issue_id, root_dataset_type, root_dataset_id, root_dataset_version);
+
+alter table public.lcia_scope_closure_issue_occurrences enable row level security;
+alter table public.lcia_scope_closure_issue_roots enable row level security;
+revoke all on public.lcia_scope_closure_issue_occurrences, public.lcia_scope_closure_issue_roots from public, anon, authenticated;
+grant all on public.lcia_scope_closure_issue_occurrences, public.lcia_scope_closure_issue_roots to service_role;
+
 alter table public.lcia_scope_closure_checks
   drop constraint if exists lcia_scope_closure_checks_completeness_check;
 alter table public.lcia_scope_closure_checks
@@ -205,6 +245,8 @@ create or replace function public.svc_lcia_scope_closure_check_record_result_v2(
 declare
   v_check public.lcia_scope_closure_checks%rowtype; v_job public.worker_jobs%rowtype; v_status text := lower(trim(p_status));
   v_effective_hash text; v_certificate_bindings jsonb; v_certificate_hash text; v_worker_status text; v_issue jsonb; v_worker_result jsonb;
+  v_closure_issue public.lcia_scope_closure_issues%rowtype; v_occurrence jsonb; v_root jsonb;
+  v_artifact public.worker_job_artifacts%rowtype; v_report_artifact_manifest_hash text; v_worker_record jsonb;
 begin
   if not coalesce(util.is_service_request(), false) then return public.lcia_scope_closure_error('service_role_required',403,'Service role is required'); end if;
   if v_status not in ('passed','blocked','failed') or p_scan_completeness not in ('complete','incomplete','unknown')
@@ -217,7 +259,8 @@ begin
   if v_check.status not in ('queued','running') then return public.lcia_scope_closure_error('closure_check_already_terminal',409,'Closure check is already terminal'); end if;
   select * into v_job from public.worker_jobs where id = p_job_id for update;
   if v_job.status <> 'running' or v_job.lease_token is distinct from p_lease_token or v_job.lease_expires_at < now() then return public.lcia_scope_closure_error('worker_job_lease_invalid',409,'Worker job lease is no longer valid'); end if;
-  if p_report_artifact_id is not null and not exists (select 1 from public.worker_job_artifacts a where a.id = p_report_artifact_id and a.job_id = v_job.id) then return public.lcia_scope_closure_error('closure_report_unavailable',409,'Report artifact does not belong to the closure job'); end if;
+  select * into v_artifact from public.worker_job_artifacts where id = p_report_artifact_id and job_id = v_job.id;
+  if p_report_artifact_id is not null and v_artifact.id is null then return public.lcia_scope_closure_error('closure_report_unavailable',409,'Report artifact does not belong to the closure job'); end if;
   if v_status in ('passed','blocked') and p_report_artifact_id is null then return public.lcia_scope_closure_error('closure_report_unavailable',409,'Completed closure checks require a report artifact'); end if;
   if v_status = 'passed' and (p_scan_completeness <> 'complete' or exists (
     select 1 from jsonb_array_elements(p_issues) issue(value)
@@ -225,6 +268,10 @@ begin
   )) then return public.lcia_scope_closure_error('closure_check_incomplete',409,'Passed closure checks must be complete and free of blocking issues'); end if;
   if v_status = 'blocked' and (cardinality(coalesce(p_blocker_codes,'{}'::text[])) = 0 or jsonb_array_length(p_issues) = 0) then return public.lcia_scope_closure_error('closure_blocker_details_required',409,'Blocked closure checks require issues and blocker codes'); end if;
   if v_status = 'passed' and not (p_evidence ?& array['schemaVersion','sourceFingerprint','resolutionMapHash','closureBundleHash','snapshotId','snapshotHash','reportArtifactManifestHash','evidenceHash']) then return public.lcia_scope_closure_error('closure_evidence_unavailable',409,'Passed closure checks require complete evidence'); end if;
+  if p_report_artifact_id is not null then
+    v_report_artifact_manifest_hash := public.lcia_scope_closure_sha256(jsonb_build_object('artifactId',v_artifact.id,'bucket',v_artifact.storage_bucket,'objectPath',v_artifact.storage_path,'mediaType',v_artifact.content_type,'byteSize',v_artifact.byte_size,'checksumSha256',v_artifact.checksum_sha256));
+  end if;
+  if v_status = 'passed' and coalesce(p_evidence->>'reportArtifactManifestHash','') <> coalesce(v_report_artifact_manifest_hash,'') then return public.lcia_scope_closure_error('closure_report_hash_mismatch',409,'Report artifact manifest hash does not match persisted artifact metadata'); end if;
   v_effective_hash := public.lcia_scope_closure_sha256(p_effective_scope_manifest);
   if v_status = 'passed' then
     v_certificate_bindings := jsonb_build_object('certificateSchemaVersion','lcia.scope-closure-certificate.v1','requestedScopeHash',v_check.requested_scope_hash,'scopeHash',v_effective_hash,'policyFingerprint',v_check.policy_fingerprint,'dataSnapshotToken',v_check.data_snapshot_token,'validatorScannerFingerprint',v_check.expected_validator_scanner_fingerprint,'sourceFingerprint',p_evidence->>'sourceFingerprint','resolutionMapHash',p_evidence->>'resolutionMapHash','closureBundleHash',p_evidence->>'closureBundleHash','snapshotId',p_evidence->>'snapshotId','snapshotHash',p_evidence->>'snapshotHash','reportArtifactManifestHash',p_evidence->>'reportArtifactManifestHash','evidenceHash',p_evidence->>'evidenceHash');
@@ -232,13 +279,22 @@ begin
   end if;
   delete from public.lcia_scope_closure_issues where closure_check_id = v_check.id;
   for v_issue in select value from jsonb_array_elements(p_issues) loop
-    insert into public.lcia_scope_closure_issues(closure_check_id,issue_key,severity,blocking,issue_code,source_dataset_type,source_dataset_id,source_dataset_version,json_path,reference_role,requested_target_type,requested_target_id,requested_target_version,message,suggested_action,occurrence_count,affected_root_count)
-    values(v_check.id,coalesce(nullif(trim(v_issue->>'issueKey'),''),public.lcia_scope_closure_sha256(v_issue)),coalesce(v_issue->>'severity','blocker'),coalesce((v_issue->>'blocking')::boolean,false),coalesce(nullif(trim(v_issue->>'issueCode'),''),'closure_issue'),nullif(v_issue->>'sourceDatasetType',''),nullif(v_issue->>'sourceDatasetId','')::uuid,nullif(v_issue->>'sourceDatasetVersion',''),nullif(v_issue->>'jsonPath',''),nullif(v_issue->>'referenceRole',''),nullif(v_issue->>'requestedTargetType',''),nullif(v_issue->>'requestedTargetId','')::uuid,nullif(v_issue->>'requestedTargetVersion',''),coalesce(nullif(v_issue->>'message',''),'Closure validation issue'),nullif(v_issue->>'suggestedAction',''),greatest(1,coalesce((v_issue->>'occurrenceCount')::integer,1)),greatest(0,coalesce((v_issue->>'affectedRootCount')::integer,0)));
+    insert into public.lcia_scope_closure_issues(closure_check_id,issue_key,severity,blocking,issue_code,source_dataset_type,source_dataset_id,source_dataset_version,json_path,reference_role,requested_target_type,requested_target_id,requested_target_version,message,suggested_action,occurrence_count,affected_root_count,details)
+    values(v_check.id,coalesce(nullif(trim(v_issue->>'issueKey'),''),public.lcia_scope_closure_sha256(v_issue)),coalesce(v_issue->>'severity','blocker'),coalesce((v_issue->>'blocking')::boolean,false),coalesce(nullif(trim(v_issue->>'issueCode'),''),'closure_issue'),nullif(v_issue->>'sourceDatasetType',''),nullif(v_issue->>'sourceDatasetId','')::uuid,nullif(v_issue->>'sourceDatasetVersion',''),nullif(v_issue->>'jsonPath',''),nullif(v_issue->>'referenceRole',''),nullif(v_issue->>'requestedTargetType',''),nullif(v_issue->>'requestedTargetId','')::uuid,nullif(v_issue->>'requestedTargetVersion',''),coalesce(nullif(v_issue->>'message',''),'Closure validation issue'),nullif(v_issue->>'suggestedAction',''),greatest(1,coalesce((v_issue->>'occurrenceCount')::integer,1)),greatest(0,coalesce((v_issue->>'affectedRootCount')::integer,0)),coalesce(v_issue->'details','{}'::jsonb)) returning * into v_closure_issue;
+    for v_occurrence in select value from jsonb_array_elements(coalesce(v_issue->'occurrences','[]'::jsonb)) loop
+      insert into public.lcia_scope_closure_issue_occurrences(closure_issue_id,occurrence_key,source_dataset_type,source_dataset_id,source_dataset_version,json_path,reference_role,details)
+      values(v_closure_issue.id,coalesce(nullif(v_occurrence->>'occurrenceKey',''),public.lcia_scope_closure_sha256(v_occurrence)),nullif(v_occurrence->>'sourceDatasetType',''),nullif(v_occurrence->>'sourceDatasetId','')::uuid,nullif(v_occurrence->>'sourceDatasetVersion',''),nullif(v_occurrence->>'jsonPath',''),nullif(v_occurrence->>'referenceRole',''),coalesce(v_occurrence->'details','{}'::jsonb));
+    end loop;
+    for v_root in select value from jsonb_array_elements(coalesce(v_issue->'affectedRoots','[]'::jsonb)) loop
+      insert into public.lcia_scope_closure_issue_roots(closure_issue_id,root_dataset_type,root_dataset_id,root_dataset_version,impact_role,witness_path)
+      values(v_closure_issue.id,coalesce(nullif(v_root->>'datasetType',''),'process'),(v_root->>'id')::uuid,coalesce(nullif(v_root->>'version',''),'00.00.000'),coalesce(nullif(v_root->>'impactRole',''),'root'),coalesce(v_root->'witnessPath','[]'::jsonb));
+    end loop;
   end loop;
   update public.lcia_scope_closure_checks set status=v_status,scan_completeness=p_scan_completeness,effective_scope_manifest=p_effective_scope_manifest,effective_scope_hash=v_effective_hash,certificate_schema_version=case when v_status='passed' then 'lcia.scope-closure-certificate.v1' else null end,certificate_status=case when v_status='passed' then 'valid' else 'unavailable' end,certificate_hash=v_certificate_hash,source_fingerprint=nullif(p_evidence->>'sourceFingerprint',''),resolution_map_hash=nullif(p_evidence->>'resolutionMapHash',''),closure_bundle_hash=nullif(p_evidence->>'closureBundleHash',''),snapshot_id=nullif(p_evidence->>'snapshotId','')::uuid,snapshot_hash=nullif(p_evidence->>'snapshotHash',''),report_artifact_manifest_hash=nullif(p_evidence->>'reportArtifactManifestHash',''),evidence_hash=nullif(p_evidence->>'evidenceHash',''),result_summary=p_result_summary,blocker_codes=coalesce(p_blocker_codes,'{}'::text[]),report_artifact_id=p_report_artifact_id,updated_at=now(),finished_at=now() where id=v_check.id returning * into v_check;
   v_worker_status := case v_status when 'passed' then 'completed' else v_status end;
   v_worker_result := jsonb_strip_nulls(jsonb_build_object('closureCheckId',v_check.id,'status',v_status,'scanCompleteness',p_scan_completeness,'certificateStatus',v_check.certificate_status,'effectiveScopeHash',v_check.effective_scope_hash,'certificateHash',v_check.certificate_hash));
-  perform public.worker_record_job_result(v_job.id,p_lease_token,v_worker_status,v_worker_result,'lcia.scope_closure_check.result.v1',null,jsonb_build_object('progressCounters',coalesce(p_result_summary->'progressCounters','{}'::jsonb)),case when v_status='failed' then coalesce(p_result_summary->>'errorCode','closure_check_failed') else null end,case when v_status='failed' then 'Scope closure check failed' else null end,null,case when v_status='blocked' then coalesce(p_blocker_codes,'{}'::text[]) else null end,case when v_status='blocked' then 'operator' else null end,case when v_status='failed' then true else false end);
+  select public.worker_record_job_result(v_job.id,p_lease_token,v_worker_status,v_worker_result,'lcia.scope_closure_check.result.v1',null,jsonb_build_object('progressCounters',coalesce(p_result_summary->'progressCounters','{}'::jsonb)),case when v_status='failed' then coalesce(p_result_summary->>'errorCode','closure_check_failed') else null end,case when v_status='failed' then 'Scope closure check failed' else null end,null,case when v_status='blocked' then coalesce(p_blocker_codes,'{}'::text[]) else null end,case when v_status='blocked' then 'operator' else null end,case when v_status='failed' then true else false end) into v_worker_record;
+  if coalesce((v_worker_record->>'ok')::boolean,false) is not true then raise exception using errcode='P0001',message='worker_job_result_rejected'; end if;
   return jsonb_build_object('ok',true,'data',jsonb_build_object('closureCheckId',v_check.id,'certificateHash',v_certificate_hash,'workerJobId',v_job.id));
 exception when invalid_text_representation then return public.lcia_scope_closure_error('invalid_closure_result',400,'Closure result contains invalid identity values');
 end;
@@ -261,7 +317,7 @@ begin
   if v_check.policy_fingerprint<>trim(coalesce(p_policy_fingerprint,'')) then return public.lcia_scope_closure_error('closure_check_policy_mismatch',409,'Policy does not match the closure certificate'); end if;
   v_effective:=coalesce(v_check.effective_scope_manifest,v_check.requested_scope_manifest);
   v_result:=public.cmd_lcia_result_build_request_legacy(p_name,v_effective->'processes','subset',p_default_impact_category,v_effective->'lciaMethods',p_idempotency_key,coalesce(p_audit,'{}'::jsonb)||jsonb_build_object('closureCheckId',v_check.id,'requestedScopeHash',v_check.requested_scope_hash,'policyFingerprint',v_check.policy_fingerprint,'certificateHash',v_check.certificate_hash));
-  v_payload:=(v_result->'data'->'workerJob'->'payload') || jsonb_build_object('coverage_mode',v_effective->>'coverageMode','input_manifest',jsonb_build_object('predicateVersion',v_effective->>'eligibilityPredicateVersion','selectionMode','closure_certificate','processes',v_effective->'processes'),'input_manifest_hash',public.lcia_scope_closure_sha256(jsonb_build_object('processes',v_effective->'processes')),'lcia_method_set',v_effective->'lciaMethods','closure_check_id',v_check.id,'closure_certificate_hash',v_check.certificate_hash,'effective_scope_hash',v_check.effective_scope_hash,'data_snapshot_token',v_check.data_snapshot_token);
+  v_payload:=(v_result->'data'->'workerJob'->'payload') || jsonb_build_object('coverage_mode',v_effective->>'coverageMode','input_manifest',jsonb_build_object('predicateVersion',v_effective->>'eligibilityPredicateVersion','selectionMode','closure_certificate','processes',v_effective->'processes'),'input_manifest_hash',public.lcia_scope_closure_sha256(jsonb_build_object('processes',v_effective->'processes')),'lcia_method_set',v_effective->'lciaMethods','closure_check_id',v_check.id,'closure_certificate_hash',v_check.certificate_hash,'effective_scope_hash',v_check.effective_scope_hash,'data_snapshot_token',v_check.data_snapshot_token,'snapshot_id',v_check.snapshot_id,'snapshot_hash',v_check.snapshot_hash,'closure_bundle_hash',v_check.closure_bundle_hash,'report_artifact_manifest_hash',v_check.report_artifact_manifest_hash);
   return jsonb_set(v_result,'{data,workerJob,payload}',v_payload,true) || jsonb_build_object('closureCheckId',v_check.id,'effectiveScopeHash',v_check.effective_scope_hash,'certificateHash',v_check.certificate_hash);
 end;
 $$;
@@ -286,9 +342,29 @@ begin
 end;
 $$;
 
+-- Validity is a separate, append-only projection.  A stale certificate may be
+-- escalated to revoked, but neither transition rewrites the immutable run.
+create or replace function public.svc_lcia_scope_closure_certificate_event(
+  p_closure_check_id uuid, p_certificate_status text, p_reason text
+) returns jsonb
+language plpgsql security definer set search_path = public, pg_temp as $$
+declare v_check public.lcia_scope_closure_checks%rowtype;
+begin
+  if not coalesce(util.is_service_request(), false) then return public.lcia_scope_closure_error('service_role_required',403,'Service role is required'); end if;
+  if p_certificate_status not in ('stale','revoked') or coalesce(nullif(trim(p_reason),''),'')='' then return public.lcia_scope_closure_error('invalid_certificate_event',400,'Certificate event status and reason are required'); end if;
+  select * into v_check from public.lcia_scope_closure_checks where id=p_closure_check_id for update;
+  if v_check.id is null then return public.lcia_scope_closure_error('closure_check_not_found',404,'Closure check not found'); end if;
+  if not ((v_check.certificate_status='valid' and p_certificate_status in ('stale','revoked')) or (v_check.certificate_status='stale' and p_certificate_status='revoked')) then return public.lcia_scope_closure_error('invalid_certificate_transition',409,'Certificate validity transition is not allowed'); end if;
+  insert into public.lcia_scope_closure_certificate_events(closure_check_id,certificate_status,reason) values(v_check.id,p_certificate_status,trim(p_reason));
+  update public.lcia_scope_closure_checks set certificate_status=p_certificate_status,updated_at=now() where id=v_check.id;
+  return jsonb_build_object('ok',true,'data',jsonb_build_object('closureCheckId',v_check.id,'certificateStatus',p_certificate_status));
+end;
+$$;
+
 -- Old hash-only request cannot prove an immutable Scope Manifest.  Keep the
 -- function for migration compatibility, but make it unavailable to clients.
 revoke all on function public.cmd_lcia_scope_closure_check_request(text,text,text,jsonb) from public, anon, authenticated;
+revoke all on function public.cmd_lcia_scope_closure_check_request_v2(jsonb,text,jsonb) from public, anon, authenticated, service_role;
 revoke all on function public.svc_lcia_scope_closure_check_record_result(uuid,text,text,text,text,jsonb,text[],uuid) from public, anon, authenticated, service_role;
 grant execute on function public.cmd_lcia_scope_closure_check_request_v2(jsonb,text,jsonb) to authenticated;
 revoke all on function public.svc_lcia_scope_closure_check_get_worker_input(uuid) from public, anon, authenticated;
