@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-07-21"
-lastReviewedCommit: "c86556d46a311c3f3f7c2723f5093eb46ecda2d9"
-lastReviewedNote: "Reviewed issue #277 production migration-history recovery routing, ownership, and required proof; existing governance remains accurate."
+lastReviewedAt: "2026-07-22"
+lastReviewedCommit: "08e8dd1dc08aa7757154074154f116817ba9742f"
+lastReviewedNote: "Reviewed issue #281 administrator-rejection shared-reference routing, ownership, and required proof; existing governance remains accurate."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

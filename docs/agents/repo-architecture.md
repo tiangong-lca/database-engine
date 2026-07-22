@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-21
-lastReviewedCommit: c86556d46a311c3f3f7c2723f5093eb46ecda2d9
-lastReviewedNote: "Reviewed issue #277 production-only migration recovery through the authoritative migration path and main hotfix flow; the path map remains accurate."
+lastReviewedAt: 2026-07-22
+lastReviewedCommit: 08e8dd1dc08aa7757154074154f116817ba9742f
+lastReviewedNote: "Reviewed issue #281 administrator-rejection migration and SQL-test ownership; the stable/generated path map remains accurate."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
