@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(28);
+select plan(34);
 
 select has_table('public', 'lcia_scope_closure_checks', 'closure checks are persisted');
 select has_table('public', 'lcia_scope_closure_issues', 'closure issues are persisted');
@@ -16,7 +16,9 @@ select ok((select relrowsecurity from pg_class where oid = 'public.lcia_scope_cl
 select ok(not has_table_privilege('authenticated', 'public.lcia_scope_closure_checks', 'select'), 'authenticated cannot directly read closure checks');
 select ok(not has_table_privilege('authenticated', 'public.lcia_scope_closure_issues', 'select'), 'authenticated cannot directly read closure issues');
 
-select has_function('public', 'cmd_lcia_scope_closure_check_request', array['text','text','text','jsonb'], 'closure request RPC accepts only client intent');
+select has_function('public', 'cmd_lcia_scope_closure_check_request_v2', array['jsonb','text','jsonb'], 'closure request RPC accepts a server-normalized scope intent');
+select has_function('public', 'svc_lcia_scope_closure_check_get_worker_input', array['uuid'], 'worker can read the frozen scope through a service-only RPC');
+select has_function('public', 'svc_lcia_scope_closure_check_record_result_v2', array['uuid','uuid','uuid','text','text','jsonb','jsonb','jsonb','jsonb','text[]','uuid'], 'lease-fenced completion RPC exists');
 select has_function('public', 'get_lcia_scope_closure_check', array['uuid'], 'closure read RPC exists');
 select has_function('public', 'list_lcia_scope_closure_issues', array['uuid','uuid','integer'], 'closure issue keyset RPC exists');
 select has_function('public', 'get_lcia_scope_closure_report_download', array['uuid'], 'report authorization RPC exists');
@@ -27,8 +29,12 @@ select has_function('public', 'cmd_lcia_result_build_request_v2', array['text','
 
 select ok(not has_function_privilege('authenticated', 'public.cmd_lcia_result_build_request_legacy(text,jsonb,text,text,jsonb,text,jsonb)', 'execute'), 'legacy build RPC is not callable by authenticated users');
 select ok(has_function_privilege('authenticated', 'public.cmd_lcia_result_build_request_v2(text,jsonb,text,text,jsonb,text,uuid,text,text,jsonb)', 'execute'), 'certificate-bound build RPC is callable by authenticated users');
-select ok(has_function_privilege('service_role', 'public.svc_lcia_scope_closure_check_record_result(uuid,text,text,text,text,jsonb,text[],uuid)', 'execute'), 'service result RPC is service-only');
+select ok(not has_function_privilege('service_role', 'public.svc_lcia_scope_closure_check_record_result(uuid,text,text,text,text,jsonb,text[],uuid)', 'execute'), 'unfenced service result RPC is no longer callable');
 select ok(has_function_privilege('service_role', 'public.svc_lcia_scope_closure_certificate_event(uuid,text,text)', 'execute'), 'certificate event RPC is service-only');
+select ok(not has_function_privilege('authenticated', 'public.cmd_lcia_scope_closure_check_request(text,text,text,jsonb)', 'execute'), 'hash-only closure request is not callable by authenticated users');
+select ok(has_function_privilege('authenticated', 'public.cmd_lcia_scope_closure_check_request_v2(jsonb,text,jsonb)', 'execute'), 'normalized closure request is callable by authenticated users');
+select ok(has_function_privilege('service_role', 'public.svc_lcia_scope_closure_check_get_worker_input(uuid)', 'execute'), 'frozen worker input is service-only');
+select ok(has_function_privilege('service_role', 'public.svc_lcia_scope_closure_check_record_result_v2(uuid,uuid,uuid,text,text,jsonb,jsonb,jsonb,jsonb,text[],uuid)', 'execute'), 'lease-fenced result RPC is service-only');
 select ok(has_function_privilege('authenticated', 'public.cmd_lcia_result_build_request(text,jsonb,text,text,jsonb,text,jsonb)', 'execute'), 'v1 build stays callable until the server feature flag requires certificates');
 
 select ok(exists (select 1 from public.worker_job_kinds where job_kind = 'lcia.scope_closure_check' and worker_queue = 'solver' and default_visibility = 'operator' and task_center_category = 'data_product'), 'closure job kind has data product task metadata');
