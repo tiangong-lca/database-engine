@@ -107,7 +107,8 @@ select is(public.svc_lcia_scope_closure_check_record_result_v3(
     'reportArtifactManifestHash',public.lcia_scope_closure_sha256(jsonb_build_object('artifactId','c7220000-0000-4000-8000-000000000201'::uuid,'bucket','test','objectPath','reports/a.xlsx','mediaType','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','byteSize',10,'checksumSha256',repeat('a',64))),
     'evidenceHash',public.lcia_scope_closure_sha256_text(
       'lcia.scope-closure-evidence.v2'||chr(10)||'source-a'||chr(10)||repeat('e',64)||chr(10)
-      ||repeat('b',64)||chr(10)||(select numerical_snapshot_id::text from public.lcia_scope_closure_scan_executions limit 1)||chr(10)
+      ||repeat('b',64)||chr(10)||'c7220000-0000-4000-8000-000000000203'||chr(10)
+      ||(select numerical_snapshot_id::text from public.lcia_scope_closure_scan_executions limit 1)||chr(10)
       ||repeat('c',64)||chr(10)||'c7220000-0000-4000-8000-000000000204'||chr(10)||repeat('d',64)||chr(10)
       ||(select snapshot_build_contract_hash from public.lca_snapshot_artifacts where id='c7220000-0000-4000-8000-000000000204')
     )
@@ -117,7 +118,8 @@ select is(public.svc_lcia_scope_closure_check_record_result_v3(
     'scan','first',
     'evidenceHash',public.lcia_scope_closure_sha256_text(
       'lcia.scope-closure-evidence.v2'||chr(10)||'source-a'||chr(10)||repeat('e',64)||chr(10)
-      ||repeat('b',64)||chr(10)||(select numerical_snapshot_id::text from public.lcia_scope_closure_scan_executions limit 1)||chr(10)
+      ||repeat('b',64)||chr(10)||'c7220000-0000-4000-8000-000000000203'||chr(10)
+      ||(select numerical_snapshot_id::text from public.lcia_scope_closure_scan_executions limit 1)||chr(10)
       ||repeat('c',64)||chr(10)||'c7220000-0000-4000-8000-000000000204'||chr(10)||repeat('d',64)||chr(10)
       ||(select snapshot_build_contract_hash from public.lca_snapshot_artifacts where id='c7220000-0000-4000-8000-000000000204')
     )
@@ -125,6 +127,17 @@ select is(public.svc_lcia_scope_closure_check_record_result_v3(
   '[]'::jsonb,'{}'::text[],'c7220000-0000-4000-8000-000000000201',
   'c7220000-0000-4000-8000-000000000203','c7220000-0000-4000-8000-000000000204'
 )->>'ok','true','first run records a lease-fenced complete certificate');
+select isnt(
+  (select evidence_hash from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
+  public.lcia_scope_closure_sha256_text(
+    'lcia.scope-closure-evidence.v2'||chr(10)||'source-a'||chr(10)||repeat('e',64)||chr(10)
+    ||repeat('b',64)||chr(10)||'c7220000-0000-4000-8000-000000000205'||chr(10)
+    ||(select numerical_snapshot_id::text from public.lcia_scope_closure_scan_executions limit 1)||chr(10)
+    ||repeat('c',64)||chr(10)||'c7220000-0000-4000-8000-000000000204'||chr(10)||repeat('d',64)||chr(10)
+    ||(select snapshot_build_contract_hash from public.lca_snapshot_artifacts where id='c7220000-0000-4000-8000-000000000204')
+  ),
+  'tampering the closure bundle artifact identity changes the canonical evidence hash'
+);
 select is((select status from public.lcia_scope_closure_scan_executions limit 1),'completed','first completion makes the shared execution reusable');
 select throws_ok(
   $$delete from public.lca_snapshot_artifacts

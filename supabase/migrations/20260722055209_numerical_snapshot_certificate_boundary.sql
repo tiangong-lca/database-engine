@@ -600,6 +600,7 @@ begin
     || (evidence->>'sourceFingerprint') || chr(10)
     || (evidence->>'resolutionMapHash') || chr(10)
     || v_bundle.checksum_sha256 || chr(10)
+    || v_bundle.id::text || chr(10)
     || v_snapshot.id::text || chr(10)
     || v_snapshot_artifact.artifact_sha256 || chr(10)
     || v_snapshot_artifact.id::text || chr(10)
