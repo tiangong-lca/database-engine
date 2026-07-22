@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(84);
+select plan(88);
 
 select has_table('public', 'lcia_scope_closure_checks', 'closure checks are persisted');
 select has_table('public', 'lcia_scope_closure_issues', 'closure issues are persisted');
@@ -70,6 +70,10 @@ select ok(not has_function_privilege('authenticated', 'public.svc_lcia_scope_clo
 select ok(not has_table_privilege('authenticated', 'public.lcia_scope_closure_scan_executions', 'select'), 'authenticated cannot enumerate reusable scan executions');
 select ok(not has_table_privilege('authenticated', 'public.lcia_document_validation_evidence', 'select'), 'authenticated cannot enumerate cross-document evidence');
 select ok(not has_function_privilege('authenticated', 'public.lcia_scope_closure_current_release_matches(text)', 'execute'), 'release freshness predicate is internal-only');
+select ok(not has_function_privilege('authenticated', 'public.get_task_summary_v2_feed_unversioned(text,text[],text[],timestamp with time zone,timestamp with time zone,uuid,integer,boolean)', 'execute'), 'authenticated callers cannot bypass the versioned task-feed wrapper');
+select ok(not has_function_privilege('authenticated', 'public.cmd_lcia_scope_closure_check_request_v2_untracked(jsonb,text,jsonb)', 'execute'), 'authenticated callers cannot call the untracked closure-request implementation');
+select ok(not has_function_privilege('authenticated', 'public.cmd_lcia_result_build_request_v2_envelope(text,jsonb,text,text,jsonb,text,uuid,text,text,jsonb)', 'execute'), 'authenticated callers cannot call the build-envelope implementation');
+select ok(has_function_privilege('authenticated', 'public.get_task_summary_v2_feed(text,text[],text[],timestamp with time zone,timestamp with time zone,uuid,integer,boolean)', 'execute'), 'authenticated callers can use only the versioned task-feed wrapper');
 
 select ok(position('insert into public.worker_jobs' in pg_get_functiondef('public.cmd_lcia_result_build_request_v2(text,jsonb,text,text,jsonb,text,uuid,text,text,jsonb)'::regprocedure)) > 0, 'build V2 persists the worker job in the certificate-validation transaction');
 select ok(position('payload_json' in pg_get_functiondef('public.cmd_lcia_result_build_request_v2(text,jsonb,text,text,jsonb,text,uuid,text,text,jsonb)'::regprocedure)) > 0, 'build V2 persists the certificate-bound payload');
