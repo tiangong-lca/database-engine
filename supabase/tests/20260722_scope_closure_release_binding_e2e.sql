@@ -59,7 +59,7 @@ insert into public.worker_job_artifacts(id,job_id,artifact_type,storage_bucket,s
 values ('c7220000-0000-4000-8000-000000000201',(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'closure_report_xlsx','test','reports/a.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',10,repeat('a',64));
 insert into public.worker_job_artifacts(id,job_id,artifact_type,storage_bucket,storage_path,content_type,byte_size,checksum_sha256,metadata)
 values ('c7220000-0000-4000-8000-000000000203',(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'closure_bundle','test','bundles/a.json','application/json',20,repeat('b',64),jsonb_build_object('closureCheckId',(select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')));
-update public.lca_network_snapshots set status='ready',source_hash='source-a'
+update public.lca_network_snapshots set status='ready',source_hash='builder-source-a'
 where id=(select numerical_snapshot_id from public.lcia_scope_closure_scan_executions limit 1);
 insert into public.lca_snapshot_artifacts(
   id,snapshot_id,artifact_url,artifact_sha256,artifact_byte_size,artifact_format,
@@ -90,7 +90,9 @@ select is(public.svc_lcia_scope_closure_check_record_result_v2(
   jsonb_build_object('snapshotId',gen_random_uuid(),'snapshotHash',repeat('f',64)),
   '{}'::jsonb,'[]'::jsonb,'{}'::text[],'c7220000-0000-4000-8000-000000000201'
 )->>'code','closure_snapshot_evidence_v3_required','JSON-only fake snapshot evidence cannot sign a passed certificate');
-create or replace function pg_temp.closure_e2e_record_result_v3()
+create or replace function pg_temp.closure_e2e_record_result_v3(
+  p_source_fingerprint text default 'source-a'
+)
 returns jsonb
 language sql
 as $test$
@@ -101,7 +103,7 @@ select public.svc_lcia_scope_closure_check_record_result_v3(
   (select requested_scope_manifest from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
   jsonb_build_object(
     'schemaVersion','lcia.scope-closure-evidence.v2',
-    'sourceFingerprint','source-a','resolutionMapHash',repeat('e',64),
+    'sourceFingerprint',p_source_fingerprint,'resolutionMapHash',repeat('e',64),
     'closureBundleArtifactId','c7220000-0000-4000-8000-000000000203',
     'closureBundleHash',repeat('b',64),
     'snapshotId',(select numerical_snapshot_id from public.lcia_scope_closure_scan_executions limit 1),
@@ -140,7 +142,9 @@ select is(pg_temp.closure_e2e_record_result_v3()->>'code','numerical_snapshot_bi
 update public.lca_network_snapshots
 set provider_matching_rule='split_by_process_volume'
 where id=(select numerical_snapshot_id from public.lcia_scope_closure_scan_executions limit 1);
+select is(pg_temp.closure_e2e_record_result_v3('forged-closure-source')->>'code','closure_evidence_hash_mismatch','forging the closure source fingerprint is rejected by the evidence hash even though snapshot source_hash uses a separate domain');
 select is(pg_temp.closure_e2e_record_result_v3()->>'ok','true','first run records a lease-fenced complete certificate');
+select is((select source_hash from public.lca_network_snapshots where id=(select numerical_snapshot_id from public.lcia_scope_closure_scan_executions limit 1)),'builder-source-a','signing preserves the snapshot builder source/config fingerprint in its own hash domain');
 select isnt(
   (select evidence_hash from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
   public.lcia_scope_closure_sha256_text(

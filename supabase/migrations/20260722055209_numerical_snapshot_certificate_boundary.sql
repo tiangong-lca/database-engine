@@ -562,7 +562,6 @@ begin
      or v_snapshot.status <> 'ready'
      or v_snapshot.scope <> 'data_product'
      or v_snapshot.provider_matching_rule <> 'split_by_process_volume'
-     or v_snapshot.source_hash is distinct from evidence->>'sourceFingerprint'
      or v_snapshot.id::text <> evidence->>'snapshotId'
      or v_snapshot_artifact.id is null
      or v_snapshot_artifact.id::text <> evidence->>'snapshotArtifactId'
@@ -908,7 +907,6 @@ begin
   ));
   if v_snapshot.id is null
      or v_snapshot.status <> 'ready'
-     or v_snapshot.source_hash is distinct from v_check.source_fingerprint
      or v_artifact.id is null
      or v_artifact.snapshot_id <> v_snapshot.id
      or v_artifact.status <> 'ready'
@@ -1066,7 +1064,6 @@ begin
   ));
   if v_snapshot.id is null
      or v_snapshot.status <> 'ready'
-     or v_snapshot.source_hash is distinct from v_check.source_fingerprint
      or v_artifact.id is null
      or v_artifact.snapshot_id <> v_snapshot.id
      or v_artifact.status <> 'ready'
@@ -1278,7 +1275,6 @@ begin
      or v_check.requested_by <> v_job.requested_by
      or v_snapshot.id is null
      or v_snapshot.status <> 'ready'
-     or v_snapshot.source_hash is distinct from v_check.source_fingerprint
      or v_artifact.id is null
      or v_artifact.snapshot_id <> v_snapshot.id
      or v_artifact.status <> 'ready'
@@ -1541,7 +1537,6 @@ begin
        )
        or v_snapshot.id is null
        or v_snapshot.status <> 'ready'
-       or v_snapshot.source_hash is distinct from v_source.source_fingerprint
        or v_artifact.id is null
        or v_artifact.snapshot_id <> v_snapshot.id
        or v_artifact.status <> 'ready'
@@ -1665,7 +1660,6 @@ begin
        )
        or v_execution.numerical_snapshot_id is distinct from v_source.snapshot_id
        or v_snapshot.id is null or v_snapshot.status <> 'ready'
-       or v_snapshot.source_hash is distinct from v_source.source_fingerprint
        or v_artifact.id is null or v_artifact.snapshot_id <> v_snapshot.id
        or v_artifact.status <> 'ready'
        or v_artifact.artifact_format <> 'snapshot-hdf5:v1'
