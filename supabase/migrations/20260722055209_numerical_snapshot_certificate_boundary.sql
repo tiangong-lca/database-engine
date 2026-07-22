@@ -19,6 +19,9 @@ alter table public.lca_snapshot_artifacts
     and (closure_bundle_hash is null or closure_bundle_hash ~ '^[0-9a-f]{64}$')
   ) not valid;
 
+alter table public.lca_snapshot_artifacts
+  validate constraint lca_snapshot_artifacts_certificate_hashes_chk;
+
 create index if not exists lca_snapshot_artifacts_certificate_lookup_idx
   on public.lca_snapshot_artifacts (snapshot_id, status, snapshot_index_sha256);
 
@@ -50,10 +53,7 @@ where s.id is null;
 alter table public.lcia_scope_closure_scan_executions
   alter column numerical_snapshot_id set not null,
   add constraint lcia_scope_closure_scan_executions_numerical_snapshot_uidx
-    unique (numerical_snapshot_id),
-  add constraint lcia_scope_closure_scan_executions_numerical_snapshot_fkey
-    foreign key (numerical_snapshot_id)
-    references public.lca_network_snapshots(id) on delete restrict;
+    unique (numerical_snapshot_id);
 
 create or replace function public.lcia_scope_closure_preallocate_numerical_snapshot()
 returns trigger
@@ -102,15 +102,9 @@ alter table public.lcia_scope_closure_checks
   add column if not exists snapshot_build_contract_hash text;
 
 alter table public.lcia_scope_closure_checks
-  add constraint lcia_scope_closure_checks_snapshot_fkey
-    foreign key (snapshot_id)
-    references public.lca_network_snapshots(id) on delete restrict not valid,
   add constraint lcia_scope_closure_checks_closure_bundle_artifact_fkey
     foreign key (closure_bundle_artifact_id)
     references public.worker_job_artifacts(id) on delete restrict not valid,
-  add constraint lcia_scope_closure_checks_snapshot_artifact_fkey
-    foreign key (snapshot_artifact_id)
-    references public.lca_snapshot_artifacts(id) on delete restrict not valid,
   add constraint lcia_scope_closure_checks_certificate_snapshot_chk
   check (
     status <> 'passed'
@@ -133,6 +127,122 @@ alter table public.lcia_scope_closure_checks
     )
   ) not valid;
 
+-- Snapshot identities remain immutable audit values after a certificate is
+-- stale or revoked, but they intentionally are not unconditional foreign keys:
+-- retention may remove expired bytes once no usable certificate or result
+-- package needs them.  The guards below provide state-aware deletion fences.
+comment on column public.lcia_scope_closure_scan_executions.numerical_snapshot_id is
+  'Immutable database-preallocated snapshot UUID. It remains as a soft audit reference after retention deletes a stale or revoked snapshot.';
+comment on column public.lcia_scope_closure_checks.snapshot_id is
+  'Immutable certificate snapshot UUID. It is a soft audit reference after the certificate is stale or revoked and retention deletes the snapshot.';
+comment on column public.lcia_scope_closure_checks.snapshot_artifact_id is
+  'Immutable certificate snapshot artifact UUID. It is a soft audit reference after stale or revoked evidence bytes are retained out.';
+
+create or replace function public.lcia_scope_closure_guard_snapshot_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if exists (
+    select 1
+    from public.lcia_scope_closure_checks closure_check
+    where closure_check.snapshot_id = old.id
+      and closure_check.status = 'passed'
+      and closure_check.scan_completeness = 'complete'
+      and closure_check.certificate_status = 'valid'
+  ) then
+    raise exception 'lca_snapshot_has_valid_closure_certificate'
+      using errcode = '23503';
+  end if;
+  if exists (
+    select 1 from public.lcia_result_packages package
+    where package.snapshot_id = old.id
+  ) or exists (
+    select 1 from public.lca_results result
+    where result.snapshot_id = old.id
+  ) then
+    raise exception 'lca_snapshot_has_result_reference'
+      using errcode = '23503';
+  end if;
+  return old;
+end;
+$$;
+
+create or replace function public.lcia_scope_closure_snapshot_refs_immutable()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if (old.snapshot_id is not null and new.snapshot_id is distinct from old.snapshot_id)
+     or (old.snapshot_artifact_id is not null and new.snapshot_artifact_id is distinct from old.snapshot_artifact_id) then
+    raise exception 'lcia_scope_closure_snapshot_reference_is_immutable'
+      using errcode = '23514';
+  end if;
+  return new;
+end;
+$$;
+
+create or replace function public.lcia_scope_closure_guard_snapshot_artifact_delete()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  if exists (
+    select 1
+    from public.lcia_scope_closure_checks closure_check
+    where closure_check.snapshot_artifact_id = old.id
+      and closure_check.status = 'passed'
+      and closure_check.scan_completeness = 'complete'
+      and closure_check.certificate_status = 'valid'
+  ) then
+    raise exception 'lca_snapshot_artifact_has_valid_closure_certificate'
+      using errcode = '23503';
+  end if;
+  if exists (
+    select 1 from public.lcia_result_packages package
+    where package.snapshot_id = old.snapshot_id
+  ) or exists (
+    select 1 from public.lca_results result
+    where result.snapshot_id = old.snapshot_id
+  ) then
+    raise exception 'lca_snapshot_artifact_has_result_reference'
+      using errcode = '23503';
+  end if;
+  return old;
+end;
+$$;
+
+drop trigger if exists lca_network_snapshots_closure_delete_guard
+  on public.lca_network_snapshots;
+create trigger lca_network_snapshots_closure_delete_guard
+before delete on public.lca_network_snapshots
+for each row execute function public.lcia_scope_closure_guard_snapshot_delete();
+
+drop trigger if exists lca_snapshot_artifacts_closure_delete_guard
+  on public.lca_snapshot_artifacts;
+create trigger lca_snapshot_artifacts_closure_delete_guard
+before delete on public.lca_snapshot_artifacts
+for each row execute function public.lcia_scope_closure_guard_snapshot_artifact_delete();
+
+drop trigger if exists lcia_scope_closure_checks_snapshot_refs_immutable
+  on public.lcia_scope_closure_checks;
+create trigger lcia_scope_closure_checks_snapshot_refs_immutable
+before update on public.lcia_scope_closure_checks
+for each row execute function public.lcia_scope_closure_snapshot_refs_immutable();
+
+revoke all on function public.lcia_scope_closure_guard_snapshot_delete()
+  from public, anon, authenticated, service_role;
+revoke all on function public.lcia_scope_closure_guard_snapshot_artifact_delete()
+  from public, anon, authenticated, service_role;
+revoke all on function public.lcia_scope_closure_snapshot_refs_immutable()
+  from public, anon, authenticated, service_role;
+
 create index if not exists lcia_scope_closure_checks_snapshot_idx
   on public.lcia_scope_closure_checks (snapshot_id)
   where snapshot_id is not null;
@@ -143,10 +253,41 @@ create index if not exists lcia_scope_closure_checks_closure_bundle_artifact_idx
   on public.lcia_scope_closure_checks (closure_bundle_artifact_id)
   where closure_bundle_artifact_id is not null;
 
+-- Certificate validity changes are an append-only event stream.  The service
+-- role may append through the event RPC, but even a direct table grant must not
+-- permit history to be rewritten or removed.
+create or replace function public.lcia_scope_closure_certificate_event_immutable()
+returns trigger
+language plpgsql
+security definer
+set search_path = public, pg_temp
+as $$
+begin
+  raise exception 'lcia_scope_closure_certificate_event_immutable'
+    using errcode = '23514';
+end;
+$$;
+
+drop trigger if exists lcia_scope_closure_certificate_events_immutable
+  on public.lcia_scope_closure_certificate_events;
+create trigger lcia_scope_closure_certificate_events_immutable
+before update or delete
+on public.lcia_scope_closure_certificate_events
+for each row execute function public.lcia_scope_closure_certificate_event_immutable();
+
+-- These rows are mutated only by the SECURITY DEFINER request/lease/result and
+-- validity-event RPCs.  Direct service DML would bypass those state machines.
+revoke insert, update, delete on table public.lcia_scope_closure_checks,
+  public.lcia_scope_closure_scan_executions,
+  public.lcia_scope_closure_certificate_events
+  from service_role;
+revoke all on function public.lcia_scope_closure_certificate_event_immutable()
+  from public, anon, authenticated, service_role;
+
 comment on column public.lcia_scope_closure_scan_executions.numerical_snapshot_id is
-  'Stable database-preallocated snapshot identity reused by retries and closure-check runs sharing this scan execution.';
+  'Stable database-preallocated snapshot UUID reused by retries and closure-check runs; retained as a soft audit reference after stale or revoked evidence is garbage-collected.';
 comment on column public.lcia_scope_closure_checks.snapshot_artifact_id is
-  'Ready numerical snapshot artifact verified by record_result_v3 before a certificate is signed.';
+  'Ready numerical snapshot artifact UUID verified by record_result_v3 before signing and retained as a soft audit reference after stale or revoked evidence is garbage-collected.';
 
 revoke all on function public.lcia_scope_closure_preallocate_numerical_snapshot()
   from public, anon, authenticated, service_role;
@@ -334,9 +475,11 @@ begin
      ) then
     return public.lcia_scope_closure_error('closure_check_incomplete', 409, 'Passed closure checks must be complete and free of blocking issues');
   end if;
-  if not (evidence ?& array[
+  if evidence->>'schemaVersion' is distinct from 'lcia.scope-closure-evidence.v2'
+     or result_summary->>'schemaVersion' is distinct from 'lcia.scope-closure-summary.v1'
+     or not (evidence ?& array[
     'sourceFingerprint', 'resolutionMapHash', 'closureBundleHash',
-    'snapshotId', 'snapshotHash', 'snapshotArtifactId',
+    'closureBundleArtifactId', 'snapshotId', 'snapshotHash', 'snapshotArtifactId',
     'snapshotIndexSha256', 'snapshotBuildContractHash', 'evidenceHash'
   ]) or not (result_summary ? 'evidenceHash') then
     return public.lcia_scope_closure_error('closure_evidence_unavailable', 409, 'Passed closure checks require complete numerical snapshot evidence');
@@ -391,6 +534,7 @@ begin
     and artifact_type = 'closure_bundle';
   if v_bundle.id is null
      or v_bundle.checksum_sha256 is null
+     or v_bundle.id::text <> evidence->>'closureBundleArtifactId'
      or v_bundle.checksum_sha256 <> evidence->>'closureBundleHash'
      or coalesce(v_bundle.metadata->>'closureCheckId', '') <> v_check.id::text then
     return public.lcia_scope_closure_error('closure_bundle_binding_invalid', 409, 'Closure bundle does not belong to this check or its hash does not match');
@@ -416,6 +560,13 @@ begin
 
   if v_snapshot.id is null
      or v_snapshot.status <> 'ready'
+     or v_snapshot.scope <> 'data_product'
+     or v_snapshot.provider_matching_rule <> 'split_by_evidence_hybrid'
+     or v_snapshot.process_filter->>'schemaVersion' <> 'lcia.numerical-snapshot-preallocation.v1'
+     or v_snapshot.process_filter->>'scanExecutionId' <> v_execution.id::text
+     or v_snapshot.process_filter->>'requestedScopeHash' <> v_execution.requested_scope_hash
+     or v_snapshot.process_filter->>'dataSnapshotToken' <> v_execution.data_snapshot_token
+     or v_snapshot.source_hash is distinct from evidence->>'sourceFingerprint'
      or v_snapshot.id::text <> evidence->>'snapshotId'
      or v_snapshot_artifact.id is null
      or v_snapshot_artifact.id::text <> evidence->>'snapshotArtifactId'
@@ -688,6 +839,9 @@ declare
   v_bundle public.worker_job_artifacts%rowtype;
   v_report public.worker_job_artifacts%rowtype;
   v_closure_check_id uuid;
+  v_input_manifest jsonb;
+  v_input_manifest_hash text;
+  v_report_manifest_hash text;
 begin
   if not coalesce(util.is_service_request(), false) then
     return public.lcia_scope_closure_error('service_role_required', 403, 'Service role is required');
@@ -741,8 +895,23 @@ begin
   select * into v_report
   from public.worker_job_artifacts
   where id = v_check.report_artifact_id;
+  v_input_manifest := jsonb_build_object(
+    'predicateVersion', v_check.effective_scope_manifest->>'eligibilityPredicateVersion',
+    'selectionMode', 'closure_certificate',
+    'processes', v_check.effective_scope_manifest->'processes'
+  );
+  v_input_manifest_hash := public.lcia_scope_closure_sha256(v_input_manifest);
+  v_report_manifest_hash := public.lcia_scope_closure_sha256(jsonb_build_object(
+    'artifactId', v_report.id,
+    'bucket', v_report.storage_bucket,
+    'objectPath', v_report.storage_path,
+    'mediaType', v_report.content_type,
+    'byteSize', v_report.byte_size,
+    'checksumSha256', v_report.checksum_sha256
+  ));
   if v_snapshot.id is null
      or v_snapshot.status <> 'ready'
+     or v_snapshot.source_hash is distinct from v_check.source_fingerprint
      or v_artifact.id is null
      or v_artifact.snapshot_id <> v_snapshot.id
      or v_artifact.status <> 'ready'
@@ -760,39 +929,52 @@ begin
      or coalesce(v_bundle.metadata->>'closureCheckId', '') <> v_check.id::text
      or v_report.id is null
      or v_report.job_id <> v_check.worker_job_id
-     or v_report.artifact_type <> 'closure_report_xlsx' then
+     or v_report.artifact_type <> 'closure_report_xlsx'
+     or v_report_manifest_hash <> v_check.report_artifact_manifest_hash then
     return public.lcia_scope_closure_error('closure_snapshot_binding_invalid', 409, 'Persisted closure snapshot evidence is no longer usable');
   end if;
 
   if coalesce(v_job.payload_json->>'closure_check_id', '') <> v_check.id::text
      or coalesce(v_job.payload_json->>'closure_certificate_hash', '') <> v_check.certificate_hash
+     or coalesce(v_job.payload_json->>'requested_scope_hash', '') <> v_check.requested_scope_hash
+     or coalesce(v_job.payload_json->>'policy_fingerprint', '') <> v_check.policy_fingerprint
      or coalesce(v_job.payload_json->>'effective_scope_hash', '') <> v_check.effective_scope_hash
      or coalesce(v_job.payload_json->>'data_snapshot_token', '') <> v_check.data_snapshot_token
      or coalesce(v_job.payload_json->>'snapshot_id', '') <> v_check.snapshot_id::text
      or coalesce(v_job.payload_json->>'snapshot_hash', '') <> v_check.snapshot_hash
+     or coalesce(v_job.payload_json->>'closure_bundle_artifact_id', '') <> v_check.closure_bundle_artifact_id::text
      or coalesce(v_job.payload_json->>'closure_bundle_hash', '') <> v_check.closure_bundle_hash
      or coalesce(v_job.payload_json->>'report_artifact_manifest_hash', '') <> v_check.report_artifact_manifest_hash
      or coalesce(v_job.payload_json->>'snapshot_artifact_id', '') <> v_check.snapshot_artifact_id::text
      or coalesce(v_job.payload_json->>'snapshot_index_sha256', '') <> v_check.snapshot_index_sha256
      or coalesce(v_job.payload_json->>'snapshot_build_contract_hash', '') <> v_check.snapshot_build_contract_hash
      or coalesce(v_job.payload_json->'effective_scope', 'null'::jsonb) <> v_check.effective_scope_manifest
-     or coalesce(v_job.payload_json->'input_manifest'->'processes', 'null'::jsonb)
-          <> coalesce(v_check.effective_scope_manifest->'processes', 'null'::jsonb) then
+     or coalesce(v_job.payload_json->>'coverage_mode', '') <> v_check.effective_scope_manifest->>'coverageMode'
+     or coalesce(v_job.payload_json->'lcia_method_set', 'null'::jsonb)
+          <> coalesce(v_check.effective_scope_manifest->'lciaMethods', 'null'::jsonb)
+     or coalesce(v_job.payload_json->'input_manifest', 'null'::jsonb) <> v_input_manifest
+     or coalesce(v_job.payload_json->>'input_manifest_hash', '') <> v_input_manifest_hash then
     return public.lcia_scope_closure_error('build_binding_mismatch', 409, 'Build payload does not exactly match the database-owned certificate');
   end if;
 
   return jsonb_build_object('ok', true, 'data', jsonb_build_object(
     'closureCheckId', v_check.id,
     'certificateHash', v_check.certificate_hash,
+    'requestedScopeHash', v_check.requested_scope_hash,
+    'policyFingerprint', v_check.policy_fingerprint,
     'effectiveScopeHash', v_check.effective_scope_hash,
     'dataSnapshotToken', v_check.data_snapshot_token,
     'snapshotId', v_check.snapshot_id,
     'snapshotHash', v_check.snapshot_hash,
+    'closureBundleArtifactId', v_check.closure_bundle_artifact_id,
     'closureBundleHash', v_check.closure_bundle_hash,
-    'reportArtifactManifestHash', v_check.report_artifact_manifest_hash,
     'snapshotArtifactId', v_check.snapshot_artifact_id,
     'snapshotIndexSha256', v_check.snapshot_index_sha256,
     'snapshotBuildContractHash', v_check.snapshot_build_contract_hash,
+    'coverageMode', v_check.effective_scope_manifest->>'coverageMode',
+    'lciaMethodSet', v_check.effective_scope_manifest->'lciaMethods',
+    'inputManifest', v_input_manifest,
+    'inputManifestHash', v_input_manifest_hash,
     'effectiveScope', v_check.effective_scope_manifest
   ));
 end;
@@ -820,12 +1002,15 @@ declare
   v_check public.lcia_scope_closure_checks%rowtype;
   v_snapshot public.lca_network_snapshots%rowtype;
   v_artifact public.lca_snapshot_artifacts%rowtype;
+  v_bundle public.worker_job_artifacts%rowtype;
+  v_report public.worker_job_artifacts%rowtype;
   v_result jsonb;
   v_kind public.worker_job_kinds%rowtype;
   v_job public.worker_jobs%rowtype;
   v_build_id uuid;
   v_payload jsonb;
   v_input_manifest jsonb;
+  v_report_manifest_hash text;
   v_idempotency_key text;
 begin
   if v_actor is null then
@@ -868,8 +1053,23 @@ begin
   select * into v_artifact
   from public.lca_snapshot_artifacts
   where id = v_check.snapshot_artifact_id;
+  select * into v_bundle
+  from public.worker_job_artifacts
+  where id = v_check.closure_bundle_artifact_id;
+  select * into v_report
+  from public.worker_job_artifacts
+  where id = v_check.report_artifact_id;
+  v_report_manifest_hash := public.lcia_scope_closure_sha256(jsonb_build_object(
+    'artifactId', v_report.id,
+    'bucket', v_report.storage_bucket,
+    'objectPath', v_report.storage_path,
+    'mediaType', v_report.content_type,
+    'byteSize', v_report.byte_size,
+    'checksumSha256', v_report.checksum_sha256
+  ));
   if v_snapshot.id is null
      or v_snapshot.status <> 'ready'
+     or v_snapshot.source_hash is distinct from v_check.source_fingerprint
      or v_artifact.id is null
      or v_artifact.snapshot_id <> v_snapshot.id
      or v_artifact.status <> 'ready'
@@ -879,7 +1079,16 @@ begin
      or v_artifact.snapshot_build_contract_hash <> v_check.snapshot_build_contract_hash
      or v_artifact.effective_scope_hash <> v_check.effective_scope_hash
      or v_artifact.data_snapshot_token <> v_check.data_snapshot_token
-     or v_artifact.closure_bundle_hash <> v_check.closure_bundle_hash then
+     or v_artifact.closure_bundle_hash <> v_check.closure_bundle_hash
+     or v_bundle.id is null
+     or v_bundle.job_id <> v_check.worker_job_id
+     or v_bundle.artifact_type <> 'closure_bundle'
+     or v_bundle.checksum_sha256 <> v_check.closure_bundle_hash
+     or coalesce(v_bundle.metadata->>'closureCheckId', '') <> v_check.id::text
+     or v_report.id is null
+     or v_report.job_id <> v_check.worker_job_id
+     or v_report.artifact_type <> 'closure_report_xlsx'
+     or v_report_manifest_hash <> v_check.report_artifact_manifest_hash then
     return public.lcia_scope_closure_error('closure_snapshot_binding_invalid', 409, 'Numerical snapshot certificate binding is not ready');
   end if;
 
@@ -910,10 +1119,13 @@ begin
       'lcia_method_set', v_check.effective_scope_manifest->'lciaMethods',
       'closure_check_id', v_check.id,
       'closure_certificate_hash', v_check.certificate_hash,
+      'requested_scope_hash', v_check.requested_scope_hash,
+      'policy_fingerprint', v_check.policy_fingerprint,
       'effective_scope_hash', v_check.effective_scope_hash,
       'data_snapshot_token', v_check.data_snapshot_token,
       'snapshot_id', v_check.snapshot_id,
       'snapshot_hash', v_check.snapshot_hash,
+      'closure_bundle_artifact_id', v_check.closure_bundle_artifact_id,
       'closure_bundle_hash', v_check.closure_bundle_hash,
       'report_artifact_manifest_hash', v_check.report_artifact_manifest_hash,
       'snapshot_artifact_id', v_check.snapshot_artifact_id,
@@ -949,10 +1161,13 @@ begin
       jsonb_build_object('closureCertificate', jsonb_build_object(
         'closureCheckId', v_check.id,
         'certificateHash', v_check.certificate_hash,
+        'requestedScopeHash', v_check.requested_scope_hash,
+        'policyFingerprint', v_check.policy_fingerprint,
         'effectiveScopeHash', v_check.effective_scope_hash,
         'dataSnapshotToken', v_check.data_snapshot_token,
         'snapshotId', v_check.snapshot_id,
         'snapshotHash', v_check.snapshot_hash,
+        'closureBundleArtifactId', v_check.closure_bundle_artifact_id,
         'closureBundleHash', v_check.closure_bundle_hash,
         'reportArtifactManifestHash', v_check.report_artifact_manifest_hash,
         'snapshotArtifactId', v_check.snapshot_artifact_id,
@@ -987,6 +1202,10 @@ revoke all on function public.svc_lcia_scope_closure_build_binding(uuid)
   from public, anon, authenticated, service_role;
 grant execute on function public.svc_lcia_scope_closure_build_binding(uuid)
   to service_role;
+-- The predecessor accepted caller-supplied check identities and rewrote the
+-- build payload without enforcing lease, owner, freshness, or exact evidence.
+revoke all on function public.svc_lcia_result_build_bind_closure(uuid, uuid)
+  from public, anon, authenticated, service_role;
 revoke all on function public.cmd_lcia_result_build_request_v2(
   text, jsonb, text, text, jsonb, text, uuid, text, text, jsonb
 ) from public, anon, authenticated, service_role;
@@ -1004,11 +1223,17 @@ declare
   v_check public.lcia_scope_closure_checks%rowtype;
   v_snapshot public.lca_network_snapshots%rowtype;
   v_artifact public.lca_snapshot_artifacts%rowtype;
+  v_bundle public.worker_job_artifacts%rowtype;
+  v_report public.worker_job_artifacts%rowtype;
   v_closure_check_id uuid;
+  v_input_manifest jsonb;
+  v_input_manifest_hash text;
+  v_report_manifest_hash text;
 begin
   select * into v_job
   from public.worker_jobs
-  where id = new.build_worker_job_id;
+  where id = new.build_worker_job_id
+  for share;
   if v_job.payload_schema_version <> 'lcia_result.package_build.request.v2' then
     return new;
   end if;
@@ -1023,7 +1248,32 @@ begin
   select * into v_artifact
   from public.lca_snapshot_artifacts
   where id = v_check.snapshot_artifact_id;
+  select * into v_bundle
+  from public.worker_job_artifacts
+  where id = v_check.closure_bundle_artifact_id;
+  select * into v_report
+  from public.worker_job_artifacts
+  where id = v_check.report_artifact_id;
+  v_input_manifest := jsonb_build_object(
+    'predicateVersion', v_check.effective_scope_manifest->>'eligibilityPredicateVersion',
+    'selectionMode', 'closure_certificate',
+    'processes', v_check.effective_scope_manifest->'processes'
+  );
+  v_input_manifest_hash := public.lcia_scope_closure_sha256(v_input_manifest);
+  v_report_manifest_hash := public.lcia_scope_closure_sha256(jsonb_build_object(
+    'artifactId', v_report.id,
+    'bucket', v_report.storage_bucket,
+    'objectPath', v_report.storage_path,
+    'mediaType', v_report.content_type,
+    'byteSize', v_report.byte_size,
+    'checksumSha256', v_report.checksum_sha256
+  ));
   if v_check.id is null
+     or v_job.job_kind <> 'lcia_result.package_build'
+     or v_job.status <> 'running'
+     or v_job.lease_token is null
+     or v_job.lease_expires_at is null
+     or v_job.lease_expires_at < now()
      or v_check.status <> 'passed'
      or v_check.scan_completeness <> 'complete'
      or v_check.certificate_status <> 'valid'
@@ -1031,18 +1281,53 @@ begin
      or v_check.requested_by <> v_job.requested_by
      or v_snapshot.id is null
      or v_snapshot.status <> 'ready'
+     or v_snapshot.source_hash is distinct from v_check.source_fingerprint
      or v_artifact.id is null
      or v_artifact.snapshot_id <> v_snapshot.id
      or v_artifact.status <> 'ready'
+     or v_artifact.artifact_format <> 'snapshot-hdf5:v1'
      or v_artifact.artifact_sha256 <> v_check.snapshot_hash
+     or v_artifact.snapshot_index_sha256 <> v_check.snapshot_index_sha256
+     or v_artifact.snapshot_build_contract_hash <> v_check.snapshot_build_contract_hash
+     or v_artifact.effective_scope_hash <> v_check.effective_scope_hash
+     or v_artifact.data_snapshot_token <> v_check.data_snapshot_token
+     or v_artifact.closure_bundle_hash <> v_check.closure_bundle_hash
+     or v_bundle.id is null
+     or v_bundle.job_id <> v_check.worker_job_id
+     or v_bundle.artifact_type <> 'closure_bundle'
+     or v_bundle.checksum_sha256 <> v_check.closure_bundle_hash
+     or coalesce(v_bundle.metadata->>'closureCheckId', '') <> v_check.id::text
+     or v_report.id is null
+     or v_report.job_id <> v_check.worker_job_id
+     or v_report.artifact_type <> 'closure_report_xlsx'
+     or v_report_manifest_hash <> v_check.report_artifact_manifest_hash
+     or new.build_id <> v_job.subject_id
+     or new.created_by <> v_job.requested_by
      or new.snapshot_id <> v_check.snapshot_id
+     or new.coverage_mode <> v_check.effective_scope_manifest->>'coverageMode'
+     or new.lcia_method_set <> coalesce(v_check.effective_scope_manifest->'lciaMethods', 'null'::jsonb)
+     or new.input_manifest <> v_input_manifest
+     or new.input_manifest_hash <> v_input_manifest_hash
+     or coalesce(v_job.payload_json->>'closure_check_id', '') <> v_check.id::text
      or coalesce(v_job.payload_json->>'closure_certificate_hash', '') <> v_check.certificate_hash
+     or coalesce(v_job.payload_json->>'requested_scope_hash', '') <> v_check.requested_scope_hash
+     or coalesce(v_job.payload_json->>'policy_fingerprint', '') <> v_check.policy_fingerprint
+     or coalesce(v_job.payload_json->>'effective_scope_hash', '') <> v_check.effective_scope_hash
+     or coalesce(v_job.payload_json->>'data_snapshot_token', '') <> v_check.data_snapshot_token
+     or coalesce(v_job.payload_json->>'snapshot_id', '') <> v_check.snapshot_id::text
      or coalesce(v_job.payload_json->>'snapshot_hash', '') <> v_check.snapshot_hash
+     or coalesce(v_job.payload_json->>'closure_bundle_artifact_id', '') <> v_check.closure_bundle_artifact_id::text
+     or coalesce(v_job.payload_json->>'closure_bundle_hash', '') <> v_check.closure_bundle_hash
+     or coalesce(v_job.payload_json->>'report_artifact_manifest_hash', '') <> v_check.report_artifact_manifest_hash
      or coalesce(v_job.payload_json->>'snapshot_artifact_id', '') <> v_check.snapshot_artifact_id::text
      or coalesce(v_job.payload_json->>'snapshot_index_sha256', '') <> v_check.snapshot_index_sha256
      or coalesce(v_job.payload_json->>'snapshot_build_contract_hash', '') <> v_check.snapshot_build_contract_hash
-     or coalesce(v_job.payload_json->'input_manifest'->'processes', 'null'::jsonb)
-          <> coalesce(v_check.effective_scope_manifest->'processes', 'null'::jsonb) then
+     or coalesce(v_job.payload_json->'effective_scope', 'null'::jsonb) <> v_check.effective_scope_manifest
+     or coalesce(v_job.payload_json->>'coverage_mode', '') <> v_check.effective_scope_manifest->>'coverageMode'
+     or coalesce(v_job.payload_json->'lcia_method_set', 'null'::jsonb)
+          <> coalesce(v_check.effective_scope_manifest->'lciaMethods', 'null'::jsonb)
+     or coalesce(v_job.payload_json->'input_manifest', 'null'::jsonb) <> v_input_manifest
+     or coalesce(v_job.payload_json->>'input_manifest_hash', '') <> v_input_manifest_hash then
     raise exception 'closure_certificate_binding_mismatch' using errcode = '23514';
   end if;
   if v_check.requested_scope_manifest->>'certificateFreshnessPolicy' = 'current-membership-required-v1'
@@ -1085,6 +1370,7 @@ declare
   v_snapshot public.lca_network_snapshots%rowtype;
   v_artifact public.lca_snapshot_artifacts%rowtype;
   v_closure_check_id uuid;
+  v_binding jsonb;
 begin
   if not public.lcia_result_is_service_request() then
     return public.lcia_result_error('service_role_required', 403, 'Service role is required to mark LCIA result packages ready');
@@ -1138,6 +1424,10 @@ begin
   if v_check.requested_scope_manifest->>'certificateFreshnessPolicy' = 'current-membership-required-v1'
      and not public.lcia_scope_closure_current_release_matches(v_check.data_snapshot_token) then
     return public.lcia_result_error('closure_check_stale', 409, 'Closure certificate was created against an earlier public release');
+  end if;
+  v_binding := public.svc_lcia_scope_closure_build_binding(p_build_worker_job_id);
+  if coalesce((v_binding->>'ok')::boolean, false) is not true then
+    return public.lcia_result_error('closure_certificate_binding_mismatch', 409, 'Build payload or persisted evidence no longer matches the numerical snapshot certificate');
   end if;
   select * into v_snapshot
   from public.lca_network_snapshots
@@ -1206,12 +1496,16 @@ declare
   v_job public.worker_jobs%rowtype;
   v_snapshot public.lca_network_snapshots%rowtype;
   v_artifact public.lca_snapshot_artifacts%rowtype;
+  v_bundle public.worker_job_artifacts%rowtype;
 begin
   if not coalesce(util.is_service_request(), false) then
     return public.lcia_scope_closure_error('service_role_required', 403, 'Service role is required');
   end if;
   select * into v_target from public.lcia_scope_closure_checks where id = p_closure_check_id for update;
-  select * into v_source from public.lcia_scope_closure_checks where id = p_completed_check_id;
+  select * into v_source
+  from public.lcia_scope_closure_checks
+  where id = p_completed_check_id
+  for share;
   select * into v_job from public.worker_jobs where id = p_worker_job_id for update;
   if v_target.id is null or v_source.id is null
      or v_target.worker_job_id <> p_worker_job_id
@@ -1241,16 +1535,31 @@ begin
   if v_source.status = 'passed' then
     select * into v_snapshot from public.lca_network_snapshots where id = v_source.snapshot_id;
     select * into v_artifact from public.lca_snapshot_artifacts where id = v_source.snapshot_artifact_id;
+    select * into v_bundle from public.worker_job_artifacts where id = v_source.closure_bundle_artifact_id;
     if v_source.certificate_status <> 'valid'
        or v_source.certificate_schema_version <> 'lcia.scope-closure-certificate.v2'
+       or (
+         v_source.requested_scope_manifest->>'certificateFreshnessPolicy' = 'current-membership-required-v1'
+         and not public.lcia_scope_closure_current_release_matches(v_source.data_snapshot_token)
+       )
        or v_snapshot.id is null
        or v_snapshot.status <> 'ready'
+       or v_snapshot.source_hash is distinct from v_source.source_fingerprint
        or v_artifact.id is null
        or v_artifact.snapshot_id <> v_snapshot.id
        or v_artifact.status <> 'ready'
+       or v_artifact.artifact_format <> 'snapshot-hdf5:v1'
        or v_artifact.artifact_sha256 <> v_source.snapshot_hash
        or v_artifact.snapshot_index_sha256 <> v_source.snapshot_index_sha256
-       or v_artifact.snapshot_build_contract_hash <> v_source.snapshot_build_contract_hash then
+       or v_artifact.snapshot_build_contract_hash <> v_source.snapshot_build_contract_hash
+       or v_artifact.effective_scope_hash <> v_source.effective_scope_hash
+       or v_artifact.data_snapshot_token <> v_source.data_snapshot_token
+       or v_artifact.closure_bundle_hash <> v_source.closure_bundle_hash
+       or v_bundle.id is null
+       or v_bundle.job_id <> v_source.worker_job_id
+       or v_bundle.artifact_type <> 'closure_bundle'
+       or v_bundle.checksum_sha256 <> v_source.closure_bundle_hash
+       or coalesce(v_bundle.metadata->>'closureCheckId', '') <> v_source.id::text then
       return public.lcia_scope_closure_error('scan_execution_not_reusable', 409, 'Source numerical snapshot certificate is not reusable');
     end if;
   end if;
@@ -1300,6 +1609,7 @@ declare
   v_report public.worker_job_artifacts%rowtype;
   v_snapshot public.lca_network_snapshots%rowtype;
   v_artifact public.lca_snapshot_artifacts%rowtype;
+  v_bundle public.worker_job_artifacts%rowtype;
   v_old_issue public.lcia_scope_closure_issues%rowtype;
   v_new_issue public.lcia_scope_closure_issues%rowtype;
   v_report_hash text;
@@ -1311,11 +1621,15 @@ begin
   if not coalesce(util.is_service_request(), false) then
     return public.lcia_scope_closure_error('service_role_required', 403, 'Service role is required');
   end if;
-  if jsonb_typeof(coalesce(p_result_summary, 'null'::jsonb)) <> 'object' then
+  if jsonb_typeof(coalesce(p_result_summary, 'null'::jsonb)) <> 'object'
+     or p_result_summary->>'schemaVersion' is distinct from 'lcia.scope-closure-summary.v1' then
     return public.lcia_scope_closure_error('invalid_closure_result', 400, 'Reused closure result summary must be an object');
   end if;
   select * into v_target from public.lcia_scope_closure_checks where id = p_closure_check_id for update;
-  select * into v_source from public.lcia_scope_closure_checks where id = p_completed_check_id;
+  select * into v_source
+  from public.lcia_scope_closure_checks
+  where id = p_completed_check_id
+  for share;
   select * into v_job from public.worker_jobs where id = p_worker_job_id for update;
   select * into v_execution from public.lcia_scope_closure_scan_executions where id = v_target.scan_execution_id for update;
   select * into v_report from public.worker_job_artifacts
@@ -1345,15 +1659,30 @@ begin
   if v_source.status = 'passed' then
     select * into v_snapshot from public.lca_network_snapshots where id = v_source.snapshot_id;
     select * into v_artifact from public.lca_snapshot_artifacts where id = v_source.snapshot_artifact_id;
+    select * into v_bundle from public.worker_job_artifacts where id = v_source.closure_bundle_artifact_id;
     if v_source.certificate_status <> 'valid'
        or v_source.certificate_schema_version <> 'lcia.scope-closure-certificate.v2'
+       or (
+         v_source.requested_scope_manifest->>'certificateFreshnessPolicy' = 'current-membership-required-v1'
+         and not public.lcia_scope_closure_current_release_matches(v_source.data_snapshot_token)
+       )
        or v_execution.numerical_snapshot_id is distinct from v_source.snapshot_id
        or v_snapshot.id is null or v_snapshot.status <> 'ready'
+       or v_snapshot.source_hash is distinct from v_source.source_fingerprint
        or v_artifact.id is null or v_artifact.snapshot_id <> v_snapshot.id
        or v_artifact.status <> 'ready'
+       or v_artifact.artifact_format <> 'snapshot-hdf5:v1'
        or v_artifact.artifact_sha256 <> v_source.snapshot_hash
        or v_artifact.snapshot_index_sha256 <> v_source.snapshot_index_sha256
-       or v_artifact.snapshot_build_contract_hash <> v_source.snapshot_build_contract_hash then
+       or v_artifact.snapshot_build_contract_hash <> v_source.snapshot_build_contract_hash
+       or v_artifact.effective_scope_hash <> v_source.effective_scope_hash
+       or v_artifact.data_snapshot_token <> v_source.data_snapshot_token
+       or v_artifact.closure_bundle_hash <> v_source.closure_bundle_hash
+       or v_bundle.id is null
+       or v_bundle.job_id <> v_source.worker_job_id
+       or v_bundle.artifact_type <> 'closure_bundle'
+       or v_bundle.checksum_sha256 <> v_source.closure_bundle_hash
+       or coalesce(v_bundle.metadata->>'closureCheckId', '') <> v_source.id::text then
       return public.lcia_scope_closure_error('scan_execution_not_reusable', 409, 'Source numerical snapshot certificate is not reusable');
     end if;
   end if;
@@ -1521,8 +1850,8 @@ grant execute on function public.svc_lcia_scope_closure_finalize_reused_scan(uui
   to service_role;
 
 -- Retention must not nominate a numerical snapshot while it is the immutable
--- evidence of a valid certificate or a persisted result package.  The FKs
--- below this filter remain the final deletion fence, but candidate generation
+-- evidence of a currently usable certificate or a persisted result/package.  The guards
+-- on snapshot and artifact deletion remain the final fence, but candidate generation
 -- should not turn protected references into noisy failed GC runs.
 alter function util.list_lca_snapshot_gc_candidates(
   interval, interval, timestamptz, integer, integer, bigint
@@ -1584,6 +1913,11 @@ as $$
     select 1
     from public.lcia_result_packages package
     where package.snapshot_id = candidate.snapshot_id
+  )
+  and not exists (
+    select 1
+    from public.lca_results result
+    where result.snapshot_id = candidate.snapshot_id
   )
 $$;
 

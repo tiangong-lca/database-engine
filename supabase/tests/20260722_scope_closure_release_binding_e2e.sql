@@ -97,6 +97,7 @@ select is(public.svc_lcia_scope_closure_check_record_result_v3(
   jsonb_build_object(
     'schemaVersion','lcia.scope-closure-evidence.v2',
     'sourceFingerprint','source-a','resolutionMapHash',repeat('e',64),
+    'closureBundleArtifactId','c7220000-0000-4000-8000-000000000203',
     'closureBundleHash',repeat('b',64),
     'snapshotId',(select numerical_snapshot_id from public.lcia_scope_closure_scan_executions limit 1),
     'snapshotHash',repeat('c',64),
@@ -112,6 +113,7 @@ select is(public.svc_lcia_scope_closure_check_record_result_v3(
     )
   ),
   jsonb_build_object(
+    'schemaVersion','lcia.scope-closure-summary.v1',
     'scan','first',
     'evidenceHash',public.lcia_scope_closure_sha256_text(
       'lcia.scope-closure-evidence.v2'||chr(10)||'source-a'||chr(10)||repeat('e',64)||chr(10)
@@ -124,6 +126,18 @@ select is(public.svc_lcia_scope_closure_check_record_result_v3(
   'c7220000-0000-4000-8000-000000000203','c7220000-0000-4000-8000-000000000204'
 )->>'ok','true','first run records a lease-fenced complete certificate');
 select is((select status from public.lcia_scope_closure_scan_executions limit 1),'completed','first completion makes the shared execution reusable');
+select throws_ok(
+  $$delete from public.lca_snapshot_artifacts
+    where id='c7220000-0000-4000-8000-000000000204'$$,
+  '23503','lca_snapshot_artifact_has_valid_closure_certificate',
+  'a valid certificate prevents direct deletion of its HDF5 artifact'
+);
+select throws_ok(
+  $$delete from public.lca_network_snapshots
+    where id=(select snapshot_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')$$,
+  '23503','lca_snapshot_has_valid_closure_certificate',
+  'a valid certificate prevents deletion of its numerical snapshot'
+);
 
 update public.worker_jobs set status='running', lease_token='c7220000-0000-4000-8000-000000000102', lease_expires_at=now()+interval '10 minutes', started_at=now()
 where id=(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b');
@@ -140,7 +154,7 @@ select is(public.svc_lcia_scope_closure_finalize_reused_scan(
   (select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),
   'c7220000-0000-4000-8000-000000000102',
   (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
-  'c7220000-0000-4000-8000-000000000202',jsonb_build_object('scan','reused-target')
+  'c7220000-0000-4000-8000-000000000202',jsonb_build_object('schemaVersion','lcia.scope-closure-summary.v1','scan','reused-target')
 )->>'ok','true','second run finalizes with a target-owned report');
 select ok((select a.certificate_hash<>b.certificate_hash and b.reused_from_check_id=a.id and b.report_artifact_id='c7220000-0000-4000-8000-000000000202'::uuid and b.result_summary->>'scan'='reused-target' from public.lcia_scope_closure_checks a join public.lcia_scope_closure_checks b on true where a.request_idempotency_token='closure-e2e-a' and b.request_idempotency_token='closure-e2e-b'),'reuse creates a distinct certificate, report and target summary with source-run linkage');
 
@@ -210,6 +224,65 @@ values ('c7220000-0000-4000-8000-000000000402',(select snapshot_id from public.l
 update public.worker_jobs
 set status='running',lease_token=gen_random_uuid(),lease_expires_at=now()+interval '10 minutes',started_at=coalesce(started_at,now())
 where subject_id in (select id from closure_build_ids);
+select set_config('request.jwt.claim.role','service_role',true);
+
+select ok((
+  select payload_json->>'closure_bundle_artifact_id'=(
+           select closure_bundle_artifact_id::text
+           from public.lcia_scope_closure_checks
+           where request_idempotency_token='closure-e2e-a'
+         )
+     and payload_json->'input_manifest'=jsonb_build_object(
+           'predicateVersion',(select effective_scope_manifest->>'eligibilityPredicateVersion' from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
+           'selectionMode','closure_certificate',
+           'processes',(select effective_scope_manifest->'processes' from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')
+         )
+  from public.worker_jobs
+  where subject_id=(select id from closure_build_ids where label='build-a')
+),'Build V2 persists the closure bundle artifact and exact certificate process axis');
+select ok((
+  select result->>'ok'='true'
+     and result#>>'{data,closureBundleArtifactId}'=(
+           select closure_bundle_artifact_id::text
+           from public.lcia_scope_closure_checks
+           where request_idempotency_token='closure-e2e-a'
+         )
+     and result#>>'{data,snapshotArtifactId}'=(
+           select snapshot_artifact_id::text
+           from public.lcia_scope_closure_checks
+           where request_idempotency_token='closure-e2e-a'
+         )
+     and result#>'{data,inputManifest}'=(
+           select payload_json->'input_manifest'
+           from public.worker_jobs
+           where subject_id=(select id from closure_build_ids where label='build-a')
+         )
+     and not (result->'data' ? 'reportArtifactManifestHash')
+  from (select public.svc_lcia_scope_closure_build_binding(
+    (select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a'))
+  ) result) binding
+),'after-lease binding returns the authoritative snapshot, bundle, and exact process axis without extending the solver contract');
+
+update public.worker_jobs
+set payload_json=jsonb_set(payload_json,'{lcia_method_set}','[]'::jsonb)
+where subject_id=(select id from closure_build_ids where label='build-b');
+select is(public.svc_lcia_scope_closure_build_binding(
+  (select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-b'))
+)->>'code','build_binding_mismatch','after-lease binding rejects a tampered LCIA method axis');
+select is(public.cmd_lcia_result_package_mark_ready(
+  (select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-b')),
+  'closure-e2e-package-tampered-methods',
+  (select snapshot_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
+  'c7220000-0000-4000-8000-000000000401',null,
+  '{}'::jsonb,'{}'::jsonb,'{}'::jsonb,jsonb_build_array('climate-change'),'climate-change','tampered-methods','{}'::jsonb
+)->>'code','closure_certificate_binding_mismatch','mark_ready rechecks and rejects a tampered LCIA method axis');
+update public.worker_jobs
+set payload_json=jsonb_set(
+  payload_json,
+  '{lcia_method_set}',
+  (select effective_scope_manifest->'lciaMethods' from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')
+)
+where subject_id=(select id from closure_build_ids where label='build-b');
 
 create temporary table closure_e2e_package_ids (label text primary key,id uuid) on commit drop;
 select set_config('request.jwt.claim.role','service_role',true);
@@ -280,6 +353,19 @@ select is(public.svc_lcia_scope_closure_certificate_event(
   (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
   'stale','scope content was superseded'
 )->>'ok','true','certificate event marks a completed closure certificate stale');
+select throws_ok(
+  $$update public.lcia_scope_closure_certificate_events
+    set reason='rewritten history'
+    where closure_check_id=(select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')$$,
+  '23514','lcia_scope_closure_certificate_event_immutable',
+  'certificate event history cannot be rewritten even through direct SQL'
+);
+select throws_ok(
+  $$delete from public.lcia_scope_closure_certificate_events
+    where closure_check_id=(select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')$$,
+  '23514','lcia_scope_closure_certificate_event_immutable',
+  'certificate event history cannot be deleted even through direct SQL'
+);
 select set_config('request.jwt.claim.role','authenticated',true);
 insert into closure_e2e_task_feed
 select 'after-stale',public.get_task_summary_v2_feed(
@@ -340,6 +426,83 @@ select ok((select exists(
     and item#>>'{deepLink,routeKey}'='data_product.package'
     and item#>>'{deepLink,params,closureCheckId}'=(select id::text from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')
 ) from closure_e2e_task_feed where label='after-revoked'),'package ready advances the task projection with preview capability and a certificate-aware package deep link');
+
+-- Once every certificate for the snapshot is revoked and strong package/result
+-- references are removed, retention may delete bytes while the immutable UUID
+-- and hash audit values remain on the historical checks and scan execution.
+select set_config('request.jwt.claim.role','service_role',true);
+select is(public.svc_lcia_scope_closure_certificate_event(
+  (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),
+  'revoked','retention lifecycle test'
+)->>'ok','true','the final usable certificate can be revoked before retention');
+create temporary table closure_e2e_gc_refs on commit drop as
+select
+  c.snapshot_id,
+  c.snapshot_artifact_id,
+  c.snapshot_hash,
+  c.snapshot_index_sha256,
+  c.snapshot_build_contract_hash,
+  e.numerical_snapshot_id
+from public.lcia_scope_closure_checks c
+join public.lcia_scope_closure_scan_executions e on e.id=c.scan_execution_id
+where c.request_idempotency_token='closure-e2e-a';
+insert into storage.buckets(id,name,public)
+values ('lca_results','lca_results',false)
+on conflict(id) do nothing;
+insert into storage.objects(bucket_id,name,metadata,created_at,updated_at)
+select
+  'lca_results',
+  'lca-results/snapshots/'||snapshot_id::text||'/snapshot.h5',
+  '{"size":100}'::jsonb,
+  now()-interval '40 days',
+  now()-interval '40 days'
+from closure_e2e_gc_refs;
+update public.lca_network_snapshots
+set created_at=now()-interval '40 days',updated_at=now()-interval '40 days'
+where id=(select snapshot_id from closure_e2e_gc_refs);
+select throws_ok(
+  $$delete from public.lca_snapshot_artifacts where id=(select snapshot_artifact_id from closure_e2e_gc_refs)$$,
+  '23503','lca_snapshot_artifact_has_result_reference',
+  'revocation does not permit artifact deletion while package or result references remain'
+);
+select throws_ok(
+  $$delete from public.lca_network_snapshots where id=(select snapshot_id from closure_e2e_gc_refs)$$,
+  '23503','lca_snapshot_has_result_reference',
+  'revocation does not permit deletion while package or result references remain'
+);
+select is((select count(*) from util.list_lca_snapshot_gc_candidates(
+  interval '1 day',interval '1 day',now(),10,10,100000
+) where snapshot_id=(select snapshot_id from closure_e2e_gc_refs)),0::bigint,'strong result/package references keep a revoked snapshot out of GC candidates');
+delete from public.lcia_result_packages
+where id=(select id from closure_e2e_package_ids where label='package-a');
+delete from public.lca_latest_all_unit_results
+where snapshot_id=(select snapshot_id from closure_e2e_gc_refs);
+delete from public.lca_results
+where snapshot_id=(select snapshot_id from closure_e2e_gc_refs);
+select ok(exists(
+  select 1 from util.list_lca_snapshot_gc_candidates(
+    interval '1 day',interval '1 day',now(),10,10,100000
+  ) where snapshot_id=(select snapshot_id from closure_e2e_gc_refs)
+),'a revoked snapshot without package/result references enters GC candidates');
+delete from public.lca_network_snapshots
+where id=(select snapshot_id from closure_e2e_gc_refs);
+select is((select count(*) from public.lca_network_snapshots where id=(select snapshot_id from closure_e2e_gc_refs)),0::bigint,'retention can delete a revoked unreferenced snapshot and its artifact');
+select ok((
+  select count(*)=2
+     and bool_and(c.snapshot_id=g.snapshot_id)
+     and bool_and(c.snapshot_artifact_id=g.snapshot_artifact_id)
+     and bool_and(c.snapshot_hash=g.snapshot_hash)
+     and bool_and(c.snapshot_index_sha256=g.snapshot_index_sha256)
+     and bool_and(c.snapshot_build_contract_hash=g.snapshot_build_contract_hash)
+  from public.lcia_scope_closure_checks c
+  cross join closure_e2e_gc_refs g
+  where c.request_idempotency_token in ('closure-e2e-a','closure-e2e-b')
+),'retention preserves certificate snapshot UUIDs and hash audit values as soft immutable references');
+select ok((select e.numerical_snapshot_id=g.numerical_snapshot_id
+  from public.lcia_scope_closure_scan_executions e
+  cross join closure_e2e_gc_refs g
+  where e.completed_check_id=(select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')
+),'retention preserves the scan execution numerical snapshot UUID as a soft immutable reference');
 
 select * from finish();
 rollback;

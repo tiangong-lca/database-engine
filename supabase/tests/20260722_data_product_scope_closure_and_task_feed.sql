@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(88);
+select plan(100);
 
 select has_table('public', 'lcia_scope_closure_checks', 'closure checks are persisted');
 select has_table('public', 'lcia_scope_closure_issues', 'closure issues are persisted');
@@ -30,10 +30,12 @@ select ok(not has_table_privilege('authenticated', 'public.lcia_scope_closure_is
 select has_function('public', 'cmd_lcia_scope_closure_check_request_v2', array['jsonb','text','jsonb'], 'closure request RPC accepts a server-normalized scope intent');
 select has_function('public', 'svc_lcia_scope_closure_check_get_worker_input', array['uuid'], 'worker can read the frozen scope through a service-only RPC');
 select has_function('public', 'svc_lcia_scope_closure_check_record_result_v2', array['uuid','uuid','uuid','text','text','jsonb','jsonb','jsonb','jsonb','text[]','uuid'], 'lease-fenced completion RPC exists');
+select has_function('public', 'svc_lcia_scope_closure_check_record_result_v3', array['uuid','uuid','uuid','text','text','jsonb','jsonb','jsonb','jsonb','text[]','uuid','uuid','uuid'], 'database-owned numerical snapshot completion RPC exists');
 select has_function('public', 'svc_lcia_scope_closure_claim_scan_execution', array['uuid','uuid','uuid'], 'scan execution claim is lease-fenced');
 select has_function('public', 'svc_lcia_document_validation_evidence_lookup', array['jsonb'], 'document evidence cache lookup is service-only');
 select has_function('public', 'svc_lcia_document_validation_evidence_record', array['jsonb','uuid'], 'document evidence cache writer is service-only');
-select has_function('public', 'svc_lcia_result_build_bind_closure', array['uuid','uuid'], 'build job certificate binding is persisted after enqueue');
+select has_function('public', 'svc_lcia_result_build_bind_closure', array['uuid','uuid'], 'deprecated caller-selected build binder remains defined for migration compatibility');
+select has_function('public', 'svc_lcia_scope_closure_build_binding', array['uuid'], 'lease-gated database-owned build binding RPC exists');
 select has_function('public', 'svc_lcia_scope_closure_reuse_completed_scan', array['uuid','uuid','uuid','uuid'], 'completed scan can be copied into a distinct closure run');
 select has_function('public', 'svc_lcia_scope_closure_finalize_reused_scan', array['uuid','uuid','uuid','uuid','uuid','jsonb'], 'reused evidence is finalized with a fresh report artifact and target summary');
 select has_function('public', 'svc_lcia_scope_closure_fail_before_scan', array['uuid','uuid','uuid','text'], 'early worker failures are lease-fenced');
@@ -53,9 +55,15 @@ select ok(not has_function_privilege('authenticated', 'public.cmd_lcia_scope_clo
 select ok(has_function_privilege('authenticated', 'public.cmd_lcia_scope_closure_check_request_v2(jsonb,text,jsonb)', 'execute'), 'normalized closure request is callable by authenticated users');
 select ok(has_function_privilege('service_role', 'public.svc_lcia_scope_closure_check_get_worker_input(uuid)', 'execute'), 'frozen worker input is service-only');
 select ok(has_function_privilege('service_role', 'public.svc_lcia_scope_closure_check_record_result_v2(uuid,uuid,uuid,text,text,jsonb,jsonb,jsonb,jsonb,text[],uuid)', 'execute'), 'lease-fenced result RPC is service-only');
+select ok(has_function_privilege('service_role', 'public.svc_lcia_scope_closure_check_record_result_v3(uuid,uuid,uuid,text,text,jsonb,jsonb,jsonb,jsonb,text[],uuid,uuid,uuid)', 'execute'), 'numerical snapshot result RPC is service-only');
 select ok(has_function_privilege('service_role', 'public.svc_lcia_scope_closure_claim_scan_execution(uuid,uuid,uuid)', 'execute'), 'scan execution claim is service-only');
 select ok(has_function_privilege('service_role', 'public.svc_lcia_document_validation_evidence_lookup(jsonb)', 'execute'), 'document evidence lookup is service-only');
-select ok(has_function_privilege('service_role', 'public.svc_lcia_result_build_bind_closure(uuid,uuid)', 'execute'), 'build binding is service-only');
+select ok(not has_function_privilege('service_role', 'public.svc_lcia_result_build_bind_closure(uuid,uuid)', 'execute'), 'deprecated caller-selected build binder is not executable');
+select ok(has_function_privilege('service_role', 'public.svc_lcia_scope_closure_build_binding(uuid)', 'execute'), 'database-owned build binding is service-only');
+select ok(not has_function_privilege('service_role', 'public.cmd_lcia_result_package_mark_ready_without_closure_recheck(uuid,text,uuid,uuid,uuid,jsonb,jsonb,jsonb,jsonb,text,text,jsonb)', 'execute'), 'service role cannot bypass the certificate recheck wrapper');
+select ok(not has_table_privilege('service_role', 'public.lcia_scope_closure_certificate_events', 'insert') and not has_table_privilege('service_role', 'public.lcia_scope_closure_certificate_events', 'update') and not has_table_privilege('service_role', 'public.lcia_scope_closure_certificate_events', 'delete'), 'service role must append certificate events through the transition RPC');
+select ok(not has_table_privilege('service_role', 'public.lcia_scope_closure_checks', 'insert') and not has_table_privilege('service_role', 'public.lcia_scope_closure_checks', 'update') and not has_table_privilege('service_role', 'public.lcia_scope_closure_checks', 'delete') and not has_table_privilege('service_role', 'public.lcia_scope_closure_scan_executions', 'insert') and not has_table_privilege('service_role', 'public.lcia_scope_closure_scan_executions', 'update') and not has_table_privilege('service_role', 'public.lcia_scope_closure_scan_executions', 'delete'), 'service role must mutate closure certificates and scan leases through fenced RPCs');
+select ok(exists (select 1 from pg_trigger where tgrelid='public.lcia_scope_closure_certificate_events'::regclass and tgname='lcia_scope_closure_certificate_events_immutable' and tgenabled <> 'D'), 'certificate event immutability trigger is enabled');
 select ok(has_function_privilege('service_role', 'public.svc_lcia_scope_closure_reuse_completed_scan(uuid,uuid,uuid,uuid)', 'execute'), 'completed scan reuse is service-only');
 select ok(has_function_privilege('service_role', 'public.svc_lcia_scope_closure_finalize_reused_scan(uuid,uuid,uuid,uuid,uuid,jsonb)', 'execute'), 'reused scan finalization is service-only');
 select ok(has_function_privilege('service_role', 'public.svc_lcia_scope_closure_fail_before_scan(uuid,uuid,uuid,text)', 'execute'), 'early failure handling is service-only');
@@ -97,6 +105,17 @@ select ok(exists (select 1 from pg_indexes where schemaname = 'public' and index
 select ok(exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'lcia_scope_closure_issue_occurrences_issue_idx'), 'occurrence pagination index exists');
 select ok(exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'lcia_document_validation_evidence_lookup_idx'), 'document evidence cache has exact identity lookup index');
 select ok(exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'lcia_result_packages_closure_check_idx'), 'result package closure causality index exists');
+select ok(not exists (
+  select 1 from pg_constraint
+  where conname in (
+    'lcia_scope_closure_scan_executions_numerical_snapshot_fkey',
+    'lcia_scope_closure_checks_snapshot_fkey',
+    'lcia_scope_closure_checks_snapshot_artifact_fkey'
+  )
+), 'historical closure snapshot UUIDs are soft references rather than unconditional retention fences');
+select ok(exists (select 1 from pg_trigger where tgrelid='public.lca_network_snapshots'::regclass and tgname='lca_network_snapshots_closure_delete_guard' and tgenabled <> 'D'), 'snapshot deletion has a validity-aware certificate guard');
+select ok(exists (select 1 from pg_trigger where tgrelid='public.lca_snapshot_artifacts'::regclass and tgname='lca_snapshot_artifacts_closure_delete_guard' and tgenabled <> 'D'), 'snapshot artifact deletion has a validity-aware certificate guard');
+select ok(exists (select 1 from pg_trigger where tgrelid='public.lcia_scope_closure_checks'::regclass and tgname='lcia_scope_closure_checks_snapshot_refs_immutable' and tgenabled <> 'D'), 'issued closure snapshot UUID references are immutable');
 
 select * from finish();
 rollback;
