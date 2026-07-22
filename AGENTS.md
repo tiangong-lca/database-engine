@@ -35,7 +35,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-22
-lastReviewedCommit: a5395caa3e13819035286dac332e3a9cadd811a3
+lastReviewedCommit: 2d991a7
 lastReviewedNote: "Reviewed issue #283 numerical snapshot certificate migration and pgTAP coverage; repo ownership and delivery rules remain unchanged."
 related:
   - .docpact/config.yaml
