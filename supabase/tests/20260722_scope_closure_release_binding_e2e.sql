@@ -90,5 +90,20 @@ select is(public.svc_lcia_scope_closure_fail_before_scan((select id from public.
 select is(public.svc_lcia_scope_closure_fail_before_scan((select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-fail'),(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-fail'),'c7220000-0000-4000-8000-000000000103','bootstrap_failed')->>'ok','true','early failure is lease fenced and records the run');
 select is((select status from public.lcia_scope_closure_scan_executions limit 1),'completed','a later worker bootstrap failure does not corrupt the completed shared execution');
 
+-- A content change with the same exact process identity is a new public
+-- release, hence a new snapshot/fingerprint. Frozen evidence remains valid;
+-- only a current-membership policy is evaluated against the new binding.
+alter table public.lca_release_publications disable trigger user;
+update public.lca_release_publications set is_current=false,status='superseded' where id='c7220000-0000-4000-8000-000000000012';
+insert into public.lca_release_runs(id,release_version,selection_manifest_hash,input_manifest_hash,calculation_bundle_hash,calculation_bundle_ref,profile_lock_hash,publish_plan_hash,publish_plan,artifact_set_hash,release_manifest_hash,release_manifest,status,idempotency_key,request_hash,created_by)
+values ('c7220000-0000-4000-8000-000000000030','77.00.002',repeat('a',64),repeat('b',64),repeat('c',64),'{}',repeat('d',64),repeat('e',64),'{}',repeat('f',64),repeat('0',64),'{}','published','closure-e2e-release-2',repeat('1',64),'c7220000-0000-4000-8000-000000000001');
+insert into public.lca_release_approvals(id,release_run_id,publish_plan_hash,approval_hash,approved_by,approved_at,expires_at) values ('c7220000-0000-4000-8000-000000000031','c7220000-0000-4000-8000-000000000030',repeat('e',64),repeat('2',64),'c7220000-0000-4000-8000-000000000001',now(),now()+interval '1 day');
+insert into public.lca_release_publications(id,release_run_id,release_version,approval_id,approval_hash,publish_plan_hash,release_manifest_hash,artifact_set_hash,approved_by,executed_by,credential_fingerprint,idempotency_key,published_at) values ('c7220000-0000-4000-8000-000000000032','c7220000-0000-4000-8000-000000000030','77.00.002','c7220000-0000-4000-8000-000000000031',repeat('2',64),repeat('e',64),repeat('0',64),repeat('f',64),'c7220000-0000-4000-8000-000000000001','c7220000-0000-4000-8000-000000000001',repeat('3',64),'closure-e2e-publication-2',now());
+insert into public.lca_release_dataset_versions(release_run_id,dataset_type,dataset_role,dataset_uuid,dataset_version,source_process_uuid,source_process_version,version_significant_hash,semantic_hash,canonical_content_hash,artifact_ref) values ('c7220000-0000-4000-8000-000000000030','process','unit_process','c7220000-0000-4000-8000-000000000020','01.00.000','c7220000-0000-4000-8000-000000000020','01.00.000',repeat('4',64),repeat('5',64),repeat('0',64),'{}'),('c7220000-0000-4000-8000-000000000030','lciamethod','support','c7220000-0000-4000-8000-000000000021','01.00.000',null,null,repeat('7',64),repeat('8',64),repeat('9',64),'{}');
+alter table public.lca_release_publications enable trigger user;
+select set_config('request.jwt.claim.role','authenticated',true);
+select public.cmd_lcia_scope_closure_check_request_v2('{"coverageMode":"subset","processes":[{"id":"c7220000-0000-4000-8000-000000000020","version":"01.00.000"}],"lciaMethods":[{"id":"c7220000-0000-4000-8000-000000000021","version":"01.00.000"}]}'::jsonb,'closure-e2e-after-release','{}');
+select ok((select a.data_snapshot_token<>n.data_snapshot_token and a.request_fingerprint<>n.request_fingerprint and a.certificate_status='valid' from public.lcia_scope_closure_checks a join public.lcia_scope_closure_checks n on true where a.request_idempotency_token='closure-e2e-a' and n.request_idempotency_token='closure-e2e-after-release'),'same identity with changed released content creates a new snapshot/fingerprint while frozen certificate remains valid');
+
 select * from finish();
 rollback;
