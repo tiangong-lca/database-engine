@@ -55,21 +55,80 @@ select is(public.svc_lcia_scope_closure_claim_scan_execution(
   'c7220000-0000-4000-8000-000000000101'
 )->'data'->>'acquired','true','first worker acquires the shared scan execution lease');
 insert into public.worker_job_artifacts(id,job_id,artifact_type,storage_bucket,storage_path,content_type,byte_size,checksum_sha256)
-values ('c7220000-0000-4000-8000-000000000201',(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'closure_report','test','reports/a.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',10,repeat('a',64));
+values ('c7220000-0000-4000-8000-000000000201',(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'closure_report_xlsx','test','reports/a.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',10,repeat('a',64));
+insert into public.worker_job_artifacts(id,job_id,artifact_type,storage_bucket,storage_path,content_type,byte_size,checksum_sha256,metadata)
+values ('c7220000-0000-4000-8000-000000000203',(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'closure_bundle','test','bundles/a.json','application/json',20,repeat('b',64),jsonb_build_object('closureCheckId',(select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')));
+update public.lca_network_snapshots set status='ready',source_hash='source-a'
+where id=(select numerical_snapshot_id from public.lcia_scope_closure_scan_executions limit 1);
+insert into public.lca_snapshot_artifacts(
+  id,snapshot_id,artifact_url,artifact_sha256,artifact_byte_size,artifact_format,
+  process_count,flow_count,impact_count,a_nnz,b_nnz,c_nnz,status,
+  snapshot_index_sha256,snapshot_build_contract_hash,effective_scope_hash,
+  data_snapshot_token,closure_bundle_hash
+)
+select
+  'c7220000-0000-4000-8000-000000000204',e.numerical_snapshot_id,
+  's3://test/snapshots/a.h5',repeat('c',64),100,'snapshot-hdf5:v1',
+  1,1,1,1,1,1,'ready',repeat('d',64),
+  public.lcia_scope_closure_sha256_text(
+    'lcia.numerical-snapshot-build-contract.v1'||chr(10)
+    ||public.lcia_scope_closure_sha256(c.requested_scope_manifest)||chr(10)
+    ||c.data_snapshot_token||chr(10)||repeat('b',64)||chr(10)
+    ||e.numerical_snapshot_id::text||chr(10)||'snapshot-hdf5:v1'
+  ),
+  public.lcia_scope_closure_sha256(c.requested_scope_manifest),
+  c.data_snapshot_token,repeat('b',64)
+from public.lcia_scope_closure_checks c
+join public.lcia_scope_closure_scan_executions e on e.id=c.scan_execution_id
+where c.request_idempotency_token='closure-e2e-a';
 select is(public.svc_lcia_scope_closure_check_record_result_v2(
   (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
   (select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
   'c7220000-0000-4000-8000-000000000101','passed','complete',
   (select requested_scope_manifest from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
-  jsonb_build_object('schemaVersion','lcia.scope-closure-evidence.v1','sourceFingerprint','source-a','resolutionMapHash','resolution-a','closureBundleHash','bundle-a','snapshotId','c7220000-0000-4000-8000-000000000301','snapshotHash','snapshot-a','reportArtifactManifestHash',public.lcia_scope_closure_sha256(jsonb_build_object('artifactId','c7220000-0000-4000-8000-000000000201'::uuid,'bucket','test','objectPath','reports/a.xlsx','mediaType','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','byteSize',10,'checksumSha256',repeat('a',64))),'evidenceHash','evidence-a'),
-  jsonb_build_object('scan','first'),'[]'::jsonb,'{}'::text[],'c7220000-0000-4000-8000-000000000201'
+  jsonb_build_object('snapshotId',gen_random_uuid(),'snapshotHash',repeat('f',64)),
+  '{}'::jsonb,'[]'::jsonb,'{}'::text[],'c7220000-0000-4000-8000-000000000201'
+)->>'code','closure_snapshot_evidence_v3_required','JSON-only fake snapshot evidence cannot sign a passed certificate');
+select is(public.svc_lcia_scope_closure_check_record_result_v3(
+  (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
+  (select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
+  'c7220000-0000-4000-8000-000000000101','passed','complete',
+  (select requested_scope_manifest from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
+  jsonb_build_object(
+    'schemaVersion','lcia.scope-closure-evidence.v2',
+    'sourceFingerprint','source-a','resolutionMapHash',repeat('e',64),
+    'closureBundleHash',repeat('b',64),
+    'snapshotId',(select numerical_snapshot_id from public.lcia_scope_closure_scan_executions limit 1),
+    'snapshotHash',repeat('c',64),
+    'snapshotArtifactId','c7220000-0000-4000-8000-000000000204',
+    'snapshotIndexSha256',repeat('d',64),
+    'snapshotBuildContractHash',(select snapshot_build_contract_hash from public.lca_snapshot_artifacts where id='c7220000-0000-4000-8000-000000000204'),
+    'reportArtifactManifestHash',public.lcia_scope_closure_sha256(jsonb_build_object('artifactId','c7220000-0000-4000-8000-000000000201'::uuid,'bucket','test','objectPath','reports/a.xlsx','mediaType','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','byteSize',10,'checksumSha256',repeat('a',64))),
+    'evidenceHash',public.lcia_scope_closure_sha256_text(
+      'lcia.scope-closure-evidence.v2'||chr(10)||'source-a'||chr(10)||repeat('e',64)||chr(10)
+      ||repeat('b',64)||chr(10)||(select numerical_snapshot_id::text from public.lcia_scope_closure_scan_executions limit 1)||chr(10)
+      ||repeat('c',64)||chr(10)||'c7220000-0000-4000-8000-000000000204'||chr(10)||repeat('d',64)||chr(10)
+      ||(select snapshot_build_contract_hash from public.lca_snapshot_artifacts where id='c7220000-0000-4000-8000-000000000204')
+    )
+  ),
+  jsonb_build_object(
+    'scan','first',
+    'evidenceHash',public.lcia_scope_closure_sha256_text(
+      'lcia.scope-closure-evidence.v2'||chr(10)||'source-a'||chr(10)||repeat('e',64)||chr(10)
+      ||repeat('b',64)||chr(10)||(select numerical_snapshot_id::text from public.lcia_scope_closure_scan_executions limit 1)||chr(10)
+      ||repeat('c',64)||chr(10)||'c7220000-0000-4000-8000-000000000204'||chr(10)||repeat('d',64)||chr(10)
+      ||(select snapshot_build_contract_hash from public.lca_snapshot_artifacts where id='c7220000-0000-4000-8000-000000000204')
+    )
+  ),
+  '[]'::jsonb,'{}'::text[],'c7220000-0000-4000-8000-000000000201',
+  'c7220000-0000-4000-8000-000000000203','c7220000-0000-4000-8000-000000000204'
 )->>'ok','true','first run records a lease-fenced complete certificate');
 select is((select status from public.lcia_scope_closure_scan_executions limit 1),'completed','first completion makes the shared execution reusable');
 
 update public.worker_jobs set status='running', lease_token='c7220000-0000-4000-8000-000000000102', lease_expires_at=now()+interval '10 minutes', started_at=now()
 where id=(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b');
 insert into public.worker_job_artifacts(id,job_id,artifact_type,storage_bucket,storage_path,content_type,byte_size,checksum_sha256)
-values ('c7220000-0000-4000-8000-000000000202',(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),'closure_report','test','reports/b.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',11,repeat('b',64));
+values ('c7220000-0000-4000-8000-000000000202',(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),'closure_report_xlsx','test','reports/b.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',11,repeat('b',64));
 select is(public.svc_lcia_scope_closure_reuse_completed_scan(
   (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),
   (select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),
@@ -136,17 +195,21 @@ insert into closure_build_ids select 'build-a',(r->'data'->>'buildId')::uuid fro
 select ok((select count(*)=1 from public.worker_jobs j join closure_build_ids b on j.subject_id=b.id where j.job_kind='lcia_result.package_build' and j.payload_json->>'closure_check_id'=(select id::text from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')),'Build V2 atomically persists a certificate-bound worker payload');
 insert into closure_build_ids select 'build-b',(r->'data'->>'buildId')::uuid from (select public.cmd_lcia_result_build_request_v2('frozen build two',null,'subset',null,'[]'::jsonb,'closure-e2e-build-b',(select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),(select requested_scope_hash from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),(select policy_fingerprint from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'{}') r) q;
 select ok((select count(*)=2 and count(distinct subject_id)=2 from public.worker_jobs where job_kind='lcia_result.package_build' and payload_json->>'closure_check_id'=(select id::text from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')),'two explicit Build V2 requests create independent jobs bound to the same certificate');
+insert into closure_build_ids select 'build-revoked',(r->'data'->>'buildId')::uuid from (select public.cmd_lcia_result_build_request_v2('revocation fence build',null,'subset',null,'[]'::jsonb,'closure-e2e-build-revoked',(select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),(select requested_scope_hash from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),(select policy_fingerprint from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'{}') r) q;
 
 -- Exercise the real package-ready boundary using the certificate's pinned
 -- snapshot and output rows.  This is intentionally not a trigger-only unit
 -- test: the package is created through the service command a Worker uses.
 insert into public.lca_network_snapshots (id,scope,process_filter,source_hash,status,created_by)
-values ('c7220000-0000-4000-8000-000000000301','data_product','{"release":"77.00.001"}'::jsonb,'snapshot-a','ready','c7220000-0000-4000-8000-000000000001'),
-       ('c7220000-0000-4000-8000-000000000302','data_product','{"release":"77.00.001","wrong":true}'::jsonb,'snapshot-wrong','ready','c7220000-0000-4000-8000-000000000001');
+values ('c7220000-0000-4000-8000-000000000302','data_product','{"release":"77.00.001","wrong":true}'::jsonb,'snapshot-wrong','ready','c7220000-0000-4000-8000-000000000001');
 insert into public.lca_results (id,job_id,snapshot_id,payload,diagnostics,artifact_url,artifact_sha256,artifact_byte_size,artifact_format,worker_job_id,is_pinned)
-values ('c7220000-0000-4000-8000-000000000401',(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')),'c7220000-0000-4000-8000-000000000301','{}'::jsonb,'{}'::jsonb,'s3://test/closure-e2e-result.json',repeat('c',64),128,'application/json',(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')),false);
+values ('c7220000-0000-4000-8000-000000000401',(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')),(select snapshot_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'{}'::jsonb,'{}'::jsonb,'s3://test/closure-e2e-result.json',repeat('c',64),128,'application/json',(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')),false);
 insert into public.lca_latest_all_unit_results (id,snapshot_id,job_id,result_id,query_artifact_url,query_artifact_sha256,query_artifact_byte_size,query_artifact_format,status,worker_job_id)
-values ('c7220000-0000-4000-8000-000000000402','c7220000-0000-4000-8000-000000000301',(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')),'c7220000-0000-4000-8000-000000000401','s3://test/closure-e2e-query.json',repeat('d',64),64,'application/json','ready',(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')));
+values ('c7220000-0000-4000-8000-000000000402',(select snapshot_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')),'c7220000-0000-4000-8000-000000000401','s3://test/closure-e2e-query.json',repeat('d',64),64,'application/json','ready',(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')));
+
+update public.worker_jobs
+set status='running',lease_token=gen_random_uuid(),lease_expires_at=now()+interval '10 minutes',started_at=coalesce(started_at,now())
+where subject_id in (select id from closure_build_ids);
 
 create temporary table closure_e2e_package_ids (label text primary key,id uuid) on commit drop;
 select set_config('request.jwt.claim.role','service_role',true);
@@ -156,7 +219,7 @@ from (
   select public.cmd_lcia_result_package_mark_ready(
     (select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')),
     'closure-e2e-package-a',
-    'c7220000-0000-4000-8000-000000000301',
+    (select snapshot_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
     'c7220000-0000-4000-8000-000000000401',
     'c7220000-0000-4000-8000-000000000402',
     '{}'::jsonb,'{}'::jsonb,jsonb_build_object('persistenceMode','pinned'),jsonb_build_array('climate-change'),'climate-change','closure-e2e-package-result','{}'::jsonb
@@ -176,17 +239,17 @@ select is(public.cmd_lcia_result_package_mark_ready(
   'c7220000-0000-4000-8000-000000000302',
   'c7220000-0000-4000-8000-000000000401',
   null,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,jsonb_build_array('climate-change'),'climate-change','wrong-snapshot','{}'::jsonb
-)->>'code','invalid_package_payload','mark_ready fails closed when a build supplies a snapshot other than its certificate snapshot');
+)->>'code','closure_certificate_binding_mismatch','mark_ready fails closed when a build supplies a snapshot other than its certificate snapshot');
 update public.worker_jobs
 set payload_json=jsonb_set(payload_json,'{snapshot_hash}','"tampered-snapshot-hash"'::jsonb)
 where subject_id=(select id from closure_build_ids where label='build-b');
 select is(public.cmd_lcia_result_package_mark_ready(
   (select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-b')),
   'closure-e2e-package-tampered-hash',
-  'c7220000-0000-4000-8000-000000000301',
+  (select snapshot_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
   'c7220000-0000-4000-8000-000000000401',
   null,'{}'::jsonb,'{}'::jsonb,'{}'::jsonb,jsonb_build_array('climate-change'),'climate-change','tampered-snapshot-hash','{}'::jsonb
-)->>'code','invalid_package_payload','mark_ready fails closed when the queued certificate snapshot hash is tampered');
+)->>'code','closure_certificate_binding_mismatch','mark_ready fails closed when the queued certificate snapshot hash is tampered');
 
 -- The global Task Center consumes the server projection.  Assert a true
 -- keyset page, then an event-driven update that leaves worker lifecycle and
@@ -236,6 +299,22 @@ select is(public.svc_lcia_scope_closure_certificate_event(
   (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
   'revoked','operator revoked stale certificate'
 )->>'ok','true','stale certificate can be revoked by a second append-only event');
+insert into public.lca_results (id,job_id,snapshot_id,payload,diagnostics,artifact_url,artifact_sha256,artifact_byte_size,artifact_format,worker_job_id,is_pinned)
+values (
+  'c7220000-0000-4000-8000-000000000403',
+  (select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-revoked')),
+  (select snapshot_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
+  '{}'::jsonb,'{}'::jsonb,'s3://test/closure-e2e-revoked-result.json',repeat('e',64),64,'application/json',
+  (select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-revoked')),false
+);
+select is(public.cmd_lcia_result_package_mark_ready(
+  (select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-revoked')),
+  'closure-e2e-package-revoked',
+  (select snapshot_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
+  'c7220000-0000-4000-8000-000000000403',null,
+  '{}'::jsonb,'{}'::jsonb,'{}'::jsonb,'[]'::jsonb,null,'revoked-result','{}'::jsonb
+)->>'code','closure_check_revoked','mark_ready rejects a certificate revoked after the build acquired its lease');
+select is((select count(*) from public.lcia_result_packages where package_version='closure-e2e-package-revoked'),0::bigint,'revocation-before-ready inserts no package row');
 update public.worker_jobs set status='stale',updated_at=clock_timestamp()
 where id=(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b');
 select set_config('request.jwt.claim.role','authenticated',true);

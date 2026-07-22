@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-22
-lastReviewedCommit: 8e7034f6dbaf46974e5198d25420586793c639f4
-lastReviewedNote: "Reviewed issue #277 migration-history recovery proof; exact SQL fingerprinting, db reset, and migration-list verification remain sufficient."
+lastReviewedCommit: a5f3754a067609cba3f7629da9fe84beb602882f
+lastReviewedNote: "Reviewed issue #283 numerical snapshot certificate proof; db reset plus focused pgTAP/E2E and advisors remain the required validation."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
