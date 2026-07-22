@@ -514,7 +514,7 @@ begin
   if coalesce((v_result->>'ok')::boolean,false) is not true then return v_result; end if;
   select * into v_check from public.lcia_scope_closure_checks where id=nullif(v_result->'data'->>'closureCheckId','')::uuid for update;
   if v_check.id is null then return public.lcia_scope_closure_error('closure_check_not_found',404,'Closure check not found'); end if;
-  if v_check.request_key<>v_request_key and v_check.data_snapshot_token<>v_snapshot_token then return public.lcia_scope_closure_error('idempotency_token_bound_to_different_snapshot',409,'Idempotency token is already bound to a different release snapshot'); end if;
+  if coalesce((v_result->'data'->>'reused')::boolean,false) and v_check.request_key<>v_request_key and v_check.data_snapshot_token<>v_snapshot_token then return public.lcia_scope_closure_error('idempotency_token_bound_to_different_snapshot',409,'Idempotency token is already bound to a different release snapshot'); end if;
   insert into public.lcia_scope_closure_data_snapshots(data_snapshot_token,root_manifest,root_manifest_hash,publication_epoch)
   values(v_snapshot_token,v_snapshot_manifest,public.lcia_scope_closure_sha256(v_snapshot_manifest),extract(epoch from v_publication.published_at)::bigint)
   on conflict (data_snapshot_token) do nothing;
