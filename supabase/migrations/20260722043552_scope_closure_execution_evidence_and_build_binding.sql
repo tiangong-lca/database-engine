@@ -577,7 +577,7 @@ begin
   if v_check.id is not null then
     v_policy:=v_check.requested_scope_manifest->>'certificateFreshnessPolicy';
     if v_policy='current-membership-required-v1' and not public.lcia_scope_closure_current_release_matches(v_check.data_snapshot_token) then
-      return public.lcia_scope_closure_error('closure_certificate_stale',409,'Closure certificate was created against an earlier public release');
+      return public.lcia_scope_closure_error('closure_check_stale',409,'Closure certificate was created against an earlier public release');
     end if;
   end if;
   v_result:=public.cmd_lcia_result_build_request_v2_envelope(p_name,p_processes,p_coverage_mode,p_default_impact_category,p_lcia_method_set,p_idempotency_key,p_closure_check_id,p_requested_scope_hash,p_policy_fingerprint,p_audit);
