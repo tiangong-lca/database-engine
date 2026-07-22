@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-22
-lastReviewedCommit: a5395caa3e13819035286dac332e3a9cadd811a3
+lastReviewedCommit: 0c0abfb73a85d0322177b1236200f564b5a023c8
 lastReviewedNote: "Reviewed issue #283 numerical snapshot certificate proof; db reset plus focused pgTAP/E2E and advisors remain the required validation."
 related:
   - ../../AGENTS.md
