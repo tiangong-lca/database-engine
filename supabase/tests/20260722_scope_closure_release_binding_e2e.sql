@@ -39,5 +39,56 @@ select is((select count(distinct scan_execution_id) from public.lcia_scope_closu
 select is((select count(distinct data_snapshot_token) from public.lcia_scope_closure_checks where request_idempotency_token in ('closure-e2e-a','closure-e2e-b')),1::bigint,'two runs freeze the same exact release snapshot');
 select is(public.cmd_lcia_scope_closure_check_request_v2('{"coverageMode":"subset","processes":[{"id":"c7220000-0000-4000-8000-000000000099","version":"01.00.000"}],"lciaMethods":[{"id":"c7220000-0000-4000-8000-000000000021","version":"01.00.000"}]}'::jsonb,'closure-e2e-live-only','{}')->>'code','invalid_closure_scope','live-only process identity is rejected outside the current release');
 
+-- Run A owns the shared execution, records a complete scan, then run B turns
+-- that completed scan into a distinct report/certificate without copying A's
+-- report identity.
+update public.worker_jobs set status='running', lease_token='c7220000-0000-4000-8000-000000000101', lease_expires_at=now()+interval '10 minutes', started_at=now()
+where id=(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a');
+select set_config('request.jwt.claim.role','service_role',true);
+select is(public.svc_lcia_scope_closure_claim_scan_execution(
+  (select scan_execution_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
+  (select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
+  'c7220000-0000-4000-8000-000000000101'
+)->'data'->>'acquired','true','first worker acquires the shared scan execution lease');
+insert into public.worker_job_artifacts(id,job_id,artifact_type,storage_bucket,storage_path,content_type,byte_size,checksum_sha256)
+values ('c7220000-0000-4000-8000-000000000201',(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'closure_report','test','reports/a.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',10,repeat('a',64));
+select is(public.svc_lcia_scope_closure_check_record_result_v2(
+  (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
+  (select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
+  'c7220000-0000-4000-8000-000000000101','passed','complete',
+  (select requested_scope_manifest from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
+  jsonb_build_object('schemaVersion','lcia.scope-closure-evidence.v1','sourceFingerprint','source-a','resolutionMapHash','resolution-a','closureBundleHash','bundle-a','snapshotId','c7220000-0000-4000-8000-000000000301','snapshotHash','snapshot-a','reportArtifactManifestHash',public.lcia_scope_closure_sha256(jsonb_build_object('artifactId','c7220000-0000-4000-8000-000000000201'::uuid,'bucket','test','objectPath','reports/a.xlsx','mediaType','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','byteSize',10,'checksumSha256',repeat('a',64))),'evidenceHash','evidence-a'),
+  jsonb_build_object('scan','first'),'[]'::jsonb,'{}'::text[],'c7220000-0000-4000-8000-000000000201'
+)->>'ok','true','first run records a lease-fenced complete certificate');
+select is((select status from public.lcia_scope_closure_scan_executions limit 1),'completed','first completion makes the shared execution reusable');
+
+update public.worker_jobs set status='running', lease_token='c7220000-0000-4000-8000-000000000102', lease_expires_at=now()+interval '10 minutes', started_at=now()
+where id=(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b');
+insert into public.worker_job_artifacts(id,job_id,artifact_type,storage_bucket,storage_path,content_type,byte_size,checksum_sha256)
+values ('c7220000-0000-4000-8000-000000000202',(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),'closure_report','test','reports/b.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',11,repeat('b',64));
+select is(public.svc_lcia_scope_closure_reuse_completed_scan(
+  (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),
+  (select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),
+  'c7220000-0000-4000-8000-000000000102',
+  (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')
+)->'data'->>'reuseAvailable','true','second run can reuse completed scan facts');
+select is(public.svc_lcia_scope_closure_finalize_reused_scan(
+  (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),
+  (select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),
+  'c7220000-0000-4000-8000-000000000102',
+  (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),
+  'c7220000-0000-4000-8000-000000000202',jsonb_build_object('scan','reused-target')
+)->>'ok','true','second run finalizes with a target-owned report');
+select ok((select a.certificate_hash<>b.certificate_hash and b.reused_from_check_id=a.id and b.report_artifact_id='c7220000-0000-4000-8000-000000000202'::uuid and b.result_summary->>'scan'='reused-target' from public.lcia_scope_closure_checks a join public.lcia_scope_closure_checks b on true where a.request_idempotency_token='closure-e2e-a' and b.request_idempotency_token='closure-e2e-b'),'reuse creates a distinct certificate, report and target summary with source-run linkage');
+
+select set_config('request.jwt.claim.role','authenticated',true);
+select public.cmd_lcia_scope_closure_check_request_v2('{"coverageMode":"subset","processes":[{"id":"c7220000-0000-4000-8000-000000000020","version":"01.00.000"}],"lciaMethods":[{"id":"c7220000-0000-4000-8000-000000000021","version":"01.00.000"}]}'::jsonb,'closure-e2e-fail','{}');
+update public.worker_jobs set status='running', lease_token='c7220000-0000-4000-8000-000000000103', lease_expires_at=now()+interval '10 minutes', started_at=now()
+where id=(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-fail');
+select set_config('request.jwt.claim.role','service_role',true);
+select is(public.svc_lcia_scope_closure_fail_before_scan((select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-fail'),(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-fail'),'c7220000-0000-4000-8000-000000000104','bootstrap_failed')->>'code','worker_job_lease_invalid','early failure rejects a stale lease token');
+select is(public.svc_lcia_scope_closure_fail_before_scan((select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-fail'),(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-fail'),'c7220000-0000-4000-8000-000000000103','bootstrap_failed')->>'ok','true','early failure is lease fenced and records the run');
+select is((select status from public.lcia_scope_closure_scan_executions limit 1),'completed','a later worker bootstrap failure does not corrupt the completed shared execution');
+
 select * from finish();
 rollback;
