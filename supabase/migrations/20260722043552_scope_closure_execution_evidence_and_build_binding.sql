@@ -64,6 +64,8 @@ begin
   return new;
 end;
 $$;
+revoke all on function public.get_task_summary_v2_feed(text,text[],text[],timestamptz,timestamptz,uuid,integer,boolean) from public, anon, authenticated, service_role;
+grant execute on function public.get_task_summary_v2_feed(text,text[],text[],timestamptz,timestamptz,uuid,integer,boolean) to authenticated;
 drop trigger if exists lcia_result_packages_bind_closure_certificate on public.lcia_result_packages;
 create trigger lcia_result_packages_bind_closure_certificate before insert on public.lcia_result_packages for each row execute function public.lcia_result_package_bind_closure_certificate();
 
@@ -422,6 +424,26 @@ grant execute on function public.svc_lcia_scope_closure_reuse_completed_scan(uui
 grant execute on function public.svc_lcia_scope_closure_finalize_reused_scan(uuid,uuid,uuid,uuid,uuid,jsonb) to service_role;
 grant execute on function public.svc_lcia_scope_closure_fail_before_scan(uuid,uuid,uuid,text) to service_role;
 grant execute on function public.cmd_lcia_result_build_request_v2(text,jsonb,text,text,jsonb,text,uuid,text,text,jsonb) to authenticated;
+
+-- Every task-feed item is independently consumable by the Task Center.
+alter function public.get_task_summary_v2_feed(text,text[],text[],timestamptz,timestamptz,uuid,integer,boolean)
+  rename to get_task_summary_v2_feed_unversioned;
+create or replace function public.get_task_summary_v2_feed(
+  p_category text default null, p_job_kinds text[] default null, p_statuses text[] default null,
+  p_updated_since timestamptz default null, p_cursor_updated_at timestamptz default null,
+  p_cursor_job_id uuid default null, p_limit integer default 50, p_root_only boolean default false
+) returns jsonb language plpgsql security definer set search_path = public, pg_temp as $$
+declare v jsonb;
+begin
+  v:=public.get_task_summary_v2_feed_unversioned(p_category,p_job_kinds,p_statuses,p_updated_since,p_cursor_updated_at,p_cursor_job_id,p_limit,p_root_only);
+  if coalesce((v->>'ok')::boolean,false) then
+    v:=jsonb_set(v,'{data,items}',coalesce((select jsonb_agg(item||jsonb_build_object('schemaVersion','task-summary.v2')) from jsonb_array_elements(coalesce(v->'data'->'items','[]'::jsonb)) item),'[]'::jsonb));
+  end if;
+  return v;
+end;
+$$;
+revoke all on function public.get_task_summary_v2_feed(text,text[],text[],timestamptz,timestamptz,uuid,integer,boolean) from public, anon, authenticated, service_role;
+grant execute on function public.get_task_summary_v2_feed(text,text[],text[],timestamptz,timestamptz,uuid,integer,boolean) to authenticated;
 
 -- The read APIs are product contracts, not table projections.  Keep the
 -- database-owned names stable so Edge and Next do not each invent aliases for
