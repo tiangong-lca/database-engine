@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-22
-lastReviewedCommit: 08e8dd1dc08aa7757154074154f116817ba9742f
-lastReviewedNote: "Reviewed issue #281 administrator-rejection migration and SQL-test ownership; the stable/generated path map remains accurate."
+lastReviewedCommit: 0c0abfb73a85d0322177b1236200f564b5a023c8
+lastReviewedNote: "Reviewed issues #281 and #283 for administrator-rejection and numerical snapshot certificate changes through authoritative migration and SQL-test paths; the stable/generated path map remains accurate."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-22
-lastReviewedCommit: 08e8dd1dc08aa7757154074154f116817ba9742f
-lastReviewedNote: "Reviewed issue #281 administrator-rejection migration delivery; source-of-truth ownership, dev-based routine delivery, and workspace integration rules remain unchanged."
+lastReviewedCommit: 2d991a7
+lastReviewedNote: "Reviewed issues #281 and #283 for administrator-rejection migration delivery and numerical snapshot certificate coverage; repo ownership, dev-based delivery, and workspace integration rules remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

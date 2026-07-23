@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-22
-lastReviewedCommit: 08e8dd1dc08aa7757154074154f116817ba9742f
-lastReviewedNote: "Reviewed issue #281 administrator-rejection proof; db reset, migration-list verification, and targeted review workflow SQL assertions remain sufficient."
+lastReviewedCommit: 0c0abfb73a85d0322177b1236200f564b5a023c8
+lastReviewedNote: "Reviewed issues #281 and #283 for administrator-rejection and numerical snapshot certificate proof; db reset, migration-list verification, focused pgTAP/E2E, and advisor checks remain the required validation."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-07-22"
-lastReviewedCommit: "08e8dd1dc08aa7757154074154f116817ba9742f"
-lastReviewedNote: "Reviewed issue #281 administrator-rejection shared-reference routing, ownership, and required proof; existing governance remains accurate."
+lastReviewedCommit: "0c0abfb73a85d0322177b1236200f564b5a023c8"
+lastReviewedNote: "Reviewed issues #281 and #283 for administrator-rejection shared references and numerical snapshot certificates; existing ownership, routing, and validation governance remains accurate."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
