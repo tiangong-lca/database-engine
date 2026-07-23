@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-21
-lastReviewedCommit: c86556d46a311c3f3f7c2723f5093eb46ecda2d9
-lastReviewedNote: "Reviewed issue #277 production migration-history recovery; source-of-truth ownership, main hotfix, dev back-merge, and workspace integration rules remain unchanged."
+lastReviewedAt: 2026-07-22
+lastReviewedCommit: 2d991a7
+lastReviewedNote: "Reviewed issue #283 numerical snapshot certificate migration and pgTAP coverage; repo ownership and delivery rules remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
