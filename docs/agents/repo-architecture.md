@@ -29,7 +29,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-22
 lastReviewedCommit: 0c0abfb73a85d0322177b1236200f564b5a023c8
-lastReviewedNote: "Reviewed issue #283 numerical snapshot certificate boundary through the authoritative migration path; the path map remains accurate."
+lastReviewedNote: "Reviewed issues #281 and #283 for administrator-rejection and numerical snapshot certificate changes through authoritative migration and SQL-test paths; the stable/generated path map remains accurate."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

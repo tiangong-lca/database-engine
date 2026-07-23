@@ -36,7 +36,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-22
 lastReviewedCommit: 2d991a7
-lastReviewedNote: "Reviewed issue #283 numerical snapshot certificate migration and pgTAP coverage; repo ownership and delivery rules remain unchanged."
+lastReviewedNote: "Reviewed issues #281 and #283 for administrator-rejection migration delivery and numerical snapshot certificate coverage; repo ownership, dev-based delivery, and workspace integration rules remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
