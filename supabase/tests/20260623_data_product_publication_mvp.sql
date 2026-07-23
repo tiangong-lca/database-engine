@@ -109,7 +109,7 @@ select ok(
     where job_kind = 'lcia_result.package_build'
       and worker_queue = 'solver'
       and default_visibility = 'operator'
-      and payload_schema_version = 'lcia_result.package_build.request.v1'
+      and payload_schema_version = 'lcia_result.package_build.request.v2'
   ),
   'lcia_result.package_build worker job kind is registered'
 );
