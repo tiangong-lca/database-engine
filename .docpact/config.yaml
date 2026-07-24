@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-07-22"
-lastReviewedCommit: "0c0abfb73a85d0322177b1236200f564b5a023c8"
-lastReviewedNote: "Reviewed issues #281 and #283 for administrator-rejection shared references and numerical snapshot certificates; existing ownership, routing, and validation governance remains accurate."
+lastReviewedAt: "2026-07-24"
+lastReviewedCommit: "30cbb894eabdceea572a68f92b44026583b20a8b"
+lastReviewedNote: "Reviewed issue #287 for first-release candidate scope-closure snapshots; ownership and routing remain accurate, with focused candidate/release validation documented."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
