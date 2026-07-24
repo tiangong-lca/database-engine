@@ -317,6 +317,11 @@ $$;
 -- The one-time backfill is deliberately paid during migration rather than on
 -- an interactive completeness-check request. Production currently has more
 -- than 100k eligible Flow rows; subsequent writes refresh only the changed row.
+-- Supabase production caps ordinary postgres statements at two minutes. The
+-- Worker-canonical JSON hash pass is intentionally bounded to ten minutes for
+-- this one administrative statement, then the session default is restored.
+set statement_timeout = '10min';
+
 insert into private.lcia_scope_closure_candidate_document_hashes(
   dataset_type,
   dataset_id,
@@ -415,6 +420,8 @@ do update set
   canonical_content_hash = excluded.canonical_content_hash,
   source_modified_at = excluded.source_modified_at,
   refreshed_at = now();
+
+reset statement_timeout;
 
 create or replace function private.lcia_scope_closure_candidate_dataset_manifest()
 returns jsonb

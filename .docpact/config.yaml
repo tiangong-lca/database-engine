@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-07-24"
-lastReviewedCommit: "30cbb894eabdceea572a68f92b44026583b20a8b"
-lastReviewedNote: "Reviewed issue #287 for first-release candidate scope-closure snapshots; ownership and routing remain accurate, with focused candidate/release validation documented."
+lastReviewedCommit: "d748dbb2e43763e5ca217c61ea4cb136977ef0bc"
+lastReviewedNote: "Reviewed issue #287 after the production-scale candidate hash backfill exceeded the Supabase statement timeout; ownership and routing remain accurate, and the required bounded migration proof is documented."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

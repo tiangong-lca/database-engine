@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-24
-lastReviewedCommit: 30cbb894eabdceea572a68f92b44026583b20a8b
-lastReviewedNote: "Reviewed issue #287 for first-release scope-closure snapshot delivery; repo ownership, main hotfix path, and workspace integration rules remain unchanged."
+lastReviewedCommit: d748dbb2e43763e5ca217c61ea4cb136977ef0bc
+lastReviewedNote: "Reviewed issue #287 after the production candidate hash backfill exceeded the platform statement timeout; repo ownership, main hotfix path, and workspace integration rules remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -117,6 +117,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - preview-branch proof belongs to the repo PR
 - persistent `dev` proof belongs after merge into Git `dev`; its single workflow uses `supabase db push --include-all` so a governed `main -> dev` backmerge can install committed migrations whose timestamps precede newer migrations already recorded on `dev`
 - production `main` proof belongs after `dev -> main` promote and should confirm Supabase GitHub integration applied migrations automatically
+- production-volume administrative backfills must fit the platform statement timeout or use a bounded session override that is restored immediately after the statement; Preview row counts alone are not sufficient volume proof
 - root workspace proof belongs later in `lca-workspace`
 - generated workspace helpers are low-risk to inspect with `python scripts/<name>.py --help`
 

@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-24
-lastReviewedCommit: 30cbb894eabdceea572a68f92b44026583b20a8b
-lastReviewedNote: "Reviewed issue #287 for first-release candidate scope-closure snapshots; documented the release/candidate source boundary and Worker v2 compatibility contract."
+lastReviewedCommit: d748dbb2e43763e5ca217c61ea4cb136977ef0bc
+lastReviewedNote: "Reviewed issue #287 after the production candidate hash backfill exceeded the platform statement timeout; documented the bounded administrative timeout contract."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -110,7 +110,7 @@ Authenticated prepare, approve, publish, readback, and unpublish commands re-che
 
 The data-product completeness check can run before the first formal `lca_release_publications` row exists. When a current release exists, normalization and the immutable `lcia.scope-closure-data-snapshot.v2` manifest remain bound to its exact `lca_release_dataset_versions`. Before the first release, the database instead freezes every exact `state_code 100..199` Process, Flow, FlowProperty, UnitGroup, Source, Contact, and LifecycleModel document readable by the deployed closure Worker, plus the exact reviewed 25-method LCIA allowlist (whose production authoring rows intentionally remain `state_code=0`). Global Process roots select the latest eligible version per UUID, while the frozen support universe retains all exact eligible versions so explicit transitive references remain resolvable.
 
-Candidate snapshots compute `canonicalContentHash` with the same recursively key-sorted, compact JSON algorithm used by the Worker and normalize the reviewed LCIA method/artifact-locator alias before freezing identities. Because the initial production universe exceeds 120,000 exact rows, migration backfill pays the canonical-hash cost once into a private cache; eight table triggers then refresh only changed identities, while interactive requests aggregate the cached manifest inside the authenticated role timeout. `candidateData.sourceKind=candidate-public-state` is the authoritative source discriminator. The zero-UUID `currentPublicRelease` object is only a deterministic compatibility projection required by the deployed Worker v2 schema and must never be treated as publication evidence. `current-membership-required-v1` continues to require a real current release; the default frozen-artifact policy may consume a candidate snapshot.
+Candidate snapshots compute `canonicalContentHash` with the same recursively key-sorted, compact JSON algorithm used by the Worker and normalize the reviewed LCIA method/artifact-locator alias before freezing identities. Because the initial production universe exceeds 120,000 exact rows, migration backfill pays the canonical-hash cost once into a private cache; eight table triggers then refresh only changed identities, while interactive requests aggregate the cached manifest inside the authenticated role timeout. This one-time production-volume administrative statement must declare a bounded session `statement_timeout` above the platform's ordinary two-minute cap and restore the default immediately after the backfill; a small Preview dataset is not sufficient evidence for that bound. `candidateData.sourceKind=candidate-public-state` is the authoritative source discriminator. The zero-UUID `currentPublicRelease` object is only a deterministic compatibility projection required by the deployed Worker v2 schema and must never be treated as publication evidence. `current-membership-required-v1` continues to require a real current release; the default frozen-artifact policy may consume a candidate snapshot.
 
 ## Generated Workspace Workflow
 
