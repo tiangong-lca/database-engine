@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-24
-lastReviewedCommit: d748dbb2e43763e5ca217c61ea4cb136977ef0bc
-lastReviewedNote: "Reviewed issue #287 after the production candidate hash backfill exceeded the platform statement timeout; documented the bounded administrative timeout contract."
+lastReviewedCommit: 8281967cf9031229789ace9df6cbcfe33f13622c
+lastReviewedNote: "Reviewed the owner-scoped closure-check V1 read projection for nonterminal checks; the current architecture and cross-repo boundaries remain accurate."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

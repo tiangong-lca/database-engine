@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-24
-lastReviewedCommit: d748dbb2e43763e5ca217c61ea4cb136977ef0bc
-lastReviewedNote: "Reviewed issue #287 after the production candidate hash backfill exceeded the platform statement timeout; first-release scope-closure changes also require bounded production-volume migration proof."
+lastReviewedCommit: 8281967cf9031229789ace9df6cbcfe33f13622c
+lastReviewedNote: "Reviewed the queued/running closure-check V1 projection regression; the existing scope-closure proof matrix already requires the correct local and production evidence."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
