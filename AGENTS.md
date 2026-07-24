@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-24
-lastReviewedCommit: d748dbb2e43763e5ca217c61ea4cb136977ef0bc
-lastReviewedNote: "Reviewed issue #287 after the production candidate hash backfill exceeded the platform statement timeout; repo ownership, main hotfix path, and workspace integration rules remain unchanged."
+lastReviewedCommit: 8281967cf9031229789ace9df6cbcfe33f13622c
+lastReviewedNote: "Reviewed the nonterminal closure-check V1 read projection hotfix; repo ownership, main hotfix path, and workspace integration rules remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

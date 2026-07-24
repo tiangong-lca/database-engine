@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-07-24"
-lastReviewedCommit: "d748dbb2e43763e5ca217c61ea4cb136977ef0bc"
-lastReviewedNote: "Reviewed issue #287 after the production-scale candidate hash backfill exceeded the Supabase statement timeout; ownership and routing remain accurate, and the required bounded migration proof is documented."
+lastReviewedCommit: "8281967cf9031229789ace9df6cbcfe33f13622c"
+lastReviewedNote: "Reviewed the owner-scoped closure-check V1 read projection for queued and running checks; ownership, routing, and proof requirements remain accurate."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

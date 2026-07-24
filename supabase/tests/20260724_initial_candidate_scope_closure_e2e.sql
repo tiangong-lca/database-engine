@@ -322,7 +322,9 @@ select set_config(
   true
 );
 
-select is(
+insert into candidate_closure_responses values
+(
+  'candidate-global',
   public.cmd_lcia_scope_closure_check_request_v2(
     '{
       "coverageMode":"global_eligible",
@@ -334,9 +336,38 @@ select is(
     }'::jsonb,
     'candidate-global',
     '{}'
-  )->>'ok',
+  )
+);
+select is(
+  (
+    select result->>'ok'
+    from candidate_closure_responses
+    where idempotency_token = 'candidate-global'
+  ),
   'true',
   'zero-release global eligible preflight is accepted'
+);
+select is(
+  public.get_lcia_scope_closure_check(
+    (
+      select (result->'data'->>'closureCheckId')::uuid
+      from candidate_closure_responses
+      where idempotency_token = 'candidate-global'
+    )
+  )->'data'->>'scanCompleteness',
+  'unknown',
+  'queued zero-release checks project unknown scan completeness'
+);
+select is(
+  public.get_lcia_scope_closure_check(
+    (
+      select (result->'data'->>'closureCheckId')::uuid
+      from candidate_closure_responses
+      where idempotency_token = 'candidate-global'
+    )
+  )->'data'->>'certificateValidity',
+  'unavailable',
+  'queued zero-release checks hide the internal pending certificate state'
 );
 
 reset role;
