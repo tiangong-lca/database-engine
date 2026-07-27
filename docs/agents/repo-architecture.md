@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-27
-lastReviewedCommit: ffd3b7dd87c268b75bef0f4450c445b60dd1eb95
-lastReviewedNote: "Reviewed Issue #297 foundation-dataset Semantic/Hybrid parity: the derivative pipeline, legacy-vector retirement, runtime ownership, and Hosted plan-proof boundaries are explicit."
+lastReviewedCommit: 7ffb8b9713b9b04027d2acd240de0626319f2361
+lastReviewedNote: "Reviewed Issue #297 foundation-dataset Semantic/Hybrid visibility parity: derivative ownership, explicit state/team scope, legacy-vector retirement, and Hosted plan-proof boundaries are explicit."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -125,9 +125,12 @@ writes are derived state: their trigger paths must not advance the authored
 
 The four public Semantic and Hybrid RPC families share exact-regclass
 allowlisted private helpers. Those helpers preserve owner/team/public
-visibility (`tg`/`co`/`my`/`te`), force custom plans so empty filters fold away,
-use strict-order iterative HNSW scans, escape PGroonga terms, and fuse text and
-semantic ranks with RRF. Local seed cardinality is not index-plan evidence;
+visibility (`tg`/`co`/`my`/`te`): `tg`/`co` may be narrowed to an explicit
+team, `my` may be narrowed to an explicit state, and `te` requires one explicit
+team that the authenticated actor can read and may also be narrowed by state.
+They force custom plans so empty filters fold away, use strict-order iterative
+HNSW scans, escape PGroonga terms, and fuse text and semantic ranks with RRF.
+Local seed cardinality is not index-plan evidence;
 after the migration reaches persistent `dev`, real redacted parameters must be
 measured with read-only `EXPLAIN (ANALYZE, BUFFERS)` there before adding partial
 or duplicate indexes.

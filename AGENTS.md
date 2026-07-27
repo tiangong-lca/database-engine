@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-27
-lastReviewedCommit: 8930e372398c0f41dfa9d8633aac9d6e45ee5f87
-lastReviewedNote: "Reviewed Issue #297 foundation-dataset Semantic/Hybrid parity; schema ownership, dev-first delivery, automatic migration, Edge/Next runtime ownership, and later workspace integration boundaries remain unchanged."
+lastReviewedCommit: 7ffb8b9713b9b04027d2acd240de0626319f2361
+lastReviewedNote: "Reviewed Issue #297 foundation-dataset Semantic/Hybrid visibility parity; explicit state/team scope does not change schema ownership, dev-first delivery, runtime ownership, or later workspace integration boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

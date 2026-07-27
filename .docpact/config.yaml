@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-07-27"
-lastReviewedCommit: "ffd3b7dd87c268b75bef0f4450c445b60dd1eb95"
-lastReviewedNote: "Reviewed Issue #297 foundation-dataset Semantic/Hybrid parity: existing migration and SQL-test routing still covers the new implementation, so no rule change is required."
+lastReviewedCommit: "7ffb8b9713b9b04027d2acd240de0626319f2361"
+lastReviewedNote: "Reviewed Issue #297 foundation-dataset Semantic/Hybrid visibility parity: the existing migration and SQL-test routing covers explicit state/team scope and fail-closed Team Data behavior, so no rule change is required."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
