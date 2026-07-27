@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-22
-lastReviewedCommit: 2d991a7
-lastReviewedNote: "Reviewed issues #281 and #283 for administrator-rejection migration delivery and numerical snapshot certificate coverage; repo ownership, dev-based delivery, and workspace integration rules remain unchanged."
+lastReviewedAt: 2026-07-27
+lastReviewedCommit: 97f7a95ecf91ffb12f25f39f978a5074e33240d7
+lastReviewedNote: "Reviewed for Issue #291 Performance Advisor governance; schema ownership, dev-based delivery, automatic migration boundaries, and later workspace integration remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
