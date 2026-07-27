@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-07-22"
-lastReviewedCommit: "0c0abfb73a85d0322177b1236200f564b5a023c8"
-lastReviewedNote: "Reviewed issues #281 and #283 for administrator-rejection shared references and numerical snapshot certificates; existing ownership, routing, and validation governance remains accurate."
+lastReviewedAt: "2026-07-27"
+lastReviewedCommit: "97f7a9597b0b4487fc7f3ffaa2bbaa012c25a975"
+lastReviewedNote: "Reviewed issue #292 measured process/flow hybrid-search delivery; added a focused route while retaining existing ownership, migration, test, and staging-proof boundaries."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -111,6 +111,18 @@ routing:
         - supabase/seed.sql
         - supabase/seeds/**
         - supabase/tests/**
+    hybrid-search-performance:
+      paths:
+        - supabase/migrations/*hybrid_search*.sql
+        - supabase/migrations/*semantic_hybrid*.sql
+        - supabase/migrations/*hybrid_semantic*.sql
+        - supabase/tests/*hybrid_search*.sql
+        - supabase/tests/*semantic_hybrid*.sql
+        - supabase/tests/*hybrid_semantic*.sql
+        - supabase/tests/benchmarks/*hybrid_search*.sql
+        - supabase/tests/benchmarks/README.md
+        - docs/agents/repo-validation.md
+        - docs/agents/repo-architecture.md
     review-submit-gate:
       paths:
         - supabase/migrations/*review_submit_gate*.sql
