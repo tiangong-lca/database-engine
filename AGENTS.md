@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-27
-lastReviewedCommit: 7ffb8b9713b9b04027d2acd240de0626319f2361
-lastReviewedNote: "Reviewed Issue #297 foundation-dataset Semantic/Hybrid visibility parity; explicit state/team scope does not change schema ownership, dev-first delivery, runtime ownership, or later workspace integration boundaries."
+lastReviewedCommit: e8dfbd2b8351aeaf71581a0d54f3bda321d090ed
+lastReviewedNote: "Reviewed Issue #297 blank-version backfill eligibility follow-up; the append-only migration, SQL regression, and explicit data-quality exception remain within existing schema ownership, dev-first delivery, runtime ownership, and later workspace integration boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
