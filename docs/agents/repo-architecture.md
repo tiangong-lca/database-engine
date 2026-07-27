@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-27
-lastReviewedCommit: 2ece812abe3af70ae51a8d3f68b9b25967d7ae58
-lastReviewedNote: "Reviewed the Issue #287 scope-closure hotfix backmerge together with Issues #291 and #292: the scope-closure, index-governance, hybrid-search, and operator-maintenance boundaries remain explicit."
+lastReviewedCommit: 7ffb8b9713b9b04027d2acd240de0626319f2361
+lastReviewedNote: "Reviewed Issue #297 foundation-dataset Semantic/Hybrid visibility parity: derivative ownership, explicit state/team scope, legacy-vector retirement, and Hosted plan-proof boundaries are explicit."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -84,7 +84,7 @@ The current migration and test history clusters around these themes:
 2. review workflow command/query RPCs
 3. dataset lifecycle, protected one-shot private owner-draft FP/UG alias rewrites, durable process-atomic Step 3 public-flow identity rewrites, guarded flow/process derivative rebuild coordination with dynamic 1..50 and retained fixed 23+27 closure proofs, and publish/delete flows
 4. notification and membership query boundaries
-5. lifecycle bundle cleanup, embedding compatibility, and measured process/flow hybrid-search HNSW plan governance
+5. lifecycle bundle cleanup, embedding compatibility, and measured process/flow plus foundation-dataset Semantic/Hybrid HNSW plan governance
 6. remote schema reconciliation and preview-branch validation
 7. review-submit gate persistence, `worker_jobs` queue state, final submit-review assertions, and retired legacy job-table archives
 8. worker-produced domain artifact/state contracts for retained `lca_package_*`, LCA result/cache/projection, and review-submit report/coordinator tables
@@ -108,6 +108,32 @@ public `state_code = 100` path; large flow-specific duplicate indexes require
 new staging evidence before they are added. Production-cardinality proof lives
 in the read-only benchmark profile and Issue #292, never in raw checked-in
 embeddings or user query text.
+
+Contacts, FlowProperties, Sources, and UnitGroups now follow the same durable
+search-derivative shape as the established Process, Flow, and LifecycleModel
+surfaces: deterministic `extracted_text`, compact extraction jobs that persist
+`extracted_md`, and backpressured embedding jobs that persist 1024-dimensional
+`embedding_ft`. Their obsolete 1536-dimensional `embedding` columns and empty
+legacy HNSW indexes are retired instead of being treated as a usable pipeline.
+
+Historical repair is an explicit service-role cursor operation with a maximum
+500-row page. It resumes either missing Markdown or missing embeddings, is
+idempotent against live extraction and embedding queues, and never performs a
+synchronous whole-table rewrite inside a migration. Extraction and embedding
+writes are derived state: their trigger paths must not advance the authored
+`modified_at` timestamp.
+
+The four public Semantic and Hybrid RPC families share exact-regclass
+allowlisted private helpers. Those helpers preserve owner/team/public
+visibility (`tg`/`co`/`my`/`te`): `tg`/`co` may be narrowed to an explicit
+team, `my` may be narrowed to an explicit state, and `te` requires one explicit
+team that the authenticated actor can read and may also be narrowed by state.
+They force custom plans so empty filters fold away, use strict-order iterative
+HNSW scans, escape PGroonga terms, and fuse text and semantic ranks with RRF.
+Local seed cardinality is not index-plan evidence;
+after the migration reaches persistent `dev`, real redacted parameters must be
+measured with read-only `EXPLAIN (ANALYZE, BUFFERS)` there before adding partial
+or duplicate indexes.
 
 ## Worker Jobs And Domain State
 
@@ -162,7 +188,7 @@ This repo owns database truth, but not every runtime consequence:
 - `database-engine` owns the guarded Step 3 public-flow identity rewrite contract. Preflight seals exact source/public/support guards, compatibility policy/evidence, ordered process templates, five-field rewrite locators, collision rows, derivative baselines, and exact pending/blocker occurrences. Initial and recovery approval artifacts are actor-wide non-reusable across request/text/identity hash domains. Each fresh preflight creates exactly one wrapper invocation and returns one memory-only rotating permit; the database persists only its generation and token hash, every successful process or finalize rotates it atomically, and exact preflight replay returns no permit. The public process/finalize RPCs require this authorization as their third argument. Scope read remains read-only status/resume evidence, while an exact read-only scope lookup resolves a lost preflight response without minting or disclosing a permit. If the wrapper loses its permit or exits after an ambiguous/domain-rejected call, continuation requires a fresh exact human-approved recovery artifact bound to observed scope state and whole-scope proof; recovery supersedes the old invocation and permit and never constitutes automatic retry. Each authenticated process call acquires the scope advisory lock, revalidates the next owner-draft process and every used mapping, reconstructs the desired JSON from live data, changes only `@refObjectId`, `@type`, `@uri`, `@version`, and `common:shortDescription`, records one unique audit, and admits one protected derivative child in the same transaction. An authenticated cancel request is actor/receipt/operation/plan/scope-proof bound and may release active fences only for an untouched `sealed` scope whose ledger, primary audits, derivative references, and mutation permits all prove zero writes; exact replay is read-only, while any post-primary scope is immutable to cancel. A terminal failed/stale derivative exposes the exact current single-target snapshot for a distinct derivative-only plan/freeze/approval; it never replays primary or auto-admits compensation. Finalize may consume only the newest exact approved-compensation request and retains active fences until all desired primaries, zero approved-source residue, unchanged source/public/support and protected occurrences, dynamic causal derivative proofs, and the completed final wrapper invocation/generation proof are current. The CLI/foundry own semantic review, canonical approval artifacts, raw in-memory permit custody, live plan/freeze/approval, and process-schema evidence; this repo never turns a historical oracle into execution authority.
 - `tiangong-lca-worker` owns numeric-stability checks and the calculator report payload semantics
 - `tiangong-lca-next` owns frontend env selection and app-side Supabase clients
-- `tiangong-lca-edge-functions` owns Edge Function runtime orchestration, worker invocation, and API response shape
+- `tiangong-lca-edge-functions` owns Edge Function runtime orchestration, worker invocation, API response shape, deterministic Markdown generation for the four foundation datasets, and the exact table/column embedding allowlist
 - `lca-workspace` owns root delivery completion after a child PR merges
 
 If a task changes both schema and app behavior, the SQL truth still starts here.
