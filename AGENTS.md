@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-27
-lastReviewedCommit: 2ece812abe3af70ae51a8d3f68b9b25967d7ae58
-lastReviewedNote: "Reviewed the Issue #287 main-to-dev hotfix backmerge together with Issues #291 and #292; schema ownership, branch delivery, automatic migration, and later workspace integration boundaries remain unchanged."
+lastReviewedCommit: 8930e372398c0f41dfa9d8633aac9d6e45ee5f87
+lastReviewedNote: "Reviewed Issue #297 foundation-dataset Semantic/Hybrid parity; schema ownership, dev-first delivery, automatic migration, Edge/Next runtime ownership, and later workspace integration boundaries remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
