@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-27
-lastReviewedCommit: 7ffb8b9713b9b04027d2acd240de0626319f2361
-lastReviewedNote: "Reviewed Issue #297 foundation-dataset Semantic/Hybrid visibility parity: derivative ownership, explicit state/team scope, legacy-vector retirement, and Hosted plan-proof boundaries are explicit."
+lastReviewedCommit: 889d3bf199ce38200dde00e7d44d2a1cc7402a70
+lastReviewedNote: "Reviewed Issue #297 foundation embedding queue selector: visible-job snapshots, distinct-scope policy resolution, preaggregated active counts, and persistent-dev plan-proof boundaries are explicit."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -125,6 +125,15 @@ writes are derived state: their trigger paths must not advance the authored
 stable worker identity and is ineligible for backfill; retain it as an explicit
 data-quality exception instead of guessing a version or enqueueing a terminally
 invalid job.
+
+Embedding queue dispatch must take one visible-job snapshot per invocation,
+resolve policy once for each distinct table/column scope, and aggregate active
+queue counts once per scope before ranking admissible work. A correlated active
+count that rescans the queue for every visible job is prohibited: a large
+backfill turns that shape into quadratic queue work before any external request
+is dispatched. Selector optimization must preserve the existing per-scope
+backpressure, retry, ordering, and stale-job contracts; it is not permission to
+raise the checked-in policy defaults.
 
 The four public Semantic and Hybrid RPC families share exact-regclass
 allowlisted private helpers. Those helpers preserve owner/team/public
