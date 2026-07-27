@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-07-27"
-lastReviewedCommit: "2ece812abe3af70ae51a8d3f68b9b25967d7ae58"
-lastReviewedNote: "Reviewed the Issue #287 main-to-dev hotfix backmerge together with Issues #291 and #292: scope-closure, index-health, and hybrid-search migrations retain their database-owned routing and proof boundaries."
+lastReviewedCommit: "ffd3b7dd87c268b75bef0f4450c445b60dd1eb95"
+lastReviewedNote: "Reviewed Issue #297 foundation-dataset Semantic/Hybrid parity: existing migration and SQL-test routing still covers the new implementation, so no rule change is required."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
