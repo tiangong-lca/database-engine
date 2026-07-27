@@ -529,7 +529,9 @@ create or replace function private.semantic_simple_dataset_candidates(
   filter_condition text default ''::text,
   match_threshold double precision default 0.5,
   match_count integer default 20,
-  data_source text default 'tg'::text
+  data_source text default 'tg'::text,
+  state_code_filter integer default null::integer,
+  team_id_filter uuid default null::uuid
 ) returns table(
   rank bigint,
   id uuid,
@@ -550,6 +552,7 @@ declare
   candidate_size integer;
   threshold_distance double precision;
   effective_user_id uuid;
+  can_read_team_filter boolean;
   visibility_clause text;
   json_filter_clause text;
   candidate_sql text;
@@ -570,29 +573,25 @@ begin
   candidate_size := greatest(normalized_match_count * 10, 200);
   threshold_distance := 1 - least(greatest(coalesce(match_threshold, 0.5), -1), 1);
   effective_user_id := private.dataset_search_effective_user_id('');
+  can_read_team_filter := private.dataset_search_can_read_team_filter(
+    team_id_filter,
+    effective_user_id
+  );
 
   if normalized_data_source = 'tg' then
-    visibility_clause := 'd.state_code = 100';
+    visibility_clause := 'd.state_code = 100 and ($7::uuid is null or d.team_id = $7)';
   elsif normalized_data_source = 'co' then
-    visibility_clause := 'd.state_code = 200';
+    visibility_clause := 'd.state_code = 200 and ($7::uuid is null or d.team_id = $7)';
   elsif normalized_data_source = 'my' then
     if effective_user_id is null then
       return;
     end if;
-    visibility_clause := 'd.user_id = $5';
+    visibility_clause := 'd.user_id = $5 and ($8::integer is null or d.state_code = $8)';
   elsif normalized_data_source = 'te' then
-    if effective_user_id is null then
+    if team_id_filter is null or not can_read_team_filter then
       return;
     end if;
-    visibility_clause := $visibility$
-      exists (
-        select 1
-        from public.roles role_row
-        where role_row.user_id = $5
-          and role_row.team_id = d.team_id
-          and role_row.role::text in ('admin', 'member', 'owner')
-      )
-    $visibility$;
+    visibility_clause := 'd.team_id = $7 and ($8::integer is null or d.state_code = $8)';
   else
     return;
   end if;
@@ -640,13 +639,14 @@ begin
 
   return query execute candidate_sql
     using query_embedding_vector, filter_condition_jsonb, candidate_size,
-          threshold_distance, effective_user_id, normalized_match_count;
+          threshold_distance, effective_user_id, normalized_match_count,
+          team_id_filter, state_code_filter;
 end;
 $$;
 
-alter function private.semantic_simple_dataset_candidates(regclass, text, text, double precision, integer, text) owner to postgres;
-revoke all on function private.semantic_simple_dataset_candidates(regclass, text, text, double precision, integer, text) from public;
-grant execute on function private.semantic_simple_dataset_candidates(regclass, text, text, double precision, integer, text) to anon, authenticated, service_role;
+alter function private.semantic_simple_dataset_candidates(regclass, text, text, double precision, integer, text, integer, uuid) owner to postgres;
+revoke all on function private.semantic_simple_dataset_candidates(regclass, text, text, double precision, integer, text, integer, uuid) from public;
+grant execute on function private.semantic_simple_dataset_candidates(regclass, text, text, double precision, integer, text, integer, uuid) to anon, authenticated, service_role;
 
 create or replace function private.semantic_simple_dataset_search(
   p_table regclass,
@@ -654,7 +654,9 @@ create or replace function private.semantic_simple_dataset_search(
   filter_condition text default ''::text,
   match_threshold double precision default 0.5,
   match_count integer default 20,
-  data_source text default 'tg'::text
+  data_source text default 'tg'::text,
+  state_code_filter integer default null::integer,
+  team_id_filter uuid default null::uuid
 ) returns table(
   rank bigint,
   id uuid,
@@ -671,6 +673,7 @@ as $$
 declare
   normalized_data_source text;
   effective_user_id uuid;
+  can_read_team_filter boolean;
   visibility_clause text;
   search_sql text;
 begin
@@ -685,29 +688,25 @@ begin
 
   normalized_data_source := coalesce(nullif(lower(btrim(data_source)), ''), 'tg');
   effective_user_id := private.dataset_search_effective_user_id('');
+  can_read_team_filter := private.dataset_search_can_read_team_filter(
+    team_id_filter,
+    effective_user_id
+  );
 
   if normalized_data_source = 'tg' then
-    visibility_clause := 'd.state_code = 100';
+    visibility_clause := 'd.state_code = 100 and ($9::uuid is null or d.team_id = $9)';
   elsif normalized_data_source = 'co' then
-    visibility_clause := 'd.state_code = 200';
+    visibility_clause := 'd.state_code = 200 and ($9::uuid is null or d.team_id = $9)';
   elsif normalized_data_source = 'my' then
     if effective_user_id is null then
       return;
     end if;
-    visibility_clause := 'd.user_id = $7';
+    visibility_clause := 'd.user_id = $7 and ($8::integer is null or d.state_code = $8)';
   elsif normalized_data_source = 'te' then
-    if effective_user_id is null then
+    if team_id_filter is null or not can_read_team_filter then
       return;
     end if;
-    visibility_clause := $visibility$
-      exists (
-        select 1
-        from public.roles role_row
-        where role_row.user_id = $7
-          and role_row.team_id = d.team_id
-          and role_row.role::text in ('admin', 'member', 'owner')
-      )
-    $visibility$;
+    visibility_clause := 'd.team_id = $9 and ($8::integer is null or d.state_code = $8)';
   else
     return;
   end if;
@@ -717,7 +716,7 @@ begin
       with semantic as materialized (
         select candidate.rank, candidate.id, candidate.distance
         from private.semantic_simple_dataset_candidates(
-          $1, $2, $3, $4, $5, $6
+          $1, $2, $3, $4, $5, $6, $8, $9
         ) candidate
       ),
       visible_rows as (
@@ -763,13 +762,14 @@ begin
 
   return query execute search_sql
     using p_table, query_embedding, filter_condition, match_threshold,
-          match_count, normalized_data_source, effective_user_id;
+          match_count, normalized_data_source, effective_user_id,
+          state_code_filter, team_id_filter;
 end;
 $$;
 
-alter function private.semantic_simple_dataset_search(regclass, text, text, double precision, integer, text) owner to postgres;
-revoke all on function private.semantic_simple_dataset_search(regclass, text, text, double precision, integer, text) from public;
-grant execute on function private.semantic_simple_dataset_search(regclass, text, text, double precision, integer, text) to anon, authenticated, service_role;
+alter function private.semantic_simple_dataset_search(regclass, text, text, double precision, integer, text, integer, uuid) owner to postgres;
+revoke all on function private.semantic_simple_dataset_search(regclass, text, text, double precision, integer, text, integer, uuid) from public;
+grant execute on function private.semantic_simple_dataset_search(regclass, text, text, double precision, integer, text, integer, uuid) to anon, authenticated, service_role;
 
 create or replace function private.hybrid_search_simple_dataset(
   p_table regclass,
@@ -785,7 +785,9 @@ create or replace function private.hybrid_search_simple_dataset(
   data_source text default 'tg'::text,
   page_size integer default 10,
   page_current integer default 1,
-  query_terms text[] default null::text[]
+  query_terms text[] default null::text[],
+  state_code_filter integer default null::integer,
+  team_id_filter uuid default null::uuid
 ) returns table(
   id uuid,
   "json" jsonb,
@@ -811,6 +813,7 @@ declare
   filter_condition_jsonb jsonb;
   escaped_query_terms text[];
   effective_user_id uuid;
+  can_read_team_filter boolean;
   visibility_clause text;
   json_filter_clause text;
   text_match_clause text;
@@ -839,30 +842,26 @@ begin
     escaped_query_terms := private.pgroonga_escape_query_terms(array[query_text]);
   end if;
   effective_user_id := private.dataset_search_effective_user_id('');
+  can_read_team_filter := private.dataset_search_can_read_team_filter(
+    team_id_filter,
+    effective_user_id
+  );
   text_weight := coalesce(full_text_weight, 0) + coalesce(extracted_text_weight, 0);
 
   if normalized_data_source = 'tg' then
-    visibility_clause := 'd.state_code = 100';
+    visibility_clause := 'd.state_code = 100 and ($5::uuid is null or d.team_id = $5)';
   elsif normalized_data_source = 'co' then
-    visibility_clause := 'd.state_code = 200';
+    visibility_clause := 'd.state_code = 200 and ($5::uuid is null or d.team_id = $5)';
   elsif normalized_data_source = 'my' then
     if effective_user_id is null then
       return;
     end if;
-    visibility_clause := 'd.user_id = $4';
+    visibility_clause := 'd.user_id = $4 and ($6::integer is null or d.state_code = $6)';
   elsif normalized_data_source = 'te' then
-    if effective_user_id is null then
+    if team_id_filter is null or not can_read_team_filter then
       return;
     end if;
-    visibility_clause := $visibility$
-      exists (
-        select 1
-        from public.roles role_row
-        where role_row.user_id = $4
-          and role_row.team_id = d.team_id
-          and role_row.role::text in ('admin', 'member', 'owner')
-      )
-    $visibility$;
+    visibility_clause := 'd.team_id = $5 and ($6::integer is null or d.state_code = $6)';
   else
     return;
   end if;
@@ -900,27 +899,27 @@ begin
           text_scores.id as text_id
         from text_scores
         order by text_scores.search_score desc, text_scores.id
-        limit $5
+        limit $7
       ),
       semantic as materialized (
         select
           candidate.rank as semantic_rank,
           candidate.id as semantic_id
         from private.semantic_simple_dataset_candidates(
-          $6, $7, $8, $9, $10, $3
+          $8, $9, $10, $11, $12, $3, $6, $5
         ) candidate
       ),
       fused_raw as (
         select
           coalesce(text_matches.text_id, semantic.semantic_id) as id,
           coalesce(
-            1.0 / ($11 + text_matches.text_rank),
+            1.0 / ($13 + text_matches.text_rank),
             0.0
-          ) * $12
+          ) * $14
           + coalesce(
-            1.0 / ($11 + semantic.semantic_rank),
+            1.0 / ($13 + semantic.semantic_rank),
             0.0
-          ) * $13 as score
+          ) * $15 as score
         from text_matches
         full outer join semantic
           on text_matches.text_id = semantic.semantic_id
@@ -961,8 +960,8 @@ begin
         counted_rows.total_count
       from counted_rows
       order by counted_rows.score desc, counted_rows.modified_at desc, counted_rows.id
-      limit $14
-      offset ($15 - 1) * $14
+      limit $16
+      offset ($17 - 1) * $16
     $sql$,
     p_table,
     text_match_clause,
@@ -972,23 +971,26 @@ begin
 
   return query execute hybrid_sql
     using escaped_query_terms, filter_condition_jsonb, normalized_data_source,
-          effective_user_id, candidate_limit, p_table, query_embedding,
-          filter_condition, match_threshold, semantic_match_count,
-          normalized_rrf_k, text_weight, coalesce(semantic_weight, 0),
-          normalized_page_size, normalized_page_current;
+          effective_user_id, team_id_filter, state_code_filter, candidate_limit,
+          p_table, query_embedding, filter_condition, match_threshold,
+          semantic_match_count, normalized_rrf_k, text_weight,
+          coalesce(semantic_weight, 0), normalized_page_size,
+          normalized_page_current;
 end;
 $$;
 
-alter function private.hybrid_search_simple_dataset(regclass, text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[]) owner to postgres;
-revoke all on function private.hybrid_search_simple_dataset(regclass, text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[]) from public;
-grant execute on function private.hybrid_search_simple_dataset(regclass, text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[]) to anon, authenticated, service_role;
+alter function private.hybrid_search_simple_dataset(regclass, text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[], integer, uuid) owner to postgres;
+revoke all on function private.hybrid_search_simple_dataset(regclass, text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[], integer, uuid) from public;
+grant execute on function private.hybrid_search_simple_dataset(regclass, text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[], integer, uuid) to anon, authenticated, service_role;
 
 create or replace function public.semantic_search_contacts_v1(
   query_embedding text,
   filter_condition text default ''::text,
   match_threshold double precision default 0.5,
   match_count integer default 20,
-  data_source text default 'tg'::text
+  data_source text default 'tg'::text,
+  state_code_filter integer default null::integer,
+  team_id_filter uuid default null::uuid
 ) returns table(rank bigint, id uuid, "json" jsonb, version character(9), modified_at timestamp with time zone, total_count bigint)
 language sql
 set search_path to 'public', 'extensions', 'pg_temp'
@@ -1000,7 +1002,9 @@ as $$
     filter_condition,
     match_threshold,
     match_count,
-    data_source
+    data_source,
+    state_code_filter,
+    team_id_filter
   );
 $$;
 
@@ -1009,7 +1013,9 @@ create or replace function public.semantic_search_flowproperties_v1(
   filter_condition text default ''::text,
   match_threshold double precision default 0.5,
   match_count integer default 20,
-  data_source text default 'tg'::text
+  data_source text default 'tg'::text,
+  state_code_filter integer default null::integer,
+  team_id_filter uuid default null::uuid
 ) returns table(rank bigint, id uuid, "json" jsonb, version character(9), modified_at timestamp with time zone, total_count bigint)
 language sql
 set search_path to 'public', 'extensions', 'pg_temp'
@@ -1021,7 +1027,9 @@ as $$
     filter_condition,
     match_threshold,
     match_count,
-    data_source
+    data_source,
+    state_code_filter,
+    team_id_filter
   );
 $$;
 
@@ -1030,7 +1038,9 @@ create or replace function public.semantic_search_sources_v1(
   filter_condition text default ''::text,
   match_threshold double precision default 0.5,
   match_count integer default 20,
-  data_source text default 'tg'::text
+  data_source text default 'tg'::text,
+  state_code_filter integer default null::integer,
+  team_id_filter uuid default null::uuid
 ) returns table(rank bigint, id uuid, "json" jsonb, version character(9), modified_at timestamp with time zone, total_count bigint)
 language sql
 set search_path to 'public', 'extensions', 'pg_temp'
@@ -1042,7 +1052,9 @@ as $$
     filter_condition,
     match_threshold,
     match_count,
-    data_source
+    data_source,
+    state_code_filter,
+    team_id_filter
   );
 $$;
 
@@ -1051,7 +1063,9 @@ create or replace function public.semantic_search_unitgroups_v1(
   filter_condition text default ''::text,
   match_threshold double precision default 0.5,
   match_count integer default 20,
-  data_source text default 'tg'::text
+  data_source text default 'tg'::text,
+  state_code_filter integer default null::integer,
+  team_id_filter uuid default null::uuid
 ) returns table(rank bigint, id uuid, "json" jsonb, version character(9), modified_at timestamp with time zone, total_count bigint)
 language sql
 set search_path to 'public', 'extensions', 'pg_temp'
@@ -1063,7 +1077,9 @@ as $$
     filter_condition,
     match_threshold,
     match_count,
-    data_source
+    data_source,
+    state_code_filter,
+    team_id_filter
   );
 $$;
 
@@ -1080,7 +1096,9 @@ create or replace function public.hybrid_search_contacts(
   data_source text default 'tg'::text,
   page_size integer default 10,
   page_current integer default 1,
-  query_terms text[] default null::text[]
+  query_terms text[] default null::text[],
+  state_code_filter integer default null::integer,
+  team_id_filter uuid default null::uuid
 ) returns table(id uuid, "json" jsonb, version character(9), modified_at timestamp with time zone, team_id uuid, total_count bigint)
 language sql
 set search_path to 'public', 'extensions', 'pg_temp'
@@ -1100,7 +1118,9 @@ as $$
     data_source,
     page_size,
     page_current,
-    query_terms
+    query_terms,
+    state_code_filter,
+    team_id_filter
   );
 $$;
 
@@ -1117,7 +1137,9 @@ create or replace function public.hybrid_search_flowproperties(
   data_source text default 'tg'::text,
   page_size integer default 10,
   page_current integer default 1,
-  query_terms text[] default null::text[]
+  query_terms text[] default null::text[],
+  state_code_filter integer default null::integer,
+  team_id_filter uuid default null::uuid
 ) returns table(id uuid, "json" jsonb, version character(9), modified_at timestamp with time zone, team_id uuid, total_count bigint)
 language sql
 set search_path to 'public', 'extensions', 'pg_temp'
@@ -1137,7 +1159,9 @@ as $$
     data_source,
     page_size,
     page_current,
-    query_terms
+    query_terms,
+    state_code_filter,
+    team_id_filter
   );
 $$;
 
@@ -1154,7 +1178,9 @@ create or replace function public.hybrid_search_sources(
   data_source text default 'tg'::text,
   page_size integer default 10,
   page_current integer default 1,
-  query_terms text[] default null::text[]
+  query_terms text[] default null::text[],
+  state_code_filter integer default null::integer,
+  team_id_filter uuid default null::uuid
 ) returns table(id uuid, "json" jsonb, version character(9), modified_at timestamp with time zone, team_id uuid, total_count bigint)
 language sql
 set search_path to 'public', 'extensions', 'pg_temp'
@@ -1174,7 +1200,9 @@ as $$
     data_source,
     page_size,
     page_current,
-    query_terms
+    query_terms,
+    state_code_filter,
+    team_id_filter
   );
 $$;
 
@@ -1191,7 +1219,9 @@ create or replace function public.hybrid_search_unitgroups(
   data_source text default 'tg'::text,
   page_size integer default 10,
   page_current integer default 1,
-  query_terms text[] default null::text[]
+  query_terms text[] default null::text[],
+  state_code_filter integer default null::integer,
+  team_id_filter uuid default null::uuid
 ) returns table(id uuid, "json" jsonb, version character(9), modified_at timestamp with time zone, team_id uuid, total_count bigint)
 language sql
 set search_path to 'public', 'extensions', 'pg_temp'
@@ -1211,35 +1241,37 @@ as $$
     data_source,
     page_size,
     page_current,
-    query_terms
+    query_terms,
+    state_code_filter,
+    team_id_filter
   );
 $$;
 
-alter function public.semantic_search_contacts_v1(text, text, double precision, integer, text) owner to postgres;
-alter function public.semantic_search_flowproperties_v1(text, text, double precision, integer, text) owner to postgres;
-alter function public.semantic_search_sources_v1(text, text, double precision, integer, text) owner to postgres;
-alter function public.semantic_search_unitgroups_v1(text, text, double precision, integer, text) owner to postgres;
+alter function public.semantic_search_contacts_v1(text, text, double precision, integer, text, integer, uuid) owner to postgres;
+alter function public.semantic_search_flowproperties_v1(text, text, double precision, integer, text, integer, uuid) owner to postgres;
+alter function public.semantic_search_sources_v1(text, text, double precision, integer, text, integer, uuid) owner to postgres;
+alter function public.semantic_search_unitgroups_v1(text, text, double precision, integer, text, integer, uuid) owner to postgres;
 
-alter function public.hybrid_search_contacts(text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[]) owner to postgres;
-alter function public.hybrid_search_flowproperties(text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[]) owner to postgres;
-alter function public.hybrid_search_sources(text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[]) owner to postgres;
-alter function public.hybrid_search_unitgroups(text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[]) owner to postgres;
+alter function public.hybrid_search_contacts(text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[], integer, uuid) owner to postgres;
+alter function public.hybrid_search_flowproperties(text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[], integer, uuid) owner to postgres;
+alter function public.hybrid_search_sources(text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[], integer, uuid) owner to postgres;
+alter function public.hybrid_search_unitgroups(text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[], integer, uuid) owner to postgres;
 
-grant execute on function public.semantic_search_contacts_v1(text, text, double precision, integer, text) to anon, authenticated, service_role;
-grant execute on function public.semantic_search_flowproperties_v1(text, text, double precision, integer, text) to anon, authenticated, service_role;
-grant execute on function public.semantic_search_sources_v1(text, text, double precision, integer, text) to anon, authenticated, service_role;
-grant execute on function public.semantic_search_unitgroups_v1(text, text, double precision, integer, text) to anon, authenticated, service_role;
+grant execute on function public.semantic_search_contacts_v1(text, text, double precision, integer, text, integer, uuid) to anon, authenticated, service_role;
+grant execute on function public.semantic_search_flowproperties_v1(text, text, double precision, integer, text, integer, uuid) to anon, authenticated, service_role;
+grant execute on function public.semantic_search_sources_v1(text, text, double precision, integer, text, integer, uuid) to anon, authenticated, service_role;
+grant execute on function public.semantic_search_unitgroups_v1(text, text, double precision, integer, text, integer, uuid) to anon, authenticated, service_role;
 
-grant execute on function public.hybrid_search_contacts(text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[]) to anon, authenticated, service_role;
-grant execute on function public.hybrid_search_flowproperties(text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[]) to anon, authenticated, service_role;
-grant execute on function public.hybrid_search_sources(text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[]) to anon, authenticated, service_role;
-grant execute on function public.hybrid_search_unitgroups(text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[]) to anon, authenticated, service_role;
+grant execute on function public.hybrid_search_contacts(text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[], integer, uuid) to anon, authenticated, service_role;
+grant execute on function public.hybrid_search_flowproperties(text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[], integer, uuid) to anon, authenticated, service_role;
+grant execute on function public.hybrid_search_sources(text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[], integer, uuid) to anon, authenticated, service_role;
+grant execute on function public.hybrid_search_unitgroups(text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[], integer, uuid) to anon, authenticated, service_role;
 
 comment on function public.cmd_dataset_semantic_backfill(text, integer, uuid, text, boolean) is
   'Service-only bounded cursor RPC that enqueues missing foundation-dataset Markdown or embedding work without a synchronous table rewrite.';
 
-comment on function private.semantic_simple_dataset_candidates(regclass, text, text, double precision, integer, text) is
-  'Allow-listed, visibility-first HNSW candidate generator shared by contacts, flow properties, sources, and unit groups.';
+comment on function private.semantic_simple_dataset_candidates(regclass, text, text, double precision, integer, text, integer, uuid) is
+  'Allow-listed, state/team-aware, visibility-first HNSW candidate generator shared by contacts, flow properties, sources, and unit groups.';
 
-comment on function private.hybrid_search_simple_dataset(regclass, text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[]) is
-  'Allow-listed PGroonga plus HNSW reciprocal-rank-fusion implementation for the four foundation dataset families.';
+comment on function private.hybrid_search_simple_dataset(regclass, text, text, text, double precision, integer, double precision, double precision, double precision, integer, text, integer, integer, text[], integer, uuid) is
+  'Allow-listed, state/team-aware PGroonga plus HNSW reciprocal-rank-fusion implementation for the four foundation dataset families.';

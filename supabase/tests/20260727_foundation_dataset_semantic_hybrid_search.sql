@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(40);
+select plan(44);
 
 create or replace function pg_temp.trigger_update_columns(
   p_table regclass,
@@ -281,7 +281,7 @@ select ok(
   (
     select routine.prosecdef
     from pg_proc routine
-    where routine.oid = 'private.semantic_simple_dataset_candidates(regclass,text,text,double precision,integer,text)'::regprocedure
+    where routine.oid = 'private.semantic_simple_dataset_candidates(regclass,text,text,double precision,integer,text,integer,uuid)'::regprocedure
   ),
   'the allow-listed semantic candidate helper is security definer'
 );
@@ -293,7 +293,7 @@ select ok(
       'hnsw.iterative_scan=strict_order'
     ]
     from pg_proc routine
-    where routine.oid = 'private.semantic_simple_dataset_candidates(regclass,text,text,double precision,integer,text)'::regprocedure
+    where routine.oid = 'private.semantic_simple_dataset_candidates(regclass,text,text,double precision,integer,text,integer,uuid)'::regprocedure
   ),
   'semantic candidates use custom plans and strict iterative HNSW scans'
 );
@@ -549,9 +549,9 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select array_agg(id::text order by id) from public.semantic_search_contacts_v1((select value from query_vector), '{}', 0.5, 20, 'te')),
+  (select array_agg(id::text order by id) from public.semantic_search_contacts_v1((select value from query_vector), '{}', 0.5, 20, 'te', null, 'c3000000-0000-0000-0000-000000000297')),
   array['ca000000-0000-0000-0000-000000000202']::text[],
-  'team Semantic Search returns only rows from teams the actor belongs to'
+  'team Semantic Search returns only rows from the selected team the actor belongs to'
 );
 
 with query_vector(value) as (
@@ -561,6 +561,42 @@ select is(
   (select id::text from public.hybrid_search_contacts('outsider-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'my', 10, 1, array['outsider-contact-token']) limit 1),
   'ca000000-0000-0000-0000-000000000201',
   'my Hybrid Search does not leak an outsider text or semantic candidate'
+);
+
+with query_vector(value) as (
+  select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
+)
+select is(
+  (select count(*)::integer from public.hybrid_search_contacts('owner-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'my', 10, 1, array['owner-contact-token'], 1, null)),
+  0,
+  'my Hybrid Search preserves the explicit state filter'
+);
+
+with query_vector(value) as (
+  select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
+)
+select is(
+  (select id::text from public.hybrid_search_contacts('team-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'te', 10, 1, array['team-contact-token'], 0, 'c3000000-0000-0000-0000-000000000297') limit 1),
+  'ca000000-0000-0000-0000-000000000202',
+  'team Hybrid Search preserves the selected team and state filters'
+);
+
+with query_vector(value) as (
+  select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
+)
+select is(
+  (select count(*)::integer from public.hybrid_search_contacts('team-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'te', 10, 1, array['team-contact-token'], 0, null)),
+  0,
+  'team Hybrid Search fails closed without an explicit team filter'
+);
+
+with query_vector(value) as (
+  select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
+)
+select is(
+  (select count(*)::integer from public.hybrid_search_contacts('public-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'tg', 10, 1, array['public-contact-token'], null, 'c3000000-0000-0000-0000-000000000297')),
+  0,
+  'public Hybrid Search preserves an explicit team scope'
 );
 
 reset role;
