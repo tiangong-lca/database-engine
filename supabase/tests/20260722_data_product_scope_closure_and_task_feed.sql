@@ -93,7 +93,21 @@ select ok((select pg_get_expr(adbin,adrelid) like '%nextval%' from pg_attrdef wh
 select ok(position('schemaVersion' in pg_get_functiondef('public.get_lcia_scope_closure_check(uuid)'::regprocedure)) > 0 and position('lcia.scope-closure-check.v1' in pg_get_functiondef('public.get_lcia_scope_closure_check(uuid)'::regprocedure)) > 0, 'closure check read API projects a versioned V1 DTO');
 select ok(position('''nextCursor''' in pg_get_functiondef('public.list_lcia_scope_closure_issues(uuid,uuid,integer)'::regprocedure)) > 0, 'issue read API exposes a stable keyset cursor page');
 select ok(position('''totalCount''' in pg_get_functiondef('public.list_lcia_scope_closure_issues(uuid,uuid,integer)'::regprocedure)) > 0, 'issue read API projects an accurate total count');
-select ok(position('lca_release_dataset_versions' in pg_get_functiondef('public.lcia_scope_closure_normalize_request(jsonb)'::regprocedure)) > 0 and position('process_not_in_current_public_release' in pg_get_functiondef('public.lcia_scope_closure_normalize_request(jsonb)'::regprocedure)) > 0, 'scope normalization rejects live-only process identities outside the current release');
+select ok(
+  position(
+    'lca_release_dataset_versions'
+    in pg_get_functiondef(
+      'public.lcia_scope_closure_normalize_request(jsonb)'::regprocedure
+    )
+  ) > 0
+  and position(
+    'candidate-public-state-code-100-199:v1'
+    in pg_get_functiondef(
+      'public.lcia_scope_closure_normalize_request(jsonb)'::regprocedure
+    )
+  ) > 0,
+  'scope normalization uses a formal release when present and candidate public state before the first release'
+);
 select ok(position('current-membership-required-v1' in pg_get_functiondef('public.cmd_lcia_result_build_request_v2(text,jsonb,text,text,jsonb,text,uuid,text,text,jsonb)'::regprocedure)) > 0 and position('lcia_scope_closure_current_release_matches' in pg_get_functiondef('public.cmd_lcia_result_build_request_v2(text,jsonb,text,text,jsonb,text,uuid,text,text,jsonb)'::regprocedure)) > 0, 'current-membership certificates are checked against the current release at Build time');
 select ok(position('lcia_scope_closure_current_release_matches' in pg_get_functiondef('public.svc_lcia_scope_closure_certificate_event(uuid,text,text)'::regprocedure)) = 0, 'frozen certificates are not automatically staled merely because a later release exists');
 
