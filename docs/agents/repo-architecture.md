@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-22
-lastReviewedCommit: 0c0abfb73a85d0322177b1236200f564b5a023c8
-lastReviewedNote: "Reviewed issues #281 and #283 for administrator-rejection and numerical snapshot certificate changes through authoritative migration and SQL-test paths; the stable/generated path map remains accurate."
+lastReviewedAt: 2026-07-27
+lastReviewedCommit: 97f7a95ecf91ffb12f25f39f978a5074e33240d7
+lastReviewedNote: "Reviewed for Issue #291: schema truth includes usable FK-support prefixes and exact duplicate removal; physical hooks compaction remains an operator action rather than a migration."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -88,6 +88,7 @@ The current migration and test history clusters around these themes:
 7. review-submit gate persistence, `worker_jobs` queue state, final submit-review assertions, and retired legacy job-table archives
 8. worker-produced domain artifact/state contracts for retained `lca_package_*`, LCA result/cache/projection, and review-submit report/coordinator tables
 9. canonical LCI/LCIA release runs, exact dataset-version indexes, immutable four-package artifact refs, durable approval, publication, and readback
+10. Performance Advisor evidence, usable foreign-key support indexes, exact duplicate removal, and lock-aware managed-schema bloat maintenance
 
 If the task touches one of those areas, expect both schema truth and regression assertions to matter.
 

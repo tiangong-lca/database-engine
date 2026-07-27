@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-07-22"
-lastReviewedCommit: "0c0abfb73a85d0322177b1236200f564b5a023c8"
-lastReviewedNote: "Reviewed issues #281 and #283 for administrator-rejection shared references and numerical snapshot certificates; existing ownership, routing, and validation governance remains accurate."
+lastReviewedAt: "2026-07-27"
+lastReviewedCommit: "97f7a95ecf91ffb12f25f39f978a5074e33240d7"
+lastReviewedNote: "Reviewed Issue #291 routing: index-health migrations and SQL assertions remain database-owned, while hooks physical compaction stays an explicit operator proof step."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

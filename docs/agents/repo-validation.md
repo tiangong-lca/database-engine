@@ -29,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-22
-lastReviewedCommit: 0c0abfb73a85d0322177b1236200f564b5a023c8
-lastReviewedNote: "Reviewed issues #281 and #283 for administrator-rejection and numerical snapshot certificate proof; db reset, migration-list verification, focused pgTAP/E2E, and advisor checks remain the required validation."
+lastReviewedAt: 2026-07-27
+lastReviewedCommit: 97f7a95ecf91ffb12f25f39f978a5074e33240d7
+lastReviewedNote: "Reviewed for Issue #291: index-health assertions now require usable key prefixes, while hooks heap compaction remains a measured maintenance-window operation outside automatic migrations."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -61,6 +61,7 @@ supabase migration list
 | Change type | Minimum local proof | Stronger proof when risk is higher | Notes |
 | --- | --- | --- | --- |
 | `supabase/migrations/**` | `supabase db reset` succeeds | run the relevant SQL assertions under `supabase/tests/**`; inspect affected workspace objects if the migration was authored from workspace files | Record which migration and which SQL test files were exercised. |
+| Performance Advisor index or table-bloat governance | `supabase db reset`; run `supabase/tests/20260608_missing_fk_support_indexes.sql` and any affected domain regression | run `supabase db lint --level warning`; compare the relevant Performance Advisor notices on Preview and persistent `dev`; for physical compaction, follow the hooks maintenance-window procedure below | An unused-index notice alone is not permission to drop HNSW, GIN, PGroonga, FK-supporting, or other workload-sensitive indexes. `VACUUM FULL` is never part of the automatic migration path. |
 | guarded atomic owner-draft FP/UG alias primitive | `supabase db reset`; run `supabase/tests/20260711_guarded_dataset_alias_batch.sql` and the legacy `supabase/tests/20260404_dataset_command_rpcs.sql` | prove both the replay-capable whole-plan function and per-dimension executor have no API grants; exercise them only through postgres-owned test wrappers; retain the exact `dataset-alias-plan.v1` envelope, ordered time plus length-time batches, 25-row/20-exchange and 27-row/39-exchange scopes, public/foreign rejection, exact factors, live closure, hashes, and all-or-nothing audit proof | This is an internal mutation primitive after protected cutover. It never publishes or changes `state_code`; direct authenticated and service-role execution remains revoked. |
 | protected one-shot owner-draft FP/UG execution | `supabase db reset`; run `supabase/tests/20260715_protected_dataset_alias_execution.sql`, `supabase/tests/20260711_guarded_dataset_alias_batch.sql`, both derivative rebuild suites, and the rollback-only statement-timeout fault assertion under `supabase/tests/preview/**` | on the exact hosted Preview ref, run `node supabase/tests/preview/protected_alias_rest_e2e.mjs --expected-preview-ref <ref>` and prove real authenticated success, atomic business rollback, concurrent duplicate admission, lost response, HTTP timeout, status-only recovery, exact 52 rows/59 exchanges/55 audits plus 23-flow + 27-process child admission, 309 unrelated-exchange preservation, and zero actor-scoped fixture residue; also retain the exact authenticated preflight/gate/admit/read ACLs and service-only executor, trusted server context, canonical plan/freeze/approval binding, immutable live-gate hashes, 180-second window, owner/state fences, zero legacy RPC grants, six unchanged support snapshots, and all-terminal causal aggregate proof | Hosted fixtures must hard-fail outside the exact disposable Preview, use separate Auth actors/UUID namespaces, emit redacted evidence, and clean up only their own rows, ledgers, queue items, failures, audits, and users. If a disposable Preview lacks `project_url` and `project_secret_key`, the fixture may create only two exact scenario-scoped Vault values after ref/URL binding, must refuse every pre-existing same-name value, and must delete them by exact name, description, and decrypted value; cleanup failure revokes but retains the actor identity for recovery. Pure BAFU owner-draft data may use the released tool directly on production only after a fresh production freeze and exact human approval; Preview/Dev validate shared capability and never replay BAFU data. No retry, approval reuse, publication, `state_code` change, raw SQL fallback, broad queue cleanup, or client-supplied desired PostgreSQL hash is allowed. |
 | guarded owner-draft flow/process derivative rebuild | `supabase db reset`; run `supabase/tests/20260714_guarded_dataset_derivative_rebuild.sql` and `supabase/tests/20260715_guarded_dataset_derivative_rebuild_batch.sql` plus nearby webhook, embedding queue, and dataset-command regressions | retain the single-process v1 ACL/envelope/error contract; prove flow/process snapshot, fence, staging, quarantine, dispatch, proposal, commit, and terminal parity; prove the internal admission/read helpers have empty search paths and no anon/authenticated/service-role grants; reject 0, 51, duplicate, foreign, public, non-draft, incomplete, or desired-hash-drift targets before any child/audit/quarantine effect; atomically bind 1..50 children to supplied frozen baselines and actual post-write primary snapshots; and require exact 50/50, 23-flow + 27-process live primary, committed proposal, fresh vector, terminal audit, queue/failure drain, and completed-snapshot proof before aggregate completion | The compatible public v1 admission remains one process. Protected alias execution alone may invoke the private batch primitive in its mutation transaction. The primitive has a five-second lock wait, takes stable table/id/version row locks rather than a broad table write lock, validates every target before effects, never reports replay, and never retries. Nonterminal drain/failure phases retain each target fence. `completed`, `stale`, or `failed` may release it only after request-specific work and pre-existing worker windows are drained. |
@@ -97,6 +98,67 @@ If you add or change SQL assertions:
 3. record the exact invocation in the PR
 
 If you add or change an offline Node contract, run its exact file with `node --test` and record that command separately from any deferred Hosted proof.
+
+## Supabase Functions Hooks Compaction
+
+`util.purge_supabase_functions_hooks` enforces logical retention, but ordinary
+deletes and autovacuum do not return the table files to the operating system.
+Treat physical compaction as an explicit production maintenance action.
+
+Before the maintenance window:
+
+1. confirm a current backup or point-in-time recovery window
+2. run the retention preview and bounded purge until `eligible_rows` is zero
+3. capture row count and heap, index, and total bytes with the query below
+4. confirm no long-running session or queued lock is using the hooks relation
+5. stop if the application cannot tolerate an `ACCESS EXCLUSIVE` lock
+
+```sql
+select *
+from util.preview_supabase_functions_hooks_retention(
+  interval '14 days',
+  pg_catalog.now()
+);
+
+select
+  count(*) as row_count,
+  pg_catalog.pg_relation_size('supabase_functions.hooks') as heap_bytes,
+  pg_catalog.pg_indexes_size('supabase_functions.hooks') as index_bytes,
+  pg_catalog.pg_total_relation_size('supabase_functions.hooks') as total_bytes
+from supabase_functions.hooks;
+
+select
+  activity.pid,
+  activity.usename,
+  activity.state,
+  activity.wait_event_type,
+  activity.wait_event,
+  lock.mode,
+  lock.granted,
+  activity.query_start
+from pg_catalog.pg_locks as lock
+join pg_catalog.pg_stat_activity as activity
+  on activity.pid = lock.pid
+where lock.relation = 'supabase_functions.hooks'::regclass
+order by lock.granted, activity.query_start;
+```
+
+Run compaction from a direct database session during the approved window. The
+timeouts make lock contention fail closed instead of queueing indefinitely:
+
+```sql
+set lock_timeout = '5s';
+set statement_timeout = '15min';
+vacuum (full, analyze) supabase_functions.hooks;
+reset statement_timeout;
+reset lock_timeout;
+```
+
+If the lock timeout fires, reschedule; do not increase it while traffic is
+active. After success, rerun the storage query and the retention SQL test,
+record before/after bytes in the delivery Issue, and verify webhook execution.
+`VACUUM FULL` cannot be rolled back, so do not repeat it merely because the
+remaining live rows still require disk space.
 
 ## Schema Workspace Tooling Checks
 
