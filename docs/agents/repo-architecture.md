@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-24
-lastReviewedCommit: 8281967cf9031229789ace9df6cbcfe33f13622c
-lastReviewedNote: "Reviewed the owner-scoped closure-check V1 read projection for nonterminal checks; the current architecture and cross-repo boundaries remain accurate."
+lastReviewedAt: 2026-07-27
+lastReviewedCommit: 2ece812abe3af70ae51a8d3f68b9b25967d7ae58
+lastReviewedNote: "Reviewed the Issue #287 scope-closure hotfix backmerge together with Issues #291 and #292: the scope-closure, index-governance, hybrid-search, and operator-maintenance boundaries remain explicit."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -50,6 +50,7 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | `supabase/seed.sql` | shared seed data; when no rows are needed, retain an executable no-op statement instead of a comments-only file so hosted Preview seeding has a valid SQL batch |
 | `supabase/seeds/dev.sql` | persistent dev-only seed overlay |
 | `supabase/tests/**` | PGTAP-style database assertions plus narrow offline Node contracts for test-runner control flow |
+| `supabase/tests/benchmarks/**` | explicit operator-run performance profiles; read each profile's environment guard because some are local/Preview-only while hybrid-search evidence is pinned to persistent staging |
 | `supabase/tests/preview/**` | exact-ref-bound disposable Hosted Preview mutation fixtures, cleanup, rollback-only fault assertions, and offline transport/lifecycle contracts; test-only and excluded from migrations, seeds, Dev data rehearsal, and production execution |
 | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |
 | `scripts/**` | export, refresh, change-copy, and migration-generation helpers |
@@ -83,14 +84,30 @@ The current migration and test history clusters around these themes:
 2. review workflow command/query RPCs
 3. dataset lifecycle, protected one-shot private owner-draft FP/UG alias rewrites, durable process-atomic Step 3 public-flow identity rewrites, guarded flow/process derivative rebuild coordination with dynamic 1..50 and retained fixed 23+27 closure proofs, and publish/delete flows
 4. notification and membership query boundaries
-5. lifecycle bundle cleanup and embedding-related compatibility
+5. lifecycle bundle cleanup, embedding compatibility, and measured process/flow hybrid-search HNSW plan governance
 6. remote schema reconciliation and preview-branch validation
 7. review-submit gate persistence, `worker_jobs` queue state, final submit-review assertions, and retired legacy job-table archives
 8. worker-produced domain artifact/state contracts for retained `lca_package_*`, LCA result/cache/projection, and review-submit report/coordinator tables
 9. canonical LCI/LCIA release runs, exact dataset-version indexes, immutable four-package artifact refs, durable approval, publication, and readback
-10. data-product scope-closure preflight, immutable release/candidate document snapshots, exact Worker-compatible content hashes, and certificate-bound result generation
+10. Performance Advisor evidence, usable foreign-key support indexes, exact duplicate removal, and lock-aware managed-schema bloat maintenance
 
 If the task touches one of those areas, expect both schema truth and regression assertions to matter.
+
+## Hybrid Search Plan Boundary
+
+The process/flow hybrid RPCs deliberately separate text-fusion expansion from
+semantic candidate expansion. Public hybrid functions pass the unexpanded
+semantic match count; private semantic helpers apply one 10x scan bound with a
+200-row floor. Empty residual JSON filters must be foldable under custom plans
+so they do not suppress HNSW. Filtered pgvector 0.8 HNSW paths use strict-order
+iterative scans because filtering happens after approximate index traversal.
+
+The global process/flow HNSW indexes remain necessary for owner/team and broad
+visibility paths. A smaller process partial HNSW index covers the measured
+public `state_code = 100` path; large flow-specific duplicate indexes require
+new staging evidence before they are added. Production-cardinality proof lives
+in the read-only benchmark profile and Issue #292, never in raw checked-in
+embeddings or user query text.
 
 ## Worker Jobs And Domain State
 

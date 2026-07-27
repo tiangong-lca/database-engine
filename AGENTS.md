@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-24
-lastReviewedCommit: 8281967cf9031229789ace9df6cbcfe33f13622c
-lastReviewedNote: "Reviewed the nonterminal closure-check V1 read projection hotfix; repo ownership, main hotfix path, and workspace integration rules remain unchanged."
+lastReviewedAt: 2026-07-27
+lastReviewedCommit: 2ece812abe3af70ae51a8d3f68b9b25967d7ae58
+lastReviewedNote: "Reviewed the Issue #287 main-to-dev hotfix backmerge together with Issues #291 and #292; schema ownership, branch delivery, automatic migration, and later workspace integration boundaries remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
