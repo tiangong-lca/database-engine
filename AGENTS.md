@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-27
-lastReviewedCommit: 97f7a9597b0b4487fc7f3ffaa2bbaa012c25a975
-lastReviewedNote: "Reviewed issue #292 measured hybrid-search migration, SQL-test, and staging-benchmark delivery; repo ownership, dev-based delivery, and workspace integration rules remain unchanged."
+lastReviewedCommit: 18a797c35441dc8abb985b537b4419980a2ca56a
+lastReviewedNote: "Reviewed merged Issue #291 and active Issue #292 together; schema ownership, dev-based delivery, automatic migration boundaries, and later workspace integration remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

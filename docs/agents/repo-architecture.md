@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-27
-lastReviewedCommit: 97f7a9597b0b4487fc7f3ffaa2bbaa012c25a975
-lastReviewedNote: "Reviewed issue #292 process/flow hybrid-search plan governance; migrations remain authoritative, while read-only staging profiles under supabase/tests/benchmarks retain production-cardinality evidence without storing raw parameters."
+lastReviewedCommit: 18a797c35441dc8abb985b537b4419980a2ca56a
+lastReviewedNote: "Reviewed Issues #291 and #292 together: schema truth includes usable FK-support prefixes and hybrid-search plan governance, read-only staging profiles retain measured evidence, and physical hooks compaction remains an operator action."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -89,6 +89,7 @@ The current migration and test history clusters around these themes:
 7. review-submit gate persistence, `worker_jobs` queue state, final submit-review assertions, and retired legacy job-table archives
 8. worker-produced domain artifact/state contracts for retained `lca_package_*`, LCA result/cache/projection, and review-submit report/coordinator tables
 9. canonical LCI/LCIA release runs, exact dataset-version indexes, immutable four-package artifact refs, durable approval, publication, and readback
+10. Performance Advisor evidence, usable foreign-key support indexes, exact duplicate removal, and lock-aware managed-schema bloat maintenance
 
 If the task touches one of those areas, expect both schema truth and regression assertions to matter.
 

@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-07-27"
-lastReviewedCommit: "97f7a9597b0b4487fc7f3ffaa2bbaa012c25a975"
-lastReviewedNote: "Reviewed issue #292 measured process/flow hybrid-search delivery; added a focused route while retaining existing ownership, migration, test, and staging-proof boundaries."
+lastReviewedCommit: "18a797c35441dc8abb985b537b4419980a2ca56a"
+lastReviewedNote: "Reviewed Issues #291 and #292 together: index-health and hybrid-search migrations, SQL assertions, and staging proof remain database-owned, while hooks physical compaction stays an explicit operator step."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
