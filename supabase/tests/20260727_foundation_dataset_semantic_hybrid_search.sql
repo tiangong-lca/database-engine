@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(44);
+select plan(46);
 
 create or replace function pg_temp.trigger_update_columns(
   p_table regclass,
@@ -736,6 +736,53 @@ select is(
   public.cmd_dataset_semantic_backfill('not_a_dataset', 10, null, null, false)->>'code',
   'UNSUPPORTED_DATASET_TABLE',
   'bounded backfill rejects tables outside the four-table allow-list'
+);
+
+reset role;
+insert into public.flowproperties (
+  id, version, json, json_ordered, user_id, state_code, modified_at
+)
+values (
+  'ff000000-0000-0000-0000-000000000301',
+  '',
+  '{"name":"invalid-blank-version-backfill-row"}',
+  null,
+  null,
+  0,
+  now()
+);
+
+delete from pgmq.q_dataset_extraction_jobs queued
+where queued.message->>'table' = 'flowproperties'
+  and queued.message->>'id' = 'ff000000-0000-0000-0000-000000000301';
+
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+
+select is(
+  public.cmd_dataset_semantic_backfill(
+    'flowproperties',
+    10,
+    'fe000000-0000-0000-0000-000000000000',
+    null,
+    false
+  )->>'scanned_count',
+  '0',
+  'bounded backfill excludes a row without a stable nonblank version identity'
+);
+
+reset role;
+
+select is(
+  (
+    select count(*)::integer
+    from pgmq.q_dataset_extraction_jobs queued
+    where queued.message->>'table' = 'flowproperties'
+      and queued.message->>'id' = 'ff000000-0000-0000-0000-000000000301'
+  ),
+  0,
+  'bounded backfill does not enqueue a terminally invalid blank-version job'
 );
 
 select * from finish();

@@ -413,6 +413,7 @@ begin
         dataset.embedding_ft is null as needs_embedding
       from public.%I dataset
       where dataset.json is not null
+        and nullif(btrim(dataset.version::text), '') is not null
         and ($4 or dataset.extracted_md is null or dataset.embedding_ft is null)
         and (
           $1 is null

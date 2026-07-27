@@ -121,7 +121,10 @@ Historical repair is an explicit service-role cursor operation with a maximum
 idempotent against live extraction and embedding queues, and never performs a
 synchronous whole-table rewrite inside a migration. Extraction and embedding
 writes are derived state: their trigger paths must not advance the authored
-`modified_at` timestamp.
+`modified_at` timestamp. A historical row without a nonblank version has no
+stable worker identity and is ineligible for backfill; retain it as an explicit
+data-quality exception instead of guessing a version or enqueueing a terminally
+invalid job.
 
 The four public Semantic and Hybrid RPC families share exact-regclass
 allowlisted private helpers. Those helpers preserve owner/team/public

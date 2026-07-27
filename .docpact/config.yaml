@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-07-27"
-lastReviewedCommit: "7ffb8b9713b9b04027d2acd240de0626319f2361"
-lastReviewedNote: "Reviewed Issue #297 foundation-dataset Semantic/Hybrid visibility parity: the existing migration and SQL-test routing covers explicit state/team scope and fail-closed Team Data behavior, so no rule change is required."
+lastReviewedCommit: "e8dfbd2b8351aeaf71581a0d54f3bda321d090ed"
+lastReviewedNote: "Reviewed Issue #297 blank-version backfill eligibility: the existing migration, SQL-test, validation, and architecture routes cover the append-only upgrade and data-quality exception, so no routing rule change is required."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
