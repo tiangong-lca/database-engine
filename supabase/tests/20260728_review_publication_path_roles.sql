@@ -1,6 +1,7 @@
 begin;
 
 create extension if not exists pgtap with schema extensions;
+create extension if not exists dblink with schema extensions;
 set local search_path = extensions, public, auth;
 
 create or replace function pg_temp.disable_trigger_if_exists(
@@ -23,7 +24,7 @@ begin
 end;
 $$;
 
-select plan(33);
+select plan(58);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
 create temporary table path_role_webhook_calls (
@@ -272,8 +273,18 @@ values
       "processDataSet": {
         "processInformation": {
           "dataSetInformation": {
-            "name": { "baseName": [{ "#text": "Submit root" }] },
-            "referenceToPrecedingDataSetVersion": {
+            "name": { "baseName": [{ "#text": "Submit root" }] }
+          },
+          "technology": {
+            "referenceToIncludedProcesses": {
+              "@refObjectId": "33800000-0000-0000-0000-000000000014",
+              "@version": "01.00.000"
+            }
+          }
+        },
+        "administrativeInformation": {
+          "publicationAndOwnership": {
+            "common:referenceToPrecedingDataSetVersion": {
               "@type": "process data set",
               "@refObjectId": "33800000-0000-0000-0000-000000000001",
               "@version": "00.01.000"
@@ -281,13 +292,13 @@ values
           }
         },
         "exchanges": {
-          "exchange": [{
-            "referenceToFlowDataSet": {
+          "exchange": {
+            "referenceToFlowDataSet": [{
               "@type": "flow data set",
               "@refObjectId": "32800000-0000-0000-0000-000000000001",
               "@version": "01.00.000"
-            }
-          }]
+            }]
+          }
         }
       }
     }'::jsonb,
@@ -295,8 +306,18 @@ values
       "processDataSet": {
         "processInformation": {
           "dataSetInformation": {
-            "name": { "baseName": [{ "#text": "Submit root" }] },
-            "referenceToPrecedingDataSetVersion": {
+            "name": { "baseName": [{ "#text": "Submit root" }] }
+          },
+          "technology": {
+            "referenceToIncludedProcesses": {
+              "@refObjectId": "33800000-0000-0000-0000-000000000014",
+              "@version": "01.00.000"
+            }
+          }
+        },
+        "administrativeInformation": {
+          "publicationAndOwnership": {
+            "common:referenceToPrecedingDataSetVersion": {
               "@type": "process data set",
               "@refObjectId": "33800000-0000-0000-0000-000000000001",
               "@version": "00.01.000"
@@ -304,13 +325,13 @@ values
           }
         },
         "exchanges": {
-          "exchange": [{
-            "referenceToFlowDataSet": {
+          "exchange": {
+            "referenceToFlowDataSet": [{
               "@type": "flow data set",
               "@refObjectId": "32800000-0000-0000-0000-000000000001",
               "@version": "01.00.000"
-            }
-          }]
+            }]
+          }
         }
       }
     }'::json,
@@ -331,10 +352,14 @@ values
             "name": { "baseName": [{ "#text": "Unknown path root" }] }
           }
         },
-        "unexpectedReference": {
-          "@type": "flow data set",
-          "@refObjectId": "32800000-0000-0000-0000-000000000002",
-          "@version": "01.00.000"
+        "processInformation": {
+          "technology": {
+            "referenceToIncludedProcesses": {
+              "@type": "process data set",
+              "@refObjectId": "not-a-uuid",
+              "@version": "01.00.000"
+            }
+          }
         }
       }
     }'::jsonb,
@@ -345,10 +370,14 @@ values
             "name": { "baseName": [{ "#text": "Unknown path root" }] }
           }
         },
-        "unexpectedReference": {
-          "@type": "flow data set",
-          "@refObjectId": "32800000-0000-0000-0000-000000000002",
-          "@version": "01.00.000"
+        "processInformation": {
+          "technology": {
+            "referenceToIncludedProcesses": {
+              "@type": "process data set",
+              "@refObjectId": "not-a-uuid",
+              "@version": "01.00.000"
+            }
+          }
         }
       }
     }'::json,
@@ -390,12 +419,23 @@ values
       "processDataSet": {
         "processInformation": {
           "dataSetInformation": {
-            "name": { "baseName": [{ "#text": "Approval root" }] },
-            "referenceToPrecedingDataSetVersion": {
+            "name": { "baseName": [{ "#text": "Approval root" }] }
+          },
+          "technology": {
+            "referenceToIncludedProcesses": [{
+              "@type": "process data set",
+              "@refObjectId": "33800000-0000-0000-0000-000000000015",
+              "@version": "01.00.000"
+            }]
+          }
+        },
+        "administrativeInformation": {
+          "publicationAndOwnership": {
+            "common:referenceToPrecedingDataSetVersion": [{
               "@type": "process data set",
               "@refObjectId": "33800000-0000-0000-0000-000000000005",
               "@version": "00.01.000"
-            }
+            }]
           }
         },
         "exchanges": {
@@ -413,12 +453,23 @@ values
       "processDataSet": {
         "processInformation": {
           "dataSetInformation": {
-            "name": { "baseName": [{ "#text": "Approval root" }] },
-            "referenceToPrecedingDataSetVersion": {
+            "name": { "baseName": [{ "#text": "Approval root" }] }
+          },
+          "technology": {
+            "referenceToIncludedProcesses": [{
+              "@type": "process data set",
+              "@refObjectId": "33800000-0000-0000-0000-000000000015",
+              "@version": "01.00.000"
+            }]
+          }
+        },
+        "administrativeInformation": {
+          "publicationAndOwnership": {
+            "common:referenceToPrecedingDataSetVersion": [{
               "@type": "process data set",
               "@refObjectId": "33800000-0000-0000-0000-000000000005",
               "@version": "00.01.000"
-            }
+            }]
           }
         },
         "exchanges": {
@@ -442,8 +493,8 @@ values
   (
     '33800000-0000-0000-0000-000000000007',
     '01.00.000',
-    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Paired process"}]}}}}}'::jsonb,
-    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Paired process"}]}}}}}'::json,
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Paired process"}]}},"technology":{"referenceToIncludedProcesses":[{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000016","@version":"01.00.000"}]}},"administrativeInformation":{"publicationAndOwnership":{"common:referenceToPrecedingDataSetVersion":{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000001","@version":"00.01.000"}}}}}'::jsonb,
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Paired process"}]}},"technology":{"referenceToIncludedProcesses":[{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000016","@version":"01.00.000"}]}},"administrativeInformation":{"publicationAndOwnership":{"common:referenceToPrecedingDataSetVersion":{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000001","@version":"00.01.000"}}}}}'::json,
     '12800000-0000-0000-0000-000000000001',
     0,
     '22800000-0000-0000-0000-000000000001',
@@ -472,7 +523,12 @@ values
       "lifeCycleModelDataSet": {
         "lifeCycleModelInformation": {
           "dataSetInformation": {
-            "name": { "baseName": [{ "#text": "Foreign composition root" }] }
+            "name": { "baseName": [{ "#text": "Foreign composition root" }] },
+            "referenceToResultingProcess": [{
+              "@type": "process data set",
+              "@refObjectId": "33800000-0000-0000-0000-000000000004",
+              "@version": "01.00.000"
+            }]
           },
           "technology": {
             "processes": {
@@ -492,7 +548,12 @@ values
       "lifeCycleModelDataSet": {
         "lifeCycleModelInformation": {
           "dataSetInformation": {
-            "name": { "baseName": [{ "#text": "Foreign composition root" }] }
+            "name": { "baseName": [{ "#text": "Foreign composition root" }] },
+            "referenceToResultingProcess": [{
+              "@type": "process data set",
+              "@refObjectId": "33800000-0000-0000-0000-000000000004",
+              "@version": "01.00.000"
+            }]
           },
           "technology": {
             "processes": {
@@ -652,6 +713,90 @@ values
     null,
     true,
     '[]'::jsonb
+  ),
+  (
+    '33800000-0000-0000-0000-000000000014',
+    '01.00.000',
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Submit included Process"}]}}}}}'::jsonb,
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Submit included Process"}]}}}}}'::json,
+    '12800000-0000-0000-0000-000000000001',
+    0,
+    '22800000-0000-0000-0000-000000000001',
+    null,
+    true,
+    '[]'::jsonb
+  ),
+  (
+    '33800000-0000-0000-0000-000000000015',
+    '01.00.000',
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Approve included Process"}]}}}}}'::jsonb,
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Approve included Process"}]}}}}}'::json,
+    '12800000-0000-0000-0000-000000000001',
+    20,
+    '22800000-0000-0000-0000-000000000001',
+    null,
+    true,
+    '[]'::jsonb
+  ),
+  (
+    '33800000-0000-0000-0000-000000000016',
+    '01.00.000',
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Foreign included Process"}]}}}}}'::jsonb,
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Foreign included Process"}]}}}}}'::json,
+    '12800000-0000-0000-0000-000000000002',
+    0,
+    '22800000-0000-0000-0000-000000000002',
+    null,
+    true,
+    '[]'::jsonb
+  ),
+  (
+    '33800000-0000-0000-0000-000000000017',
+    '01.00.000',
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Bad included version root"}]}},"technology":{"referenceToIncludedProcesses":{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000014","@version":""}}}}}'::jsonb,
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Bad included version root"}]}},"technology":{"referenceToIncludedProcesses":{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000014","@version":""}}}}}'::json,
+    '12800000-0000-0000-0000-000000000001',
+    0,
+    '22800000-0000-0000-0000-000000000001',
+    null,
+    true,
+    '[]'::jsonb
+  ),
+  (
+    '33800000-0000-0000-0000-000000000018',
+    '01.00.000',
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Paired submit root"}]}}}}}'::jsonb,
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Paired submit root"}]}}}}}'::json,
+    '12800000-0000-0000-0000-000000000001',
+    0,
+    '22800000-0000-0000-0000-000000000001',
+    null,
+    true,
+    '[]'::jsonb
+  ),
+  (
+    '33800000-0000-0000-0000-000000000019',
+    '01.00.000',
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Paired approve root"}]}}}}}'::jsonb,
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Paired approve root"}]}}}}}'::json,
+    '12800000-0000-0000-0000-000000000001',
+    20,
+    '22800000-0000-0000-0000-000000000001',
+    null,
+    true,
+    '[{"key":0,"id":"53800000-0000-0000-0000-000000000019"}]'::jsonb
+  ),
+  (
+    '33800000-0000-0000-0000-000000000020',
+    '01.00.000',
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Direct included root"}]}},"technology":{"referenceToIncludedProcesses":[{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000016","@version":"01.00.000"}]}}}}'::jsonb,
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Direct included root"}]}},"technology":{"referenceToIncludedProcesses":[{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000016","@version":"01.00.000"}]}}}}'::json,
+    '12800000-0000-0000-0000-000000000001',
+    0,
+    '22800000-0000-0000-0000-000000000001',
+    null,
+    true,
+    '[]'::jsonb
   );
 
 insert into public.lifecyclemodels (
@@ -678,13 +823,13 @@ values
           },
           "technology": {
             "processes": {
-              "processInstance": [{
-                "referenceToProcess": {
+              "processInstance": {
+                "referenceToProcess": [{
                   "@type": "process data set",
                   "@refObjectId": "33800000-0000-0000-0000-000000000011",
                   "@version": "01.00.000"
-                }
-              }]
+                }]
+              }
             }
           }
         }
@@ -698,13 +843,13 @@ values
           },
           "technology": {
             "processes": {
-              "processInstance": [{
-                "referenceToProcess": {
+              "processInstance": {
+                "referenceToProcess": [{
                   "@type": "process data set",
                   "@refObjectId": "33800000-0000-0000-0000-000000000011",
                   "@version": "01.00.000"
-                }
-              }]
+                }]
+              }
             }
           }
         }
@@ -766,6 +911,30 @@ values
     '22800000-0000-0000-0000-000000000001',
     true,
     '[]'::jsonb
+  ),
+  (
+    '33800000-0000-0000-0000-000000000018',
+    '01.00.000',
+    '{"lifeCycleModelDataSet":{"lifeCycleModelInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Private paired submit model"}]}}}}}'::jsonb,
+    '{"lifeCycleModelDataSet":{"lifeCycleModelInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Private paired submit model"}]}}}}}'::json,
+    '{"submodels":[]}'::jsonb,
+    '12800000-0000-0000-0000-000000000001',
+    0,
+    '22800000-0000-0000-0000-000000000001',
+    true,
+    '[]'::jsonb
+  ),
+  (
+    '33800000-0000-0000-0000-000000000019',
+    '01.00.000',
+    '{"lifeCycleModelDataSet":{"lifeCycleModelInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Private paired approve model"}]}}}}}'::jsonb,
+    '{"lifeCycleModelDataSet":{"lifeCycleModelInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Private paired approve model"}]}}}}}'::json,
+    '{"submodels":[]}'::jsonb,
+    '12800000-0000-0000-0000-000000000001',
+    0,
+    '22800000-0000-0000-0000-000000000001',
+    true,
+    '[]'::jsonb
   );
 
 insert into public.reviews (
@@ -776,23 +945,41 @@ insert into public.reviews (
   reviewer_id,
   json
 )
-values (
-  '53800000-0000-0000-0000-000000000011',
-  '34800000-0000-0000-0000-000000000011',
-  '01.00.000',
-  1,
-  '[]'::jsonb,
-  '{
-    "data": {
-      "id": "34800000-0000-0000-0000-000000000011",
-      "version": "01.00.000"
-    },
-    "team": { "id": "22800000-0000-0000-0000-000000000001" },
-    "user": { "id": "12800000-0000-0000-0000-000000000001" },
-    "comment": { "message": "" },
-    "logs": []
-  }'::jsonb
-);
+values
+  (
+    '53800000-0000-0000-0000-000000000011',
+    '34800000-0000-0000-0000-000000000011',
+    '01.00.000',
+    1,
+    '[]'::jsonb,
+    '{
+      "data": {
+        "id": "34800000-0000-0000-0000-000000000011",
+        "version": "01.00.000"
+      },
+      "team": { "id": "22800000-0000-0000-0000-000000000001" },
+      "user": { "id": "12800000-0000-0000-0000-000000000001" },
+      "comment": { "message": "" },
+      "logs": []
+    }'::jsonb
+  ),
+  (
+    '53800000-0000-0000-0000-000000000019',
+    '33800000-0000-0000-0000-000000000019',
+    '01.00.000',
+    1,
+    '[]'::jsonb,
+    '{
+      "data": {
+        "id": "33800000-0000-0000-0000-000000000019",
+        "version": "01.00.000"
+      },
+      "team": { "id": "22800000-0000-0000-0000-000000000001" },
+      "user": { "id": "12800000-0000-0000-0000-000000000001" },
+      "comment": { "message": "" },
+      "logs": []
+    }'::jsonb
+  );
 
 insert into public.comments (
   review_id,
@@ -866,10 +1053,400 @@ as $$
   select extensions.is(p_have::text, p_want::text, p_description)
 $$;
 
+create or replace function pg_temp.concurrent_lifecycle_insert_sqlstate()
+returns text
+language plpgsql
+as $$
+declare
+  v_state text;
+begin
+  perform extensions.dblink_connect(
+    'path_role_pair_insert',
+    'host=db port=5432 dbname=' || current_database()
+      || ' user=postgres password=postgres'
+  );
+  perform extensions.dblink_exec(
+    'path_role_pair_insert',
+    'set statement_timeout = ''250ms'''
+  );
+  begin
+    perform extensions.dblink_exec(
+      'path_role_pair_insert',
+      $insert$
+        insert into public.lifecyclemodels (
+          id,
+          version,
+          json,
+          json_ordered,
+          json_tg,
+          state_code,
+          rule_verification,
+          reviews
+        )
+        values (
+          'f5800000-0000-0000-0000-000000000001',
+          '01.00.000',
+          '{}',
+          '{}',
+          '{"submodels":[]}',
+          0,
+          true,
+          '[]'
+        )
+      $insert$
+    );
+  exception when query_canceled then
+    get stacked diagnostics v_state = returned_sqlstate;
+  when others then
+    get stacked diagnostics v_state = returned_sqlstate;
+  end;
+  perform extensions.dblink_disconnect('path_role_pair_insert');
+  return v_state;
+exception when others then
+  begin
+    perform extensions.dblink_disconnect('path_role_pair_insert');
+  exception when others then
+    null;
+  end;
+  raise;
+end;
+$$;
+
+select is(
+  (
+    with shapes(label, document) as (
+      values
+        (
+          'object-object',
+          '{"processDataSet":{"exchanges":{"exchange":{"referenceToFlowDataSet":{"@type":"flow data set","@refObjectId":"32800000-0000-0000-0000-000000000021","@version":"01.00.000"}}}}}'::jsonb
+        ),
+        (
+          'object-array',
+          '{"processDataSet":{"exchanges":{"exchange":{"referenceToFlowDataSet":[{"@type":"flow data set","@refObjectId":"32800000-0000-0000-0000-000000000022","@version":"01.00.000"}]}}}}'::jsonb
+        ),
+        (
+          'array-object',
+          '{"processDataSet":{"exchanges":{"exchange":[{"referenceToFlowDataSet":{"@type":"flow data set","@refObjectId":"32800000-0000-0000-0000-000000000023","@version":"01.00.000"}}]}}}'::jsonb
+        ),
+        (
+          'array-array',
+          '{"processDataSet":{"exchanges":{"exchange":[{"referenceToFlowDataSet":[{"@type":"flow data set","@refObjectId":"32800000-0000-0000-0000-000000000024","@version":"01.00.000"}]}]}}}'::jsonb
+        )
+    )
+    select count(*)::text
+    from shapes
+    cross join lateral public.cmd_review_reference_roles(
+      'processes',
+      shapes.label,
+      shapes.document
+    ) as role_ref
+    where role_ref.lifecycle_role = 'RequiredSupport'
+  ),
+  '4',
+  'exchange and Flow-reference object/array combinations are RequiredSupport'
+);
+
+select is(
+  (
+    with shapes(label, document) as (
+      values
+        (
+          'object-object',
+          '{"processDataSet":{"exchanges":{"exchange":{"referencesToDataSource":{"referenceToDataSource":{"@type":"source data set","@refObjectId":"32800000-0000-0000-0000-000000000025","@version":"01.00.000"}}}}}}'::jsonb
+        ),
+        (
+          'object-array',
+          '{"processDataSet":{"exchanges":{"exchange":{"referencesToDataSource":{"referenceToDataSource":[{"@type":"source data set","@refObjectId":"32800000-0000-0000-0000-000000000026","@version":"01.00.000"}]}}}}}'::jsonb
+        ),
+        (
+          'array-object',
+          '{"processDataSet":{"exchanges":{"exchange":[{"referencesToDataSource":{"referenceToDataSource":{"@type":"source data set","@refObjectId":"32800000-0000-0000-0000-000000000027","@version":"01.00.000"}}}]}}}'::jsonb
+        ),
+        (
+          'array-array',
+          '{"processDataSet":{"exchanges":{"exchange":[{"referencesToDataSource":{"referenceToDataSource":[{"@type":"source data set","@refObjectId":"32800000-0000-0000-0000-000000000028","@version":"01.00.000"}]}}]}}}'::jsonb
+        )
+    )
+    select count(*)::text
+    from shapes
+    cross join lateral public.cmd_review_reference_roles(
+      'processes',
+      shapes.label,
+      shapes.document
+    ) as role_ref
+    where role_ref.lifecycle_role = 'RequiredSupport'
+  ),
+  '4',
+  'exchange and data-source reference object/array combinations are RequiredSupport'
+);
+
+select is(
+  (
+    with shapes(label, document) as (
+      values
+        (
+          'object-object',
+          '{"lifeCycleModelDataSet":{"lifeCycleModelInformation":{"technology":{"processes":{"processInstance":{"referenceToProcess":{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000021","@version":"01.00.000"}}}}}}}'::jsonb
+        ),
+        (
+          'object-array',
+          '{"lifeCycleModelDataSet":{"lifeCycleModelInformation":{"technology":{"processes":{"processInstance":{"referenceToProcess":[{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000022","@version":"01.00.000"}]}}}}}}'::jsonb
+        ),
+        (
+          'array-object',
+          '{"lifeCycleModelDataSet":{"lifeCycleModelInformation":{"technology":{"processes":{"processInstance":[{"referenceToProcess":{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000023","@version":"01.00.000"}}]}}}}}'::jsonb
+        ),
+        (
+          'array-array',
+          '{"lifeCycleModelDataSet":{"lifeCycleModelInformation":{"technology":{"processes":{"processInstance":[{"referenceToProcess":[{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000024","@version":"01.00.000"}]}]}}}}}'::jsonb
+        )
+    )
+    select count(*)::text
+    from shapes
+    cross join lateral public.cmd_review_reference_roles(
+      'lifecyclemodels',
+      shapes.label,
+      shapes.document
+    ) as role_ref
+    where role_ref.lifecycle_role = 'ModelComposition'
+  ),
+  '4',
+  'processInstance and Process-reference object/array combinations are ModelComposition'
+);
+
+select is(
+  (
+    with roles as (
+      select lifecycle_role
+      from public.cmd_review_reference_roles(
+        'lifecyclemodels',
+        'object',
+        '{"lifeCycleModelDataSet":{"lifeCycleModelInformation":{"dataSetInformation":{"referenceToResultingProcess":{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000025","@version":"01.00.000"}}}}}'::jsonb
+      )
+      union all
+      select lifecycle_role
+      from public.cmd_review_reference_roles(
+        'lifecyclemodels',
+        'array',
+        '{"lifeCycleModelDataSet":{"lifeCycleModelInformation":{"dataSetInformation":{"referenceToResultingProcess":[{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000026","@version":"01.00.000"}]}}}}'::jsonb
+      )
+    )
+    select count(*)::text from roles where lifecycle_role = 'Descriptive'
+  ),
+  '2',
+  'resulting Process object and array references are Descriptive'
+);
+
+select is(
+  (
+    with shapes(label, document) as (
+      values
+        (
+          'object-object',
+          '{"modellingAndValidation":{"validation":{"review":{"common:referenceToReviewDetails":{"@type":"source data set","@refObjectId":"32800000-0000-0000-0000-000000000029","@version":"01.00.000"}}}}}'::jsonb
+        ),
+        (
+          'object-array',
+          '{"modellingAndValidation":{"validation":{"review":{"common:referenceToReviewDetails":[{"@type":"source data set","@refObjectId":"32800000-0000-0000-0000-000000000030","@version":"01.00.000"}]}}}}'::jsonb
+        ),
+        (
+          'array-object',
+          '{"modellingAndValidation":{"validation":{"review":[{"common:referenceToReviewDetails":{"@type":"source data set","@refObjectId":"32800000-0000-0000-0000-000000000031","@version":"01.00.000"}}]}}}'::jsonb
+        ),
+        (
+          'array-array',
+          '{"modellingAndValidation":{"validation":{"review":[{"common:referenceToReviewDetails":[{"@type":"source data set","@refObjectId":"32800000-0000-0000-0000-000000000032","@version":"01.00.000"}]}]}}}'::jsonb
+        )
+    )
+    select count(*)::text
+    from shapes
+    cross join lateral public.cmd_review_reference_roles(
+      'comments',
+      shapes.label,
+      shapes.document
+    ) as role_ref
+    where role_ref.lifecycle_role = 'RequiredSupport'
+  ),
+  '4',
+  'review and review-detail reference object/array combinations are RequiredSupport'
+);
+
+select is(
+  (
+    select lifecycle_role
+    from public.cmd_review_reference_roles(
+      'processes',
+      'unknown',
+      '{"processDataSet":{"unknownList":[{"referenceToFlowDataSet":[{"@type":"flow data set","@refObjectId":"32800000-0000-0000-0000-000000000033","@version":"01.00.000"}]}]}}'::jsonb
+    )
+  ),
+  'PolicyGap',
+  'numeric segments at unknown repeated nodes remain fail-closed'
+);
+
+select is(
+  (
+    with roles as (
+      select lifecycle_role
+      from public.cmd_review_reference_roles(
+        'processes',
+        'object',
+        '{"processDataSet":{"administrativeInformation":{"publicationAndOwnership":{"common:referenceToPrecedingDataSetVersion":{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000034","@version":"00.01.000"}}}}}'::jsonb
+      )
+      union all
+      select lifecycle_role
+      from public.cmd_review_reference_roles(
+        'processes',
+        'array',
+        '{"processDataSet":{"administrativeInformation":{"publicationAndOwnership":{"common:referenceToPrecedingDataSetVersion":[{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000035","@version":"00.01.000"}]}}}}'::jsonb
+      )
+    )
+    select count(*)::text from roles where lifecycle_role = 'Lineage'
+  ),
+  '2',
+  'Process preceding-version object and array references are read-only Lineage'
+);
+
+select is(
+  (
+    with roles as (
+      select lifecycle_role
+      from public.cmd_review_reference_roles(
+        'flows',
+        'object',
+        '{"flowDataSet":{"administrativeInformation":{"publicationAndOwnership":{"common:referenceToPrecedingDataSetVersion":{"@type":"flow data set","@refObjectId":"32800000-0000-0000-0000-000000000034","@version":"00.01.000"}}}}}'::jsonb
+      )
+      union all
+      select lifecycle_role
+      from public.cmd_review_reference_roles(
+        'flows',
+        'array',
+        '{"flowDataSet":{"administrativeInformation":{"publicationAndOwnership":{"common:referenceToPrecedingDataSetVersion":[{"@type":"flow data set","@refObjectId":"32800000-0000-0000-0000-000000000035","@version":"00.01.000"}]}}}}'::jsonb
+      )
+    )
+    select count(*)::text from roles where lifecycle_role = 'Lineage'
+  ),
+  '2',
+  'Flow preceding-version object and array references are read-only Lineage'
+);
+
+select is(
+  (
+    select lifecycle_role
+    from public.cmd_review_reference_roles(
+      'processes',
+      'wrong-path',
+      '{"processDataSet":{"processInformation":{"dataSetInformation":{"common:referenceToPrecedingDataSetVersion":{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000036","@version":"00.01.000"}}}}}'::jsonb
+    )
+  ),
+  'PolicyGap',
+  'preceding-version key outside its schema path remains fail-closed'
+);
+
+select is(
+  (
+    with roles as (
+      select lifecycle_role
+      from public.cmd_review_reference_roles(
+        'processes',
+        'object-without-type',
+        '{"processDataSet":{"processInformation":{"technology":{"referenceToIncludedProcesses":{"@refObjectId":"33800000-0000-0000-0000-000000000037","@version":"01.00.000"}}}}}'::jsonb
+      )
+      union all
+      select lifecycle_role
+      from public.cmd_review_reference_roles(
+        'processes',
+        'array',
+        '{"processDataSet":{"processInformation":{"technology":{"referenceToIncludedProcesses":[{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000038","@version":"01.00.000"}]}}}}'::jsonb
+      )
+    )
+    select count(*)::text from roles where lifecycle_role = 'ModelComposition'
+  ),
+  '2',
+  'included Process object/array references are ModelComposition and type is path-inferable'
+);
+
+select is(
+  (
+    select lifecycle_role
+    from public.cmd_review_reference_roles(
+      'processes',
+      'bad-uuid',
+      '{"processDataSet":{"processInformation":{"technology":{"referenceToIncludedProcesses":{"@type":"process data set","@refObjectId":"not-a-uuid","@version":"01.00.000"}}}}}'::jsonb
+    )
+  ),
+  'PolicyGap',
+  'malformed included Process UUID is an explicit policy gap'
+);
+
+select is(
+  (
+    select lifecycle_role
+    from public.cmd_review_reference_roles(
+      'processes',
+      'bad-version',
+      '{"processDataSet":{"processInformation":{"technology":{"referenceToIncludedProcesses":{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000039","@version":""}}}}}'::jsonb
+    )
+  ),
+  'PolicyGap',
+  'malformed included Process version is an explicit policy gap'
+);
+
 select set_config(
   'request.jwt.claim.sub',
   '12800000-0000-0000-0000-000000000001',
   true
+);
+
+insert into path_role_results (label, result)
+values (
+  'publish_included_process',
+  public.cmd_dataset_publish(
+    'processes',
+    '33800000-0000-0000-0000-000000000020',
+    '01.00.000',
+    '{"test":"path-role-characterization"}'::jsonb
+  )
+);
+
+select is(
+  (select result->>'code' from path_role_results where label = 'publish_included_process'),
+  'MODEL_DEPENDENCY_NOT_PUBLIC',
+  'direct Process publish fails when an exact included Process is private'
+);
+
+select is(
+  (
+    select result#>>'{details,path}'
+    from path_role_results
+    where label = 'publish_included_process'
+  ),
+  'json.processDataSet.processInformation.technology.referenceToIncludedProcesses[0]',
+  'direct Process publish identifies the caller-visible included Process path'
+);
+
+select pg_temp.is_deeply(
+  jsonb_build_object(
+    'rootState', (
+      select state_code
+      from public.processes
+      where id = '33800000-0000-0000-0000-000000000020'
+        and version = '01.00.000'
+    ),
+    'dependencyState', (
+      select state_code
+      from public.processes
+      where id = '33800000-0000-0000-0000-000000000016'
+        and version = '01.00.000'
+    ),
+    'auditCount', (
+      select count(*)
+      from public.command_audit_log
+      where target_id = '33800000-0000-0000-0000-000000000020'
+    )
+  ),
+  '{"rootState":0,"dependencyState":0,"auditCount":0}'::jsonb,
+  'failed direct included Process publish leaves root, dependency, and audit unchanged'
 );
 
 insert into path_role_results (label, result)
@@ -911,6 +1488,35 @@ select is(
   'submit does not treat referenceToPrecedingDataSetVersion as a state target'
 );
 
+select is(
+  (
+    select state_code::text
+    from public.processes
+    where id = '33800000-0000-0000-0000-000000000014'
+      and version = '01.00.000'
+  ),
+  '20',
+  'submit includes a path-inferred Process composition dependency in the review lifecycle'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_catalog.pg_locks
+    where pid = pg_catalog.pg_backend_pid()
+      and relation = 'public.lifecyclemodels'::regclass
+      and mode = 'ShareRowExclusiveLock'
+      and granted
+  ),
+  'Process-root submit holds the lifecyclemodels phantom fence through the transaction'
+);
+
+select is(
+  pg_temp.concurrent_lifecycle_insert_sqlstate(),
+  '57014',
+  'a concurrent unrelated LifecycleModel insert waits behind the Process-root phantom fence'
+);
+
 insert into path_role_results (label, result)
 values (
   'submit_unknown_path',
@@ -939,15 +1545,106 @@ select is(
   'unknown reference policy failure leaves the submit root unchanged'
 );
 
-select is(
-  (
-    select state_code::text
-    from public.flows
-    where id = '32800000-0000-0000-0000-000000000002'
-      and version = '01.00.000'
+select pg_temp.is_deeply(
+  jsonb_build_object(
+    'reviewCount', (
+      select count(*)
+      from public.reviews
+      where data_id = '33800000-0000-0000-0000-000000000003'
+    ),
+    'auditCount', (
+      select count(*)
+      from public.command_audit_log
+      where target_id = '33800000-0000-0000-0000-000000000003'
+    )
   ),
-  '0',
-  'unknown reference policy failure leaves the referenced dataset unchanged'
+  '{"reviewCount":0,"auditCount":0}'::jsonb,
+  'malformed included Process UUID writes no review or audit rows'
+);
+
+insert into path_role_results (label, result)
+values
+  (
+    'submit_bad_composition_version',
+    public.cmd_review_submit_without_gate(
+      'processes',
+      '33800000-0000-0000-0000-000000000017',
+      '01.00.000',
+      '{"test":"path-role-characterization"}'::jsonb
+    )
+  ),
+  (
+    'submit_private_paired_model',
+    public.cmd_review_submit_without_gate(
+      'processes',
+      '33800000-0000-0000-0000-000000000018',
+      '01.00.000',
+      '{"test":"path-role-characterization"}'::jsonb
+    )
+  );
+
+select is(
+  (select result->>'code' from path_role_results where label = 'submit_bad_composition_version'),
+  'REFERENCE_ROLE_POLICY_GAP',
+  'malformed included Process version fails submit with a stable policy-gap code'
+);
+
+select pg_temp.is_deeply(
+  jsonb_build_object(
+    'rootState', (
+      select state_code
+      from public.processes
+      where id = '33800000-0000-0000-0000-000000000017'
+        and version = '01.00.000'
+    ),
+    'reviewCount', (
+      select count(*)
+      from public.reviews
+      where data_id = '33800000-0000-0000-0000-000000000017'
+    ),
+    'auditCount', (
+      select count(*)
+      from public.command_audit_log
+      where target_id = '33800000-0000-0000-0000-000000000017'
+    )
+  ),
+  '{"rootState":0,"reviewCount":0,"auditCount":0}'::jsonb,
+  'malformed included Process version leaves submit state, reviews, and audits unchanged'
+);
+
+select is(
+  (select result->>'code' from path_role_results where label = 'submit_private_paired_model'),
+  'MODEL_DEPENDENCY_NOT_PUBLIC',
+  'Process-root submit fails closed when an exact private paired LifecycleModel exists'
+);
+
+select pg_temp.is_deeply(
+  jsonb_build_object(
+    'processState', (
+      select state_code
+      from public.processes
+      where id = '33800000-0000-0000-0000-000000000018'
+        and version = '01.00.000'
+    ),
+    'modelState', (
+      select state_code
+      from public.lifecyclemodels
+      where id = '33800000-0000-0000-0000-000000000018'
+        and version = '01.00.000'
+    ),
+    'reviewCount', (
+      select count(*)
+      from public.reviews
+      where data_id = '33800000-0000-0000-0000-000000000018'
+    ),
+    'auditCount', (
+      select count(*)
+      from public.command_audit_log
+      where target_id = '33800000-0000-0000-0000-000000000018'
+    )
+  ),
+  '{"processState":0,"modelState":0,"reviewCount":0,"auditCount":0}'::jsonb,
+  'failed paired Process submit leaves Process, model, reviews, and audits unchanged'
 );
 
 insert into path_role_results (label, result)
@@ -1151,6 +1848,100 @@ select set_config(
   true
 );
 
+insert into path_role_snapshots (label, snapshot)
+values (
+  'paired_process_approve_before',
+  jsonb_build_object(
+    'process', (
+      select to_jsonb(process)
+      from public.processes as process
+      where id = '33800000-0000-0000-0000-000000000019'
+        and version = '01.00.000'
+    ),
+    'model', (
+      select to_jsonb(model)
+      from public.lifecyclemodels as model
+      where id = '33800000-0000-0000-0000-000000000019'
+        and version = '01.00.000'
+    ),
+    'review', (
+      select to_jsonb(review)
+      from public.reviews as review
+      where id = '53800000-0000-0000-0000-000000000019'
+    ),
+    'comments', coalesce((
+      select jsonb_agg(to_jsonb(comment) order by comment.created_at)
+      from public.comments as comment
+      where review_id = '53800000-0000-0000-0000-000000000019'
+    ), '[]'::jsonb),
+    'audits', coalesce((
+      select jsonb_agg(to_jsonb(audit) order by audit.id)
+      from public.command_audit_log as audit
+      where target_id in (
+        '33800000-0000-0000-0000-000000000019',
+        '53800000-0000-0000-0000-000000000019'
+      )
+    ), '[]'::jsonb)
+  )
+);
+
+insert into path_role_results (label, result)
+values (
+  'approve_private_paired_model',
+  public.cmd_review_approve(
+    'processes',
+    '53800000-0000-0000-0000-000000000019',
+    '{"test":"path-role-characterization"}'::jsonb
+  )
+);
+
+select is(
+  (select result->>'code' from path_role_results where label = 'approve_private_paired_model'),
+  'MODEL_DEPENDENCY_NOT_PUBLIC',
+  'Process-root approve fails closed when an exact private paired LifecycleModel exists'
+);
+
+select pg_temp.is_deeply(
+  jsonb_build_object(
+    'process', (
+      select to_jsonb(process)
+      from public.processes as process
+      where id = '33800000-0000-0000-0000-000000000019'
+        and version = '01.00.000'
+    ),
+    'model', (
+      select to_jsonb(model)
+      from public.lifecyclemodels as model
+      where id = '33800000-0000-0000-0000-000000000019'
+        and version = '01.00.000'
+    ),
+    'review', (
+      select to_jsonb(review)
+      from public.reviews as review
+      where id = '53800000-0000-0000-0000-000000000019'
+    ),
+    'comments', coalesce((
+      select jsonb_agg(to_jsonb(comment) order by comment.created_at)
+      from public.comments as comment
+      where review_id = '53800000-0000-0000-0000-000000000019'
+    ), '[]'::jsonb),
+    'audits', coalesce((
+      select jsonb_agg(to_jsonb(audit) order by audit.id)
+      from public.command_audit_log as audit
+      where target_id in (
+        '33800000-0000-0000-0000-000000000019',
+        '53800000-0000-0000-0000-000000000019'
+      )
+    ), '[]'::jsonb)
+  ),
+  (
+    select snapshot
+    from path_role_snapshots
+    where label = 'paired_process_approve_before'
+  ),
+  'failed paired Process approve leaves Process, model, review, comments, and audits byte-for-byte unchanged'
+);
+
 insert into path_role_results (label, result)
 values (
   'approve_lineage_and_support',
@@ -1170,6 +1961,17 @@ select is(
   ),
   '20',
   'approve does not publish a referenceToPrecedingDataSetVersion target'
+);
+
+select is(
+  (
+    select state_code::text
+    from public.processes
+    where id = '33800000-0000-0000-0000-000000000015'
+      and version = '01.00.000'
+  ),
+  '100',
+  'approve publishes an exact included Process version in the review lifecycle'
 );
 
 insert into path_role_snapshots (label, snapshot)

@@ -38,20 +38,98 @@ as $$
       ) with ordinality as array_item(value, ordinality)
     ) as child
   ),
-  refs as (
+  candidates as (
     select
       value,
       path,
-      public.cmd_review_ref_type_to_table(value->>'@type') as mapped_table
+      coalesce((
+        select pg_catalog.array_agg(path_item.item order by path_item.ordinality)
+        from pg_catalog.unnest(path)
+          with ordinality as path_item(item, ordinality)
+        where not (
+          path_item.item ~ '^[0-9]+$'
+          and path_item.ordinality > 1
+          and path[path_item.ordinality - 1] = any(array[
+            'exchange',
+            'referenceToFlowDataSet',
+            'referencesToDataSource',
+            'referenceToDataSource',
+            'processInstance',
+            'referenceToProcess',
+            'referenceToResultingProcess',
+            'review',
+            'common:referenceToReviewDetails',
+            'common:referenceToPrecedingDataSetVersion',
+            'referenceToIncludedProcesses'
+          ])
+        )
+      ), array[]::text[]) as semantic_path
     from walk
     where pg_catalog.jsonb_typeof(value) = 'object'
-      and value ? '@refObjectId'
-      and value ? '@version'
-      and value ? '@type'
-      and (value->>'@refObjectId')
+  ),
+  refs as (
+    select
+      candidates.value,
+      candidates.path,
+      candidates.semantic_path,
+      case
+        when candidates.semantic_path in (
+          array[
+            'processDataSet',
+            'processInformation',
+            'technology',
+            'referenceToIncludedProcesses'
+          ],
+          array[
+            'lifeCycleModelDataSet',
+            'lifeCycleModelInformation',
+            'technology',
+            'processes',
+            'processInstance',
+            'referenceToProcess'
+          ]
+        ) then 'processes'
+        else public.cmd_review_ref_type_to_table(candidates.value->>'@type')
+      end as mapped_table,
+      (
+        candidates.value->>'@refObjectId'
+          ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        and candidates.value->>'@version'
+          ~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$'
+        and (
+          not candidates.value ? '@type'
+          or public.cmd_review_ref_type_to_table(
+            candidates.value->>'@type'
+          ) = 'processes'
+        )
+      ) as valid_process_composition
+    from candidates
+    where (
+      candidates.value ? '@refObjectId'
+      and candidates.value ? '@version'
+      and candidates.value ? '@type'
+      and candidates.value->>'@refObjectId'
         ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-      and nullif(value->>'@version', '') is not null
-      and public.cmd_review_ref_type_to_table(value->>'@type') is not null
+      and nullif(candidates.value->>'@version', '') is not null
+      and public.cmd_review_ref_type_to_table(
+        candidates.value->>'@type'
+      ) is not null
+    ) or candidates.semantic_path in (
+      array[
+        'processDataSet',
+        'processInformation',
+        'technology',
+        'referenceToIncludedProcesses'
+      ],
+      array[
+        'lifeCycleModelDataSet',
+        'lifeCycleModelInformation',
+        'technology',
+        'processes',
+        'processInstance',
+        'referenceToProcess'
+      ]
+    )
   )
   select
     coalesce(p_source, 'json') || coalesce((
@@ -67,44 +145,73 @@ as $$
         with ordinality as path_item(item, ordinality)
     ), '') as reference_path,
     case
-      when refs.path[array_length(refs.path, 1)]
-        = 'referenceToPrecedingDataSetVersion'
+      when refs.semantic_path = array[
+        case lower(coalesce(p_table, ''))
+          when 'contacts' then 'contactDataSet'
+          when 'sources' then 'sourceDataSet'
+          when 'unitgroups' then 'unitGroupDataSet'
+          when 'flowproperties' then 'flowPropertyDataSet'
+          when 'flows' then 'flowDataSet'
+          when 'processes' then 'processDataSet'
+          when 'lifecyclemodels' then 'lifeCycleModelDataSet'
+          else null
+        end,
+        'administrativeInformation',
+        'publicationAndOwnership',
+        'common:referenceToPrecedingDataSetVersion'
+      ]
         then 'Lineage'
       when lower(coalesce(p_table, '')) = 'processes'
-        and array_length(refs.path, 1) = 5
-        and refs.path[1:3] = array['processDataSet', 'exchanges', 'exchange']
-        and refs.path[4] ~ '^[0-9]+$'
-        and refs.path[5] = 'referenceToFlowDataSet'
+        and refs.semantic_path = array[
+          'processDataSet',
+          'exchanges',
+          'exchange',
+          'referenceToFlowDataSet'
+        ]
         then 'RequiredSupport'
       when lower(coalesce(p_table, '')) = 'processes'
-        and array_length(refs.path, 1) = 6
-        and refs.path[1:3] = array['processDataSet', 'exchanges', 'exchange']
-        and refs.path[4] ~ '^[0-9]+$'
-        and refs.path[5:6]
-          = array['referencesToDataSource', 'referenceToDataSource']
+        and refs.semantic_path = array[
+          'processDataSet',
+          'exchanges',
+          'exchange',
+          'referencesToDataSource',
+          'referenceToDataSource'
+        ]
         then 'RequiredSupport'
       when lower(coalesce(p_table, '')) = 'processes'
-        and refs.path = array[
+        and refs.semantic_path = array[
           'processDataSet',
           'processInformation',
           'quantitativeReference',
           'referenceToReferenceFlow'
         ]
         then 'RequiredSupport'
+      when lower(coalesce(p_table, '')) = 'processes'
+        and refs.semantic_path = array[
+          'processDataSet',
+          'processInformation',
+          'technology',
+          'referenceToIncludedProcesses'
+        ]
+        then case
+          when refs.valid_process_composition then 'ModelComposition'
+          else 'PolicyGap'
+        end
       when lower(coalesce(p_table, '')) = 'lifecyclemodels'
-        and array_length(refs.path, 1) = 7
-        and refs.path[1:5] = array[
+        and refs.semantic_path = array[
           'lifeCycleModelDataSet',
           'lifeCycleModelInformation',
           'technology',
           'processes',
-          'processInstance'
+          'processInstance',
+          'referenceToProcess'
         ]
-        and refs.path[6] ~ '^[0-9]+$'
-        and refs.path[7] = 'referenceToProcess'
-        then 'ModelComposition'
+        then case
+          when refs.valid_process_composition then 'ModelComposition'
+          else 'PolicyGap'
+        end
       when lower(coalesce(p_table, '')) = 'lifecyclemodels'
-        and refs.path = array[
+        and refs.semantic_path = array[
           'lifeCycleModelDataSet',
           'lifeCycleModelInformation',
           'dataSetInformation',
@@ -112,19 +219,30 @@ as $$
         ]
         then 'Descriptive'
       when lower(coalesce(p_table, '')) = 'comments'
-        and array_length(refs.path, 1) = 5
-        and refs.path[1:3]
-          = array['modellingAndValidation', 'validation', 'review']
-        and refs.path[4] ~ '^[0-9]+$'
-        and refs.path[5] = 'common:referenceToReviewDetails'
+        and refs.semantic_path = array[
+          'modellingAndValidation',
+          'validation',
+          'review',
+          'common:referenceToReviewDetails'
+        ]
         then 'RequiredSupport'
       when refs.mapped_table in ('processes', 'flows')
         then 'PolicyGap'
       else 'RequiredSupport'
     end as lifecycle_role,
-    lower(trim(refs.value->>'@type')) as ref_type,
+    case
+      when not refs.value ? '@type'
+        and refs.mapped_table = 'processes'
+        then 'process data set'
+      else lower(trim(refs.value->>'@type'))
+    end as ref_type,
     refs.mapped_table as ref_table,
-    (refs.value->>'@refObjectId')::uuid as ref_object_id,
+    case
+      when refs.value->>'@refObjectId'
+        ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        then (refs.value->>'@refObjectId')::uuid
+      else null
+    end as ref_object_id,
     refs.value->>'@version' as ref_version
   from refs
 $$;
@@ -410,6 +528,25 @@ begin
           v_ref.reference_path
         )
         on conflict do nothing;
+      elsif v_ref.lifecycle_role = 'ModelComposition'
+        and v_current.table_name <> 'lifecyclemodels' then
+        insert into pg_temp.cmd_review_policy_queue (
+          table_name,
+          dataset_id,
+          dataset_version,
+          is_root,
+          dependency_role,
+          reference_path
+        )
+        values (
+          v_ref.ref_table,
+          v_ref.ref_object_id,
+          v_ref.ref_version,
+          false,
+          'ModelComposition',
+          v_ref.reference_path
+        )
+        on conflict do nothing;
       end if;
     end loop;
 
@@ -446,6 +583,25 @@ begin
           v_ref.ref_version,
           false,
           'RequiredSupport',
+          v_ref.reference_path
+        )
+        on conflict do nothing;
+      elsif v_ref.lifecycle_role = 'ModelComposition'
+        and v_current.table_name <> 'lifecyclemodels' then
+        insert into pg_temp.cmd_review_policy_queue (
+          table_name,
+          dataset_id,
+          dataset_version,
+          is_root,
+          dependency_role,
+          reference_path
+        )
+        values (
+          v_ref.ref_table,
+          v_ref.ref_object_id,
+          v_ref.ref_version,
+          false,
+          'ModelComposition',
           v_ref.reference_path
         )
         on conflict do nothing;
@@ -603,11 +759,7 @@ begin
       end loop;
     end if;
 
-    if v_current.table_name = 'processes'
-      and (
-        p_action = 'publish'
-        or (p_action in ('submit', 'approve') and not v_current.is_root)
-      ) then
+    if v_current.table_name = 'processes' then
       v_paired := public.cmd_review_get_dataset_row(
         'lifecyclemodels',
         v_current.dataset_id,
@@ -622,7 +774,11 @@ begin
         ) or (
           p_action in ('submit', 'approve')
           and coalesce((v_paired->>'state_code')::integer, 0) < 100
-          and nullif(v_paired->>'user_id', '')::uuid is distinct from v_root_owner
+          and (
+            v_current.is_root
+            or nullif(v_paired->>'user_id', '')::uuid
+              is distinct from v_root_owner
+          )
         ) then
           return public.cmd_review_lifecycle_error(
             'MODEL_DEPENDENCY_NOT_PUBLIC',
@@ -798,6 +954,10 @@ begin
     );
   end if;
 
+  if p_table = 'processes' then
+    lock table public.lifecyclemodels in share row exclusive mode;
+  end if;
+
   v_assertion := public.cmd_review_assert_lifecycle_closure(
     jsonb_build_array(jsonb_build_object(
       'table', p_table,
@@ -886,6 +1046,10 @@ begin
       p_review_id,
       p_audit
     );
+  end if;
+
+  if lower(p_table) = 'processes' then
+    lock table public.lifecyclemodels in share row exclusive mode;
   end if;
 
   perform 1
