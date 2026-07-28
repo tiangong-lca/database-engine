@@ -729,6 +729,17 @@ values
             "name": [
               { "@xml:lang": "en", "#text": "Approve Model" }
             ]
+          },
+          "technology": {
+            "processes": {
+              "processInstance": [{
+                "referenceToProcess": {
+                  "@type": "process data set",
+                  "@refObjectId": "32000000-0000-0000-0000-000000000302",
+                  "@version": "01.00.000"
+                }
+              }]
+            }
           }
         },
         "modellingAndValidation": {
@@ -759,6 +770,17 @@ values
             "name": [
               { "@xml:lang": "en", "#text": "Approve Model" }
             ]
+          },
+          "technology": {
+            "processes": {
+              "processInstance": [{
+                "referenceToProcess": {
+                  "@type": "process data set",
+                  "@refObjectId": "32000000-0000-0000-0000-000000000302",
+                  "@version": "01.00.000"
+                }
+              }]
+            }
           }
         },
         "modellingAndValidation": {
@@ -803,6 +825,17 @@ values
             "name": [
               { "@xml:lang": "en", "#text": "Broken Model" }
             ]
+          },
+          "technology": {
+            "processes": {
+              "processInstance": [{
+                "referenceToProcess": {
+                  "@type": "process data set",
+                  "@refObjectId": "32000000-0000-0000-0000-000000000304",
+                  "@version": "01.00.000"
+                }
+              }]
+            }
           }
         },
         "modellingAndValidation": {
@@ -818,6 +851,17 @@ values
             "name": [
               { "@xml:lang": "en", "#text": "Broken Model" }
             ]
+          },
+          "technology": {
+            "processes": {
+              "processInstance": [{
+                "referenceToProcess": {
+                  "@type": "process data set",
+                  "@refObjectId": "32000000-0000-0000-0000-000000000304",
+                  "@version": "01.00.000"
+                }
+              }]
+            }
           }
         },
         "modellingAndValidation": {
@@ -847,6 +891,17 @@ values
             "name": [
               { "@xml:lang": "en", "#text": "Sparse Approve Model" }
             ]
+          },
+          "technology": {
+            "processes": {
+              "processInstance": [{
+                "referenceToProcess": {
+                  "@type": "process data set",
+                  "@refObjectId": "32000000-0000-0000-0000-000000000305",
+                  "@version": "01.00.000"
+                }
+              }]
+            }
           }
         },
         "modellingAndValidation": {}
@@ -859,6 +914,17 @@ values
             "name": [
               { "@xml:lang": "en", "#text": "Sparse Approve Model" }
             ]
+          },
+          "technology": {
+            "processes": {
+              "processInstance": [{
+                "referenceToProcess": {
+                  "@type": "process data set",
+                  "@refObjectId": "32000000-0000-0000-0000-000000000305",
+                  "@version": "01.00.000"
+                }
+              }]
+            }
           }
         },
         "modellingAndValidation": {}
@@ -1590,8 +1656,8 @@ select is(
     '53000000-0000-0000-0000-000000000303',
     '{"command":"review_approve"}'::jsonb
   )->>'code',
-  'INVALID_PAYLOAD',
-  'lifecycle model approval fails when a referenced submodel snapshot is missing'
+  'MODEL_DEPENDENCY_NOT_PUBLIC',
+  'lifecycle model approval safely fails when an exact included Process is missing'
 );
 
 select is(
