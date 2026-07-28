@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-07-27"
-lastReviewedCommit: "2ece812abe3af70ae51a8d3f68b9b25967d7ae58"
-lastReviewedNote: "Reviewed the Issue #287 main-to-dev hotfix backmerge together with Issues #291 and #292: scope-closure, index-health, and hybrid-search migrations retain their database-owned routing and proof boundaries."
+lastReviewedCommit: "889d3bf199ce38200dde00e7d44d2a1cc7402a70"
+lastReviewedNote: "Reviewed Issue #297 embedding queue selector optimization: existing migration, SQL-test, validation, and architecture routes cover scope preaggregation and persistent-dev plan proof, so no routing rule change is required."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

@@ -5,7 +5,7 @@
 -- iterative mode so post-index filters do not silently truncate candidates.
 
 create index concurrently if not exists processes_embedding_ft_tg_hnsw_idx
-  on public.processes using hnsw (embedding_ft vector_cosine_ops)
+  on public.processes using hnsw (embedding_ft extensions.vector_cosine_ops)
   where state_code = 100
     and embedding_ft is not null;
 

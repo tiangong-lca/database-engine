@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-27
-lastReviewedCommit: 2ece812abe3af70ae51a8d3f68b9b25967d7ae58
-lastReviewedNote: "Reviewed the Issue #287 main-to-dev hotfix backmerge together with Issues #291 and #292; schema ownership, branch delivery, automatic migration, and later workspace integration boundaries remain unchanged."
+lastReviewedCommit: 889d3bf199ce38200dde00e7d44d2a1cc7402a70
+lastReviewedNote: "Reviewed Issue #297 embedding queue selector follow-up; scope-count preaggregation, SQL plan regression, persistent-dev plan proof, and unchanged backpressure defaults remain within existing schema ownership, dev-first delivery, runtime ownership, and later workspace integration boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
