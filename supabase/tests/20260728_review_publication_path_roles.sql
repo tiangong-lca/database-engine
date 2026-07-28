@@ -23,7 +23,7 @@ begin
 end;
 $$;
 
-select plan(24);
+select plan(33);
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
 create temporary table path_role_webhook_calls (
@@ -604,10 +604,267 @@ values (
   }'::jsonb
 );
 
+insert into public.processes (
+  id,
+  version,
+  json,
+  json_ordered,
+  user_id,
+  state_code,
+  team_id,
+  model_id,
+  rule_verification,
+  reviews
+)
+values
+  (
+    '33800000-0000-0000-0000-000000000011',
+    '01.00.000',
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Approve foreign dependency"}]}}}}}'::jsonb,
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Approve foreign dependency"}]}}}}}'::json,
+    '12800000-0000-0000-0000-000000000002',
+    0,
+    '22800000-0000-0000-0000-000000000002',
+    null,
+    true,
+    '[]'::jsonb
+  ),
+  (
+    '33800000-0000-0000-0000-000000000012',
+    '01.00.000',
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"ILCD composition member"}]}}}}}'::jsonb,
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"ILCD composition member"}]}}}}}'::json,
+    '12800000-0000-0000-0000-000000000001',
+    0,
+    '22800000-0000-0000-0000-000000000001',
+    null,
+    true,
+    '[]'::jsonb
+  ),
+  (
+    '33800000-0000-0000-0000-000000000013',
+    '01.00.000',
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"json_tg composition member"}]}}}}}'::jsonb,
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"json_tg composition member"}]}}}}}'::json,
+    '12800000-0000-0000-0000-000000000001',
+    0,
+    '22800000-0000-0000-0000-000000000001',
+    null,
+    true,
+    '[]'::jsonb
+  );
+
+insert into public.lifecyclemodels (
+  id,
+  version,
+  json,
+  json_ordered,
+  json_tg,
+  user_id,
+  state_code,
+  team_id,
+  rule_verification,
+  reviews
+)
+values
+  (
+    '34800000-0000-0000-0000-000000000011',
+    '01.00.000',
+    '{
+      "lifeCycleModelDataSet": {
+        "lifeCycleModelInformation": {
+          "dataSetInformation": {
+            "name": { "baseName": [{ "#text": "Approve foreign composition root" }] }
+          },
+          "technology": {
+            "processes": {
+              "processInstance": [{
+                "referenceToProcess": {
+                  "@type": "process data set",
+                  "@refObjectId": "33800000-0000-0000-0000-000000000011",
+                  "@version": "01.00.000"
+                }
+              }]
+            }
+          }
+        }
+      }
+    }'::jsonb,
+    '{
+      "lifeCycleModelDataSet": {
+        "lifeCycleModelInformation": {
+          "dataSetInformation": {
+            "name": { "baseName": [{ "#text": "Approve foreign composition root" }] }
+          },
+          "technology": {
+            "processes": {
+              "processInstance": [{
+                "referenceToProcess": {
+                  "@type": "process data set",
+                  "@refObjectId": "33800000-0000-0000-0000-000000000011",
+                  "@version": "01.00.000"
+                }
+              }]
+            }
+          }
+        }
+      }
+    }'::json,
+    '{"submodels":[{"id":"33800000-0000-0000-0000-000000000011","version":"01.00.000","type":"secondary"}]}'::jsonb,
+    '12800000-0000-0000-0000-000000000001',
+    20,
+    '22800000-0000-0000-0000-000000000001',
+    true,
+    '[{"key":0,"id":"53800000-0000-0000-0000-000000000011"}]'::jsonb
+  ),
+  (
+    '34800000-0000-0000-0000-000000000012',
+    '01.00.000',
+    '{
+      "lifeCycleModelDataSet": {
+        "lifeCycleModelInformation": {
+          "dataSetInformation": {
+            "name": { "baseName": [{ "#text": "Mismatched composition root" }] }
+          },
+          "technology": {
+            "processes": {
+              "processInstance": [{
+                "referenceToProcess": {
+                  "@type": "process data set",
+                  "@refObjectId": "33800000-0000-0000-0000-000000000012",
+                  "@version": "01.00.000"
+                }
+              }]
+            }
+          }
+        }
+      }
+    }'::jsonb,
+    '{
+      "lifeCycleModelDataSet": {
+        "lifeCycleModelInformation": {
+          "dataSetInformation": {
+            "name": { "baseName": [{ "#text": "Mismatched composition root" }] }
+          },
+          "technology": {
+            "processes": {
+              "processInstance": [{
+                "referenceToProcess": {
+                  "@type": "process data set",
+                  "@refObjectId": "33800000-0000-0000-0000-000000000012",
+                  "@version": "01.00.000"
+                }
+              }]
+            }
+          }
+        }
+      }
+    }'::json,
+    '{"submodels":[{"id":"33800000-0000-0000-0000-000000000013","version":"01.00.000","type":"secondary"}]}'::jsonb,
+    '12800000-0000-0000-0000-000000000001',
+    0,
+    '22800000-0000-0000-0000-000000000001',
+    true,
+    '[]'::jsonb
+  );
+
+insert into public.reviews (
+  id,
+  data_id,
+  data_version,
+  state_code,
+  reviewer_id,
+  json
+)
+values (
+  '53800000-0000-0000-0000-000000000011',
+  '34800000-0000-0000-0000-000000000011',
+  '01.00.000',
+  1,
+  '[]'::jsonb,
+  '{
+    "data": {
+      "id": "34800000-0000-0000-0000-000000000011",
+      "version": "01.00.000"
+    },
+    "team": { "id": "22800000-0000-0000-0000-000000000001" },
+    "user": { "id": "12800000-0000-0000-0000-000000000001" },
+    "comment": { "message": "" },
+    "logs": []
+  }'::jsonb
+);
+
+insert into public.comments (
+  review_id,
+  reviewer_id,
+  json,
+  state_code
+)
+values (
+  '53800000-0000-0000-0000-000000000011',
+  '12800000-0000-0000-0000-000000000010',
+  '{
+    "modellingAndValidation": {
+      "validation": {
+        "review": [{
+          "common:scope": [{
+            "@name": "Approve composition scope",
+            "common:method": { "@name": "Approve composition method" }
+          }]
+        }]
+      }
+    }
+  }'::json,
+  1
+);
+
 create temporary table path_role_results (
   label text primary key,
   result jsonb not null
 ) on commit drop;
+
+create temporary table path_role_snapshots (
+  label text primary key,
+  snapshot jsonb not null
+) on commit drop;
+
+create or replace function pg_temp.public_error_shape(p_result jsonb)
+returns jsonb
+language sql
+immutable
+as $$
+  select jsonb_build_object(
+    'ok', p_result->'ok',
+    'status', p_result->'status',
+    'code', p_result->'code',
+    'message', p_result->'message',
+    'detailKeys', coalesce((
+      select jsonb_agg(key order by key)
+      from jsonb_object_keys(coalesce(p_result->'details', '{}'::jsonb)) as key
+    ), '[]'::jsonb),
+    'referenceKeys', coalesce((
+      select jsonb_agg(key order by key)
+      from jsonb_object_keys(
+        case
+          when jsonb_typeof(p_result#>'{details,reference}') = 'object'
+            then p_result#>'{details,reference}'
+          else '{}'::jsonb
+        end
+      ) as key
+    ), '[]'::jsonb)
+  )
+$$;
+
+create or replace function pg_temp.is_deeply(
+  p_have jsonb,
+  p_want jsonb,
+  p_description text
+)
+returns text
+language sql
+as $$
+  select extensions.is(p_have::text, p_want::text, p_description)
+$$;
 
 select set_config(
   'request.jwt.claim.sub',
@@ -698,6 +955,15 @@ select is(
 insert into path_role_results (label, result)
 values
   (
+    'submit_mismatched_composition',
+    public.cmd_review_submit_without_gate(
+      'lifecyclemodels',
+      '34800000-0000-0000-0000-000000000012',
+      '01.00.000',
+      '{"test":"path-role-characterization"}'::jsonb
+    )
+  ),
+  (
     'submit_foreign_composition',
     public.cmd_review_submit_without_gate(
       'lifecyclemodels',
@@ -717,6 +983,53 @@ values
   );
 
 select is(
+  (select result->>'code' from path_role_results where label = 'submit_mismatched_composition'),
+  'MODEL_COMPOSITION_POLICY_GAP',
+  'json_tg submodels and ILCD processInstance mismatch fails closed'
+);
+
+select pg_temp.is_deeply(
+  jsonb_build_object(
+    'rootState', (
+      select state_code
+      from public.lifecyclemodels
+      where id = '34800000-0000-0000-0000-000000000012'
+        and version = '01.00.000'
+    ),
+    'ilcdProcessState', (
+      select state_code
+      from public.processes
+      where id = '33800000-0000-0000-0000-000000000012'
+        and version = '01.00.000'
+    ),
+    'jsonTgProcessState', (
+      select state_code
+      from public.processes
+      where id = '33800000-0000-0000-0000-000000000013'
+        and version = '01.00.000'
+    ),
+    'reviewCount', (
+      select count(*)
+      from public.reviews
+      where data_id = '34800000-0000-0000-0000-000000000012'
+    ),
+    'auditCount', (
+      select count(*)
+      from public.command_audit_log
+      where target_id = '34800000-0000-0000-0000-000000000012'
+    )
+  ),
+  '{
+    "rootState": 0,
+    "ilcdProcessState": 0,
+    "jsonTgProcessState": 0,
+    "reviewCount": 0,
+    "auditCount": 0
+  }'::jsonb,
+  'composition-source mismatch leaves both locators, review rows, and audits unchanged'
+);
+
+select is(
   (select result->>'code' from path_role_results where label = 'submit_foreign_composition'),
   'MODEL_DEPENDENCY_NOT_PUBLIC',
   'cross-owner private model composition fails closed'
@@ -726,6 +1039,31 @@ select is(
   (select result->>'code' from path_role_results where label = 'submit_missing_composition'),
   'MODEL_DEPENDENCY_NOT_PUBLIC',
   'missing and private model composition use the same non-disclosing safe code'
+);
+
+select pg_temp.is_deeply(
+  pg_temp.public_error_shape((
+    select result
+    from path_role_results
+    where label = 'submit_foreign_composition'
+  )),
+  pg_temp.public_error_shape((
+    select result
+    from path_role_results
+    where label = 'submit_missing_composition'
+  )),
+  'private and missing composition expose the same public error envelope and key schema'
+);
+
+select ok(
+  (
+    select bool_and(
+      result::text !~* '(not found|private|state_code|owner|Foreign Secret)'
+    )
+    from path_role_results
+    where label in ('submit_foreign_composition', 'submit_missing_composition')
+  ),
+  'private and missing composition messages do not reveal existence, state, owner, name, or content'
 );
 
 select is(
@@ -834,6 +1172,145 @@ select is(
   ),
   '20',
   'approve does not publish a referenceToPrecedingDataSetVersion target'
+);
+
+insert into path_role_snapshots (label, snapshot)
+values (
+  'approve_composition_before',
+  jsonb_build_object(
+    'root', (
+      select to_jsonb(model)
+      from public.lifecyclemodels as model
+      where id = '34800000-0000-0000-0000-000000000011'
+        and version = '01.00.000'
+    ),
+    'dependency', (
+      select to_jsonb(process)
+      from public.processes as process
+      where id = '33800000-0000-0000-0000-000000000011'
+        and version = '01.00.000'
+    ),
+    'review', (
+      select to_jsonb(review)
+      from public.reviews as review
+      where id = '53800000-0000-0000-0000-000000000011'
+    )
+  )
+);
+
+insert into path_role_snapshots (label, snapshot)
+values (
+  'approve_comments_before',
+  coalesce((
+    select jsonb_agg(
+      to_jsonb(comment)
+      order by comment.review_id, comment.reviewer_id, comment.created_at
+    )
+    from public.comments as comment
+    where review_id = '53800000-0000-0000-0000-000000000011'
+  ), '[]'::jsonb)
+);
+
+insert into path_role_snapshots (label, snapshot)
+values (
+  'approve_audits_before',
+  coalesce((
+    select jsonb_agg(to_jsonb(audit) order by audit.id)
+    from public.command_audit_log as audit
+    where target_id in (
+      '34800000-0000-0000-0000-000000000011',
+      '53800000-0000-0000-0000-000000000011'
+    )
+  ), '[]'::jsonb)
+);
+
+insert into path_role_results (label, result)
+values (
+  'approve_foreign_composition',
+  public.cmd_review_approve(
+    'lifecyclemodels',
+    '53800000-0000-0000-0000-000000000011',
+    '{"test":"path-role-characterization"}'::jsonb
+  )
+);
+
+select is(
+  (select result->>'code' from path_role_results where label = 'approve_foreign_composition'),
+  'MODEL_DEPENDENCY_NOT_PUBLIC',
+  'approve fails closed for a cross-owner private exact included Process'
+);
+
+select pg_temp.is_deeply(
+  jsonb_build_object(
+    'root', (
+      select to_jsonb(model)
+      from public.lifecyclemodels as model
+      where id = '34800000-0000-0000-0000-000000000011'
+        and version = '01.00.000'
+    ),
+    'dependency', (
+      select to_jsonb(process)
+      from public.processes as process
+      where id = '33800000-0000-0000-0000-000000000011'
+        and version = '01.00.000'
+    ),
+    'review', (
+      select to_jsonb(review)
+      from public.reviews as review
+      where id = '53800000-0000-0000-0000-000000000011'
+    )
+  ),
+  (
+    select snapshot
+    from path_role_snapshots
+    where label = 'approve_composition_before'
+  ),
+  'failed approve leaves root, dependency, and review rows byte-for-byte unchanged'
+);
+
+select pg_temp.is_deeply(
+  coalesce((
+    select jsonb_agg(
+      to_jsonb(comment)
+      order by comment.review_id, comment.reviewer_id, comment.created_at
+    )
+    from public.comments as comment
+    where review_id = '53800000-0000-0000-0000-000000000011'
+  ), '[]'::jsonb),
+  (
+    select snapshot
+    from path_role_snapshots
+    where label = 'approve_comments_before'
+  ),
+  'failed approve leaves review comments byte-for-byte unchanged'
+);
+
+select pg_temp.is_deeply(
+  coalesce((
+    select jsonb_agg(to_jsonb(audit) order by audit.id)
+    from public.command_audit_log as audit
+    where target_id in (
+      '34800000-0000-0000-0000-000000000011',
+      '53800000-0000-0000-0000-000000000011'
+    )
+  ), '[]'::jsonb),
+  (
+    select snapshot
+    from path_role_snapshots
+    where label = 'approve_audits_before'
+  ),
+  'failed approve writes no root or review command audit'
+);
+
+select ok(
+  (
+    select result::text not like '%Approve foreign dependency%'
+      and result::text not like '%12800000-0000-0000-0000-000000000002%'
+      and result::text !~* '(not found|private|state_code|owner)'
+    from path_role_results
+    where label = 'approve_foreign_composition'
+  ),
+  'approve composition failure does not disclose foreign existence, state, owner, name, or content'
 );
 
 select set_config(
