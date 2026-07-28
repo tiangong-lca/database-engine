@@ -900,8 +900,6 @@ select is(
   'control: submit keeps existing required Flow support in the review lifecycle'
 );
 
-select todo_start('Issue #304 path-aware lifecycle closure is not implemented yet');
-
 select is(
   (
     select state_code::text
@@ -1396,8 +1394,6 @@ select is(
   '0',
   'failed LifecycleModel publish leaves the exact included Process private'
 );
-
-select todo_end();
 
 select is(
   (select result->>'ok' from path_role_results where label = 'approve_lineage_and_support'),
