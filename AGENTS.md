@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-27
-lastReviewedCommit: 889d3bf199ce38200dde00e7d44d2a1cc7402a70
-lastReviewedNote: "Reviewed Issue #297 embedding queue selector follow-up; scope-count preaggregation, SQL plan regression, persistent-dev plan proof, and unchanged backpressure defaults remain within existing schema ownership, dev-first delivery, runtime ownership, and later workspace integration boundaries."
+lastReviewedAt: 2026-07-28
+lastReviewedCommit: e5316bb4b6326632684a922c77452c620b65b00b
+lastReviewedNote: "Reviewed Issue #304 review/publication lifecycle closure; explicit database path roles, transaction-final assertions, safe errors, dev-first delivery, and later workspace integration remain within existing repo ownership and cross-repo contract boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
