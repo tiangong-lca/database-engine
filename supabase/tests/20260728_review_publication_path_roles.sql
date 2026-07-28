@@ -24,8 +24,59 @@ begin
 end;
 $$;
 
-select plan(58);
+select plan(61);
 select set_config('request.jwt.claim.role', 'authenticated', true);
+
+set local role anon;
+select ok(
+  (
+    select count(*) = 1
+    from public.cmd_review_extract_refs(
+      '{"processDataSet":{"exchanges":{"exchange":{"referenceToFlowDataSet":{"@type":"flow data set","@refObjectId":"32800000-0000-0000-0000-000000000040","@version":"01.00.000"}}}}}'::jsonb
+    )
+  )
+  and not pg_catalog.has_function_privilege(
+    current_user,
+    'public.cmd_review_reference_roles(text,text,jsonb)',
+    'EXECUTE'
+  ),
+  'anon can call the input-only extractor without direct helper access'
+);
+reset role;
+
+set local role authenticated;
+select ok(
+  (
+    select count(*) = 1
+    from public.cmd_review_extract_refs(
+      '{"processDataSet":{"exchanges":{"exchange":{"referenceToFlowDataSet":{"@type":"flow data set","@refObjectId":"32800000-0000-0000-0000-000000000041","@version":"01.00.000"}}}}}'::jsonb
+    )
+  )
+  and not pg_catalog.has_function_privilege(
+    current_user,
+    'public.cmd_review_reference_roles(text,text,jsonb)',
+    'EXECUTE'
+  ),
+  'authenticated can call the input-only extractor without direct helper access'
+);
+reset role;
+
+set local role service_role;
+select ok(
+  (
+    select count(*) = 1
+    from public.cmd_review_extract_refs(
+      '{"processDataSet":{"exchanges":{"exchange":{"referenceToFlowDataSet":{"@type":"flow data set","@refObjectId":"32800000-0000-0000-0000-000000000042","@version":"01.00.000"}}}}}'::jsonb
+    )
+  )
+  and not pg_catalog.has_function_privilege(
+    current_user,
+    'public.cmd_review_reference_roles(text,text,jsonb)',
+    'EXECUTE'
+  ),
+  'service_role can call the input-only extractor without direct helper access'
+);
+reset role;
 
 create temporary table path_role_webhook_calls (
   edge_function text not null,

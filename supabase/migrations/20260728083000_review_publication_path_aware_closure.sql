@@ -872,6 +872,7 @@ returns table (
   ref_version text
 )
 language sql
+security definer
 stable
 set search_path = ''
 as $$
