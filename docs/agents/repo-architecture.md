@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-29
-lastReviewedCommit: 09683a090f7e50b521233584b8ec20748eb9afeb
-lastReviewedNote: "Reviewed Issue #308 authoritative artifact delivery: Database owns DB-first fresh/reused publication staging, atomic manifest-ID resolution, public projections, and fenced resumable GC; Worker owns object I/O."
+lastReviewedCommit: 436673150bc81601b3c975cdf046af7e54c8c9e6
+lastReviewedNote: "Reviewed post-merge Issue #310 staging evidence: retain seven extracted_md PGroonga indexes, bind Hybrid proof to the Edge route parameter profile plus redacted staging vectors, and verify PGroonga use from direct plans."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -106,15 +106,32 @@ The global process/flow HNSW indexes remain necessary for owner/team and broad
 visibility paths. A smaller process partial HNSW index covers the measured
 public `state_code = 100` path; large flow-specific duplicate indexes require
 new staging evidence before they are added. Production-cardinality proof lives
-in the read-only benchmark profile and Issue #292, never in raw checked-in
-embeddings or user query text.
+in the read-only benchmark profile and Issues #292/#310. The benchmark combines
+the checked-in Edge route lexical parameter profile with redacted real staging
+vectors; it must not derive lexical terms from shared Markdown document-prefix
+tokens or retain raw embeddings, UUIDs, or user query text.
 
-Contacts, FlowProperties, Sources, and UnitGroups now follow the same durable
-search-derivative shape as the established Process, Flow, and LifecycleModel
-surfaces: deterministic `extracted_text`, compact extraction jobs that persist
-`extracted_md`, and backpressured embedding jobs that persist 1024-dimensional
-`embedding_ft`. Their obsolete 1536-dimensional `embedding` columns and empty
-legacy HNSW indexes are retired instead of being treated as a usable pipeline.
+All seven dataset families use deterministic `extracted_md` as the single
+lexical document and as the source for backpressured 1024-dimensional
+`embedding_ft` jobs. PGroonga indexes cover `extracted_md` for Process, Flow,
+LifecycleModel, Contact, FlowProperty, Source, and UnitGroup search. Hybrid v2
+RPCs expose one `lexical_weight`; the old two-weight signatures remain only as
+an Expand-phase compatibility surface and do not represent two lexical
+branches. On the hosted branch, standard `idx_scan` statistics and the
+Performance Advisor may continue to report a PGroonga index as unused after a
+query plan has used it; a direct `EXPLAIN (ANALYZE, BUFFERS)` naming the index is
+the required cross-check before any retention decision. After Edge and Next
+have cut over and staging evidence is complete, a separate Contract migration
+may remove the legacy RPC signatures,
+`extracted_text` triggers/functions/indexes/columns, and the retired LLM
+webhook database objects with explicit dependency checks.
+
+Contacts, FlowProperties, Sources, and UnitGroups otherwise follow the same
+durable search-derivative shape as the established Process, Flow, and
+LifecycleModel surfaces: compact extraction jobs persist `extracted_md`, and
+backpressured embedding jobs persist `embedding_ft`. Their obsolete
+1536-dimensional `embedding` columns and empty legacy HNSW indexes are retired
+instead of being treated as a usable pipeline.
 
 Historical repair is an explicit service-role cursor operation with a maximum
 500-row page. It resumes either missing Markdown or missing embeddings, is

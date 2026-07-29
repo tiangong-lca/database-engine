@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-29
-lastReviewedCommit: 09683a090f7e50b521233584b8ec20748eb9afeb
-lastReviewedNote: "Reviewed Issue #308 authoritative artifact delivery: Database owns DB-first fresh/reused publication staging, atomic client-key resolution, owner-safe projections, expiry admission, and fenced resumable GC."
+lastReviewedCommit: 436673150bc81601b3c975cdf046af7e54c8c9e6
+lastReviewedNote: "Reviewed post-merge Issue #310 staging evidence: Database ownership, dev-first delivery, and later workspace integration remain unchanged; persistent-dev proof uses the checked-in Edge Hybrid parameter profile and direct index plans."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
