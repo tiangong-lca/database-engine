@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-29
-lastReviewedCommit: 220d9568a3e1a4000245e26a1cf444d9b403d4ed
-lastReviewedNote: "Reviewed merged Issues #308 and #310: Database owns authoritative artifact delivery and the extracted_md lexical v2 expand contract, including seven concurrent PGroonga indexes, strict owner-draft search, dev-first delivery, and later workspace integration."
+lastReviewedCommit: 436673150bc81601b3c975cdf046af7e54c8c9e6
+lastReviewedNote: "Reviewed post-merge Issue #310 staging evidence: Database ownership, dev-first delivery, and later workspace integration remain unchanged; persistent-dev proof uses the checked-in Edge Hybrid parameter profile and direct index plans."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
