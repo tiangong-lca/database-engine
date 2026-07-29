@@ -265,6 +265,51 @@ create temporary table issue_308_reconcile_claim (value jsonb);
 insert into issue_308_reconcile_claim
 select public.svc_lcia_scope_closure_artifact_write_set_reconcile(1, 30);
 select is(
+  (
+    select value #>> '{data,writeSets,0,status}'
+    from issue_308_reconcile_claim
+  ),
+  'cleanup_pending',
+  'reconcile returns the persisted post-update cleanup state'
+);
+select is(
+  (
+    select value #>> '{data,writeSets,0,reconcileToken}'
+    from issue_308_reconcile_claim
+  ),
+  (
+    select value #>> '{data,reconcileToken}'
+    from issue_308_reconcile_claim
+  ),
+  'reconcile write-set projection returns the current claim token'
+);
+select is(
+  (
+    select value #>> '{data,writeSets,0,reconcileLeaseExpiresAt}'
+    from issue_308_reconcile_claim
+  ),
+  (
+    select value #>> '{data,leaseExpiresAt}'
+    from issue_308_reconcile_claim
+  ),
+  'reconcile write-set projection returns the current claim lease'
+);
+select ok(
+  (
+    select
+      write_set.status = 'cleanup_pending'
+      and write_set.reconcile_token =
+        (claim.value #>> '{data,writeSets,0,reconcileToken}')::uuid
+      and write_set.reconcile_expires_at =
+        (claim.value #>> '{data,writeSets,0,reconcileLeaseExpiresAt}')::timestamptz
+    from issue_308_reconcile_claim claim
+    join public.lcia_scope_closure_artifact_write_sets write_set
+      on write_set.id =
+        (claim.value #>> '{data,writeSets,0,writeSetId}')::uuid
+  ),
+  'reconcile response status, token, and lease exactly match persisted claim'
+);
+select is(
   jsonb_array_length(
     (select value #> '{data,writeSets,0,items}'
      from issue_308_reconcile_claim)

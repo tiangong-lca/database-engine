@@ -952,6 +952,7 @@ declare
   v_token uuid := gen_random_uuid();
   v_lease_expires_at timestamptz :=
     now() + make_interval(secs => p_lease_seconds);
+  v_claimed_ids uuid[] := array[]::uuid[];
   v_items jsonb;
 begin
   if not coalesce(util.is_service_request(), false) then
@@ -993,12 +994,21 @@ begin
     where write_set.id = candidates.id
     returning write_set.id
   )
+  select coalesce(array_agg(claimed.id order by claimed.id), array[]::uuid[])
+  into v_claimed_ids
+  from claimed;
+
+  -- Render in a new command after the data-modifying CTE. Calling the
+  -- projection helper inside the CTE statement observes the pre-update
+  -- command snapshot and can return status=staging for a persisted
+  -- cleanup_pending claim.
   select coalesce(jsonb_agg(
-    public.lcia_scope_closure_artifact_write_set_json(claimed.id)
-    order by claimed.id
+    public.lcia_scope_closure_artifact_write_set_json(claimed_id)
+    order by claimed_id
   ), '[]'::jsonb)
   into v_items
-  from claimed;
+  from unnest(v_claimed_ids) claimed_id;
+
   return jsonb_build_object('ok', true, 'data', jsonb_build_object(
     'reconcileToken', v_token,
     'leaseExpiresAt', v_lease_expires_at,

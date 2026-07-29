@@ -86,11 +86,12 @@ select is(
       '20260729014734',
       '20260729030109',
       '20260729045326',
-      '20260729060609'
+      '20260729060609',
+      '20260729070000'
     )
   ),
-  4::bigint,
-  'all four PR migrations committed without partial DDL'
+  5::bigint,
+  'all five PR migrations committed without partial DDL'
 );
 select has_table(
   'public', 'lcia_scope_closure_artifact_write_sets',
