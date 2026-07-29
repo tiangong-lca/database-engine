@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-29
-lastReviewedCommit: 220d9568a3e1a4000245e26a1cf444d9b403d4ed
-lastReviewedNote: "Reviewed merged Issues #308 and #310: Database owns authoritative artifact delivery and the extracted_md lexical v2 expand contract; the latter uses seven concurrent PGroonga indexes and strict owner-draft process search while preserving v1 during rollout."
+lastReviewedCommit: 436673150bc81601b3c975cdf046af7e54c8c9e6
+lastReviewedNote: "Reviewed post-merge Issue #310 staging evidence: retain seven extracted_md PGroonga indexes, bind Hybrid proof to the Edge route parameter profile plus redacted staging vectors, and verify PGroonga use from direct plans."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -106,8 +106,10 @@ The global process/flow HNSW indexes remain necessary for owner/team and broad
 visibility paths. A smaller process partial HNSW index covers the measured
 public `state_code = 100` path; large flow-specific duplicate indexes require
 new staging evidence before they are added. Production-cardinality proof lives
-in the read-only benchmark profile and Issue #292, never in raw checked-in
-embeddings or user query text.
+in the read-only benchmark profile and Issues #292/#310. The benchmark combines
+the checked-in Edge route lexical parameter profile with redacted real staging
+vectors; it must not derive lexical terms from shared Markdown document-prefix
+tokens or retain raw embeddings, UUIDs, or user query text.
 
 All seven dataset families use deterministic `extracted_md` as the single
 lexical document and as the source for backpressured 1024-dimensional
@@ -115,8 +117,12 @@ lexical document and as the source for backpressured 1024-dimensional
 LifecycleModel, Contact, FlowProperty, Source, and UnitGroup search. Hybrid v2
 RPCs expose one `lexical_weight`; the old two-weight signatures remain only as
 an Expand-phase compatibility surface and do not represent two lexical
-branches. After Edge and Next have cut over and staging evidence is complete, a
-separate Contract migration may remove the legacy RPC signatures,
+branches. On the hosted branch, standard `idx_scan` statistics and the
+Performance Advisor may continue to report a PGroonga index as unused after a
+query plan has used it; a direct `EXPLAIN (ANALYZE, BUFFERS)` naming the index is
+the required cross-check before any retention decision. After Edge and Next
+have cut over and staging evidence is complete, a separate Contract migration
+may remove the legacy RPC signatures,
 `extracted_text` triggers/functions/indexes/columns, and the retired LLM
 webhook database objects with explicit dependency checks.
 

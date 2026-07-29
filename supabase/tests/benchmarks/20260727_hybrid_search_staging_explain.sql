@@ -6,6 +6,10 @@
 --   -v expected_project_ref=fotofiyqnuyvgtotswie
 --   -v explain_output=/absolute/private/path/hybrid-search-explain.log
 -- This profile is read-only. Never point it at production.
+-- The lexical parameters mirror the checked-in Edge route regression for the
+-- client query "electricity": the route preserves the raw term and adds the
+-- deterministic English/Chinese aliases below. The semantic vector comes from
+-- the same redacted real staging rows used by Issue #292.
 \if :{?benchmark_target}
 \else
   \echo 'ERROR: pass -v benchmark_target=staging'
@@ -42,7 +46,7 @@ set local search_path = public, extensions, pg_temp;
 
 select set_config(
   'application_name',
-  'database-engine-292-hybrid-search-staging-explain',
+  'database-engine-310-hybrid-search-v2-staging-explain',
   true
 );
 
@@ -53,6 +57,15 @@ set local hnsw.iterative_scan = 'strict_order';
 
 select
   to_regclass('public.processes_embedding_ft_tg_hnsw_idx') is not null
+  and to_regclass('public.flows_embedding_ft_hnsw_idx') is not null
+  and to_regclass('public.processes_extracted_md_pgroonga') is not null
+  and to_regclass('public.flows_extracted_md_pgroonga') is not null
+  and to_regprocedure(
+    'public.hybrid_search_processes_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'
+  ) is not null
+  and to_regprocedure(
+    'public.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'
+  ) is not null
   and (
     select routine.proconfig @> array[
       'plan_cache_mode=force_custom_plan',
@@ -75,24 +88,24 @@ select
 
 \if :optimized_migration_installed
 \else
-  \echo 'ERROR: issue #292 migration is not installed on this target'
+  \echo 'ERROR: issue #292/#310 search migrations are not installed on this target'
   \quit 4
 \endif
 
 with process_sample as (
-  select id, embedding_ft, extracted_text
+  select id, embedding_ft, extracted_md
   from public.processes
   where state_code = 100
     and embedding_ft is not null
-    and nullif(btrim(extracted_text), '') is not null
+    and nullif(btrim(extracted_md), '') is not null
   order by id
   limit 1
 ), flow_sample as (
-  select id, embedding_ft, extracted_text
+  select id, embedding_ft, extracted_md
   from public.flows
   where state_code = 100
     and embedding_ft is not null
-    and nullif(btrim(extracted_text), '') is not null
+    and nullif(btrim(extracted_md), '') is not null
     and json->'flowDataSet'->'modellingAndValidation'->'LCIMethod'
       ->>'typeOfDataSet' = 'Product flow'
   order by id
@@ -110,7 +123,11 @@ select jsonb_build_object(
     'data_source', 'tg',
     'match_threshold', 0.5,
     'match_count', 20,
-    'weights', jsonb_build_array(0.3, 0.2, 0.5),
+    'lexical_parameter_profile', 'edge-route-electricity-regression-v1',
+    'weights', jsonb_build_object(
+      'lexical', 0.5,
+      'semantic', 0.5
+    ),
     'rrf_k', 10,
     'page_size', 10,
     'page_current', 1
@@ -140,7 +157,7 @@ with sample as materialized (
   from public.processes
   where state_code = 100
     and embedding_ft is not null
-    and nullif(btrim(extracted_text), '') is not null
+    and nullif(btrim(extracted_md), '') is not null
   order by id
   limit 1
 ), candidates as materialized (
@@ -173,7 +190,7 @@ with sample as materialized (
   from public.flows
   where state_code = 100
     and embedding_ft is not null
-    and nullif(btrim(extracted_text), '') is not null
+    and nullif(btrim(extracted_md), '') is not null
     and json->'flowDataSet'->'modellingAndValidation'->'LCIMethod'
       ->>'typeOfDataSet' = 'Product flow'
   order by id
@@ -208,7 +225,7 @@ with sample as materialized (
   from public.flows
   where state_code = 100
     and embedding_ft is not null
-    and nullif(btrim(extracted_text), '') is not null
+    and nullif(btrim(extracted_md), '') is not null
     and json->'flowDataSet'->'modellingAndValidation'->'LCIMethod'
       ->>'typeOfDataSet' = 'Product flow'
   order by id
@@ -238,36 +255,72 @@ where candidate_distance < 0.5
 order by candidate_distance
 limit 20;
 
-\qecho profile=process-hybrid-rpc-defaults
+\qecho profile=process-lexical-v2-edge-route
+explain (analyze, buffers, settings, wal, summary, format json)
+select
+  process.id,
+  pgroonga_score(process.tableoid, process.ctid) as lexical_score
+from public.processes process
+where process.extracted_md &@~| private.pgroonga_escape_query_terms(
+    array[
+      '交流电',
+      'alternating current',
+      'electricity',
+      'AC power'
+    ]::text[]
+  )
+  and process.state_code = 100
+order by lexical_score desc, process.id
+limit 200;
+
+\qecho profile=flow-lexical-v2-product-filter
+explain (analyze, buffers, settings, wal, summary, format json)
+select
+  flow.id,
+  pgroonga_score(flow.tableoid, flow.ctid) as lexical_score
+from public.flows flow
+where flow.extracted_md &@~| private.pgroonga_escape_query_terms(
+    array[
+      '交流电',
+      'alternating current',
+      'electricity',
+      'AC power'
+    ]::text[]
+  )
+  and flow.state_code = 100
+  and flow.json->'flowDataSet'->'modellingAndValidation'->'LCIMethod'
+    ->>'typeOfDataSet' = 'Product flow'
+order by lexical_score desc, flow.id
+limit 200;
+
+\qecho profile=process-hybrid-v2-rpc-defaults
 explain (analyze, buffers, settings, wal, summary, format json)
 with sample as materialized (
   select
-    array_to_string(
-      (regexp_split_to_array(btrim(extracted_text), '[[:space:]]+'))[1:3],
-      ' '
-    ) as query_text,
-    (regexp_split_to_array(
-      btrim(extracted_text),
-      '[[:space:]]+'
-    ))[1:3] as query_terms,
+    'electricity'::text as query_text,
+    array[
+      '交流电',
+      'alternating current',
+      'electricity',
+      'AC power'
+    ]::text[] as query_terms,
     embedding_ft::text as query_embedding
   from public.processes
   where state_code = 100
     and embedding_ft is not null
-    and nullif(btrim(extracted_text), '') is not null
+    and nullif(btrim(extracted_md), '') is not null
   order by id
   limit 1
 )
 select hybrid_result.*
 from sample
-cross join lateral public.hybrid_search_processes(
+cross join lateral public.hybrid_search_processes_v2(
   sample.query_text,
   sample.query_embedding,
   '{}',
   0.5,
   20,
-  0.3,
-  0.2,
+  0.5,
   0.5,
   10,
   'tg',
@@ -276,23 +329,22 @@ cross join lateral public.hybrid_search_processes(
   sample.query_terms
 ) hybrid_result;
 
-\qecho profile=flow-hybrid-rpc-product-filter
+\qecho profile=flow-hybrid-v2-rpc-product-filter
 explain (analyze, buffers, settings, wal, summary, format json)
 with sample as materialized (
   select
-    array_to_string(
-      (regexp_split_to_array(btrim(extracted_text), '[[:space:]]+'))[1:3],
-      ' '
-    ) as query_text,
-    (regexp_split_to_array(
-      btrim(extracted_text),
-      '[[:space:]]+'
-    ))[1:3] as query_terms,
+    'electricity'::text as query_text,
+    array[
+      '交流电',
+      'alternating current',
+      'electricity',
+      'AC power'
+    ]::text[] as query_terms,
     embedding_ft::text as query_embedding
   from public.flows
   where state_code = 100
     and embedding_ft is not null
-    and nullif(btrim(extracted_text), '') is not null
+    and nullif(btrim(extracted_md), '') is not null
     and json->'flowDataSet'->'modellingAndValidation'->'LCIMethod'
       ->>'typeOfDataSet' = 'Product flow'
   order by id
@@ -300,14 +352,13 @@ with sample as materialized (
 )
 select hybrid_result.*
 from sample
-cross join lateral public.hybrid_search_flows(
+cross join lateral public.hybrid_search_flows_v2(
   sample.query_text,
   sample.query_embedding,
   '{"flowType":"Product flow"}',
   0.5,
   20,
-  0.3,
-  0.2,
+  0.5,
   0.5,
   10,
   'tg',
