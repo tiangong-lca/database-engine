@@ -34,8 +34,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-28
-lastReviewedCommit: e5316bb4b6326632684a922c77452c620b65b00b
+lastReviewedAt: 2026-07-29
+lastReviewedCommit: 29733df9c38a86cae1b06ac8455801dec0f939db
 lastReviewedNote: "Reviewed Issue #304 review/publication lifecycle closure; explicit database path roles, transaction-final assertions, safe errors, dev-first delivery, and later workspace integration remain within existing repo ownership and cross-repo contract boundaries."
 related:
   - .docpact/config.yaml
