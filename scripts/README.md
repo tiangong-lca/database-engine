@@ -20,8 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-04
-lastReviewedCommit: a8aef0bc7bb89333a30d22da10d7269107d38f44
+lastReviewedAt: 2026-07-29
+lastReviewedCommit: 0f41fb08fb0874caefc2c8054822d928504f4c61
+lastReviewedNote: "Reviewed for Issue #308: the new populated base-to-head test runner is a narrow schema-validation entrypoint and does not change workspace export, refresh, or migration-generation behavior."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
