@@ -41,7 +41,7 @@ select has_function('public', 'svc_lcia_scope_closure_finalize_reused_scan', arr
 select has_function('public', 'svc_lcia_scope_closure_fail_before_scan', array['uuid','uuid','uuid','text'], 'early worker failures are lease-fenced');
 select has_function('public', 'get_lcia_scope_closure_check', array['uuid'], 'closure read RPC exists');
 select has_function('public', 'list_lcia_scope_closure_issues', array['uuid','uuid','integer'], 'closure issue keyset RPC exists');
-select has_function('public', 'get_lcia_scope_closure_report_download', array['uuid'], 'report authorization RPC exists');
+select has_function('public', 'get_lcia_scope_closure_report_download', array['uuid','text'], 'role-selecting artifact authorization RPC exists');
 select has_function('public', 'svc_lcia_scope_closure_check_record_result', array['uuid','text','text','text','text','jsonb','text[]','uuid'], 'service closure result RPC cannot set certificate state');
 select has_function('public', 'svc_lcia_scope_closure_certificate_event', array['uuid','text','text'], 'append-only certificate event RPC exists');
 select has_function('public', 'get_task_summary_v2_feed', array['text','text[]','text[]','timestamp with time zone','timestamp with time zone','uuid','integer','boolean'], 'role-aware task feed RPC exists');
@@ -69,10 +69,10 @@ select ok(has_function_privilege('service_role', 'public.svc_lcia_scope_closure_
 select ok(has_function_privilege('service_role', 'public.svc_lcia_scope_closure_fail_before_scan(uuid,uuid,uuid,text)', 'execute'), 'early failure handling is service-only');
 select ok(has_function_privilege('authenticated', 'public.get_lcia_scope_closure_check(uuid)', 'execute'), 'authenticated callers can use the owner-scoped check read RPC');
 select ok(has_function_privilege('authenticated', 'public.list_lcia_scope_closure_issues(uuid,uuid,integer)', 'execute'), 'authenticated callers can use the owner-scoped issue read RPC');
-select ok(has_function_privilege('authenticated', 'public.get_lcia_scope_closure_report_download(uuid)', 'execute'), 'authenticated callers can use the owner-scoped report read RPC');
+select ok(has_function_privilege('authenticated', 'public.get_lcia_scope_closure_report_download(uuid,text)', 'execute'), 'authenticated callers can use the owner-scoped role-selecting artifact read RPC');
 select ok(not has_function_privilege('service_role', 'public.get_lcia_scope_closure_check(uuid)', 'execute'), 'service role has no direct closure check read grant');
 select ok(not has_function_privilege('service_role', 'public.list_lcia_scope_closure_issues(uuid,uuid,integer)', 'execute'), 'service role has no direct closure issue read grant');
-select ok(not has_function_privilege('service_role', 'public.get_lcia_scope_closure_report_download(uuid)', 'execute'), 'service role has no direct closure report read grant');
+select ok(not has_function_privilege('service_role', 'public.get_lcia_scope_closure_report_download(uuid,text)', 'execute'), 'service role has no direct closure artifact read grant');
 select ok(has_function_privilege('authenticated', 'public.cmd_lcia_result_build_request(text,jsonb,text,text,jsonb,text,jsonb)', 'execute'), 'v1 build stays callable until the server feature flag requires certificates');
 select ok(not has_function_privilege('authenticated', 'public.svc_lcia_scope_closure_reuse_completed_scan(uuid,uuid,uuid,uuid)', 'execute'), 'authenticated callers cannot reuse another run scan');
 select ok(not has_table_privilege('authenticated', 'public.lcia_scope_closure_scan_executions', 'select'), 'authenticated cannot enumerate reusable scan executions');

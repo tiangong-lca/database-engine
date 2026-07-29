@@ -36,7 +36,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-29
 lastReviewedCommit: 09683a090f7e50b521233584b8ec20748eb9afeb
-lastReviewedNote: "Reviewed Issue #308 scope-closure evidence retention; lifecycle, actor projection, certificate/build expiry, and service GC remain database-owned while Storage deletion stays Worker-owned."
+lastReviewedNote: "Reviewed Issue #308 cross-repo reconciliation; strict public artifact selection and resumable post-tombstone cleanup remain database-owned while signing and Storage deletion stay outside SQL."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -137,7 +137,7 @@ At a human-readable level, this repo owns:
 - the authenticated guarded derivative-rebuild surface: one flow/process owner-draft snapshot, the compatible single-process v1 queued admission, and one owner-only child status read; the private flow/process coordinator, 1..50 batch admission, exact 23-flow + 27-process aggregate proof, queue access, proposals, permits, and active target fences are never authenticated APIs
 - the authenticated guarded Step 3 flow-identity surface: one immutable actor-owned scope seal, one scope-serialized owner-draft process rewrite at a time, read-only resume/status and exact lost-preflight-response lookup, terminal finalization, and one actor-bound cancel that may release a scope only while it is still sealed with zero primary/audit/derivative/permit evidence; actor-wide approval hashes cannot be reused across request/text/identity domains, and each fresh preflight or exact human-approved recovery creates one wrapper invocation with a rotating memory-only permit whose raw token is never persisted; exact replay and every read return no permit, recovery supersedes the prior active permit, and the public process/finalize RPCs require the permit as a third argument; each process transaction may replace only the five sealed flow-reference identity fields, must preserve exchange rows/order/amounts/direction/comments/uncertainty/internal IDs and exact pending/blocker occurrences, and must atomically bind one protected derivative child while every source/public/support row remains read-only; a terminal derivative failure exposes an exact derivative-only compensation target but never replays primary, and compensation requires a distinct plan/freeze/approval before finalization can consume its causal proof
 - `tiangong-lca-worker` `worker_jobs` queue schema/RPCs, legacy lifecycle cutover cleanup, and review-submit coordinator links to worker job results
-- the seven-day scope-closure report, complete-machine-result, and closure-bundle lifecycle; actor-opaque download projection; evidence-bounded certificate/build admission; and service-only idempotent GC coordination that retains compact audit hashes/counts
+- the seven-day scope-closure report, complete-machine-result, and closure-bundle lifecycle; actor-opaque strict XLSX/manifest download projection; evidence-bounded certificate/build admission; and service-only idempotent GC coordination with fresh-process post-tombstone recovery and retained compact audit hashes/counts
 - `scripts/**` for schema export, workspace refresh, change copying, and migration generation
 - `.github/workflows/supabase-dev.yml`
 - production Supabase GitHub integration contract for Git `main`

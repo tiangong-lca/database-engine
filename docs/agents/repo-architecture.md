@@ -29,7 +29,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-29
 lastReviewedCommit: 09683a090f7e50b521233584b8ec20748eb9afeb
-lastReviewedNote: "Reviewed Issue #308 scope-closure evidence retention: Database owns seven-day deadlines, certificate admission, actor projection, GC coordination, and compact audit residue; Worker owns object deletion."
+lastReviewedNote: "Reviewed Issue #308 cross-repo reconciliation: Database maps coarse roles to the strict public XLSX/manifest DTO and owns reclaimable post-tombstone detail cleanup; Worker owns object deletion."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -171,9 +171,9 @@ Candidate snapshots compute `canonicalContentHash` with the same recursively key
 
 `worker_job_artifacts` is the authoritative lifecycle surface for the private scope-closure report, complete machine result, and closure bundle. A database trigger assigns their immutable artifact roles and a retention deadline no later than seven days after creation. Ready evidence must have a private object locator, media type, size, and checksum; lifecycle transitions are one-way from `ready` to `expired` to `deleted`.
 
-Every new valid closure certificate links all three evidence roles. Its `valid_until` is the earliest evidence deadline, and both authenticated build admission and service-side build binding re-check current lifecycle state and expiry. The owner-only report projection returns semantic download metadata while preserving opaque 404 behavior across actors; an owner whose evidence expired receives the stable `410 closure_report_expired` contract.
+Every new valid closure certificate links all three evidence roles. Its `valid_until` is the earliest evidence deadline, and both authenticated build admission and service-side build binding re-check current lifecycle state and expiry. The actor-bound download projection requires one public selector: `closure_report_xlsx` maps only to the linked report artifact, while `closure_issue_manifest` maps only to the linked complete-machine-result artifact. It maps database-owned coarse roles at the boundary and returns the shared role/state/filename/format/media/integrity/expiry/locator descriptor. Cross-actor results remain opaque 404; an owner whose selected artifact expired receives the stable `410 closure_report_expired` contract.
 
-Storage object deletion remains outside SQL. Service-only GC RPCs lease expired candidates with `FOR UPDATE SKIP LOCKED`, accept retryable failure, and treat repeated or missing-object completion idempotently. Completion removes the object locator and bounded high-cardinality issue/occurrence/root details, while retaining artifact checksum/size plus a compact closure summary, counts, and content hash for audit.
+Storage object deletion remains outside SQL. Service-only GC RPCs lease expired candidates with `FOR UPDATE SKIP LOCKED`, accept retryable failure, and treat repeated or missing-object completion idempotently. The first successful completion tombstones the locator and moves any remaining bounded detail cleanup into DB-owned `gc_cleanup_state=pending`. A later claim returns `gcPhase=detail_cleanup` and `objectDeleteRequired=false` with a fresh fenced token, so a new Worker process can finish without attempting Storage deletion again. Final completion retains artifact checksum/size plus a compact closure summary, counts, and content hash for audit.
 
 ## Generated Workspace Workflow
 

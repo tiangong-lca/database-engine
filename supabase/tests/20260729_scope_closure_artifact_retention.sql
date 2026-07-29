@@ -13,12 +13,27 @@ select has_column(
   'scope-closure artifacts have an authoritative lifecycle'
 );
 select has_column(
+  'public', 'worker_job_artifacts', 'gc_cleanup_state',
+  'scope-closure GC has a DB-owned resumable cleanup state'
+);
+select has_column(
   'public', 'lcia_scope_closure_checks', 'valid_until',
   'closure certificates have an evidence-bounded validity deadline'
 );
 select has_table(
   'public', 'lcia_scope_closure_retention_summaries',
   'detail GC retains a compact audit summary'
+);
+select has_function(
+  'public', 'get_lcia_scope_closure_report_download',
+  array['uuid', 'text'],
+  'actor-bound closure artifact projection has a strict role selector'
+);
+select ok(
+  to_regprocedure(
+    'public.get_lcia_scope_closure_report_download(uuid)'
+  ) is null,
+  'the legacy selector-less public download RPC is removed'
 );
 select has_function(
   'public', 'svc_lcia_scope_closure_artifact_gc_claim',
@@ -147,7 +162,8 @@ insert into public.worker_job_artifacts (
     '30800000-0000-4000-8000-000000000206',
     '30800000-0000-4000-8000-000000000101',
     'closure_complete_machine_result', 'private-evidence',
-    'checks/308/machine-result.json', 'application/json',
+    'checks/308/machine-result.json',
+    'application/vnd.tiangong.scope-closure-manifest+json',
     512, repeat('f', 64), '{}', now()
   );
 
@@ -324,29 +340,183 @@ select set_config(
 );
 select is(
   public.get_lcia_scope_closure_report_download(
-    '30800000-0000-4000-8000-000000000301'
+    '30800000-0000-4000-8000-000000000301',
+    'closure_report_xlsx'
   ) #>> '{data,artifactRole}',
-  'closure_report',
-  'owner download projection includes artifact role'
+  'closure_report_xlsx',
+  'owner can select the public XLSX role'
 );
 select is(
   public.get_lcia_scope_closure_report_download(
-    '30800000-0000-4000-8000-000000000301'
+    '30800000-0000-4000-8000-000000000301',
+    'closure_report_xlsx'
+  ) #>> '{data,artifactId}',
+  '30800000-0000-4000-8000-000000000201',
+  'XLSX selector resolves only the linked report artifact'
+);
+select is(
+  public.get_lcia_scope_closure_report_download(
+    '30800000-0000-4000-8000-000000000301',
+    'closure_report_xlsx'
+  ) #>> '{data,artifactState}',
+  'ready',
+  'ready XLSX projection publishes the shared artifact state'
+);
+select is(
+  (
+    public.get_lcia_scope_closure_report_download(
+      '30800000-0000-4000-8000-000000000301',
+      'closure_report_xlsx'
+    ) -> 'data'
+  ) - array[
+    'artifactId',
+    'artifactRole',
+    'artifactState',
+    'filename',
+    'format',
+    'mediaType',
+    'size',
+    'checksumSha256',
+    'artifactExpiresAt',
+    'bucket',
+    'objectPath'
+  ]::text[],
+  '{}'::jsonb,
+  'public descriptor contains no fields outside the shared DTO'
+);
+select is(
+  (
+    select count(*)
+    from jsonb_object_keys(
+      public.get_lcia_scope_closure_report_download(
+        '30800000-0000-4000-8000-000000000301',
+        'closure_report_xlsx'
+      ) -> 'data'
+    )
+  ),
+  11::bigint,
+  'public descriptor contains every required shared DTO field'
+);
+select is(
+  public.get_lcia_scope_closure_report_download(
+    '30800000-0000-4000-8000-000000000301',
+    'closure_report_xlsx'
   ) #>> '{data,filename}',
   'scope-closure-30800000-0000-4000-8000-000000000301.xlsx',
-  'owner download projection includes a semantic filename'
+  'XLSX selector returns its semantic filename'
+);
+select is(
+  (
+    public.get_lcia_scope_closure_report_download(
+      '30800000-0000-4000-8000-000000000301',
+      'closure_report_xlsx'
+    ) #>> '{data,format}'
+  ) || ':' || (
+    public.get_lcia_scope_closure_report_download(
+      '30800000-0000-4000-8000-000000000301',
+      'closure_report_xlsx'
+    ) #>> '{data,mediaType}'
+  ),
+  'xlsx:application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+  'XLSX selector returns the exact public format/media pair'
+);
+select is(
+  (
+    public.get_lcia_scope_closure_report_download(
+      '30800000-0000-4000-8000-000000000301',
+      'closure_report_xlsx'
+    ) #>> '{data,bucket}'
+  ) || ':' || (
+    public.get_lcia_scope_closure_report_download(
+      '30800000-0000-4000-8000-000000000301',
+      'closure_report_xlsx'
+    ) #>> '{data,objectPath}'
+  ),
+  'private-evidence:checks/308/report.xlsx',
+  'XLSX locator is projected from the linked artifact without substitution'
+);
+select is(
+  public.get_lcia_scope_closure_report_download(
+    '30800000-0000-4000-8000-000000000301',
+    'closure_issue_manifest'
+  ) #>> '{data,artifactId}',
+  '30800000-0000-4000-8000-000000000206',
+  'manifest selector resolves only the linked complete-machine artifact'
+);
+select is(
+  (
+    public.get_lcia_scope_closure_report_download(
+      '30800000-0000-4000-8000-000000000301',
+      'closure_issue_manifest'
+    ) #>> '{data,artifactRole}'
+  ) || ':' || (
+    public.get_lcia_scope_closure_report_download(
+      '30800000-0000-4000-8000-000000000301',
+      'closure_issue_manifest'
+    ) #>> '{data,filename}'
+  ),
+  'closure_issue_manifest:scope-closure-30800000-0000-4000-8000-000000000301-manifest.json',
+  'manifest selector returns its public role and semantic filename'
+);
+select is(
+  (
+    public.get_lcia_scope_closure_report_download(
+      '30800000-0000-4000-8000-000000000301',
+      'closure_issue_manifest'
+    ) #>> '{data,format}'
+  ) || ':' || (
+    public.get_lcia_scope_closure_report_download(
+      '30800000-0000-4000-8000-000000000301',
+      'closure_issue_manifest'
+    ) #>> '{data,mediaType}'
+  ),
+  'json:application/vnd.tiangong.scope-closure-manifest+json',
+  'manifest selector returns the exact public format/media pair'
+);
+select is(
+  (
+    public.get_lcia_scope_closure_report_download(
+      '30800000-0000-4000-8000-000000000301',
+      'closure_issue_manifest'
+    ) #>> '{data,bucket}'
+  ) || ':' || (
+    public.get_lcia_scope_closure_report_download(
+      '30800000-0000-4000-8000-000000000301',
+      'closure_issue_manifest'
+    ) #>> '{data,objectPath}'
+  ),
+  'private-evidence:checks/308/machine-result.json',
+  'manifest locator is projected from the linked artifact without substitution'
 );
 select ok(
   (
     public.get_lcia_scope_closure_report_download(
-      '30800000-0000-4000-8000-000000000301'
+      '30800000-0000-4000-8000-000000000301',
+      'closure_issue_manifest'
     ) #> '{data,artifactExpiresAt}'
   ) is not null,
-  'owner download projection includes artifactExpiresAt'
+  'public manifest descriptor includes artifactExpiresAt'
 );
 select is(
   public.get_lcia_scope_closure_report_download(
-    '30800000-0000-4000-8000-000000000302'
+    '30800000-0000-4000-8000-000000000301',
+    'closure_bundle'
+  ) ->> 'code',
+  'closure_artifact_role_invalid',
+  'owner receives a stable error for an unsupported selector'
+);
+select is(
+  public.get_lcia_scope_closure_report_download(
+    '30800000-0000-4000-8000-000000000302',
+    'closure_issue_manifest'
+  ) ->> 'code',
+  'closure_report_unavailable',
+  'owner cannot receive a descriptor for an unready or unlinked artifact'
+);
+select is(
+  public.get_lcia_scope_closure_report_download(
+    '30800000-0000-4000-8000-000000000302',
+    'closure_report_xlsx'
   ) ->> 'code',
   'closure_report_expired',
   'owner receives stable expired semantics'
@@ -354,7 +524,8 @@ select is(
 select is(
   (
     public.get_lcia_scope_closure_report_download(
-      '30800000-0000-4000-8000-000000000302'
+      '30800000-0000-4000-8000-000000000302',
+      'closure_report_xlsx'
     ) ->> 'status'
   )::integer,
   410,
@@ -367,17 +538,35 @@ select set_config(
 );
 select is(
   public.get_lcia_scope_closure_report_download(
-    '30800000-0000-4000-8000-000000000301'
+    '30800000-0000-4000-8000-000000000301',
+    'closure_report_xlsx'
   ) ->> 'code',
   'closure_check_not_found',
   'cross-user ready artifact remains opaque'
 );
 select is(
   public.get_lcia_scope_closure_report_download(
-    '30800000-0000-4000-8000-000000000302'
+    '30800000-0000-4000-8000-000000000302',
+    'closure_report_xlsx'
   ) ->> 'code',
   'closure_check_not_found',
   'cross-user expired artifact remains opaque'
+);
+select is(
+  public.get_lcia_scope_closure_report_download(
+    '30800000-0000-4000-8000-000000000301',
+    'closure_issue_manifest'
+  ) ->> 'code',
+  'closure_check_not_found',
+  'cross-user manifest selection remains opaque'
+);
+select is(
+  public.get_lcia_scope_closure_report_download(
+    '30800000-0000-4000-8000-000000000301',
+    'closure_bundle'
+  ) ->> 'code',
+  'closure_check_not_found',
+  'cross-user invalid selectors do not reveal check existence'
 );
 reset role;
 
@@ -409,7 +598,8 @@ reset role;
 select set_config('request.jwt.claim.role', 'service_role', true);
 create temporary table issue_308_gc_claims (
   claim_token uuid,
-  artifact_id uuid
+  artifact_id uuid,
+  value jsonb
 );
 with response as (
   select public.svc_lcia_scope_closure_artifact_gc_claim(1, 300) value
@@ -417,7 +607,8 @@ with response as (
 insert into issue_308_gc_claims
 select
   (value #>> '{data,claimToken}')::uuid,
-  (value #>> '{data,items,0,artifactId}')::uuid
+  (value #>> '{data,items,0,artifactId}')::uuid,
+  value
 from response;
 
 select is(
@@ -426,24 +617,40 @@ select is(
   'GC claims the oldest eligible artifact'
 );
 select is(
-  public.svc_lcia_scope_closure_artifact_gc_complete(
-    (select artifact_id from issue_308_gc_claims),
-    (select claim_token from issue_308_gc_claims),
-    true,
-    1
-  ) #>> '{data,state}',
+  (select value #>> '{data,items,0,gcPhase}' from issue_308_gc_claims),
+  'object_delete',
+  'an expired object claim identifies the object-delete phase'
+);
+select is(
+  (
+    select value #>> '{data,items,0,objectDeleteRequired}'
+    from issue_308_gc_claims
+  ),
+  'true',
+  'initial claim requires exactly one Storage object deletion'
+);
+
+create temporary table issue_308_first_completion (value jsonb);
+insert into issue_308_first_completion
+select public.svc_lcia_scope_closure_artifact_gc_complete(
+  (select artifact_id from issue_308_gc_claims),
+  (select claim_token from issue_308_gc_claims),
+  true,
+  1
+);
+select is(
+  (select value #>> '{data,state}' from issue_308_first_completion),
   'deleted',
   'missing-object completion tombstones metadata successfully'
 );
-select is(
-  public.svc_lcia_scope_closure_artifact_gc_complete(
-    (select artifact_id from issue_308_gc_claims),
-    (select claim_token from issue_308_gc_claims),
-    true,
-    1
-  ) ->> 'reused',
-  'true',
-  'repeated GC completion is idempotent'
+select ok(
+  (
+    select (value #>> '{data,detailsRemaining}')::bigint > 0
+      and (value #>> '{data,cleanupPending}')::boolean
+      and (value #>> '{data,objectDeleteRequired}')::boolean
+    from issue_308_first_completion
+  ),
+  'bounded first completion reports resumable detail cleanup after object deletion'
 );
 select ok(
   (
@@ -456,6 +663,112 @@ select ok(
   ),
   'GC removes object location but retains compact artifact evidence'
 );
+select is(
+  (
+    select lifecycle_state || ':' || gc_cleanup_state
+    from public.worker_job_artifacts
+    where id = '30800000-0000-4000-8000-000000000203'
+  ),
+  'deleted:pending',
+  'partial completion persists an explicit post-tombstone cleanup candidate'
+);
+
+-- Simulate the first Worker process exiting without retaining its token.
+update public.worker_job_artifacts
+set gc_claim_expires_at = now() - interval '1 second'
+where id = '30800000-0000-4000-8000-000000000203';
+
+create temporary table issue_308_recovery_claim (
+  claim_token uuid,
+  artifact_id uuid,
+  value jsonb
+);
+with response as (
+  select public.svc_lcia_scope_closure_artifact_gc_claim(1, 300) value
+)
+insert into issue_308_recovery_claim
+select
+  (value #>> '{data,claimToken}')::uuid,
+  (value #>> '{data,items,0,artifactId}')::uuid,
+  value
+from response;
+select is(
+  (select artifact_id from issue_308_recovery_claim),
+  '30800000-0000-4000-8000-000000000203'::uuid,
+  'a fresh process reclaims the partial post-tombstone cleanup candidate'
+);
+select isnt(
+  (select claim_token from issue_308_recovery_claim),
+  (select claim_token from issue_308_gc_claims),
+  'fresh-process recovery receives a newly fenced claim token'
+);
+select ok(
+  (
+    select value #>> '{data,items,0,gcPhase}' = 'detail_cleanup'
+      and not (
+        value #>> '{data,items,0,objectDeleteRequired}'
+      )::boolean
+      and (value #> '{data,items,0,bucket}') = 'null'::jsonb
+      and (value #> '{data,items,0,objectPath}') = 'null'::jsonb
+    from issue_308_recovery_claim
+  ),
+  'recovery claim explicitly forbids a second object deletion and exposes no locator'
+);
+
+create temporary table issue_308_final_completion (value jsonb);
+insert into issue_308_final_completion
+select public.svc_lcia_scope_closure_artifact_gc_complete(
+  (select artifact_id from issue_308_recovery_claim),
+  (select claim_token from issue_308_recovery_claim),
+  false,
+  1
+);
+select ok(
+  (
+    select value #>> '{data,detailsRemaining}' = '0'
+      and not (value #>> '{data,cleanupPending}')::boolean
+      and (value #>> '{data,cleanupComplete}')::boolean
+      and not (value #>> '{data,objectDeleteRequired}')::boolean
+    from issue_308_final_completion
+  ),
+  'fresh-process completion finishes bounded detail cleanup without object deletion'
+);
+select is(
+  public.svc_lcia_scope_closure_artifact_gc_complete(
+    (select artifact_id from issue_308_recovery_claim),
+    (select claim_token from issue_308_recovery_claim),
+    false,
+    1
+  ) ->> 'reused',
+  'true',
+  'repeated final completion with the recovery token is idempotent'
+);
+select is(
+  (
+    select lifecycle_state || ':' || gc_cleanup_state
+    from public.worker_job_artifacts
+    where id = '30800000-0000-4000-8000-000000000203'
+  ),
+  'deleted:complete',
+  'final completion leaves compact audit residue in a terminal cleanup state'
+);
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config(
+  'request.jwt.claim.sub',
+  '30800000-0000-4000-8000-000000000001',
+  true
+);
+select is(
+  public.get_lcia_scope_closure_report_download(
+    '30800000-0000-4000-8000-000000000302',
+    'closure_report_xlsx'
+  ) ->> 'code',
+  'closure_report_unavailable',
+  'a deleted artifact is unavailable rather than returned as a descriptor'
+);
+reset role;
+select set_config('request.jwt.claim.role', 'service_role', true);
 select is(
   (
     select issue_count || ':' || occurrence_count || ':' || affected_root_count
