@@ -1,7 +1,7 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-07-28"
-lastReviewedCommit: "80d57bc68387fc2c98216e032da1608a49bc855b"
+lastReviewedAt: "2026-07-29"
+lastReviewedCommit: "19b56eac805fb035288cdc2304e67fad4a990f77"
 lastReviewedNote: "Reviewed Issue #304 review/publication lifecycle closure: existing migration-and-rpc, review-submit-gate, proof, validation, and architecture routes cover the change, so no routing rule change is required."
 
 # Keep deterministic governance facts here.

@@ -27,8 +27,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-28
-lastReviewedCommit: 80d57bc68387fc2c98216e032da1608a49bc855b
+lastReviewedAt: 2026-07-29
+lastReviewedCommit: 19b56eac805fb035288cdc2304e67fad4a990f77
 lastReviewedNote: "Reviewed Issue #304 review/publication lifecycle closure: Database owns explicit path roles, exact composition agreement, transaction-final assertions, and safe dependency errors."
 related:
   - ../../AGENTS.md
@@ -109,12 +109,23 @@ new staging evidence before they are added. Production-cardinality proof lives
 in the read-only benchmark profile and Issue #292, never in raw checked-in
 embeddings or user query text.
 
-Contacts, FlowProperties, Sources, and UnitGroups now follow the same durable
-search-derivative shape as the established Process, Flow, and LifecycleModel
-surfaces: deterministic `extracted_text`, compact extraction jobs that persist
-`extracted_md`, and backpressured embedding jobs that persist 1024-dimensional
-`embedding_ft`. Their obsolete 1536-dimensional `embedding` columns and empty
-legacy HNSW indexes are retired instead of being treated as a usable pipeline.
+All seven dataset families use deterministic `extracted_md` as the single
+lexical document and as the source for backpressured 1024-dimensional
+`embedding_ft` jobs. PGroonga indexes cover `extracted_md` for Process, Flow,
+LifecycleModel, Contact, FlowProperty, Source, and UnitGroup search. Hybrid v2
+RPCs expose one `lexical_weight`; the old two-weight signatures remain only as
+an Expand-phase compatibility surface and do not represent two lexical
+branches. After Edge and Next have cut over and staging evidence is complete, a
+separate Contract migration may remove the legacy RPC signatures,
+`extracted_text` triggers/functions/indexes/columns, and the retired LLM
+webhook database objects with explicit dependency checks.
+
+Contacts, FlowProperties, Sources, and UnitGroups otherwise follow the same
+durable search-derivative shape as the established Process, Flow, and
+LifecycleModel surfaces: compact extraction jobs persist `extracted_md`, and
+backpressured embedding jobs persist `embedding_ft`. Their obsolete
+1536-dimensional `embedding` columns and empty legacy HNSW indexes are retired
+instead of being treated as a usable pipeline.
 
 Historical repair is an explicit service-role cursor operation with a maximum
 500-row page. It resumes either missing Markdown or missing embeddings, is
