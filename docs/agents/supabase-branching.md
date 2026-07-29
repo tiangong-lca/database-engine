@@ -20,8 +20,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-05-18
-lastReviewedCommit: 9b0c7f2d41057d9eecf2fa0adad2a9055ca8ee32
+lastReviewedAt: 2026-07-29
+lastReviewedCommit: 6577b7a48f90ae449cbdd2ef419d92d13c273a0c
+lastReviewedNote: "Reviewed Issue #308 rollout follow-up: the additive publication/GC migration reapplies final guards and RPCs so an existing Preview can advance even when earlier PR migrations were already recorded."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -67,6 +68,8 @@ Rules:
 - Routine feature and fix branches start from `dev` and PR back into `dev`.
 - `dev -> main` is the promotion path.
 - Do not infer the working trunk from GitHub default-branch UI alone.
+
+When review changes an already-applied PR migration, add a later migration that reapplies the authoritative final schema/functions for the existing Preview branch. Still retain and run a real populated canonical-base-to-head upgrade test, because the additive Preview repair does not by itself prove first-time production upgrade safety.
 
 ## Repository contract
 
@@ -142,6 +145,12 @@ Normal PR path:
 6. The workflow links to `SUPABASE_DEV_PROJECT_ID` and runs `supabase db push --include-all`.
 7. Pending checked-in migrations are then applied to the persistent Supabase
    `dev` branch.
+
+An existing Preview branch applies newly added migration files on later PR
+pushes. Editing a migration already recorded in that Preview's migration
+history does not reapply it. Ship an additive follow-up migration for forward
+changes; use explicit Preview branch reprovision only when the intent is to
+discard and rebuild that disposable branch state.
 
 `--include-all` means every committed migration absent from remote history is
 eligible for application. It is required when a governed `main -> dev`
