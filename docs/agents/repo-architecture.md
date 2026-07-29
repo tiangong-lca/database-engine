@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-28
-lastReviewedCommit: 80d57bc68387fc2c98216e032da1608a49bc855b
-lastReviewedNote: "Reviewed Issue #304 review/publication lifecycle closure: Database owns explicit path roles, exact composition agreement, transaction-final assertions, and safe dependency errors."
+lastReviewedAt: 2026-07-29
+lastReviewedCommit: 09683a090f7e50b521233584b8ec20748eb9afeb
+lastReviewedNote: "Reviewed Issue #308 scope-closure evidence retention: Database owns seven-day deadlines, certificate admission, actor projection, GC coordination, and compact audit residue; Worker owns object deletion."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -166,6 +166,14 @@ Authenticated prepare, approve, publish, readback, and unpublish commands re-che
 The data-product completeness check can run before the first formal `lca_release_publications` row exists. When a current release exists, normalization and the immutable `lcia.scope-closure-data-snapshot.v2` manifest remain bound to its exact `lca_release_dataset_versions`. Before the first release, the database instead freezes every exact `state_code 100..199` Process, Flow, FlowProperty, UnitGroup, Source, Contact, and LifecycleModel document readable by the deployed closure Worker, plus the exact reviewed 25-method LCIA allowlist (whose production authoring rows intentionally remain `state_code=0`). Global Process roots select the latest eligible version per UUID, while the frozen support universe retains all exact eligible versions so explicit transitive references remain resolvable.
 
 Candidate snapshots compute `canonicalContentHash` with the same recursively key-sorted, compact JSON algorithm used by the Worker and normalize the reviewed LCIA method/artifact-locator alias before freezing identities. Because the initial production universe exceeds 120,000 exact rows, migration backfill pays the canonical-hash cost once into a private cache; eight table triggers then refresh only changed identities, while interactive requests aggregate the cached manifest inside the authenticated role timeout. This one-time production-volume administrative statement must declare a bounded session `statement_timeout` above the platform's ordinary two-minute cap and restore the default immediately after the backfill; a small Preview dataset is not sufficient evidence for that bound. `candidateData.sourceKind=candidate-public-state` is the authoritative source discriminator. The zero-UUID `currentPublicRelease` object is only a deterministic compatibility projection required by the deployed Worker v2 schema and must never be treated as publication evidence. `current-membership-required-v1` continues to require a real current release; the default frozen-artifact policy may consume a candidate snapshot.
+
+## Scope-Closure Evidence Retention
+
+`worker_job_artifacts` is the authoritative lifecycle surface for the private scope-closure report, complete machine result, and closure bundle. A database trigger assigns their immutable artifact roles and a retention deadline no later than seven days after creation. Ready evidence must have a private object locator, media type, size, and checksum; lifecycle transitions are one-way from `ready` to `expired` to `deleted`.
+
+Every new valid closure certificate links all three evidence roles. Its `valid_until` is the earliest evidence deadline, and both authenticated build admission and service-side build binding re-check current lifecycle state and expiry. The owner-only report projection returns semantic download metadata while preserving opaque 404 behavior across actors; an owner whose evidence expired receives the stable `410 closure_report_expired` contract.
+
+Storage object deletion remains outside SQL. Service-only GC RPCs lease expired candidates with `FOR UPDATE SKIP LOCKED`, accept retryable failure, and treat repeated or missing-object completion idempotently. Completion removes the object locator and bounded high-cardinality issue/occurrence/root details, while retaining artifact checksum/size plus a compact closure summary, counts, and content hash for audit.
 
 ## Generated Workspace Workflow
 

@@ -58,7 +58,9 @@ select is(public.svc_lcia_scope_closure_claim_scan_execution(
 insert into public.worker_job_artifacts(id,job_id,artifact_type,storage_bucket,storage_path,content_type,byte_size,checksum_sha256)
 values ('c7220000-0000-4000-8000-000000000201',(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'closure_report_xlsx','test','reports/a.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',10,repeat('a',64));
 insert into public.worker_job_artifacts(id,job_id,artifact_type,storage_bucket,storage_path,content_type,byte_size,checksum_sha256,metadata)
-values ('c7220000-0000-4000-8000-000000000203',(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'closure_bundle','test','bundles/a.json','application/json',20,repeat('b',64),jsonb_build_object('closureCheckId',(select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')));
+values ('c7220000-0000-4000-8000-000000000203',(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'closure_bundle','test','bundles/a.json','application/json',20,repeat('b',64),jsonb_build_object('closureCheckId',(select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'completeMachineResultArtifactId','c7220000-0000-4000-8000-000000000204'));
+insert into public.worker_job_artifacts(id,job_id,artifact_type,storage_bucket,storage_path,content_type,byte_size,checksum_sha256,metadata)
+values ('c7220000-0000-4000-8000-000000000204',(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'closure_complete_machine_result','test','results/a.json','application/json',30,repeat('c',64),jsonb_build_object('closureCheckId',(select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')));
 update public.lca_network_snapshots set status='ready',source_hash='builder-source-a'
 where id=(select numerical_snapshot_id from public.lcia_scope_closure_scan_executions limit 1);
 insert into public.lca_snapshot_artifacts(
@@ -188,6 +190,7 @@ select is(public.svc_lcia_scope_closure_finalize_reused_scan(
   'c7220000-0000-4000-8000-000000000202',jsonb_build_object('schemaVersion','lcia.scope-closure-summary.v1','scan','reused-target')
 )->>'ok','true','second run finalizes with a target-owned report');
 select ok((select a.certificate_hash<>b.certificate_hash and b.reused_from_check_id=a.id and b.report_artifact_id='c7220000-0000-4000-8000-000000000202'::uuid and b.result_summary->>'scan'='reused-target' from public.lcia_scope_closure_checks a join public.lcia_scope_closure_checks b on true where a.request_idempotency_token='closure-e2e-a' and b.request_idempotency_token='closure-e2e-b'),'reuse creates a distinct certificate, report and target summary with source-run linkage');
+select ok((select public.lcia_scope_closure_evidence_usable(b) from public.lcia_scope_closure_checks b where b.request_idempotency_token='closure-e2e-b'),'reused certificate remains build-usable with target report and source machine/bundle evidence');
 
 -- Operator visibility is strictly owner-scoped.  A second valid DPM cannot
 -- use SECURITY DEFINER reads, report lookup, or the task feed to enumerate
