@@ -43,6 +43,39 @@ alter table public.worker_job_artifacts
 
 drop function if exists public.get_lcia_scope_closure_report_download(uuid);
 
+create or replace function public.lcia_scope_closure_artifact_lineage_eligible(
+  p_check public.lcia_scope_closure_checks,
+  p_artifact public.worker_job_artifacts,
+  p_public_artifact_role text
+) returns boolean
+language sql
+stable
+security definer
+set search_path = public, pg_temp
+as $$
+  select case p_public_artifact_role
+    when 'closure_report_xlsx' then
+      (p_artifact).id = (p_check).report_artifact_id
+      and (p_artifact).job_id = (p_check).worker_job_id
+      and (p_artifact).artifact_role = 'closure_report'
+      and (p_artifact).artifact_type = 'closure_report_xlsx'
+    when 'closure_issue_manifest' then
+      (p_artifact).id = (p_check).complete_machine_result_artifact_id
+      and (p_artifact).artifact_role = 'complete_machine_result'
+      and (p_artifact).artifact_type = 'closure_complete_machine_result'
+      and (
+        (p_artifact).job_id = (p_check).worker_job_id
+        or exists (
+          select 1
+          from public.lcia_scope_closure_checks source_check
+          where source_check.id = (p_check).reused_from_check_id
+            and source_check.worker_job_id = (p_artifact).job_id
+        )
+      )
+    else false
+  end
+$$;
+
 create or replace function public.get_lcia_scope_closure_report_download(
   p_closure_check_id uuid,
   p_artifact_role text
@@ -54,11 +87,8 @@ as $$
 declare
   v_actor uuid := auth.uid();
   v_check public.lcia_scope_closure_checks%rowtype;
-  v_source_check public.lcia_scope_closure_checks%rowtype;
   v_artifact public.worker_job_artifacts%rowtype;
   v_artifact_id uuid;
-  v_expected_internal_role text;
-  v_expected_artifact_type text;
   v_expected_media_type text;
   v_format text;
   v_filename text;
@@ -86,16 +116,12 @@ begin
 
   if p_artifact_role = 'closure_report_xlsx' then
     v_artifact_id := v_check.report_artifact_id;
-    v_expected_internal_role := 'closure_report';
-    v_expected_artifact_type := 'closure_report_xlsx';
     v_expected_media_type :=
       'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
     v_format := 'xlsx';
     v_filename := 'scope-closure-' || v_check.id::text || '.xlsx';
   elsif p_artifact_role = 'closure_issue_manifest' then
     v_artifact_id := v_check.complete_machine_result_artifact_id;
-    v_expected_internal_role := 'complete_machine_result';
-    v_expected_artifact_type := 'closure_complete_machine_result';
     v_expected_media_type :=
       'application/vnd.tiangong.scope-closure-manifest+json';
     v_format := 'json';
@@ -109,27 +135,16 @@ begin
     );
   end if;
 
-  if v_check.reused_from_check_id is not null then
-    select * into v_source_check
-    from public.lcia_scope_closure_checks
-    where id = v_check.reused_from_check_id;
-  end if;
-
   select * into v_artifact
   from public.worker_job_artifacts
-  where id = v_artifact_id
-    and artifact_role = v_expected_internal_role
-    and artifact_type = v_expected_artifact_type
-    and (
-      job_id = v_check.worker_job_id
-      or (
-        p_artifact_role = 'closure_issue_manifest'
-        and v_source_check.id is not null
-        and job_id = v_source_check.worker_job_id
-      )
-    );
+  where id = v_artifact_id;
 
   if v_artifact.id is not null
+     and public.lcia_scope_closure_artifact_lineage_eligible(
+       v_check,
+       v_artifact,
+       p_artifact_role
+     )
      and (
        v_artifact.lifecycle_state = 'expired'
        or (
@@ -143,6 +158,11 @@ begin
   end if;
 
   if v_artifact.id is null
+     or not public.lcia_scope_closure_artifact_lineage_eligible(
+       v_check,
+       v_artifact,
+       p_artifact_role
+     )
      or v_check.status not in ('passed', 'blocked')
      or v_artifact.lifecycle_state <> 'ready'
      or v_artifact.expires_at is null
@@ -177,6 +197,11 @@ $$;
 
 revoke all on function public.get_lcia_scope_closure_report_download(uuid, text)
   from public, anon, authenticated, service_role;
+revoke all on function public.lcia_scope_closure_artifact_lineage_eligible(
+  public.lcia_scope_closure_checks,
+  public.worker_job_artifacts,
+  text
+) from public, anon, authenticated, service_role;
 grant execute on function public.get_lcia_scope_closure_report_download(uuid, text)
   to authenticated;
 
@@ -217,7 +242,7 @@ begin
   if p_limit is null
      or p_limit not between 1 and 500
      or p_lease_seconds is null
-     or p_lease_seconds not between 30 and 3600 then
+     or p_lease_seconds not between 1 and 3600 then
     return public.lcia_scope_closure_error(
       'invalid_gc_claim', 400, 'Invalid GC claim bounds'
     );

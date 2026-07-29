@@ -209,6 +209,93 @@ select throws_ok(
   'expired artifacts cannot transition back to ready'
 );
 
+insert into public.worker_job_artifacts (
+  id, job_id, artifact_type, storage_bucket, storage_path, content_type,
+  byte_size, checksum_sha256, metadata, created_at
+) values
+  (
+    '30800000-0000-4000-8000-000000000207',
+    '30800000-0000-4000-8000-000000000102',
+    'closure_report_xlsx', 'private-evidence', 'checks/308/terminal.xlsx',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    67, repeat('7', 64), '{}', now() - interval '8 days'
+  ),
+  (
+    '30800000-0000-4000-8000-000000000208',
+    '30800000-0000-4000-8000-000000000102',
+    'ordinary_worker_log', 'private-evidence', 'checks/308/worker.log',
+    'text/plain', 68, repeat('8', 64), '{}', now()
+  );
+update public.worker_job_artifacts
+set lifecycle_state = 'deleted',
+    gc_cleanup_state = 'complete'
+where id = '30800000-0000-4000-8000-000000000207';
+
+select throws_ok(
+  $$
+    update public.worker_job_artifacts
+    set artifact_type = 'ordinary_worker_log'
+    where id = '30800000-0000-4000-8000-000000000201'
+  $$,
+  '23514',
+  'scope_closure_artifact_identity_or_expiry_is_immutable',
+  'closure artifacts cannot escape the lifecycle contract by changing to an unknown type'
+);
+select throws_ok(
+  $$
+    update public.worker_job_artifacts
+    set artifact_type = 'closure_bundle',
+        artifact_role = 'closure_bundle'
+    where id = '30800000-0000-4000-8000-000000000201'
+  $$,
+  '23514',
+  'scope_closure_artifact_identity_or_expiry_is_immutable',
+  'closure artifacts cannot change into another closure type and role'
+);
+select throws_ok(
+  $$
+    insert into public.worker_job_artifacts (
+      job_id, artifact_type, artifact_role, storage_bucket, storage_path,
+      content_type, byte_size, checksum_sha256, metadata
+    ) values (
+      '30800000-0000-4000-8000-000000000102',
+      'ordinary_worker_log', 'closure_report', 'private-evidence',
+      'checks/308/invalid-role.log', 'text/plain', 1, repeat('9', 64), '{}'
+    )
+  $$,
+  '23514',
+  'invalid_scope_closure_artifact_lifecycle',
+  'unknown artifact types cannot carry a closure role'
+);
+select throws_ok(
+  $$
+    update public.worker_job_artifacts
+    set artifact_type = 'ordinary_worker_log'
+    where id = '30800000-0000-4000-8000-000000000203'
+  $$,
+  '23514',
+  'scope_closure_artifact_identity_or_expiry_is_immutable',
+  'expired artifacts cannot change type to revive outside the contract'
+);
+select throws_ok(
+  $$
+    update public.worker_job_artifacts
+    set artifact_type = 'ordinary_worker_log'
+    where id = '30800000-0000-4000-8000-000000000207'
+  $$,
+  '23514',
+  'scope_closure_artifact_identity_or_expiry_is_immutable',
+  'deleted artifacts cannot change type to revive outside the contract'
+);
+select lives_ok(
+  $$
+    update public.worker_job_artifacts
+    set metadata = '{"ordinaryUpdate":true}'::jsonb
+    where id = '30800000-0000-4000-8000-000000000208'
+  $$,
+  'legal non-closure artifact updates remain unaffected'
+);
+
 insert into public.lcia_scope_closure_checks (
   id, worker_job_id, requested_by, request_idempotency_token, request_key,
   request_fingerprint, requested_scope_hash, effective_scope_hash,

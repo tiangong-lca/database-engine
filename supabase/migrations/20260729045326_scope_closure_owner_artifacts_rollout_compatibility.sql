@@ -48,8 +48,6 @@ begin
     ordinal,
     artifact_role,
     artifact_id,
-    expected_internal_role,
-    expected_artifact_type,
     filename,
     format,
     media_type
@@ -59,8 +57,6 @@ begin
         1,
         'closure_report_xlsx'::text,
         v_check.report_artifact_id,
-        'closure_report'::text,
-        'closure_report_xlsx'::text,
         'scope-closure-' || v_check.id::text || '.xlsx',
         'xlsx'::text,
         'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'::text
@@ -69,8 +65,6 @@ begin
         2,
         'closure_issue_manifest'::text,
         v_check.complete_machine_result_artifact_id,
-        'complete_machine_result'::text,
-        'closure_complete_machine_result'::text,
         'scope-closure-' || v_check.id::text || '-manifest.json',
         'json'::text,
         'application/vnd.tiangong.scope-closure-manifest+json'::text
@@ -85,12 +79,18 @@ begin
           when artifact.id is null
                and v_check.status in ('queued', 'running') then 'pending'
           when artifact.id is null then 'failed'
+          when not public.lcia_scope_closure_artifact_lineage_eligible(
+            v_check,
+            artifact,
+            role.artifact_role
+          ) then 'failed'
           when artifact.lifecycle_state = 'deleted' then 'deleted'
           when artifact.lifecycle_state = 'expired'
                or artifact.expires_at <= now() then 'expired'
-          when artifact.lifecycle_state = 'ready'
-               and artifact.artifact_role = role.expected_internal_role
-               and artifact.artifact_type = role.expected_artifact_type
+          when v_check.status in ('passed', 'blocked')
+               and artifact.lifecycle_state = 'ready'
+               and nullif(trim(artifact.storage_bucket), '') is not null
+               and nullif(trim(artifact.storage_path), '') is not null
                and artifact.content_type = role.media_type
                and artifact.byte_size is not null
                and artifact.byte_size >= 0
@@ -101,9 +101,27 @@ begin
         'filename', role.filename,
         'format', role.format,
         'mediaType', role.media_type,
-        'size', artifact.byte_size,
-        'checksumSha256', artifact.checksum_sha256,
-        'artifactExpiresAt', artifact.expires_at
+        'size', case
+          when public.lcia_scope_closure_artifact_lineage_eligible(
+            v_check,
+            artifact,
+            role.artifact_role
+          ) then artifact.byte_size
+        end,
+        'checksumSha256', case
+          when public.lcia_scope_closure_artifact_lineage_eligible(
+            v_check,
+            artifact,
+            role.artifact_role
+          ) then artifact.checksum_sha256
+        end,
+        'artifactExpiresAt', case
+          when public.lcia_scope_closure_artifact_lineage_eligible(
+            v_check,
+            artifact,
+            role.artifact_role
+          ) then artifact.expires_at
+        end
       ) as summary
     from public_roles role
     left join public.worker_job_artifacts artifact

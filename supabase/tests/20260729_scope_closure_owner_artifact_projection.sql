@@ -297,6 +297,26 @@ insert into public.lcia_scope_closure_checks (
     'unavailable', null, null, '{}', now()
   );
 
+insert into public.worker_job_artifacts (
+  id, job_id, artifact_type, storage_bucket, storage_path, content_type,
+  byte_size, checksum_sha256, metadata
+) values
+  (
+    '30810000-0000-4000-8000-000000000209',
+    '30810000-0000-4000-8000-000000000106',
+    'closure_report_xlsx', 'projection-test', 'wrong-job/report.xlsx',
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    109, repeat('3', 64), '{}'
+  ),
+  (
+    '30810000-0000-4000-8000-000000000210',
+    '30810000-0000-4000-8000-000000000106',
+    'closure_complete_machine_result', 'projection-test',
+    'source-job/manifest.json',
+    'application/vnd.tiangong.scope-closure-manifest+json',
+    110, repeat('4', 64), '{}'
+  );
+
 set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config(
@@ -512,6 +532,120 @@ select ok(
     ) #> '{data,artifacts,1,checksumSha256}'
   ) = 'null'::jsonb,
   'terminal missing summaries retain exact null integrity fields'
+);
+
+reset role;
+update public.lcia_scope_closure_checks
+set report_artifact_id = '30810000-0000-4000-8000-000000000209'
+where id = '30810000-0000-4000-8000-000000000302';
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config(
+  'request.jwt.claim.sub',
+  '30810000-0000-4000-8000-000000000001',
+  true
+);
+select ok(
+  public.get_lcia_scope_closure_check(
+    '30810000-0000-4000-8000-000000000302'
+  ) #>> '{data,artifacts,0,artifactState}' = 'failed'
+  and public.get_lcia_scope_closure_check(
+    '30810000-0000-4000-8000-000000000302'
+  ) #> '{data,artifacts,0,size}' = 'null'::jsonb
+  and public.get_lcia_scope_closure_check(
+    '30810000-0000-4000-8000-000000000302'
+  ) #> '{data,artifacts,0,checksumSha256}' = 'null'::jsonb
+  and public.get_lcia_scope_closure_check(
+    '30810000-0000-4000-8000-000000000302'
+  ) #> '{data,artifacts,0,artifactExpiresAt}' = 'null'::jsonb,
+  'wrong-job XLSX summary fails without leaking integrity or expiry metadata'
+);
+select is(
+  public.get_lcia_scope_closure_report_download(
+    '30810000-0000-4000-8000-000000000302',
+    'closure_report_xlsx'
+  ) ->> 'code',
+  'closure_report_unavailable',
+  'wrong-job XLSX download matches failed owner-summary eligibility'
+);
+
+reset role;
+update public.lcia_scope_closure_checks
+set report_artifact_id = '30810000-0000-4000-8000-000000000201',
+    complete_machine_result_artifact_id =
+      '30810000-0000-4000-8000-000000000210',
+    reused_from_check_id = null
+where id = '30810000-0000-4000-8000-000000000302';
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config(
+  'request.jwt.claim.sub',
+  '30810000-0000-4000-8000-000000000001',
+  true
+);
+select ok(
+  public.get_lcia_scope_closure_check(
+    '30810000-0000-4000-8000-000000000302'
+  ) #>> '{data,artifacts,1,artifactState}' = 'failed'
+  and public.get_lcia_scope_closure_check(
+    '30810000-0000-4000-8000-000000000302'
+  ) #> '{data,artifacts,1,size}' = 'null'::jsonb
+  and public.get_lcia_scope_closure_check(
+    '30810000-0000-4000-8000-000000000302'
+  ) #> '{data,artifacts,1,checksumSha256}' = 'null'::jsonb
+  and public.get_lcia_scope_closure_check(
+    '30810000-0000-4000-8000-000000000302'
+  ) #> '{data,artifacts,1,artifactExpiresAt}' = 'null'::jsonb,
+  'non-source-job manifest summary fails without leaking metadata'
+);
+select is(
+  public.get_lcia_scope_closure_report_download(
+    '30810000-0000-4000-8000-000000000302',
+    'closure_issue_manifest'
+  ) ->> 'code',
+  'closure_report_unavailable',
+  'non-source-job manifest download matches failed owner-summary eligibility'
+);
+
+reset role;
+update public.lcia_scope_closure_checks
+set reused_from_check_id = '30810000-0000-4000-8000-000000000306'
+where id = '30810000-0000-4000-8000-000000000302';
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config(
+  'request.jwt.claim.sub',
+  '30810000-0000-4000-8000-000000000001',
+  true
+);
+select is(
+  public.get_lcia_scope_closure_check(
+    '30810000-0000-4000-8000-000000000302'
+  ) #>> '{data,artifacts,1,artifactState}',
+  'ready',
+  'manifest from the exact reused source job is owner-summary ready'
+);
+select is(
+  public.get_lcia_scope_closure_report_download(
+    '30810000-0000-4000-8000-000000000302',
+    'closure_issue_manifest'
+  ) #>> '{data,artifactState}',
+  'ready',
+  'exact reused-source manifest ready summary is download-success equivalent'
+);
+
+reset role;
+update public.lcia_scope_closure_checks
+set complete_machine_result_artifact_id =
+      '30810000-0000-4000-8000-000000000202',
+    reused_from_check_id = null
+where id = '30810000-0000-4000-8000-000000000302';
+set local role authenticated;
+select set_config('request.jwt.claim.role', 'authenticated', true);
+select set_config(
+  'request.jwt.claim.sub',
+  '30810000-0000-4000-8000-000000000001',
+  true
 );
 
 select is(

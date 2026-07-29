@@ -16,16 +16,6 @@ alter table public.worker_job_artifacts
   add column if not exists deleted_at timestamptz;
 
 alter table public.worker_job_artifacts
-  drop constraint if exists worker_job_artifacts_artifact_role_check,
-  add constraint worker_job_artifacts_artifact_role_check
-    check (
-      artifact_role is null
-      or artifact_role in (
-        'closure_report',
-        'complete_machine_result',
-        'closure_bundle'
-      )
-    ),
   drop constraint if exists worker_job_artifacts_lifecycle_state_check,
   add constraint worker_job_artifacts_lifecycle_state_check
     check (
@@ -58,15 +48,28 @@ security definer
 set search_path = public, pg_temp
 as $$
 declare
-  v_expected_role text :=
+  v_old_expected_role text := case
+    when tg_op = 'UPDATE'
+    then public.lcia_scope_closure_artifact_role(old.artifact_type)
+  end;
+  v_new_expected_role text :=
     public.lcia_scope_closure_artifact_role(new.artifact_type);
 begin
-  if v_expected_role is null then
+  if tg_op = 'INSERT'
+     and v_new_expected_role is null
+     and new.artifact_role is null then
+    return new;
+  end if;
+  if tg_op = 'UPDATE'
+     and v_old_expected_role is null
+     and v_new_expected_role is null
+     and old.artifact_role is null
+     and new.artifact_role is null then
     return new;
   end if;
 
   if tg_op = 'INSERT' then
-    new.artifact_role := coalesce(new.artifact_role, v_expected_role);
+    new.artifact_role := coalesce(new.artifact_role, v_new_expected_role);
     new.expires_at := coalesce(
       new.expires_at,
       coalesce(new.created_at, now()) + interval '7 days'
@@ -101,7 +104,8 @@ begin
     end if;
   end if;
 
-  if new.artifact_role is distinct from v_expected_role
+  if v_new_expected_role is null
+     or new.artifact_role is distinct from v_new_expected_role
      or new.expires_at is null
      or new.expires_at > coalesce(new.created_at, now()) + interval '7 days'
      or new.lifecycle_state is null then
@@ -136,15 +140,25 @@ $$;
 update public.worker_job_artifacts
 set artifact_role = public.lcia_scope_closure_artifact_role(artifact_type),
     lifecycle_state = case
-      when expires_at is not null and expires_at <= now() then 'expired'
+      when least(
+        coalesce(expires_at, created_at + interval '7 days'),
+        created_at + interval '7 days'
+      ) <= now() then 'expired'
       else 'ready'
     end,
     expires_at = least(
       coalesce(expires_at, created_at + interval '7 days'),
       created_at + interval '7 days'
     )
-where public.lcia_scope_closure_artifact_role(artifact_type) is not null
-  and artifact_role is null;
+where public.lcia_scope_closure_artifact_role(artifact_type) is not null;
+
+alter table public.worker_job_artifacts
+  drop constraint if exists worker_job_artifacts_artifact_role_check,
+  add constraint worker_job_artifacts_artifact_role_check
+    check (
+      artifact_role is not distinct from
+        public.lcia_scope_closure_artifact_role(artifact_type)
+    );
 
 drop trigger if exists worker_job_artifacts_scope_closure_lifecycle
   on public.worker_job_artifacts;
@@ -240,7 +254,8 @@ begin
     v_machine_result.expires_at,
     v_bundle.expires_at
   );
-  if new.valid_until <= coalesce(new.finished_at, now()) then
+  if new.valid_until <= coalesce(new.finished_at, now())
+     or new.valid_until <= now() then
     raise exception 'closure_certificate_evidence_already_expired'
       using errcode = '23514';
   end if;
@@ -248,43 +263,109 @@ begin
 end;
 $$;
 
-drop trigger if exists lcia_scope_closure_checks_certificate_validity
-  on public.lcia_scope_closure_checks;
-create trigger lcia_scope_closure_checks_certificate_validity
-before insert or update of certificate_status, report_artifact_id,
-  complete_machine_result_artifact_id, closure_bundle_artifact_id, finished_at,
-  valid_until
-on public.lcia_scope_closure_checks
-for each row execute function public.lcia_scope_closure_certificate_validity_guard();
-
-update public.lcia_scope_closure_checks c
-set complete_machine_result_artifact_id =
+with resolved as (
+  select
+    closure_check.id,
+    machine_result.id as machine_result_artifact_id,
+    least(
+      report.expires_at,
+      machine_result.expires_at,
+      bundle.expires_at
+    ) as evidence_valid_until,
+    (
+      report.id is not null
+      and report.job_id = closure_check.worker_job_id
+      and report.artifact_role = 'closure_report'
+      and report.lifecycle_state = 'ready'
+      and machine_result.id is not null
+      and (
+        machine_result.job_id = closure_check.worker_job_id
+        or (
+          source_check.id is not null
+          and source_check.worker_job_id = machine_result.job_id
+        )
+      )
+      and machine_result.artifact_role = 'complete_machine_result'
+      and machine_result.lifecycle_state = 'ready'
+      and bundle.id is not null
+      and (
+        bundle.job_id = closure_check.worker_job_id
+        or (
+          source_check.id is not null
+          and source_check.worker_job_id = bundle.job_id
+        )
+      )
+      and bundle.artifact_role = 'closure_bundle'
+      and bundle.lifecycle_state = 'ready'
+      and report.expires_at > now()
+      and machine_result.expires_at > now()
+      and bundle.expires_at > now()
+      and least(
+        report.expires_at,
+        machine_result.expires_at,
+        bundle.expires_at
+      ) > coalesce(closure_check.finished_at, now())
+      and least(
+        report.expires_at,
+        machine_result.expires_at,
+        bundle.expires_at
+      ) > now()
+    ) as remains_valid
+  from public.lcia_scope_closure_checks closure_check
+  left join public.worker_job_artifacts report
+    on report.id = closure_check.report_artifact_id
+  left join public.worker_job_artifacts bundle
+    on bundle.id = closure_check.closure_bundle_artifact_id
+  left join public.lcia_scope_closure_checks source_check
+    on source_check.id = closure_check.reused_from_check_id
+  left join public.worker_job_artifacts machine_result
+    on machine_result.id = coalesce(
+      closure_check.complete_machine_result_artifact_id,
       case
         when coalesce(
           bundle.metadata->>'completeMachineResultArtifactId', ''
         ) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
         then (bundle.metadata->>'completeMachineResultArtifactId')::uuid
-      end,
-    valid_until = least(
-      report.expires_at,
-      machine_result.expires_at,
-      bundle.expires_at
+      end
     )
-from public.worker_job_artifacts report,
-     public.worker_job_artifacts machine_result,
-     public.worker_job_artifacts bundle
-where c.report_artifact_id = report.id
-  and c.closure_bundle_artifact_id = bundle.id
-  and machine_result.id = case
-    when coalesce(
-      bundle.metadata->>'completeMachineResultArtifactId', ''
-    ) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
-    then (bundle.metadata->>'completeMachineResultArtifactId')::uuid
-  end
-  and c.certificate_status = 'valid'
-  and report.expires_at is not null
-  and machine_result.expires_at is not null
-  and bundle.expires_at is not null;
+  where closure_check.certificate_status = 'valid'
+), classified as (
+  update public.lcia_scope_closure_checks closure_check
+  set complete_machine_result_artifact_id =
+        resolved.machine_result_artifact_id,
+      valid_until = resolved.evidence_valid_until,
+      certificate_status = case
+        when resolved.remains_valid then 'valid'
+        else 'stale'
+      end,
+      updated_at = case
+        when resolved.remains_valid then closure_check.updated_at
+        else now()
+      end
+  from resolved
+  where closure_check.id = resolved.id
+  returning closure_check.id, closure_check.certificate_status
+)
+insert into public.lcia_scope_closure_certificate_events (
+  closure_check_id,
+  certificate_status,
+  reason,
+  created_by
+)
+select
+  id,
+  'stale',
+  'artifact_retention_migration_evidence_expired_or_incomplete',
+  null
+from classified
+where certificate_status = 'stale';
+
+drop trigger if exists lcia_scope_closure_checks_certificate_validity
+  on public.lcia_scope_closure_checks;
+create trigger lcia_scope_closure_checks_certificate_validity
+before insert or update
+on public.lcia_scope_closure_checks
+for each row execute function public.lcia_scope_closure_certificate_validity_guard();
 
 alter table public.lcia_scope_closure_checks
   drop constraint if exists lcia_scope_closure_checks_valid_until_check,

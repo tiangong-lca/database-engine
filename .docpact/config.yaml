@@ -2,7 +2,7 @@ version: 1
 layout: repo
 lastReviewedAt: "2026-07-29"
 lastReviewedCommit: "09683a090f7e50b521233584b8ec20748eb9afeb"
-lastReviewedNote: "Reviewed Issue #308 rollout compatibility: existing routes cover the locator-free owner artifact summary, strict two-selector download DTO, temporary XLSX overload, fresh-process GC recovery, additive Preview migration, and expanded SQL proof."
+lastReviewedNote: "Reviewed Issue #308 authoritative artifact delivery: existing routes cover DB-first fresh/reused staging, atomic manifest resolution, public DTOs, expiry admission, renewable fenced GC, additive Preview repair, and populated upgrade proof."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

@@ -22,7 +22,7 @@ checkPaths:
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-07-29
 lastReviewedCommit: 6577b7a48f90ae449cbdd2ef419d92d13c273a0c
-lastReviewedNote: "Reviewed Issue #308 rollout follow-up: the owner projection and temporary overload ship in a new additive migration so the existing Preview branch can apply them without rewriting recorded history."
+lastReviewedNote: "Reviewed Issue #308 rollout follow-up: the additive publication/GC migration reapplies final guards and RPCs so an existing Preview can advance even when earlier PR migrations were already recorded."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -68,6 +68,8 @@ Rules:
 - Routine feature and fix branches start from `dev` and PR back into `dev`.
 - `dev -> main` is the promotion path.
 - Do not infer the working trunk from GitHub default-branch UI alone.
+
+When review changes an already-applied PR migration, add a later migration that reapplies the authoritative final schema/functions for the existing Preview branch. Still retain and run a real populated canonical-base-to-head upgrade test, because the additive Preview repair does not by itself prove first-time production upgrade safety.
 
 ## Repository contract
 
