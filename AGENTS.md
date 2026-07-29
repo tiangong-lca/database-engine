@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-29
-lastReviewedCommit: 09683a090f7e50b521233584b8ec20748eb9afeb
-lastReviewedNote: "Reviewed Issue #308 authoritative artifact delivery: Database owns DB-first fresh/reused publication staging, atomic client-key resolution, owner-safe projections, expiry admission, and fenced resumable GC."
+lastReviewedCommit: 220d9568a3e1a4000245e26a1cf444d9b403d4ed
+lastReviewedNote: "Reviewed merged Issues #308 and #310: Database owns authoritative artifact delivery and the extracted_md lexical v2 expand contract, including seven concurrent PGroonga indexes, strict owner-draft search, dev-first delivery, and later workspace integration."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

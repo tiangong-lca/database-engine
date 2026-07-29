@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-07-29"
-lastReviewedCommit: "09683a090f7e50b521233584b8ec20748eb9afeb"
-lastReviewedNote: "Reviewed Issue #308 authoritative artifact delivery: existing routes cover DB-first fresh/reused staging, atomic manifest resolution, public DTOs, expiry admission, renewable fenced GC, additive Preview repair, and populated upgrade proof."
+lastReviewedCommit: "220d9568a3e1a4000245e26a1cf444d9b403d4ed"
+lastReviewedNote: "Reviewed merged Issues #308 and #310: existing routes cover authoritative artifact delivery plus the extracted_md lexical v2 expand contract, seven concurrent PGroonga indexes, strict owner-draft search, Preview proof, and later contract cleanup."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

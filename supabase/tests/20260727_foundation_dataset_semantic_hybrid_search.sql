@@ -499,7 +499,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_contacts('public-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'tg', 10, 1, array['public-contact-token']) limit 1),
+  (select id::text from public.hybrid_search_contacts_v2('public-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'tg', 10, 1, array['public-contact-token']) limit 1),
   'ca000000-0000-0000-0000-000000000101',
   'contact Hybrid Search fuses text and semantic candidates'
 );
@@ -508,7 +508,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_flowproperties('public-flowproperty-token', (select value from query_vector), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'tg', 10, 1, array['public-flowproperty-token']) limit 1),
+  (select id::text from public.hybrid_search_flowproperties_v2('public-flowproperty-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'tg', 10, 1, array['public-flowproperty-token']) limit 1),
   'fb000000-0000-0000-0000-000000000101',
   'flow-property Hybrid Search fuses text and semantic candidates'
 );
@@ -517,7 +517,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_sources('public-source-token', (select value from query_vector), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'tg', 10, 1, array['public-source-token']) limit 1),
+  (select id::text from public.hybrid_search_sources_v2('public-source-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'tg', 10, 1, array['public-source-token']) limit 1),
   '5a000000-0000-0000-0000-000000000101',
   'source Hybrid Search fuses text and semantic candidates'
 );
@@ -526,7 +526,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_unitgroups('public-unitgroup-token', (select value from query_vector), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'tg', 10, 1, array['public-unitgroup-token']) limit 1),
+  (select id::text from public.hybrid_search_unitgroups_v2('public-unitgroup-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'tg', 10, 1, array['public-unitgroup-token']) limit 1),
   'a1000000-0000-0000-0000-000000000101',
   'unit-group Hybrid Search fuses text and semantic candidates'
 );
@@ -558,7 +558,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_contacts('outsider-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'my', 10, 1, array['outsider-contact-token']) limit 1),
+  (select id::text from public.hybrid_search_contacts_v2('outsider-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'my', 10, 1, array['outsider-contact-token']) limit 1),
   'ca000000-0000-0000-0000-000000000201',
   'my Hybrid Search does not leak an outsider text or semantic candidate'
 );
@@ -567,7 +567,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select count(*)::integer from public.hybrid_search_contacts('owner-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'my', 10, 1, array['owner-contact-token'], 1, null)),
+  (select count(*)::integer from public.hybrid_search_contacts_v2('owner-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'my', 10, 1, array['owner-contact-token'], 1, null)),
   0,
   'my Hybrid Search preserves the explicit state filter'
 );
@@ -576,7 +576,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_contacts('team-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'te', 10, 1, array['team-contact-token'], 0, 'c3000000-0000-0000-0000-000000000297') limit 1),
+  (select id::text from public.hybrid_search_contacts_v2('team-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'te', 10, 1, array['team-contact-token'], 0, 'c3000000-0000-0000-0000-000000000297') limit 1),
   'ca000000-0000-0000-0000-000000000202',
   'team Hybrid Search preserves the selected team and state filters'
 );
@@ -585,7 +585,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select count(*)::integer from public.hybrid_search_contacts('team-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'te', 10, 1, array['team-contact-token'], 0, null)),
+  (select count(*)::integer from public.hybrid_search_contacts_v2('team-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'te', 10, 1, array['team-contact-token'], 0, null)),
   0,
   'team Hybrid Search fails closed without an explicit team filter'
 );
@@ -594,7 +594,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select count(*)::integer from public.hybrid_search_contacts('public-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'tg', 10, 1, array['public-contact-token'], null, 'c3000000-0000-0000-0000-000000000297')),
+  (select count(*)::integer from public.hybrid_search_contacts_v2('public-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'tg', 10, 1, array['public-contact-token'], null, 'c3000000-0000-0000-0000-000000000297')),
   0,
   'public Hybrid Search preserves an explicit team scope'
 );

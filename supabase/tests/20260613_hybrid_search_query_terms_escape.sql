@@ -85,7 +85,7 @@ values
   ('b6130000-0000-0000-0000-000000000001', '{"email":"query-terms-outsider@example.com"}'::jsonb, null);
 
 insert into public.flows (
-  id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at
+  id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at
 )
 values
   (
@@ -129,7 +129,7 @@ values
   );
 
 insert into public.processes (
-  id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at
+  id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at
 )
 values (
   'e6130000-0000-0000-0000-000000000001',
@@ -146,7 +146,7 @@ values (
 );
 
 insert into public.lifecyclemodels (
-  id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at
+  id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at
 )
 values
   (
@@ -209,14 +209,13 @@ chemical(term) as (
 select is(
   (
     select id::text
-    from public.hybrid_search_flows(
+    from public.hybrid_search_flows_v2(
       '(111479-05-1) OR (Propanoic acid, 2-[4-[(6-chloro-2-quinoxalinyl)oxy]phenoxy]-, 2-[[(1-methylethylidene)amino]oxy]ethyl ester, (2R)-)',
       (select value from latest_zero_embedding),
       '{}',
       0.5,
       20,
-      0.3,
-      0.2,
+      0.5,
       0.5,
       10,
       'tg',
@@ -227,7 +226,7 @@ select is(
     limit 1
   ),
   'f6130000-0000-0000-0000-000000000001',
-  'flow hybrid search passes query_terms into latest text candidates'
+  'flow Hybrid Search v2 passes query_terms into latest text candidates'
 );
 
 select is(
@@ -379,20 +378,20 @@ select is(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_text &@~| $14') > 0
-    and strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_text &@~ $1') = 0,
+  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_md &@~| $14') > 0
+    and strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_text &@~') = 0,
   'flow latest implementation always uses escaped term-array text search'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'p.extracted_text &@~| $11') > 0
-    and strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'p.extracted_text &@~ $1') = 0,
+  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'p.extracted_md &@~| $11') > 0
+    and strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'p.extracted_text &@~') = 0,
   'process latest implementation always uses escaped term-array text search'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'l.extracted_text &@~| $10') > 0
-    and strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'l.extracted_text &@~ $1') = 0,
+  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'l.extracted_md &@~| $10') > 0
+    and strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'l.extracted_text &@~') = 0,
   'lifecyclemodel latest implementation always uses escaped term-array text search'
 );
 
