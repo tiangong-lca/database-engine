@@ -29,11 +29,10 @@ select has_function(
   array['uuid', 'text'],
   'actor-bound closure artifact projection has a strict role selector'
 );
-select ok(
-  to_regprocedure(
-    'public.get_lcia_scope_closure_report_download(uuid)'
-  ) is null,
-  'the legacy selector-less public download RPC is removed'
+select has_function(
+  'public', 'get_lcia_scope_closure_report_download',
+  array['uuid'],
+  'temporary selector-less XLSX compatibility overload remains during rollout'
 );
 select has_function(
   'public', 'svc_lcia_scope_closure_artifact_gc_claim',

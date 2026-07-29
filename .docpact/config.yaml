@@ -2,7 +2,7 @@ version: 1
 layout: repo
 lastReviewedAt: "2026-07-29"
 lastReviewedCommit: "09683a090f7e50b521233584b8ec20748eb9afeb"
-lastReviewedNote: "Reviewed Issue #308 cross-repo reconciliation: existing routes cover the strict public download selector/DTO, fresh-process GC recovery, follow-up migration, and expanded SQL proof."
+lastReviewedNote: "Reviewed Issue #308 rollout compatibility: existing routes cover the locator-free owner artifact summary, strict two-selector download DTO, temporary XLSX overload, fresh-process GC recovery, additive Preview migration, and expanded SQL proof."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

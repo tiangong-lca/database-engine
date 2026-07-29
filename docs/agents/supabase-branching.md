@@ -22,7 +22,7 @@ checkPaths:
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-07-29
 lastReviewedCommit: 6577b7a48f90ae449cbdd2ef419d92d13c273a0c
-lastReviewedNote: "Reviewed Issue #308 Preview follow-up: existing Preview branches apply new migration files, while changing an already-recorded migration requires an additive migration or explicit branch reprovision."
+lastReviewedNote: "Reviewed Issue #308 rollout follow-up: the owner projection and temporary overload ship in a new additive migration so the existing Preview branch can apply them without rewriting recorded history."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
