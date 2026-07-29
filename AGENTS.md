@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-29
-lastReviewedCommit: 29733df9c38a86cae1b06ac8455801dec0f939db
-lastReviewedNote: "Reviewed Issue #304 review/publication lifecycle closure; explicit database path roles, transaction-final assertions, safe errors, dev-first delivery, and later workspace integration remain within existing repo ownership and cross-repo contract boundaries."
+lastReviewedCommit: 220d9568a3e1a4000245e26a1cf444d9b403d4ed
+lastReviewedNote: "Reviewed merged Issues #308 and #310: Database owns authoritative artifact delivery and the extracted_md lexical v2 expand contract, including seven concurrent PGroonga indexes, strict owner-draft search, dev-first delivery, and later workspace integration."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -137,6 +137,7 @@ At a human-readable level, this repo owns:
 - the authenticated guarded derivative-rebuild surface: one flow/process owner-draft snapshot, the compatible single-process v1 queued admission, and one owner-only child status read; the private flow/process coordinator, 1..50 batch admission, exact 23-flow + 27-process aggregate proof, queue access, proposals, permits, and active target fences are never authenticated APIs
 - the authenticated guarded Step 3 flow-identity surface: one immutable actor-owned scope seal, one scope-serialized owner-draft process rewrite at a time, read-only resume/status and exact lost-preflight-response lookup, terminal finalization, and one actor-bound cancel that may release a scope only while it is still sealed with zero primary/audit/derivative/permit evidence; actor-wide approval hashes cannot be reused across request/text/identity domains, and each fresh preflight or exact human-approved recovery creates one wrapper invocation with a rotating memory-only permit whose raw token is never persisted; exact replay and every read return no permit, recovery supersedes the prior active permit, and the public process/finalize RPCs require the permit as a third argument; each process transaction may replace only the five sealed flow-reference identity fields, must preserve exchange rows/order/amounts/direction/comments/uncertainty/internal IDs and exact pending/blocker occurrences, and must atomically bind one protected derivative child while every source/public/support row remains read-only; a terminal derivative failure exposes an exact derivative-only compensation target but never replays primary, and compensation requires a distinct plan/freeze/approval before finalization can consume its causal proof
 - `tiangong-lca-worker` `worker_jobs` queue schema/RPCs, legacy lifecycle cutover cleanup, and review-submit coordinator links to worker job results
+- the seven-day scope-closure report, complete-machine-result, and closure-bundle lifecycle; DB-first service-only publication write sets that register every locator before upload, atomically resolve bundle manifest client keys, support full fresh and report-only reused publication without partial ready state, and expose the authoritative clientKey-to-artifactId map; the owner-only, fixed-order, locator-free XLSX/manifest availability projection; actor-opaque strict XLSX/manifest download projection plus a temporary one-argument XLSX compatibility overload; evidence-bounded certificate/build admission; and service-only idempotent GC coordination with non-mutating preview, renewable fenced leases, fresh-process post-tombstone recovery, and retained compact audit hashes/counts
 - `scripts/**` for schema export, workspace refresh, change copying, and migration generation
 - `.github/workflows/supabase-dev.yml`
 - production Supabase GitHub integration contract for Git `main`

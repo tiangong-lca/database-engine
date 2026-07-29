@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-07-29"
-lastReviewedCommit: "19b56eac805fb035288cdc2304e67fad4a990f77"
-lastReviewedNote: "Reviewed Issue #304 review/publication lifecycle closure: existing migration-and-rpc, review-submit-gate, proof, validation, and architecture routes cover the change, so no routing rule change is required."
+lastReviewedCommit: "220d9568a3e1a4000245e26a1cf444d9b403d4ed"
+lastReviewedNote: "Reviewed merged Issues #308 and #310: existing routes cover authoritative artifact delivery plus the extracted_md lexical v2 expand contract, seven concurrent PGroonga indexes, strict owner-draft search, Preview proof, and later contract cleanup."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

@@ -20,8 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-04
-lastReviewedCommit: a8aef0bc7bb89333a30d22da10d7269107d38f44
+lastReviewedAt: 2026-07-29
+lastReviewedCommit: 0f41fb08fb0874caefc2c8054822d928504f4c61
+lastReviewedNote: "已为 Issue #308 复核：新增的 populated base-to-head 测试 runner 是窄范围 schema 验证入口，不改变 workspace 导出、刷新或 migration 生成行为。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
