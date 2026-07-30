@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "public"."cmd_review_reject"("p_table" "text", "p_review_id" "uuid", "p_reason" "text", "p_audit" "jsonb") IS 'Rejects an admin-managed review while retaining non-root under-review datasets still occupied by another active review; unverifiable review links fail closed and are audited.';

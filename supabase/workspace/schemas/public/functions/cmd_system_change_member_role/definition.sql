@@ -12,33 +12,18 @@ declare
   v_role_row jsonb;
 begin
   if v_actor is null then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'AUTH_REQUIRED',
-      'status', 401,
-      'message', 'Authentication required'
-    );
+    return jsonb_build_object('ok', false, 'code', 'AUTH_REQUIRED', 'status', 401, 'message', 'Authentication required');
   end if;
 
   if p_user_id is null then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'USER_ID_REQUIRED',
-      'status', 400,
-      'message', 'userId is required'
-    );
+    return jsonb_build_object('ok', false, 'code', 'USER_ID_REQUIRED', 'status', 400, 'message', 'userId is required');
   end if;
 
   v_actor_is_owner := public.cmd_membership_is_system_owner(v_actor);
   v_actor_is_manager := public.cmd_membership_is_system_manager(v_actor);
 
   if not v_actor_is_manager then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'FORBIDDEN',
-      'status', 403,
-      'message', 'The actor cannot manage system members'
-    );
+    return jsonb_build_object('ok', false, 'code', 'FORBIDDEN', 'status', 403, 'message', 'The actor cannot manage system members');
   end if;
 
   select role
@@ -50,21 +35,11 @@ begin
 
   if v_action = 'remove' then
     if v_existing_role is null then
-      return jsonb_build_object(
-        'ok', false,
-        'code', 'ROLE_NOT_FOUND',
-        'status', 404,
-        'message', 'Role not found'
-      );
+      return jsonb_build_object('ok', false, 'code', 'ROLE_NOT_FOUND', 'status', 404, 'message', 'Role not found');
     end if;
 
     if p_user_id = v_actor or v_existing_role = 'owner' then
-      return jsonb_build_object(
-        'ok', false,
-        'code', 'FORBIDDEN',
-        'status', 403,
-        'message', 'The actor cannot remove this system member'
-      );
+      return jsonb_build_object('ok', false, 'code', 'FORBIDDEN', 'status', 403, 'message', 'The actor cannot remove this system member');
     end if;
 
     delete from public.roles
@@ -85,80 +60,39 @@ begin
       'roles',
       p_user_id,
       v_team_id::text,
-      coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
-        'action', 'remove'
-      )
+      coalesce(p_audit, '{}'::jsonb) || jsonb_build_object('action', 'remove')
     );
 
     return jsonb_build_object(
       'ok', true,
-      'data', jsonb_build_object(
-        'removed', true,
-        'user_id', p_user_id,
-        'team_id', v_team_id
-      )
+      'data', jsonb_build_object('removed', true, 'user_id', p_user_id, 'team_id', v_team_id)
     );
   end if;
 
   if v_action <> 'set' then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'INVALID_ACTION',
-      'status', 400,
-      'message', 'Unsupported action'
-    );
+    return jsonb_build_object('ok', false, 'code', 'INVALID_ACTION', 'status', 400, 'message', 'Unsupported action');
   end if;
 
-  if p_role not in ('member', 'admin') then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'INVALID_ROLE',
-      'status', 400,
-      'message', 'Unsupported system role transition'
-    );
+  if p_role not in ('member', 'admin', 'data_product_manager') then
+    return jsonb_build_object('ok', false, 'code', 'INVALID_ROLE', 'status', 400, 'message', 'Unsupported system role transition');
   end if;
 
   if p_role = 'admin' and not v_actor_is_owner then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'FORBIDDEN',
-      'status', 403,
-      'message', 'Only the system owner can assign admin roles'
-    );
+    return jsonb_build_object('ok', false, 'code', 'FORBIDDEN', 'status', 403, 'message', 'Only the system owner can assign admin roles');
   end if;
 
   if p_role = 'member' and v_existing_role = 'admin' and not v_actor_is_owner then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'FORBIDDEN',
-      'status', 403,
-      'message', 'Only the system owner can demote an admin'
-    );
+    return jsonb_build_object('ok', false, 'code', 'FORBIDDEN', 'status', 403, 'message', 'Only the system owner can demote an admin');
   end if;
 
   if v_existing_role is null then
-    insert into public.roles (
-      user_id,
-      team_id,
-      role,
-      modified_at
-    )
-    values (
-      p_user_id,
-      v_team_id,
-      p_role,
-      now()
-    )
+    insert into public.roles (user_id, team_id, role, modified_at)
+    values (p_user_id, v_team_id, p_role, now())
     returning to_jsonb(roles.*)
       into v_role_row;
-  elsif v_existing_role in ('owner', 'admin', 'member') then
+  elsif v_existing_role in ('owner', 'admin', 'member', 'data_product_manager') then
     if v_existing_role = 'owner' then
-      return jsonb_build_object(
-        'ok', false,
-        'code', 'FORBIDDEN',
-        'status', 403,
-        'message', 'The owner role cannot be modified'
-      );
+      return jsonb_build_object('ok', false, 'code', 'FORBIDDEN', 'status', 403, 'message', 'The owner role cannot be modified');
     end if;
 
     update public.roles
@@ -169,12 +103,7 @@ begin
     returning to_jsonb(roles.*)
       into v_role_row;
   else
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'ROLE_CONFLICT',
-      'status', 409,
-      'message', 'The existing zero-team role belongs to another scope'
-    );
+    return jsonb_build_object('ok', false, 'code', 'ROLE_CONFLICT', 'status', 409, 'message', 'The existing zero-team role belongs to another scope');
   end if;
 
   insert into public.command_audit_log (
@@ -191,24 +120,13 @@ begin
     'roles',
     p_user_id,
     v_team_id::text,
-    coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
-      'action', 'set',
-      'role', p_role
-    )
+    coalesce(p_audit, '{}'::jsonb) || jsonb_build_object('action', 'set', 'role', p_role)
   );
 
-  return jsonb_build_object(
-    'ok', true,
-    'data', v_role_row
-  );
+  return jsonb_build_object('ok', true, 'data', v_role_row);
 exception
   when unique_violation then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'ROLE_CONFLICT',
-      'status', 409,
-      'message', 'The existing zero-team role belongs to another scope'
-    );
+    return jsonb_build_object('ok', false, 'code', 'ROLE_CONFLICT', 'status', 409, 'message', 'The existing zero-team role belongs to another scope');
 end;
 $$;
 

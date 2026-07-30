@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "flow_derivative_rebuild_stage_markdown" BEFORE UPDATE OF "extracted_md" ON "public"."flows" FOR EACH ROW EXECUTE FUNCTION "util"."stage_dataset_derivative_rebuild_write"('markdown');

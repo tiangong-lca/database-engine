@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-30
-lastReviewedCommit: 1f6b5d4fa1be214a55257413b188c8af0bb7db5a
-lastReviewedNote: "Reviewed for Issue #310 after Issue #316 merged: database ownership, dev-first delivery, Preview-before-promotion ordering, and later workspace integration remain unchanged; the staged write-set expansion composes with removal of extracted_text and legacy embedding flags while preserving extracted_md and embedding_ft."
+lastReviewedCommit: ebbb7364186783d1491a4ab5e18d9c1002ed8992
+lastReviewedNote: "Reviewed for Issue #310 generated-workspace closure: database ownership, migration source-of-truth, dev-first delivery, and workspace integration remain unchanged; CLI-local reconstruction affects only disposable generated inspection output and requires hosted parity proof."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

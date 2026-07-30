@@ -1,0 +1,1 @@
+COMMENT ON COLUMN "public"."lca_factorization_registry"."prepared_job_id" IS 'Retained legacy lca_jobs identifier for historical compatibility only. New lifecycle traceability uses prepared_worker_job_id.';

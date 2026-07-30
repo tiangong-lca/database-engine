@@ -15,6 +15,8 @@ CREATE TABLE IF NOT EXISTS "public"."lca_package_export_items" (
 
 ALTER TABLE "public"."lca_package_export_items" OWNER TO "postgres";
 
+COMMENT ON TABLE "public"."lca_package_export_items" IS 'Worker-produced package export item state used to resume or inspect TIDAS package export/import domain work. This is not a task lifecycle/job table.';
+
 ALTER TABLE ONLY "public"."lca_package_export_items"
     ADD CONSTRAINT "lca_package_export_items_pkey" PRIMARY KEY ("id");
 

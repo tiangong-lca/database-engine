@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "public"."cmd_dataset_alias_execution_read"("p_request_id" "uuid") IS 'Actor-only status and reconciliation for one protected attempt. It may monotonically classify durable evidence as derivatives_pending/completed/failed/indeterminate, but it never dispatches, retries, replays, or changes dataset rows.';

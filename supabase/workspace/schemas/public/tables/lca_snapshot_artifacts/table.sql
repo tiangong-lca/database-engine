@@ -15,6 +15,12 @@ CREATE TABLE IF NOT EXISTS "public"."lca_snapshot_artifacts" (
     "status" "text" DEFAULT 'ready'::"text" NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "snapshot_index_sha256" "text",
+    "snapshot_build_contract_hash" "text",
+    "effective_scope_hash" "text",
+    "data_snapshot_token" "text",
+    "closure_bundle_hash" "text",
+    CONSTRAINT "lca_snapshot_artifacts_certificate_hashes_chk" CHECK (((("snapshot_index_sha256" IS NULL) OR ("snapshot_index_sha256" ~ '^[0-9a-f]{64}$'::"text")) AND (("snapshot_build_contract_hash" IS NULL) OR ("snapshot_build_contract_hash" ~ '^[0-9a-f]{64}$'::"text")) AND (("effective_scope_hash" IS NULL) OR ("effective_scope_hash" ~ '^[0-9a-f]{64}$'::"text")) AND (("closure_bundle_hash" IS NULL) OR ("closure_bundle_hash" ~ '^[0-9a-f]{64}$'::"text")))),
     CONSTRAINT "lca_snapshot_artifacts_counts_chk" CHECK ((("process_count" >= 0) AND ("flow_count" >= 0) AND ("impact_count" >= 0) AND ("a_nnz" >= 0) AND ("b_nnz" >= 0) AND ("c_nnz" >= 0))),
     CONSTRAINT "lca_snapshot_artifacts_size_chk" CHECK (("artifact_byte_size" >= 0)),
     CONSTRAINT "lca_snapshot_artifacts_status_chk" CHECK (("status" = ANY (ARRAY['ready'::"text", 'stale'::"text", 'failed'::"text"])))

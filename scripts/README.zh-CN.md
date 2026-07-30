@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-30
-lastReviewedCommit: 0954eb2ec588076945389e822d31278bd4b5d355
-lastReviewedNote: "已为 Issue #316 复核：staged write-set fixture 校验脚本是本地合同测试入口，不改变 workspace 导出、刷新或 migration 生成行为。"
+lastReviewedCommit: 4c7e52d315d02444372d6e1978af33e4ede470c7
+lastReviewedNote: "已为 Issue #310 的生成 workspace 收口复核：本地导出与重建改用 Supabase CLI 原生 local 路径；远程 dev 仍是权威目标，本地产物提交前必须有托管迁移一致性证据。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -76,6 +76,7 @@ python scripts/export_remote_schema.py --environment dev
 - 默认环境是 `dev`
 - 默认 schema 列表是 `public`
 - 可通过 `--schema-file` 覆盖输出路径
+- 未传 `--db-url` 时，`--environment local` 使用 Supabase CLI 的 `db dump --local`；显式 `--db-url` 仍使用该 URL
 
 ### `build_schema_workspace.py`
 
@@ -91,6 +92,12 @@ python scripts/export_remote_schema.py --environment dev
 python scripts/build_schema_workspace.py --environment dev
 ```
 
+如需按本地已应用 migration 精确重建：
+
+```bash
+python scripts/build_schema_workspace.py --environment local
+```
+
 行为：
 
 - 先导出最新远程 schema
@@ -104,6 +111,7 @@ python scripts/build_schema_workspace.py --environment dev
 - `remote_schema.sql`、`global/` 和 `schemas/` 中的手工修改都不稳定
 - 刷新时可能覆盖这些生成文件里尚未提交到 Git 的改动
 - 如果你希望 `--git-changes` 只反映后续手工修改，应在同步远程数据库并刷新 workspace 之后，先把新的 `supabase/workspace/schemas` 提交到 Git，再开始编辑
+- 远程 `dev` 仍是生成 schema 的权威目标。只有在已应用 migration 与托管目标一致，并对本次合同完成托管 catalog 定向检查后，才能提交本地重建产物。
 
 ### `check_generated_workspace_legacy_tables.py`
 

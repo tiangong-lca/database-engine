@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "lcia_scope_closure_checks_snapshot_refs_immutable" BEFORE UPDATE ON "public"."lcia_scope_closure_checks" FOR EACH ROW EXECUTE FUNCTION "public"."lcia_scope_closure_snapshot_refs_immutable"();

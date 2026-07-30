@@ -1,0 +1,1 @@
+CREATE INDEX "contacts_user_id_id_version_modified_at_latest_idx" ON "public"."contacts" USING "btree" ("user_id", "id", "version" DESC, "modified_at" DESC) INCLUDE ("created_at", "team_id", "state_code");

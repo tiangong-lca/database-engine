@@ -1,43 +1,30 @@
 CREATE OR REPLACE FUNCTION "public"."cmd_review_extract_refs"("p_json" "jsonb") RETURNS TABLE("ref_type" "text", "ref_object_id" "uuid", "ref_version" "text")
-    LANGUAGE "sql" STABLE
-    SET "search_path" TO 'public', 'pg_temp'
-    AS $_$
-  with recursive walk(value) as (
-    select coalesce(p_json, '{}'::jsonb)
-    union all
-    select child.value
-    from walk
-    cross join lateral (
-      select object_values.value
-      from jsonb_each(
-        case
-          when jsonb_typeof(walk.value) = 'object' then walk.value
-          else '{}'::jsonb
-        end
-      ) as object_values(key, value)
-      union all
-      select array_values.value
-      from jsonb_array_elements(
-        case
-          when jsonb_typeof(walk.value) = 'array' then walk.value
-          else '[]'::jsonb
-        end
-      ) as array_values(value)
-    ) as child
-  )
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
   select distinct
-    lower(trim(value->>'@type')) as ref_type,
-    (value->>'@refObjectId')::uuid as ref_object_id,
-    value->>'@version' as ref_version
-  from walk
-  where jsonb_typeof(value) = 'object'
-    and value ? '@refObjectId'
-    and value ? '@version'
-    and value ? '@type'
-    and (value->>'@refObjectId') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-    and nullif(value->>'@version', '') is not null
-    and public.cmd_review_ref_type_to_table(value->>'@type') is not null
-$_$;
+    role_ref.ref_type,
+    role_ref.ref_object_id,
+    role_ref.ref_version
+  from public.cmd_review_reference_roles(
+    case
+      when coalesce(p_json, '{}'::jsonb) ? 'processDataSet' then 'processes'
+      when coalesce(p_json, '{}'::jsonb) ? 'lifeCycleModelDataSet'
+        then 'lifecyclemodels'
+      when coalesce(p_json, '{}'::jsonb) ? 'flowDataSet' then 'flows'
+      when coalesce(p_json, '{}'::jsonb) ? 'flowPropertyDataSet'
+        then 'flowproperties'
+      when coalesce(p_json, '{}'::jsonb) ? 'unitGroupDataSet'
+        then 'unitgroups'
+      when coalesce(p_json, '{}'::jsonb) ? 'sourceDataSet' then 'sources'
+      when coalesce(p_json, '{}'::jsonb) ? 'contactDataSet' then 'contacts'
+      else 'comments'
+    end,
+    'json',
+    p_json
+  ) as role_ref
+  where role_ref.lifecycle_role in ('RequiredSupport', 'ModelComposition')
+$$;
 
 ALTER FUNCTION "public"."cmd_review_extract_refs"("p_json" "jsonb") OWNER TO "postgres";
 

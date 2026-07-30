@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-30
-lastReviewedCommit: 1f6b5d4fa1be214a55257413b188c8af0bb7db5a
-lastReviewedNote: "Reviewed for Issue #310 after Issue #316 merged: versioned staged write sets remain additive and compatible with the Contract retirement of extracted_text, legacy embedding flags/timestamps, dual lexical weights, and orphaned rule-based helpers while extracted_md and embedding_ft remain authoritative."
+lastReviewedCommit: 4c7e52d315d02444372d6e1978af33e4ede470c7
+lastReviewedNote: "Reviewed for Issue #310 generated-workspace closure: generated output remains disposable inspection state; local reconstruction now uses the CLI-native local path and is commit-eligible only with hosted migration parity and targeted catalog proof."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -215,6 +215,8 @@ Use it like this:
 4. generate a migration from the stable overlay file or write the migration directly
 
 Do not leave durable manual edits only inside generated paths.
+
+Remote `dev` is the canonical refresh target. `--environment local` is a validation and recovery path that uses the Supabase CLI-native local connection; locally reconstructed output must not be represented as hosted truth without matching migration-version and targeted hosted catalog evidence.
 
 ## Script Responsibilities
 

@@ -1,0 +1,1 @@
+CREATE INDEX "lcia_scope_closure_issue_roots_issue_idx" ON "public"."lcia_scope_closure_issue_roots" USING "btree" ("closure_issue_id", "root_dataset_type", "root_dataset_id", "root_dataset_version");
