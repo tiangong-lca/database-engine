@@ -109,8 +109,8 @@ select is(
     ) expected(signature)
     where to_regprocedure(expected.signature) is not null
   ),
-  7,
-  'the seven legacy RPC signatures remain available during Expand'
+  0,
+  'the seven two-weight compatibility RPC signatures are retired'
 );
 
 select is(
@@ -167,7 +167,7 @@ select is(
 select ok(
   strpos(
     pg_get_functiondef(
-      'private.hybrid_search_simple_dataset(regclass,text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'::regprocedure
+      'private.hybrid_search_simple_dataset_v2(regclass,text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'::regprocedure
     ),
     'd.extracted_md &@~|'
   ) > 0,
@@ -177,7 +177,7 @@ select ok(
 select is(
   strpos(
     pg_get_functiondef(
-      'private.hybrid_search_simple_dataset(regclass,text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'::regprocedure
+      'private.hybrid_search_simple_dataset_v2(regclass,text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'::regprocedure
     ),
     'd.extracted_text &@~|'
   ),
@@ -192,10 +192,11 @@ select is(
     join pg_namespace namespace on namespace.oid = routine.pronamespace
     where namespace.nspname = 'public'
       and routine.proname like 'hybrid_search_%_v2'
-      and strpos(routine.prosrc, '0.0::double precision') > 0
+      and strpos(routine.prosrc, '0.0::double precision') = 0
+      and strpos(routine.prosrc, 'private.hybrid_search_') > 0
   ),
   7,
-  'v2 adapters pass no independent extracted-text weight'
+  'v2 RPCs call lexical-only private implementations directly'
 );
 
 select is(

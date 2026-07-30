@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-07-29"
-lastReviewedCommit: "436673150bc81601b3c975cdf046af7e54c8c9e6"
-lastReviewedNote: "Reviewed post-merge Issue #310 staging evidence: existing ownership and routes remain correct; Hybrid proof now binds the checked-in Edge parameter profile, redacted staging vectors, and direct PGroonga plan verification."
+lastReviewedAt: "2026-07-30"
+lastReviewedCommit: "0954eb2ec588076945389e822d31278bd4b5d355"
+lastReviewedNote: "Reviewed for Issue #310 Contract cleanup: existing ownership and routes remain correct; the migration retires extracted_text and legacy embedding flags while retaining extracted_md lexical search and embedding_ft semantic search."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

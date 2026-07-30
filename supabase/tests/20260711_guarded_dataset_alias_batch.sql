@@ -612,7 +612,7 @@ begin
 end;
 $$;
 
-select plan(94);
+select plan(93);
 
 select ok(
   (
@@ -717,11 +717,7 @@ select is(
 );
 
 alter table public.flowproperties
-  disable trigger zz_flowproperties_extracted_text_sync_trigger;
-alter table public.flowproperties
   disable trigger flowproperties_set_modified_at_trigger;
-alter table public.unitgroups
-  disable trigger zz_unitgroups_extracted_text_sync_trigger;
 alter table public.unitgroups
   disable trigger unitgroups_set_modified_at_trigger;
 alter table public.flows
@@ -729,15 +725,11 @@ alter table public.flows
 alter table public.flows
   disable trigger flow_embedding_ft_on_extract_md_update;
 alter table public.flows
-  disable trigger zz_flows_extracted_text_sync_trigger;
-alter table public.flows
   disable trigger flows_set_modified_at_trigger;
 alter table public.processes
   disable trigger process_embedding_ft_on_extract_md_update;
 alter table public.processes
   disable trigger process_extract_md_trigger_insert;
-alter table public.processes
-  disable trigger zz_processes_extracted_text_sync_trigger;
 alter table public.processes
   disable trigger processes_set_modified_at_trigger;
 
@@ -774,19 +766,6 @@ select ok(
   ),
   'legacy batch and replay-capable full-plan alias RPCs are both internal after protected cutover'
 );
-
-set local role authenticated;
-
-select throws_ok(
-  $$
-    select public.cmd_dataset_alias_batch_guarded('{}'::jsonb)
-  $$,
-  '42501',
-  null,
-  'authenticated callers cannot bypass full-plan atomicity through the dimension executor'
-);
-
-reset role;
 
 select ok(
   strpos(

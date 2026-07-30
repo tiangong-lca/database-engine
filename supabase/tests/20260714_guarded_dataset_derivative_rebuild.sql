@@ -239,8 +239,6 @@ alter table public.processes
   disable trigger process_extract_md_trigger_insert;
 alter table public.processes
   disable trigger processes_json_sync_trigger;
-alter table public.processes
-  disable trigger zz_processes_extracted_text_sync_trigger;
 
 insert into public.processes (
   id,
@@ -249,7 +247,6 @@ insert into public.processes (
   json_ordered,
   user_id,
   state_code,
-  extracted_text,
   extracted_md,
   modified_at
 ) values
@@ -260,7 +257,6 @@ insert into public.processes (
     '{"processDataSet":{"processInformation":{"dataSetInformation":{"UUID":"11111111-1111-4111-8111-111111111111","name":{"baseName":[{"@xml:lang":"en","#text":"fixture one"}]}}}}}'::json,
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     0,
-    'fixture extracted text one',
     'same markdown',
     '2026-07-14 00:00:00+00'
   ),
@@ -271,7 +267,6 @@ insert into public.processes (
     '{"processDataSet":{"processInformation":{"dataSetInformation":{"UUID":"22222222-2222-4222-8222-222222222222","name":{"baseName":[{"@xml:lang":"en","#text":"fixture two"}]}}}}}'::json,
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     0,
-    'fixture extracted text two',
     'failure markdown',
     '2026-07-14 00:00:00+00'
   ),
@@ -282,7 +277,6 @@ insert into public.processes (
     '{"processDataSet":{"processInformation":{"dataSetInformation":{"UUID":"33333333-3333-4333-8333-333333333333"}}}}'::json,
     'bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb',
     0,
-    'foreign extracted text',
     'foreign markdown',
     '2026-07-14 00:00:00+00'
   ),
@@ -293,7 +287,6 @@ insert into public.processes (
     '{"processDataSet":{"processInformation":{"dataSetInformation":{"UUID":"44444444-4444-4444-8444-444444444444"}}}}'::json,
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     100,
-    'public extracted text',
     'public markdown',
     '2026-07-14 00:00:00+00'
   );
@@ -302,8 +295,6 @@ alter table public.processes
   enable trigger process_extract_md_trigger_insert;
 alter table public.processes
   enable trigger processes_json_sync_trigger;
-alter table public.processes
-  enable trigger zz_processes_extracted_text_sync_trigger;
 
 delete from pgmq.q_embedding_jobs;
 delete from util.pending_embedding_jobs;
@@ -611,7 +602,7 @@ select is(
 
 select throws_ok(
   $$update public.processes
-      set extracted_text = 'must be fenced'
+      set modified_at = modified_at + interval '1 second'
     where id = '11111111-1111-4111-8111-111111111111'
       and version = '00.00.001'$$,
   '55006',
@@ -1247,7 +1238,7 @@ select ok(
 );
 select throws_ok(
   $$update public.processes
-      set extracted_text = 'still fenced'
+      set modified_at = modified_at + interval '1 second'
     where id = '22222222-2222-4222-8222-222222222222'
       and version = '00.00.001'$$,
   '55006',
@@ -1259,7 +1250,7 @@ alter table public.processes
   disable trigger process_derivative_rebuild_primary_update_fence;
 select lives_ok(
   $$update public.processes
-      set extracted_text = 'administrative drift during failure drain'
+      set modified_at = '2026-07-14 00:00:01+00'
     where id = '22222222-2222-4222-8222-222222222222'
       and version = '00.00.001'$$,
   'test fixture simulates privileged primary drift during failure drain'
@@ -1307,7 +1298,7 @@ select is(
 );
 select lives_ok(
   $$update public.processes
-      set extracted_text = 'editable after drain'
+      set modified_at = '2026-07-14 00:00:02+00'
     where id = '22222222-2222-4222-8222-222222222222'
       and version = '00.00.001'$$,
   'primary becomes editable only after failed request drain completes'
@@ -1320,8 +1311,6 @@ alter table public.processes
   disable trigger process_extract_md_trigger_insert;
 alter table public.processes
   disable trigger processes_json_sync_trigger;
-alter table public.processes
-  disable trigger zz_processes_extracted_text_sync_trigger;
 
 insert into public.processes (
   id,
@@ -1330,7 +1319,6 @@ insert into public.processes (
   json_ordered,
   user_id,
   state_code,
-  extracted_text,
   extracted_md,
   modified_at
 )
@@ -1341,7 +1329,6 @@ select
   '{"processDataSet":{}}'::json,
   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa'::uuid,
   0,
-  'fairness fixture ' || i::text,
   'fairness markdown ' || i::text,
   '2026-07-14 00:00:00+00'::timestamp with time zone
 from generate_series(1, 6) as series(i);
@@ -1350,8 +1337,6 @@ alter table public.processes
   enable trigger process_extract_md_trigger_insert;
 alter table public.processes
   enable trigger processes_json_sync_trigger;
-alter table public.processes
-  enable trigger zz_processes_extracted_text_sync_trigger;
 
 insert into util.dataset_derivative_rebuild_requests (
   id,
@@ -1365,7 +1350,6 @@ insert into util.dataset_derivative_rebuild_requests (
   expected_modified_at,
   expected_json_sha256,
   expected_json_ordered_sha256,
-  expected_extracted_text_sha256,
   plan_request_sha256,
   action_request_sha256,
   reason_code,
@@ -1390,7 +1374,6 @@ select
   (snapshot.value->>'modified_at')::timestamp with time zone,
   snapshot.value->>'json_sha256',
   snapshot.value->>'json_ordered_sha256',
-  snapshot.value->>'extracted_text_sha256',
   lpad((i + 10)::text, 64, '0'),
   lpad((i + 20)::text, 64, '0'),
   'fairness',
@@ -1448,8 +1431,6 @@ alter table public.processes
   disable trigger process_extract_md_trigger_insert;
 alter table public.processes
   disable trigger processes_json_sync_trigger;
-alter table public.processes
-  disable trigger zz_processes_extracted_text_sync_trigger;
 
 insert into public.processes (
   id,
@@ -1458,7 +1439,6 @@ insert into public.processes (
   json_ordered,
   user_id,
   state_code,
-  extracted_text,
   extracted_md,
   modified_at
 ) values
@@ -1469,7 +1449,6 @@ insert into public.processes (
     '{"processDataSet":{}}'::json,
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     0,
-    'poison fixture',
     'poison markdown',
     '2026-07-14 00:00:00+00'
   ),
@@ -1480,7 +1459,6 @@ insert into public.processes (
     '{"processDataSet":{}}'::json,
     'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
     0,
-    'healthy fixture',
     'healthy markdown',
     '2026-07-14 00:00:00+00'
   );
@@ -1489,8 +1467,6 @@ alter table public.processes
   enable trigger process_extract_md_trigger_insert;
 alter table public.processes
   enable trigger processes_json_sync_trigger;
-alter table public.processes
-  enable trigger zz_processes_extracted_text_sync_trigger;
 
 insert into util.dataset_derivative_rebuild_requests (
   id,
@@ -1504,7 +1480,6 @@ insert into util.dataset_derivative_rebuild_requests (
   expected_modified_at,
   expected_json_sha256,
   expected_json_ordered_sha256,
-  expected_extracted_text_sha256,
   plan_request_sha256,
   action_request_sha256,
   reason_code,
@@ -1531,7 +1506,6 @@ select
   (snapshot.value->>'modified_at')::timestamp with time zone,
   snapshot.value->>'json_sha256',
   snapshot.value->>'json_ordered_sha256',
-  snapshot.value->>'extracted_text_sha256',
   lpad((40 + i)::text, 64, '0'),
   lpad((50 + i)::text, 64, '0'),
   'error-isolation',
@@ -1603,7 +1577,7 @@ where id::text like '60000000-0000-4000-8000-%';
 
 select lives_ok(
   $$update public.processes
-      set extracted_text = 'fixture extracted text two'
+      set modified_at = '2026-07-14 00:00:00+00'
     where id = '22222222-2222-4222-8222-222222222222'
       and version = '00.00.001'$$,
   'failed target can be restored to the same primary snapshot for retry'

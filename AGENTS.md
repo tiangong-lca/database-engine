@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-29
-lastReviewedCommit: 436673150bc81601b3c975cdf046af7e54c8c9e6
-lastReviewedNote: "Reviewed post-merge Issue #310 staging evidence: Database ownership, dev-first delivery, and later workspace integration remain unchanged; persistent-dev proof uses the checked-in Edge Hybrid parameter profile and direct index plans."
+lastReviewedAt: 2026-07-30
+lastReviewedCommit: 0954eb2ec588076945389e822d31278bd4b5d355
+lastReviewedNote: "Reviewed for Issue #310 Contract cleanup: database ownership, dev-first delivery, and workspace integration remain unchanged; the migration removes extracted_text and legacy embedding flags while preserving the extracted_md and embedding_ft derivative chain."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

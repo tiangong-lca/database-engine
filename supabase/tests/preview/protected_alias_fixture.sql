@@ -679,7 +679,7 @@ cross join pg_temp.preview_alias_fixture_config as config;
 
 insert into public.flows (
   id, version, json, json_ordered, user_id, state_code, rule_verification,
-  modified_at, extracted_text, extracted_md, embedding_ft, embedding_ft_at
+  modified_at, extracted_md, embedding_ft, embedding_ft_at
 )
 select
   pg_temp.preview_alias_entity_id(dimensions.dimension, 'flow', ordinal),
@@ -690,7 +690,6 @@ select
   0,
   true,
   config.fixture_modified_at,
-  'Preview protected alias flow extracted text ' || ordinal,
   'Preview protected alias flow Markdown ' || ordinal,
   null,
   null
@@ -700,7 +699,7 @@ cross join pg_temp.preview_alias_fixture_config as config;
 
 insert into public.processes (
   id, version, json, json_ordered, user_id, state_code, rule_verification,
-  modified_at, extracted_text, extracted_md, embedding_ft, embedding_ft_at
+  modified_at, extracted_md, embedding_ft, embedding_ft_at
 )
 select
   pg_temp.preview_alias_entity_id(dimensions.dimension, 'process', ordinal),
@@ -711,7 +710,6 @@ select
   0,
   true,
   config.fixture_modified_at,
-  'Preview protected alias process extracted text ' || ordinal,
   'Preview protected alias process Markdown ' || ordinal,
   null,
   null

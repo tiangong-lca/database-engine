@@ -25,16 +25,9 @@ select plan(26);
 select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'processes_json_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_extract_md_trigger_insert');
 select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_extract_md_trigger_update');
-select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_extract_text_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_extract_text_trigger_update');
-select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'zz_processes_extracted_text_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flows_json_sync_trigger');
-select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flow_extract_md_trigger_insert');
 select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flow_extract_md_trigger_update');
-select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flow_extract_text_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flow_extract_text_trigger_update');
 select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flow_dataset_extraction_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'zz_flows_extracted_text_sync_trigger');
 
 insert into auth.users (
   instance_id,

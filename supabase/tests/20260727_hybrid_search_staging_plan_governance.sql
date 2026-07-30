@@ -157,7 +157,7 @@ select ok(
 select ok(
   strpos(
     pg_get_functiondef(
-      'public.hybrid_search_processes(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure
+      'private.hybrid_search_processes_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure
     ),
     'match_threshold,
         semantic_match_count,
@@ -169,7 +169,7 @@ select ok(
 select ok(
   strpos(
     pg_get_functiondef(
-      'public.hybrid_search_flows(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure
+      'private.hybrid_search_flows_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure
     ),
     'match_threshold,
         semantic_match_count,
@@ -181,13 +181,13 @@ select ok(
 select ok(
   strpos(
     pg_get_functiondef(
-      'public.hybrid_search_processes(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure
+      'private.hybrid_search_processes_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure
     ),
     'order by counted_rows.score desc, counted_rows.modified_at desc, counted_rows.id'
   ) > 0
   and strpos(
     pg_get_functiondef(
-      'public.hybrid_search_processes(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure
+      'private.hybrid_search_processes_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure
     ),
     'offset (greatest(coalesce(page_current, 1), 1) - 1) * greatest(coalesce(page_size, 10), 1)'
   ) > 0,
@@ -197,13 +197,13 @@ select ok(
 select ok(
   strpos(
     pg_get_functiondef(
-      'public.hybrid_search_flows(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure
+      'private.hybrid_search_flows_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure
     ),
     'order by counted_rows.score desc, counted_rows.modified_at desc, counted_rows.id'
   ) > 0
   and strpos(
     pg_get_functiondef(
-      'public.hybrid_search_flows(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure
+      'private.hybrid_search_flows_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure
     ),
     'offset (greatest(coalesce(page_current, 1), 1) - 1) * greatest(coalesce(page_size, 10), 1)'
   ) > 0,

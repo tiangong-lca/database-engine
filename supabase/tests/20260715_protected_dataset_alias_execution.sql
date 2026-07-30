@@ -573,7 +573,6 @@ as $$
     'modified_at', '2026-07-15T00:00:00Z',
     'json_sha256', repeat('a', 64),
     'json_ordered_sha256', repeat('a', 64),
-    'extracted_text_sha256', repeat('d', 64),
     'extracted_md_sha256', repeat('e', 64),
     'embedding_ft_sha256', repeat('f', 64),
     'embedding_ft_at', '2026-07-15T00:00:00Z',
