@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-30
-lastReviewedCommit: 1f6b5d4fa1be214a55257413b188c8af0bb7db5a
-lastReviewedNote: "Reviewed for Issue #310 after Issue #316 merged: retain the staged write-set fixture and scale/REST proof while adding explicit absence checks for extracted_text, legacy embedding flags/timestamps, rule-based helpers, and dual-weight compatibility, with extracted_md/embedding_ft plan evidence preserved."
+lastReviewedCommit: 4c7e52d315d02444372d6e1978af33e4ede470c7
+lastReviewedNote: "Reviewed for Issue #310 generated-workspace closure: retain the existing database proof and require migration parity plus targeted hosted catalog checks before committing locally reconstructed generated schema output."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -186,6 +186,14 @@ python scripts/check_generated_workspace_legacy_tables.py --help
 ```
 
 If you actually refresh the workspace, make the validation note explicit about which generated paths changed and whether the change is intended to be committed.
+
+The canonical refresh target remains remote `dev`. For an exact local migration-state reconstruction, omit `--db-url` so the helper uses the Supabase CLI local connection path:
+
+```bash
+python scripts/build_schema_workspace.py --environment local
+```
+
+Do not commit a local reconstruction unless its applied migration versions match the intended hosted target and targeted hosted catalog checks rule out relevant schema drift. Record both proofs in the PR.
 
 ## Preview, Persistent Dev, and Root Integration
 

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-30
-lastReviewedCommit: 0954eb2ec588076945389e822d31278bd4b5d355
-lastReviewedNote: "Reviewed for Issue #316: the direct migration and staged write-set fixture verifier leave generated workspace and stable manual-overlay boundaries unchanged."
+lastReviewedCommit: 4c7e52d315d02444372d6e1978af33e4ede470c7
+lastReviewedNote: "Reviewed for Issue #310 generated-workspace closure: generated and stable-overlay boundaries remain unchanged; the local reconstruction path is now explicit and requires hosted parity evidence before commit."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -81,6 +81,14 @@ Each refresh performs these operations inside `supabase/workspace`:
 ```bash
 python scripts/build_schema_workspace.py --environment dev
 ```
+
+Remote `dev` remains canonical. When direct remote export is unavailable, an exact local migration-state reconstruction uses the CLI-native local connection:
+
+```bash
+python scripts/build_schema_workspace.py --environment local
+```
+
+Commit that local output only after the applied migration versions match the intended hosted target and targeted hosted catalog checks show no relevant drift.
 
 After refreshing a branch where the `worker_jobs` cutover and legacy table retirement migrations have applied, verify that generated output no longer advertises retired legacy job tables:
 
