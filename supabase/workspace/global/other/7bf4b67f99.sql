@@ -1,0 +1,1 @@
+COMMENT ON COLUMN "public"."dataset_review_submit_requests"."gate_worker_job_id" IS 'Canonical child review_submit.gate worker_jobs task when a numeric-stability gate has been enqueued for this coordinator row.';

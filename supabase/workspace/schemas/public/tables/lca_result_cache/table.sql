@@ -21,6 +21,8 @@ CREATE TABLE IF NOT EXISTS "public"."lca_result_cache" (
 
 ALTER TABLE "public"."lca_result_cache" OWNER TO "postgres";
 
+COMMENT ON TABLE "public"."lca_result_cache" IS 'Request-level cache for LCA result lookups. This is domain cache state backed by worker_jobs, not a task lifecycle/job table.';
+
 ALTER TABLE ONLY "public"."lca_result_cache"
     ADD CONSTRAINT "lca_result_cache_pkey" PRIMARY KEY ("id");
 

@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS "public"."dataset_review_submit_requests" (
 
 ALTER TABLE "public"."dataset_review_submit_requests" OWNER TO "postgres";
 
-COMMENT ON TABLE "public"."dataset_review_submit_requests" IS 'Durable review-submit request/coordinator state. This replaces dataset_review_submit_jobs as the active coordinator table while worker_jobs remains the canonical lifecycle fact.';
+COMMENT ON TABLE "public"."dataset_review_submit_requests" IS 'Review-submit coordinator domain state that replaces dataset_review_submit_jobs. The root submit and child gate lifecycles are canonicalized in public.worker_jobs.';
 
 ALTER TABLE ONLY "public"."dataset_review_submit_requests"
     ADD CONSTRAINT "dataset_review_submit_requests_pkey" PRIMARY KEY ("id");

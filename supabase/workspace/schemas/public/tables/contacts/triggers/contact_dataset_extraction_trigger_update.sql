@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "contact_dataset_extraction_trigger_update" AFTER UPDATE OF "json", "json_ordered" ON "public"."contacts" FOR EACH ROW WHEN (("new"."json" IS DISTINCT FROM "old"."json")) EXECUTE FUNCTION "util"."queue_dataset_extraction_jobs"();

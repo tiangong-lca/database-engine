@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "contact_embedding_ft_on_extract_md_update" AFTER UPDATE OF "extracted_md" ON "public"."contacts" FOR EACH ROW WHEN (("old"."extracted_md" IS DISTINCT FROM "new"."extracted_md")) EXECUTE FUNCTION "util"."queue_embeddings"('contacts_embedding_ft_input', 'embedding_ft', 'embedding_ft');

@@ -1,1 +1,0 @@
-CREATE OR REPLACE TRIGGER "zz_flowproperties_extracted_text_sync_trigger" BEFORE INSERT OR UPDATE OF "json", "json_ordered" ON "public"."flowproperties" FOR EACH ROW EXECUTE FUNCTION "util"."set_dataset_extracted_text_from_json"();

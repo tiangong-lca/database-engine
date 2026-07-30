@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "lcia_scope_closure_candidate_hash_refresh" AFTER INSERT OR DELETE OR UPDATE OF "id", "version", "state_code", "json", "json_ordered" ON "public"."flowproperties" FOR EACH ROW EXECUTE FUNCTION "private"."lcia_scope_closure_refresh_candidate_document_hash"();

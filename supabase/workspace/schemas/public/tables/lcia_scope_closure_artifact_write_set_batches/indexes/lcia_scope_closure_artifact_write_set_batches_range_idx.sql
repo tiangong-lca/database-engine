@@ -1,0 +1,1 @@
+CREATE INDEX "lcia_scope_closure_artifact_write_set_batches_range_idx" ON "public"."lcia_scope_closure_artifact_write_set_batches" USING "btree" ("write_set_id", "first_ordinal", "last_ordinal", "batch_id");

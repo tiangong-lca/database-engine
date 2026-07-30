@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-30
-lastReviewedCommit: 0954eb2ec588076945389e822d31278bd4b5d355
-lastReviewedNote: "Reviewed for Issue #316: the staged write-set fixture verifier is a local contract-test entrypoint and does not change workspace export, refresh, or migration-generation behavior."
+lastReviewedCommit: 4c7e52d315d02444372d6e1978af33e4ede470c7
+lastReviewedNote: "Reviewed for Issue #310 generated-workspace closure: local export and rebuild now use the Supabase CLI-native local path; remote dev remains canonical and local output requires hosted parity evidence before commit."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -76,6 +76,7 @@ Notes:
 - Default environment: `dev`
 - Default schema list: `public`
 - You can override the destination with `--schema-file`
+- `--environment local` without `--db-url` uses Supabase CLI `db dump --local`; an explicit `--db-url` still uses that URL
 
 ### `build_schema_workspace.py`
 
@@ -91,6 +92,12 @@ Usage:
 python scripts/build_schema_workspace.py --environment dev
 ```
 
+For an exact local migration-state reconstruction:
+
+```bash
+python scripts/build_schema_workspace.py --environment local
+```
+
 Behavior:
 
 - Exports the latest remote schema first
@@ -104,6 +111,7 @@ Warnings:
 - Manual edits inside `remote_schema.sql`, `global/`, and `schemas/` are not stable
 - Refresh can overwrite uncommitted Git changes in generated workspace files
 - If you want `--git-changes` to reflect only later hand edits, commit the refreshed `supabase/workspace/schemas` to Git after syncing the remote database and before editing files.
+- Remote `dev` remains the canonical generated-schema target. Commit local reconstruction output only after proving applied migration parity and running targeted hosted catalog checks for the affected contract.
 
 ### `check_generated_workspace_legacy_tables.py`
 

@@ -17,6 +17,8 @@ CREATE TABLE IF NOT EXISTS "public"."lca_results" (
 
 ALTER TABLE "public"."lca_results" OWNER TO "postgres";
 
+COMMENT ON TABLE "public"."lca_results" IS 'Worker-produced LCA result artifact metadata. This is domain result state, not a task lifecycle/job table.';
+
 ALTER TABLE ONLY "public"."lca_results"
     ADD CONSTRAINT "lca_results_pkey" PRIMARY KEY ("id");
 

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-30
-lastReviewedCommit: 0954eb2ec588076945389e822d31278bd4b5d355
-lastReviewedNote: "已为 Issue #316 复核：直接 migration 与 staged write-set fixture 校验脚本不改变生成 workspace 和稳定人工 overlay 的边界。"
+lastReviewedCommit: 4c7e52d315d02444372d6e1978af33e4ede470c7
+lastReviewedNote: "已为 Issue #310 的生成 workspace 收口复核：生成区与稳定人工 overlay 的边界不变；本地重建路径已明确，提交前必须有托管一致性证据。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -81,6 +81,14 @@ related:
 ```bash
 python scripts/build_schema_workspace.py --environment dev
 ```
+
+远程 `dev` 仍是权威目标。无法直接导出远程 schema 时，可通过 CLI 原生 local 连接按本地已应用 migration 精确重建：
+
+```bash
+python scripts/build_schema_workspace.py --environment local
+```
+
+只有在已应用 migration 版本与目标托管环境一致，且本次合同的托管 catalog 定向检查未发现相关漂移时，才能提交该本地产物。
 
 如果目标分支已经应用 `worker_jobs` cutover 和旧 job 表退休 migration，刷新后应确认生成内容不再展示已退休的 legacy job 表：
 

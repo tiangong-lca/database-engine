@@ -1,0 +1,1 @@
+CREATE INDEX "processes_json_ordered_alias_exchange_gin_idx" ON "public"."processes" USING "gin" ("private"."dataset_alias_jsonb_array_v1"((("json_ordered")::"jsonb" #> '{processDataSet,exchanges,exchange}'::"text"[])) "jsonb_path_ops");

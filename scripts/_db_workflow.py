@@ -149,7 +149,7 @@ def export_remote_schema(
     schema_file: Path | None = None,
     schemas: list[str] | None = None,
 ) -> Path:
-    resolved_db_url = resolve_db_url(environment, db_url)
+    validate_environment(environment)
     schema_path = resolve_remote_schema_path(schema_file)
     ensure_parent(schema_path)
     schema_list = resolve_schema_list(schemas)
@@ -159,13 +159,15 @@ def export_remote_schema(
         *resolve_supabase_cli_command(),
         "db",
         "dump",
-        "--db-url",
-        resolved_db_url,
         "--file",
         str(temp_schema_path),
         "--schema",
         ",".join(schema_list),
     ]
+    if environment == "local" and db_url is None:
+        command.append("--local")
+    else:
+        command.extend(["--db-url", resolve_db_url(environment, db_url)])
 
     try:
         run_command(command)

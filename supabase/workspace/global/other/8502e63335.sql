@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "public"."cmd_dataset_alias_execution_preflight_guarded"("p_request" "jsonb") IS 'Rollback-only server validation for the exact owner-draft 52-row/59-exchange alias plan plus its sorted 23-flow/27-process derivative closure. A successful call persists one non-replayable token that expires 180 seconds after simulation completes.';

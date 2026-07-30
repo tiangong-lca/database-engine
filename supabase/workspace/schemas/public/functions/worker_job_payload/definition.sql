@@ -2,7 +2,12 @@ CREATE OR REPLACE FUNCTION "public"."worker_job_payload"("p_job" "public"."worke
     LANGUAGE "sql" STABLE
     SET "search_path" TO 'public', 'pg_temp'
     AS $$
-  select jsonb_strip_nulls(
+  select coalesce(
+    jsonb_object_agg(entry.key, entry.value)
+      filter (where entry.value <> 'null'::jsonb),
+    '{}'::jsonb
+  )
+  from jsonb_each(
     jsonb_build_object(
       'id', (p_job).id,
       'jobKind', (p_job).job_kind,
@@ -54,7 +59,7 @@ CREATE OR REPLACE FUNCTION "public"."worker_job_payload"("p_job" "public"."worke
       'cancelledAt', to_jsonb((p_job).cancelled_at),
       'cancelledBy', (p_job).cancelled_by
     )
-  )
+  ) as entry(key, value)
 $$;
 
 ALTER FUNCTION "public"."worker_job_payload"("p_job" "public"."worker_jobs", "p_include_internal" boolean) OWNER TO "postgres";

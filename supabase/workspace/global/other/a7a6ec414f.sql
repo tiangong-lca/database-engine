@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "public"."get_lcia_scope_closure_report_download"("p_closure_check_id" "uuid") IS 'Temporary expand-migrate-contract overload forwarding to closure_report_xlsx. Remove in a separate cleanup Issue only after every Edge consumer migrates to the two-argument selector.';

@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "dataset_flow_identity_flow_active_fence" BEFORE INSERT OR DELETE OR UPDATE ON "public"."flows" FOR EACH ROW EXECUTE FUNCTION "private"."dataset_flow_identity_active_fence_v2"();

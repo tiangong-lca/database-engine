@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "lca_network_snapshots_closure_delete_guard" BEFORE DELETE ON "public"."lca_network_snapshots" FOR EACH ROW EXECUTE FUNCTION "public"."lcia_scope_closure_guard_snapshot_delete"();
