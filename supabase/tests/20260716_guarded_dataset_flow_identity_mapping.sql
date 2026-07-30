@@ -283,7 +283,7 @@ alter table public.processes disable trigger user;
 
 insert into public.flows (
   id, version, user_id, state_code, json, json_ordered, modified_at,
-  extracted_text, extracted_md
+  extracted_md
 ) values
   (
     pg_temp.flow_identity_id('source_flow'), '01.00.000',
@@ -294,7 +294,7 @@ insert into public.flows (
     pg_temp.flow_identity_flow_payload(
       pg_temp.flow_identity_id('source_flow'), 'Owner source'
     )::json,
-    '2026-07-16T01:00:00Z', 'source text', 'source markdown'
+    '2026-07-16T01:00:00Z', 'source markdown'
   ),
   (
     pg_temp.flow_identity_id('target_flow'), '01.00.000',
@@ -305,7 +305,7 @@ insert into public.flows (
     pg_temp.flow_identity_flow_payload(
       pg_temp.flow_identity_id('target_flow'), 'Public target'
     )::json,
-    '2026-07-16T01:00:00Z', 'target text', 'target markdown'
+    '2026-07-16T01:00:00Z', 'target markdown'
   ),
   (
     pg_temp.flow_identity_id('pending_flow'), '01.00.000',
@@ -316,12 +316,12 @@ insert into public.flows (
     pg_temp.flow_identity_flow_payload(
       pg_temp.flow_identity_id('pending_flow'), 'Protected pending'
     )::json,
-    '2026-07-16T01:00:00Z', 'pending text', 'pending markdown'
+    '2026-07-16T01:00:00Z', 'pending markdown'
   );
 
 insert into public.flows (
   id, version, user_id, state_code, json, json_ordered, modified_at,
-  extracted_text, extracted_md
+  extracted_md
 )
 select
   pg_temp.flow_identity_orphan_id(n), '01.00.000',
@@ -332,19 +332,19 @@ select
   pg_temp.flow_identity_flow_payload(
     pg_temp.flow_identity_orphan_id(n), 'Protected orphan ' || n
   )::json,
-  '2026-07-16T01:00:00Z', 'orphan text ' || n, 'orphan markdown ' || n
+  '2026-07-16T01:00:00Z', 'orphan markdown ' || n
 from generate_series(1, 303) as n;
 
 insert into public.processes (
   id, version, user_id, state_code, json, json_ordered, modified_at,
-  extracted_text, extracted_md, model_id, rule_verification
+  extracted_md, model_id, rule_verification
 ) values
   (
     pg_temp.flow_identity_id('process'), '01.00.000',
     pg_temp.flow_identity_id('owner'), 0,
     pg_temp.flow_identity_process_payload(false),
     pg_temp.flow_identity_process_payload(false)::json,
-    '2026-07-16T01:00:00Z', 'process text', 'process markdown', null, null
+    '2026-07-16T01:00:00Z', 'process markdown', null, null
   ),
   (
     pg_temp.flow_identity_id('process_2'), '01.00.000',
@@ -355,7 +355,7 @@ insert into public.processes (
     pg_temp.flow_identity_process_payload(
       false, pg_temp.flow_identity_id('process_2')
     )::json,
-    '2026-07-16T01:00:00Z', 'process 2 text', 'process 2 markdown', null, null
+    '2026-07-16T01:00:00Z', 'process 2 markdown', null, null
   );
 
 alter table public.flows enable trigger user;

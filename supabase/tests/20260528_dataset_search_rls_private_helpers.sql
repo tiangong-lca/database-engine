@@ -137,21 +137,14 @@ values
   ('a1000000-0000-0000-0000-000000000103', 'c3000000-0000-0000-0000-000000000103', 'owner');
 
 select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flows_json_sync_trigger');
-select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flow_extract_md_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flow_extract_text_trigger_insert');
 select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flow_dataset_extraction_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'zz_flows_extracted_text_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'processes_json_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_extract_md_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_extract_text_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'zz_processes_extracted_text_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodels_json_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodel_extract_md_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodels_extract_text_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'zz_lifecyclemodels_extracted_text_sync_trigger');
 
 insert into public.flows (
-  id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at
+  id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at
 )
 values
   ('f1000000-0000-0000-0000-000000000103', '01.00.000', '{"search":"rls-public-flow-token"}'::jsonb, '{"search":"rls-public-flow-token"}'::json, 'a1000000-0000-0000-0000-000000000103', 100, null, 'rls-public-flow-token', true, now(), now()),
@@ -160,7 +153,7 @@ values
   ('f4000000-0000-0000-0000-000000000103', '01.00.000', '{"search":"rls-outsider-flow-token"}'::jsonb, '{"search":"rls-outsider-flow-token"}'::json, 'b2000000-0000-0000-0000-000000000103', 0, null, 'rls-outsider-flow-token', true, now(), now());
 
 insert into public.processes (
-  id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at
+  id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at
 )
 values
   ('e1000000-0000-0000-0000-000000000103', '01.00.000', '{"processDataSet":{"modellingAndValidation":{"LCIMethodAndAllocation":{"typeOfDataSet":"Unit process"}}},"search":"rls-public-process-token"}'::jsonb, '{"processDataSet":{"modellingAndValidation":{"LCIMethodAndAllocation":{"typeOfDataSet":"Unit process"}}},"search":"rls-public-process-token"}'::json, 'a1000000-0000-0000-0000-000000000103', 100, null, 'rls-public-process-token', true, now(), now()),
@@ -169,7 +162,7 @@ values
   ('e4000000-0000-0000-0000-000000000103', '01.00.000', '{"processDataSet":{"modellingAndValidation":{"LCIMethodAndAllocation":{"typeOfDataSet":"Unit process"}}},"search":"rls-outsider-process-token"}'::jsonb, '{"processDataSet":{"modellingAndValidation":{"LCIMethodAndAllocation":{"typeOfDataSet":"Unit process"}}},"search":"rls-outsider-process-token"}'::json, 'b2000000-0000-0000-0000-000000000103', 0, null, 'rls-outsider-process-token', true, now(), now());
 
 insert into public.lifecyclemodels (
-  id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at
+  id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at
 )
 values
   ('d1000000-0000-0000-0000-000000000103', '01.00.000', '{"search":"rls-public-lifecycle-token"}'::jsonb, '{"search":"rls-public-lifecycle-token"}'::json, 'a1000000-0000-0000-0000-000000000103', 100, null, 'rls-public-lifecycle-token', true, now(), now()),

@@ -132,6 +132,9 @@ values
     now() - interval '1 hour'
   );
 
+update public.unitgroups
+set extracted_md = json::text;
+
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '16000000-0000-0000-0000-000000000046', true);
 
@@ -242,8 +245,8 @@ select is(
 );
 
 select ok(
-  to_regclass('public.unitgroups_text_pgroonga') is not null,
-  'unit group latest PGroonga search has an extracted_text index'
+  to_regclass('public.unitgroups_extracted_md_pgroonga') is not null,
+  'unit group latest PGroonga search has an extracted_md index'
 );
 
 select ok(
@@ -259,8 +262,8 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'd.extracted_text &@~ $1') > 0,
-  'unit group latest PGroonga search matches query_text against extracted_text'
+  strpos(pg_get_functiondef('public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'd.extracted_md &@~ $1') > 0,
+  'unit group latest PGroonga search matches query_text against extracted_md'
 );
 
 select ok(

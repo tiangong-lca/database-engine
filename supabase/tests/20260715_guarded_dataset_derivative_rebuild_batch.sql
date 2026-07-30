@@ -117,14 +117,10 @@ alter table public.flows
   disable trigger flow_dataset_extraction_trigger_insert;
 alter table public.flows
   disable trigger flows_json_sync_trigger;
-alter table public.flows
-  disable trigger zz_flows_extracted_text_sync_trigger;
 alter table public.processes
   disable trigger process_extract_md_trigger_insert;
 alter table public.processes
   disable trigger processes_json_sync_trigger;
-alter table public.processes
-  disable trigger zz_processes_extracted_text_sync_trigger;
 
 insert into public.flows (
   id,
@@ -133,7 +129,6 @@ insert into public.flows (
   json_ordered,
   user_id,
   state_code,
-  extracted_text,
   extracted_md,
   modified_at
 )
@@ -146,7 +141,6 @@ select
   jsonb_build_object('kind', 'flow', 'n', series.value)::json,
   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   0,
-  'flow extracted text ' || series.value::text,
   'flow old markdown ' || series.value::text,
   '2026-07-15 00:00:00+00'
 from generate_series(1, 24) as series(value);
@@ -158,7 +152,6 @@ insert into public.processes (
   json_ordered,
   user_id,
   state_code,
-  extracted_text,
   extracted_md,
   modified_at
 )
@@ -171,7 +164,6 @@ select
   jsonb_build_object('kind', 'process', 'n', series.value)::json,
   'aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa',
   0,
-  'process extracted text ' || series.value::text,
   'process old markdown ' || series.value::text,
   '2026-07-15 00:00:00+00'
 from generate_series(1, 28) as series(value);
@@ -180,14 +172,10 @@ alter table public.flows
   enable trigger flow_dataset_extraction_trigger_insert;
 alter table public.flows
   enable trigger flows_json_sync_trigger;
-alter table public.flows
-  enable trigger zz_flows_extracted_text_sync_trigger;
 alter table public.processes
   enable trigger process_extract_md_trigger_insert;
 alter table public.processes
   enable trigger processes_json_sync_trigger;
-alter table public.processes
-  enable trigger zz_processes_extracted_text_sync_trigger;
 
 delete from pgmq.q_embedding_jobs;
 delete from util.pending_embedding_jobs;
@@ -408,7 +396,7 @@ select is(
 
 select throws_ok(
   $$update public.flows
-      set extracted_text = 'must be fenced'
+      set json = jsonb_set(json, '{fenceProbe}', '"must be fenced"')
     where id = '81000000-0000-4000-8000-000000000024'
       and version = '00.00.001'$$,
   '55006',
@@ -619,7 +607,7 @@ select ok(
 
 select throws_ok(
   $$update public.flows
-      set extracted_text = 'batch flow fenced'
+      set json = jsonb_set(json, '{fenceProbe}', '"batch flow fenced"')
     where id = '81000000-0000-4000-8000-000000000001'
       and version = '00.00.001'$$,
   '55006',
@@ -628,7 +616,7 @@ select throws_ok(
 );
 select throws_ok(
   $$update public.processes
-      set extracted_text = 'batch process fenced'
+      set json = jsonb_set(json, '{fenceProbe}', '"batch process fenced"')
     where id = '82000000-0000-4000-8000-000000000001'
       and version = '00.00.001'$$,
   '55006',
@@ -647,7 +635,7 @@ declare
   v_markdown_dispatched_at timestamp with time zone;
   v_markdown_received_at timestamp with time zone;
   v_embedding_queued_at timestamp with time zone;
-  v_embedding_at timestamp with time zone;
+  v_embedding_ft_at timestamp with time zone;
   v_snapshot jsonb;
 begin
   v_embedding := (
@@ -665,7 +653,7 @@ begin
     v_markdown_dispatched_at := clock_timestamp() - interval '3 seconds';
     v_markdown_received_at := clock_timestamp() - interval '2 seconds';
     v_embedding_queued_at := clock_timestamp() - interval '1 second';
-    v_embedding_at := clock_timestamp() + interval '1 second';
+    v_embedding_ft_at := clock_timestamp() + interval '1 second';
 
     insert into util.dataset_derivative_rebuild_proposals (
       request_id,
@@ -694,7 +682,7 @@ begin
       'embedding',
       v_embedding,
       util.dataset_derivative_rebuild_sha256(v_embedding::text),
-      v_embedding_at,
+      v_embedding_ft_at,
       v_markdown_sha256,
       'captured'
     ) returning id into v_embedding_id;

@@ -11,8 +11,8 @@ select ok(
 );
 
 select ok(
-  to_regclass('public.flows_text_pgroonga') is not null,
-  'flow latest search keeps the extracted_text PGroonga index'
+  to_regclass('public.flows_extracted_md_pgroonga') is not null,
+  'flow latest search keeps the extracted_md PGroonga index'
 );
 
 select ok(

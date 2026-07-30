@@ -258,11 +258,10 @@ select is(
     from public.flows
     where id = 'e7100000-0000-0000-0000-000000000001'
       and json = json_ordered::jsonb
-      and extracted_text is not distinct from
-        util.dataset_json_search_text('flows', json)
+      and extracted_md is null
   ),
   1,
-  'flow ordered JSON keeps json and extracted_text synchronized'
+  'flow ordered JSON canonicalizes json without synchronously mutating extracted_md'
 );
 
 select is(
@@ -271,11 +270,10 @@ select is(
     from public.processes
     where id = 'e7200000-0000-0000-0000-000000000001'
       and json = json_ordered::jsonb
-      and extracted_text is not distinct from
-        util.dataset_json_search_text('processes', json)
+      and extracted_md is null
   ),
   1,
-  'process ordered JSON keeps json and extracted_text synchronized'
+  'process ordered JSON canonicalizes json without synchronously mutating extracted_md'
 );
 
 select is(
@@ -284,11 +282,10 @@ select is(
     from public.lifecyclemodels
     where id = 'e7300000-0000-0000-0000-000000000001'
       and json = json_ordered::jsonb
-      and extracted_text is not distinct from
-        util.dataset_json_search_text('lifecyclemodels', json)
+      and extracted_md is null
   ),
   1,
-  'lifecycle model ordered JSON keeps json and extracted_text synchronized'
+  'lifecycle model ordered JSON canonicalizes json without synchronously mutating extracted_md'
 );
 
 truncate pg_temp.derivative_webhook_calls;
