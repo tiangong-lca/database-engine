@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-29
-lastReviewedCommit: 0f41fb08fb0874caefc2c8054822d928504f4c61
-lastReviewedNote: "已为 Issue #308 复核：新增的 populated base-to-head 测试 runner 是窄范围 schema 验证入口，不改变 workspace 导出、刷新或 migration 生成行为。"
+lastReviewedAt: 2026-07-30
+lastReviewedCommit: 0954eb2ec588076945389e822d31278bd4b5d355
+lastReviewedNote: "已为 Issue #316 复核：staged write-set fixture 校验脚本是本地合同测试入口，不改变 workspace 导出、刷新或 migration 生成行为。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -187,6 +187,20 @@ python scripts/new_migration.py --name "update policy roles update" --source-pat
 这是上面几个脚本共用的内部模块。
 
 通常不作为日常命令行入口直接使用。
+
+### `test_scope_closure_staged_write_set_v2_fixture.sh`
+
+用于校验 Worker/数据库逐字共享的 staged write-set v2 fixture，包括
+canonical JSON、descriptor-set SHA-256、bounded batch 上限、status 字段
+不透明性、状态转换以及保留 one-shot 兼容窗口。
+
+用法：
+
+```bash
+scripts/test_scope_closure_staged_write_set_v2_fixture.sh
+```
+
+这是只读的本地合同检查；不会刷新生成的 schema workspace，也不会连接远程数据库。
 
 ## Local Docpact Push Gate
 
