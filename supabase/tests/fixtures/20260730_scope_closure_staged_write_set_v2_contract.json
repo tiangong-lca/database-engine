@@ -1,0 +1,360 @@
+{
+  "schemaVersion": "lcia.scope-closure-staged-write-set-fixture.v2",
+  "contractVersion": "lcia.scope-closure-artifact-write-set.v2",
+  "coordination": {
+    "databaseIssue": "tiangong-lca/database-engine#316",
+    "workerIssue": "linancn/tiangong-lca-worker#177",
+    "rollout": "expand-migrate-contract",
+    "legacyOneShotAdapterRetained": true
+  },
+  "limits": {
+    "ordinalBase": 1,
+    "maximumExpectedDescriptorCount": 100000,
+    "maximumBatchDescriptorCount": 500,
+    "minimumBatchDescriptorCount": 1,
+    "batchArrivalOrder": "arbitrary",
+    "batchItemOrder": "strictly ascending contiguous ordinals"
+  },
+  "canonicalization": {
+    "algorithm": "SHA-256 over UTF-8 canonical JSON; object keys recursively sorted by Unicode code point, arrays preserved, compact separators, JSON scalar rendering",
+    "descriptorSetEnvelopeFields": [
+      "contractVersion",
+      "descriptors"
+    ],
+    "descriptorFields": [
+      "ordinal",
+      "clientKey",
+      "artifactType",
+      "artifactRole",
+      "bucket",
+      "objectPath",
+      "mediaType",
+      "size",
+      "checksumSha256",
+      "metadata"
+    ],
+    "descriptorOrder": "ordinal ascending",
+    "descriptorSetCanonicalJson": "{\"contractVersion\":\"lcia.scope-closure-artifact-write-set.v2\",\"descriptors\":[{\"artifactRole\":\"closure_bundle\",\"artifactType\":\"closure_bundle\",\"bucket\":\"scope-closure-artifacts\",\"checksumSha256\":\"1111111111111111111111111111111111111111111111111111111111111111\",\"clientKey\":\"closure-bundle-v3.json\",\"mediaType\":\"application/json\",\"metadata\":{\"artifactRole\":\"closure_bundle\",\"closureCheckId\":\"11111111-1111-4111-8111-111111111111\",\"completeMachineResultClientKey\":\"manifest.json\",\"contentArtifactManifestHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"fileName\":\"closure-bundle-v3.json\",\"retentionSeconds\":604800,\"schemaVersion\":\"lcia.scope-closure-artifact.v2\"},\"objectPath\":\"scope-closure/11111111-1111-4111-8111-111111111111/99999999-9999-4999-8999-999999999999/closure-bundle-v3.json\",\"ordinal\":1,\"size\":128},{\"artifactRole\":\"closure_report\",\"artifactType\":\"closure_report_xlsx\",\"bucket\":\"scope-closure-artifacts\",\"checksumSha256\":\"2222222222222222222222222222222222222222222222222222222222222222\",\"clientKey\":\"closure-report-v3.xlsx\",\"mediaType\":\"application/vnd.openxmlformats-officedocument.spreadsheetml.sheet\",\"metadata\":{\"artifactRole\":\"closure_report\",\"closureCheckId\":\"11111111-1111-4111-8111-111111111111\",\"contentArtifactManifestHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"fileName\":\"closure-report-v3.xlsx\",\"retentionSeconds\":604800,\"schemaVersion\":\"lcia.scope-closure-artifact.v2\"},\"objectPath\":\"scope-closure/11111111-1111-4111-8111-111111111111/99999999-9999-4999-8999-999999999999/closure-report-v3.xlsx\",\"ordinal\":2,\"size\":256},{\"artifactRole\":\"complete_machine_result\",\"artifactType\":\"closure_complete_machine_result\",\"bucket\":\"scope-closure-artifacts\",\"checksumSha256\":\"3333333333333333333333333333333333333333333333333333333333333333\",\"clientKey\":\"issues/part-000000.ndjson.zst\",\"mediaType\":\"application/x-ndjson+zstd\",\"metadata\":{\"artifactRole\":\"complete_machine_result\",\"closureCheckId\":\"11111111-1111-4111-8111-111111111111\",\"contentArtifactManifestHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"fileName\":\"issues/part-000000.ndjson.zst\",\"retentionSeconds\":604800,\"schemaVersion\":\"lcia.scope-closure-artifact.v2\"},\"objectPath\":\"scope-closure/11111111-1111-4111-8111-111111111111/99999999-9999-4999-8999-999999999999/issues/part-000000.ndjson.zst\",\"ordinal\":3,\"size\":512},{\"artifactRole\":\"complete_machine_result\",\"artifactType\":\"closure_complete_machine_result\",\"bucket\":\"scope-closure-artifacts\",\"checksumSha256\":\"4444444444444444444444444444444444444444444444444444444444444444\",\"clientKey\":\"manifest.json\",\"mediaType\":\"application/vnd.tiangong.scope-closure-manifest+json\",\"metadata\":{\"artifactRole\":\"complete_machine_result\",\"closureCheckId\":\"11111111-1111-4111-8111-111111111111\",\"contentArtifactManifestHash\":\"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa\",\"fileName\":\"manifest.json\",\"retentionSeconds\":604800,\"schemaVersion\":\"lcia.scope-closure-artifact.v2\"},\"objectPath\":\"scope-closure/11111111-1111-4111-8111-111111111111/99999999-9999-4999-8999-999999999999/manifest.json\",\"ordinal\":4,\"size\":1024}]}",
+    "descriptorSetSha256": "11723d5becbb3c1c3a9a3c6d7d23f021044f260857558c4520c40614fd14e27f"
+  },
+  "requiredPrimaryRoles": {
+    "fresh": [
+      {
+        "artifactRole": "closure_report",
+        "artifactType": "closure_report_xlsx",
+        "mediaType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "exactCount": 1
+      },
+      {
+        "artifactRole": "complete_machine_result",
+        "artifactType": "closure_complete_machine_result",
+        "mediaType": "application/vnd.tiangong.scope-closure-manifest+json",
+        "exactCount": 1
+      },
+      {
+        "artifactRole": "closure_bundle",
+        "artifactType": "closure_bundle",
+        "mediaType": "application/json",
+        "exactCount": 1
+      }
+    ],
+    "reused": [
+      {
+        "artifactRole": "closure_report",
+        "artifactType": "closure_report_xlsx",
+        "mediaType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "exactCount": 1
+      }
+    ]
+  },
+  "example": {
+    "ids": {
+      "closureCheckId": "11111111-1111-4111-8111-111111111111",
+      "workerJobId": "22222222-2222-4222-8222-222222222222",
+      "workerLeaseToken": "33333333-3333-4333-8333-333333333333",
+      "requestId": "44444444-4444-4444-8444-444444444444",
+      "writeSetId": "55555555-5555-4555-8555-555555555555",
+      "writeToken": "66666666-6666-4666-8666-666666666666",
+      "batchIds": [
+        "77777777-7777-4777-8777-777777777777",
+        "88888888-8888-4888-8888-888888888888"
+      ]
+    },
+    "descriptors": [
+      {
+        "ordinal": 1,
+        "clientKey": "closure-bundle-v3.json",
+        "artifactType": "closure_bundle",
+        "artifactRole": "closure_bundle",
+        "bucket": "scope-closure-artifacts",
+        "objectPath": "scope-closure/11111111-1111-4111-8111-111111111111/99999999-9999-4999-8999-999999999999/closure-bundle-v3.json",
+        "mediaType": "application/json",
+        "size": 128,
+        "checksumSha256": "1111111111111111111111111111111111111111111111111111111111111111",
+        "metadata": {
+          "schemaVersion": "lcia.scope-closure-artifact.v2",
+          "closureCheckId": "11111111-1111-4111-8111-111111111111",
+          "fileName": "closure-bundle-v3.json",
+          "artifactRole": "closure_bundle",
+          "retentionSeconds": 604800,
+          "contentArtifactManifestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          "completeMachineResultClientKey": "manifest.json"
+        }
+      },
+      {
+        "ordinal": 2,
+        "clientKey": "closure-report-v3.xlsx",
+        "artifactType": "closure_report_xlsx",
+        "artifactRole": "closure_report",
+        "bucket": "scope-closure-artifacts",
+        "objectPath": "scope-closure/11111111-1111-4111-8111-111111111111/99999999-9999-4999-8999-999999999999/closure-report-v3.xlsx",
+        "mediaType": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        "size": 256,
+        "checksumSha256": "2222222222222222222222222222222222222222222222222222222222222222",
+        "metadata": {
+          "schemaVersion": "lcia.scope-closure-artifact.v2",
+          "closureCheckId": "11111111-1111-4111-8111-111111111111",
+          "fileName": "closure-report-v3.xlsx",
+          "artifactRole": "closure_report",
+          "retentionSeconds": 604800,
+          "contentArtifactManifestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      {
+        "ordinal": 3,
+        "clientKey": "issues/part-000000.ndjson.zst",
+        "artifactType": "closure_complete_machine_result",
+        "artifactRole": "complete_machine_result",
+        "bucket": "scope-closure-artifacts",
+        "objectPath": "scope-closure/11111111-1111-4111-8111-111111111111/99999999-9999-4999-8999-999999999999/issues/part-000000.ndjson.zst",
+        "mediaType": "application/x-ndjson+zstd",
+        "size": 512,
+        "checksumSha256": "3333333333333333333333333333333333333333333333333333333333333333",
+        "metadata": {
+          "schemaVersion": "lcia.scope-closure-artifact.v2",
+          "closureCheckId": "11111111-1111-4111-8111-111111111111",
+          "fileName": "issues/part-000000.ndjson.zst",
+          "artifactRole": "complete_machine_result",
+          "retentionSeconds": 604800,
+          "contentArtifactManifestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      },
+      {
+        "ordinal": 4,
+        "clientKey": "manifest.json",
+        "artifactType": "closure_complete_machine_result",
+        "artifactRole": "complete_machine_result",
+        "bucket": "scope-closure-artifacts",
+        "objectPath": "scope-closure/11111111-1111-4111-8111-111111111111/99999999-9999-4999-8999-999999999999/manifest.json",
+        "mediaType": "application/vnd.tiangong.scope-closure-manifest+json",
+        "size": 1024,
+        "checksumSha256": "4444444444444444444444444444444444444444444444444444444444444444",
+        "metadata": {
+          "schemaVersion": "lcia.scope-closure-artifact.v2",
+          "closureCheckId": "11111111-1111-4111-8111-111111111111",
+          "fileName": "manifest.json",
+          "artifactRole": "complete_machine_result",
+          "retentionSeconds": 604800,
+          "contentArtifactManifestHash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"
+        }
+      }
+    ],
+    "batches": [
+      {
+        "batchId": "77777777-7777-4777-8777-777777777777",
+        "ordinals": [
+          1,
+          2
+        ]
+      },
+      {
+        "batchId": "88888888-8888-4888-8888-888888888888",
+        "ordinals": [
+          3,
+          4
+        ]
+      }
+    ],
+    "artifactMapAfterSeal": {
+      "closure-bundle-v3.json": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      "closure-report-v3.xlsx": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
+      "issues/part-000000.ndjson.zst": "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+      "manifest.json": "dddddddd-dddd-4ddd-8ddd-dddddddddddd"
+    }
+  },
+  "rpc": {
+    "create": {
+      "signature": "svc_lcia_scope_closure_artifact_write_set_create_v2(uuid,uuid,uuid,uuid,text,integer,text,jsonb,integer,uuid)",
+      "arguments": [
+        "p_closure_check_id",
+        "p_worker_job_id",
+        "p_worker_lease_token",
+        "p_request_id",
+        "p_contract_version",
+        "p_expected_descriptor_count",
+        "p_descriptor_set_sha256",
+        "p_required_primary_roles",
+        "p_staging_seconds",
+        "p_reused_from_check_id"
+      ],
+      "initialState": "registration_open",
+      "uploadEligible": false
+    },
+    "registerBatch": {
+      "signature": "svc_lcia_scope_closure_artifact_write_set_register_batch_v2(uuid,uuid,uuid,uuid,uuid,jsonb)",
+      "arguments": [
+        "p_write_set_id",
+        "p_write_token",
+        "p_worker_job_id",
+        "p_worker_lease_token",
+        "p_batch_id",
+        "p_items"
+      ],
+      "sameBytesReplay": "ok=true,reused=true",
+      "conflictingReplay": "artifact_write_set_v2_batch_conflict",
+      "postSealExactReplay": "ok=true,reused=true",
+      "postSealMutation": "artifact_write_set_v2_registration_closed"
+    },
+    "status": {
+      "signature": "svc_lcia_scope_closure_artifact_write_set_status_v2(uuid,uuid,uuid,uuid)",
+      "arguments": [
+        "p_closure_check_id",
+        "p_worker_job_id",
+        "p_worker_lease_token",
+        "p_request_id"
+      ],
+      "fields": [
+        "contractVersion",
+        "writeSetId",
+        "closureCheckId",
+        "workerJobId",
+        "requestId",
+        "publicationMode",
+        "reusedFromCheckId",
+        "status",
+        "uploadEligible",
+        "writeToken",
+        "expectedDescriptorCount",
+        "registeredDescriptorCount",
+        "registeredBatchCount",
+        "descriptorSetSha256",
+        "requiredPrimaryRoles",
+        "stagingExpiresAt",
+        "sealedAt",
+        "finalizedAt",
+        "cleanedAt",
+        "artifactMap",
+        "batches"
+      ],
+      "forbiddenFields": [
+        "requestedBy",
+        "ownerId",
+        "bucket",
+        "objectPath",
+        "storageBucket",
+        "storagePath",
+        "items",
+        "workerLeaseToken",
+        "workerLeaseTokenSha256",
+        "serviceRole",
+        "serviceKey",
+        "reconcileToken"
+      ]
+    },
+    "seal": {
+      "signature": "svc_lcia_scope_closure_artifact_write_set_seal_v2(uuid,uuid,uuid,uuid)",
+      "arguments": [
+        "p_write_set_id",
+        "p_write_token",
+        "p_worker_job_id",
+        "p_worker_lease_token"
+      ],
+      "transition": "registration_open -> staging",
+      "atomicChecks": [
+        "exact cardinality",
+        "ordinal range is exactly 1..expectedDescriptorCount",
+        "descriptor-set SHA-256",
+        "required primary roles",
+        "role/type/media invariants",
+        "unique client keys and locators",
+        "bundle-to-manifest clientKey binding",
+        "current worker-job lease and write-set fence"
+      ],
+      "success": "uploadEligible=true and artifactMap becomes visible"
+    },
+    "finalize": {
+      "signature": "svc_lcia_scope_closure_artifact_write_set_finalize_v2(uuid,uuid,uuid,uuid)",
+      "arguments": [
+        "p_write_set_id",
+        "p_write_token",
+        "p_worker_job_id",
+        "p_worker_lease_token"
+      ],
+      "transition": "staging -> ready",
+      "atomic": true
+    },
+    "fail": {
+      "signature": "svc_lcia_scope_closure_artifact_write_set_fail_v2(uuid,uuid,uuid,uuid,text)",
+      "arguments": [
+        "p_write_set_id",
+        "p_write_token",
+        "p_worker_job_id",
+        "p_worker_lease_token",
+        "p_error"
+      ],
+      "transition": "registration_open|staging -> cleanup_pending"
+    }
+  },
+  "states": {
+    "registration_open": {
+      "batchRegistrationAllowed": true,
+      "uploadEligible": false,
+      "readyArtifactRows": 0
+    },
+    "staging": {
+      "batchRegistrationAllowed": false,
+      "uploadEligible": true,
+      "readyArtifactRows": 0
+    },
+    "ready": {
+      "batchRegistrationAllowed": false,
+      "uploadEligible": false,
+      "readyArtifactRows": "expectedDescriptorCount"
+    },
+    "cleanup_pending": {
+      "batchRegistrationAllowed": false,
+      "uploadEligible": false
+    },
+    "cleaned": {
+      "batchRegistrationAllowed": false,
+      "uploadEligible": false
+    }
+  },
+  "errors": {
+    "service_role_required": 403,
+    "artifact_write_set_v2_invalid": 400,
+    "closure_check_not_found": 404,
+    "artifact_write_set_unavailable": 409,
+    "worker_job_lease_invalid": 409,
+    "artifact_write_set_v2_request_conflict": 409,
+    "artifact_write_set_not_found": 404,
+    "artifact_write_set_token_invalid": 409,
+    "artifact_write_set_v2_registration_closed": 409,
+    "artifact_write_set_v2_batch_conflict": 409,
+    "artifact_write_set_v2_descriptor_conflict": 409,
+    "artifact_write_set_v2_incomplete": 409,
+    "artifact_write_set_v2_digest_mismatch": 409,
+    "artifact_write_set_v2_primary_roles_invalid": 409,
+    "artifact_write_set_not_finalizable": 409,
+    "artifact_write_set_v2_status_required": 409,
+    "artifact_write_set_v2_fence_required": 409
+  },
+  "legacyAdapter": {
+    "createSignature": "svc_lcia_scope_closure_artifact_write_set_create(uuid,text,jsonb,integer,uuid)",
+    "inspectSignature": "svc_lcia_scope_closure_artifact_write_set_inspect(uuid)",
+    "finalizeSignature": "svc_lcia_scope_closure_artifact_write_set_finalize(uuid,uuid)",
+    "failSignature": "svc_lcia_scope_closure_artifact_write_set_fail(uuid,uuid,text)",
+    "maximumDescriptorCount": 500,
+    "removal": "separate explicit contraction audit only after deployed consumers migrate"
+  }
+}

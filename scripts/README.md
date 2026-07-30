@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-29
-lastReviewedCommit: 0f41fb08fb0874caefc2c8054822d928504f4c61
-lastReviewedNote: "Reviewed for Issue #308: the new populated base-to-head test runner is a narrow schema-validation entrypoint and does not change workspace export, refresh, or migration-generation behavior."
+lastReviewedAt: 2026-07-30
+lastReviewedCommit: 0954eb2ec588076945389e822d31278bd4b5d355
+lastReviewedNote: "Reviewed for Issue #316: the staged write-set fixture verifier is a local contract-test entrypoint and does not change workspace export, refresh, or migration-generation behavior."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -187,6 +187,21 @@ Not currently supported:
 Internal shared module used by the scripts above.
 
 It is not intended to be the primary entry point for routine command-line use.
+
+### `test_scope_closure_staged_write_set_v2_fixture.sh`
+
+Validates the byte-shared Worker/database staged write-set v2 fixture, including
+canonical JSON, descriptor-set SHA-256, bounded batch limits, status-field
+opacity, state transitions, and the retained one-shot compatibility window.
+
+Usage:
+
+```bash
+scripts/test_scope_closure_staged_write_set_v2_fixture.sh
+```
+
+This is a read-only local contract check. It does not refresh generated schema
+workspace files or connect to a remote database.
 
 ## Local Docpact Push Gate
 
