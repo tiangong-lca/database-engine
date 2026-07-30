@@ -94,7 +94,7 @@ begin
              d.user_id,
              pgroonga_score(d.tableoid, d.ctid) as search_score
       from %1$s d
-      where d.extracted_text &@~ $1
+      where d.extracted_md &@~ $1
     ),
     matched_ids as (
       select d.id, max(d.search_score) as search_score

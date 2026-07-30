@@ -1,0 +1,1 @@
+CREATE INDEX "flows_json_ordered_alias_flowproperty_gin_idx" ON "public"."flows" USING "gin" ("private"."dataset_alias_jsonb_array_v1"((("json_ordered")::"jsonb" #> '{flowDataSet,flowProperties,flowProperty}'::"text"[])) "jsonb_path_ops");

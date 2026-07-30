@@ -1,0 +1,1 @@
+COMMENT ON COLUMN "public"."lcia_scope_closure_scan_executions"."numerical_snapshot_id" IS 'Stable database-preallocated snapshot UUID reused by retries and closure-check runs; retained as a soft audit reference after stale or revoked evidence is garbage-collected.';

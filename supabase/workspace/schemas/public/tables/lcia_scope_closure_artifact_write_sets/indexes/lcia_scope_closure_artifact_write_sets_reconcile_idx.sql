@@ -1,0 +1,1 @@
+CREATE INDEX "lcia_scope_closure_artifact_write_sets_reconcile_idx" ON "public"."lcia_scope_closure_artifact_write_sets" USING "btree" ("status", "staging_expires_at", "reconcile_expires_at", "created_at", "id");

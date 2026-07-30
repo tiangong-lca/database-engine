@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "lcia_scope_closure_artifact_write_set_items_v2_guard" BEFORE INSERT OR DELETE OR UPDATE ON "public"."lcia_scope_closure_artifact_write_set_items" FOR EACH ROW EXECUTE FUNCTION "private"."lcia_scope_closure_artifact_v2_item_guard"();

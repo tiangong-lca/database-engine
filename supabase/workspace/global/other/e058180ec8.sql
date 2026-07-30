@@ -1,0 +1,1 @@
+COMMENT ON VIEW "public"."worker_domain_traceability_violations" IS 'Service-role audit view for post-cutover worker-produced domain rows that are not traceable to worker_jobs. Historical pre-cutover nullable rows are intentionally ignored.';

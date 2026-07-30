@@ -4,7 +4,7 @@ CREATE TABLE IF NOT EXISTS "public"."roles" (
     "role" character varying(255) NOT NULL,
     "created_at" timestamp with time zone DEFAULT "now"(),
     "modified_at" timestamp with time zone,
-    CONSTRAINT "roles_role_check" CHECK ((("role")::"text" = ANY ((ARRAY['owner'::character varying, 'admin'::character varying, 'member'::character varying, 'is_invited'::character varying, 'rejected'::character varying, 'review-admin'::character varying, 'review-member'::character varying])::"text"[])))
+    CONSTRAINT "roles_role_check" CHECK ((("role")::"text" = ANY (ARRAY['owner'::"text", 'admin'::"text", 'member'::"text", 'is_invited'::"text", 'rejected'::"text", 'review-admin'::"text", 'review-member'::"text", 'data_product_manager'::"text"])))
 );
 
 ALTER TABLE "public"."roles" OWNER TO "postgres";

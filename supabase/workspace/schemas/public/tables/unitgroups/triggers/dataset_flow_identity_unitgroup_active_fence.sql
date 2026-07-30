@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "dataset_flow_identity_unitgroup_active_fence" BEFORE DELETE OR UPDATE ON "public"."unitgroups" FOR EACH ROW EXECUTE FUNCTION "private"."dataset_flow_identity_active_fence_v2"();

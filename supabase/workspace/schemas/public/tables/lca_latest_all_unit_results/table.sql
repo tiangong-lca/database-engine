@@ -18,6 +18,8 @@ CREATE TABLE IF NOT EXISTS "public"."lca_latest_all_unit_results" (
 
 ALTER TABLE "public"."lca_latest_all_unit_results" OWNER TO "postgres";
 
+COMMENT ON TABLE "public"."lca_latest_all_unit_results" IS 'Latest all-unit LCA result pointer and query artifact metadata. This is domain projection state, not a task lifecycle/job table.';
+
 ALTER TABLE ONLY "public"."lca_latest_all_unit_results"
     ADD CONSTRAINT "lca_latest_all_unit_results_pkey" PRIMARY KEY ("id");
 

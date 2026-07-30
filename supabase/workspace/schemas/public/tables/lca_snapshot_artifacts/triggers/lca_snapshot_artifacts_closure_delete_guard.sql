@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "lca_snapshot_artifacts_closure_delete_guard" BEFORE DELETE ON "public"."lca_snapshot_artifacts" FOR EACH ROW EXECUTE FUNCTION "public"."lcia_scope_closure_guard_snapshot_artifact_delete"();

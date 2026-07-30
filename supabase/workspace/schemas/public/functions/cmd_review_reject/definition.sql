@@ -12,6 +12,11 @@ declare
   v_comment_ref record;
   v_review_json jsonb;
   v_affected_datasets jsonb := '[]'::jsonb;
+  v_retained_datasets jsonb := '[]'::jsonb;
+  v_unverifiable_datasets jsonb := '[]'::jsonb;
+  v_other_active_review_ids jsonb := '[]'::jsonb;
+  v_unverifiable_review_refs jsonb := '[]'::jsonb;
+  v_has_current_review_ref boolean := false;
 begin
   if v_actor is null then
     return jsonb_build_object(
@@ -156,6 +161,132 @@ begin
       and state_code < 100
     order by table_name, dataset_id, dataset_version
   loop
+    if not v_target.is_root then
+      v_other_active_review_ids := '[]'::jsonb;
+      v_unverifiable_review_refs := '[]'::jsonb;
+      v_has_current_review_ref := false;
+
+      if jsonb_typeof(v_target.reviews) is distinct from 'array' then
+        v_unverifiable_review_refs := jsonb_build_array(
+          jsonb_build_object(
+            'reason', 'REVIEWS_NOT_ARRAY',
+            'reviews', coalesce(v_target.reviews, 'null'::jsonb)
+          )
+        );
+      elsif jsonb_array_length(v_target.reviews) = 0 then
+        v_unverifiable_review_refs := jsonb_build_array(
+          jsonb_build_object(
+            'reason', 'REVIEWS_EMPTY'
+          )
+        );
+      else
+        with review_refs as (
+          select
+            entry.value as review_ref,
+            entry.ordinality,
+            case
+              when jsonb_typeof(entry.value) = 'object'
+                and jsonb_typeof(entry.value->'id') = 'string'
+                and (entry.value->>'id') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+              then (entry.value->>'id')::uuid
+              else null
+            end as review_id
+          from jsonb_array_elements(v_target.reviews)
+            with ordinality as entry(value, ordinality)
+        ),
+        resolved_review_refs as (
+          select
+            review_refs.review_ref,
+            review_refs.ordinality,
+            review_refs.review_id,
+            linked_review.id is not null as is_resolved
+          from review_refs
+          left join public.reviews as linked_review
+            on linked_review.id = review_refs.review_id
+        )
+        select
+          coalesce(
+            jsonb_agg(
+              jsonb_build_object(
+                'ordinal', ordinality,
+                'review_ref', review_ref,
+                'reason', case
+                  when review_id is null then 'INVALID_REVIEW_REF'
+                  else 'REVIEW_NOT_FOUND'
+                end
+              )
+              order by ordinality
+            ) filter (where review_id is null or not is_resolved),
+            '[]'::jsonb
+          ),
+          coalesce(bool_or(review_id = p_review_id), false)
+        into
+          v_unverifiable_review_refs,
+          v_has_current_review_ref
+        from resolved_review_refs;
+
+        if not v_has_current_review_ref then
+          v_unverifiable_review_refs := v_unverifiable_review_refs || jsonb_build_array(
+            jsonb_build_object(
+              'reason', 'CURRENT_REVIEW_REF_MISSING',
+              'review_id', p_review_id
+            )
+          );
+        end if;
+      end if;
+
+      if jsonb_array_length(v_unverifiable_review_refs) > 0 then
+        v_retained_datasets := v_retained_datasets || jsonb_build_array(
+          jsonb_build_object(
+            'table', v_target.table_name,
+            'id', v_target.dataset_id,
+            'version', v_target.dataset_version,
+            'state_code', v_target.state_code,
+            'reason', 'UNVERIFIABLE_REVIEW_LINKS',
+            'unverifiable_review_refs', v_unverifiable_review_refs
+          )
+        );
+        v_unverifiable_datasets := v_unverifiable_datasets || jsonb_build_array(
+          jsonb_build_object(
+            'table', v_target.table_name,
+            'id', v_target.dataset_id,
+            'version', v_target.dataset_version,
+            'state_code', v_target.state_code,
+            'unverifiable_review_refs', v_unverifiable_review_refs
+          )
+        );
+        continue;
+      end if;
+
+      select coalesce(
+        jsonb_agg(to_jsonb(active_review.review_id) order by active_review.review_id),
+        '[]'::jsonb
+      )
+        into v_other_active_review_ids
+      from (
+        select distinct linked_review.id::text as review_id
+        from jsonb_array_elements(v_target.reviews) as review_ref(value)
+        join public.reviews as linked_review
+          on linked_review.id = (review_ref.value->>'id')::uuid
+        where linked_review.id <> p_review_id
+          and linked_review.state_code in (0, 1)
+      ) as active_review;
+
+      if jsonb_array_length(v_other_active_review_ids) > 0 then
+        v_retained_datasets := v_retained_datasets || jsonb_build_array(
+          jsonb_build_object(
+            'table', v_target.table_name,
+            'id', v_target.dataset_id,
+            'version', v_target.dataset_version,
+            'state_code', v_target.state_code,
+            'reason', 'OTHER_ACTIVE_REVIEWS',
+            'active_review_ids', v_other_active_review_ids
+          )
+        );
+        continue;
+      end if;
+    end if;
+
     execute format(
       'update public.%I
           set state_code = 0,
@@ -165,6 +296,16 @@ begin
       v_target.table_name
     )
       using v_target.dataset_id, v_target.dataset_version;
+
+    v_affected_datasets := v_affected_datasets || jsonb_build_array(
+      jsonb_build_object(
+        'table', v_target.table_name,
+        'id', v_target.dataset_id,
+        'version', v_target.dataset_version,
+        'previous_state_code', v_target.state_code,
+        'state_code', 0
+      )
+    );
   end loop;
 
   update public.comments
@@ -199,23 +340,6 @@ begin
   returning *
     into v_review;
 
-  select coalesce(
-    jsonb_agg(
-      jsonb_build_object(
-        'table', table_name,
-        'id', dataset_id,
-        'version', dataset_version,
-        'state_code', 0
-      )
-      order by table_name, dataset_id, dataset_version
-    ),
-    '[]'::jsonb
-  )
-    into v_affected_datasets
-  from cmd_review_reject_targets
-  where state_code >= 20
-    and state_code < 100;
-
   insert into public.command_audit_log (
     command,
     actor_user_id,
@@ -231,7 +355,10 @@ begin
     coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
       'root_table', v_root_table,
       'reason', coalesce(p_reason, ''),
-      'affected_datasets', v_affected_datasets
+      'active_review_state_codes', jsonb_build_array(0, 1),
+      'affected_datasets', v_affected_datasets,
+      'retained_datasets', v_retained_datasets,
+      'unverifiable_datasets', v_unverifiable_datasets
     )
   );
 
@@ -239,7 +366,9 @@ begin
     'ok', true,
     'data', jsonb_build_object(
       'review', to_jsonb(v_review),
-      'affected_datasets', v_affected_datasets
+      'affected_datasets', v_affected_datasets,
+      'retained_datasets', v_retained_datasets,
+      'unverifiable_datasets', v_unverifiable_datasets
     )
   );
 end;

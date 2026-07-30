@@ -11,11 +11,13 @@ CREATE TABLE IF NOT EXISTS "public"."lca_network_snapshots" (
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     CONSTRAINT "lca_network_snapshots_provider_rule_chk" CHECK (("provider_matching_rule" = ANY (ARRAY['strict_unique_provider'::"text", 'best_provider_strict'::"text", 'split_by_evidence'::"text", 'split_by_evidence_hybrid'::"text", 'split_equal'::"text", 'equal_split_multi_provider'::"text", 'custom_weighted_provider'::"text", 'split_by_process_volume'::"text"]))),
-    CONSTRAINT "lca_network_snapshots_scope_chk" CHECK (("scope" = 'full_library'::"text")),
+    CONSTRAINT "lca_network_snapshots_scope_chk" CHECK (("scope" = ANY (ARRAY['full_library'::"text", 'data_product'::"text"]))),
     CONSTRAINT "lca_network_snapshots_status_chk" CHECK (("status" = ANY (ARRAY['draft'::"text", 'ready'::"text", 'stale'::"text", 'failed'::"text"])))
 );
 
 ALTER TABLE "public"."lca_network_snapshots" OWNER TO "postgres";
+
+COMMENT ON TABLE "public"."lca_network_snapshots" IS 'LCA network snapshot domain cache/state. Snapshot rows are not task lifecycle rows; current direct worker traceability is through downstream worker-linked result/cache/latest/factorization records and source_hash.';
 
 ALTER TABLE ONLY "public"."lca_network_snapshots"
     ADD CONSTRAINT "lca_network_snapshots_pkey" PRIMARY KEY ("id");

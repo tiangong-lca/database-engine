@@ -20,6 +20,8 @@ CREATE TABLE IF NOT EXISTS "public"."lca_factorization_registry" (
 
 ALTER TABLE "public"."lca_factorization_registry" OWNER TO "postgres";
 
+COMMENT ON TABLE "public"."lca_factorization_registry" IS 'Domain registry for prepared LCA factorization artifacts and leases. Canonical preparation task lifecycle lives in public.worker_jobs.';
+
 ALTER TABLE ONLY "public"."lca_factorization_registry"
     ADD CONSTRAINT "lca_factorization_registry_pkey" PRIMARY KEY ("id");
 

@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "process_derivative_rebuild_stage_embedding" BEFORE UPDATE OF "embedding_ft", "embedding_ft_at" ON "public"."processes" FOR EACH ROW EXECUTE FUNCTION "util"."stage_dataset_derivative_rebuild_write"('embedding');

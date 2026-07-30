@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS "public"."lca_package_artifacts" (
 
 ALTER TABLE "public"."lca_package_artifacts" OWNER TO "postgres";
 
+COMMENT ON TABLE "public"."lca_package_artifacts" IS 'Worker-produced TIDAS package artifact metadata. This is a domain artifact table, not a task lifecycle/job table; canonical execution state lives in public.worker_jobs.';
+
 ALTER TABLE ONLY "public"."lca_package_artifacts"
     ADD CONSTRAINT "lca_package_artifacts_pkey" PRIMARY KEY ("id");
 

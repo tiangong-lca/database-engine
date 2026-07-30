@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "flowproperty_embedding_ft_on_extract_md_update" AFTER UPDATE OF "extracted_md" ON "public"."flowproperties" FOR EACH ROW WHEN (("old"."extracted_md" IS DISTINCT FROM "new"."extracted_md")) EXECUTE FUNCTION "util"."queue_embeddings"('flowproperties_embedding_ft_input', 'embedding_ft', 'embedding_ft');

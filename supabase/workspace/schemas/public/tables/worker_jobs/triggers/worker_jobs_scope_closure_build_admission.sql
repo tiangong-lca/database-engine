@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "worker_jobs_scope_closure_build_admission" BEFORE INSERT OR UPDATE OF "status", "payload_json" ON "public"."worker_jobs" FOR EACH ROW EXECUTE FUNCTION "public"."lcia_scope_closure_build_admission_guard"();

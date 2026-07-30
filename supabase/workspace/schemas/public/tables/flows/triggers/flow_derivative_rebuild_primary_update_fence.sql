@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "flow_derivative_rebuild_primary_update_fence" BEFORE UPDATE OF "id", "json", "created_at", "json_ordered", "user_id", "state_code", "version", "modified_at", "team_id", "review_id", "rule_verification", "reviews" ON "public"."flows" FOR EACH ROW EXECUTE FUNCTION "util"."guard_dataset_derivative_rebuild_primary"();

@@ -1,128 +1,70 @@
 CREATE OR REPLACE FUNCTION "public"."cmd_dataset_publish"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'public', 'pg_temp'
-    AS $_$
+    SET "search_path" TO ''
+    AS $$
 declare
   v_actor uuid := auth.uid();
-  v_current_row jsonb;
-  v_owner_id uuid;
-  v_state_code integer;
-  v_updated_row jsonb;
+  v_root jsonb;
+  v_assertion jsonb;
 begin
-  if v_actor is null then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'AUTH_REQUIRED',
-      'status', 401,
-      'message', 'Authentication required'
+  if v_actor is null
+    or p_table not in ('processes', 'lifecyclemodels') then
+    return public.cmd_dataset_publish_issue304_legacy(
+      p_table,
+      p_id,
+      p_version,
+      p_audit
     );
   end if;
 
-  if p_table not in (
-    'contacts',
-    'sources',
-    'unitgroups',
-    'flowproperties',
-    'flows',
-    'processes',
-    'lifecyclemodels'
-  ) then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'INVALID_DATASET_TABLE',
-      'status', 400,
-      'message', 'Unsupported dataset table'
-    );
-  end if;
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended('review-publication-lifecycle-closure', 0)
+  );
 
-  execute format(
-    'select to_jsonb(t) from public.%I as t where t.id = $1 and t.version = $2 for update of t',
-    p_table
-  )
-    into v_current_row
-    using p_id, p_version;
-
-  if v_current_row is null then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'DATASET_NOT_FOUND',
-      'status', 404,
-      'message', 'Dataset not found'
-    );
-  end if;
-
-  v_owner_id := nullif(v_current_row->>'user_id', '')::uuid;
-  v_state_code := coalesce((v_current_row->>'state_code')::integer, 0);
-
-  if v_owner_id is distinct from v_actor then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'DATASET_OWNER_REQUIRED',
-      'status', 403,
-      'message', 'Only the dataset owner can publish the dataset'
-    );
-  end if;
-
-  if v_state_code >= 100 then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'DATA_ALREADY_PUBLISHED',
-      'status', 403,
-      'message', 'Dataset is already published',
-      'details', jsonb_build_object(
-        'state_code', v_state_code
-      )
-    );
-  end if;
-
-  if v_state_code >= 20 then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'DATA_UNDER_REVIEW',
-      'status', 403,
-      'message', 'Data is under review and cannot be published directly',
-      'details', jsonb_build_object(
-        'state_code', 20,
-        'review_state_code', v_state_code
-      )
-    );
-  end if;
-
-  execute format(
-    'update public.%I as t
-        set state_code = 100,
-            modified_at = now()
-      where t.id = $1
-        and t.version = $2
-    returning to_jsonb(t)',
-    p_table
-  )
-    into v_updated_row
-    using p_id, p_version;
-
-  insert into public.command_audit_log (
-    command,
-    actor_user_id,
-    target_table,
-    target_id,
-    target_version,
-    payload
-  )
-  values (
-    'cmd_dataset_publish',
-    v_actor,
+  v_root := public.cmd_review_get_dataset_row(
     p_table,
     p_id,
     p_version,
-    coalesce(p_audit, '{}'::jsonb)
+    true
   );
 
-  return jsonb_build_object(
-    'ok', true,
-    'data', v_updated_row
+  if v_root is null
+    or nullif(v_root->>'user_id', '')::uuid is distinct from v_actor
+    or coalesce((v_root->>'state_code')::integer, 0) >= 100 then
+    return public.cmd_dataset_publish_issue304_legacy(
+      p_table,
+      p_id,
+      p_version,
+      p_audit
+    );
+  end if;
+
+  if p_table = 'processes' then
+    lock table public.lifecyclemodels in share row exclusive mode;
+  end if;
+
+  v_assertion := public.cmd_review_assert_lifecycle_closure(
+    jsonb_build_array(jsonb_build_object(
+      'table', p_table,
+      'id', p_id,
+      'version', p_version
+    )),
+    'publish',
+    v_actor
+  );
+
+  if v_assertion is not null then
+    return v_assertion;
+  end if;
+
+  return public.cmd_dataset_publish_issue304_legacy(
+    p_table,
+    p_id,
+    p_version,
+    p_audit
   );
 end;
-$_$;
+$$;
 
 ALTER FUNCTION "public"."cmd_dataset_publish"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_audit" "jsonb") OWNER TO "postgres";
 

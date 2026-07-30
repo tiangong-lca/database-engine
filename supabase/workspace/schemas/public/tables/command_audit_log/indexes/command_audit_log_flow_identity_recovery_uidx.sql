@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "command_audit_log_flow_identity_recovery_uidx" ON "public"."command_audit_log" USING "btree" ("actor_user_id", (("payload" ->> 'scope_id'::"text")), (("payload" ->> 'recovery_approval_identity_sha256'::"text"))) WHERE (("command" = 'cmd_dataset_flow_identity_scope_recover_guarded'::"text") AND ("target_table" IS NULL));

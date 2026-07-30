@@ -1,0 +1,1 @@
+CREATE INDEX "contacts_embedding_ft_hnsw_idx" ON "public"."contacts" USING "hnsw" ("embedding_ft" "extensions"."vector_cosine_ops");

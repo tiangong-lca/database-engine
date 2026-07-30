@@ -23,6 +23,8 @@ CREATE TABLE IF NOT EXISTS "public"."lca_package_request_cache" (
 
 ALTER TABLE "public"."lca_package_request_cache" OWNER TO "postgres";
 
+COMMENT ON TABLE "public"."lca_package_request_cache" IS 'Request-level cache for package import/export commands. This is domain cache state backed by worker_jobs, not a task lifecycle/job table.';
+
 ALTER TABLE ONLY "public"."lca_package_request_cache"
     ADD CONSTRAINT "lca_package_request_cache_pkey" PRIMARY KEY ("id");
 
