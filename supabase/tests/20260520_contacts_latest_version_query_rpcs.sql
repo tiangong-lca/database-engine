@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(15);
+select plan(14);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -161,15 +161,8 @@ values (
 
 reset role;
 
-select ok(
-  (
-    select extracted_text
-    from public.contacts
-    where id = '37000000-0000-0000-0000-000000000099'
-      and version = '01.00.000'
-  ) like '%Service role trigger contact%',
-  'service_role direct contact insert can run the extracted_text trigger'
-);
+update public.contacts
+set extracted_md = json::text;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '17000000-0000-0000-0000-000000000001', true);
@@ -281,8 +274,8 @@ select is(
 );
 
 select ok(
-  to_regclass('public.contacts_text_pgroonga') is not null,
-  'contact latest PGroonga search has an extracted_text index'
+  to_regclass('public.contacts_extracted_md_pgroonga') is not null,
+  'contact latest PGroonga search has an extracted_md index'
 );
 
 select ok(
@@ -298,8 +291,8 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'd.extracted_text &@~ $1') > 0,
-  'contact latest PGroonga search matches query_text against extracted_text'
+  strpos(pg_get_functiondef('public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'd.extracted_md &@~ $1') > 0,
+  'contact latest PGroonga search matches query_text against extracted_md'
 );
 
 select ok(

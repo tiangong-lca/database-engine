@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-07-30"
-lastReviewedCommit: "0954eb2ec588076945389e822d31278bd4b5d355"
-lastReviewedNote: "Reviewed for Issue #316: existing migration/test ownership and routes remain correct; the staged write-set fixture verifier is validation tooling rather than a schema-workspace authoring path."
+lastReviewedCommit: "1f6b5d4fa1be214a55257413b188c8af0bb7db5a"
+lastReviewedNote: "Reviewed for Issue #310 after Issue #316 merged: existing ownership and routes remain correct; the staged write-set expansion composes with the Contract migration that retires extracted_text and legacy embedding flags while preserving extracted_md and embedding_ft."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

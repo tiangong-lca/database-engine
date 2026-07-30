@@ -5,12 +5,13 @@ seed files, migrations, or production maintenance scripts.
 
 ## Hybrid-search staging profile
 
-Issue #292 uses a read-only profile against the persistent staging branch. It
+Issues #292 and #310 use a read-only profile against the persistent staging branch. It
 selects deterministic real `state_code = 100` process and Product-flow rows,
 keeps their text and 1024-dimensional embeddings inside SQL, and emits only
 SHA-256 sample identifiers plus `EXPLAIN (ANALYZE, BUFFERS, WAL, SETTINGS)`
 plans. The client and Edge Function defaults are fixed at threshold `0.5`,
-match count `20`, weights `0.3/0.2/0.5`, RRF `10`, and page `10/1`.
+match count `20`, lexical/semantic weights `0.5/0.5`, RRF `10`, and page
+`10/1`.
 
 Run only after independently confirming that the connection is the persistent
 staging ref `fotofiyqnuyvgtotswie` and the issue #292 migration is installed:

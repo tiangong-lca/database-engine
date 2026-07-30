@@ -38,20 +38,20 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.hybrid_search_flows(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'private.semantic_flow_candidates') > 0
-    and strpos(pg_get_functiondef('public.hybrid_search_flows(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.semantic_search_flows_v1') = 0,
+  strpos(pg_get_functiondef('private.hybrid_search_flows_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'private.semantic_flow_candidates') > 0
+    and strpos(pg_get_functiondef('private.hybrid_search_flows_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.semantic_search_flows_v1') = 0,
   'flow hybrid search uses lightweight private semantic candidates'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.hybrid_search_processes(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'private.semantic_process_candidates') > 0
-    and strpos(pg_get_functiondef('public.hybrid_search_processes(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.semantic_search_processes_v1') = 0,
+  strpos(pg_get_functiondef('private.hybrid_search_processes_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'private.semantic_process_candidates') > 0
+    and strpos(pg_get_functiondef('private.hybrid_search_processes_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.semantic_search_processes_v1') = 0,
   'process hybrid search uses lightweight private semantic candidates'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.hybrid_search_lifecyclemodels(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'private.semantic_lifecyclemodel_candidates') > 0
-    and strpos(pg_get_functiondef('public.hybrid_search_lifecyclemodels(text,text,text,double precision,integer,double precision,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.semantic_search_lifecyclemodels_v1') = 0,
+  strpos(pg_get_functiondef('private.hybrid_search_lifecyclemodels_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'private.semantic_lifecyclemodel_candidates') > 0
+    and strpos(pg_get_functiondef('private.hybrid_search_lifecyclemodels_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.semantic_search_lifecyclemodels_v1') = 0,
   'lifecyclemodel hybrid search uses lightweight private semantic candidates'
 );
 
@@ -132,24 +132,17 @@ values
   ('a1000000-0000-0000-0000-000000000111', 'c3000000-0000-0000-0000-000000000111', 'owner');
 
 select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flows_json_sync_trigger');
-select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flow_extract_md_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flow_extract_text_trigger_insert');
 select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flow_dataset_extraction_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'zz_flows_extracted_text_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'processes_json_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_extract_md_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_extract_text_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'zz_processes_extracted_text_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodels_json_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodel_extract_md_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodels_extract_text_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'zz_lifecyclemodels_extracted_text_sync_trigger');
 
 with test_vector(value) as (
   select ('[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']')::vector(1024)
 )
 insert into public.flows (
-  id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, embedding_ft, rule_verification, created_at, modified_at
+  id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, embedding_ft, rule_verification, created_at, modified_at
 )
 select *
 from (
@@ -164,7 +157,7 @@ with test_vector(value) as (
   select ('[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']')::vector(1024)
 )
 insert into public.processes (
-  id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, embedding_ft, rule_verification, created_at, modified_at
+  id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, embedding_ft, rule_verification, created_at, modified_at
 )
 select *
 from (
@@ -179,7 +172,7 @@ with test_vector(value) as (
   select ('[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']')::vector(1024)
 )
 insert into public.lifecyclemodels (
-  id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, embedding_ft, rule_verification, created_at, modified_at
+  id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, embedding_ft, rule_verification, created_at, modified_at
 )
 select *
 from (
@@ -234,7 +227,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_processes('no-text-match-token', (select value from query_vector), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'my', 10, 1) limit 1),
+  (select id::text from public.hybrid_search_processes_v2('no-text-match-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'my', 10, 1) limit 1),
   'e1000000-0000-0000-0000-000000000111',
   'process hybrid search can return a semantic-only my candidate'
 );
@@ -243,7 +236,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_processes('semantic-outsider-process', (select value from query_vector), '{}', 0.5, 20, 0.3, 0.2, 0.5, 10, 'my', 10, 1) limit 1),
+  (select id::text from public.hybrid_search_processes_v2('semantic-outsider-process', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'my', 10, 1) limit 1),
   'e1000000-0000-0000-0000-000000000111',
   'process hybrid my search does not leak outsider semantic candidates even when text query names outsider row'
 );

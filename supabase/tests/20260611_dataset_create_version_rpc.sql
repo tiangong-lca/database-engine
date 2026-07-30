@@ -77,11 +77,7 @@ values
   ('a1000000-0000-0000-0000-000000000002', '{"email":"create-version-other@example.com"}'::jsonb, null);
 
 alter table public.processes disable trigger "process_extract_md_trigger_insert";
-select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_extract_text_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'zz_processes_extracted_text_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodel_extract_md_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodels_extract_text_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'zz_lifecyclemodels_extracted_text_sync_trigger');
 
 insert into public.processes (id, json_ordered, user_id, state_code, rule_verification)
 values
@@ -277,6 +273,8 @@ select is(
   'created json_ordered permanentDataSetURI matches the allocated version'
 );
 
+reset role;
+
 select is(
   (
     select target_version
@@ -289,6 +287,8 @@ select is(
   '01.01.003',
   'command audit log records the allocated target version'
 );
+
+set local role authenticated;
 
 select is(
   public.cmd_dataset_create_version(

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(25);
+select plan(21);
 
 do $$
 begin
@@ -142,21 +142,8 @@ select ok(
   not (select result->'data' ? 'json' from dataset_create_results)
     and not (select result->'data' ? 'json_ordered' from dataset_create_results)
     and not (select result->'data' ? 'embedding_ft' from dataset_create_results)
-    and not (select result->'data' ? 'extracted_md' from dataset_create_results)
-    and not (select result->'data' ? 'extracted_text' from dataset_create_results),
+    and not (select result->'data' ? 'extracted_md' from dataset_create_results),
   'minimal create result does not include heavy json or derived embedding fields'
-);
-
-select ok(
-  (
-    select extracted_text ~ 'Dataset extraction test flow'
-       and extracted_text ~ '数据抽取测试流'
-       and extracted_text ~ 'Datensatz Extraktion Testfluss'
-    from public.flows
-    where id = '97000000-0000-0000-0000-000000000001'
-      and version = '01.00.000'
-  ),
-  'flow create synchronously derives multilingual extracted_text from json'
 );
 
 reset role;
@@ -206,47 +193,6 @@ select is(
   ),
   1,
   'dataset extraction jobs use compact flow identity payloads'
-);
-
-select is(
-  (
-    select count(*)::integer
-    from pg_trigger
-    where tgrelid = 'public.flows'::regclass
-      and tgname in ('flow_extract_md_trigger_insert', 'flow_extract_text_trigger_insert')
-      and not tgisinternal
-  ),
-  0,
-  'old flow INSERT webhook triggers are removed'
-);
-
-select is(
-  (
-    select count(*)::integer
-    from pg_trigger
-    where tgrelid = 'public.flows'::regclass
-      and tgname = 'flow_extract_text_trigger_update'
-      and not tgisinternal
-  ),
-  0,
-  'flow UPDATE text extraction webhook trigger is removed'
-);
-
-select is(
-  (
-    select count(*)::integer
-    from pg_trigger
-    where tgrelid in ('public.processes'::regclass, 'public.lifecyclemodels'::regclass)
-      and tgname in (
-        'process_extract_text_trigger_insert',
-        'process_extract_text_trigger_update',
-        'lifecyclemodels_extract_text_trigger_insert',
-        'lifecyclemodels_extract_text_trigger_update'
-      )
-      and not tgisinternal
-  ),
-  0,
-  'process and lifecyclemodel text extraction webhook triggers are removed'
 );
 
 reset role;

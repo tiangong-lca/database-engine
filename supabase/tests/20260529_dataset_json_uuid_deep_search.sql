@@ -107,7 +107,7 @@ values
   ('a1380000-0000-0000-0000-000000000001', 'c1380000-0000-0000-0000-000000000001', 'owner');
 
 insert into public.flows (
-  id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at
+  id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at
 )
 values
   (
@@ -138,7 +138,7 @@ values
   );
 
 insert into public.processes (
-  id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at
+  id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at
 )
 values
   (
@@ -195,7 +195,7 @@ values
   );
 
 insert into public.lifecyclemodels (
-  id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at
+  id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at
 )
 values (
   'd1380000-0000-0000-0000-000000000010',
@@ -211,7 +211,7 @@ values (
   now()
 );
 
-insert into public.sources (id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at)
+insert into public.sources (id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at)
 values (
   '51380000-0000-0000-0000-000000000001',
   '01.00.000',
@@ -226,7 +226,7 @@ values (
   now()
 );
 
-insert into public.contacts (id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at)
+insert into public.contacts (id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at)
 values (
   'c1380000-0000-0000-0000-000000000010',
   '01.00.000',
@@ -241,7 +241,7 @@ values (
   now()
 );
 
-insert into public.unitgroups (id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at)
+insert into public.unitgroups (id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at)
 values (
   '71380000-0000-0000-0000-000000000001',
   '01.00.000',
@@ -256,7 +256,7 @@ values (
   now()
 );
 
-insert into public.flowproperties (id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at)
+insert into public.flowproperties (id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at)
 values (
   '81380000-0000-0000-0000-000000000001',
   '01.00.000',

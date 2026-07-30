@@ -20,7 +20,7 @@ begin
 end;
 $$;
 
-select plan(21);
+select plan(20);
 
 select ok(
   strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'exact_query_id') > 0,
@@ -43,16 +43,8 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_text &@~| $14') > 0,
-  'flow non-UUID search still uses extracted_text PGroonga through escaped term-array search'
-);
-
-select ok(
-  util.dataset_json_search_text(
-    'flows',
-    '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"common:UUID":"f1320000-0000-0000-0000-000000000001","name":{"baseName":[{"@xml:lang":"en","#text":"UUID Fast Path Flow"}]}}}}}'::jsonb
-  ) !~* 'f1320000-0000-0000-0000-000000000001',
-  'extracted_text generation still filters UUID metadata'
+  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_md &@~| $14') > 0,
+  'flow non-UUID search uses extracted_md PGroonga through escaped term-array search'
 );
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -118,23 +110,15 @@ values
   ('a1320000-0000-0000-0000-000000000001', 'c1320000-0000-0000-0000-000000000001', 'owner');
 
 select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flows_json_sync_trigger');
-select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flow_extract_md_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flow_extract_text_trigger_insert');
 select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'flow_dataset_extraction_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.flows'::regclass, 'zz_flows_extracted_text_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'processes_json_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_extract_md_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_extract_text_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'zz_processes_extracted_text_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodels_json_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodel_extract_md_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodels_extract_text_trigger_insert');
-select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'zz_lifecyclemodels_extracted_text_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.contacts'::regclass, 'contacts_json_sync_trigger');
-select pg_temp.disable_trigger_if_exists('public.contacts'::regclass, 'zz_contacts_extracted_text_sync_trigger');
 
 insert into public.flows (
-  id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at
+  id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at
 )
 values
   ('f1320000-0000-0000-0000-000000000001', '01.00.000', '{"kind":"legacy","search":"uuid-fast-flow-token"}'::jsonb, '{"kind":"legacy","search":"uuid-fast-flow-token"}'::json, 'a1320000-0000-0000-0000-000000000001', 100, null, 'uuid-fast-flow-token legacy', true, now() - interval '2 days', now() - interval '2 days'),
@@ -144,7 +128,7 @@ values
   ('f1320000-0000-0000-0000-000000000004', '01.00.000', '{"kind":"team","search":"uuid-fast-team-flow-token"}'::jsonb, '{"kind":"team","search":"uuid-fast-team-flow-token"}'::json, 'b1320000-0000-0000-0000-000000000001', 0, 'c1320000-0000-0000-0000-000000000001', 'uuid-fast-team-flow-token', true, now(), now());
 
 insert into public.processes (
-  id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at
+  id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at
 )
 values (
   'e1320000-0000-0000-0000-000000000001',
@@ -161,7 +145,7 @@ values (
 );
 
 insert into public.lifecyclemodels (
-  id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at
+  id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at
 )
 values (
   'd1320000-0000-0000-0000-000000000001',
@@ -178,7 +162,7 @@ values (
 );
 
 insert into public.contacts (
-  id, version, json, json_ordered, user_id, state_code, team_id, extracted_text, rule_verification, created_at, modified_at
+  id, version, json, json_ordered, user_id, state_code, team_id, extracted_md, rule_verification, created_at, modified_at
 )
 values
   ('c1320000-0000-0000-0000-000000000101', '01.00.000', '{"search":"uuid-fast-contact-token","contactDataSet":{"contactInformation":{"dataSetInformation":{"common:name":[{"@xml:lang":"en","#text":"Legacy UUID contact"}]}}}}'::jsonb, '{"search":"uuid-fast-contact-token","contactDataSet":{"contactInformation":{"dataSetInformation":{"common:name":[{"@xml:lang":"en","#text":"Legacy UUID contact"}]}}}}'::json, 'a1320000-0000-0000-0000-000000000001', 100, null, 'uuid-fast-contact-token legacy', true, now() - interval '2 days', now() - interval '2 days'),
@@ -203,7 +187,7 @@ select is(
 select is(
   (select count(*) from public.search_flows_latest('f1320000-0000-0000-0000', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '')),
   0::bigint,
-  'flow UUID fragments do not use exact id search and are not in extracted_text'
+  'flow UUID fragments do not use exact id search and are not in extracted_md'
 );
 
 select is(
@@ -281,9 +265,9 @@ select ok(
     select 1
     from public.flows
     where id = 'f1320000-0000-0000-0000-000000000001'
-      and extracted_text ~* 'f1320000-0000-0000-0000-000000000001'
+      and extracted_md ~* 'f1320000-0000-0000-0000-000000000001'
   ),
-  'stored extracted_text fixtures do not need UUIDs for UUID search'
+  'stored extracted_md fixtures do not need UUIDs for UUID search'
 );
 
 select * from finish();

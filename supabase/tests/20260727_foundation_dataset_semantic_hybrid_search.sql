@@ -243,8 +243,7 @@ select is(
       ('public.sources'::regclass, 'sources_set_modified_at_trigger'),
       ('public.unitgroups'::regclass, 'unitgroups_set_modified_at_trigger')
     ) expected(table_oid, trigger_name)
-    where pg_temp.trigger_update_columns(expected.table_oid, expected.trigger_name) not like '%extracted_text%'
-      and pg_temp.trigger_update_columns(expected.table_oid, expected.trigger_name) not like '%extracted_md%'
+    where pg_temp.trigger_update_columns(expected.table_oid, expected.trigger_name) not like '%extracted_md%'
       and pg_temp.trigger_update_columns(expected.table_oid, expected.trigger_name) not like '%embedding_ft%'
       and pg_temp.trigger_update_columns(expected.table_oid, expected.trigger_name) not like '%embedding_ft_at%'
   ),
@@ -322,14 +321,14 @@ select is(
     join pg_namespace namespace on namespace.oid = routine.pronamespace
     where namespace.nspname = 'public'
       and routine.proname in (
-        'hybrid_search_contacts',
-        'hybrid_search_flowproperties',
-        'hybrid_search_sources',
-        'hybrid_search_unitgroups'
+        'hybrid_search_contacts_v2',
+        'hybrid_search_flowproperties_v2',
+        'hybrid_search_sources_v2',
+        'hybrid_search_unitgroups_v2'
       )
   ),
   4,
-  'four public Hybrid Search RPCs exist'
+  'four public Hybrid Search v2 RPCs exist'
 );
 
 select ok(
@@ -414,16 +413,16 @@ with test_vector(value) as (
 )
 insert into public.contacts (
   id, version, json, json_ordered, user_id, state_code, team_id,
-  extracted_text, extracted_md, embedding_ft, embedding_ft_at, modified_at
+  extracted_md, embedding_ft, embedding_ft_at, modified_at
 )
 select * from (
-  select 'ca000000-0000-0000-0000-000000000101'::uuid, '01.00.000'::character(9), '{"name":"public-contact-token"}'::jsonb, null::json, null::uuid, 100, null::uuid, 'public-contact-token'::text, '# Contact public-contact-token'::text, test_vector.value, now(), now() from test_vector
+  select 'ca000000-0000-0000-0000-000000000101'::uuid, '01.00.000'::character(9), '{"name":"public-contact-token"}'::jsonb, null::json, null::uuid, 100, null::uuid, '# Contact public-contact-token'::text, test_vector.value, now(), now() from test_vector
   union all
-  select 'ca000000-0000-0000-0000-000000000201'::uuid, '01.00.000'::character(9), '{"name":"owner-contact-token"}'::jsonb, null::json, 'a1000000-0000-0000-0000-000000000297'::uuid, 0, null::uuid, 'owner-contact-token'::text, '# Contact owner-contact-token'::text, test_vector.value, now(), now() from test_vector
+  select 'ca000000-0000-0000-0000-000000000201'::uuid, '01.00.000'::character(9), '{"name":"owner-contact-token"}'::jsonb, null::json, 'a1000000-0000-0000-0000-000000000297'::uuid, 0, null::uuid, '# Contact owner-contact-token'::text, test_vector.value, now(), now() from test_vector
   union all
-  select 'ca000000-0000-0000-0000-000000000202'::uuid, '01.00.000'::character(9), '{"name":"team-contact-token"}'::jsonb, null::json, 'b2000000-0000-0000-0000-000000000297'::uuid, 0, 'c3000000-0000-0000-0000-000000000297'::uuid, 'team-contact-token'::text, '# Contact team-contact-token'::text, test_vector.value, now(), now() from test_vector
+  select 'ca000000-0000-0000-0000-000000000202'::uuid, '01.00.000'::character(9), '{"name":"team-contact-token"}'::jsonb, null::json, 'b2000000-0000-0000-0000-000000000297'::uuid, 0, 'c3000000-0000-0000-0000-000000000297'::uuid, '# Contact team-contact-token'::text, test_vector.value, now(), now() from test_vector
   union all
-  select 'ca000000-0000-0000-0000-000000000203'::uuid, '01.00.000'::character(9), '{"name":"outsider-contact-token"}'::jsonb, null::json, 'b2000000-0000-0000-0000-000000000297'::uuid, 0, null::uuid, 'outsider-contact-token'::text, '# Contact outsider-contact-token'::text, test_vector.value, now(), now() from test_vector
+  select 'ca000000-0000-0000-0000-000000000203'::uuid, '01.00.000'::character(9), '{"name":"outsider-contact-token"}'::jsonb, null::json, 'b2000000-0000-0000-0000-000000000297'::uuid, 0, null::uuid, '# Contact outsider-contact-token'::text, test_vector.value, now(), now() from test_vector
 ) rows;
 
 with test_vector(value) as (
@@ -431,10 +430,10 @@ with test_vector(value) as (
 )
 insert into public.flowproperties (
   id, version, json, json_ordered, user_id, state_code, team_id,
-  extracted_text, extracted_md, embedding_ft, embedding_ft_at, modified_at
+  extracted_md, embedding_ft, embedding_ft_at, modified_at
 )
 select 'fb000000-0000-0000-0000-000000000101', '01.00.000', '{"name":"public-flowproperty-token"}', null, null, 100, null,
-       'public-flowproperty-token', '# Flow property public-flowproperty-token', test_vector.value, now(), now()
+       '# Flow property public-flowproperty-token', test_vector.value, now(), now()
 from test_vector;
 
 with test_vector(value) as (
@@ -442,10 +441,10 @@ with test_vector(value) as (
 )
 insert into public.sources (
   id, version, json, json_ordered, user_id, state_code, team_id,
-  extracted_text, extracted_md, embedding_ft, embedding_ft_at, modified_at
+  extracted_md, embedding_ft, embedding_ft_at, modified_at
 )
 select '5a000000-0000-0000-0000-000000000101', '01.00.000', '{"name":"public-source-token"}', null, null, 100, null,
-       'public-source-token', '# Source public-source-token', test_vector.value, now(), now()
+       '# Source public-source-token', test_vector.value, now(), now()
 from test_vector;
 
 with test_vector(value) as (
@@ -453,10 +452,10 @@ with test_vector(value) as (
 )
 insert into public.unitgroups (
   id, version, json, json_ordered, user_id, state_code, team_id,
-  extracted_text, extracted_md, embedding_ft, embedding_ft_at, modified_at
+  extracted_md, embedding_ft, embedding_ft_at, modified_at
 )
 select 'a1000000-0000-0000-0000-000000000101', '01.00.000', '{"name":"public-unitgroup-token"}', null, null, 100, null,
-       'public-unitgroup-token', '# Unit group public-unitgroup-token', test_vector.value, now(), now()
+       '# Unit group public-unitgroup-token', test_vector.value, now(), now()
 from test_vector;
 
 with query_vector(value) as (

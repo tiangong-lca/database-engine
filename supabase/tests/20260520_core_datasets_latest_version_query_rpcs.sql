@@ -252,15 +252,15 @@ values
   );
 
 update public.flows
-   set extracted_text = json->>'search'
+   set extracted_md = json->>'search'
  where id in ('47000000-0000-0000-0000-000000000001', '47000000-0000-0000-0000-000000000002');
 
 update public.processes
-   set extracted_text = json->>'search'
+   set extracted_md = json->>'search'
  where id in ('48000000-0000-0000-0000-000000000001', '48000000-0000-0000-0000-000000000002');
 
 update public.lifecyclemodels
-   set extracted_text = json->>'search'
+   set extracted_md = json->>'search'
  where id in ('49000000-0000-0000-0000-000000000001', '49000000-0000-0000-0000-000000000002');
 
 set local role authenticated;
@@ -310,7 +310,7 @@ select is(
 );
 
 select is(
-  (select version::text from public.hybrid_search_flows('legacy-flow-token', (select value from latest_zero_embedding), '{}', 0.1, 20, 0.3, 0.2, 0.5, 10, 'tg', 10, 1) where id = '47000000-0000-0000-0000-000000000001'),
+  (select version::text from public.hybrid_search_flows_v2('legacy-flow-token', (select value from latest_zero_embedding), '{}', 0.1, 20, 0.5, 0.5, 10, 'tg', 10, 1) where id = '47000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'flow hybrid search returns the highest visible version for a matching UUID'
 );
@@ -341,7 +341,7 @@ select is(
 );
 
 select is(
-  (select version::text from public.hybrid_search_processes('legacy-process-token', (select value from latest_zero_embedding), '{}', 0.1, 20, 0.3, 0.2, 0.5, 10, 'tg', 10, 1) where id = '48000000-0000-0000-0000-000000000001'),
+  (select version::text from public.hybrid_search_processes_v2('legacy-process-token', (select value from latest_zero_embedding), '{}', 0.1, 20, 0.5, 0.5, 10, 'tg', 10, 1) where id = '48000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'process hybrid search returns the highest visible version for a matching UUID'
 );
@@ -378,7 +378,7 @@ select is(
 );
 
 select is(
-  (select version::text from public.hybrid_search_lifecyclemodels('legacy-lifecycle-token', (select value from latest_zero_embedding), '{}', 0.1, 20, 0.3, 0.2, 0.5, 10, 'tg', 10, 1) where id = '49000000-0000-0000-0000-000000000001'),
+  (select version::text from public.hybrid_search_lifecyclemodels_v2('legacy-lifecycle-token', (select value from latest_zero_embedding), '{}', 0.1, 20, 0.5, 0.5, 10, 'tg', 10, 1) where id = '49000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'lifecyclemodel hybrid search returns the highest visible version for a matching UUID'
 );
@@ -437,8 +437,8 @@ select ok(
 );
 
 select ok(
-  to_regclass('public.flows_text_pgroonga') is not null,
-  'flow latest PGroonga search keeps the extracted_text index'
+  to_regclass('public.flows_extracted_md_pgroonga') is not null,
+  'flow latest PGroonga search keeps the extracted_md index'
 );
 
 select ok(
@@ -452,8 +452,8 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_text &@~| $14') > 0,
-  'flow latest PGroonga search matches escaped query terms against extracted_text'
+  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_md &@~| $14') > 0,
+  'flow latest PGroonga search matches escaped query terms against extracted_md'
 );
 
 select ok(
@@ -472,8 +472,8 @@ select ok(
 );
 
 select ok(
-  to_regclass('public.processes_text_pgroonga') is not null,
-  'process latest PGroonga search keeps the extracted_text index'
+  to_regclass('public.processes_extracted_md_pgroonga') is not null,
+  'process latest PGroonga search keeps the extracted_md index'
 );
 
 select ok(
@@ -487,8 +487,8 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'p.extracted_text &@~| $11') > 0,
-  'process latest PGroonga search matches escaped query terms against extracted_text'
+  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'p.extracted_md &@~| $11') > 0,
+  'process latest PGroonga search matches escaped query terms against extracted_md'
 );
 
 select ok(
@@ -507,8 +507,8 @@ select ok(
 );
 
 select ok(
-  to_regclass('public.lifecyclemodels_text_pgroonga') is not null,
-  'lifecyclemodel latest PGroonga search keeps the extracted_text index'
+  to_regclass('public.lifecyclemodels_extracted_md_pgroonga') is not null,
+  'lifecyclemodel latest PGroonga search keeps the extracted_md index'
 );
 
 select ok(
@@ -522,8 +522,8 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'l.extracted_text &@~| $10') > 0,
-  'lifecyclemodel latest PGroonga search matches escaped query terms against extracted_text'
+  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'l.extracted_md &@~| $10') > 0,
+  'lifecyclemodel latest PGroonga search matches escaped query terms against extracted_md'
 );
 
 select ok(

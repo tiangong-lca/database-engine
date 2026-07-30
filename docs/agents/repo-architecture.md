@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-30
-lastReviewedCommit: 0954eb2ec588076945389e822d31278bd4b5d355
-lastReviewedNote: "Reviewed for Issue #316: versioned staged headers, bounded descriptor batches, locator-free recovery, and atomic seal extend DB-first publication while the one-shot v1 adapter remains during consumer migration."
+lastReviewedCommit: 1f6b5d4fa1be214a55257413b188c8af0bb7db5a
+lastReviewedNote: "Reviewed for Issue #310 after Issue #316 merged: versioned staged write sets remain additive and compatible with the Contract retirement of extracted_text, legacy embedding flags/timestamps, dual lexical weights, and orphaned rule-based helpers while extracted_md and embedding_ft remain authoritative."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -116,15 +116,20 @@ lexical document and as the source for backpressured 1024-dimensional
 `embedding_ft` jobs. PGroonga indexes cover `extracted_md` for Process, Flow,
 LifecycleModel, Contact, FlowProperty, Source, and UnitGroup search. Hybrid v2
 RPCs expose one `lexical_weight`; the old two-weight signatures remain only as
-an Expand-phase compatibility surface and do not represent two lexical
-branches. On the hosted branch, standard `idx_scan` statistics and the
+an historical Expand-phase compatibility surface and do not represent two
+lexical branches. The Contract migration retires those signatures after all
+consumers have moved to v2. On the hosted branch, standard `idx_scan` statistics and the
 Performance Advisor may continue to report a PGroonga index as unused after a
 query plan has used it; a direct `EXPLAIN (ANALYZE, BUFFERS)` naming the index is
 the required cross-check before any retention decision. After Edge and Next
-have cut over and staging evidence is complete, a separate Contract migration
-may remove the legacy RPC signatures,
-`extracted_text` triggers/functions/indexes/columns, and the retired LLM
-webhook database objects with explicit dependency checks.
+consumer cutover, the fail-closed Contract migration removes the legacy RPC
+signatures, seven `extracted_text` columns/triggers/indexes, the rule-based text
+projection/backfill helpers, three `embedding_flag` columns, three legacy
+`embedding_at` columns, and the obsolete embedding-input/generation routines.
+It refuses to run while a guarded derivative rebuild or non-FT embedding job is
+active and uses `RESTRICT` for dependency-sensitive drops. `extracted_md`,
+`embedding_ft`, `embedding_ft_at`, their seven PGroonga indexes, and their HNSW
+indexes remain the supported derivative contract.
 
 Contacts, FlowProperties, Sources, and UnitGroups otherwise follow the same
 durable search-derivative shape as the established Process, Flow, and

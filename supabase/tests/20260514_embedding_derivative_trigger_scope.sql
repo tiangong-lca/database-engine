@@ -83,24 +83,21 @@ select ok(
 
 select ok(
   pg_temp.trigger_update_columns('public.flows'::regclass, 'flows_set_modified_at_trigger') not like '%embedding_ft%'
-  and pg_temp.trigger_update_columns('public.flows'::regclass, 'flows_set_modified_at_trigger') not like '%embedding_at%'
-  and pg_temp.trigger_update_columns('public.flows'::regclass, 'flows_set_modified_at_trigger') not like '%extracted_text%'
+  and pg_temp.trigger_update_columns('public.flows'::regclass, 'flows_set_modified_at_trigger') not like '%embedding_ft_at%'
   and pg_temp.trigger_update_columns('public.flows'::regclass, 'flows_set_modified_at_trigger') not like '%extracted_md%',
   'flows modified_at skips derived embedding and extraction columns'
 );
 
 select ok(
   pg_temp.trigger_update_columns('public.lifecyclemodels'::regclass, 'lifecyclemodels_set_modified_at_trigger') not like '%embedding_ft%'
-  and pg_temp.trigger_update_columns('public.lifecyclemodels'::regclass, 'lifecyclemodels_set_modified_at_trigger') not like '%embedding_at%'
-  and pg_temp.trigger_update_columns('public.lifecyclemodels'::regclass, 'lifecyclemodels_set_modified_at_trigger') not like '%extracted_text%'
+  and pg_temp.trigger_update_columns('public.lifecyclemodels'::regclass, 'lifecyclemodels_set_modified_at_trigger') not like '%embedding_ft_at%'
   and pg_temp.trigger_update_columns('public.lifecyclemodels'::regclass, 'lifecyclemodels_set_modified_at_trigger') not like '%extracted_md%',
   'lifecyclemodels modified_at skips derived embedding and extraction columns'
 );
 
 select ok(
   pg_temp.trigger_update_columns('public.processes'::regclass, 'processes_set_modified_at_trigger') not like '%embedding_ft%'
-  and pg_temp.trigger_update_columns('public.processes'::regclass, 'processes_set_modified_at_trigger') not like '%embedding_at%'
-  and pg_temp.trigger_update_columns('public.processes'::regclass, 'processes_set_modified_at_trigger') not like '%extracted_text%'
+  and pg_temp.trigger_update_columns('public.processes'::regclass, 'processes_set_modified_at_trigger') not like '%embedding_ft_at%'
   and pg_temp.trigger_update_columns('public.processes'::regclass, 'processes_set_modified_at_trigger') not like '%extracted_md%',
   'processes modified_at skips derived embedding and extraction columns'
 );

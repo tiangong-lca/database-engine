@@ -605,7 +605,7 @@ alter table public.processes disable trigger user;
 
 insert into public.flows (
   id, version, user_id, state_code, json, json_ordered, modified_at,
-  extracted_text, extracted_md
+  extracted_md
 )
 select
   entry.id,
@@ -615,7 +615,6 @@ select
   pg_temp.preview_flow_identity_flow_payload(entry.id, entry.name),
   pg_temp.preview_flow_identity_flow_payload(entry.id, entry.name)::json,
   config.fixture_modified_at,
-  entry.name || ' text',
   entry.name || ' markdown'
 from pg_temp.preview_flow_identity_fixture_config as config
 cross join lateral (
@@ -630,7 +629,7 @@ cross join lateral (
 
 insert into public.flows (
   id, version, user_id, state_code, json, json_ordered, modified_at,
-  extracted_text, extracted_md
+  extracted_md
 )
 select
   pg_temp.preview_flow_identity_uuid('orphan/' || ordinal),
@@ -646,14 +645,13 @@ select
     'Protected orphan ' || ordinal
   )::json,
   config.fixture_modified_at,
-  'Protected orphan ' || ordinal || ' text',
   'Protected orphan ' || ordinal || ' markdown'
 from pg_temp.preview_flow_identity_fixture_config as config
 cross join generate_series(1, 303) as ordinal;
 
 insert into public.processes (
   id, version, user_id, state_code, json, json_ordered, modified_at,
-  extracted_text, extracted_md, model_id, rule_verification
+  extracted_md, model_id, rule_verification
 )
 select
   pg_temp.preview_flow_identity_uuid('process/' || ordinal),
@@ -669,7 +667,6 @@ select
     'Step 3 Preview process ' || ordinal
   )::json,
   config.fixture_modified_at,
-  'Step 3 Preview process ' || ordinal || ' text',
   'Step 3 Preview process ' || ordinal || ' markdown',
   null,
   null
