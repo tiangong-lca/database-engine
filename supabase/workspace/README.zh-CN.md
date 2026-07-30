@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-29
-lastReviewedCommit: 0f41fb08fb0874caefc2c8054822d928504f4c61
-lastReviewedNote: "已为 Issue #308 复核：直接 migration 与 populated upgrade harness 不改变生成 workspace 和稳定人工 overlay 的边界。"
+lastReviewedAt: 2026-07-30
+lastReviewedCommit: 0954eb2ec588076945389e822d31278bd4b5d355
+lastReviewedNote: "已为 Issue #316 复核：直接 migration 与 staged write-set fixture 校验脚本不改变生成 workspace 和稳定人工 overlay 的边界。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
