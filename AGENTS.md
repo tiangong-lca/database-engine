@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-30
-lastReviewedCommit: 0954eb2ec588076945389e822d31278bd4b5d355
-lastReviewedNote: "Reviewed for Issue #310 Contract cleanup: database ownership, dev-first delivery, and workspace integration remain unchanged; the migration removes extracted_text and legacy embedding flags while preserving the extracted_md and embedding_ft derivative chain."
+lastReviewedCommit: 1f6b5d4fa1be214a55257413b188c8af0bb7db5a
+lastReviewedNote: "Reviewed for Issue #310 after Issue #316 merged: database ownership, dev-first delivery, Preview-before-promotion ordering, and later workspace integration remain unchanged; the staged write-set expansion composes with removal of extracted_text and legacy embedding flags while preserving extracted_md and embedding_ft."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
