@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-30
-lastReviewedCommit: ebbb7364186783d1491a4ab5e18d9c1002ed8992
-lastReviewedNote: "Reviewed for Issue #310 generated-workspace closure: database ownership, migration source-of-truth, dev-first delivery, and workspace integration remain unchanged; CLI-local reconstruction affects only disposable generated inspection output and requires hosted parity proof."
+lastReviewedAt: 2026-07-31
+lastReviewedCommit: bb97b3d1064656f6d519d07e1b4efeb3bc8df026
+lastReviewedNote: "Reviewed for Issue #324 Flow derivative fence narrowing: database ownership, migration source-of-truth, dev-first delivery, and workspace integration remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
