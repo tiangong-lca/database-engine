@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-31
-lastReviewedCommit: bb97b3d1064656f6d519d07e1b4efeb3bc8df026
-lastReviewedNote: "Reviewed for Issues #324 and #323: retain the focused busy-actor Flow derivative-fence proof and complete identity/rebuild regressions, while adding Root/Reference Review v2 pgTAP plus local backup, restore, dry-run, one-row migration, and reconciliation rehearsal before any hosted cutover."
+lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
+lastReviewedNote: "Reviewed through Issues #323, #324, and #329: retain Flow identity/rebuild and Root/Reference Review backup/cutover proofs; the existing #308/#316 scope-closure matrix remains authoritative and is executed by isolated owner adapters."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -132,6 +132,7 @@ create temporary table issue_316_context (
 create temporary table issue_316_scale_metrics (
   label text primary key,
   descriptor_count integer not null,
+  descriptor_bytes bigint not null,
   batch_size integer not null,
   request_count integer not null,
   registered_row_count integer not null,
@@ -530,6 +531,7 @@ begin
   insert into issue_316_scale_metrics (
     label,
     descriptor_count,
+    descriptor_bytes,
     batch_size,
     request_count,
     registered_row_count,
@@ -540,6 +542,7 @@ begin
   ) values (
     p_label,
     p_count,
+    octet_length(convert_to(v_context.descriptors::text, 'UTF8')),
     p_batch_size,
     v_requests,
     v_registered_rows,
@@ -1348,6 +1351,7 @@ select diag(
   'issue-316 scale metrics: ' || coalesce(jsonb_agg(jsonb_build_object(
     'scenario', label,
     'descriptorCount', descriptor_count,
+    'descriptorBytes', descriptor_bytes,
     'batchSize', batch_size,
     'requestCount', request_count,
     'rowCount', registered_row_count,

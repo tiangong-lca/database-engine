@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-31
-lastReviewedCommit: bb97b3d1064656f6d519d07e1b4efeb3bc8df026
-lastReviewedNote: "Reviewed for Issues #324 and #323: schema truth remains migration-owned; the narrowed Flow derivative fence stays within the guarded identity hotspot, while shared exact-reference reviews and append-only Root scope history extend the review workflow without changing repo ownership or generated-workspace boundaries."
+lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
+lastReviewedNote: "Reviewed through Issues #323, #324, and #329: schema truth remains migration-owned; the narrowed Flow fence and Root/Reference Review workflow preserve ownership and generated-workspace boundaries, while isolated provider evidence stays script-owned."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
