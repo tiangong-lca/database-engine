@@ -65,8 +65,10 @@ python scripts/run_database_contract.py --suite canonical-local
 It classifies every test asset, excludes benchmark/fixture/Preview/upgrade
 harnesses from pgTAP, fails on unexpected lint errors even when the Supabase CLI
 would exit zero, and checks catalog plus generated-workspace drift. Worker
-control-plane changes additionally run `--suite worker-control-plane` and
-`python scripts/test_worker_control_plane_upgrade.py`.
+control-plane changes additionally run `--suite worker-control-plane`,
+`python scripts/test_worker_control_plane_upgrade.py`, and—after a clean reset—
+`python scripts/test_worker_control_plane_data_api.py` to prove the final
+PostgREST cache exposes the service RPCs while anonymous calls fail closed.
 
 The canonical green suite currently runs 56 top-level files. Nineteen stale
 top-level files are visible, reasoned exclusions—not passes—and are tracked for

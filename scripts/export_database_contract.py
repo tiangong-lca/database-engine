@@ -22,6 +22,11 @@ with contract as (
       from pg_class c join pg_namespace n on n.oid=c.relnamespace
       where n.nspname in ('public','private','util','archive') and c.relkind in ('r','p','v','m','S')
     ) q),
+    'indexes', (select coalesce(jsonb_agg(to_jsonb(x) order by schemaname,tablename,indexname), '[]') from (
+      select schemaname,tablename,indexname,indexdef
+      from pg_indexes
+      where schemaname in ('public','private','util','archive')
+    ) x),
     'policies', (select coalesce(jsonb_agg(to_jsonb(x) order by schemaname,tablename,policyname), '[]') from (
       select schemaname,tablename,policyname,permissive,roles,cmd,qual,with_check from pg_policies
       where schemaname in ('public','private','util','archive')

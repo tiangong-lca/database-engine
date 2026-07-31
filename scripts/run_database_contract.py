@@ -95,6 +95,7 @@ def main() -> int:
     if not args.skip_reset:
         run(["supabase", "db", "reset", "--local"])
     run(["supabase", "test", "db", *files, "--local"])
+    run([sys.executable, "scripts/test_worker_control_plane_data_api.py"])
     if not args.skip_lint:
         # CLI defaults to exit zero even when it prints ERROR diagnostics.
         check_lint()
