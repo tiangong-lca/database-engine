@@ -231,6 +231,28 @@ Internal shared module used by the scripts above.
 
 It is not intended to be the primary entry point for routine command-line use.
 
+### `run_database_contract.py`
+
+Runs the checked-in fail-closed local database manifest. It rejects unclassified
+test assets, keeps Preview/upgrade/fixture/benchmark assets out of the canonical
+pgTAP suite, checks the exact reviewed lint-error baseline, and verifies the
+stable catalog hash and generated-workspace cleanliness.
+
+```bash
+python scripts/run_database_contract.py --suite canonical-local
+python scripts/run_database_contract.py --suite worker-control-plane
+```
+
+### `test_worker_control_plane_upgrade.py`
+
+Runs the populated `20260731124000` base-to-head Worker Expand proof, including
+in-transaction failure injection, rollback residue checks, and idempotent retry.
+It is local-only and resets the currently selected local Supabase project.
+
+```bash
+python scripts/test_worker_control_plane_upgrade.py
+```
+
 ### `test_scope_closure_staged_write_set_v2_fixture.sh`
 
 Validates the byte-shared Worker/database staged write-set v2 fixture, including

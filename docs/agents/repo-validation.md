@@ -56,6 +56,24 @@ supabase db reset
 supabase migration list
 ```
 
+The checked-in canonical entry point is:
+
+```bash
+python scripts/run_database_contract.py --suite canonical-local
+```
+
+It classifies every test asset, excludes benchmark/fixture/Preview/upgrade
+harnesses from pgTAP, fails on unexpected lint errors even when the Supabase CLI
+would exit zero, and checks catalog plus generated-workspace drift. Worker
+control-plane changes additionally run `--suite worker-control-plane` and
+`python scripts/test_worker_control_plane_upgrade.py`.
+
+The canonical green suite currently runs 56 top-level files. Nineteen stale
+top-level files are visible, reasoned exclusions—not passes—and are tracked for
+repair or explicit retirement in
+`tiangong-lca/database-engine#336`. A green canonical result must not be
+reported as those 19 files passing.
+
 ## Proof Matrix
 
 | Change type | Minimum local proof | Stronger proof when risk is higher | Notes |
