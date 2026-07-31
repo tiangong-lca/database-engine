@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-30
-lastReviewedCommit: 4c7e52d315d02444372d6e1978af33e4ede470c7
-lastReviewedNote: "已为 Issue #310 的生成 workspace 收口复核：本地导出与重建改用 Supabase CLI 原生 local 路径；远程 dev 仍是权威目标，本地产物提交前必须有托管迁移一致性证据。"
+lastReviewedAt: 2026-07-31
+lastReviewedCommit: bb97b3d1064656f6d519d07e1b4efeb3bc8df026
+lastReviewedNote: "已为 Issue #323 的 Root/Reference Review v2 复核：补充本地加密备份、恢复验证标记、dry-run 清单和逐条迁移入口，既有 workspace 生成边界不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -33,7 +33,7 @@ related:
 
 # Scripts
 
-这个目录包含用于远程 schema 导出、workspace 刷新、修改复制和 migration 生成的命令行脚本。
+这个目录包含用于远程 schema 导出、workspace 刷新、修改复制、migration 生成和受控数据迁移的命令行脚本。
 
 ## 目录结构
 
@@ -58,6 +58,37 @@ python scripts/data_migrations/tidas_schema_202606/runner.py plan --environment 
 ```
 
 完整命令面和安全说明见 `scripts/data_migrations/tidas_schema_202606/README.md`。
+
+### `data_migrations/root_reference_review_v2_local.sh`
+
+用于在 Root/Reference Review v2 切换前创建本地加密备份，并由操作员逐条迁移存量审核。
+
+备份内容包括完整 custom-format dump、审核相关表 dump，以及七类业务表中受影响的数据行。备份目录必须位于 Git 工作树之外。只有操作员已独立验证恢复能力、确认第二份本地副本并生成 dry-run 清单后，`apply` 才会解锁。
+
+用法：
+
+```bash
+DATABASE_URL='postgresql://...' \
+REVIEW_BACKUP_PASSWORD_FILE='<本地密码文件的绝对路径>' \
+scripts/data_migrations/root_reference_review_v2_local.sh backup \
+  '/absolute/path/review-v2-backup'
+
+DATABASE_URL='postgresql://...' \
+scripts/data_migrations/root_reference_review_v2_local.sh dry-run \
+  '/absolute/path/review-v2-backup'
+
+DATABASE_URL='postgresql://...' \
+scripts/data_migrations/root_reference_review_v2_local.sh verify \
+  '/absolute/path/review-v2-backup'
+
+DATABASE_URL='postgresql://...' \
+scripts/data_migrations/root_reference_review_v2_local.sh apply \
+  '/absolute/path/review-v2-backup'
+```
+
+操作员只能在真实完成恢复验证和第二份本地副本验证后，创建
+`RESTORE_VERIFIED` 与 `SECOND_LOCAL_COPY_VERIFIED` 标记。不得把密码文件、
+加密备份、标记文件或迁移清单提交到 Git。
 
 ### `export_remote_schema.py`
 

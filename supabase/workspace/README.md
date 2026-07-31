@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-30
-lastReviewedCommit: 4c7e52d315d02444372d6e1978af33e4ede470c7
-lastReviewedNote: "Reviewed for Issue #310 generated-workspace closure: generated and stable-overlay boundaries remain unchanged; the local reconstruction path is now explicit and requires hosted parity evidence before commit."
+lastReviewedAt: 2026-07-31
+lastReviewedCommit: bb97b3d1064656f6d519d07e1b4efeb3bc8df026
+lastReviewedNote: "Reviewed for Issue #323 Root/Reference Review v2: generated and stable-overlay boundaries remain unchanged; review migrations and the local cutover runner do not make generated workspace paths authoritative."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

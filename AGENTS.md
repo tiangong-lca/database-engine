@@ -36,7 +36,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-31
 lastReviewedCommit: bb97b3d1064656f6d519d07e1b4efeb3bc8df026
-lastReviewedNote: "Reviewed for Issue #324 Flow derivative fence narrowing: database ownership, migration source-of-truth, dev-first delivery, and workspace integration remain unchanged."
+lastReviewedNote: "Reviewed for Issues #324 and #323: database ownership, migration source-of-truth, dev-first delivery, and workspace integration remain unchanged; the Flow derivative fence remains narrowly scoped, while the Root/Reference Review v2 contract is owned by migrations/tests and its local cutover runner by scripts/data_migrations."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

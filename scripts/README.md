@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-30
-lastReviewedCommit: 4c7e52d315d02444372d6e1978af33e4ede470c7
-lastReviewedNote: "Reviewed for Issue #310 generated-workspace closure: local export and rebuild now use the Supabase CLI-native local path; remote dev remains canonical and local output requires hosted parity evidence before commit."
+lastReviewedAt: 2026-07-31
+lastReviewedCommit: bb97b3d1064656f6d519d07e1b4efeb3bc8df026
+lastReviewedNote: "Reviewed for Issue #323 Root/Reference Review v2: document the local encrypted backup, restore markers, dry-run manifest, and operator-controlled one-review-at-a-time migration entrypoint."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -33,7 +33,7 @@ related:
 
 # Scripts
 
-This directory contains the command-line helpers used for remote schema export, workspace refresh, change-copying, and migration generation.
+This directory contains the command-line helpers used for remote schema export, workspace refresh, change-copying, migration generation, and controlled data migrations.
 
 ## Layout
 
@@ -58,6 +58,41 @@ python scripts/data_migrations/tidas_schema_202606/runner.py plan --environment 
 ```
 
 See `scripts/data_migrations/tidas_schema_202606/README.md` for the complete command surface and safety notes.
+
+### `data_migrations/root_reference_review_v2_local.sh`
+
+Creates the local encrypted backup and performs the operator-controlled legacy
+review migration for the Root/Reference Review v2 cutover.
+
+The backup includes a full custom-format dump, a review-table dump, and only
+affected rows from the seven business tables. It must be stored outside the Git
+worktree. `apply` remains locked until the operator has completed an independent
+restore check, verified a second local copy, and generated the dry-run manifest.
+
+Usage:
+
+```bash
+DATABASE_URL='postgresql://...' \
+REVIEW_BACKUP_PASSWORD_FILE='<absolute-path-to-local-password-file>' \
+scripts/data_migrations/root_reference_review_v2_local.sh backup \
+  '/absolute/path/review-v2-backup'
+
+DATABASE_URL='postgresql://...' \
+scripts/data_migrations/root_reference_review_v2_local.sh dry-run \
+  '/absolute/path/review-v2-backup'
+
+DATABASE_URL='postgresql://...' \
+scripts/data_migrations/root_reference_review_v2_local.sh verify \
+  '/absolute/path/review-v2-backup'
+
+DATABASE_URL='postgresql://...' \
+scripts/data_migrations/root_reference_review_v2_local.sh apply \
+  '/absolute/path/review-v2-backup'
+```
+
+The operator must create `RESTORE_VERIFIED` and
+`SECOND_LOCAL_COPY_VERIFIED` only after those checks actually pass. Never
+commit the password file, encrypted backup, markers, or migration manifest.
 
 ### `export_remote_schema.py`
 
