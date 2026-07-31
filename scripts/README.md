@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-19
-lastReviewedCommit: fb17729e9a57196977aee60d552af934fbfdcc55
-lastReviewedNote: "Reviewed after an exact CI-equivalent five-schema workspace rebuild; the script catalog and invocation contract remain unchanged."
+lastReviewedAt: 2026-08-20
+lastReviewedCommit: c9cfa90dc541b3ac1bd33690dedce65b55fb79d2
+lastReviewedNote: "Reviewed for Issue #327 canonical active-fence naming; the exact-local workspace rebuild command and script invocation contract remain unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

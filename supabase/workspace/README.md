@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-19
-lastReviewedCommit: fb17729e9a57196977aee60d552af934fbfdcc55
-lastReviewedNote: "Restored and reviewed the exact-local workspace for the CI-authoritative public, api, private, util, and archive schemas; deterministic generation behavior is unchanged."
+lastReviewedAt: 2026-08-20
+lastReviewedCommit: c9cfa90dc541b3ac1bd33690dedce65b55fb79d2
+lastReviewedNote: "Reviewed for Issue #327 canonical active-fence naming; the CI-authoritative five-schema exact-local generation behavior remains unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -29217,7 +29217,7 @@ COMMENT ON FUNCTION "private"."dataset_alias_jsonb_array_v1"("p_value" "jsonb") 
 
 
 
-CREATE OR REPLACE FUNCTION "private"."dataset_flow_identity_active_fence_v2"() RETURNS "trigger"
+CREATE OR REPLACE FUNCTION "private"."dataset_flow_identity_active_fence"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -29517,7 +29517,7 @@ end;
 $$;
 
 
-ALTER FUNCTION "private"."dataset_flow_identity_active_fence_v2"() OWNER TO "postgres";
+ALTER FUNCTION "private"."dataset_flow_identity_active_fence"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "private"."dataset_flow_identity_build_flow_guard_v2"("p_actor" "uuid", "p_endpoint" "jsonb", "p_target" boolean) RETURNS "jsonb"
@@ -56736,7 +56736,7 @@ CREATE OR REPLACE TRIGGER "contacts_set_modified_at_trigger" BEFORE UPDATE OF "j
 
 
 
-CREATE OR REPLACE TRIGGER "dataset_flow_identity_flow_active_fence" BEFORE UPDATE ON "public"."flows" FOR EACH ROW WHEN ((("to_jsonb"("new".*) - ARRAY['extracted_md'::"text", 'embedding_ft'::"text", 'embedding_ft_at'::"text", 'search_text'::"text"]) IS DISTINCT FROM ("to_jsonb"("old".*) - ARRAY['extracted_md'::"text", 'embedding_ft'::"text", 'embedding_ft_at'::"text", 'search_text'::"text"]))) EXECUTE FUNCTION "private"."dataset_flow_identity_active_fence_v2"();
+CREATE OR REPLACE TRIGGER "dataset_flow_identity_flow_active_fence" BEFORE UPDATE ON "public"."flows" FOR EACH ROW WHEN ((("to_jsonb"("new".*) - ARRAY['extracted_md'::"text", 'embedding_ft'::"text", 'embedding_ft_at'::"text", 'search_text'::"text"]) IS DISTINCT FROM ("to_jsonb"("old".*) - ARRAY['extracted_md'::"text", 'embedding_ft'::"text", 'embedding_ft_at'::"text", 'search_text'::"text"]))) EXECUTE FUNCTION "private"."dataset_flow_identity_active_fence"();
 
 
 
@@ -56744,7 +56744,7 @@ COMMENT ON TRIGGER "dataset_flow_identity_flow_active_fence" ON "public"."flows"
 
 
 
-CREATE OR REPLACE TRIGGER "dataset_flow_identity_flow_insert_delete_active_fence" BEFORE INSERT OR DELETE ON "public"."flows" FOR EACH ROW EXECUTE FUNCTION "private"."dataset_flow_identity_active_fence_v2"();
+CREATE OR REPLACE TRIGGER "dataset_flow_identity_flow_insert_delete_active_fence" BEFORE INSERT OR DELETE ON "public"."flows" FOR EACH ROW EXECUTE FUNCTION "private"."dataset_flow_identity_active_fence"();
 
 
 
@@ -56752,15 +56752,39 @@ COMMENT ON TRIGGER "dataset_flow_identity_flow_insert_delete_active_fence" ON "p
 
 
 
-CREATE OR REPLACE TRIGGER "dataset_flow_identity_flowproperty_active_fence" BEFORE DELETE OR UPDATE ON "public"."flowproperties" FOR EACH ROW EXECUTE FUNCTION "private"."dataset_flow_identity_active_fence_v2"();
+CREATE OR REPLACE TRIGGER "dataset_flow_identity_flowproperty_active_fence" BEFORE UPDATE ON "public"."flowproperties" FOR EACH ROW WHEN ((("to_jsonb"("new".*) - ARRAY['extracted_md'::"text", 'embedding_ft'::"text", 'embedding_ft_at'::"text", 'search_text'::"text"]) IS DISTINCT FROM ("to_jsonb"("old".*) - ARRAY['extracted_md'::"text", 'embedding_ft'::"text", 'embedding_ft_at'::"text", 'search_text'::"text"]))) EXECUTE FUNCTION "private"."dataset_flow_identity_active_fence"();
 
 
 
-CREATE OR REPLACE TRIGGER "dataset_flow_identity_process_active_fence" BEFORE INSERT OR DELETE OR UPDATE ON "public"."processes" FOR EACH ROW EXECUTE FUNCTION "private"."dataset_flow_identity_active_fence_v2"();
+COMMENT ON TRIGGER "dataset_flow_identity_flowproperty_active_fence" ON "public"."flowproperties" IS 'Fail-closed Step 3 actor fence for FlowProperty updates that change any support-guard-relevant or future non-derivative column; extracted_md, embedding_ft, embedding_ft_at, and search_text updates bypass the actor fence.';
 
 
 
-CREATE OR REPLACE TRIGGER "dataset_flow_identity_unitgroup_active_fence" BEFORE DELETE OR UPDATE ON "public"."unitgroups" FOR EACH ROW EXECUTE FUNCTION "private"."dataset_flow_identity_active_fence_v2"();
+CREATE OR REPLACE TRIGGER "dataset_flow_identity_flowproperty_delete_active_fence" BEFORE DELETE ON "public"."flowproperties" FOR EACH ROW EXECUTE FUNCTION "private"."dataset_flow_identity_active_fence"();
+
+
+
+COMMENT ON TRIGGER "dataset_flow_identity_flowproperty_delete_active_fence" ON "public"."flowproperties" IS 'Fail-closed Step 3 actor fence for every FlowProperty delete.';
+
+
+
+CREATE OR REPLACE TRIGGER "dataset_flow_identity_process_active_fence" BEFORE INSERT OR DELETE OR UPDATE ON "public"."processes" FOR EACH ROW EXECUTE FUNCTION "private"."dataset_flow_identity_active_fence"();
+
+
+
+CREATE OR REPLACE TRIGGER "dataset_flow_identity_unitgroup_active_fence" BEFORE UPDATE ON "public"."unitgroups" FOR EACH ROW WHEN ((("to_jsonb"("new".*) - ARRAY['extracted_md'::"text", 'embedding_ft'::"text", 'embedding_ft_at'::"text", 'search_text'::"text"]) IS DISTINCT FROM ("to_jsonb"("old".*) - ARRAY['extracted_md'::"text", 'embedding_ft'::"text", 'embedding_ft_at'::"text", 'search_text'::"text"]))) EXECUTE FUNCTION "private"."dataset_flow_identity_active_fence"();
+
+
+
+COMMENT ON TRIGGER "dataset_flow_identity_unitgroup_active_fence" ON "public"."unitgroups" IS 'Fail-closed Step 3 actor fence for UnitGroup updates that change any support-guard-relevant or future non-derivative column; extracted_md, embedding_ft, embedding_ft_at, and search_text updates bypass the actor fence.';
+
+
+
+CREATE OR REPLACE TRIGGER "dataset_flow_identity_unitgroup_delete_active_fence" BEFORE DELETE ON "public"."unitgroups" FOR EACH ROW EXECUTE FUNCTION "private"."dataset_flow_identity_active_fence"();
+
+
+
+COMMENT ON TRIGGER "dataset_flow_identity_unitgroup_delete_active_fence" ON "public"."unitgroups" IS 'Fail-closed Step 3 actor fence for every UnitGroup delete.';
 
 
 
@@ -59541,8 +59565,8 @@ GRANT ALL ON FUNCTION "private"."dataset_alias_jsonb_array_v1"("p_value" "jsonb"
 
 
 
-REVOKE ALL ON FUNCTION "private"."dataset_flow_identity_active_fence_v2"() FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."dataset_flow_identity_active_fence_v2"() TO "api_internal_executor";
+REVOKE ALL ON FUNCTION "private"."dataset_flow_identity_active_fence"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."dataset_flow_identity_active_fence"() TO "api_internal_executor";
 
 
 

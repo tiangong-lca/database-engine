@@ -1,4 +1,4 @@
-CREATE OR REPLACE FUNCTION "private"."dataset_flow_identity_active_fence_v2"() RETURNS "trigger"
+CREATE OR REPLACE FUNCTION "private"."dataset_flow_identity_active_fence"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
@@ -297,8 +297,8 @@ begin
 end;
 $$;
 
-ALTER FUNCTION "private"."dataset_flow_identity_active_fence_v2"() OWNER TO "postgres";
+ALTER FUNCTION "private"."dataset_flow_identity_active_fence"() OWNER TO "postgres";
 
-REVOKE ALL ON FUNCTION "private"."dataset_flow_identity_active_fence_v2"() FROM PUBLIC;
+REVOKE ALL ON FUNCTION "private"."dataset_flow_identity_active_fence"() FROM PUBLIC;
 
-GRANT ALL ON FUNCTION "private"."dataset_flow_identity_active_fence_v2"() TO "api_internal_executor";
+GRANT ALL ON FUNCTION "private"."dataset_flow_identity_active_fence"() TO "api_internal_executor";

@@ -500,32 +500,32 @@ select is(
       ])
       and trigger.tgenabled = 'O'
       and trigger.tgfoid =
-        'private.dataset_flow_identity_active_fence_v2()'::regprocedure
+        'private.dataset_flow_identity_active_fence()'::regprocedure
   ),
   4,
-  'all four primary/support tables have the enabled v2 active fence'
+  'all four primary/support tables have the enabled canonical active fence'
 );
 select ok(
   pg_get_functiondef(
-    'private.dataset_flow_identity_active_fence_v2()'::regprocedure
+    'private.dataset_flow_identity_active_fence()'::regprocedure
   ) like '%pg_try_advisory_xact_lock%'
   and pg_get_functiondef(
-    'private.dataset_flow_identity_active_fence_v2()'::regprocedure
+    'private.dataset_flow_identity_active_fence()'::regprocedure
   ) like '%FLOW_IDENTITY_ACTIVE_SCOPE_ACTOR_FENCE_BUSY%'
   and pg_get_functiondef(
-    'private.dataset_flow_identity_active_fence_v2()'::regprocedure
+    'private.dataset_flow_identity_active_fence()'::regprocedure
   ) not like '%perform pg_advisory_xact_lock(%',
   'row triggers use non-blocking actor locks and fail closed instead of waiting'
 );
 select ok(
   pg_get_functiondef(
-    'private.dataset_flow_identity_active_fence_v2()'::regprocedure
+    'private.dataset_flow_identity_active_fence()'::regprocedure
   ) like '%delete from util.dataset_flow_identity_mutation_permits%'
   and pg_get_functiondef(
-    'private.dataset_flow_identity_active_fence_v2()'::regprocedure
+    'private.dataset_flow_identity_active_fence()'::regprocedure
   ) not like '%current_setting%'
   and pg_get_functiondef(
-    'private.dataset_flow_identity_active_fence_v2()'::regprocedure
+    'private.dataset_flow_identity_active_fence()'::regprocedure
   ) not like '%app.dataset_flow_identity_v2_process_request_sha256%',
   'active fence consumes a private permit and has no forged-GUC bypass path'
 );
