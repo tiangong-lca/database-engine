@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-30
-lastReviewedCommit: 4c7e52d315d02444372d6e1978af33e4ede470c7
-lastReviewedNote: "已为 Issue #310 的生成 workspace 收口复核：生成区与稳定人工 overlay 的边界不变；本地重建路径已明确，提交前必须有托管一致性证据。"
+lastReviewedAt: 2026-07-31
+lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
+lastReviewedNote: "已为 Issue #323 与 #329 复核：生成区与稳定人工 overlay 的边界不变；审核 migration、本地切换和 provider 资格验证适配器都不会把生成 workspace 变成真相源。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

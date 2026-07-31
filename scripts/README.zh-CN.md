@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-30
-lastReviewedCommit: 4c7e52d315d02444372d6e1978af33e4ede470c7
-lastReviewedNote: "已为 Issue #310 的生成 workspace 收口复核：本地导出与重建改用 Supabase CLI 原生 local 路径；远程 dev 仍是权威目标，本地产物提交前必须有托管迁移一致性证据。"
+lastReviewedAt: 2026-07-31
+lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
+lastReviewedNote: "已为 Issue #323 与 #329 复核：记录本地 Root/Reference Review 备份/切换 runner，以及与 Worker 精确兼容的隔离数据库和存储资格验证入口，不改变 schema workspace 行为。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -33,7 +33,7 @@ related:
 
 # Scripts
 
-这个目录包含用于远程 schema 导出、workspace 刷新、修改复制和 migration 生成的命令行脚本。
+这个目录包含用于远程 schema 导出、workspace 刷新、修改复制、migration 生成和受控数据迁移的命令行脚本。
 
 ## 目录结构
 
@@ -58,6 +58,37 @@ python scripts/data_migrations/tidas_schema_202606/runner.py plan --environment 
 ```
 
 完整命令面和安全说明见 `scripts/data_migrations/tidas_schema_202606/README.md`。
+
+### `data_migrations/root_reference_review_v2_local.sh`
+
+用于在 Root/Reference Review v2 切换前创建本地加密备份，并由操作员逐条迁移存量审核。
+
+备份内容包括完整 custom-format dump、审核相关表 dump，以及七类业务表中受影响的数据行。备份目录必须位于 Git 工作树之外。只有操作员已独立验证恢复能力、确认第二份本地副本并生成 dry-run 清单后，`apply` 才会解锁。
+
+用法：
+
+```bash
+DATABASE_URL='postgresql://...' \
+REVIEW_BACKUP_PASSWORD_FILE='<本地密码文件的绝对路径>' \
+scripts/data_migrations/root_reference_review_v2_local.sh backup \
+  '/absolute/path/review-v2-backup'
+
+DATABASE_URL='postgresql://...' \
+scripts/data_migrations/root_reference_review_v2_local.sh dry-run \
+  '/absolute/path/review-v2-backup'
+
+DATABASE_URL='postgresql://...' \
+scripts/data_migrations/root_reference_review_v2_local.sh verify \
+  '/absolute/path/review-v2-backup'
+
+DATABASE_URL='postgresql://...' \
+scripts/data_migrations/root_reference_review_v2_local.sh apply \
+  '/absolute/path/review-v2-backup'
+```
+
+操作员只能在真实完成恢复验证和第二份本地副本验证后，创建
+`RESTORE_VERIFIED` 与 `SECOND_LOCAL_COPY_VERIFIED` 标记。不得把密码文件、
+加密备份、标记文件或迁移清单提交到 Git。
 
 ### `export_remote_schema.py`
 
@@ -209,6 +240,64 @@ scripts/test_scope_closure_staged_write_set_v2_fixture.sh
 ```
 
 这是只读的本地合同检查；不会刷新生成的 schema workspace，也不会连接远程数据库。
+
+### Scope-closure provider 资格验证适配器
+
+`run_scope_closure_database_qualification.sh` 和
+`run_scope_closure_storage_qualification.sh` 生成 Worker provider aggregator
+直接消费的 `lcia.scope-closure-provider-owned-result.v1` 记录。两个适配器都要求
+Worker 提供 `--run-id`，把 `componentSha` 绑定到当前 database-engine commit，
+只接受 loopback 或已明确加入许可清单的非生产目标 fingerprint，拒绝生产或不明确
+目标，并固定输出 `productionMutation=false`。
+
+数据库适配器对显式 `QUALIFICATION_DATABASE_URL` 执行 #308/#316
+pgTAP 合同。存储适配器使用显式 S3-compatible endpoint，并验证 bounded 生成
+文件、有效及过期签名 HEAD/range 请求、multipart 边界、重试和精确 prefix GC。
+结果中不会写入凭据、object locator、signed URL 或 payload 内容。
+
+在精确 Worker commit `e5a7f769` 下，loopback 执行只构成协议、故障注入和
+adapter 证据，不是最终 provider-specific 非生产资格验证。Worker #188 提供
+已验证的非生产目标分类后，再使用同一组 owner adapter 运行最终验证；歧义目标
+或生产目标仍必须 fail closed。
+
+用法：
+
+```bash
+scripts/run_scope_closure_database_qualification.sh \
+  --output <new-result-path> \
+  --run-id <worker-supplied-uuid>
+
+scripts/run_scope_closure_storage_qualification.sh \
+  --output <new-result-path> \
+  --run-id <same-worker-supplied-uuid>
+```
+
+必需环境变量：
+
+- 两个适配器：`QUALIFICATION_NON_PRODUCTION_CONFIRMATION`
+- 数据库：`QUALIFICATION_DATABASE_URL`、`QUALIFICATION_SUPABASE_URL`、
+  `QUALIFICATION_SUPABASE_SERVICE_ROLE_KEY`
+- 存储：`QUALIFICATION_DATABASE_URL`、`QUALIFICATION_S3_ENDPOINT`、
+  `QUALIFICATION_S3_ACCESS_KEY_ID`、
+  `QUALIFICATION_S3_SECRET_ACCESS_KEY`、`QUALIFICATION_S3_BUCKET`，以及可选的
+  `QUALIFICATION_S3_REGION`
+- 非 loopback 目标：`QUALIFICATION_VERIFIED_NON_PRODUCTION_FINGERPRINTS`，值为
+  qualification coordinator 批准的、以逗号分隔的精确 SHA-256 目标身份；远程
+  数据库和 provider endpoint 必须使用 TLS
+
+不得改变记录 schema；用精确 Worker compatibility verifier 接收并合并两条记录：
+
+```bash
+scripts/verify_scope_closure_worker_aggregator.py \
+  --worker-repo <worker-checkout-containing-e5a7f769> \
+  <database-result> <storage-result>
+```
+
+离线控制流和安全回归命令：
+
+```bash
+python3 -m unittest scripts/test_scope_closure_provider_qualification.py
+```
 
 ## Local Docpact Push Gate
 

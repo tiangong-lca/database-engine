@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-30
-lastReviewedCommit: 4c7e52d315d02444372d6e1978af33e4ede470c7
-lastReviewedNote: "Reviewed for Issue #310 generated-workspace closure: local export and rebuild now use the Supabase CLI-native local path; remote dev remains canonical and local output requires hosted parity evidence before commit."
+lastReviewedAt: 2026-07-31
+lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
+lastReviewedNote: "Reviewed through Issues #323 and #329: document the local Root/Reference Review backup/cutover runner and exact Worker-compatible isolated database/storage qualification adapters without changing schema-workspace behavior."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -33,7 +33,7 @@ related:
 
 # Scripts
 
-This directory contains the command-line helpers used for remote schema export, workspace refresh, change-copying, and migration generation.
+This directory contains the command-line helpers used for remote schema export, workspace refresh, change-copying, migration generation, and controlled data migrations.
 
 ## Layout
 
@@ -58,6 +58,41 @@ python scripts/data_migrations/tidas_schema_202606/runner.py plan --environment 
 ```
 
 See `scripts/data_migrations/tidas_schema_202606/README.md` for the complete command surface and safety notes.
+
+### `data_migrations/root_reference_review_v2_local.sh`
+
+Creates the local encrypted backup and performs the operator-controlled legacy
+review migration for the Root/Reference Review v2 cutover.
+
+The backup includes a full custom-format dump, a review-table dump, and only
+affected rows from the seven business tables. It must be stored outside the Git
+worktree. `apply` remains locked until the operator has completed an independent
+restore check, verified a second local copy, and generated the dry-run manifest.
+
+Usage:
+
+```bash
+DATABASE_URL='postgresql://...' \
+REVIEW_BACKUP_PASSWORD_FILE='<absolute-path-to-local-password-file>' \
+scripts/data_migrations/root_reference_review_v2_local.sh backup \
+  '/absolute/path/review-v2-backup'
+
+DATABASE_URL='postgresql://...' \
+scripts/data_migrations/root_reference_review_v2_local.sh dry-run \
+  '/absolute/path/review-v2-backup'
+
+DATABASE_URL='postgresql://...' \
+scripts/data_migrations/root_reference_review_v2_local.sh verify \
+  '/absolute/path/review-v2-backup'
+
+DATABASE_URL='postgresql://...' \
+scripts/data_migrations/root_reference_review_v2_local.sh apply \
+  '/absolute/path/review-v2-backup'
+```
+
+The operator must create `RESTORE_VERIFIED` and
+`SECOND_LOCAL_COPY_VERIFIED` only after those checks actually pass. Never
+commit the password file, encrypted backup, markers, or migration manifest.
 
 ### `export_remote_schema.py`
 
@@ -210,6 +245,71 @@ scripts/test_scope_closure_staged_write_set_v2_fixture.sh
 
 This is a read-only local contract check. It does not refresh generated schema
 workspace files or connect to a remote database.
+
+### Scope-closure provider qualification adapters
+
+`run_scope_closure_database_qualification.sh` and
+`run_scope_closure_storage_qualification.sh` emit the exact
+`lcia.scope-closure-provider-owned-result.v1` records consumed by the Worker
+provider aggregator. Both adapters require a Worker-supplied `--run-id`, bind
+`componentSha` to the checked-out database-engine commit, accept either
+loopback targets or positively allowlisted non-production target fingerprints,
+reject production or ambiguous targets, and emit `productionMutation=false`.
+
+The database adapter runs the #308/#316 pgTAP contracts against the explicit
+`QUALIFICATION_DATABASE_URL`. The storage adapter uses an explicit
+S3-compatible endpoint, bounded generated files, live and expired signed
+HEAD/range requests, multipart boundaries, retries, and exact-prefix garbage
+collection.
+Neither adapter writes credentials, object locators, signed URLs, or payload
+contents to its result.
+
+Under exact Worker commit `e5a7f769`, loopback execution is protocol,
+fault-injection, and adapter evidence only. It is not the final
+provider-specific non-production qualification. Run that later with the same
+owner adapters after Worker #188 supplies verified non-production target
+classification; ambiguous or production targets must still fail closed.
+
+Usage:
+
+```bash
+scripts/run_scope_closure_database_qualification.sh \
+  --output <new-result-path> \
+  --run-id <worker-supplied-uuid>
+
+scripts/run_scope_closure_storage_qualification.sh \
+  --output <new-result-path> \
+  --run-id <same-worker-supplied-uuid>
+```
+
+Required environment variables are intentionally qualification-scoped:
+
+- both adapters: `QUALIFICATION_NON_PRODUCTION_CONFIRMATION`
+- database: `QUALIFICATION_DATABASE_URL`, `QUALIFICATION_SUPABASE_URL`,
+  `QUALIFICATION_SUPABASE_SERVICE_ROLE_KEY`
+- storage: `QUALIFICATION_DATABASE_URL`, `QUALIFICATION_S3_ENDPOINT`,
+  `QUALIFICATION_S3_ACCESS_KEY_ID`,
+  `QUALIFICATION_S3_SECRET_ACCESS_KEY`, `QUALIFICATION_S3_BUCKET`, and optional
+  `QUALIFICATION_S3_REGION`
+- non-loopback targets: `QUALIFICATION_VERIFIED_NON_PRODUCTION_FINGERPRINTS`,
+  containing the exact comma-separated SHA-256 target identities approved by
+  the qualification coordinator; remote database and provider endpoints must
+  use TLS
+
+Feed both records to the exact Worker compatibility verifier without adapting
+their schema:
+
+```bash
+scripts/verify_scope_closure_worker_aggregator.py \
+  --worker-repo <worker-checkout-containing-e5a7f769> \
+  <database-result> <storage-result>
+```
+
+Run the offline control-flow and safety regressions with:
+
+```bash
+python3 -m unittest scripts/test_scope_closure_provider_qualification.py
+```
 
 ## Local Docpact Push Gate
 
