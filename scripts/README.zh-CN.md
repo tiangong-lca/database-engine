@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-31
-lastReviewedCommit: bb97b3d1064656f6d519d07e1b4efeb3bc8df026
-lastReviewedNote: "已为 Issue #323 的 Root/Reference Review v2 复核：补充本地加密备份、恢复验证标记、dry-run 清单和逐条迁移入口，既有 workspace 生成边界不变。"
+lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
+lastReviewedNote: "已为 Issue #323 与 #329 复核：记录本地 Root/Reference Review 备份/切换 runner，以及与 Worker 精确兼容的隔离数据库和存储资格验证入口，不改变 schema workspace 行为。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -240,6 +240,64 @@ scripts/test_scope_closure_staged_write_set_v2_fixture.sh
 ```
 
 这是只读的本地合同检查；不会刷新生成的 schema workspace，也不会连接远程数据库。
+
+### Scope-closure provider 资格验证适配器
+
+`run_scope_closure_database_qualification.sh` 和
+`run_scope_closure_storage_qualification.sh` 生成 Worker provider aggregator
+直接消费的 `lcia.scope-closure-provider-owned-result.v1` 记录。两个适配器都要求
+Worker 提供 `--run-id`，把 `componentSha` 绑定到当前 database-engine commit，
+只接受 loopback 或已明确加入许可清单的非生产目标 fingerprint，拒绝生产或不明确
+目标，并固定输出 `productionMutation=false`。
+
+数据库适配器对显式 `QUALIFICATION_DATABASE_URL` 执行 #308/#316
+pgTAP 合同。存储适配器使用显式 S3-compatible endpoint，并验证 bounded 生成
+文件、有效及过期签名 HEAD/range 请求、multipart 边界、重试和精确 prefix GC。
+结果中不会写入凭据、object locator、signed URL 或 payload 内容。
+
+在精确 Worker commit `e5a7f769` 下，loopback 执行只构成协议、故障注入和
+adapter 证据，不是最终 provider-specific 非生产资格验证。Worker #188 提供
+已验证的非生产目标分类后，再使用同一组 owner adapter 运行最终验证；歧义目标
+或生产目标仍必须 fail closed。
+
+用法：
+
+```bash
+scripts/run_scope_closure_database_qualification.sh \
+  --output <new-result-path> \
+  --run-id <worker-supplied-uuid>
+
+scripts/run_scope_closure_storage_qualification.sh \
+  --output <new-result-path> \
+  --run-id <same-worker-supplied-uuid>
+```
+
+必需环境变量：
+
+- 两个适配器：`QUALIFICATION_NON_PRODUCTION_CONFIRMATION`
+- 数据库：`QUALIFICATION_DATABASE_URL`、`QUALIFICATION_SUPABASE_URL`、
+  `QUALIFICATION_SUPABASE_SERVICE_ROLE_KEY`
+- 存储：`QUALIFICATION_DATABASE_URL`、`QUALIFICATION_S3_ENDPOINT`、
+  `QUALIFICATION_S3_ACCESS_KEY_ID`、
+  `QUALIFICATION_S3_SECRET_ACCESS_KEY`、`QUALIFICATION_S3_BUCKET`，以及可选的
+  `QUALIFICATION_S3_REGION`
+- 非 loopback 目标：`QUALIFICATION_VERIFIED_NON_PRODUCTION_FINGERPRINTS`，值为
+  qualification coordinator 批准的、以逗号分隔的精确 SHA-256 目标身份；远程
+  数据库和 provider endpoint 必须使用 TLS
+
+不得改变记录 schema；用精确 Worker compatibility verifier 接收并合并两条记录：
+
+```bash
+scripts/verify_scope_closure_worker_aggregator.py \
+  --worker-repo <worker-checkout-containing-e5a7f769> \
+  <database-result> <storage-result>
+```
+
+离线控制流和安全回归命令：
+
+```bash
+python3 -m unittest scripts/test_scope_closure_provider_qualification.py
+```
 
 ## Local Docpact Push Gate
 
