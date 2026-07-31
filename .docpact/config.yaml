@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-07-30"
-lastReviewedCommit: "4c7e52d315d02444372d6e1978af33e4ede470c7"
-lastReviewedNote: "Reviewed for Issue #310 generated-workspace closure: existing ownership and routes remain correct; a migration-parity-checked local refresh is an explicit fallback for rebuilding generated inspection output while dev remains the canonical remote target."
+lastReviewedAt: "2026-07-31"
+lastReviewedCommit: "bb97b3d1064656f6d519d07e1b4efeb3bc8df026"
+lastReviewedNote: "Reviewed for Issue #324 Flow derivative fence narrowing: existing database-engine ownership, guarded-flow-identity routing, and workspace-integration requirements remain correct."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

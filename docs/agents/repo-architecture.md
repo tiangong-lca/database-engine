@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-30
-lastReviewedCommit: 4c7e52d315d02444372d6e1978af33e4ede470c7
-lastReviewedNote: "Reviewed for Issue #310 generated-workspace closure: generated output remains disposable inspection state; local reconstruction now uses the CLI-native local path and is commit-eligible only with hosted migration parity and targeted catalog proof."
+lastReviewedAt: 2026-07-31
+lastReviewedCommit: bb97b3d1064656f6d519d07e1b4efeb3bc8df026
+lastReviewedNote: "Reviewed for Issue #324 Flow derivative fence narrowing: the migration stays within the existing guarded identity/derivative hotspot and does not change repo ownership, source-of-truth, or branch architecture."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
