@@ -29,7 +29,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-07-31
 lastReviewedCommit: bb97b3d1064656f6d519d07e1b4efeb3bc8df026
-lastReviewedNote: "Reviewed for Issue #324 Flow derivative fence narrowing: the migration stays within the existing guarded identity/derivative hotspot and does not change repo ownership, source-of-truth, or branch architecture."
+lastReviewedNote: "Reviewed for Issues #324 and #323: schema truth remains migration-owned; the narrowed Flow derivative fence stays within the guarded identity hotspot, while shared exact-reference reviews and append-only Root scope history extend the review workflow without changing repo ownership or generated-workspace boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -86,7 +86,7 @@ The current migration and test history clusters around these themes:
 4. notification and membership query boundaries
 5. lifecycle bundle cleanup, embedding compatibility, and measured process/flow plus foundation-dataset Semantic/Hybrid HNSW plan governance
 6. remote schema reconciliation and preview-branch validation
-7. review-submit gate persistence, `worker_jobs` queue state, final submit-review assertions, and retired legacy job-table archives
+7. review-submit gate persistence, Process-only Gate enforcement, Root/Reference Review v2 range history and shared exact-reference reviews, `worker_jobs` queue state, final submit-review assertions, and retired legacy job-table archives
 8. worker-produced domain artifact/state contracts for retained `lca_package_*`, LCA result/cache/projection, and review-submit report/coordinator tables
 9. canonical LCI/LCIA release runs, exact dataset-version indexes, immutable four-package artifact refs, durable approval, publication, and readback
 10. Performance Advisor evidence, usable foreign-key support indexes, exact duplicate removal, and lock-aware managed-schema bloat maintenance
