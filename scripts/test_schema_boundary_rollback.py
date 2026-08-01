@@ -59,13 +59,49 @@ def view_signature(db_url: str, schema: str) -> str:
     """)
 
 
+def service_role_maintain_count(db_url: str) -> str:
+    return psql(db_url, """
+      select count(*)
+      from (values
+        ('worker_domain_traceability_cutoffs'),('worker_domain_traceability_violations'),
+        ('worker_job_domain_refs'),('worker_legacy_lifecycle_audit'),
+        ('worker_legacy_table_retirement_blockers')
+      ) expected(name)
+      where has_table_privilege('service_role', format('public.%I', expected.name), 'MAINTAIN');
+    """)
+
+
+def rollback(db_url: str, maintain: str) -> None:
+    run([
+        "psql", db_url, "-X", "-v", "ON_ERROR_STOP=1",
+        "-v", f"source_service_role_maintain={maintain}", "-f", str(ROLLBACK),
+    ])
+
+
+def assert_rollback_evidence_rejected(db_url: str, value: str | None) -> None:
+    command = ["psql", db_url, "-X", "-v", "ON_ERROR_STOP=1"]
+    if value is not None:
+        command.extend(["-v", f"source_service_role_maintain={value}"])
+    command.extend(["-f", str(ROLLBACK)])
+    result = subprocess.run(
+        command, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE
+    )
+    if result.returncode == 0:
+        raise SystemExit(f"rollback accepted invalid evidence value: {value!r}")
+
+
 def main() -> int:
     db_url = database_url()
     target_oids = view_signature(db_url, "target")
     if target_oids.count(":") != 5:
         raise SystemExit("Issue #354 target views are not at Expand head")
 
-    run(["psql", db_url, "-X", "-v", "ON_ERROR_STOP=1", "-f", str(ROLLBACK)])
+    assert_rollback_evidence_rejected(db_url, None)
+    assert_rollback_evidence_rejected(db_url, "yes")
+    if view_signature(db_url, "target") != target_oids:
+        raise SystemExit("rejected rollback evidence changed the Expand target views")
+
+    rollback(db_url, "false")
     try:
         public_oids = view_signature(db_url, "public")
         if public_oids != target_oids:
@@ -81,12 +117,26 @@ def main() -> int:
         """)
         if residue != "0":
             raise SystemExit("rollback left Issue #354 target or phase-view residue")
+        if service_role_maintain_count(db_url) != "0":
+            raise SystemExit("false rollback evidence restored unexpected service_role MAINTAIN")
     finally:
         psql(db_url, MIGRATION.read_text(encoding="utf-8"))
 
     if view_signature(db_url, "target") != target_oids:
         raise SystemExit("roll-forward failed to preserve the five canonical view OIDs")
-    print("PASS Issue #354 rollback and roll-forward preserve all five canonical view OIDs")
+
+    rollback(db_url, "true")
+    try:
+        if view_signature(db_url, "public") != target_oids:
+            raise SystemExit("MAINTAIN-variant rollback failed to preserve the five canonical view OIDs")
+        if service_role_maintain_count(db_url) != "5":
+            raise SystemExit("true rollback evidence did not restore service_role MAINTAIN")
+    finally:
+        psql(db_url, MIGRATION.read_text(encoding="utf-8"))
+
+    if view_signature(db_url, "target") != target_oids:
+        raise SystemExit("MAINTAIN-variant roll-forward failed to preserve the five canonical view OIDs")
+    print("PASS Issue #354 rollback and roll-forward preserve OIDs for both proven ACL variants")
     return 0
 
 
