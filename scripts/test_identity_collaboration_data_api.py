@@ -7,6 +7,7 @@ import base64
 import hashlib
 import hmac
 import json
+import os
 import subprocess
 import time
 import urllib.error
@@ -14,7 +15,7 @@ import urllib.parse
 import urllib.request
 from pathlib import Path
 
-from identity_collaboration_target import resolve_target
+from identity_collaboration_target import VERIFIED_ENV, resolve_target
 
 ROOT = Path(__file__).resolve().parents[1]
 AUTH_READS = {
@@ -67,12 +68,19 @@ def call(url: str, apikey: str, token: str, profile: str, *, body: dict | None =
 
 
 def main() -> int:
-    db_url, status = resolve_target()
-    assert status is not None
-    rest = status["REST_URL"].rstrip("/")
-    anon_key = status["ANON_KEY"]
-    service_key = status["SERVICE_ROLE_KEY"]
-    jwt_secret = status["JWT_SECRET"]
+    if os.environ.get(VERIFIED_ENV):
+        db_url = os.environ["DATABASE_URL"]
+        rest = os.environ["SUPABASE_REST_URL"].rstrip("/")
+        anon_key = os.environ["SUPABASE_ANON_KEY"]
+        service_key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+        jwt_secret = os.environ["SUPABASE_JWT_SECRET"]
+    else:
+        target = resolve_target()
+        db_url = target.database_url
+        rest = target.rest_url
+        anon_key = target.anon_key
+        service_key = target.service_role_key
+        jwt_secret = target.jwt_secret
     auth_token = authenticated_jwt(jwt_secret)
     subprocess.run(
         ["psql", db_url, "-XAt", "-v", "ON_ERROR_STOP=1", "-c", "notify pgrst, 'reload schema'"],

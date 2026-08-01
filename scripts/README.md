@@ -517,9 +517,11 @@ python scripts/test_identity_collaboration_data_api.py
 python scripts/test_identity_collaboration_concurrency.py
 ```
 
-All three probes resolve one explicit loopback database through
-`IDENTITY_COLLABORATION_DATABASE_URL` (or `DATABASE_URL`) and verify that it is
-the database behind the selected `SUPABASE_WORKDIR` stack. The canonical runner
+The canonical runner resolves one explicit loopback stack once, verifies its
+database identity against `SUPABASE_WORKDIR`, then overwrites and passes the
+same `DATABASE_URL`, REST credentials, and workdir to every SQL, Data API,
+catalog, schema-phase, inventory, lint, and SECURITY DEFINER gate. Offline
+two-stack negatives live in `test_database_contract_targeting.py`. The runner
 does not execute rollback DDL by default. On a disposable local stack, opt in
 with `--run-destructive-identity-qualification`; `--skip-data-api` skips only
 HTTP probes and does not select or redirect the destructive target.
@@ -528,8 +530,10 @@ The operator rollback is
 `supabase/operator/issue_355_restore_identity_collaboration_expand.sql`. It is
 repeatable and removes only the additive API/private Expand objects; the audited
 public physical routines and their OIDs remain untouched. The rollback harness
-also proves arbitrary custom ACL/owner convergence, complete target absence
-after two rollbacks, dependency/comment/property fingerprints, and roll-forward.
+also proves reviewed-predecessor routine and extra-overload rejection, arbitrary
+custom ACL/owner convergence, exact migration-head plus complete target
+fingerprints before deletion, tamper/partial-state rejection, complete target
+absence after two rollbacks, and exact roll-forward.
 
 ### `test_production_equivalent_upgrade.py`
 

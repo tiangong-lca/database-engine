@@ -13,7 +13,7 @@ import sys
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote, unquote, urlsplit
 
-from identity_collaboration_target import TARGET_ENV, resolve_target
+from identity_collaboration_target import apply_target_environment, resolve_target
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "supabase/tests/manifest.json"
@@ -114,9 +114,9 @@ def pending_security_definer_transition() -> list[Path]:
 def check_lint() -> None:
     command = supabase_command("db", "lint")
     environment = None
-    if (db_url := os.environ.get("DATABASE_URL")) and not os.environ.get("SUPABASE_WORKDIR"):
-        target, environment = database_cli_target(db_url)
-        command.extend(["--db-url", target])
+    if db_url := os.environ.get("DATABASE_URL"):
+        cli_database_url, environment = database_cli_target(db_url)
+        command.extend(["--db-url", cli_database_url])
     else:
         command.append("--local")
     command.extend(["--level", "warning", "--fail-on", "none"])
@@ -248,19 +248,15 @@ def main() -> int:
         if os.environ.get("DATABASE_URL") and not os.environ.get("SUPABASE_WORKDIR"):
             raise SystemExit("DATABASE_URL qualification requires --skip-reset or SUPABASE_WORKDIR")
         run(supabase_command("db", "reset", "--local"))
+    target = resolve_target()
+    apply_target_environment(target)
     test_command = supabase_command("test", "db", *files)
-    test_environment = None
-    if (db_url := os.environ.get("DATABASE_URL")) and not os.environ.get("SUPABASE_WORKDIR"):
-        target, test_environment = database_cli_target(db_url)
-        test_command.extend(["--db-url", target])
-    else:
-        test_command.append("--local")
+    cli_database_url, test_environment = database_cli_target(target.database_url)
+    test_command.extend(["--db-url", cli_database_url])
     run(test_command, env=test_environment)
     if not args.skip_data_api:
         run([sys.executable, "scripts/test_worker_control_plane_data_api.py"])
     if identity_qualification:
-        identity_db_url, _ = resolve_target()
-        os.environ[TARGET_ENV] = identity_db_url
         if not args.skip_data_api:
             run([sys.executable, "scripts/test_identity_collaboration_data_api.py"])
         run([sys.executable, "scripts/test_identity_collaboration_concurrency.py"])

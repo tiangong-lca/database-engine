@@ -55,6 +55,15 @@ class IdentityCollaborationExpandStaticTest(unittest.TestCase):
         self.assertIn("create or replace view private.comments", normalized)
         self.assertIn("create or replace function private.review_scope_checksum_v1", normalized)
         self.assertIn("issue355_routine_baseline", normalized)
+        self.assertIn("reviewed predecessor routine signature/definition/property/acl fingerprint mismatch", normalized)
+        self.assertIn("from actual except select signature,fingerprint from expected", normalized)
+
+    def test_policy_fingerprint_is_hosted_role_oid_portable(self) -> None:
+        normalized = self.sql.lower()
+        self.assertNotIn("array_to_string(policy.polroles", normalized)
+        self.assertNotIn("policy.polroles::text", normalized)
+        self.assertIn("from unnest(policy.polroles) role_oid", normalized)
+        self.assertIn("then 'public' else role_name.rolname", normalized)
 
 
 if __name__ == "__main__":

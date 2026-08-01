@@ -8,7 +8,7 @@ import subprocess
 import time
 from pathlib import Path
 
-from identity_collaboration_target import resolve_target
+from identity_collaboration_target import verified_database_url
 
 ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase/migrations/20260801061000_issue_355_identity_collaboration_expand.sql"
@@ -117,11 +117,33 @@ def apply_file(db_url: str, path: Path, *, check: bool = True) -> subprocess.Com
     return run(["psql", db_url, "-X", "-v", "ON_ERROR_STOP=1", "-f", str(path)], check=check)
 
 
+def require_rejected(result: subprocess.CompletedProcess[str], label: str) -> None:
+    if result.returncode == 0:
+        raise SystemExit(f"Issue #355 negative unexpectedly succeeded: {label}")
+
+
 def main() -> int:
-    db_url, _ = resolve_target()
+    db_url = verified_database_url()
     public_before = public_routine_fingerprint(db_url)
     target_before = target_fingerprint(db_url)
     target_logical_before = target_fingerprint(db_url, include_oid=False)
+
+    psql(db_url, """
+      create function public.review_scope_checksum_v1(text) returns text
+      language sql immutable strict set search_path='' as 'select $1';
+    """)
+    require_rejected(apply_file(db_url, MIGRATION, check=False), "extra public overload")
+    if target_fingerprint(db_url) != target_before:
+        raise SystemExit("Issue #355 extra-overload rejection changed target state")
+    psql(db_url, "drop function public.review_scope_checksum_v1(text)")
+
+    psql(db_url, "alter function public.review_scope_checksum_v1(jsonb) cost 101")
+    require_rejected(apply_file(db_url, MIGRATION, check=False), "public routine property drift")
+    if target_fingerprint(db_url) != target_before:
+        raise SystemExit("Issue #355 source-drift rejection changed target state")
+    psql(db_url, "alter function public.review_scope_checksum_v1(jsonb) cost 100")
+    if public_routine_fingerprint(db_url) != public_before:
+        raise SystemExit("Issue #355 source-drift negative did not restore predecessor state")
 
     psql(db_url, """
       create role issue355_drift_role nologin;
@@ -140,6 +162,27 @@ def main() -> int:
     """)
     if target_fingerprint(db_url) != target_before or public_routine_fingerprint(db_url) != public_before:
         raise SystemExit("Issue #355 exact-state reapply did not converge owner/ACL/catalog state")
+
+    psql(db_url, "comment on view api.teams_v1 is 'issue355-tamper'")
+    require_rejected(apply_file(db_url, ROLLBACK, check=False), "tampered target comment")
+    psql(db_url, "comment on view api.teams_v1 is null")
+    if target_fingerprint(db_url) != target_before:
+        raise SystemExit("Issue #355 rollback tamper negative changed target state")
+
+    psql(db_url, """
+      insert into supabase_migrations.schema_migrations(version,statements,name)
+      values ('99999999999999',array[]::text[],'issue355_negative');
+    """)
+    require_rejected(apply_file(db_url, ROLLBACK, check=False), "non-exact migration head")
+    psql(db_url, "delete from supabase_migrations.schema_migrations where version='99999999999999'")
+    if target_fingerprint(db_url) != target_before:
+        raise SystemExit("Issue #355 migration-head negative changed target state")
+
+    psql(db_url, "drop view api.teams_v1")
+    require_rejected(apply_file(db_url, ROLLBACK, check=False), "partial target set")
+    apply_file(db_url, MIGRATION)
+    if target_fingerprint(db_url, include_oid=False) != target_logical_before:
+        raise SystemExit("Issue #355 partial-target negative did not restore exact state")
 
     apply_file(db_url, ROLLBACK)
     assert_zero_targets(db_url)

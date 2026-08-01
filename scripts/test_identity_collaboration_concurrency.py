@@ -7,7 +7,7 @@ import concurrent.futures
 import subprocess
 from pathlib import Path
 
-from identity_collaboration_target import resolve_target
+from identity_collaboration_target import verified_database_url
 
 ROOT = Path(__file__).resolve().parents[1]
 QUERY = """
@@ -31,7 +31,7 @@ def run_one(db_url: str) -> None:
 
 
 def main() -> int:
-    db_url, _ = resolve_target()
+    db_url = verified_database_url()
     with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
         futures = [executor.submit(run_one, db_url) for _ in range(8)]
         for future in futures:

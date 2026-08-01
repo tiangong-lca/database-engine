@@ -411,17 +411,20 @@ python scripts/test_identity_collaboration_data_api.py
 python scripts/test_identity_collaboration_concurrency.py
 ```
 
-三个 probe 都通过 `IDENTITY_COLLABORATION_DATABASE_URL`（或 `DATABASE_URL`）
-绑定同一个显式 loopback database，并与所选 `SUPABASE_WORKDIR` stack 做 identity
-对账。canonical runner 默认不执行 rollback DDL；只可在 disposable local stack 上用
+canonical runner 只解析一次显式 loopback stack：先把 database identity 与所选
+`SUPABASE_WORKDIR` 对账，再向每一个 SQL、Data API、catalog、schema phase、inventory、
+lint 和 SECURITY DEFINER gate 覆盖并传递同一组 `DATABASE_URL`、REST credentials 与
+workdir。`test_database_contract_targeting.py` 提供离线双 stack 混拼负向测试。
+canonical runner 默认不执行 rollback DDL；只可在 disposable local stack 上用
 `--run-destructive-identity-qualification` 显式启用。`--skip-data-api` 只跳过 HTTP
 probe，不选择或重定向破坏性测试目标。
 
 可重复 operator rollback 为
 `supabase/operator/issue_355_restore_identity_collaboration_expand.sql`；它只删除新增
 api/private Expand 对象，不改动受审 public 物理 routine 或其 OID。
-rollback harness 还验证任意 custom ACL/owner 收敛、连续两次 rollback 后目标对象为零、
-dependency/comment/property 指纹与 roll-forward。
+rollback harness 还验证 reviewed predecessor routine/额外 overload 拒绝、任意 custom
+ACL/owner 收敛、精确 migration head 与完整 target fingerprint 删除门、tamper/partial-state
+拒绝、连续两次 rollback 后目标对象为零，以及精确 roll-forward。
 
 ### `test_production_equivalent_upgrade.py`
 

@@ -10,6 +10,56 @@ begin;
 set local lock_timeout = '5s';
 set local statement_timeout = '60s';
 
+-- Refuse to derive adapter authority from a drifted live source.  These hashes
+-- bind the eight exact signatures to the reviewed predecessor definitions and
+-- all execution-relevant properties using role names rather than role OIDs.
+do $routine_predecessor$
+begin
+  if exists (
+    with expected(signature,fingerprint) as (values
+      ('review_append_scope_snapshot_v1(uuid, text, text, jsonb, uuid)','175ca0e89e01ce55c26d9d799a2c861b'),
+      ('review_revision_fingerprint_v1(text, jsonb)','93ba379684cff3fad1dcb5721850563c'),
+      ('review_scope_all_reference_ids_v1(jsonb)','5d1a9153045b21ec9438f17bad6ea16c'),
+      ('review_scope_checksum_v1(jsonb)','7994415c18fca9cc48b18b2db723d225'),
+      ('review_scope_current_items_v1(jsonb)','729370bc24a2ecf8efca388654b0f03c'),
+      ('review_scope_current_reference_ids_v1(jsonb)','601641764b3d2acfde78fae4e590ba6b'),
+      ('review_scope_current_snapshot_v1(jsonb)','28abac7d508e68687c2c2f0252cd8359'),
+      ('review_validate_scope_history_v1(uuid, jsonb)','fb646860c0e176bd849be7a98459a70b')
+    ), actual as (
+      select p.proname||'('||oidvectortypes(p.proargtypes)||')' as signature,
+        md5(concat_ws('|',owner.rolname,language.lanname,p.prokind::text,
+          p.provolatile::text,p.prosecdef::text,p.proisstrict::text,p.proparallel::text,
+          p.proleakproof::text,p.procost::text,p.prorows::text,coalesce(p.proconfig::text,''),
+          pg_get_function_result(p.oid),pg_get_functiondef(p.oid),
+          coalesce((select string_agg(
+            (case when acl.grantee=0 then 'PUBLIC' else grantee.rolname end)||':'||
+            acl.privilege_type||':'||acl.is_grantable::text||':'||
+            (case when acl.grantor=0 then 'PUBLIC' else grantor.rolname end),
+            '|' order by case when acl.grantee=0 then 'PUBLIC' else grantee.rolname end,
+            acl.privilege_type,acl.is_grantable,
+            case when acl.grantor=0 then 'PUBLIC' else grantor.rolname end)
+            from aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+            left join pg_roles grantee on grantee.oid=acl.grantee
+            left join pg_roles grantor on grantor.oid=acl.grantor),''))) as fingerprint
+      from pg_proc p
+      join pg_namespace namespace on namespace.oid=p.pronamespace
+      join pg_language language on language.oid=p.prolang
+      join pg_roles owner on owner.oid=p.proowner
+      where namespace.nspname='public' and p.proname in
+        ('review_append_scope_snapshot_v1','review_revision_fingerprint_v1',
+         'review_scope_all_reference_ids_v1','review_scope_checksum_v1',
+         'review_scope_current_items_v1','review_scope_current_reference_ids_v1',
+         'review_scope_current_snapshot_v1','review_validate_scope_history_v1')
+    )
+    (select signature,fingerprint from expected except select signature,fingerprint from actual)
+    union all
+    (select signature,fingerprint from actual except select signature,fingerprint from expected)
+  ) then
+    raise exception 'Issue #355 reviewed predecessor routine signature/definition/property/ACL fingerprint mismatch';
+  end if;
+end
+$routine_predecessor$;
+
 lock table
   public.comments, public.identity_center_processed_events,
   public.identity_center_users, public.notifications, public.reviews,
@@ -20,7 +70,10 @@ create temporary table issue355_relation_baseline on commit drop as
 select c.oid,c.relowner,c.relkind,c.relrowsecurity,c.relforcerowsecurity,c.relacl,
   (select md5(coalesce(string_agg(
     policy.polname||':'||policy.polcmd::text||':'||policy.polpermissive::text||':'||
-    coalesce(array_to_string(policy.polroles,','),'')||':'||
+    coalesce((select string_agg(case when role_oid=0 then 'PUBLIC' else role_name.rolname end,
+      ',' order by case when role_oid=0 then 'PUBLIC' else role_name.rolname end)
+      from unnest(policy.polroles) role_oid
+      left join pg_roles role_name on role_name.oid=role_oid),'')||':'||
     coalesce(pg_get_expr(policy.polqual,policy.polrelid),'')||':'||
     coalesce(pg_get_expr(policy.polwithcheck,policy.polrelid),''),
     '|' order by policy.polname),''))
@@ -62,21 +115,24 @@ begin
   end if;
 
   with expected(relname, acl_hash, policy_hash) as (values
-    ('comments','01325751d110098b0c41305bc21ee772','2f8bdfde6841f70c7d64541ddfbd4371'),
+    ('comments','01325751d110098b0c41305bc21ee772','380f1a0c3b1970af16ec71425b65f2f0'),
     ('identity_center_processed_events','3a6eef6333e35dd973f1d4b8cef7e564','d41d8cd98f00b204e9800998ecf8427e'),
     ('identity_center_users','3a6eef6333e35dd973f1d4b8cef7e564','d41d8cd98f00b204e9800998ecf8427e'),
-    ('notifications','80b5dc3f8df5de03126ed3ef949dcd26','4538df8d90e484e71d3c7c7d154ac106'),
-    ('reviews','01325751d110098b0c41305bc21ee772','02f320ac2de2a923848d218e3444d639'),
-    ('roles','01325751d110098b0c41305bc21ee772','e932287b0560cf79600c5f97f572d58d'),
-    ('teams','01325751d110098b0c41305bc21ee772','0ddbfc30f5f11ed4c1fec80a15cbccab'),
-    ('users','01325751d110098b0c41305bc21ee772','242f6e314391dc2bdb9c78fa9a0c73e9')
+    ('notifications','80b5dc3f8df5de03126ed3ef949dcd26','f08c612310fbeecf938d31e0a5e4806a'),
+    ('reviews','01325751d110098b0c41305bc21ee772','7f1955b6ee25bf7afd937f1ec32f941b'),
+    ('roles','01325751d110098b0c41305bc21ee772','0be7e710b6b38a985dafe00754395c74'),
+    ('teams','01325751d110098b0c41305bc21ee772','dc47a8e9365d969154020c196bbfa23e'),
+    ('users','01325751d110098b0c41305bc21ee772','57fd9c26617c29dc6edc92d231bbec85')
   ), actual as (
     select c.relname, c.relkind, c.relrowsecurity, c.relforcerowsecurity,
       md5(string_agg(coalesce(grantee_role.rolname,'PUBLIC')||':'||acl.privilege_type||':'||acl.is_grantable::text,
         '|' order by coalesce(grantee_role.rolname,'PUBLIC'),acl.privilege_type,acl.is_grantable)) as acl_hash,
       (select md5(coalesce(string_agg(
         policy.polname||':'||policy.polcmd::text||':'||policy.polpermissive::text||':'||
-        coalesce(array_to_string(policy.polroles,','),'')||':'||
+        coalesce((select string_agg(case when role_oid=0 then 'PUBLIC' else role_name.rolname end,
+          ',' order by case when role_oid=0 then 'PUBLIC' else role_name.rolname end)
+          from unnest(policy.polroles) role_oid
+          left join pg_roles role_name on role_name.oid=role_oid),'')||':'||
         coalesce(pg_get_expr(policy.polqual,policy.polrelid),'')||':'||
         coalesce(pg_get_expr(policy.polwithcheck,policy.polrelid),''),
         '|' order by policy.polname),''))
@@ -437,7 +493,10 @@ begin
        or current.relacl is distinct from baseline.relacl
        or (select md5(coalesce(string_agg(
          policy.polname||':'||policy.polcmd::text||':'||policy.polpermissive::text||':'||
-         coalesce(array_to_string(policy.polroles,','),'')||':'||
+         coalesce((select string_agg(case when role_oid=0 then 'PUBLIC' else role_name.rolname end,
+           ',' order by case when role_oid=0 then 'PUBLIC' else role_name.rolname end)
+           from unnest(policy.polroles) role_oid
+           left join pg_roles role_name on role_name.oid=role_oid),'')||':'||
          coalesce(pg_get_expr(policy.polqual,policy.polrelid),'')||':'||
          coalesce(pg_get_expr(policy.polwithcheck,policy.polrelid),''),
          '|' order by policy.polname),''))
