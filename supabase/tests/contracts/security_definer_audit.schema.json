@@ -1,0 +1,158 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "database.security-definer-audit.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "source", "boundaries", "summary", "auditArtifactComplete", "contractReady", "routines"],
+  "properties": {
+    "schemaVersion": {"const": "database.security-definer-audit.v1"},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["inventorySchemaVersion", "inventorySha256", "databaseSchemaSha", "issue"],
+      "properties": {
+        "inventorySchemaVersion": {"type": "string"},
+        "inventorySha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+        "databaseSchemaSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "issue": {"const": "tiangong-lca/database-engine#333"}
+      }
+    },
+    "boundaries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repoOwnedAcl", "platformOwnerDefaultPrivileges", "contractMigration"],
+      "properties": {
+        "repoOwnedAcl": {"$ref": "#/$defs/boundary"},
+        "platformOwnerDefaultPrivileges": {"$ref": "#/$defs/boundaryCoverage"},
+        "contractMigration": {"$ref": "#/$defs/boundaryCoverage"}
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["routineCount", "issue333OwnerRuntimeResidue", "issue333ApiResidue", "issue333PrivateResidue", "issue339ValidatedFacades", "inventoryStaticClosure", "baselineAnonAdvisorWarnings", "baselineAuthenticatedAdvisorWarnings", "baselineAdvisorWarnings", "currentAnonEffectiveExecute", "currentAuthenticatedEffectiveExecute", "currentPublicEffectiveExecute", "currentServiceRoleEffectiveExecute"],
+      "properties": {
+        "routineCount": {"const": 241},
+        "issue333OwnerRuntimeResidue": {"const": 129},
+        "issue333ApiResidue": {"const": 90},
+        "issue333PrivateResidue": {"const": 39},
+        "issue339ValidatedFacades": {"const": 14},
+        "inventoryStaticClosure": {"const": 98},
+        "baselineAnonAdvisorWarnings": {"const": 77},
+        "baselineAuthenticatedAdvisorWarnings": {"const": 124},
+        "baselineAdvisorWarnings": {"const": 201},
+        "currentAnonEffectiveExecute": {"const": 93},
+        "currentAuthenticatedEffectiveExecute": {"const": 140},
+        "currentPublicEffectiveExecute": {"const": 17},
+        "currentServiceRoleEffectiveExecute": {"const": 171}
+      }
+    },
+    "auditArtifactComplete": {"const": true},
+    "contractReady": {"const": false},
+    "routines": {
+      "type": "array",
+      "minItems": 241,
+      "maxItems": 241,
+      "items": {"$ref": "#/$defs/routine"}
+    }
+  },
+  "$defs": {
+    "boundary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue", "status"],
+      "properties": {
+        "issue": {"type": "string"},
+        "status": {"type": "string"}
+      }
+    },
+    "boundaryCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["issue", "status", "coveredByThisAudit"],
+      "properties": {
+        "issue": {"type": "string"},
+        "status": {"type": "string"},
+        "coveredByThisAudit": {"const": false}
+      }
+    },
+    "roleMatrix": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "observedCurrentExecute", "observedGrantSources", "requiredContractDisposition"],
+      "properties": {
+        "role": {"enum": ["PUBLIC", "anon", "authenticated", "service_role", "api_internal_executor", "postgres"]},
+        "observedCurrentExecute": {"type": "boolean"},
+        "observedGrantSources": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"enum": ["PUBLIC", "anon", "authenticated", "service_role", "api_internal_executor", "postgres"]}
+        },
+        "requiredContractDisposition": {"type": "string", "minLength": 1}
+      }
+    },
+    "routine": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["objectKey", "targetSchema", "migrationBatch", "cohort", "observed", "inferred", "required", "confirmed", "blockers"],
+      "properties": {
+        "objectKey": {"type": "string", "pattern": "^public\\."},
+        "targetSchema": {"enum": ["api", "private"]},
+        "migrationBatch": {"type": "string", "minLength": 1},
+        "cohort": {"enum": ["issue333-owner-runtime-residue", "issue339-validated-rls-facade", "inventory-static-closure"]},
+        "observed": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ownerRole", "securityDefiner", "searchPath", "definitionSha256", "dynamicSql", "consumerClosure", "intendedConsumers", "directConsumerEvidence", "transitiveConsumerEvidence", "dependencyCount", "dependentCount", "authorizationSignals"],
+          "properties": {
+            "ownerRole": {"enum": ["postgres", "api_internal_executor"]},
+            "securityDefiner": {"const": true},
+            "searchPath": {"type": "array", "minItems": 1, "items": {"type": "string", "pattern": "^search_path="}},
+            "definitionSha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+            "dynamicSql": {"type": "boolean"},
+            "consumerClosure": {"type": "string"},
+            "intendedConsumers": {"type": "array", "items": {"type": "string"}},
+            "directConsumerEvidence": {"type": "array"},
+            "transitiveConsumerEvidence": {"type": "array"},
+            "dependencyCount": {"type": "integer", "minimum": 0},
+            "dependentCount": {"type": "integer", "minimum": 0},
+            "authorizationSignals": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}}
+          }
+        },
+        "inferred": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["riskLevel", "signalLimit"],
+          "properties": {
+            "riskLevel": {"type": "string", "minLength": 1},
+            "signalLimit": {"const": "static-signals-are-not-runtime-authorization-proof"}
+          }
+        },
+        "required": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["ownerSignoff", "runtimeEvidence", "roleMatrix", "positiveNegativeTests", "handoffIssue"],
+          "properties": {
+            "ownerSignoff": {"type": "string"},
+            "runtimeEvidence": {"type": "string"},
+            "roleMatrix": {"type": "array", "minItems": 6, "maxItems": 6, "items": {"$ref": "#/$defs/roleMatrix"}},
+            "positiveNegativeTests": {"const": "required-by-exact-signature-before-contract"},
+            "handoffIssue": {"const": "tiangong-lca/database-engine#358"}
+          }
+        },
+        "confirmed": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": ["issue339AclValidation", "staticConsumerClosure", "ownerRuntime", "platformOwnerDefaultPrivileges"],
+          "properties": {
+            "issue339AclValidation": {"type": "boolean"},
+            "staticConsumerClosure": {"type": "boolean"},
+            "ownerRuntime": {"const": false},
+            "platformOwnerDefaultPrivileges": {"const": false}
+          }
+        },
+        "blockers": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+      }
+    }
+  }
+}
