@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: 03566bee31d66dc2264a337595854cbf13faaaf9
-lastReviewedNote: "Reviewed through Issues #339/#341, #346, and #351: ACL/catalog changes, opaque-key Worker probes, and fail-closed upgrade evidence preserve PostgREST rollback semantics without changing generated-workspace or source-of-truth boundaries."
+lastReviewedNote: "Reviewed through Issues #339/#341, #346, and #351: opaque-key Worker probes, ACL-aware rehearsal, fresh populated CLI roll-forward, and fail-closed evidence preserve PostgREST rollback semantics and workspace source-of-truth boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

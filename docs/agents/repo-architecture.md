@@ -29,7 +29,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: 03566bee31d66dc2264a337595854cbf13faaaf9
-lastReviewedNote: "Reviewed through Issues #339/#341, #346, and #351: ACL convergence, opaque-key probes, and the upgrade proof layer's new-only evidence, URL redaction, and zero-WAL retry preserve PostgREST rollback/readback and api/private ownership."
+lastReviewedNote: "Reviewed through Issues #339/#341, #346, and #351: opaque-key probes, ACL-aware per-migration rehearsal, and fresh populated CLI roll-forward preserve intended catalog evolution, PostgREST rollback/readback, and api/private ownership."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

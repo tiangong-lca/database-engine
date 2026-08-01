@@ -63,20 +63,20 @@ insert into public.command_audit_log (
 
 insert into public.worker_jobs (
   id, job_kind, worker_runtime, worker_queue, requester_type, requested_by,
-  status, phase, attempt_count, max_attempts, leased_by, lease_token,
+  status, phase, run_after, attempt_count, max_attempts, leased_by, lease_token,
   lease_expires_at, heartbeat_at, retryable, concurrency_key,
   payload_schema_version, payload_json, diagnostics, created_at, updated_at
 ) values
   (
     '34100000-0000-4000-8000-000000000101', 'lca.snapshot_gc', 'calculator',
-    'maintenance', 'service', null, 'queued', 'admission', 0, 3,
+    'maintenance', 'service', null, 'queued', 'admission', '2026-08-01 00:00:00+00', 0, 3,
     null, null, null, null, true, 'issue-341-queued',
     'issue-341.fixture.v1', '{"surface":"worker-active"}', '{}',
     '2026-08-01 00:00:00+00', '2026-08-01 00:00:00+00'
   ),
   (
     '34100000-0000-4000-8000-000000000102', 'lca.snapshot_gc', 'calculator',
-    'maintenance', 'service', null, 'running', 'execute', 1, 3,
+    'maintenance', 'service', null, 'running', 'execute', '2026-08-01 00:00:00+00', 1, 3,
     'issue-341-worker', '34100000-0000-4000-8000-000000000902',
     '2026-08-01 00:10:00+00', '2026-08-01 00:00:30+00', true,
     'issue-341-running', 'issue-341.fixture.v1',
@@ -85,7 +85,7 @@ insert into public.worker_jobs (
   ),
   (
     '34100000-0000-4000-8000-000000000103', 'lca.snapshot_gc', 'calculator',
-    'maintenance', 'service', null, 'stale', 'retry', 2, 3,
+    'maintenance', 'service', null, 'stale', 'retry', '2026-08-01 00:00:00+00', 2, 3,
     null, null, null, null, true, 'issue-341-stale',
     'issue-341.fixture.v1', '{"surface":"worker-retry"}',
     '{"lastFailure":"synthetic"}',
@@ -93,7 +93,7 @@ insert into public.worker_jobs (
   ),
   (
     '34100000-0000-4000-8000-000000000104', 'lca.snapshot_gc', 'calculator',
-    'maintenance', 'service', null, 'failed', 'terminal', 3, 3,
+    'maintenance', 'service', null, 'failed', 'terminal', '2026-08-01 00:00:00+00', 3, 3,
     null, null, null, null, false, null,
     'issue-341.fixture.v1', '{"surface":"worker-failure"}',
     '{"error":"synthetic"}',
@@ -101,7 +101,7 @@ insert into public.worker_jobs (
   ),
   (
     '34100000-0000-4000-8000-000000000105', 'lca.snapshot_gc', 'calculator',
-    'maintenance', 'service', null, 'completed', 'terminal', 1, 3,
+    'maintenance', 'service', null, 'completed', 'terminal', '2026-08-01 00:00:00+00', 1, 3,
     null, null, null, null, false, null,
     'issue-341.fixture.v1', '{"surface":"worker-artifact"}', '{}',
     '2026-08-01 00:00:00+00', '2026-08-01 00:03:00+00'
@@ -109,7 +109,7 @@ insert into public.worker_jobs (
   (
     '34100000-0000-4000-8000-000000000106', 'lcia.scope_closure_check',
     'calculator', 'solver', 'operator',
-    '34100000-0000-4000-8000-000000000001', 'queued', 'admission', 0, 3,
+    '34100000-0000-4000-8000-000000000001', 'queued', 'admission', '2026-08-01 00:00:00+00', 0, 3,
     null, null, null, null, true, 'issue-341-closure',
     'lcia.scope_closure_check.request.v1', '{"surface":"closure"}', '{}',
     '2026-08-01 00:00:00+00', '2026-08-01 00:00:00+00'
@@ -117,7 +117,7 @@ insert into public.worker_jobs (
   (
     '34100000-0000-4000-8000-000000000107', 'tidas.export_package',
     'calculator', 'package', 'operator',
-    '34100000-0000-4000-8000-000000000001', 'running', 'materialize', 1, 3,
+    '34100000-0000-4000-8000-000000000001', 'running', 'materialize', '2026-08-01 00:00:00+00', 1, 3,
     'issue-341-worker', '34100000-0000-4000-8000-000000000907',
     '2026-08-01 00:10:00+00', '2026-08-01 00:00:30+00', true,
     'issue-341-package', 'tidas.export_package.request.v1',

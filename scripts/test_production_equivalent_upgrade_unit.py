@@ -11,6 +11,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 from scripts import test_production_equivalent_upgrade as runner
 
@@ -70,6 +71,30 @@ class ProductionEquivalentUpgradeSafetyTest(unittest.TestCase):
         runner.assert_retry_wal_bytes(0, 0)
         with self.assertRaisesRegex(SystemExit, "expected=0, actual=1"):
             runner.assert_retry_wal_bytes(1, 0)
+
+    def test_new_head_relation_is_allowed_but_base_relation_drift_is_rejected(self) -> None:
+        base = {"public.rows": {"rowCount": 1}}
+        runner.assert_base_relations_preserved(
+            base,
+            {**base, "archive.acl_snapshot": {"rowCount": 10}},
+        )
+        with self.assertRaisesRegex(SystemExit, "changed=.*public.rows"):
+            runner.assert_base_relations_preserved(
+                base,
+                {"public.rows": {"rowCount": 2}},
+            )
+
+    def test_configured_head_must_be_repository_latest_numeric_migration(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            migrations = Path(directory)
+            for name in ("100_base.sql", "200_expected.sql", "300_later.sql"):
+                (migrations / name).write_text("select 1;\n", encoding="utf-8")
+            with mock.patch.object(runner, "MIGRATIONS", migrations):
+                with self.assertRaisesRegex(
+                    SystemExit,
+                    "expected migration head 200 is not repository latest numeric migration 300",
+                ):
+                    runner.migration_files("100", "200")
 
 
 if __name__ == "__main__":

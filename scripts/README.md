@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: 03566bee31d66dc2264a337595854cbf13faaaf9
-lastReviewedNote: "Reviewed through Issues #339/#341, #346, and #351: document opaque-key-safe Worker probes, ACL qualification, fail-closed upgrade evidence, URL redaction, zero-WAL retry, and PostgREST rollback/readback proof."
+lastReviewedNote: "Reviewed through Issues #339/#341, #346, and #351: document opaque-key-safe Worker probes, ACL-aware rehearsal, fresh populated CLI roll-forward, fail-closed evidence, URL redaction, zero-WAL retry, and PostgREST rollback/readback."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -361,10 +361,16 @@ Runs the local-only global populated-upgrade qualification from the reviewed
 `20260731124000` base through the exact checked-in head. It generates the
 representative identity/review/notification/audit, Worker lifecycle, package,
 cache, release, closure, and million-row package-evidence fixture; captures
-whole-database row/primary-key/content-hash oracles; fault-injects every pending
-migration; proves the five-second lock timeout and a compatible concurrent
-reader; then reconciles constraints, ACL/RLS, policies, triggers, publication
-membership, WAL, retry, and expected boundary objects.
+whole-database row/primary-key/content-hash oracles (normalizing only generic
+`created_at`/`updated_at`/`modified_at` reset timestamps and migration-evidence
+`captured_at` timestamps); fault-injects and rehearses
+every pending migration; resets and deterministically reloads the populated
+base before the real CLI roll-forward, using the contract-pinned Issue #339
+operator rollback to remove its database-global rehearsal role; proves the five-second lock timeout and
+a compatible concurrent reader; then proves every base relation oracle is
+preserved while any new physical evidence relation matches the rehearsed head,
+and reconciles constraints, ACL/RLS, policies, triggers, and publication
+membership against that head together with WAL, retry, and expected objects.
 
 The runner resets only the currently selected local Supabase project. It never
 connects to a linked or hosted project, never retains credentials or row

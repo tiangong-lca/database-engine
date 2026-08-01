@@ -126,11 +126,40 @@ def assert_retry_wal_bytes(actual: int, expected: int) -> None:
         )
 
 
+def assert_base_relations_preserved(before: dict[str, object], after: dict[str, object]) -> None:
+    missing = sorted(set(before) - set(after))
+    changed = sorted(key for key in set(before) & set(after) if before[key] != after[key])
+    if missing or changed:
+        raise SystemExit(
+            f"successful migration changed base relation oracles: missing={missing}, changed={changed}"
+        )
+
+
+def oracle_difference(expected: dict[str, object], actual: dict[str, object]) -> str:
+    return (
+        f"missing={sorted(set(expected) - set(actual))}, "
+        f"extra={sorted(set(actual) - set(expected))}, "
+        f"changed={sorted(key for key in set(expected) & set(actual) if expected[key] != actual[key])}"
+    )
+
+
 def migration_files(base: str, head: str) -> list[Path]:
-    selected: list[Path] = []
+    versioned: list[tuple[str, Path]] = []
     for path in sorted(MIGRATIONS.glob("*.sql")):
         match = re.match(r"^(\d+)_", path.name)
-        if match and base < match.group(1) <= head:
+        if match:
+            versioned.append((match.group(1), path))
+    if not versioned:
+        raise SystemExit("repository has no numeric migrations")
+    latest = max(versioned, key=lambda item: int(item[0]))[0]
+    if head != latest:
+        raise SystemExit(
+            f"expected migration head {head} is not repository latest numeric migration {latest}"
+        )
+
+    selected: list[Path] = []
+    for version, path in versioned:
+        if base < version <= head:
             selected.append(path)
     if not selected or re.match(r"^(\d+)_", selected[-1].name).group(1) != head:
         raise SystemExit(f"expected migration head {head} was not selected")
@@ -182,7 +211,9 @@ begin
     execute format(
       'select count(*), '
       'coalesce(sum(pg_catalog.hashtextextended((%s)::text, 341)::numeric), 0)::text, '
-      'coalesce(sum(pg_catalog.hashtextextended(to_jsonb(t)::text, 1341)::numeric), 0)::text '
+      'coalesce(sum(pg_catalog.hashtextextended('
+      '(to_jsonb(t) - ARRAY[''created_at'',''updated_at'',''modified_at'',''captured_at''])::text, '
+      '1341)::numeric), 0)::text '
       'from %I.%I as t',
       primary_key_expression, relation_row.schema_name, relation_row.relation_name
     ) into relation_count, primary_key_hash, row_hash;
@@ -385,6 +416,14 @@ def main() -> int:
         }
         for path in migration_paths
     ]
+    rehearsal_cleanup_paths = [ROOT / path for path in contract.get("rehearsalCleanupScripts", [])]
+    rehearsal_cleanup_manifest = [
+        {
+            "path": path.relative_to(ROOT).as_posix(),
+            "sha256": sha256_bytes(path.read_bytes()),
+        }
+        for path in rehearsal_cleanup_paths
+    ]
 
     db_url = args.db_url
     if db_url:
@@ -424,21 +463,49 @@ def main() -> int:
 
     fault_results: list[dict[str, object]] = []
     for path in migration_paths:
+        fault_data_before = json_query(db_url, DATA_ORACLE_SQL)
+        fault_catalog_before_hash = stable_hash(json_query(db_url, CATALOG_INVARIANTS_SQL))
         started = time.monotonic()
         result = psql(db_url, inject_failure(path.read_text(encoding="utf-8")), expect_failure=True)
         elapsed = time.monotonic() - started
         if "division by zero" not in result.stderr.lower():
             raise SystemExit(f"fault injection for {path.name} failed for an unexpected reason")
-        if stable_hash(json_query(db_url, CATALOG_INVARIANTS_SQL)) != catalog_before_hash:
+        if stable_hash(json_query(db_url, CATALOG_INVARIANTS_SQL)) != fault_catalog_before_hash:
             raise SystemExit(f"failed migration left catalog residue: {path.name}")
-        if json_query(db_url, DATA_ORACLE_SQL) != data_before:
+        if json_query(db_url, DATA_ORACLE_SQL) != fault_data_before:
             raise SystemExit(f"failed migration changed row/PK/hash oracle: {path.name}")
         fault_results.append({"version": migration_manifest[len(fault_results)]["version"], "seconds": round(elapsed, 3)})
-        # Establish the successfully committed prerequisite before faulting the
-        # next migration. Migration history remains at the selected base, so
-        # the later CLI roll-forward still exercises the complete pending set.
-        if path != migration_paths[-1]:
-            psql(db_url, path.read_text(encoding="utf-8"))
+        # Establish the successfully committed state before faulting the next
+        # migration. This rehearsal is reset below so the CLI roll-forward
+        # still exercises the complete pending set on a fresh populated base.
+        psql(db_url, path.read_text(encoding="utf-8"))
+
+    expected_head_catalog = json_query(db_url, CATALOG_INVARIANTS_SQL)
+    expected_head_catalog_hash = stable_hash(expected_head_catalog)
+    expected_head_data = json_query(db_url, DATA_ORACLE_SQL)
+    assert isinstance(data_before, dict) and isinstance(expected_head_data, dict)
+    assert_base_relations_preserved(data_before, expected_head_data)
+
+    for cleanup_path in rehearsal_cleanup_paths:
+        run(["psql", db_url, "-X", "-v", "ON_ERROR_STOP=1", "-f", str(cleanup_path)])
+
+    run(["supabase", "db", "reset", *target_args, "--version", base, "--no-seed", "--yes"])
+    replay_fixture_started = time.monotonic()
+    run([
+        "psql", db_url, "-X", "-v", "ON_ERROR_STOP=1",
+        "-v", f"representative_rows={rows}", "-f", str(FIXTURE_PATH),
+    ])
+    replay_fixture_seconds = time.monotonic() - replay_fixture_started
+    if replay_fixture_seconds > contract["budgets"]["fixtureSeconds"]:
+        raise SystemExit(f"replayed fixture budget exceeded: {replay_fixture_seconds:.3f}s")
+    if json_query(db_url, FIXTURE_SURFACES_SQL) != surfaces:
+        raise SystemExit("replayed fixture surfaces diverged from the deterministic fixture")
+    replayed_data = json_query(db_url, DATA_ORACLE_SQL)
+    if replayed_data != data_before:
+        assert isinstance(replayed_data, dict)
+        raise SystemExit(f"replayed fixture row/PK/hash oracle diverged: {oracle_difference(data_before, replayed_data)}")
+    if stable_hash(json_query(db_url, CATALOG_INVARIANTS_SQL)) != catalog_before_hash:
+        raise SystemExit("base catalog diverged after deterministic fixture replay")
 
     exclusive_holder = start_lock_holder(db_url, "access exclusive", "issue-341-exclusive-holder")
     try:
@@ -473,11 +540,15 @@ def main() -> int:
         raise SystemExit(f"migration WAL budget exceeded: {wal_bytes}")
 
     data_after = json_query(db_url, DATA_ORACLE_SQL)
-    if data_after != data_before:
-        raise SystemExit("successful base-to-head upgrade changed row/PK/hash oracle")
+    if data_after != expected_head_data:
+        assert isinstance(data_after, dict)
+        raise SystemExit(
+            "successful base-to-head data state diverged from rehearsed head: "
+            + oracle_difference(expected_head_data, data_after)
+        )
     catalog_after = json_query(db_url, CATALOG_INVARIANTS_SQL)
-    if catalog_after != catalog_before:
-        raise SystemExit("constraints/ACL/RLS/triggers/publication invariants drifted")
+    if catalog_after != expected_head_catalog:
+        raise SystemExit("constraints/ACL/RLS/triggers/publication state diverged from rehearsed head")
 
     role_matrix = json_query(db_url, ROLE_MATRIX_SQL)
     assert isinstance(role_matrix, dict)
@@ -504,8 +575,8 @@ def main() -> int:
     if not no_pending_migrations:
         raise SystemExit("idempotent migration retry did not report an up-to-date local database")
     assert_retry_wal_bytes(retry_wal_bytes, budgets["retryWalBytes"])
-    if json_query(db_url, DATA_ORACLE_SQL) != data_before:
-        raise SystemExit("idempotent migration retry changed row/PK/hash oracle")
+    if json_query(db_url, DATA_ORACLE_SQL) != expected_head_data:
+        raise SystemExit("idempotent migration retry changed rehearsed head row/PK/hash oracle")
 
     migration_list = run(["supabase", "migration", "list", *target_args]).stdout
     evidence = {
@@ -524,19 +595,24 @@ def main() -> int:
             "baseVersion": base,
             "headVersion": head,
             "files": migration_manifest,
+            "rehearsalCleanup": rehearsal_cleanup_manifest,
             "historyAfter": history,
             "listSha256": sha256_bytes(migration_list.encode()),
         },
         "fixture": {
             "representativeRows": rows,
             "seconds": round(fixture_seconds, 3),
+            "replaySeconds": round(replay_fixture_seconds, 3),
             "surfaces": surfaces,
         },
         "oracles": {
             "relationCount": len(data_before),
             "beforeSha256": stable_hash(data_before),
+            "expectedHeadSha256": stable_hash(expected_head_data),
             "afterSha256": stable_hash(data_after),
-            "catalogInvariantSha256": catalog_before_hash,
+            "catalogBaseSha256": catalog_before_hash,
+            "catalogExpectedHeadSha256": expected_head_catalog_hash,
+            "catalogAfterSha256": stable_hash(catalog_after),
             "catalogInvariantCategories": [
                 "constraints", "relation ACL/RLS", "policies", "triggers", "publication membership"
             ],

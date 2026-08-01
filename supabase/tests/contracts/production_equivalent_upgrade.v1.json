@@ -4,6 +4,9 @@
   "expectedHeadVersion": "20260801023000",
   "defaultRepresentativeRows": 1000000,
   "minimumQualificationRows": 1000000,
+  "rehearsalCleanupScripts": [
+    "supabase/operator/issue_339_restore_expand_acl.sql"
+  ],
   "budgets": {
     "fixtureSeconds": 300,
     "lockFailureMinimumSeconds": 4.5,
