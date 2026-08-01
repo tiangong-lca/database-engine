@@ -40,11 +40,13 @@ class DatabaseContractManifestTest(unittest.TestCase):
             runner.subprocess, "run",
             side_effect=[
                 subprocess.CompletedProcess([], 0, stdout="a" * 40 + "\n"),
+                subprocess.CompletedProcess([], 0, stdout=""),
                 subprocess.CompletedProcess([], 0, stdout="2.98.0\n"),
             ],
         ):
             evidence = runner.suite_evidence("canonical-local", files, 19)
         self.assertEqual(evidence["gitCommit"], "a" * 40)
+        self.assertFalse(evidence["worktreeDirty"])
         self.assertEqual(evidence["migrationHead"], "20260801131918")
         self.assertEqual(evidence["supabaseCliVersion"], "2.98.0")
         self.assertEqual(evidence["filesSha256"], runner.stable_json_sha256(files))

@@ -280,6 +280,10 @@ def suite_evidence(suite_name: str, files: list[str], excluded_count: int) -> di
         ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
         text=True, stdout=subprocess.PIPE,
     ).stdout.strip()
+    worktree_dirty = bool(subprocess.run(
+        ["git", "status", "--porcelain", "--untracked-files=all"],
+        cwd=ROOT, check=True, text=True, stdout=subprocess.PIPE,
+    ).stdout.strip())
     cli_version = subprocess.run(
         ["supabase", "--version"], cwd=ROOT, check=True,
         text=True, stdout=subprocess.PIPE,
@@ -287,6 +291,7 @@ def suite_evidence(suite_name: str, files: list[str], excluded_count: int) -> di
     return {
         "suite": suite_name,
         "gitCommit": commit,
+        "worktreeDirty": worktree_dirty,
         "migrationHead": migration_versions[-1],
         "supabaseCliVersion": cli_version,
         "manifestSha256": hashlib.sha256(MANIFEST.read_bytes()).hexdigest(),

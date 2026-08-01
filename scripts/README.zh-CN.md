@@ -274,7 +274,9 @@ python scripts/run_database_contract.py --suite canonical-local --list
 ```
 
 当前 manifest 动态得到 64 个 canonical 顶层 pgTAP，并保留 19 个带分类、
-处置状态、跟踪 Issue 与 replacement 元数据的显式 exclusion。`lca-private-expand`
+处置状态、跟踪 Issue 与 replacement 元数据的显式 exclusion。清单证据同时记录
+exact commit、migration head、CLI 版本、manifest/文件清单 hash 与 worktree dirty
+状态，避免把本地 dirty 内容误写成 clean commit 证据。`lca-private-expand`
 使用 `--if-activated` 时，仅在仓库尚未跟踪任何 #357 generator、contract 或
 migration 激活路径时报告未激活。一旦出现任一激活路径，完整的 freeze/receipt、
 sidecar/schema、capture/generator 脚本与两阶段 reviewed migration 都必须各自

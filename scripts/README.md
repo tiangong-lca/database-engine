@@ -283,7 +283,10 @@ python scripts/run_database_contract.py --suite canonical-local --list
 ```
 
 The current derived baseline is 64 selected top-level pgTAP files plus 19
-metadata-bearing exclusions. `lca-private-expand` additionally requires the
+metadata-bearing exclusions. The list evidence records the exact commit,
+migration head, CLI version, manifest/file-list hashes, and whether the worktree
+was dirty, so local development output cannot masquerade as clean exact-commit
+evidence. `lca-private-expand` additionally requires the
 canonical hashed Issue #357 freeze and delegates its versioned physical-object,
 exposure-surface, fingerprint, and receipt semantics to the official #357
 freezer. CI uses `--if-activated`: it skips only when
