@@ -355,8 +355,12 @@ fixture 与资格收据仍由当前 HEAD 的精确 SHA-256 单独绑定。
 python scripts/run_database_contract.py --suite canonical-local \
   --security-definer-transition-workdir <clean-stack-a> \
   --security-definer-transition-workdir <clean-stack-b> \
+  --security-definer-transition-source-workdir <clean-source-worktree> \
   --security-definer-transition-migration <issue-356-migration.sql> \
   --security-definer-transition-rollback <issue-356-operator-rollback.sql> \
+  --security-definer-transition-qualification-receipt \
+    supabase/tests/contracts/security_definer_transition_qualification_receipt.issue-356.json \
+  --security-definer-transition-qualification-receipt-sha256 <exact-sha256> \
   --security-definer-transition-migration-sha256 <exact-sha256> \
   --security-definer-transition-rollback-sha256 <exact-sha256> \
   --security-definer-transition-base 597072ca34a62cdc93df9bf0896a9d361901852c
@@ -364,7 +368,9 @@ python scripts/run_database_contract.py --suite canonical-local \
 
 两个 workdir 必须是处于 exact base 的独立 loopback stack。gate 会执行 baseline audit、
 migration、live transition audit、operator rollback、baseline bytes 恢复、rollforward，
-并比较第二个 stack 的 bytes/SHA。缺少输入、SQL bytes 改变、reset 失败或 audit drift
+并从 immutable sequence-0 lineage/audit 读取 baseline，禁止结算后用 mutable current
+lineage 替代历史基线，同时比较第二个 stack 的 bytes/SHA。缺少输入、SQL bytes 改变、
+reset 失败或 audit drift
 都会 fail closed。
 
 ### Security ACL Expand 验证

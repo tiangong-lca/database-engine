@@ -26,6 +26,18 @@ BASELINE_AUDIT = CONTRACT_DIR / "security_definer_audit.json"
 BASELINE_AUDIT_SHA = CONTRACT_DIR / "security_definer_audit.sha256"
 LINEAGE = CONTRACT_DIR / "privileged_routine_lineage.json"
 LINEAGE_SHA = CONTRACT_DIR / "privileged_routine_lineage.sha256"
+TRANSITION_BASELINE_LINEAGE = (
+    CONTRACT_DIR / "privileged_routine_lineage.transition-000-issue-333-lineage-baseline.json"
+)
+TRANSITION_BASELINE_LINEAGE_SHA = (
+    CONTRACT_DIR / "privileged_routine_lineage.transition-000-issue-333-lineage-baseline.sha256"
+)
+TRANSITION_BASELINE_AUDIT = (
+    CONTRACT_DIR / "security_definer_audit_v2.transition-000-issue-333-lineage-baseline.json"
+)
+TRANSITION_BASELINE_AUDIT_SHA256 = (
+    "53e955127545fee508bed8b67d85d497967c8e7397b79c70e988a015ea0e9359"
+)
 OUT = CONTRACT_DIR / "security_definer_audit_v2.json"
 SHA = CONTRACT_DIR / "security_definer_audit_v2.sha256"
 CONFIG = ROOT / "supabase/config.toml"
@@ -40,13 +52,35 @@ BASELINE_PROVENANCE = {
     "databaseSchemaSha": "05d1387cc073da8161db782db978a77431ff8b3f",
     "lineageSnapshotSha256": "996a95d81ace738380a6de557cfc3723f58e1b3158aa25adc4427a54bc827eb9",
 }
-EXPECTED_CURRENT_TRANSITION = {
+BASELINE_CURRENT_TRANSITION = {
     "sequence": 0,
     "batch": "issue-333-lineage-baseline",
     "databaseSchemaSha": "05d1387cc073da8161db782db978a77431ff8b3f",
     "predecessorArtifactSha256": "8fca15a8728c79a73784199950f182a9465c33098e3c0b6e5edd54836c6669f7",
 }
-EXPECTED_COMPLETED_TRANSITIONS: tuple[dict[str, Any], ...] = ()
+EXPECTED_CURRENT_TRANSITION = {
+    "sequence": 1,
+    "batch": "issue-356-worker-control-plane",
+    "databaseSchemaSha": "7a609de6e68848a66ad8abfbec5681211302b108",
+    "predecessorArtifactSha256": "53e955127545fee508bed8b67d85d497967c8e7397b79c70e988a015ea0e9359",
+}
+EXPECTED_COMPLETED_TRANSITIONS: tuple[dict[str, Any], ...] = ({
+    "sequence": 0,
+    "batch": "issue-333-lineage-baseline",
+    "databaseSchemaSha": "05d1387cc073da8161db782db978a77431ff8b3f",
+    "predecessorArtifactSha256": "8fca15a8728c79a73784199950f182a9465c33098e3c0b6e5edd54836c6669f7",
+    "predecessorAuditPath": "supabase/tests/contracts/security_definer_audit.json",
+    "producedAuditV2Sha256": "53e955127545fee508bed8b67d85d497967c8e7397b79c70e988a015ea0e9359",
+    "producedAuditV2Path": (
+        "supabase/tests/contracts/"
+        "security_definer_audit_v2.transition-000-issue-333-lineage-baseline.json"
+    ),
+    "receiptPath": (
+        "supabase/tests/contracts/"
+        "security_definer_transition_receipt.000-issue-333-lineage-baseline.json"
+    ),
+    "receiptSha256": "f8931edaa90a8cd2608d38b79e6d5fc24c3c82ff440f4d6a5aee65aeb792ca7d",
+},)
 
 CATALOG_QUERY = r"""
 select coalesce(jsonb_agg(jsonb_build_object(
@@ -711,7 +745,13 @@ def bootstrap_lineage(
 def validate_lineage(
     lineage: dict[str, Any], inventory: dict[str, Any],
     inventory_hash: str, baseline_audit_hash: str,
+    *, expected_current_transition: dict[str, Any] | None = None,
+    expected_completed_transitions: tuple[dict[str, Any], ...] | None = None,
 ) -> None:
+    if expected_current_transition is None:
+        expected_current_transition = EXPECTED_CURRENT_TRANSITION
+    if expected_completed_transitions is None:
+        expected_completed_transitions = EXPECTED_COMPLETED_TRANSITIONS
     if lineage.get("schemaVersion") != "database.privileged-routine-lineage.v1":
         raise ValueError("unexpected privileged routine lineage schemaVersion")
     if inventory_hash != BASELINE_PROVENANCE["inventorySha256"]:
@@ -723,14 +763,14 @@ def validate_lineage(
     source = lineage.get("source", {})
     if source.get("baseline") != BASELINE_PROVENANCE:
         raise ValueError("privileged routine immutable baseline provenance differs")
-    if source.get("currentTransition") != EXPECTED_CURRENT_TRANSITION:
+    if source.get("currentTransition") != expected_current_transition:
         raise ValueError("privileged routine current transition provenance differs from reviewed code")
     if source.get("issue") != "tiangong-lca/database-engine#333":
         raise ValueError("privileged routine lineage Issue differs")
     completed = source.get("completedTransitions")
     if not isinstance(completed, list):
         raise ValueError("privileged routine completed transition history is missing")
-    if completed != list(EXPECTED_COMPLETED_TRANSITIONS):
+    if completed != list(expected_completed_transitions):
         raise ValueError("completed transition history differs from reviewed immutable receipts")
     predecessor = BASELINE_PROVENANCE["auditV1Sha256"]
     for sequence, transition in enumerate(completed):

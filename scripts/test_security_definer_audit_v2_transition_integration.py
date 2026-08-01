@@ -334,7 +334,9 @@ def validate_receipt(
         audit.CONTRACT_DIR / "security_definer_transition_fixture.v1.json",
         audit.CONTRACT_DIR / "security_definer_transition_fixture.v1.sha256",
     )
-    audit.validate_transition_fixture(fixture, audit.LINEAGE_SHA.read_text(encoding="utf-8").strip())
+    audit.validate_transition_fixture(
+        fixture, audit.TRANSITION_BASELINE_LINEAGE_SHA.read_text(encoding="utf-8").strip(),
+    )
     source = fixture["source"]
     if not PurePosixPath(migration_file.relative).name.startswith(source["migrationVersion"] + "_"):
         raise ValueError("migration path does not match the reviewed migration version")
@@ -433,25 +435,40 @@ def load_catalog(connection: Connection, *, cwd: Path) -> dict[str, dict[str, An
 def baseline_bytes(connection: Connection, *, cwd: Path) -> bytes:
     inventory, inventory_hash = audit.read_hashed_json(audit.INVENTORY, audit.INVENTORY_SHA)
     baseline, baseline_hash = audit.read_hashed_json(audit.BASELINE_AUDIT, audit.BASELINE_AUDIT_SHA)
-    lineage, lineage_hash = audit.read_hashed_json(audit.LINEAGE, audit.LINEAGE_SHA)
-    audit.validate_lineage(lineage, inventory, inventory_hash, baseline_hash)
+    lineage, lineage_hash = audit.read_hashed_json(
+        audit.TRANSITION_BASELINE_LINEAGE, audit.TRANSITION_BASELINE_LINEAGE_SHA,
+    )
+    audit.validate_lineage(
+        lineage, inventory, inventory_hash, baseline_hash,
+        expected_current_transition=audit.BASELINE_CURRENT_TRANSITION,
+        expected_completed_transitions=(),
+    )
     observed = audit.build_audit(
         lineage, lineage_hash, baseline, load_catalog(connection, cwd=cwd), audit.exposed_schemas(),
     )
-    committed, _ = audit.read_hashed_json(audit.OUT, audit.SHA)
-    if observed != committed:
-        raise ValueError("clean stack baseline differs from committed v2 audit")
+    frozen_raw = audit.read_reviewed_contract_bytes(
+        str(audit.TRANSITION_BASELINE_AUDIT.relative_to(audit.ROOT)),
+    )
+    if audit.sha256_bytes(frozen_raw) != audit.TRANSITION_BASELINE_AUDIT_SHA256:
+        raise ValueError("immutable transition baseline audit bytes differ")
+    frozen = json.loads(frozen_raw)
+    if frozen_raw != audit.canonical(frozen).encode("utf-8") or observed != frozen:
+        raise ValueError("clean stack baseline differs from immutable v2 audit")
     return audit.canonical(observed).encode("utf-8")
 
 
 def transitioned_bytes(connection: Connection, *, cwd: Path) -> bytes:
     baseline, _ = audit.read_hashed_json(audit.BASELINE_AUDIT, audit.BASELINE_AUDIT_SHA)
-    lineage, _ = audit.read_hashed_json(audit.LINEAGE, audit.LINEAGE_SHA)
+    lineage, _ = audit.read_hashed_json(
+        audit.TRANSITION_BASELINE_LINEAGE, audit.TRANSITION_BASELINE_LINEAGE_SHA,
+    )
     fixture, fixture_hash = audit.read_hashed_json(
         audit.CONTRACT_DIR / "security_definer_transition_fixture.v1.json",
         audit.CONTRACT_DIR / "security_definer_transition_fixture.v1.sha256",
     )
-    audit.validate_transition_fixture(fixture, audit.LINEAGE_SHA.read_text(encoding="utf-8").strip())
+    audit.validate_transition_fixture(
+        fixture, audit.TRANSITION_BASELINE_LINEAGE_SHA.read_text(encoding="utf-8").strip(),
+    )
     by_original = {row["originalObjectKey"]: row for row in lineage["lineages"]}
     for move in fixture["moves"]:
         row = by_original[move["originalObjectKey"]]

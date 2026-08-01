@@ -404,8 +404,12 @@ there is no successful skip mode:
 python scripts/run_database_contract.py --suite canonical-local \
   --security-definer-transition-workdir <clean-stack-a> \
   --security-definer-transition-workdir <clean-stack-b> \
+  --security-definer-transition-source-workdir <clean-source-worktree> \
   --security-definer-transition-migration <issue-356-migration.sql> \
   --security-definer-transition-rollback <issue-356-operator-rollback.sql> \
+  --security-definer-transition-qualification-receipt \
+    supabase/tests/contracts/security_definer_transition_qualification_receipt.issue-356.json \
+  --security-definer-transition-qualification-receipt-sha256 <exact-sha256> \
   --security-definer-transition-migration-sha256 <exact-sha256> \
   --security-definer-transition-rollback-sha256 <exact-sha256> \
   --security-definer-transition-base 597072ca34a62cdc93df9bf0896a9d361901852c
@@ -414,6 +418,8 @@ python scripts/run_database_contract.py --suite canonical-local \
 Both workdirs must be independent loopback stacks at the exact base. The gate
 performs baseline audit, migration, live transition audit, operator rollback,
 baseline byte restoration, rollforward, and a second-stack byte/SHA comparison.
+The baseline lineage and v2 audit are immutable sequence-0 artifacts; the gate
+never substitutes the mutable current lineage after a transition is settled.
 Missing inputs, changed SQL bytes, reset failure, or any audit drift fails closed.
 
 ### `test_worker_control_plane_upgrade.py`
