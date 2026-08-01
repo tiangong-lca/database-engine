@@ -238,10 +238,48 @@ test assets, keeps Preview/upgrade/fixture/benchmark assets out of the canonical
 pgTAP suite, checks the exact reviewed lint-error baseline, and verifies the
 stable catalog hash and generated-workspace cleanliness.
 
+The canonical contract also runs `public_inventory_closure.py --check`. That
+gate joins the imported workspace #533 per-object ledger to the live catalog at
+the database #337 merge base, records tables/views/materialized views/functions/
+procedures, exact routine identity arguments, ACL/RLS/default privileges, and
+FK/rewrite/trigger/policy/composite/body dependencies, then fails if any live
+`public` object is unmapped. The deterministic output includes SCC-aware Expand
+and reverse Contract order plus exact-SHA static-consumer evidence and explicit
+runtime/owner residue.
+
 ```bash
 python scripts/run_database_contract.py --suite canonical-local
 python scripts/run_database_contract.py --suite worker-control-plane
 ```
+
+For an independently named local stack, export its direct `DATABASE_URL` and
+set `SUPABASE_WORKDIR` to that stack's parent directory, then use
+`--skip-reset --skip-data-api`; SQL, lint, catalog, and public-inventory checks
+bind to that explicit stack instead of the repo-default stack.
+Run Data API proof separately against the matching explicit REST URL/keys.
+
+### `public_inventory_closure.py`
+
+Refresh consumer evidence from the exact commits pinned in the checked-in
+consumer manifest without switching those repositories:
+
+```bash
+python scripts/public_inventory_closure.py --scan-consumers <lca-workspace-root>
+```
+
+After a local reset, write or verify the deterministic database contract:
+
+```bash
+python scripts/public_inventory_closure.py --write
+python scripts/public_inventory_closure.py --check
+python -m unittest scripts/test_public_inventory_closure.py
+```
+
+`contractReady=false` is expected while the emitted residue still contains
+dynamic-SQL or runtime/owner-confirmation blockers. A missing mapping, invalid
+target, non-exact repository SHA, duplicate key, or live/ledger count drift is
+always a hard failure; an unknown consumer is retained as an explicit blocker
+and is never silently converted to `retire`.
 
 ### `test_worker_control_plane_upgrade.py`
 

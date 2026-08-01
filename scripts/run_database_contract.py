@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
@@ -13,13 +14,26 @@ ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "supabase/tests/manifest.json"
 
 
+def supabase_command(*args: str) -> list[str]:
+    command = ["supabase"]
+    if workdir := os.environ.get("SUPABASE_WORKDIR"):
+        command.extend(["--workdir", workdir])
+    command.extend(args)
+    return command
+
+
 def run(command: list[str]) -> None:
     print("+", " ".join(command), flush=True)
     subprocess.run(command, cwd=ROOT, check=True)
 
 
 def check_lint() -> None:
-    command = ["supabase", "db", "lint", "--local", "--level", "warning", "--fail-on", "none"]
+    command = supabase_command("db", "lint")
+    if (db_url := os.environ.get("DATABASE_URL")) and not os.environ.get("SUPABASE_WORKDIR"):
+        command.extend(["--db-url", db_url])
+    else:
+        command.append("--local")
+    command.extend(["--level", "warning", "--fail-on", "none"])
     print("+", " ".join(command), flush=True)
     result = subprocess.run(command, cwd=ROOT, check=True, text=True, stdout=subprocess.PIPE)
     report = json.loads(result.stdout)
@@ -81,6 +95,7 @@ def main() -> int:
     parser.add_argument("--suite", default="canonical-local")
     parser.add_argument("--skip-reset", action="store_true")
     parser.add_argument("--skip-lint", action="store_true")
+    parser.add_argument("--skip-data-api", action="store_true")
     args = parser.parse_args()
     manifest, classified = load_and_validate_manifest()
     if args.suite not in manifest["suites"]:
@@ -94,13 +109,25 @@ def main() -> int:
         raise SystemExit(f"suite {args.suite} selected no files")
     if not args.skip_reset:
         run(["supabase", "db", "reset", "--local"])
-    run(["supabase", "test", "db", *files, "--local"])
-    run([sys.executable, "scripts/test_worker_control_plane_data_api.py"])
+    test_command = supabase_command("test", "db", *files)
+    if (db_url := os.environ.get("DATABASE_URL")) and not os.environ.get("SUPABASE_WORKDIR"):
+        test_command.extend(["--db-url", db_url])
+    else:
+        test_command.append("--local")
+    run(test_command)
+    if not args.skip_data_api:
+        run([sys.executable, "scripts/test_worker_control_plane_data_api.py"])
     if not args.skip_lint:
         # CLI defaults to exit zero even when it prints ERROR diagnostics.
         check_lint()
     run([sys.executable, "scripts/export_database_contract.py", "--check"])
-    run(["git", "diff", "--exit-code", "--", "supabase/workspace"])
+    run([sys.executable, "scripts/public_inventory_closure.py", "--check"])
+    run([
+        "git", "diff", "--exit-code", "--",
+        "supabase/workspace/remote_schema.sql",
+        "supabase/workspace/global",
+        "supabase/workspace/schemas",
+    ])
     return 0
 
 
