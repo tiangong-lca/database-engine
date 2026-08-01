@@ -106,6 +106,11 @@ artifact/sidecar/schema, and each reviewed migration phase are mandatory;
 partial or ambiguous activation fails before SQL and cannot become an empty
 green suite.
 
+The GitHub fresh-stack jobs install the pinned `jsonschema==4.23.0` dependency
+before invoking the canonical runner. This dependency is required by the
+SECURITY DEFINER v2 JSON Schema tests; omitting it is an invalid CI environment,
+not a skippable test result.
+
 ## Proof Matrix
 
 | Change type | Minimum local proof | Stronger proof when risk is higher | Notes |
