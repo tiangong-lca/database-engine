@@ -55,8 +55,10 @@ select ok(
 );
 
 select ok(
-  not (select prosecdef from pg_proc where oid = 'public.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure),
-  'public search wrapper remains security invoker'
+  (select p.prosecdef and owner_role.rolname = 'api_internal_executor'
+   from pg_proc p join pg_roles owner_role on owner_role.oid = p.proowner
+   where p.oid = 'public.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure),
+  'public search wrapper uses the RLS-bound internal executor'
 );
 
 select ok(
@@ -70,8 +72,8 @@ select ok(
 );
 
 select ok(
-  has_function_privilege('authenticated', 'private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])', 'EXECUTE'),
-  'authenticated can execute the hardcoded flow search helper through the wrapper path'
+  not has_function_privilege('authenticated', 'private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])', 'EXECUTE'),
+  'authenticated cannot execute the hardcoded flow search helper directly'
 );
 
 select set_config('request.jwt.claim.role', 'authenticated', true);

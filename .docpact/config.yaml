@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-01"
-lastReviewedCommit: "833564c7ced2037d07e09d3f5bb800f5b430e469"
-lastReviewedNote: "Reviewed for Issue #346 follow-up: branch automation routes also cover rollback and readback of the prior allowlisted PostgREST snapshot."
+lastReviewedCommit: "a3b1f19aaceef1cb6037180dc55e454d00ac08eb"
+lastReviewedNote: "Reviewed through Issue #339 and the Issue #346 follow-up: ACL convergence and serialized persistent-dev PostgREST reconciliation, including rollback and readback of the prior allowlisted snapshot, remain covered by migration/test/tooling routes with redacted hosted evidence."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

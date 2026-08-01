@@ -197,6 +197,33 @@ Rules:
 - Treat the values as branch-specific. `main`, persistent `dev`, and any preview branch that needs webhook execution must each have the required secrets.
 - If a branch is recreated or relinked, re-check the Vault entries before testing webhook-driven flows.
 
+## Hosted Data API security operator gate
+
+During the schema-boundary Expand phase, hosted PostgREST must expose exactly
+`api,public,graphql_public` in the reviewed order. Keeping `public` is an explicit compatibility
+decision; `private`, `util`, and `archive` are never exposed. The repository
+config and representative `api` objects are owned by their implementation
+change, while Issue #339 supplies the independent Management API readback and
+negative REST gate in the read-only `scripts/hosted_security_acl.py`. Configuration
+mutation remains exclusively behind `scripts/apply_postgrest_config.py` and its
+allowlisted diff, readback, and rollback gate.
+
+Public search wrappers that require `private` helpers run through the
+non-login, non-BYPASSRLS `api_internal_executor`, which inherits authenticated
+transport prerequisites while retaining its own RLS-bound identity; browser roles
+receive no direct `private` USAGE or EXECUTE. Two lifecycle bundle RPCs remain
+authenticated compatibility contracts. Expand records that fact instead of
+silently breaking callers; Contract removes them after consumer-zero evidence.
+
+Migrations close default privileges owned by `postgres`. Supabase's internal
+`supabase_admin` defaults cannot be altered by the migration owner; an
+authorized owner session must run
+`supabase/operator/issue_339_supabase_admin_default_privileges.sql`, then the
+hosted gate must report `hostedOperatorReady=true`. Until both exposed-schema
+and owner-default readbacks pass, Preview/dev/production security proof is
+blocked. Never treat a local config value or SQL catalog check alone as hosted
+Data API exposure evidence.
+
 ## Default workflow
 
 ### Routine schema change

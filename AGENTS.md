@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 833564c7ced2037d07e09d3f5bb800f5b430e469
-lastReviewedNote: "Reviewed for Issue #346 follow-up: persistent dev also restores and verifies the prior allowlisted PostgREST snapshot when post-PATCH readback fails."
+lastReviewedCommit: a3b1f19aaceef1cb6037180dc55e454d00ac08eb
+lastReviewedNote: "Reviewed through Issue #339 and the Issue #346 follow-up: ACL migration truth and serialized persistent-dev PostgREST reconciliation, including restoration and verification of the prior allowlisted snapshot after readback failure, preserve production integration, repository ownership, and hosted evidence boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

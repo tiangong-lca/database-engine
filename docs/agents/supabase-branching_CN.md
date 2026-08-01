@@ -175,6 +175,26 @@ Git `main` 由 Supabase GitHub integration 处理。运维人员仍可在本地�
 - 这些值是 branch-specific 的。`main`、持久化 `dev`，以及任何需要执行 webhook 的 preview branch 都要各自提供所需 secret。
 - 如果 branch 被重建或重新关联，测试 webhook 之前要重新核对 Vault entries。
 
+## Hosted Data API 安全运维门
+
+Schema boundary Expand 阶段，hosted PostgREST 必须精确暴露
+`api,public,graphql_public`（受审顺序）。保留 `public` 是明确的兼容阶段；`private`、`util`、
+`archive` 不得暴露。Issue #339 通过 `scripts/hosted_security_acl.py` 独立执行
+Management API readback 和真实 REST negative gate；该脚本保持只读，配置变更仅通过
+`scripts/apply_postgrest_config.py` 的 allowlisted diff/readback/rollback gate。不能用本地 config 或单独 SQL
+catalog 查询替代 hosted exposure 证据。
+
+需要调用 `private` helper 的 public search wrapper 通过 non-login、non-BYPASSRLS
+且继承 authenticated transport prerequisite 的 `api_internal_executor` 执行；browser role 不获得直接 `private`
+USAGE/EXECUTE。两个 lifecycle bundle RPC 仍是 authenticated compatibility
+contract。Expand 明确记录该边界；consumer-zero 证据成立后，Contract 才移除它们。
+
+Migration 负责关闭 `postgres` owner 的 default privileges。内部
+`supabase_admin` owner defaults 需要有权限的 owner session 执行
+`supabase/operator/issue_339_supabase_admin_default_privileges.sql`，随后 hosted
+gate 必须返回 `hostedOperatorReady=true`。这两个 readback 未同时通过前，
+Preview/dev/production security proof 保持 blocked。
+
 ## 默认工作流
 
 ### 常规 schema 变更
