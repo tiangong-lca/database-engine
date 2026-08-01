@@ -37,7 +37,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: 05d1387cc073da8161db782db978a77431ff8b3f
-lastReviewedNote: "Reviewed for Issue #354 hosted repair: exact ACL variants, explicit rollback evidence, blank-to-head convergence, scoped artifact guards, OID-preserving moves, and production-equivalent proof preserve ownership and hosted boundaries."
+lastReviewedNote: "Reviewed through the Issue #354 hosted repair and for #333: exact ACL convergence and immutable five-schema proof remain intact while the full SECURITY DEFINER audit separates current evidence, inferred signals, required Contract proof, and confirmed boundaries without resolving #352."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -125,6 +125,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - generated workspace helpers are low-risk to inspect with `python scripts/<name>.py --help`
 - public-boundary inventory changes must run `python scripts/public_inventory_closure.py --check`; the checked contract owns immutable workspace/database provenance, exact object mapping, catalog dependencies, ACL/RLS/default-privilege evidence, SCC-aware migration order, exact-SHA consumer evidence, and explicit Contract residue; generation must never derive provenance from a moving remote ref
 - schema-boundary changes must run `python scripts/schema_boundary_phase.py`; Expand requires the nine core public tables plus inventory-backed non-public targets, while only a separately reviewed Contract phase may enforce zero additional public application relations
+- SECURITY DEFINER evidence changes must run `python scripts/security_definer_audit.py --check`; the audit covers every public SECURITY DEFINER exact signature and keeps observed catalog facts, inferred static signals, required owner/runtime proof, and confirmed evidence separate; it must leave Issue #352 blocked and `contractReady=false`
 
 ## Ownership Boundaries
 

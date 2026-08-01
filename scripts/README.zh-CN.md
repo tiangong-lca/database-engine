@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: a1be848fefc88d68c1073f98c9e3ecf866095399
-lastReviewedNote: "已为 Issues #353/#354 复核：保留 immutable provenance gate，并记录五 schema 导出以及 phase、REST、rollback 与 upgrade 验证入口。"
+lastReviewedNote: "已为 Issues #353/#354 与 #333 复核：保留 immutable provenance 和五 schema 验证入口，并记录 deterministic SECURITY DEFINER audit、role matrix 与 fail-closed #352/#358 边界。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -287,6 +287,22 @@ review/source/merge-base lineage，与唯一用于 migration/catalog 重放的
 `databaseSchemaSha` 明确分离；旧 #338 artifact hash 仅作为 lineage。
 `--verify-provenance` 不读取移动 remote 即可重放这些关系；`--check` 先验证
 canonical JSON bytes 与 committed SHA-256，再执行 committed-vs-generated 对比。
+
+### `security_definer_audit.py`
+
+在 inventory 固定的相同 schema 上生成或校验完整 SECURITY DEFINER 证据总账：
+
+```bash
+python scripts/security_definer_audit.py --write
+python scripts/security_definer_audit.py --check
+python -m unittest scripts/test_security_definer_audit.py
+```
+
+产物保留全部 241 个 exact signatures：129 个 #333 owner/runtime residue
+（90 api、39 private）、14 个 #339 RLS-bound facade，以及 98 个 inventory static
+closure。逐项字段严格区分 observed catalog evidence、inferred signal、required
+Contract proof 与 confirmed fact；静态 signal 不等于 runtime authorization 证明。
+#352 继续 Blocked，#358 负责物理迁移，gate 始终保持 `contractReady=false`。
 
 ### Security ACL Expand 验证
 

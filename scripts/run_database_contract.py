@@ -123,6 +123,7 @@ def main() -> int:
     run([sys.executable, "scripts/export_database_contract.py", "--check"])
     run([sys.executable, "scripts/schema_boundary_phase.py"])
     run([sys.executable, "scripts/public_inventory_closure.py", "--check"])
+    run([sys.executable, "scripts/security_definer_audit.py", "--check"])
     run([
         "git", "diff", "--exit-code", "--",
         "supabase/workspace/remote_schema.sql",

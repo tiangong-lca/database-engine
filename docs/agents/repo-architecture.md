@@ -29,7 +29,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: 05d1387cc073da8161db782db978a77431ff8b3f
-lastReviewedNote: "Reviewed for Issue #354 hosted repair: exact source-ACL variants, fail-closed rollback evidence, blank-to-head ACL convergence, and scoped generation guards preserve the intended catalog and Data API boundaries."
+lastReviewedNote: "Reviewed through the Issue #354 hosted repair and for #333: exact ACL convergence, immutable provenance, and five-schema boundaries remain intact while the stable contract adds a full SECURITY DEFINER evidence ledger without performing Contract migration."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -79,6 +79,13 @@ baseline, reconciles the #337 delta with the current `dev` head, and is regenera
 from a live local catalog by `scripts/public_inventory_closure.py`. Generated
 dependency and consumer evidence belongs in that contract surface, not in
 `supabase/workspace/**`.
+
+The stable `security_definer_audit.*` contract derives from that inventory and
+the exact live definitions at its immutable schema SHA. It keeps the complete
+241-signature ledger, including #339 facades, while separating observed ACL and
+owner facts from inferred static authorization signals, required #358 proof,
+and actually confirmed evidence. It never substitutes for runtime telemetry,
+the blocked platform-owner work in #352, or physical api/private migration.
 
 Its provenance separates the exact workspace baseline/gitlink and historical
 review/source/merge-base lineage from `databaseSchemaSha`, the only immutable

@@ -2,7 +2,7 @@ version: 1
 layout: repo
 lastReviewedAt: "2026-08-01"
 lastReviewedCommit: "05d1387cc073da8161db782db978a77431ff8b3f"
-lastReviewedNote: "Reviewed for Issue #354 hosted repair: routes retain immutable provenance, explicit rollback evidence, scoped ACL generation guards, blank-to-head convergence, and OID/REST/production-equivalent validation."
+lastReviewedNote: "Reviewed through the Issue #354 hosted repair and for #333: routes retain immutable ACL provenance and blank-to-head convergence while covering the full SECURITY DEFINER owner/runtime audit, exact role matrix, and fail-closed Contract handoff."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -122,6 +122,16 @@ routing:
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
         - scripts/README.md
+    security-definer-audit:
+      paths:
+        - scripts/security_definer_audit.py
+        - scripts/test_security_definer_audit.py
+        - supabase/tests/20260801_security_definer_owner_runtime_audit.sql
+        - supabase/tests/contracts/security_definer_audit.*
+        - docs/agents/repo-validation.md
+        - docs/agents/repo-architecture.md
+        - scripts/README.md
+        - scripts/README.zh-CN.md
     hybrid-search-performance:
       paths:
         - supabase/migrations/*hybrid_search*.sql

@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: a1be848fefc88d68c1073f98c9e3ecf866095399
-lastReviewedNote: "Reviewed through Issues #353/#354: retain immutable provenance gates and document five-schema export plus phase, REST, rollback, and upgrade qualification entrypoints."
+lastReviewedNote: "Reviewed through Issues #353/#354 and for #333: retain immutable provenance and five-schema qualification entrypoints while documenting deterministic SECURITY DEFINER audit generation and fail-closed #352/#358 boundaries."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -273,7 +273,8 @@ test assets, keeps Preview/upgrade/fixture/benchmark assets out of the canonical
 pgTAP suite, checks the exact reviewed lint-error baseline, and verifies the
 stable catalog hash and generated-workspace cleanliness.
 
-The canonical contract also runs `public_inventory_closure.py --check`. That
+The canonical contract also runs `public_inventory_closure.py --check` and
+`security_definer_audit.py --check`. The inventory
 gate joins the imported workspace #533 per-object ledger to the live catalog at
 the database #337 merge base, records tables/views/materialized views/functions/
 procedures, exact routine identity arguments, ACL/RLS/default privileges, and
@@ -324,6 +325,24 @@ artifact hash is lineage, not the current artifact hash. `--verify-provenance`
 replays those relationships
 without consulting a moving remote. `--check` first verifies canonical JSON
 bytes and the committed SHA-256, then performs committed-vs-generated comparison.
+
+### `security_definer_audit.py`
+
+Generate or verify the complete public SECURITY DEFINER evidence ledger against
+the same exact schema used by the immutable inventory:
+
+```bash
+python scripts/security_definer_audit.py --write
+python scripts/security_definer_audit.py --check
+python -m unittest scripts/test_security_definer_audit.py
+```
+
+The artifact retains all 241 signatures. It distinguishes 129 unresolved #333
+owner/runtime signatures (90 api, 39 private), 14 #339 RLS-bound facades, and 98
+inventory static closures. Per-signature fields deliberately separate observed
+catalog evidence, inferred signals, required Contract proof, and confirmed
+facts. Static signals never prove runtime authorization; #352 remains blocked,
+#358 owns physical migration, and the gate always keeps `contractReady=false`.
 
 ### `test_worker_control_plane_upgrade.py`
 
