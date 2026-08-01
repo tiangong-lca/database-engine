@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 20f56228c21e8e677154c3e77fbf0e243dde677d
-lastReviewedNote: "已为 Issues #339/#341、#346、#351 与 #353 复核：保留 probe/rehearsal/rollback 指引，并记录 immutable inventory schema replay、provenance 验证与 deterministic committed-artifact gate。"
+lastReviewedCommit: a1be848fefc88d68c1073f98c9e3ecf866095399
+lastReviewedNote: "已为 Issues #353/#354 复核：保留 immutable provenance gate，并记录五 schema 导出以及 phase、REST、rollback 与 upgrade 验证入口。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -118,7 +118,7 @@ python scripts/export_remote_schema.py --environment dev
 说明：
 
 - 默认环境是 `dev`
-- 默认 schema 列表是 `public`
+- 默认 schema 列表是 `public`、`api`、`private`、`util`、`archive`
 - 可通过 `--schema-file` 覆盖输出路径
 - 未传 `--db-url` 时，`--environment local` 使用 Supabase CLI 的 `db dump --local`；显式 `--db-url` 仍使用该 URL
 
@@ -145,6 +145,7 @@ python scripts/build_schema_workspace.py --environment local
 行为：
 
 - 先导出最新远程 schema
+- 默认包含 `public`、`api`、`private`、`util`、`archive`；只有在明确需要缩小检查范围时才使用 `--schemas`
 - 重建 `global/` 和 `schemas/`
 - 保留 `supabase/workspace/README.md`
 - 保留 `supabase/workspace/README.zh-CN.md`
@@ -156,6 +157,16 @@ python scripts/build_schema_workspace.py --environment local
 - 刷新时可能覆盖这些生成文件里尚未提交到 Git 的改动
 - 如果你希望 `--git-changes` 只反映后续手工修改，应在同步远程数据库并刷新 workspace 之后，先把新的 `supabase/workspace/schemas` 提交到 Git，再开始编辑
 - 远程 `dev` 仍是生成 schema 的权威目标。只有在已应用 migration 与托管目标一致，并对本次合同完成托管 catalog 定向检查后，才能提交本地重建产物。
+
+### `schema_boundary_phase.py`
+
+根据 live catalog 与已提交 public-object inventory 检查版本化 Expand/Contract 边界合同。Expand 要求九张核心 public 表继续存在，且其余 inventory public 表都有 non-public target；Contract 才执行最终精确 public allowlist。
+
+```bash
+DATABASE_URL='postgresql://...' python scripts/schema_boundary_phase.py
+```
+
+该 checker 只读，并由 `run_database_contract.py` 调用。Issue #354 还提供 `test_schema_boundary_data_api.py` 用于本地 PostgREST profile/角色验证，以及 `test_schema_boundary_rollback.py` 用于本地 operator rollback/roll-forward OID 验证。
 
 ### `check_generated_workspace_legacy_tables.py`
 

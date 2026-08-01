@@ -22,6 +22,7 @@ checkPaths:
   - docs/agents/**
   - supabase/config.toml
   - supabase/migrations/**
+  - supabase/operator/**
   - supabase/tests/**
   - supabase/seed.sql
   - supabase/seeds/**
@@ -35,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 20f56228c21e8e677154c3e77fbf0e243dde677d
-lastReviewedNote: "Reviewed through Issues #339/#341, #346, #351, and #353: existing qualification and rollback evidence is retained; immutable inventory schema replay and committed-artifact checks preserve ownership, schema truth, and integration boundaries."
+lastReviewedCommit: a1be848fefc88d68c1073f98c9e3ecf866095399
+lastReviewedNote: "Reviewed through Issues #353/#354: immutable inventory provenance, five-schema workspace coverage, OID-preserving view moves, phase guards, and rollback/REST/production-equivalent proof preserve ownership and hosted boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -123,6 +124,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - root workspace proof belongs later in `lca-workspace`
 - generated workspace helpers are low-risk to inspect with `python scripts/<name>.py --help`
 - public-boundary inventory changes must run `python scripts/public_inventory_closure.py --check`; the checked contract owns immutable workspace/database provenance, exact object mapping, catalog dependencies, ACL/RLS/default-privilege evidence, SCC-aware migration order, exact-SHA consumer evidence, and explicit Contract residue; generation must never derive provenance from a moving remote ref
+- schema-boundary changes must run `python scripts/schema_boundary_phase.py`; Expand requires the nine core public tables plus inventory-backed non-public targets, while only a separately reviewed Contract phase may enforce zero additional public application relations
 
 ## Ownership Boundaries
 
