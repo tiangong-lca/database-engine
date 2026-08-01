@@ -10,6 +10,7 @@ import sys
 import tempfile
 import unittest
 from pathlib import Path
+from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import security_definer_audit as audit
@@ -111,6 +112,10 @@ class SecurityDefinerAuditTest(unittest.TestCase):
     def test_canonical_runner_contains_committed_generation_gate(self) -> None:
         runner = (audit.ROOT / "scripts/run_database_contract.py").read_text(encoding="utf-8")
         self.assertIn('"scripts/security_definer_audit.py", "--check"', runner)
+
+    def test_frozen_v1_check_does_not_read_transition_catalog(self) -> None:
+        with mock.patch.object(audit, "load_definitions", side_effect=AssertionError("must not query live")):
+            self.assertEqual(audit.check_frozen_baseline()["summary"], audit.EXPECTED)
 
     def test_non_loopback_database_url_is_rejected(self) -> None:
         self.assertEqual(

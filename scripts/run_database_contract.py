@@ -4,14 +4,18 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
+import ipaddress
 import json
 import os
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
+from urllib.parse import quote, unquote, urlsplit
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "supabase/tests/manifest.json"
+TRANSITION_FIXTURE = ROOT / "supabase/tests/contracts/security_definer_transition_fixture.v1.json"
 
 
 def supabase_command(*args: str) -> list[str]:
@@ -22,20 +26,102 @@ def supabase_command(*args: str) -> list[str]:
     return command
 
 
-def run(command: list[str]) -> None:
+def run(command: list[str], *, env: dict[str, str] | None = None) -> None:
     print("+", " ".join(command), flush=True)
-    subprocess.run(command, cwd=ROOT, check=True)
+    subprocess.run(command, cwd=ROOT, env=env, check=True)
+
+
+def database_cli_target(value: str) -> tuple[str, dict[str, str]]:
+    """Return a password-free, single-host CLI URL and PGPASSWORD environment."""
+    try:
+        parsed = urlsplit(value)
+        port = parsed.port
+    except ValueError as exc:
+        raise SystemExit("DATABASE_URL has an invalid host or port") from exc
+    if parsed.scheme not in {"postgres", "postgresql"}:
+        raise SystemExit("DATABASE_URL must use postgres or postgresql")
+    if parsed.query or parsed.fragment:
+        raise SystemExit("DATABASE_URL query overrides and fragments are forbidden")
+    if not parsed.netloc or parsed.hostname is None or port is None:
+        raise SystemExit("DATABASE_URL must contain one explicit TCP host and port")
+    host = unquote(parsed.hostname)
+    if ("," in parsed.netloc or "," in host or "/" in host or "\\" in host
+            or any(character.isspace() or ord(character) < 32 for character in host)):
+        raise SystemExit("DATABASE_URL must use one TCP host; multi-host and socket targets are forbidden")
+    try:
+        loopback = host == "localhost" or ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        loopback = False
+    if not loopback:
+        raise SystemExit("DATABASE_URL must use a literal loopback host for canonical-local validation")
+    user = unquote(parsed.username or "")
+    database = unquote(parsed.path.removeprefix("/"))
+    if not user or not database or "/" in database:
+        raise SystemExit("DATABASE_URL must contain one user and database")
+    if ":" in host:
+        host = f"[{host}]"
+    target = f"{parsed.scheme}://{quote(user, safe='')}@{host}:{port}/{quote(database, safe='')}"
+    environment = {key: item for key, item in os.environ.items() if not key.startswith("PG")}
+    environment.pop("DATABASE_URL", None)
+    if parsed.password is not None:
+        environment["PGPASSWORD"] = unquote(parsed.password)
+    return target, environment
+
+
+def canonical_database_url() -> str:
+    """Resolve and validate the one local database used by every contract probe."""
+    if value := os.environ.get("DATABASE_URL"):
+        database_cli_target(value)
+        return value
+    result = subprocess.run(
+        supabase_command("status", "--output", "json"), cwd=ROOT, check=True,
+        text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+    )
+    try:
+        value = json.loads(result.stdout)["DB_URL"]
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise SystemExit("supabase status did not return one DB_URL") from exc
+    if not isinstance(value, str):
+        raise SystemExit("supabase status DB_URL must be a string")
+    database_cli_target(value)
+    return value
+
+
+def pending_security_definer_transition() -> list[Path]:
+    if not TRANSITION_FIXTURE.is_file():
+        return []
+    raw = TRANSITION_FIXTURE.read_bytes()
+    digest_path = TRANSITION_FIXTURE.with_suffix(".sha256")
+    if not digest_path.is_file() or digest_path.read_text(encoding="utf-8").strip() != hashlib.sha256(raw).hexdigest():
+        raise SystemExit("SECURITY DEFINER transition fixture hash differs from reviewed bytes")
+    try:
+        fixture = json.loads(raw)
+        version = fixture["source"]["migrationVersion"]
+    except (json.JSONDecodeError, KeyError, TypeError) as exc:
+        raise SystemExit("SECURITY DEFINER transition fixture cannot determine migrationVersion") from exc
+    canonical = (json.dumps(
+        fixture, ensure_ascii=False, sort_keys=True, separators=(",", ":"),
+    ) + "\n").encode()
+    if raw != canonical:
+        raise SystemExit("SECURITY DEFINER transition fixture is not canonical byte-for-byte")
+    if not isinstance(version, str) or not version.isdigit() or len(version) != 14:
+        raise SystemExit("SECURITY DEFINER transition fixture migrationVersion is invalid")
+    return sorted((ROOT / "supabase/migrations").glob(f"{version}_*.sql"))
 
 
 def check_lint() -> None:
     command = supabase_command("db", "lint")
+    environment = None
     if (db_url := os.environ.get("DATABASE_URL")) and not os.environ.get("SUPABASE_WORKDIR"):
-        command.extend(["--db-url", db_url])
+        target, environment = database_cli_target(db_url)
+        command.extend(["--db-url", target])
     else:
         command.append("--local")
     command.extend(["--level", "warning", "--fail-on", "none"])
     print("+", " ".join(command), flush=True)
-    result = subprocess.run(command, cwd=ROOT, check=True, text=True, stdout=subprocess.PIPE)
+    result = subprocess.run(
+        command, cwd=ROOT, env=environment, check=True, text=True, stdout=subprocess.PIPE,
+    )
     report = json.loads(result.stdout)
     actual = {
         (item["function"], issue["sqlState"], issue["message"])
@@ -96,7 +182,42 @@ def main() -> int:
     parser.add_argument("--skip-reset", action="store_true")
     parser.add_argument("--skip-lint", action="store_true")
     parser.add_argument("--skip-data-api", action="store_true")
+    parser.add_argument("--security-definer-transition-workdir", action="append")
+    parser.add_argument("--security-definer-transition-source-workdir")
+    parser.add_argument("--security-definer-transition-migration")
+    parser.add_argument("--security-definer-transition-rollback")
+    parser.add_argument("--security-definer-transition-qualification-receipt")
+    parser.add_argument("--security-definer-transition-qualification-receipt-sha256")
+    parser.add_argument("--security-definer-transition-migration-sha256")
+    parser.add_argument("--security-definer-transition-rollback-sha256")
+    parser.add_argument("--security-definer-transition-base")
     args = parser.parse_args()
+    qualification = [
+        args.security_definer_transition_workdir,
+        args.security_definer_transition_source_workdir,
+        args.security_definer_transition_migration,
+        args.security_definer_transition_rollback,
+        args.security_definer_transition_qualification_receipt,
+        args.security_definer_transition_qualification_receipt_sha256,
+        args.security_definer_transition_migration_sha256,
+        args.security_definer_transition_rollback_sha256,
+        args.security_definer_transition_base,
+    ]
+    qualification_requested = any(value is not None for value in qualification)
+    pending_transition = pending_security_definer_transition()
+    qualification_enabled = qualification_requested or bool(pending_transition)
+    if qualification_enabled:
+        if any(value is None for value in qualification):
+            reason = f"; pending migration={pending_transition[0].relative_to(ROOT)}" if pending_transition else ""
+            raise SystemExit(
+                "SECURITY DEFINER transition qualification requires every exact input" + reason
+            )
+        if len(args.security_definer_transition_workdir) != 2:
+            raise SystemExit("SECURITY DEFINER transition qualification requires exactly two workdirs")
+        if args.suite != "canonical-local" or args.skip_reset or args.skip_lint or args.skip_data_api:
+            raise SystemExit(
+                "SECURITY DEFINER transition qualification requires the complete canonical-local CI mode"
+            )
     manifest, classified = load_and_validate_manifest()
     if args.suite not in manifest["suites"]:
         raise SystemExit(f"unknown suite: {args.suite}")
@@ -108,13 +229,15 @@ def main() -> int:
     if not files:
         raise SystemExit(f"suite {args.suite} selected no files")
     if not args.skip_reset:
-        run(["supabase", "db", "reset", "--local"])
+        run(supabase_command("db", "reset", "--local"))
     test_command = supabase_command("test", "db", *files)
+    test_environment = None
     if (db_url := os.environ.get("DATABASE_URL")) and not os.environ.get("SUPABASE_WORKDIR"):
-        test_command.extend(["--db-url", db_url])
+        target, test_environment = database_cli_target(db_url)
+        test_command.extend(["--db-url", target])
     else:
         test_command.append("--local")
-    run(test_command)
+    run(test_command, env=test_environment)
     if not args.skip_data_api:
         run([sys.executable, "scripts/test_worker_control_plane_data_api.py"])
     if not args.skip_lint:
@@ -124,6 +247,36 @@ def main() -> int:
     run([sys.executable, "scripts/schema_boundary_phase.py"])
     run([sys.executable, "scripts/public_inventory_closure.py", "--check"])
     run([sys.executable, "scripts/security_definer_audit.py", "--check"])
+    run([sys.executable, "scripts/security_definer_audit_v2.py", "--check"])
+    run([
+        sys.executable, "-m", "unittest",
+        "scripts.test_security_definer_audit_v2",
+        "scripts.test_security_definer_audit_v2_transition_integration_runner",
+    ])
+    if not args.skip_data_api:
+        conformance_environment = os.environ.copy()
+        conformance_environment["ISSUE333_DATABASE_URL"] = canonical_database_url()
+        run([
+            sys.executable, "-m", "unittest",
+            "scripts.test_security_definer_audit_v2_postgrest_conformance",
+        ], env=conformance_environment)
+    if qualification_enabled:
+        command = [
+            sys.executable, "scripts/test_security_definer_audit_v2_transition_integration.py",
+            "--ci",
+            "--source-workdir", args.security_definer_transition_source_workdir,
+            "--migration", args.security_definer_transition_migration,
+            "--rollback", args.security_definer_transition_rollback,
+            "--qualification-receipt", args.security_definer_transition_qualification_receipt,
+            "--expected-qualification-receipt-sha256",
+            args.security_definer_transition_qualification_receipt_sha256,
+            "--expected-migration-sha256", args.security_definer_transition_migration_sha256,
+            "--expected-rollback-sha256", args.security_definer_transition_rollback_sha256,
+            "--expected-base", args.security_definer_transition_base,
+        ]
+        for workdir in args.security_definer_transition_workdir:
+            command.extend(["--workdir", workdir])
+        run(command)
     run([
         "git", "diff", "--exit-code", "--",
         "supabase/workspace/remote_schema.sql",
