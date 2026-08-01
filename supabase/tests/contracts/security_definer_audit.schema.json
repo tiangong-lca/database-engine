@@ -41,8 +41,8 @@
         "baselineAnonAdvisorWarnings": {"const": 77},
         "baselineAuthenticatedAdvisorWarnings": {"const": 124},
         "baselineAdvisorWarnings": {"const": 201},
-        "currentAnonEffectiveExecute": {"const": 95},
-        "currentAuthenticatedEffectiveExecute": {"const": 142},
+        "currentAnonEffectiveExecute": {"const": 93},
+        "currentAuthenticatedEffectiveExecute": {"const": 140},
         "currentPublicEffectiveExecute": {"const": 17},
         "currentServiceRoleEffectiveExecute": {"const": 171}
       }

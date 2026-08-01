@@ -26,12 +26,12 @@ select extensions.is(
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
    where n.nspname='public' and p.prosecdef and has_function_privilege('anon',p.oid,'EXECUTE')),
-  95::bigint, 'current anon effective EXECUTE count is explicit');
+  93::bigint, 'current anon effective EXECUTE count reflects #354 convergence');
 
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
    where n.nspname='public' and p.prosecdef and has_function_privilege('authenticated',p.oid,'EXECUTE')),
-  142::bigint, 'current authenticated effective EXECUTE count is explicit');
+  140::bigint, 'current authenticated effective EXECUTE count reflects #354 convergence');
 
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace

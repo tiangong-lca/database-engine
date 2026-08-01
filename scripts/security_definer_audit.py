@@ -31,8 +31,8 @@ EXPECTED = {
     "baselineAnonAdvisorWarnings": 77,
     "baselineAuthenticatedAdvisorWarnings": 124,
     "baselineAdvisorWarnings": 201,
-    "currentAnonEffectiveExecute": 95,
-    "currentAuthenticatedEffectiveExecute": 142,
+    "currentAnonEffectiveExecute": 93,
+    "currentAuthenticatedEffectiveExecute": 140,
     "currentPublicEffectiveExecute": 17,
     "currentServiceRoleEffectiveExecute": 171,
 }
