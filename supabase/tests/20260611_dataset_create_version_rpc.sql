@@ -408,6 +408,8 @@ select is(
   'jsonOrdered is required'
 );
 
+set local role service_role;
+
 select is(
   public.save_lifecycle_model_bundle(
     '{
@@ -470,6 +472,8 @@ select is(
   '01.00.001',
   'save_lifecycle_model_bundle allocates the next lifecycle model version when requested'
 );
+
+reset role;
 
 select is(
   (

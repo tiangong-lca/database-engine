@@ -102,16 +102,16 @@ from drift_tables;
 
 select ok(has_function_privilege('service_role', 'public.save_lifecycle_model_bundle(jsonb)', 'EXECUTE'),
   'service role retains save bundle execution');
-select ok(has_function_privilege('anon', 'public.save_lifecycle_model_bundle(jsonb)', 'EXECUTE'),
-  'anon save bundle compatibility remains visible during Expand');
-select ok(has_function_privilege('authenticated', 'public.save_lifecycle_model_bundle(jsonb)', 'EXECUTE'),
-  'authenticated save bundle compatibility remains during Expand');
+select ok(not has_function_privilege('anon', 'public.save_lifecycle_model_bundle(jsonb)', 'EXECUTE'),
+  'anon cannot execute the service-only save bundle compatibility RPC');
+select ok(not has_function_privilege('authenticated', 'public.save_lifecycle_model_bundle(jsonb)', 'EXECUTE'),
+  'authenticated cannot execute the service-only save bundle compatibility RPC');
 select ok(has_function_privilege('service_role', 'public.delete_lifecycle_model_bundle(uuid,text)', 'EXECUTE'),
   'service role retains delete bundle execution');
-select ok(has_function_privilege('anon', 'public.delete_lifecycle_model_bundle(uuid,text)', 'EXECUTE'),
-  'anon delete bundle compatibility remains visible during Expand');
-select ok(has_function_privilege('authenticated', 'public.delete_lifecycle_model_bundle(uuid,text)', 'EXECUTE'),
-  'authenticated delete bundle compatibility remains during Expand');
+select ok(not has_function_privilege('anon', 'public.delete_lifecycle_model_bundle(uuid,text)', 'EXECUTE'),
+  'anon cannot execute the service-only delete bundle compatibility RPC');
+select ok(not has_function_privilege('authenticated', 'public.delete_lifecycle_model_bundle(uuid,text)', 'EXECUTE'),
+  'authenticated cannot execute the service-only delete bundle compatibility RPC');
 
 select is((
   select count(*)::integer

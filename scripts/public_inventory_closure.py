@@ -27,12 +27,12 @@ SOURCE = {
     "workspaceBaselineSha": "520b7af67240beb0f08419ab432a018d93542170",
     "workspacePinnedDatabaseSha": "1516ad7bb3f74734095756e741f00f60e93b79b3",
     # The only migration/catalog input for current artifact regeneration.
-    "databaseSchemaSha": "20f56228c21e8e677154c3e77fbf0e243dde677d",
+    "databaseSchemaSha": "a1be848fefc88d68c1073f98c9e3ecf866095399",
     # Historical #345 branch lineage; never use these as the schema reset target.
     "databaseBaseSha": "157ef7bb4e844edb26525dfb89f4fde188ee0cef",
     "databaseInventorySha": "86203c9190b11f12109a7fdd3f310ff47a47c9e5",
     "databaseMergeBaseSha": "907f7b6a47b98c401d98184a8b7452aaaa429bbf",
-    "previousArtifactSha256": "248d1f86addc332d0f5486b2edb8875e87a95929d06c9f59ef51968f90685c1b",
+    "previousArtifactSha256": "d7353b0b3d2dcd3bcc64ffaf41ff2015729142789e0b3a39818acc12ebf35c16",
 }
 SOURCE_SHA_FIELDS = (
     "workspaceBaselineSha",
@@ -623,8 +623,10 @@ def validate(contract: dict[str, Any]) -> None:
         errors.append(f"expected baseline counts {expected}, got {contract['counts']}")
     if len(contract["objects"]) != 393:
         errors.append(f"expected 393 objects, got {len(contract['objects'])}")
-    if len(contract["dependencies"]) != 1119:
-        errors.append(f"expected 1119 dependency edges, got {len(contract['dependencies'])}")
+    # Issue #354 replaces one public-to-public canonical view edge with five
+    # explicit public compatibility-wrapper edges to non-public targets.
+    if len(contract["dependencies"]) != 1123:
+        errors.append(f"expected 1123 dependency edges, got {len(contract['dependencies'])}")
     if len(contract["residue"]["objectsWithoutConsumerClosure"]) != 206:
         errors.append("expected 206 owner/consumer residue entries")
     if len(contract["residue"]["dynamicSqlReviewRequired"]) != 35:

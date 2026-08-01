@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-01"
-lastReviewedCommit: "20f56228c21e8e677154c3e77fbf0e243dde677d"
-lastReviewedNote: "Reviewed through Issues #339/#341, #346, #351, and #353: routes retain qualification and rollback evidence while public-inventory tooling adds immutable schema replay, deterministic generation, and committed-artifact drift gates."
+lastReviewedCommit: "a1be848fefc88d68c1073f98c9e3ecf866095399"
+lastReviewedNote: "Reviewed through Issues #353/#354: routes cover immutable provenance, five-schema generation, operator rollback, phase checking, and OID/REST/production-equivalent validation."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -36,6 +36,7 @@ ownership:
         include:
           - supabase/config.toml
           - supabase/migrations/**
+          - supabase/operator/**
           - supabase/seed.sql
           - supabase/seeds/**
           - supabase/tests/**
@@ -79,6 +80,7 @@ coverage:
     - supabase/workspace/README.zh-CN.md
     - supabase/config.toml
     - supabase/migrations/**
+    - supabase/operator/**
     - supabase/seed.sql
     - supabase/seeds/**
     - supabase/tests/**
@@ -304,6 +306,8 @@ rules:
     triggers:
       - path: supabase/migrations/**
         kind: db-schema
+      - path: supabase/operator/**
+        kind: operator-rollback
       - path: supabase/seed.sql
         kind: db-seed
       - path: supabase/seeds/**
