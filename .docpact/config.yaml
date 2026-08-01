@@ -233,6 +233,7 @@ routing:
         - supabase/seed.sql
         - supabase/seeds/**
         - supabase/tests/**
+        - .github/workflows/database-validation.yml
         - .github/workflows/supabase-dev.yml
     root-integration:
       paths:
@@ -307,6 +308,8 @@ rules:
       - path: supabase/config.toml
         kind: db-config
       - path: .github/workflows/supabase-dev.yml
+        kind: automation
+      - path: .github/workflows/database-validation.yml
         kind: automation
       - path: .env.supabase.dev.local.example
         kind: operator-template

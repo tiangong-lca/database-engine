@@ -17,6 +17,7 @@ checkPaths:
   - AGENTS.md
   - .docpact/config.yaml
   - supabase/config.toml
+  - .github/workflows/database-validation.yml
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
