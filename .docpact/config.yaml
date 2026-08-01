@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-01"
-lastReviewedCommit: "1445889b2746c28fc80b77db8ee15213470da718"
-lastReviewedNote: "Reviewed for Issue #340 stage B: config ownership and validation routes cover the persistent-branch api exposure contract while private/util/archive remain non-exposed."
+lastReviewedCommit: "907f7b6a47b98c401d98184a8b7452aaaa429bbf"
+lastReviewedNote: "Reviewed for Issue #340 hosted closure: validation routes cover both legacy JWT and new opaque Supabase API keys without weakening the api/private exposure contract."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
