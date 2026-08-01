@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 1445889b2746c28fc80b77db8ee15213470da718
-lastReviewedNote: "Reviewed for Issue #340 stage B: api is exposed through the persistent-branch binding only after its hosted schema deployment; private, util, and archive remain non-exposed."
+lastReviewedCommit: 907f7b6a47b98c401d98184a8b7452aaaa429bbf
+lastReviewedNote: "Reviewed for Issue #340 hosted closure: API boundary validation supports both legacy JWT and opaque Supabase keys; private, util, and archive remain non-exposed."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

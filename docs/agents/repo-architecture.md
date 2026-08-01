@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 1445889b2746c28fc80b77db8ee15213470da718
-lastReviewedNote: "Reviewed for Issue #340 stage B: the persistent-branch binding exposes the already-hosted api DTO/RPC layer while the private runtime boundary and repository source-of-truth paths remain unchanged."
+lastReviewedCommit: 907f7b6a47b98c401d98184a8b7452aaaa429bbf
+lastReviewedNote: "Reviewed for Issue #340 hosted closure: opaque API-key handling changes validation only; the api DTO/RPC and private runtime architecture remains unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
