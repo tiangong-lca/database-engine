@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 1a0fc514e41724bd513b4126429c38dff10339c0
+lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
 lastReviewedNote: "已为 Issue #355 mandatory destructive qualification 复核：canonical opt-in gate 先调用 dual exact-hash/逐角色 RLS harness，再调用 rollback/roll-forward harness，并传播任一失败。"
 related:
   - ../AGENTS.md
