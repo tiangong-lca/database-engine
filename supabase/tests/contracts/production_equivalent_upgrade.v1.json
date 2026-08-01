@@ -9,7 +9,8 @@
     "lockFailureMinimumSeconds": 4.5,
     "lockFailureMaximumSeconds": 8,
     "upgradeSeconds": 120,
-    "migrationWalBytes": 536870912
+    "migrationWalBytes": 536870912,
+    "retryWalBytes": 0
   },
   "requiredFixtureSurfaces": [
     "identity",

@@ -36,7 +36,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: 03566bee31d66dc2264a337595854cbf13faaaf9
-lastReviewedNote: "Reviewed through Issues #339/#341, #346, and #351: ACL migration truth, opaque-key Worker probes, the local populated-upgrade harness, and persistent-dev rollback/readback preserve repository ownership, production integration, and hosted evidence boundaries."
+lastReviewedNote: "Reviewed through Issues #339/#341, #346, and #351: ACL truth, opaque-key Worker probes, and the local harness's new-only evidence, URL redaction, and zero-WAL retry preserve PostgREST rollback/readback, ownership, and hosted boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

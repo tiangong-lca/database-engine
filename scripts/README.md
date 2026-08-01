@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: 03566bee31d66dc2264a337595854cbf13faaaf9
-lastReviewedNote: "Reviewed through Issues #339/#341, #346, and #351: document opaque-key-safe Worker probes, ACL qualification, the populated-upgrade runner, and PostgREST rollback/readback proof."
+lastReviewedNote: "Reviewed through Issues #339/#341, #346, and #351: document opaque-key-safe Worker probes, ACL qualification, fail-closed upgrade evidence, URL redaction, zero-WAL retry, and PostgREST rollback/readback proof."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -368,10 +368,15 @@ membership, WAL, retry, and expected boundary objects.
 
 The runner resets only the currently selected local Supabase project. It never
 connects to a linked or hosted project, never retains credentials or row
-contents, and requires evidence output outside the worktree. A qualification
-run requires a clean commit and at least one million representative rows;
-`--allow-dirty` and smaller counts are development-only. `--db-url` may select
-an isolated local stack explicitly, but rejects every non-loopback host.
+contents, redacts both `postgres://` and `postgresql://` URLs from command and
+failure output, and requires evidence output outside the worktree. Evidence is
+created as a new mode-0600 regular file with exclusive/no-follow semantics and
+is file- and directory-fsynced before success; existing targets, including
+symlinks, are refused. A qualification run requires a clean commit and at least
+one million representative rows; `--allow-dirty` and smaller counts are
+development-only. `--db-url` may select an isolated local stack explicitly,
+but rejects every non-loopback host. The no-op migration retry must emit exactly
+zero WAL bytes.
 
 ```bash
 python scripts/test_production_equivalent_upgrade.py \

@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: 03566bee31d66dc2264a337595854cbf13faaaf9
-lastReviewedNote: "已为 Issues #339/#341、#346 与 #351 复核：ACL/catalog 变更、opaque-key Worker probe、populated-upgrade harness 和 PostgREST rollback/readback 不改变生成 workspace 或真相源边界。"
+lastReviewedNote: "已为 Issues #339/#341、#346 与 #351 复核：ACL/catalog 变更、opaque-key Worker probe 与 fail-closed upgrade 证据保留 PostgREST rollback 语义，且不改变生成 workspace 或真相源边界。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

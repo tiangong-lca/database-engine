@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: 03566bee31d66dc2264a337595854cbf13faaaf9
-lastReviewedNote: "已为 Issues #339/#341、#346 与 #351 复核：记录 opaque-key-safe Worker probe、ACL qualification、populated-upgrade runner 与 PostgREST rollback/readback 证据。"
+lastReviewedNote: "已为 Issues #339/#341、#346 与 #351 复核：记录 opaque-key-safe Worker probe、ACL qualification、fail-closed upgrade 证据、URL 脱敏、零 WAL retry 与 PostgREST rollback/readback 证据。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -292,10 +292,13 @@ Worker 生命周期、package、cache、release、closure 以及百万行 packag
 故障；验证五秒锁超时及并发只读兼容；最后对账 constraint、ACL/RLS、policy、
 trigger、publication、WAL、重试和预期边界对象。
 
-脚本不会连接 linked/hosted 项目，也不会把凭据或原始行写入证据。证据路径必须
-显式指定并放在 worktree 外。正式资格验证要求 clean commit 和至少一百万行；
-`--allow-dirty` 与较小规模只用于开发。`--db-url` 可显式选择隔离的本地 stack，
-但会拒绝所有非 loopback host。
+脚本不会连接 linked/hosted 项目，也不会把凭据或原始行写入证据；命令和失败
+输出中的 `postgres://` 与 `postgresql://` URL 都会脱敏。证据路径必须显式指定
+并放在 worktree 外，只能以 exclusive/no-follow 语义新建 mode-0600 regular
+file；成功前会 fsync 文件与目录，任何已存在目标（包括 symlink）都会被拒绝。
+正式资格验证要求 clean commit 和至少一百万行；`--allow-dirty` 与较小规模只用于
+开发。`--db-url` 可显式选择隔离的本地 stack，但会拒绝所有非 loopback host；
+no-op migration retry 必须产生精确的零 WAL bytes。
 
 ```bash
 python scripts/test_production_equivalent_upgrade.py \

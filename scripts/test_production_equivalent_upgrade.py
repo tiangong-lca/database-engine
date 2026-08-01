@@ -18,12 +18,17 @@ ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_PATH = ROOT / "supabase/tests/contracts/production_equivalent_upgrade.v1.json"
 FIXTURE_PATH = ROOT / "supabase/tests/fixtures/20260801_production_equivalent_upgrade.sql"
 MIGRATIONS = ROOT / "supabase/migrations"
+POSTGRES_URL_PATTERN = re.compile(r"(?i)postgres(?:ql)?://[^\s\"']+")
+
+
+def redact_database_urls(value: str) -> str:
+    return POSTGRES_URL_PATTERN.sub("<database-url>", value)
 
 
 def run(
     command: list[str], *, input_text: str | None = None, expect_failure: bool = False
 ) -> subprocess.CompletedProcess[str]:
-    display = ["<database-url>" if part.startswith("postgresql://") else part for part in command]
+    display = [redact_database_urls(part) for part in command]
     print("+", " ".join(display), flush=True)
     environment = None
     if "--db-url" in command:
@@ -37,9 +42,56 @@ def run(
     if failed != expect_failure:
         raise SystemExit(
             f"unexpected command result ({result.returncode}): {' '.join(display)}\n"
-            f"{result.stdout}\n{result.stderr}"
+            f"{redact_database_urls(result.stdout)}\n"
+            f"{redact_database_urls(result.stderr)}"
         )
     return result
+
+
+def prepare_evidence_target(requested: Path) -> Path:
+    requested = requested.expanduser().absolute()
+    if requested.is_relative_to(ROOT.resolve()):
+        raise SystemExit("--evidence-out must resolve outside the worktree")
+    requested.parent.mkdir(parents=True, exist_ok=True)
+    parent = requested.parent.resolve(strict=True)
+    target = parent / requested.name
+    if target.is_relative_to(ROOT.resolve()):
+        raise SystemExit("--evidence-out must resolve outside the worktree")
+    try:
+        target.lstat()
+    except FileNotFoundError:
+        return target
+    raise SystemExit("--evidence-out must name a new path; existing files, directories, and symlinks are refused")
+
+
+def write_new_evidence(target: Path, evidence: dict[str, object]) -> None:
+    flags = os.O_WRONLY | os.O_CREAT | os.O_EXCL
+    if hasattr(os, "O_NOFOLLOW"):
+        flags |= os.O_NOFOLLOW
+    try:
+        descriptor = os.open(target, flags, 0o600)
+    except FileExistsError as exc:
+        raise SystemExit("evidence target appeared before write; refusing to overwrite it") from exc
+    try:
+        os.fchmod(descriptor, 0o600)
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            descriptor = -1
+            handle.write(json.dumps(evidence, indent=2, sort_keys=True) + "\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        directory_descriptor = os.open(target.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory_descriptor)
+        finally:
+            os.close(directory_descriptor)
+    except BaseException:
+        if descriptor >= 0:
+            os.close(descriptor)
+        try:
+            target.unlink()
+        except FileNotFoundError:
+            pass
+        raise
 
 
 def psql(db_url: str, sql: str, *, expect_failure: bool = False) -> subprocess.CompletedProcess[str]:
@@ -65,6 +117,13 @@ def sha256_bytes(value: bytes) -> str:
 def stable_hash(value: object) -> str:
     encoded = json.dumps(value, sort_keys=True, separators=(",", ":")).encode()
     return sha256_bytes(encoded)
+
+
+def assert_retry_wal_bytes(actual: int, expected: int) -> None:
+    if actual != expected:
+        raise SystemExit(
+            f"idempotent migration retry WAL mismatch: expected={expected}, actual={actual}"
+        )
 
 
 def migration_files(base: str, head: str) -> list[Path]:
@@ -302,6 +361,7 @@ def main() -> int:
     )
     parser.add_argument("--allow-dirty", action="store_true")
     args = parser.parse_args()
+    evidence_target = prepare_evidence_target(args.evidence_out)
 
     contract = json.loads(CONTRACT_PATH.read_text(encoding="utf-8"))
     rows = args.representative_rows or contract["defaultRepresentativeRows"]
@@ -443,6 +503,7 @@ def main() -> int:
     no_pending_migrations = "up to date" in (retry.stdout + retry.stderr).lower()
     if not no_pending_migrations:
         raise SystemExit("idempotent migration retry did not report an up-to-date local database")
+    assert_retry_wal_bytes(retry_wal_bytes, budgets["retryWalBytes"])
     if json_query(db_url, DATA_ORACLE_SQL) != data_before:
         raise SystemExit("idempotent migration retry changed row/PK/hash oracle")
 
@@ -499,12 +560,11 @@ def main() -> int:
         "expectedHeadObjects": contract["expectedHeadObjects"],
         "budgets": budgets,
     }
-    args.evidence_out.parent.mkdir(parents=True, exist_ok=True)
-    args.evidence_out.write_text(json.dumps(evidence, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+    write_new_evidence(evidence_target, evidence)
     print(
         f"PASS production-equivalent upgrade {base}->{head}; rows={rows}; "
         f"upgradeSeconds={upgrade_seconds:.3f}; migrationWalBytes={wal_bytes}; "
-        f"evidence={args.evidence_out}", flush=True,
+        f"evidence={evidence_target}", flush=True,
     )
     return 0
 
