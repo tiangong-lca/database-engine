@@ -122,9 +122,23 @@ class TransitionIntegrationRunnerTest(unittest.TestCase):
         root = Path("/tmp/qualification-root")
         with mock.patch.object(harness, "git_root", return_value=root), \
                 mock.patch.object(harness, "exact_head", return_value="a" * 40), \
-                mock.patch.object(harness, "capture", return_value=" M supabase/migrations/dirty.sql"):
+                mock.patch.object(
+                    harness, "_git_output", return_value=b" M supabase/migrations/dirty.sql\n",
+                ):
             with self.assertRaisesRegex(ValueError, "non-local-config changes"):
                 harness.validate_stack_root(root, "a" * 40)
+
+    def test_porcelain_status_preserves_leading_worktree_column(self) -> None:
+        root = Path("/tmp/qualification-root")
+        committed = 'project_id = "base"\n[db]\nport = 5432\n'
+        current = 'project_id = "local"\n[db]\nport = 5433\n'
+        with mock.patch.object(harness, "git_root", return_value=root), \
+                mock.patch.object(harness, "exact_head", return_value="a" * 40), \
+                mock.patch.object(harness, "_git_output", return_value=b" M supabase/config.toml\n"), \
+                mock.patch.object(harness, "capture", return_value=committed), \
+                mock.patch.object(Path, "read_text", return_value=current):
+            config = harness.validate_stack_root(root, "a" * 40)
+        self.assertEqual(config["project_id"], "local")
 
     def test_receipt_byte_tamper_fails_against_reviewed_hash(self) -> None:
         raw = b'{"tampered":true}\n'

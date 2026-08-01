@@ -227,9 +227,9 @@ def validate_stack_root(workdir: Path, expected_base: str) -> dict[str, Any]:
         raise ValueError(f"qualification workdir is not an exact repository root: {workdir}")
     if exact_head(workdir) != expected_base:
         raise ValueError(f"qualification workdir is not at the reviewed base: {workdir}")
-    status = capture(
+    status = _git_output(
         ["git", "status", "--porcelain=v1", "--untracked-files=all"], cwd=workdir,
-    ).splitlines()
+    ).decode("utf-8").splitlines()
     if any(line != f" M {CONFIG_PATH.as_posix()}" for line in status):
         raise ValueError(f"qualification workdir has non-local-config changes: {workdir}")
     committed = tomllib.loads(capture(["git", "show", f"HEAD:{CONFIG_PATH.as_posix()}"], cwd=workdir))
