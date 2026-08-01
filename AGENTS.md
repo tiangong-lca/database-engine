@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 9e843e67783123f859035e3a720df910e87a644e
-lastReviewedNote: "Reviewed for Issue #355: the identity/collaboration Expand keeps eight physical tables public, adds private/api compatibility boundaries, and preserves repo/workspace ownership rules; Contract remains gated on consumer-zero and hosted evidence."
+lastReviewedCommit: 613e6a975ecdc57da66d88f8746d25d4f0286347
+lastReviewedNote: "Reviewed for Issue #355 column-ACL hardening: the Expand boundary keeps eight physical tables public, requires normalized empty column ACLs on private/api targets, and leaves Contract gated on consumer-zero and hosted evidence."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

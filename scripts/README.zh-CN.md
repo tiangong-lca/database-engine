@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 9e843e67783123f859035e3a720df910e87a644e
-lastReviewedNote: "已为 Issue #355 在 #356 集成后复核：脚本入口继续保留 immutable provenance、五 schema lineage 验证、确定性回滚与 production-equivalent upgrade 证据。"
+lastReviewedCommit: 613e6a975ecdc57da66d88f8746d25d4f0286347
+lastReviewedNote: "已为 Issue #355 column ACL 加固复核：脚本入口继续保留 immutable provenance，并增加规范化 column ACL catalog/fingerprint、篡改拒绝与 production-equivalent 证据。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

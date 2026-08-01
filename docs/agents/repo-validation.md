@@ -31,8 +31,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 9e843e67783123f859035e3a720df910e87a644e
-lastReviewedNote: "Reviewed for Issue #355 after #356 integration: canonical validation retains immutable v1 provenance, live v2 lineage, role matrices, tamper negatives, exact rollback, and populated base-to-head proof."
+lastReviewedCommit: 613e6a975ecdc57da66d88f8746d25d4f0286347
+lastReviewedNote: "Reviewed for Issue #355 column-ACL hardening: canonical validation now also proves quoted/group/inherited grant convergence, normalized catalog evidence, column-ACL rollback tamper rejection, retry, and populated upgrade behavior."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

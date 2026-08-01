@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 9e843e67783123f859035e3a720df910e87a644e
-lastReviewedNote: "Reviewed for Issue #355: identity/collaboration remains an Expand-only single-source boundary with eight physical tables public and private/api projections; Contract still requires consumer-zero before physical movement."
+lastReviewedCommit: 613e6a975ecdc57da66d88f8746d25d4f0286347
+lastReviewedNote: "Reviewed for Issue #355 column-ACL hardening: identity/collaboration remains Expand-only with public physical sources, private/api projections, and normalized empty target column ACLs; Contract still requires consumer-zero."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

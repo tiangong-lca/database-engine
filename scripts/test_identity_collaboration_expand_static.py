@@ -67,6 +67,13 @@ class IdentityCollaborationExpandStaticTest(unittest.TestCase):
         self.assertIn("from unnest(policy.polroles) role_oid", normalized)
         self.assertIn("then 'public' else role_name.rolname", normalized)
 
+    def test_target_column_acl_is_converged_and_evidenced(self) -> None:
+        normalized = self.sql.lower()
+        self.assertIn("cross join lateral aclexplode(attribute.attacl)", normalized)
+        self.assertIn("revoke all privileges (%i) on table %s from %s", normalized)
+        self.assertIn("target column acl postcondition failed", normalized)
+        self.assertEqual("none", self.contract["targetColumnAclPolicy"])
+
 
 if __name__ == "__main__":
     unittest.main()

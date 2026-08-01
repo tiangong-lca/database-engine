@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-01"
-lastReviewedCommit: "9e843e67783123f859035e3a720df910e87a644e"
-lastReviewedNote: "Reviewed for Issue #355: identity/collaboration Expand, rollback, generated contracts, and qualification tooling remain covered; ownership and governance rules are unchanged."
+lastReviewedCommit: "613e6a975ecdc57da66d88f8746d25d4f0286347"
+lastReviewedNote: "Reviewed for Issue #355 column-ACL hardening: migration convergence, rollback fingerprints, catalog evidence, and adversarial qualification remain covered; ownership rules are unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

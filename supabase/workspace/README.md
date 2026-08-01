@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 9e843e67783123f859035e3a720df910e87a644e
-lastReviewedNote: "Reviewed for Issue #355: generated workspace output remains separate from authoritative migrations and cross-schema lineage/transition contracts; the live export covers Worker movement plus identity/collaboration projections."
+lastReviewedCommit: 613e6a975ecdc57da66d88f8746d25d4f0286347
+lastReviewedNote: "Reviewed for Issue #355 column-ACL hardening: generated workspace output remains separate from authoritative migrations and catalog contracts; normalized per-column ACL evidence belongs to the live catalog export."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

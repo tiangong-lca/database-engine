@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 9e843e67783123f859035e3a720df910e87a644e
-lastReviewedNote: "Reviewed for Issue #355 after #356 integration: script entrypoints retain immutable provenance, five-schema lineage qualification, deterministic rollback, and production-equivalent upgrade proof."
+lastReviewedCommit: 613e6a975ecdc57da66d88f8746d25d4f0286347
+lastReviewedNote: "Reviewed for Issue #355 column-ACL hardening: script entrypoints retain immutable provenance and now include normalized column-ACL catalog/fingerprint evidence, tamper rejection, and production-equivalent proof."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

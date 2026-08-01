@@ -38,21 +38,21 @@ begin
 
   if exists (
     with expected(object_key,fingerprint) as (values
-      ('api.identity_center_processed_events_v1','8bfb1353f1f6a6d526b6c05339c8d7d5'),
-      ('api.identity_center_users_v1','77c2b608b6ae5c23abafe1b14f117b8f'),
-      ('api.notifications_v1','de4b6f2b9316e551ed03799f260dd40f'),
-      ('api.reviews_v1','104400e8bd771436243b64f2694604ee'),
-      ('api.team_roles_v1','c89b72ee66ba35f94f89ff98ab00e90e'),
-      ('api.teams_v1','35e3e0b08cc61b106fd2f72d12959c83'),
-      ('api.user_profiles_v1','a8eee4f5b217c59a643d75c85ff8a4c4'),
-      ('private.comments','f6d5e2ba8c5a7789b3096724af4b9c32'),
-      ('private.identity_center_processed_events','d63b4de0a064bfe5656fa0fb1950415b'),
-      ('private.identity_center_users','3b8e0a17058a89ede3febe47c710e887'),
-      ('private.notifications','d9083031626a704c4baf70d58b4ea37d'),
-      ('private.reviews','b8d2da38e4b839a9669527d8867e032e'),
-      ('private.roles','dd51afa95e88506a3804414d41be5c5d'),
-      ('private.teams','e546e2511bb4f9ca92976833995da9e7'),
-      ('private.users','20aaa4cff623d1672520d63fa5ce3a49'),
+      ('api.identity_center_processed_events_v1','9c9658b4629342cf504b0ff5bc305450'),
+      ('api.identity_center_users_v1','2237fc113ddcc791ab0a4f07082887d9'),
+      ('api.notifications_v1','d337071f23a863c87b6fe63b8408f38c'),
+      ('api.reviews_v1','2812e4fac6d72c77b3fbcf4aaa554a42'),
+      ('api.team_roles_v1','0b90da951c7396f584bc4a736b71caa5'),
+      ('api.teams_v1','2bc89a22a7c9693827821fe450dc8d11'),
+      ('api.user_profiles_v1','8100f44a5690696a4fcec4c195e61cca'),
+      ('private.comments','1f5c87041522c134d27db17da9fcaf91'),
+      ('private.identity_center_processed_events','11a3b755ce928d66826db079fedc2799'),
+      ('private.identity_center_users','a9fd61b56cab162f063220d67bd25854'),
+      ('private.notifications','98d99e8d88f5bff4c0192b9c443105b4'),
+      ('private.reviews','1e336a0bb0463c6a6f16298bd983bcd1'),
+      ('private.roles','ca5a46da736d530d2b417d316da86c86'),
+      ('private.teams','20148baef45638d04597c2ced6ccded2'),
+      ('private.users','93d5d99161f2b2a12d0beb5c0d8fa31d'),
       ('private.review_append_scope_snapshot_v1(uuid, text, text, jsonb, uuid)','58a21252d890896177de0b397c76d649'),
       ('private.review_revision_fingerprint_v1(text, jsonb)','a01a3ebb834862e179e728738187e36e'),
       ('private.review_scope_all_reference_ids_v1(jsonb)','1c316d2949860f7b37d4f4d5124a2795'),
@@ -74,6 +74,21 @@ begin
             from aclexplode(coalesce(relation.relacl,acldefault('r',relation.relowner))) acl
             left join pg_roles grantee on grantee.oid=acl.grantee
             left join pg_roles grantor on grantor.oid=acl.grantor),''),
+          coalesce((select string_agg(
+            attribute.attname||':'||
+            (case when acl.grantee=0 then 'PUBLIC' else grantee.rolname end)||':'||
+            acl.privilege_type||':'||acl.is_grantable::text||':'||
+            (case when acl.grantor=0 then 'PUBLIC' else grantor.rolname end),
+            '|' order by attribute.attname,
+            case when acl.grantee=0 then 'PUBLIC' else grantee.rolname end,
+            acl.privilege_type,acl.is_grantable,
+            case when acl.grantor=0 then 'PUBLIC' else grantor.rolname end)
+            from pg_attribute attribute
+            cross join lateral aclexplode(attribute.attacl) acl
+            left join pg_roles grantee on grantee.oid=acl.grantee
+            left join pg_roles grantor on grantor.oid=acl.grantor
+            where attribute.attrelid=relation.oid and attribute.attnum>0
+              and not attribute.attisdropped),''),
           pg_get_viewdef(relation.oid,true),coalesce(obj_description(relation.oid,'pg_class'),''),
           coalesce((select string_agg(
             pg_describe_object(dependency.refclassid,dependency.refobjid,dependency.refobjsubid)||':'||dependency.deptype::text,

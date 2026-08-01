@@ -243,7 +243,7 @@ alter view private.teams owner to postgres;
 alter view private.users owner to postgres;
 
 do $converge_private_view_acl$
-declare target_oid oid; grantee_name text;
+declare target_oid oid; grantee_name text; attribute_acl record;
 begin
   for target_oid in
     select c.oid from pg_class c join pg_namespace n on n.oid=c.relnamespace
@@ -257,6 +257,21 @@ begin
       join pg_roles role on role.oid=acl.grantee where c.oid=target_oid and role.rolname<>'postgres'
     loop
       execute format('revoke all privileges on table %s from %I',target_oid::regclass,grantee_name);
+    end loop;
+    -- Relation ACL convergence does not remove column-only grants.  Enumerate
+    -- every physical attacl entry so group, inherited, PUBLIC, and quoted-role
+    -- grants all converge to the reviewed no-column-ACL posture.
+    for attribute_acl in
+      select attribute.attname, acl.grantee, grantee.rolname
+      from pg_attribute attribute
+      cross join lateral aclexplode(attribute.attacl) acl
+      left join pg_roles grantee on grantee.oid=acl.grantee
+      where attribute.attrelid=target_oid and attribute.attnum>0 and not attribute.attisdropped
+      group by attribute.attname,acl.grantee,grantee.rolname
+    loop
+      execute format('revoke all privileges (%I) on table %s from %s',
+        attribute_acl.attname,target_oid::regclass,
+        case when attribute_acl.grantee=0 then 'PUBLIC' else format('%I',attribute_acl.rolname) end);
     end loop;
   end loop;
 end
@@ -330,7 +345,7 @@ alter view api.identity_center_processed_events_v1 owner to postgres;
 alter view api.identity_center_users_v1 owner to postgres;
 
 do $converge_api_view_acl$
-declare target_oid oid; grantee_name text;
+declare target_oid oid; grantee_name text; attribute_acl record;
 begin
   for target_oid in
     select c.oid from pg_class c join pg_namespace n on n.oid=c.relnamespace
@@ -345,6 +360,18 @@ begin
       join pg_roles role on role.oid=acl.grantee where c.oid=target_oid and role.rolname<>'postgres'
     loop
       execute format('revoke all privileges on table %s from %I',target_oid::regclass,grantee_name);
+    end loop;
+    for attribute_acl in
+      select attribute.attname, acl.grantee, grantee.rolname
+      from pg_attribute attribute
+      cross join lateral aclexplode(attribute.attacl) acl
+      left join pg_roles grantee on grantee.oid=acl.grantee
+      where attribute.attrelid=target_oid and attribute.attnum>0 and not attribute.attisdropped
+      group by attribute.attname,acl.grantee,grantee.rolname
+    loop
+      execute format('revoke all privileges (%I) on table %s from %s',
+        attribute_acl.attname,target_oid::regclass,
+        case when attribute_acl.grantee=0 then 'PUBLIC' else format('%I',attribute_acl.rolname) end);
     end loop;
   end loop;
 end
@@ -363,6 +390,40 @@ to authenticated, service_role;
 grant select on api.notifications_v1,
   api.identity_center_processed_events_v1, api.identity_center_users_v1
 to service_role;
+
+-- A normalized empty per-column ACL is part of the target contract.  Table
+-- grants above are intentional; no column-specific privilege survives.
+do $column_acl_postcondition$
+declare normalized_column_acl text;
+begin
+  select string_agg(
+    namespace.nspname||'.'||relation.relname||':'||attribute.attname||':'||
+    case when acl.grantee=0 then 'PUBLIC' else grantee.rolname end||':'||
+    acl.privilege_type||':'||acl.is_grantable::text||':'||
+    case when acl.grantor=0 then 'PUBLIC' else grantor.rolname end,
+    '|' order by namespace.nspname,relation.relname,attribute.attname,
+      case when acl.grantee=0 then 'PUBLIC' else grantee.rolname end,
+      acl.privilege_type,acl.is_grantable,
+      case when acl.grantor=0 then 'PUBLIC' else grantor.rolname end)
+  into normalized_column_acl
+  from pg_class relation
+  join pg_namespace namespace on namespace.oid=relation.relnamespace
+  join pg_attribute attribute on attribute.attrelid=relation.oid
+    and attribute.attnum>0 and not attribute.attisdropped
+  cross join lateral aclexplode(attribute.attacl) acl
+  left join pg_roles grantee on grantee.oid=acl.grantee
+  left join pg_roles grantor on grantor.oid=acl.grantor
+  where (namespace.nspname='private' and relation.relname in
+    ('comments','identity_center_processed_events','identity_center_users','notifications','reviews','roles','teams','users'))
+     or (namespace.nspname='api' and relation.relname in
+    ('notifications_v1','reviews_v1','team_roles_v1','teams_v1','user_profiles_v1',
+     'identity_center_processed_events_v1','identity_center_users_v1'));
+
+  if coalesce(normalized_column_acl,'')<>'' then
+    raise exception 'Issue #355 target column ACL postcondition failed: %',normalized_column_acl;
+  end if;
+end
+$column_acl_postcondition$;
 
 -- Keep the audited SECURITY DEFINER routines physically public during Expand.
 -- Private invoker adapters create the internal cutover target without adding a

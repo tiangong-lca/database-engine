@@ -24,7 +24,9 @@ ROUTINES = (
 def run(command: list[str], *, check: bool = True) -> subprocess.CompletedProcess[str]:
     result = subprocess.run(command, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE)
     if check and result.returncode != 0:
-        raise SystemExit(f"Issue #355 qualification command failed: {command[0]}")
+        raise SystemExit(
+            f"Issue #355 qualification command failed: {command[0]}: {result.stderr.strip()}"
+        )
     return result
 
 
@@ -67,6 +69,18 @@ def target_fingerprint(db_url: str, *, include_oid: bool = True) -> str:
         select concat_ws(':',n.nspname||'.'||c.relname,
           case when {str(include_oid).lower()} then c.oid::text else '' end,
           c.relowner,c.relkind,coalesce(c.relacl::text,''),
+          coalesce((select string_agg(a.attname||':'||
+            case when x.grantee=0 then 'PUBLIC' else grantee.rolname end||':'||
+            x.privilege_type||':'||x.is_grantable::text||':'||
+            case when x.grantor=0 then 'PUBLIC' else grantor.rolname end,
+            '|' order by a.attname,
+            case when x.grantee=0 then 'PUBLIC' else grantee.rolname end,
+            x.privilege_type,x.is_grantable,
+            case when x.grantor=0 then 'PUBLIC' else grantor.rolname end)
+            from pg_attribute a cross join lateral aclexplode(a.attacl) x
+            left join pg_roles grantee on grantee.oid=x.grantee
+            left join pg_roles grantor on grantor.oid=x.grantor
+            where a.attrelid=c.oid and a.attnum>0 and not a.attisdropped),''),
           coalesce(c.reloptions::text,''),pg_get_viewdef(c.oid,true),
           coalesce(obj_description(c.oid,'pg_class'),''),
           coalesce((select string_agg(pg_describe_object(d.classid,d.objid,d.objsubid)||':'||
@@ -147,21 +161,61 @@ def main() -> int:
 
     psql(db_url, """
       create role issue355_drift_role nologin;
+      create role issue355_acl_group nologin;
+      create role issue355_acl_member nologin in role issue355_acl_group;
+      create role "issue355 quoted role" nologin;
       grant issue355_drift_role to postgres;
       grant create on schema api, private to issue355_drift_role;
       grant select on api.teams_v1 to supabase_auth_admin;
+      grant select (id) on api.teams_v1 to "issue355 quoted role";
+      grant select ("json") on private.teams to issue355_acl_group;
       alter view api.teams_v1 owner to issue355_drift_role;
       grant execute on function private.review_scope_checksum_v1(jsonb) to supabase_auth_admin;
       alter function private.review_scope_checksum_v1(jsonb) owner to issue355_drift_role;
     """)
+    inherited_column_acl = psql(db_url, """
+      select has_column_privilege('issue355 quoted role','api.teams_v1','id','select')
+        || '|' ||
+        has_column_privilege('issue355_acl_member','private.teams','json','select');
+    """)
+    if inherited_column_acl != "true|true":
+        raise SystemExit("Issue #355 column-ACL negative fixture did not establish quoted/inherited grants")
     apply_file(db_url, MIGRATION)
+    remaining_column_acl = psql(db_url, """
+      select count(*)
+      from pg_class c join pg_namespace n on n.oid=c.relnamespace
+      join pg_attribute a on a.attrelid=c.oid and a.attnum>0 and not a.attisdropped
+      cross join lateral aclexplode(a.attacl) acl
+      where (n.nspname='private' and c.relname in
+        ('comments','identity_center_processed_events','identity_center_users','notifications','reviews','roles','teams','users'))
+         or (n.nspname='api' and c.relname in
+        ('notifications_v1','reviews_v1','team_roles_v1','teams_v1','user_profiles_v1',
+         'identity_center_processed_events_v1','identity_center_users_v1'));
+    """)
+    if remaining_column_acl != "0":
+        raise SystemExit("Issue #355 migration left target column ACL entries")
     psql(db_url, """
       revoke create on schema api, private from issue355_drift_role;
       revoke issue355_drift_role from postgres;
       drop role issue355_drift_role;
+      drop role issue355_acl_member;
+      drop role issue355_acl_group;
+      drop role "issue355 quoted role";
     """)
     if target_fingerprint(db_url) != target_before or public_routine_fingerprint(db_url) != public_before:
         raise SystemExit("Issue #355 exact-state reapply did not converge owner/ACL/catalog state")
+
+    psql(db_url, """
+      create role issue355_column_tamper nologin;
+      grant select (id) on api.teams_v1 to issue355_column_tamper;
+    """)
+    require_rejected(apply_file(db_url, ROLLBACK, check=False), "tampered target column ACL")
+    psql(db_url, """
+      revoke select (id) on api.teams_v1 from issue355_column_tamper;
+      drop role issue355_column_tamper;
+    """)
+    if target_fingerprint(db_url) != target_before:
+        raise SystemExit("Issue #355 column-ACL tamper negative changed target state")
 
     psql(db_url, "comment on view api.teams_v1 is 'issue355-tamper'")
     require_rejected(apply_file(db_url, ROLLBACK, check=False), "tampered target comment")

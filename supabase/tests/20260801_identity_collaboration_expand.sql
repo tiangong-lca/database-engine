@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(61);
+select plan(62);
 
 select has_table('public', name, 'Expand retains public physical table ' || name)
 from unnest(array['comments','identity_center_processed_events','identity_center_users','notifications','reviews','roles','teams','users']) as name;
@@ -20,6 +20,23 @@ select ok(
       and grantee in ('PUBLIC','anon','authenticated')
   ),
   'browser roles have zero private projection grants'
+);
+
+select ok(
+  not exists (
+    select 1
+    from pg_class relation
+    join pg_namespace namespace on namespace.oid=relation.relnamespace
+    join pg_attribute attribute on attribute.attrelid=relation.oid
+      and attribute.attnum>0 and not attribute.attisdropped
+    cross join lateral aclexplode(attribute.attacl) acl
+    where (namespace.nspname='private' and relation.relname in
+      ('comments','identity_center_processed_events','identity_center_users','notifications','reviews','roles','teams','users'))
+       or (namespace.nspname='api' and relation.relname in
+      ('notifications_v1','reviews_v1','team_roles_v1','teams_v1','user_profiles_v1',
+       'identity_center_processed_events_v1','identity_center_users_v1'))
+  ),
+  'target projections have normalized empty column ACLs'
 );
 
 select ok(

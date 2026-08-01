@@ -4,6 +4,7 @@
   "databaseBaseSha": "49ea2a2a7d6ed306bbcb95db20656e3acc221381",
   "singleWritePhysicalSchema": "public",
   "tablePhysicalMoveReady": false,
+  "targetColumnAclPolicy": "none",
   "productionMutationAllowed": false,
   "consumerEvidence": {
     "next": "b8b32228f6debd2165512c26fc186801bd3bcfe2",
