@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-01"
-lastReviewedCommit: "cccdb4e90b65cc7b56dbae72946637cede599ba3"
-lastReviewedNote: "Reviewed for Issue #340 api/private boundary POC: config ownership and validation routes cover the staged api exposure contract while private/util/archive remain non-exposed."
+lastReviewedCommit: "1445889b2746c28fc80b77db8ee15213470da718"
+lastReviewedNote: "Reviewed for Issue #340 stage B: config ownership and validation routes cover api exposure plus migration-before-config deployment while private/util/archive remain non-exposed."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: cccdb4e90b65cc7b56dbae72946637cede599ba3
-lastReviewedNote: "Reviewed Issue #340 api/private boundary POC: document the required schema-first, configuration-second rollout for the api/public/graphql_public exposure contract."
+lastReviewedCommit: 1445889b2746c28fc80b77db8ee15213470da718
+lastReviewedNote: "Reviewed Issue #340 stage B: persistent dev now pushes configuration after migrations to implement the api/public/graphql_public exposure contract safely."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -77,16 +77,16 @@ When review changes an already-applied PR migration, add a later migration that 
 - Treat committed files in `supabase/migrations/` as the schema source of truth for production, `dev`, and preview branches.
 - Keep branch-specific overrides in `[remotes.<branch>]` inside `supabase/config.toml`.
 - Do not create a separate `supabase/` directory per Git branch.
-- Keep `.github/workflows/supabase-dev.yml` as the only GitHub Actions flow in this repo that runs `supabase db push` for the persistent Supabase `dev` branch.
+- Keep `.github/workflows/supabase-dev.yml` as the only GitHub Actions flow in this repo that runs `supabase db push` and `supabase config push` for the persistent Supabase `dev` branch. Migration push must precede configuration push.
 - Do not add a checked-in GitHub Actions production deploy for Git `main`; the production project is migrated by the Supabase GitHub integration bound to this repository.
 - Do not author normal schema changes by editing the remote database first and reconstructing migrations later.
-- Keep Data API schemas configuration-as-code: the target is `api`, `public`, and `graphql_public`; never add `private`, `util`, or `archive` to exposed schemas or `extra_search_path`.
+- Keep Data API schemas configuration-as-code: expose `api`, `public`, and `graphql_public`; never add `private`, `util`, or `archive` to exposed schemas or `extra_search_path`.
 - Supabase's GitHub deployment DAG applies `Configure` before `Migrate`. Therefore, first deploy and verify a new schema and its API objects with the existing exposure configuration; only a later commit/PR may expose that already-hosted schema. Never introduce a schema and expose it in the same deployment.
 
 ## Files to maintain
 
 - `supabase/config.toml`: shared baseline plus `[remotes.dev]`
-- `.github/workflows/supabase-dev.yml`: pushes committed migrations to the persistent Supabase `dev` branch on Git `dev`
+- `.github/workflows/supabase-dev.yml`: pushes committed migrations and then configuration to the persistent Supabase `dev` branch on Git `dev`
 - `supabase/migrations/*.sql`: committed migration history
 - `supabase/seed.sql`: shared seed data
 - `supabase/seeds/dev.sql`: optional persistent-dev-only seed data
@@ -144,9 +144,8 @@ Normal PR path:
    Supabase `dev` branch.
 5. After the PR merges, the resulting push to Git `dev` triggers
    `.github/workflows/supabase-dev.yml`.
-6. The workflow links to `SUPABASE_DEV_PROJECT_ID` and runs `supabase db push --include-all`.
-7. Pending checked-in migrations are then applied to the persistent Supabase
-   `dev` branch.
+6. The workflow links to `SUPABASE_DEV_PROJECT_ID`, runs `supabase db push --include-all`, and only after it succeeds runs `supabase config push`.
+7. Pending checked-in migrations and then the checked-in service configuration are applied to the persistent Supabase `dev` branch.
 
 An existing Preview branch applies newly added migration files on later PR
 pushes. Editing a migration already recorded in that Preview's migration

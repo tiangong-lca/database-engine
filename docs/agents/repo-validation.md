@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: cccdb4e90b65cc7b56dbae72946637cede599ba3
-lastReviewedNote: "Reviewed for Issue #340 api/private boundary POC: add staged schema/config deployment plus SQL ACL/parity, local REST profile, and hosted exact-ref proof requirements."
+lastReviewedCommit: 1445889b2746c28fc80b77db8ee15213470da718
+lastReviewedNote: "Reviewed for Issue #340 stage B: validate migration-before-config ordering, local REST profiles, and hosted exact-ref API/private boundary proof."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

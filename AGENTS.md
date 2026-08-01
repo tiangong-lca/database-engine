@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: cccdb4e90b65cc7b56dbae72946637cede599ba3
-lastReviewedNote: "Reviewed for Issue #340 api/private boundary POC: api is created before its separately deployed exposure; private, util, and archive remain non-exposed, and database ownership, dev-first delivery, and workspace integration remain unchanged."
+lastReviewedCommit: 1445889b2746c28fc80b77db8ee15213470da718
+lastReviewedNote: "Reviewed for Issue #340 stage B: api is exposed only after its hosted schema deployment; private, util, and archive remain non-exposed, and database ownership, dev-first delivery, and workspace integration remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
