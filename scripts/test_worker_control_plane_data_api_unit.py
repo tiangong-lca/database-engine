@@ -49,14 +49,18 @@ class WorkerControlPlaneDataApiProfileTest(unittest.TestCase):
         self.assertEqual(headers["Authorization"], f"Bearer {credential}")
 
     def test_reload_failure_does_not_echo_database_url(self) -> None:
-        database_url = "postgresql://" + "operator:" + "must-not-leak" + "@example.invalid/postgres"
-        failed = CompletedProcess(args=["psql", database_url], returncode=2)
-        with mock.patch.object(target.subprocess, "run", return_value=failed):
-            with self.assertRaises(SystemExit) as raised:
+        database_url = "postgresql://" + "operator:" + "must-not-leak" + "@127.0.0.1:5432/postgres"
+        failed = CompletedProcess(args=["psql"], returncode=2)
+        with mock.patch.object(target.subprocess, "run", return_value=failed) as invoked:
+            with self.assertRaises(AssertionError) as raised:
                 target.reload_schema(database_url)
         self.assertEqual(str(raised.exception), "PostgREST schema reload failed")
         self.assertNotIn(database_url, str(raised.exception))
         self.assertNotIn("must-not-leak", str(raised.exception))
+        argv = invoked.call_args.args[0]
+        self.assertNotIn(database_url, argv)
+        self.assertFalse(any("must-not-leak" in item for item in argv))
+        self.assertEqual(invoked.call_args.kwargs["env"]["PGPASSWORD"], "must-not-leak")
 
 
 if __name__ == "__main__":

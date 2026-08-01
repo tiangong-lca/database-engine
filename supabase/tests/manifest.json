@@ -42,11 +42,15 @@
         "supabase/tests/20260602_worker_jobs_canonical_task_contract.sql",
         "supabase/tests/20260603_worker_domain_artifact_contracts.sql",
         "supabase/tests/20260603_lca_worker_job_projection.sql",
-        "supabase/tests/20260731_worker_control_plane_private_expand.sql"
+        "supabase/tests/20260731_worker_control_plane_private_expand.sql",
+        "supabase/tests/20260801_worker_control_plane_physical_expand.sql"
       ]
     },
     "role-matrix": {
-      "files": ["supabase/tests/20260731_worker_control_plane_private_expand.sql"]
+      "files": [
+        "supabase/tests/20260731_worker_control_plane_private_expand.sql",
+        "supabase/tests/20260801_worker_control_plane_physical_expand.sql"
+      ]
     },
     "security-acl": {
       "files": ["supabase/tests/20260801_security_acl_expand.sql"]

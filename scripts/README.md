@@ -418,6 +418,25 @@ It is local-only and resets the currently selected local Supabase project.
 python scripts/test_worker_control_plane_upgrade.py
 ```
 
+### `test_worker_control_plane_physical_upgrade.py` and rollback
+
+Issue #356's mandatory physical-boundary qualification is selected through:
+
+```bash
+python scripts/run_database_contract.py --suite worker-control-plane
+```
+
+The suite runs both physical harnesses before its focused pgTAP/reset phase.
+The upgrade harness loads one million jobs by default, injects a failed
+transaction, measures lock wait and WAL, preserves OIDs/catalog/data, and
+proves exact retry. The rollback harness first proves a maliciously drifted
+adapter fails preflight without mutation, then proves exact baseline restore
+and roll-forward. Both harnesses poll real PostgREST through baseline and
+Expand phases; together they cover baseline → Expand → rollback → roll-forward.
+`private` remains unexposed, `service_role` retains the compatibility surface,
+and anonymous access fails closed at every phase. Database passwords are passed
+through `PGPASSWORD`, never process arguments or output.
+
 ### `test_worker_control_plane_data_api.py`
 
 After a clean local reset, sends a post-ready schema reload, polls until

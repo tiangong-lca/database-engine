@@ -85,7 +85,7 @@ actual as (
   join pg_attribute as att on att.attrelid = rel.oid and att.attnum = any(con.conkey)
   where con.contype = 'f'
     and rel_ns.nspname = 'public'
-    and ref_ns.nspname = 'public'
+    and ref_ns.nspname in ('public', 'private')
     and ref.relname = 'worker_jobs'
 ),
 missing as (
