@@ -556,7 +556,9 @@ does not execute destructive identity DDL by default. On a disposable local
 stack, opt in with `--run-destructive-identity-qualification`. That mandatory
 gate runs the dual exact-hash preservation/retry, unknown atomic-rejection, and
 actor RLS matrix harness before the rollback/roll-forward/lock-failure harness;
-either failure terminates the canonical runner. `--skip-data-api` skips only
+it resets the selected stack to exact Issue #355 head `20260801061000` for that
+rehearsal and restores the current repository head afterwards. Qualification
+and restoration failures both terminate the canonical runner. `--skip-data-api` skips only
 HTTP probes and does not select or redirect the destructive target. The
 runner-level control-flow contract is
 `test_database_contract_identity_qualification.py`.

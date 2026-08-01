@@ -438,7 +438,9 @@ workdir。`test_database_contract_targeting.py` 提供离线双 stack 混拼负�
 canonical runner 默认不执行 destructive identity DDL；只可在 disposable local stack
 上用 `--run-destructive-identity-qualification` 显式启用。该 mandatory gate 先执行
 dual exact-hash preservation/retry、unknown 原子拒绝与逐角色 RLS matrix harness，再执行
-rollback/roll-forward/lock-failure harness；任一失败都会终止 canonical runner。
+rollback/roll-forward/lock-failure harness；该演练会先把选定 stack reset 到 Issue #355
+精确 head `20260801061000`，完成后恢复到当前仓库 head。资格验证或恢复任一失败都会终止
+canonical runner。
 `--skip-data-api` 只跳过 HTTP probe，不选择或重定向破坏性测试目标。runner control-flow
 合同位于 `test_database_contract_identity_qualification.py`。
 
