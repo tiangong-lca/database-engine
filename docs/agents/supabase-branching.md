@@ -22,7 +22,7 @@ checkPaths:
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: 1445889b2746c28fc80b77db8ee15213470da718
-lastReviewedNote: "Reviewed Issue #340 stage B: persistent dev now pushes configuration after migrations to implement the api/public/graphql_public exposure contract safely."
+lastReviewedNote: "Reviewed Issue #340 stage B: the persistent dev binding applies the api/public/graphql_public exposure contract only after the schema-first PR is hosted."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -77,7 +77,7 @@ When review changes an already-applied PR migration, add a later migration that 
 - Treat committed files in `supabase/migrations/` as the schema source of truth for production, `dev`, and preview branches.
 - Keep branch-specific overrides in `[remotes.<branch>]` inside `supabase/config.toml`.
 - Do not create a separate `supabase/` directory per Git branch.
-- Keep `.github/workflows/supabase-dev.yml` as the only GitHub Actions flow in this repo that runs `supabase db push` and `supabase config push` for the persistent Supabase `dev` branch. Migration push must precede configuration push.
+- Keep `.github/workflows/supabase-dev.yml` as the only GitHub Actions flow in this repo that runs `supabase db push` for the persistent Supabase `dev` branch. Branch configuration remains owned by the Supabase GitHub integration and `[remotes.dev]`; do not add an unconditional `supabase config push` that could apply unrelated remote config drift.
 - Do not add a checked-in GitHub Actions production deploy for Git `main`; the production project is migrated by the Supabase GitHub integration bound to this repository.
 - Do not author normal schema changes by editing the remote database first and reconstructing migrations later.
 - Keep Data API schemas configuration-as-code: expose `api`, `public`, and `graphql_public`; never add `private`, `util`, or `archive` to exposed schemas or `extra_search_path`.
@@ -86,7 +86,7 @@ When review changes an already-applied PR migration, add a later migration that 
 ## Files to maintain
 
 - `supabase/config.toml`: shared baseline plus `[remotes.dev]`
-- `.github/workflows/supabase-dev.yml`: pushes committed migrations and then configuration to the persistent Supabase `dev` branch on Git `dev`
+- `.github/workflows/supabase-dev.yml`: pushes committed migrations to the persistent Supabase `dev` branch on Git `dev`
 - `supabase/migrations/*.sql`: committed migration history
 - `supabase/seed.sql`: shared seed data
 - `supabase/seeds/dev.sql`: optional persistent-dev-only seed data
@@ -144,8 +144,8 @@ Normal PR path:
    Supabase `dev` branch.
 5. After the PR merges, the resulting push to Git `dev` triggers
    `.github/workflows/supabase-dev.yml`.
-6. The workflow links to `SUPABASE_DEV_PROJECT_ID`, runs `supabase db push --include-all`, and only after it succeeds runs `supabase config push`.
-7. Pending checked-in migrations and then the checked-in service configuration are applied to the persistent Supabase `dev` branch.
+6. The workflow links to `SUPABASE_DEV_PROJECT_ID` and runs `supabase db push --include-all`.
+7. Pending checked-in migrations are applied by the workflow; Supabase Branching independently applies checked-in configuration to the persistent ref declared by `[remotes.dev]`.
 
 An existing Preview branch applies newly added migration files on later PR
 pushes. Editing a migration already recorded in that Preview's migration

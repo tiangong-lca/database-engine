@@ -7,7 +7,6 @@ const migrationUrl = new URL(
   '../migrations/20260801023000_api_private_boundary_poc.sql',
   import.meta.url,
 );
-const devWorkflowUrl = new URL('../../.github/workflows/supabase-dev.yml', import.meta.url);
 
 test('api is the only application custom schema exposed by config', async () => {
   const config = await readFile(configUrl, 'utf8');
@@ -32,14 +31,10 @@ test('migration keeps the contract additive and reloads PostgREST', async () => 
   assert.doesNotMatch(migration, /drop\s+(table|view|function|schema)/i);
 });
 
-test('persistent dev deploys migrations before pushing Data API configuration', async () => {
-  const workflow = await readFile(devWorkflowUrl, 'utf8');
-  const migrationPush = workflow.indexOf('supabase db push --include-all');
-  const configPush = workflow.indexOf(
-    'supabase config push --project-ref "$SUPABASE_PROJECT_ID"',
+test('persistent dev binding targets the exact hosted branch', async () => {
+  const config = await readFile(configUrl, 'utf8');
+  assert.match(
+    config,
+    /\[remotes\.dev\][\s\S]*?project_id\s*=\s*"fotofiyqnuyvgtotswie"/,
   );
-
-  assert.notEqual(migrationPush, -1, 'persistent dev workflow must push migrations');
-  assert.notEqual(configPush, -1, 'persistent dev workflow must push config');
-  assert.ok(migrationPush < configPush, 'schema migrations must precede exposed-schema config');
 });

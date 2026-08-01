@@ -31,7 +31,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: 1445889b2746c28fc80b77db8ee15213470da718
-lastReviewedNote: "Reviewed for Issue #340 stage B: validate migration-before-config ordering, local REST profiles, and hosted exact-ref API/private boundary proof."
+lastReviewedNote: "Reviewed for Issue #340 stage B: validate the staged Branching deployment, local REST profiles, and hosted exact-ref API/private boundary proof."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

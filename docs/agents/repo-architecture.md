@@ -29,7 +29,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: 1445889b2746c28fc80b77db8ee15213470da718
-lastReviewedNote: "Reviewed for Issue #340 stage B: the already-hosted api DTO/RPC layer becomes exposed while the private runtime boundary and repository source-of-truth paths remain unchanged."
+lastReviewedNote: "Reviewed for Issue #340 stage B: the persistent-branch binding exposes the already-hosted api DTO/RPC layer while the private runtime boundary and repository source-of-truth paths remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

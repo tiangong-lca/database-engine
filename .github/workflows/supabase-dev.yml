@@ -29,9 +29,3 @@ jobs:
 
       - name: Push migrations to Supabase dev branch
         run: supabase db push --include-all
-
-      # Supabase's hosted deployment DAG configures services before migrations.
-      # Our persistent-dev path deliberately reverses that unsafe first-schema
-      # order: an exposed schema must already exist before PostgREST is updated.
-      - name: Push configuration to Supabase dev branch
-        run: supabase config push --project-ref "$SUPABASE_PROJECT_ID"

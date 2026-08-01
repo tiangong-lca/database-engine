@@ -36,7 +36,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: 1445889b2746c28fc80b77db8ee15213470da718
-lastReviewedNote: "Reviewed for Issue #340 stage B: api is exposed only after its hosted schema deployment; private, util, and archive remain non-exposed, and database ownership, dev-first delivery, and workspace integration remain unchanged."
+lastReviewedNote: "Reviewed for Issue #340 stage B: api is exposed through the persistent-branch binding only after its hosted schema deployment; private, util, and archive remain non-exposed."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

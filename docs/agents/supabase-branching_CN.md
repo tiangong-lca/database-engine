@@ -22,7 +22,7 @@ checkPaths:
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: 1445889b2746c28fc80b77db8ee15213470da718
-lastReviewedNote: "已针对 Issue #340 阶段 B 复核：持久化 dev 现在先推送 migration、再推送配置，以安全落实 api/public/graphql_public 暴露合同。"
+lastReviewedNote: "已针对 Issue #340 阶段 B 复核：持久化 dev 仅在 schema-first PR 已托管后，通过分支绑定落实 api/public/graphql_public 暴露合同。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -75,7 +75,7 @@ related:
 - 把 `supabase/migrations/` 中已提交的文件视为 production、`dev` 和 preview 分支共同遵循的 schema 真相源。
 - 分支差异放在 `supabase/config.toml` 的 `[remotes.<branch>]` 中。
 - 不要为不同 Git 分支复制多套 `supabase/` 目录。
-- 把 `.github/workflows/supabase-dev.yml` 作为本仓唯一会对持久化 Supabase `dev` 分支执行 `supabase db push` 与 `supabase config push` 的 GitHub Actions 流程；必须先推送 migration，再推送配置。
+- 把 `.github/workflows/supabase-dev.yml` 作为本仓唯一会对持久化 Supabase `dev` 分支执行 `supabase db push` 的 GitHub Actions 流程。分支配置由 Supabase GitHub integration 与 `[remotes.dev]` 负责；不得增加会连同无关远端配置漂移一起提交的无条件 `supabase config push`。
 - 不要为 Git `main` 增加 checked-in 的 GitHub Actions 生产部署流程；生产项目由绑定到本仓的 Supabase GitHub integration 自动迁移。
 - 不要先手改远端数据库再回头补 migration。
 - Data API schema 必须配置即代码：只暴露 `api`、`public` 和 `graphql_public`；不得把 `private`、`util` 或 `archive` 加入 exposed schemas 或 `extra_search_path`。
