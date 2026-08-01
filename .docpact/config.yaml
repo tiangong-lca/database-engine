@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-01"
-lastReviewedCommit: "a1be848fefc88d68c1073f98c9e3ecf866095399"
-lastReviewedNote: "Reviewed through Issues #353/#354: routes cover immutable provenance, five-schema generation, operator rollback, phase checking, and OID/REST/production-equivalent validation."
+lastReviewedCommit: "05d1387cc073da8161db782db978a77431ff8b3f"
+lastReviewedNote: "Reviewed for Issue #354 hosted repair: routes retain immutable provenance, explicit rollback evidence, scoped ACL generation guards, blank-to-head convergence, and OID/REST/production-equivalent validation."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

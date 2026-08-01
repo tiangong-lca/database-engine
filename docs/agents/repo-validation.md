@@ -31,8 +31,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a1be848fefc88d68c1073f98c9e3ecf866095399
-lastReviewedNote: "Reviewed through Issues #353/#354: retain immutable provenance checks plus OID/ACL/dependency/parity pgTAP, REST, rollback, phase-checker, and million-row upgrade proof."
+lastReviewedCommit: 05d1387cc073da8161db782db978a77431ff8b3f
+lastReviewedNote: "Reviewed for Issue #354 hosted repair: retain immutable provenance and catalog byte-equality plus scoped ACL guards, two-variant rollback, blank-to-head, pgTAP, REST, phase, and million-row proof."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -168,6 +168,17 @@ DATABASE_URL='postgresql://...' python scripts/schema_boundary_phase.py
 
 该 checker 只读，并由 `run_database_contract.py` 调用。Issue #354 还提供 `test_schema_boundary_data_api.py` 用于本地 PostgREST profile/角色验证，以及 `test_schema_boundary_rollback.py` 用于本地 operator rollback/roll-forward OID 验证。
 
+owner-only rollback 会 fail-closed，必须显式提供预部署保留的 ACL 证据。只能使用以下二者之一：
+
+```bash
+psql "$DATABASE_URL" -v source_service_role_maintain=false -f supabase/operator/issue_354_restore_schema_boundary.sql
+psql "$DATABASE_URL" -v source_service_role_maintain=true -f supabase/operator/issue_354_restore_schema_boundary.sql
+```
+
+只有保留的 source readback 证明存在显式 `service_role MAINTAIN` grant 时才选择 `true`。缺失或其他值会在 canonical view 移动前被拒绝。
+
+Catalog export 在写入前还会拒绝被 Issue #339/#354 rollback 或 blank replay 污染的状态：14 个已复核的 PostgreSQL-17 replay relation 以及五个 canonical/compatibility view 名称不得有 `service_role MAINTAIN`；internal helper 与四个已复核的 public helper facade 必须保留 browser-role 边界；两个 lifecycle bundle RPC 必须继续拒绝 anon/authenticated。该 guard 有意限定在本 Issue 范围内；它不声称所有无关 application relation 的 `service_role MAINTAIN` 都为零。与已复核 catalog artifact 的 byte equality 仍是独立门禁。
+
 ### `check_generated_workspace_legacy_tables.py`
 
 检查生成的 schema workspace 是否仍在展示已退休的 public legacy job 表：
