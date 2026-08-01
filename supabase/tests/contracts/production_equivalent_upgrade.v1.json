@@ -1,7 +1,7 @@
 {
   "schemaVersion": "production-equivalent-upgrade-contract.v1",
   "baseVersion": "20260731124000",
-  "expectedHeadVersion": "20260801042547",
+  "expectedHeadVersion": "20260801042600",
   "defaultRepresentativeRows": 1000000,
   "minimumQualificationRows": 1000000,
   "rehearsalCleanupScripts": [

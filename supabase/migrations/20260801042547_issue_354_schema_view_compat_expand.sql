@@ -167,9 +167,14 @@ begin
         ('service_role','TRUNCATE',false), ('service_role','REFERENCES',false),
         ('service_role','TRIGGER',false),
         ('api_internal_executor','SELECT',false)
+      ), allowed_optional(grantee, privilege_type, is_grantable) as (values
+        ('service_role','MAINTAIN',false)
       )
       (select grantee, privilege_type, is_grantable from actual
-       except select grantee, privilege_type, is_grantable from expected)
+       except
+       (select grantee, privilege_type, is_grantable from expected
+        union all
+        select grantee, privilege_type, is_grantable from allowed_optional))
       union all
       (select grantee, privilege_type, is_grantable from expected
        except select grantee, privilege_type, is_grantable from actual)

@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a1be848fefc88d68c1073f98c9e3ecf866095399
-lastReviewedNote: "Reviewed through Issues #353/#354: immutable inventory provenance, OID-preserving canonical view moves, explicit compatibility wrappers, and five-schema generation preserve catalog and Data API boundaries."
+lastReviewedCommit: 05d1387cc073da8161db782db978a77431ff8b3f
+lastReviewedNote: "Reviewed for Issue #354 hosted repair: exact source-ACL variants, fail-closed rollback evidence, blank-to-head ACL convergence, and scoped generation guards preserve the intended catalog and Data API boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

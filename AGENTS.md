@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a1be848fefc88d68c1073f98c9e3ecf866095399
-lastReviewedNote: "Reviewed through Issues #353/#354: immutable inventory provenance, five-schema workspace coverage, OID-preserving view moves, phase guards, and rollback/REST/production-equivalent proof preserve ownership and hosted boundaries."
+lastReviewedCommit: 05d1387cc073da8161db782db978a77431ff8b3f
+lastReviewedNote: "Reviewed for Issue #354 hosted repair: exact ACL variants, explicit rollback evidence, blank-to-head convergence, scoped artifact guards, OID-preserving moves, and production-equivalent proof preserve ownership and hosted boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

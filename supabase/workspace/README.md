@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a1be848fefc88d68c1073f98c9e3ecf866095399
-lastReviewedNote: "Reviewed through Issues #353/#354: immutable inventory provenance remains stable while generated workspace refresh covers public/api/private/util/archive."
+lastReviewedCommit: 05d1387cc073da8161db782db978a77431ff8b3f
+lastReviewedNote: "Reviewed for Issue #354 hosted repair: generated workspace scope remains stable while blank-to-head ACL convergence and guarded catalog generation preserve byte-identical five-schema output."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -1,5 +1,11 @@
 \set ON_ERROR_STOP on
 
+\if :{?source_service_role_maintain}
+\else
+  \echo 'ERROR: set source_service_role_maintain=true|false from retained pre-deployment ACL evidence'
+  \set source_service_role_maintain __missing__
+\endif
+
 -- Issue #354 emergency compatibility rollback.  Freeze new consumers and
 -- retain redacted telemetry evidence before running this owner-only script.
 begin;
@@ -7,10 +13,20 @@ begin;
 set local lock_timeout = '5s';
 set local statement_timeout = '2min';
 
+create temporary table issue_354_rollback_evidence (
+  source_service_role_maintain text not null
+) on commit drop;
+
+insert into issue_354_rollback_evidence values (:'source_service_role_maintain');
+
 do $preflight$
 begin
   if session_user <> 'postgres' or current_user <> 'postgres' then
     raise exception using errcode = '42501', message = 'rollback requires the postgres owner session';
+  end if;
+  if (select source_service_role_maintain from issue_354_rollback_evidence)
+     not in ('true', 'false') then
+    raise exception 'source_service_role_maintain must be exactly true or false';
   end if;
   if to_regclass('private.worker_domain_traceability_cutoffs') is null
      or to_regclass('util.worker_domain_traceability_violations') is null
@@ -60,6 +76,20 @@ grant select on table
   public.worker_legacy_lifecycle_audit,
   public.worker_legacy_table_retirement_blockers
 to api_internal_executor;
+
+do $restore_optional_acl$
+begin
+  if (select source_service_role_maintain = 'true' from issue_354_rollback_evidence) then
+    grant maintain on table
+      public.worker_domain_traceability_cutoffs,
+      public.worker_domain_traceability_violations,
+      public.worker_job_domain_refs,
+      public.worker_legacy_lifecycle_audit,
+      public.worker_legacy_table_retirement_blockers
+    to service_role;
+  end if;
+end
+$restore_optional_acl$;
 
 comment on view public.worker_domain_traceability_cutoffs is
   'Service-role audit contract listing when new worker-produced domain rows must carry a worker_jobs reference. Historical pre-cutover rows are allowed to remain nullable.';
