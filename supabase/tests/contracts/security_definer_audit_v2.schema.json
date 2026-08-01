@@ -1,0 +1,130 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema", "$id": "database.security-definer-audit.v2",
+  "type": "object", "additionalProperties": false,
+  "required": ["schemaVersion", "source", "governedSchemas", "exposedSchemas", "summary", "auditArtifactComplete", "contractReady", "routines"],
+  "properties": {
+    "schemaVersion": {"const": "database.security-definer-audit.v2"}, "source": {"type": "object"},
+    "governedSchemas": {"const": ["api", "archive", "private", "public", "util"]},
+    "exposedSchemas": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+    "summary": {
+      "type": "object", "additionalProperties": false,
+      "required": ["lineageCount", "activeLineageCount", "retiredLineageCount", "originalPublicLineageCount", "genesisNativeNonPublicLineageCount", "transitionNativeLineageCount", "canonicalPrivilegedEndpointCount", "compatibilityEndpointCount", "privilegedCompatibilityEndpointCount", "globalPrivilegedEndpointCount", "unregisteredPrivilegedEndpointCount", "unsafeSearchPathEndpointCount", "explicitTrustedSearchPathEndpointCount", "grandfatheredSearchPathResidueCount", "searchPathContractReady", "canonicalPrivilegedBySchema", "globalPrivilegedBySchema", "issue333OwnerRuntimeResidue"],
+      "properties": {
+        "lineageCount": {"type": "integer", "minimum": 315}, "activeLineageCount": {"type": "integer", "minimum": 0},
+        "retiredLineageCount": {"type": "integer", "minimum": 0}, "originalPublicLineageCount": {"const": 241},
+        "genesisNativeNonPublicLineageCount": {"const": 74}, "transitionNativeLineageCount": {"type": "integer", "minimum": 0},
+        "canonicalPrivilegedEndpointCount": {"type": "integer", "minimum": 0}, "compatibilityEndpointCount": {"type": "integer", "minimum": 0},
+        "privilegedCompatibilityEndpointCount": {"const": 0}, "globalPrivilegedEndpointCount": {"type": "integer", "minimum": 0},
+        "unregisteredPrivilegedEndpointCount": {"const": 0}, "unsafeSearchPathEndpointCount": {"type": "integer", "minimum": 0},
+        "explicitTrustedSearchPathEndpointCount": {"type": "integer", "minimum": 0},
+        "grandfatheredSearchPathResidueCount": {"type": "integer", "minimum": 0}, "searchPathContractReady": {"type": "boolean"},
+        "canonicalPrivilegedBySchema": {"$ref": "#/$defs/schemaCounts"}, "globalPrivilegedBySchema": {"$ref": "#/$defs/schemaCounts"},
+        "issue333OwnerRuntimeResidue": {"type": "integer", "minimum": 0}
+      }
+    },
+    "auditArtifactComplete": {"const": true}, "contractReady": {"const": false},
+    "routines": {"type": "array", "minItems": 315, "items": {"$ref": "#/$defs/routine"}}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "schemaCounts": {"type": "object", "additionalProperties": false, "required": ["api", "archive", "private", "public", "util"], "properties": {
+      "api": {"type": "integer", "minimum": 0}, "archive": {"type": "integer", "minimum": 0}, "private": {"type": "integer", "minimum": 0}, "public": {"type": "integer", "minimum": 0}, "util": {"type": "integer", "minimum": 0}
+    }},
+    "role": {"type": "object", "additionalProperties": false,
+      "required": ["role", "directGrantSources", "effectiveSchemaUsage", "effectiveExecute", "effectiveCallable", "dataApiExposedSchema", "dataApiTransportRole", "postgrestAuthenticatorCanSetRole", "postgrestRoutineKind", "postgrestSchemaCacheEndpoint", "postgrestRequestResolvable", "postgrestDirectInvocationSupported", "postgrestCallableShape", "effectiveDataApiEndpoint", "effectiveDataApiCallable"],
+      "properties": {
+        "role": {"enum": ["PUBLIC", "anon", "authenticated", "service_role", "api_internal_executor", "postgres"]},
+        "directGrantSources": {"type": "array", "uniqueItems": true, "items": {"type": "string"}},
+        "effectiveSchemaUsage": {"type": "boolean"}, "effectiveExecute": {"type": "boolean"}, "effectiveCallable": {"type": "boolean"},
+        "dataApiExposedSchema": {"type": "boolean"}, "dataApiTransportRole": {"type": "boolean"},
+        "postgrestAuthenticatorCanSetRole": {"type": "boolean"},
+        "postgrestRoutineKind": {"type": "boolean"},
+        "postgrestSchemaCacheEndpoint": {"type": "boolean"}, "postgrestRequestResolvable": {"type": "boolean"},
+        "postgrestDirectInvocationSupported": {"type": "boolean"}, "postgrestCallableShape": {"type": "boolean"},
+        "effectiveDataApiEndpoint": {"type": "boolean"}, "effectiveDataApiCallable": {"type": "boolean"}
+      }
+    },
+    "effectiveCaller": {"type": "object", "additionalProperties": false,
+      "required": ["role", "canLogin", "schemaUsage", "execute", "postgrestAuthenticatorCanSetRole"],
+      "properties": {
+        "role": {"type": "string", "minLength": 1}, "canLogin": {"type": "boolean"},
+        "schemaUsage": {"const": true}, "execute": {"const": true},
+        "postgrestAuthenticatorCanSetRole": {"type": "boolean"}
+      }
+    },
+    "endpoint": {"type": "object", "additionalProperties": false,
+      "required": ["currentObjectKey", "currentSchema", "routineKind", "securityDefiner", "ownerRole", "databaseOwnerRole", "directExecuteGrants", "effectiveCallerMatrix", "postgrestShape", "searchPath", "fixedSearchPath", "parsedSearchPath", "searchPathSchemaTrust", "searchPathProof", "searchPathDisposition", "grandfatheredSearchPathResidue", "safeSearchPath", "unsafeSearchPathReason", "definitionSha256", "bodySha256", "propertiesSha256", "endpointRole", "authorizationSignals", "roleMatrix"],
+      "properties": {
+        "currentObjectKey": {"type": "string", "minLength": 1}, "currentSchema": {"enum": ["api", "archive", "private", "public", "util"]},
+        "routineKind": {"enum": ["function", "procedure"]}, "securityDefiner": {"type": "boolean"}, "ownerRole": {"type": "string"},
+        "databaseOwnerRole": {"enum": ["postgres", "supabase_admin"]},
+        "directExecuteGrants": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "effectiveCallerMatrix": {"type": "array", "uniqueItems": true, "items": {"$ref": "#/$defs/effectiveCaller"}},
+        "postgrestShape": {"type": "object", "additionalProperties": false,
+          "required": ["modelVersion", "eligible", "reason", "schemaCacheEligible", "schemaCacheReason", "requestResolvable", "requestResolutionReason", "directInvocationSupported", "directInvocationReason", "returnTypeName", "returnTypeKind", "inputArgumentNames", "inputArgumentTypes", "inputArgumentTypeKinds", "inputArgumentRequired", "argumentModes", "outputArgumentCount", "rawBodyMediaTypes", "unambiguousRequestKeySet", "hasAmbiguousRequestShape", "ambiguousRequestKeySetExamples", "ambiguousOverloadObjectKeys"],
+          "properties": {
+            "modelVersion": {"const": "postgrest-v14.7-schema-cache-and-find-proc"},
+            "eligible": {"type": "boolean"}, "reason": {"type": ["string", "null"]},
+            "schemaCacheEligible": {"type": "boolean"}, "schemaCacheReason": {"type": ["string", "null"]},
+            "requestResolvable": {"type": "boolean"}, "requestResolutionReason": {"type": ["string", "null"]},
+            "directInvocationSupported": {"type": "boolean"}, "directInvocationReason": {"type": ["string", "null"]},
+            "returnTypeName": {"type": "string"}, "returnTypeKind": {"type": "string"},
+            "inputArgumentNames": {"type": "array", "items": {"type": "string"}},
+            "inputArgumentTypes": {"type": "array", "items": {"type": "string"}},
+            "inputArgumentTypeKinds": {"type": "array", "items": {"type": "string", "minLength": 1}},
+            "inputArgumentRequired": {"type": "array", "items": {"type": "boolean"}},
+            "argumentModes": {"type": "array", "items": {"type": "string"}},
+            "outputArgumentCount": {"type": "integer", "minimum": 0},
+            "rawBodyMediaTypes": {"type": "array", "uniqueItems": true, "items": {"enum": ["application/json", "application/octet-stream", "text/plain", "text/xml"]}},
+            "unambiguousRequestKeySet": {"oneOf": [{"type": "null"}, {"type": "array", "uniqueItems": true, "items": {"type": "string"}}]},
+            "hasAmbiguousRequestShape": {"type": "boolean"},
+            "ambiguousRequestKeySetExamples": {"type": "array", "uniqueItems": true, "items": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}},
+            "ambiguousOverloadObjectKeys": {"type": "array", "uniqueItems": true, "items": {"type": "string"}}
+          }
+        },
+        "searchPath": {"type": "array", "items": {"type": "string", "pattern": "^search_path="}}, "fixedSearchPath": {"type": "boolean"},
+        "parsedSearchPath": {"type": "array", "items": {"type": "string"}}, "searchPathSchemaTrust": {"type": "array", "items": {"type": "object"}},
+        "searchPathProof": {"type": "object", "additionalProperties": false,
+          "required": ["engine", "dependencies", "qualifiedDependencies", "unqualifiedDependencies", "unqualifiedRelationTokens", "unqualifiedTypeTokens", "runtimeLookupTokens", "unqualifiedRuntimeLookupTokens", "unprovenRuntimeLookupCount", "dynamicSqlTemplates", "unprovenDynamicSqlStatementCount"],
+          "properties": {
+            "engine": {"enum": ["plpgsql-check-2.7", "strict-static-sql-qualification-v1"]},
+            "dependencies": {"type": "array", "items": {"type": "object"}},
+            "qualifiedDependencies": {"type": "array", "items": {"type": "object"}},
+            "unqualifiedDependencies": {"type": "array", "items": {"type": "object"}},
+            "unqualifiedRelationTokens": {"type": "array", "items": {"type": "string"}},
+            "unqualifiedTypeTokens": {"type": "array", "items": {"type": "string"}},
+            "runtimeLookupTokens": {"type": "array", "items": {"type": "string"}},
+            "unqualifiedRuntimeLookupTokens": {"type": "array", "items": {"type": "string"}},
+            "unprovenRuntimeLookupCount": {"type": "integer", "minimum": 0},
+            "dynamicSqlTemplates": {"type": "array", "items": {"type": "object", "additionalProperties": false,
+              "required": ["templateSha256", "relationTargets", "provenQualified"], "properties": {
+                "templateSha256": {"$ref": "#/$defs/sha256"},
+                "relationTargets": {"type": "array", "items": {"type": "string"}},
+                "provenQualified": {"type": "boolean"}
+              }
+            }},
+            "unprovenDynamicSqlStatementCount": {"type": "integer", "minimum": 0}
+          }
+        },
+        "searchPathDisposition": {"enum": ["explicit-trusted-pg-temp-last", "grandfathered-static-proof", "grandfathered-unproven-residue"]},
+        "grandfatheredSearchPathResidue": {"type": "boolean"},
+        "safeSearchPath": {"type": "boolean"}, "unsafeSearchPathReason": {"type": ["string", "null"]},
+        "definitionSha256": {"$ref": "#/$defs/sha256"}, "bodySha256": {"$ref": "#/$defs/sha256"}, "propertiesSha256": {"$ref": "#/$defs/sha256"},
+        "endpointRole": {"enum": ["canonical", "compatibility-alias"]},
+        "authorizationSignals": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string"}},
+        "roleMatrix": {"type": "array", "minItems": 6, "maxItems": 6, "items": {"$ref": "#/$defs/role"}}
+      }
+    },
+    "routine": {"type": "object", "additionalProperties": false,
+      "required": ["lineageKey", "origin", "originalObjectKey", "originalSchema", "originalDefinitionSha256", "originalRoutineKind", "targetSchema", "migrationBatch", "lifecycle", "canonical", "compatibilityAliases", "retirement", "baselineEvidence"],
+      "properties": {
+        "lineageKey": {"$ref": "#/$defs/sha256"}, "origin": {"enum": ["original-public", "native-nonpublic", "transition-native"]},
+        "originalObjectKey": {"type": "string"}, "originalSchema": {"type": "string"}, "originalDefinitionSha256": {"$ref": "#/$defs/sha256"},
+        "originalRoutineKind": {"enum": ["function", "procedure"]}, "targetSchema": {"type": "string"}, "migrationBatch": {"type": "string"},
+        "lifecycle": {"enum": ["active", "retired"]}, "canonical": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/endpoint"}]},
+        "compatibilityAliases": {"type": "array", "items": {"$ref": "#/$defs/endpoint"}}, "retirement": {"type": ["object", "null"]},
+        "baselineEvidence": {"type": "object"}
+      }
+    }
+  }
+}

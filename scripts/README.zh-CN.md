@@ -290,19 +290,76 @@ canonical JSON bytes 与 committed SHA-256，再执行 committed-vs-generated �
 
 ### `security_definer_audit.py`
 
-在 inventory 固定的相同 schema 上生成或校验完整 SECURITY DEFINER 证据总账：
+校验冻结的 public SECURITY DEFINER 基线产物，或显式对照 exact genesis schema：
 
 ```bash
 python scripts/security_definer_audit.py --write
 python scripts/security_definer_audit.py --check
+DATABASE_URL=<genesis-loopback-url> python scripts/security_definer_audit.py --check-live-baseline
 python -m unittest scripts/test_security_definer_audit.py
 ```
 
-产物保留全部 241 个 exact signatures：129 个 #333 owner/runtime residue
+`--check` 仅校验 artifact，不表示当前 catalog 状态；`--check-live-baseline` 仅适用于
+exact genesis schema。当前状态由 live v2 audit gate 负责。v1 产物保留全部 241 个
+exact signatures：129 个 #333 owner/runtime residue
 （90 api、39 private）、14 个 #339 RLS-bound facade，以及 98 个 inventory static
 closure。逐项字段严格区分 observed catalog evidence、inferred signal、required
 Contract proof 与 confirmed fact；静态 signal 不等于 runtime authorization 证明。
 #352 继续 Blocked，#358 负责物理迁移，gate 始终保持 `contractReady=false`。
+
+### `security_definer_audit_v2.py`
+
+保留 immutable v1 public baseline，同时生成跨 schema privileged-routine lineage
+与当前 endpoint 审计：
+
+```bash
+DATABASE_URL=<loopback-url> python scripts/security_definer_audit_v2.py --bootstrap-write
+DATABASE_URL=<loopback-url> python scripts/security_definer_audit_v2.py --write
+DATABASE_URL=<loopback-url> python scripts/security_definer_audit_v2.py --check
+python scripts/security_definer_audit_v2.py --plan-transition-advance \
+  --batch issue-356-worker-control-plane --database-schema-sha <exact-40-hex-commit>
+python -m unittest scripts/test_security_definer_audit_v2.py
+ISSUE333_DATABASE_URL=<loopback-url> \
+  python -m unittest scripts/test_security_definer_audit_v2_postgrest_conformance.py
+```
+
+`--bootstrap-write` 仅用于受审 exact baseline schema。后续迁移批次必须显式更新
+lineage mapping，并在 exact-SHA clean reset 后使用 `--write`。审计覆盖
+`public`、`api`、`private`、`util`、`archive`；每个 SECURITY DEFINER endpoint
+必须且只能作为一个 active lineage 的 canonical。compatibility alias 必须是
+SECURITY INVOKER；未来若需 privileged 例外，必须新增受审 lineage/version，不能
+把它记作 privileged alias。Invoker wrapper 只能是 alias，不能替代 canonical。role matrix 分别记录 schema USAGE、
+effective EXECUTE、effective callable 与 Data API exposure。Data API 证据保留 exposed
+schema 的受审顺序，分别证明 PostgREST schema cache、请求解析与直接 SQL 调用能力，
+并验证 `authenticator` 对受支持 transport role 的 `SET ROLE` 权限。v14.7
+conformance test 会用一次性、仅 loopback 暴露的 PostgREST 容器，对账 anon OpenAPI
+routes、无 Profile 时的首 schema 路由，以及内部 schema 的负向 Profile。数据库密码
+仅通过 `PGPASSWORD` 传给 `psql`，不进入 argv。transition 引用的文件必须是规范仓库
+相对路径下的 Git 普通文件，并以 no-follow 方式读取。已提交的 #356 fixture
+证明 11 个 Worker move 和一个 composite-signature move 后仍保留 315 个 lineage，
+23 个 invoker aliases 不增加 privileged endpoint 总数。
+transition-advance plan 会确定性冻结当前 v2 bytes、生成 immutable predecessor/produced
+artifact receipt、结算 sequence 0 并开启 sequence 1，同时输出 exact reviewed-code constants。
+迁移 PR 必须物化并校验 plan 中的全部文件，禁止手工拼接 `completedTransitions`，也不能
+把会被覆盖的 `security_definer_audit_v2.json` 当作历史产物。
+
+#356 PR gate 还必须运行真实的双 stack integration harness；不存在可计为成功的 skip：
+
+```bash
+python scripts/run_database_contract.py --suite canonical-local \
+  --security-definer-transition-workdir <clean-stack-a> \
+  --security-definer-transition-workdir <clean-stack-b> \
+  --security-definer-transition-migration <issue-356-migration.sql> \
+  --security-definer-transition-rollback <issue-356-operator-rollback.sql> \
+  --security-definer-transition-migration-sha256 <exact-sha256> \
+  --security-definer-transition-rollback-sha256 <exact-sha256> \
+  --security-definer-transition-base 1b94c1ce7c132e5481c4a2594d6d9a957d7dc683
+```
+
+两个 workdir 必须是处于 exact base 的独立 loopback stack。gate 会执行 baseline audit、
+migration、live transition audit、operator rollback、baseline bytes 恢复、rollforward，
+并比较第二个 stack 的 bytes/SHA。缺少输入、SQL bytes 改变、reset 失败或 audit drift
+都会 fail closed。
 
 ### Security ACL Expand 验证
 

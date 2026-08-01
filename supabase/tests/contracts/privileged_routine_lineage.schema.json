@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "database.privileged-routine-lineage.v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "source", "governedSchemas", "lineages", "contractReady"],
+  "properties": {
+    "schemaVersion": {"const": "database.privileged-routine-lineage.v1"},
+    "source": {
+      "type": "object", "additionalProperties": false,
+      "required": ["baseline", "completedTransitions", "currentTransition", "issue"],
+      "properties": {
+        "baseline": {"$ref": "#/$defs/baseline"},
+        "completedTransitions": {"type": "array", "items": {"$ref": "#/$defs/completedTransition"}},
+        "currentTransition": {"$ref": "#/$defs/transition"},
+        "issue": {"const": "tiangong-lca/database-engine#333"}
+      }
+    },
+    "governedSchemas": {"const": ["api", "archive", "private", "public", "util"]},
+    "lineages": {"type": "array", "minItems": 315, "items": {"$ref": "#/$defs/lineage"}},
+    "contractReady": {"const": false}
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"},
+    "gitSha": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+    "contractPath": {"type": "string", "pattern": "^supabase/tests/contracts/[A-Za-z0-9][A-Za-z0-9_.-]*$"},
+    "schemaName": {"enum": ["api", "archive", "private", "public", "util"]},
+    "baseline": {
+      "type": "object", "additionalProperties": false,
+      "required": ["inventorySchemaVersion", "inventorySha256", "auditV1Sha256", "databaseSchemaSha", "lineageSnapshotSha256"],
+      "properties": {
+        "inventorySchemaVersion": {"const": "database.public-object-inventory-closure.v1"},
+        "inventorySha256": {"$ref": "#/$defs/sha256"}, "auditV1Sha256": {"$ref": "#/$defs/sha256"},
+        "databaseSchemaSha": {"$ref": "#/$defs/gitSha"}, "lineageSnapshotSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "transition": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sequence", "batch", "databaseSchemaSha", "predecessorArtifactSha256"],
+      "properties": {
+        "sequence": {"type": "integer", "minimum": 0}, "batch": {"type": "string", "minLength": 1},
+        "databaseSchemaSha": {"$ref": "#/$defs/gitSha"}, "predecessorArtifactSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "completedTransition": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sequence", "batch", "databaseSchemaSha", "predecessorArtifactSha256", "predecessorAuditPath", "producedAuditV2Sha256", "producedAuditV2Path", "receiptPath", "receiptSha256"],
+      "properties": {
+        "sequence": {"type": "integer", "minimum": 0}, "batch": {"type": "string", "minLength": 1},
+        "databaseSchemaSha": {"$ref": "#/$defs/gitSha"}, "predecessorArtifactSha256": {"$ref": "#/$defs/sha256"}, "predecessorAuditPath": {"$ref": "#/$defs/contractPath"},
+        "producedAuditV2Sha256": {"$ref": "#/$defs/sha256"}, "producedAuditV2Path": {"$ref": "#/$defs/contractPath"}, "receiptPath": {"$ref": "#/$defs/contractPath"},
+        "receiptSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "registrationReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sequence", "batch", "databaseSchemaSha", "predecessorArtifactSha256", "receiptPath", "receiptSha256"],
+      "properties": {
+        "sequence": {"type": "integer", "minimum": 0}, "batch": {"type": "string", "minLength": 1},
+        "databaseSchemaSha": {"$ref": "#/$defs/gitSha"}, "predecessorArtifactSha256": {"$ref": "#/$defs/sha256"},
+        "receiptPath": {"$ref": "#/$defs/contractPath"}, "receiptSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "retirementReference": {
+      "type": "object", "additionalProperties": false,
+      "required": ["sequence", "batch", "databaseSchemaSha", "predecessorArtifactSha256", "receiptPath", "receiptSha256", "consumerZeroEvidenceSha256", "ownerEvidenceSha256", "retiredEndpointKeys", "predecessorAuditPath"],
+      "properties": {
+        "sequence": {"type": "integer", "minimum": 0}, "batch": {"type": "string", "minLength": 1},
+        "databaseSchemaSha": {"$ref": "#/$defs/gitSha"}, "predecessorArtifactSha256": {"$ref": "#/$defs/sha256"},
+        "receiptPath": {"$ref": "#/$defs/contractPath"}, "receiptSha256": {"$ref": "#/$defs/sha256"},
+        "consumerZeroEvidenceSha256": {"$ref": "#/$defs/sha256"},
+        "ownerEvidenceSha256": {"$ref": "#/$defs/sha256"},
+        "retiredEndpointKeys": {"type": "array", "minItems": 1, "uniqueItems": true, "items": {"type": "string", "minLength": 1}},
+        "predecessorAuditPath": {"$ref": "#/$defs/contractPath"}
+      }
+    },
+    "lineage": {
+      "type": "object", "additionalProperties": false,
+      "required": ["lineageKey", "origin", "originalObjectKey", "originalSchema", "originalDefinitionSha256", "originalRoutineKind", "targetSchema", "migrationBatch", "lifecycle", "birthTransition", "retirement", "canonicalObjectKey", "compatibilityAliases"],
+      "properties": {
+        "lineageKey": {"$ref": "#/$defs/sha256"},
+        "origin": {"enum": ["original-public", "native-nonpublic", "transition-native"]},
+        "originalObjectKey": {"type": "string", "minLength": 1}, "originalSchema": {"$ref": "#/$defs/schemaName"},
+        "originalDefinitionSha256": {"$ref": "#/$defs/sha256"}, "originalRoutineKind": {"enum": ["function", "procedure"]},
+        "targetSchema": {"$ref": "#/$defs/schemaName"}, "migrationBatch": {"type": "string", "minLength": 1},
+        "lifecycle": {"enum": ["active", "retired"]},
+        "birthTransition": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/registrationReference"}]},
+        "retirement": {"oneOf": [{"type": "null"}, {"$ref": "#/$defs/retirementReference"}]},
+        "canonicalObjectKey": {"oneOf": [{"type": "null"}, {"type": "string", "minLength": 1}]},
+        "compatibilityAliases": {"type": "array", "uniqueItems": true, "items": {"type": "string", "minLength": 1}}
+      },
+      "allOf": [
+        {"if": {"properties": {"lifecycle": {"const": "active"}}}, "then": {
+          "properties": {"retirement": {"type": "null"}, "canonicalObjectKey": {"type": "string", "minLength": 1}}
+        }},
+        {"if": {"properties": {"lifecycle": {"const": "retired"}}}, "then": {
+          "properties": {"retirement": {"$ref": "#/$defs/retirementReference"}, "canonicalObjectKey": {"type": "null"}, "compatibilityAliases": {"maxItems": 0}}
+        }},
+        {"if": {"properties": {"origin": {"const": "transition-native"}}}, "then": {
+          "properties": {"birthTransition": {"$ref": "#/$defs/registrationReference"}}
+        }, "else": {"properties": {"birthTransition": {"type": "null"}}}}
+      ]
+    }
+  }
+}

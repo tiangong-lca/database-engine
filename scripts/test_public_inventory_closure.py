@@ -187,6 +187,13 @@ class PublicInventoryClosureTest(unittest.TestCase):
         runner = (inventory.ROOT / "scripts/run_database_contract.py").read_text(encoding="utf-8")
         self.assertIn('"scripts/public_inventory_closure.py", "--check"', runner)
 
+    def test_frozen_v1_check_does_not_read_transition_catalog(self) -> None:
+        with mock.patch.object(inventory, "load_catalog", side_effect=AssertionError("must not query live")):
+            self.assertEqual(
+                inventory.check_frozen_baseline(),
+                inventory.SHA.read_text(encoding="utf-8").strip(),
+            )
+
 
 if __name__ == "__main__":
     unittest.main()

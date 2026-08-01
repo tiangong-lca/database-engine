@@ -15,8 +15,8 @@ from urllib.parse import urlparse
 
 ROOT = Path(__file__).resolve().parents[1]
 CONTRACT_DIR = ROOT / "supabase/tests/contracts"
-INVENTORY = CONTRACT_DIR / "public_object_inventory.json"
-INVENTORY_SHA = CONTRACT_DIR / "public_object_inventory.sha256"
+INVENTORY = CONTRACT_DIR / "public_object_inventory.genesis.json"
+INVENTORY_SHA = CONTRACT_DIR / "public_object_inventory.genesis.sha256"
 OUT = CONTRACT_DIR / "security_definer_audit.json"
 SHA = CONTRACT_DIR / "security_definer_audit.sha256"
 
@@ -407,13 +407,28 @@ def write_or_check(write: bool) -> None:
     print(json.dumps({"summary": generated["summary"], "sha256": digest.strip()}, sort_keys=True))
 
 
+def check_frozen_baseline() -> dict[str, Any]:
+    """Verify immutable v1 bytes/provenance without reading transition catalog state."""
+    audit = verify_committed()
+    print(json.dumps({
+        "summary": audit["summary"],
+        "sha256": SHA.read_text(encoding="utf-8").strip(),
+        "frozenBaseline": True,
+    }, sort_keys=True))
+    return audit
+
+
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--write", action="store_true")
     group.add_argument("--check", action="store_true")
+    group.add_argument("--check-live-baseline", action="store_true")
     args = parser.parse_args()
-    write_or_check(args.write)
+    if args.check:
+        check_frozen_baseline()
+    else:
+        write_or_check(args.write)
     return 0
 
 
