@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
-lastReviewedNote: "Reviewed for Issue #355 delegated-ACL hardening: script entrypoints retain immutable provenance and now prove relation/column/routine grant-option-chain convergence, unrelated-object isolation, three-class tamper rejection, and production-equivalent behavior."
+lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
+lastReviewedNote: "Reviewed for Issue #355 predecessor-policy compatibility: the disposable-local variant harness proves exact admission, unchanged source policy, bounded projection authority, retry, rollback/reapply, and atomic unknown rejection."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -510,9 +510,17 @@ split, PostgREST schema-cache reload, and negative internal-schema profiles.
 `test_identity_collaboration_concurrency.py` runs 800 checksum parity calls over
 eight sessions. The static test binds the exact 16-object inventory batch,
 consumer SHAs, versioned DTO names, transaction/timeouts, and Contract gates.
+`test_identity_collaboration_policy_variants.py` is disposable-local only. It
+rehearses the exact blank/repository and persistent Dev/Production users-policy
+fingerprints, proves Expand preserves either predecessor, bounds every
+security-invoker projection by its source grants, and rejects an unknown third
+variant before mutation. The live legacy variant is compatibility evidence,
+not the approved security target; retirement remains tracked in Next #753 and
+database-engine #358.
 
 ```bash
 python -m unittest scripts/test_identity_collaboration_expand_static.py
+python scripts/test_identity_collaboration_policy_variants.py
 python scripts/test_identity_collaboration_data_api.py
 python scripts/test_identity_collaboration_concurrency.py
 ```

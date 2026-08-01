@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
-lastReviewedNote: "Reviewed for Issue #355 delegated-ACL hardening: identity/collaboration remains Expand-only with public physical sources and private/api targets whose relation, column, and adapter-routine ACLs converge from delegated chains; Contract still requires consumer-zero."
+lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
+lastReviewedNote: "Reviewed for Issue #355 predecessor-policy compatibility: Expand admits and preserves only the exact blank/repository and persistent Dev/Production public.users variants; tightening the live legacy clause remains gated by #753/#358."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -82,6 +82,14 @@ Notification browser traffic remains RPC-only, identity-center projections are
 service-only, and user profiles expose named `id`/`contact`/`email`/`display_name`
 fields rather than raw Auth metadata. Physical moves wait for exact-SHA consumer
 zero, hosted-dev burn-in, and a separately reviewed Contract change.
+
+The `public.users` predecessor currently has two exact catalog variants: the
+blank/repository policy set and a persistent Dev/Production legacy policy set
+with an additional global team-owner visibility clause. Identity/collaboration
+Expand admits only those two fingerprints and preserves whichever predecessor
+it receives. The live variant is compatibility evidence, not an approved
+security target; narrowing it requires the separately tracked consumer-zero
+and owner review in Next #753 and database-engine #358.
 
 The versioned `schema_boundary_phase.v1` contract keeps that transition explicit. In Expand, the nine core tables remain in `public`, each other inventoried public table must have a non-public target, and reviewed compatibility relations may remain. Contract is a separate approval that enforces exactly the nine tables and no application views, materialized views, functions, or procedures in `public`.
 

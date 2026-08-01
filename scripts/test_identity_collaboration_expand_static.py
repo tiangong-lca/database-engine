@@ -67,6 +67,28 @@ class IdentityCollaborationExpandStaticTest(unittest.TestCase):
         self.assertIn("from unnest(policy.polroles) role_oid", normalized)
         self.assertIn("then 'public' else role_name.rolname", normalized)
 
+    def test_users_policy_admits_only_exact_observed_predecessors(self) -> None:
+        normalized = self.sql.lower()
+        policy_contract = self.contract["sourcePolicyCompatibility"][
+            "public.users/select by self and team and admin"
+        ]
+        self.assertEqual(
+            [
+                "57fd9c26617c29dc6edc92d231bbec85",
+                "6ab74729e7e0ec6e9378542059d17cd0",
+            ],
+            policy_contract["admittedPolicySetMd5"],
+        )
+        self.assertEqual("preserve-exact-predecessor", policy_contract["expandDisposition"])
+        self.assertEqual(
+            "compatibility-only-not-approved-target",
+            policy_contract["legacyVariantSecurityDisposition"],
+        )
+        for fingerprint in policy_contract["admittedPolicySetMd5"]:
+            self.assertEqual(1, normalized.count(fingerprint))
+        self.assertIn("actual.policy_hash = any(expected.policy_hashes)", normalized)
+        self.assertIn("is distinct from baseline.policy_hash", normalized)
+
     def test_target_column_acl_is_converged_and_evidenced(self) -> None:
         normalized = self.sql.lower()
         self.assertIn("cross join lateral aclexplode(attribute.attacl)", normalized)

@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-01"
-lastReviewedCommit: "c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8"
-lastReviewedNote: "Reviewed for Issue #355 delegated-ACL hardening: target-scoped relation, column, and routine CASCADE convergence, rollback fingerprints, isolation evidence, and adversarial qualification remain covered; ownership rules are unchanged."
+lastReviewedCommit: "a253f381e25ba514758536268bc6a47f02691f3d"
+lastReviewedNote: "Reviewed for Issue #355 predecessor-policy compatibility: routing still requires exact source-catalog admission plus local rollback/reapply proof; ownership and source-of-truth rules are unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
