@@ -27,9 +27,10 @@ RPC_CASES = {
 def request_headers(key: str, *, payload: dict | None, profile: str) -> dict[str, str]:
     headers = {
         "apikey": key,
-        "Authorization": f"Bearer {key}",
         "Accept": "application/openapi+json" if payload is None else "application/json",
     }
+    if key.startswith("eyJ"):
+        headers["Authorization"] = f"Bearer {key}"
     headers["Accept-Profile" if payload is None else "Content-Profile"] = profile
     if payload is not None:
         headers["Content-Type"] = "application/json"
@@ -44,6 +45,18 @@ def request(url: str, key: str, *, payload: dict | None = None, profile: str = "
             return response.status, json.loads(response.read())
     except urllib.error.HTTPError as error:
         return error.code, json.loads(error.read())
+
+
+def reload_schema(db_url: str) -> None:
+    result = subprocess.run(
+        ["psql", db_url, "-XAt", "-v", "ON_ERROR_STOP=1", "-c", "notify pgrst, 'reload schema'"],
+        cwd=ROOT,
+        check=False,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.DEVNULL,
+    )
+    if result.returncode != 0:
+        raise SystemExit("PostgREST schema reload failed")
 
 
 def main() -> int:
@@ -65,10 +78,7 @@ def main() -> int:
     # A clean reset can commit migrations before the restarted PostgREST
     # listener subscribes. Reload only after the service is healthy, then poll
     # the actual role-filtered OpenAPI catalog instead of assuming delivery.
-    subprocess.run(
-        ["psql", db_url, "-XAt", "-v", "ON_ERROR_STOP=1", "-c", "notify pgrst, 'reload schema'"],
-        cwd=ROOT, check=True, stdout=subprocess.DEVNULL,
-    )
+    reload_schema(db_url)
     for _ in range(40):
         openapi_status, openapi = request(f"{rest_url}/", service_credential, profile="public")
         paths = openapi.get("paths", {}) if openapi_status == 200 else {}

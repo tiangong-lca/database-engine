@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: b32072d5a38509c4a25d866692958f0ced1303cf
-lastReviewedNote: "Reviewed for Issue #346: document the allowlisted persistent-dev PostgREST diff/apply/readback gate and its offline tests."
+lastReviewedCommit: a46bb023873f3ae17cd5a9b34a443201515793c0
+lastReviewedNote: "Reviewed for Issue #339 hosted follow-up: document opaque-key-safe Worker Data API probes and credential-redacted reload failures."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -312,7 +312,9 @@ profile (independent of the reviewed `api`-first exposed-schema order), verifies
 the expected empty envelope, and proves anon calls fail closed. It reads local
 keys from `supabase status` and never prints them. Isolated stacks can instead
 set `DATABASE_URL`, `SUPABASE_REST_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and
-`SUPABASE_ANON_KEY` without changing tracked config.
+`SUPABASE_ANON_KEY` without changing tracked config. Legacy JWT keys are also
+sent as bearer tokens; opaque `sb_publishable_` and `sb_secret_` keys are sent
+only as gateway `apikey` values. Reload failures never print the database URL.
 
 ```bash
 python scripts/test_worker_control_plane_data_api.py

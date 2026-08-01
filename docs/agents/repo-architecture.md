@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a3b1f19aaceef1cb6037180dc55e454d00ac08eb
-lastReviewedNote: "Reviewed through Issue #339 and the Issue #346 follow-up: ACL convergence and persistent Dev PostgREST reconciliation, including restoration and verification of the prior allowlisted snapshot on readback mismatch, preserve the api/private ownership model and operator evidence boundary."
+lastReviewedCommit: a46bb023873f3ae17cd5a9b34a443201515793c0
+lastReviewedNote: "Reviewed for Issue #339 hosted follow-up: opaque-key and explicit-public-profile probe behavior does not change the api/private ownership model."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: b32072d5a38509c4a25d866692958f0ced1303cf
-lastReviewedNote: "已为 Issue #346 复核：记录持久化 Dev PostgREST 配置的字段白名单 diff/apply/回读 gate 及其离线测试。"
+lastReviewedCommit: a46bb023873f3ae17cd5a9b34a443201515793c0
+lastReviewedNote: "已为 Issue #339 hosted follow-up 复核：Worker Data API probe 正确处理 opaque key、显式 public profile 和数据库 URL 脱敏。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

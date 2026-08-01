@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: b32072d5a38509c4a25d866692958f0ced1303cf
-lastReviewedNote: "Reviewed for Issue #346: add offline failure/idempotency/redaction tests and hosted exact-ref readback for the allowlisted PostgREST config gate."
+lastReviewedCommit: a46bb023873f3ae17cd5a9b34a443201515793c0
+lastReviewedNote: "Reviewed for Issue #339 hosted follow-up: Worker probes cover api-first profile selection, opaque keys, and redacted schema-reload failures."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
