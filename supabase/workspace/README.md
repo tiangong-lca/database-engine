@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 613e6a975ecdc57da66d88f8746d25d4f0286347
-lastReviewedNote: "Reviewed for Issue #355 column-ACL hardening: generated workspace output remains separate from authoritative migrations and catalog contracts; normalized per-column ACL evidence belongs to the live catalog export."
+lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
+lastReviewedNote: "Reviewed for Issue #355 delegated-ACL hardening: generated workspace output remains separate from authoritative migrations and catalog contracts; relation/column/routine delegation evidence belongs to live-catalog qualification."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

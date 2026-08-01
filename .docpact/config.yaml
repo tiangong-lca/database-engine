@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-01"
-lastReviewedCommit: "613e6a975ecdc57da66d88f8746d25d4f0286347"
-lastReviewedNote: "Reviewed for Issue #355 column-ACL hardening: migration convergence, rollback fingerprints, catalog evidence, and adversarial qualification remain covered; ownership rules are unchanged."
+lastReviewedCommit: "c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8"
+lastReviewedNote: "Reviewed for Issue #355 delegated-ACL hardening: target-scoped relation, column, and routine CASCADE convergence, rollback fingerprints, isolation evidence, and adversarial qualification remain covered; ownership rules are unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

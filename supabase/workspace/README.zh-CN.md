@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 613e6a975ecdc57da66d88f8746d25d4f0286347
-lastReviewedNote: "已为 Issue #355 column ACL 加固复核：生成工作区继续与权威 migration/catalog 合同分离；规范化逐列 ACL 证据由 live catalog export 持有。"
+lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
+lastReviewedNote: "已为 Issue #355 delegated ACL 加固复核：生成工作区继续与权威 migration/catalog 合同分离；relation/column/routine 授权链证据由 live catalog qualification 持有。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

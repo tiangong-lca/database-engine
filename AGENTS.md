@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 613e6a975ecdc57da66d88f8746d25d4f0286347
-lastReviewedNote: "Reviewed for Issue #355 column-ACL hardening: the Expand boundary keeps eight physical tables public, requires normalized empty column ACLs on private/api targets, and leaves Contract gated on consumer-zero and hosted evidence."
+lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
+lastReviewedNote: "Reviewed for Issue #355 delegated-ACL hardening: the Expand boundary keeps eight physical tables public, converges target relation/column/routine delegation chains without touching unrelated objects, and leaves Contract gated on consumer-zero and hosted evidence."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

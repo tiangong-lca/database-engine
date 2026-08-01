@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 613e6a975ecdc57da66d88f8746d25d4f0286347
-lastReviewedNote: "Reviewed for Issue #355 column-ACL hardening: identity/collaboration remains Expand-only with public physical sources, private/api projections, and normalized empty target column ACLs; Contract still requires consumer-zero."
+lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
+lastReviewedNote: "Reviewed for Issue #355 delegated-ACL hardening: identity/collaboration remains Expand-only with public physical sources and private/api targets whose relation, column, and adapter-routine ACLs converge from delegated chains; Contract still requires consumer-zero."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

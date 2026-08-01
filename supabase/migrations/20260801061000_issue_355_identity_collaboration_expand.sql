@@ -250,13 +250,22 @@ begin
     where n.nspname='private' and c.relname in
       ('comments','identity_center_processed_events','identity_center_users','notifications','reviews','roles','teams','users')
   loop
-    execute format('revoke all privileges on table %s from public',target_oid::regclass);
+    -- CASCADE is scoped by PostgreSQL to privileges derived from this exact
+    -- target relation.  It is required for multi-level grant-option chains and
+    -- cannot revoke the same roles' independent grants on other objects.
+    -- ACL role OIDs cannot dangle: PostgreSQL's shared dependencies reject a
+    -- role drop while its grant survives; grantee OID zero is PUBLIC.
+    execute format('revoke all privileges on table %s from public cascade',target_oid::regclass);
     for grantee_name in
-      select distinct role.rolname from pg_class c
-      cross join lateral aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl
+      select role.rolname from pg_class c
+      cross join lateral aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) with ordinality acl
       join pg_roles role on role.oid=acl.grantee where c.oid=target_oid and role.rolname<>'postgres'
+      group by role.rolname
+      order by min(acl.ordinality)
     loop
-      execute format('revoke all privileges on table %s from %I',target_oid::regclass,grantee_name);
+      -- The cursor can retain rows already removed by an earlier CASCADE;
+      -- repeating a target-scoped revoke is stable and leaves no privilege.
+      execute format('revoke all privileges on table %s from %I cascade',target_oid::regclass,grantee_name);
     end loop;
     -- Relation ACL convergence does not remove column-only grants.  Enumerate
     -- every physical attacl entry so group, inherited, PUBLIC, and quoted-role
@@ -264,12 +273,13 @@ begin
     for attribute_acl in
       select attribute.attname, acl.grantee, grantee.rolname
       from pg_attribute attribute
-      cross join lateral aclexplode(attribute.attacl) acl
+      cross join lateral aclexplode(attribute.attacl) with ordinality acl
       left join pg_roles grantee on grantee.oid=acl.grantee
       where attribute.attrelid=target_oid and attribute.attnum>0 and not attribute.attisdropped
       group by attribute.attname,acl.grantee,grantee.rolname
+      order by min(acl.ordinality)
     loop
-      execute format('revoke all privileges (%I) on table %s from %s',
+      execute format('revoke all privileges (%I) on table %s from %s cascade',
         attribute_acl.attname,target_oid::regclass,
         case when attribute_acl.grantee=0 then 'PUBLIC' else format('%I',attribute_acl.rolname) end);
     end loop;
@@ -353,23 +363,26 @@ begin
       ('notifications_v1','reviews_v1','team_roles_v1','teams_v1','user_profiles_v1',
        'identity_center_processed_events_v1','identity_center_users_v1')
   loop
-    execute format('revoke all privileges on table %s from public',target_oid::regclass);
+    execute format('revoke all privileges on table %s from public cascade',target_oid::regclass);
     for grantee_name in
-      select distinct role.rolname from pg_class c
-      cross join lateral aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl
+      select role.rolname from pg_class c
+      cross join lateral aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) with ordinality acl
       join pg_roles role on role.oid=acl.grantee where c.oid=target_oid and role.rolname<>'postgres'
+      group by role.rolname
+      order by min(acl.ordinality)
     loop
-      execute format('revoke all privileges on table %s from %I',target_oid::regclass,grantee_name);
+      execute format('revoke all privileges on table %s from %I cascade',target_oid::regclass,grantee_name);
     end loop;
     for attribute_acl in
       select attribute.attname, acl.grantee, grantee.rolname
       from pg_attribute attribute
-      cross join lateral aclexplode(attribute.attacl) acl
+      cross join lateral aclexplode(attribute.attacl) with ordinality acl
       left join pg_roles grantee on grantee.oid=acl.grantee
       where attribute.attrelid=target_oid and attribute.attnum>0 and not attribute.attisdropped
       group by attribute.attname,acl.grantee,grantee.rolname
+      order by min(acl.ordinality)
     loop
-      execute format('revoke all privileges (%I) on table %s from %s',
+      execute format('revoke all privileges (%I) on table %s from %s cascade',
         attribute_acl.attname,target_oid::regclass,
         case when attribute_acl.grantee=0 then 'PUBLIC' else format('%I',attribute_acl.rolname) end);
     end loop;
@@ -517,14 +530,21 @@ begin
       (to_regprocedure('public.review_validate_scope_history_v1(uuid,jsonb)'),to_regprocedure('private.review_validate_scope_history_v1(uuid,jsonb)'))
     ) pair(source_oid,target_oid)
   loop
-    execute format('revoke all privileges on function %s from public',mapping.target_oid::regprocedure);
+    -- As with relation and column ACLs above, CASCADE is limited to the exact
+    -- target routine.  This removes delegated EXECUTE chains without touching
+    -- the same roles' independent grants on any other routine.
+    execute format('revoke all privileges on function %s from public cascade',mapping.target_oid::regprocedure);
     for grantee_record in
-      select distinct role.rolname from pg_proc p
-      cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+      select role.rolname from pg_proc p
+      cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) with ordinality acl
       join pg_roles role on role.oid=acl.grantee
       where p.oid=mapping.target_oid and role.rolname<>'postgres'
+      group by role.rolname
+      order by min(acl.ordinality)
     loop
-      execute format('revoke all privileges on function %s from %I',mapping.target_oid::regprocedure,grantee_record.rolname);
+      -- The loop snapshot can still contain a downstream grantee removed by a
+      -- preceding CASCADE.  Repeating the exact-routine revoke is idempotent.
+      execute format('revoke all privileges on function %s from %I cascade',mapping.target_oid::regprocedure,grantee_record.rolname);
     end loop;
     for grantee_record in
       select case when acl.grantee=0 then 'PUBLIC' else role.rolname end as rolname,

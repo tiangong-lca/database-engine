@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 613e6a975ecdc57da66d88f8746d25d4f0286347
-lastReviewedNote: "Reviewed for Issue #355 column-ACL hardening: script entrypoints retain immutable provenance and now include normalized column-ACL catalog/fingerprint evidence, tamper rejection, and production-equivalent proof."
+lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
+lastReviewedNote: "Reviewed for Issue #355 delegated-ACL hardening: script entrypoints retain immutable provenance and now prove relation/column/routine grant-option-chain convergence, unrelated-object isolation, three-class tamper rejection, and production-equivalent behavior."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

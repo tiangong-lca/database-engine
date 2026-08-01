@@ -31,8 +31,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 613e6a975ecdc57da66d88f8746d25d4f0286347
-lastReviewedNote: "Reviewed for Issue #355 column-ACL hardening: canonical validation now also proves quoted/group/inherited grant convergence, normalized catalog evidence, column-ACL rollback tamper rejection, retry, and populated upgrade behavior."
+lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
+lastReviewedNote: "Reviewed for Issue #355 delegated-ACL hardening: canonical validation proves relation/column/routine grant-option-chain convergence, quoted/group/inherited/PUBLIC variants, unrelated-object isolation, transactional fault recovery, three-class rollback tamper rejection, retry, and populated upgrade behavior."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
