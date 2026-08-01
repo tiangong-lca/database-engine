@@ -23,6 +23,7 @@ checkPaths:
   - supabase/workspace/**
   - scripts/**
   - .github/workflows/supabase-dev.yml
+  - .github/workflows/database-validation.yml
   - .githooks/pre-push
   - scripts/docpact
   - scripts/docpact-gate.sh
@@ -56,6 +57,7 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |
 | `scripts/**` | export, refresh, change-copy, and migration-generation helpers |
 | `.github/workflows/supabase-dev.yml` | serialized automation for pushing committed migrations to persistent remote `dev`, then reconciling and readback-verifying only the reviewed PostgREST fields |
+| `.github/workflows/database-validation.yml` | PR fresh-stack reset, manifest-owned canonical database contract, and freeze-activated focused validation before merge |
 | `supabase/workspace/changes/**` | manual overlay area used when generating migrations from workspace files |
 | `supabase/workspace/remote_schema.sql` | generated full raw dump from the remote database |
 | `supabase/workspace/global/**` | generated split-out global objects rebuilt on workspace refresh |

@@ -273,6 +273,25 @@ test assets, keeps Preview/upgrade/fixture/benchmark assets out of the canonical
 pgTAP suite, checks the exact reviewed lint-error baseline, and verifies the
 stable catalog hash and generated-workspace cleanliness.
 
+Bare `supabase test db` is not a repository gate: recursive discovery also
+selects benchmark, fixture, Preview, upgrade, and transition-migration support
+SQL. Inspect the exact manifest-owned selection without touching a database:
+
+```bash
+python scripts/run_database_contract.py --suite canonical-local --validate-manifest-only
+python scripts/run_database_contract.py --suite canonical-local --list
+```
+
+The current derived baseline is 64 selected top-level pgTAP files plus 19
+metadata-bearing exclusions. `lca-private-expand` additionally requires the
+canonical hashed Issue #357 freeze and delegates its versioned physical-object,
+exposure-surface, fingerprint, and receipt semantics to the official #357
+freezer. CI uses `--if-activated`: it skips only when
+no #357 generator, contract, or migration activation path is tracked. Any partial
+or ambiguous activation requires exactly one version-matched freeze/receipt,
+sidecar and schema, the capture and generator scripts, plus both reviewed
+migration phases, and fails before SQL if that closure is incomplete.
+
 The canonical contract also runs `public_inventory_closure.py --check` and
 `security_definer_audit.py --check`. The inventory
 gate joins the imported workspace #533 per-object ledger to the live catalog at
@@ -285,6 +304,7 @@ runtime/owner residue.
 
 ```bash
 python scripts/run_database_contract.py --suite canonical-local
+python scripts/run_database_contract.py --suite lca-private-expand --if-activated
 python scripts/run_database_contract.py --suite worker-control-plane
 ```
 

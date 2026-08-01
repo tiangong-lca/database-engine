@@ -43,6 +43,7 @@ ownership:
           - .env.supabase.dev.local.example
           - .env.supabase.main.local.example
           - .github/workflows/supabase-dev.yml
+          - .github/workflows/database-validation.yml
       ownerRepo: database-engine
     - id: schema-workspace-and-migration-tooling
       paths:
@@ -90,6 +91,7 @@ coverage:
     - .env.supabase.main.local.example
     - .github/workflows/ai-doc-lint.yml
     - .github/workflows/supabase-dev.yml
+    - .github/workflows/database-validation.yml
   exclude:
     - .git/**
     - .github/scripts/**
@@ -192,6 +194,7 @@ routing:
         - .env.supabase.dev.local.example
         - .env.supabase.main.local.example
         - .github/workflows/supabase-dev.yml
+        - .github/workflows/database-validation.yml
         - docs/agents/supabase-branching.md
         - docs/agents/supabase-branching_CN.md
     preview-drift:

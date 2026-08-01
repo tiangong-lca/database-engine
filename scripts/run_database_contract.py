@@ -8,16 +8,21 @@ import hashlib
 import ipaddress
 import json
 import os
+import re
 import subprocess
 import sys
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote, unquote, urlsplit
 
-from identity_collaboration_target import apply_target_environment, resolve_target
+try:
+    from .identity_collaboration_target import apply_target_environment, resolve_target
+except ImportError:  # Direct script execution keeps scripts/ on sys.path.
+    from identity_collaboration_target import apply_target_environment, resolve_target
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "supabase/tests/manifest.json"
 TRANSITION_FIXTURE = ROOT / "supabase/tests/contracts/security_definer_transition_fixture.v1.json"
+AUDIT_V2 = ROOT / "supabase/tests/contracts/security_definer_audit_v2.json"
 IDENTITY_QUALIFICATION_SCRIPTS = (
     "scripts/test_identity_collaboration_policy_variants.py",
     "scripts/test_identity_collaboration_rollback.py",
@@ -190,6 +195,27 @@ def pending_security_definer_transition() -> list[Path]:
         raise SystemExit("SECURITY DEFINER transition fixture is not canonical byte-for-byte")
     if not isinstance(version, str) or not version.isdigit() or len(version) != 14:
         raise SystemExit("SECURITY DEFINER transition fixture migrationVersion is invalid")
+    issue = fixture["source"].get("issue")
+    if issue is None:
+        return sorted((ROOT / "supabase/migrations").glob(f"{version}_*.sql"))
+    try:
+        issue_number = int(issue.rsplit("#", 1)[1])
+        audit = json.loads(AUDIT_V2.read_text(encoding="utf-8"))
+        source = audit["source"]
+        completed = source["completedTransitions"]
+        current = source["currentTransition"]
+    except (FileNotFoundError, json.JSONDecodeError, KeyError, TypeError, ValueError, IndexError) as exc:
+        raise SystemExit("SECURITY DEFINER audit-v2 transition state is invalid") from exc
+    issue_marker = f"issue-{issue_number}-"
+    if any(
+        isinstance(item, dict) and issue_marker in str(item.get("batch", ""))
+        for item in completed
+    ):
+        return []
+    if issue_marker not in str(current.get("batch", "")):
+        raise SystemExit(
+            "SECURITY DEFINER fixture is neither the current nor a completed transition"
+        )
     return sorted((ROOT / "supabase/migrations").glob(f"{version}_*.sql"))
 
 
@@ -229,13 +255,60 @@ def tracked_test_files() -> list[str]:
     return sorted(line for line in result.stdout.splitlines() if line)
 
 
-def load_and_validate_manifest() -> tuple[dict, dict[str, list[str]]]:
-    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+def tracked_repository_files() -> list[str]:
+    result = subprocess.run(
+        ["git", "ls-files", "--cached", "--others", "--exclude-standard"],
+        cwd=ROOT, check=True, text=True, stdout=subprocess.PIPE,
+    )
+    return sorted(line for line in result.stdout.splitlines() if line)
+
+
+def stable_json_sha256(value: object) -> str:
+    encoded = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")).encode()
+    return hashlib.sha256(encoded).hexdigest()
+
+
+def suite_evidence(suite_name: str, files: list[str], excluded_count: int) -> dict[str, object]:
+    migration_versions = sorted(
+        match.group(1)
+        for path in (ROOT / "supabase/migrations").glob("*.sql")
+        if (match := re.match(r"^(\d+)_", path.name))
+    )
+    if not migration_versions:
+        raise SystemExit("repository has no numeric Supabase migrations")
+    commit = subprocess.run(
+        ["git", "rev-parse", "HEAD"], cwd=ROOT, check=True,
+        text=True, stdout=subprocess.PIPE,
+    ).stdout.strip()
+    cli_version = subprocess.run(
+        ["supabase", "--version"], cwd=ROOT, check=True,
+        text=True, stdout=subprocess.PIPE,
+    ).stdout.strip()
+    return {
+        "suite": suite_name,
+        "gitCommit": commit,
+        "migrationHead": migration_versions[-1],
+        "supabaseCliVersion": cli_version,
+        "manifestSha256": hashlib.sha256(MANIFEST.read_bytes()).hexdigest(),
+        "selectedCount": len(files),
+        "excludedCount": excluded_count,
+        "filesSha256": stable_json_sha256(files),
+        "files": files,
+    }
+
+
+def validate_manifest(
+    manifest: dict, tracked_files: list[str],
+) -> dict[str, list[str]]:
     classified: dict[str, list[str]] = {
         item["name"]: [] for item in manifest["classifications"]
     }
     errors: list[str] = []
-    for path in tracked_test_files():
+    if manifest.get("schemaVersion") != "database-test-manifest.v2":
+        errors.append("manifest schemaVersion must be database-test-manifest.v2")
+    if len(classified) != len(manifest["classifications"]):
+        errors.append("classification names must be unique")
+    for path in tracked_files:
         matches = [
             item["name"] for item in manifest["classifications"]
             if PurePosixPath(path).match(item["glob"])
@@ -246,23 +319,168 @@ def load_and_validate_manifest() -> tuple[dict, dict[str, list[str]]]:
             classified[matches[0]].append(path)
     for suite_name, suite in manifest["suites"].items():
         for path in suite.get("files", []):
-            if path not in tracked_test_files():
+            if path not in tracked_files:
                 errors.append(f"suite {suite_name}: missing tracked file {path}")
-        for path, reason in suite.get("excludedFiles", {}).items():
-            if path not in tracked_test_files():
+        excluded = suite.get("excludedFiles", {})
+        for path, metadata in excluded.items():
+            if path not in tracked_files:
                 errors.append(f"suite {suite_name}: stale excluded path {path}")
-            if not reason.strip():
-                errors.append(f"suite {suite_name}: excluded path lacks reason: {path}")
-        if suite.get("excludedFiles") and not suite.get("excludedFollowUp", "").startswith("https://github.com/"):
-            errors.append(f"suite {suite_name}: exclusions lack a GitHub follow-up")
+            required = {"reason", "category", "disposition", "trackingIssue", "replacementFiles"}
+            if not isinstance(metadata, dict) or set(metadata) != required:
+                errors.append(
+                    f"suite {suite_name}: exclusion metadata fields differ: {path}"
+                )
+                continue
+            if not all(
+                isinstance(metadata[field], str) and metadata[field].strip()
+                for field in ("reason", "category", "disposition", "trackingIssue")
+            ):
+                errors.append(f"suite {suite_name}: exclusion metadata is incomplete: {path}")
+            if not metadata["trackingIssue"].startswith("https://github.com/"):
+                errors.append(f"suite {suite_name}: exclusion lacks a GitHub issue: {path}")
+            replacements = metadata["replacementFiles"]
+            if not isinstance(replacements, list) or len(replacements) != len(set(replacements)):
+                errors.append(f"suite {suite_name}: replacement files differ: {path}")
+                continue
+            for replacement in replacements:
+                if replacement not in tracked_files:
+                    errors.append(
+                        f"suite {suite_name}: missing exclusion replacement {replacement}: {path}"
+                    )
+                if replacement in excluded:
+                    errors.append(
+                        f"suite {suite_name}: replacement is itself excluded {replacement}: {path}"
+                    )
+        baseline = suite.get("exclusionBaseline")
+        if excluded:
+            if not isinstance(baseline, dict) or set(baseline) != {"count", "pathsSha256"}:
+                errors.append(f"suite {suite_name}: exclusion baseline is missing")
+            else:
+                paths = sorted(excluded)
+                if baseline["count"] != len(paths):
+                    errors.append(f"suite {suite_name}: exclusion count grew or shrank")
+                if baseline["pathsSha256"] != stable_json_sha256(paths):
+                    errors.append(f"suite {suite_name}: exclusion path baseline differs")
+        selected = suite.get("files") or [
+            path for path in classified.get(suite.get("classification"), [])
+            if path not in excluded
+        ]
+        if len(selected) != len(set(selected)):
+            errors.append(f"suite {suite_name}: selected files are not unique")
     if errors:
         raise SystemExit("manifest classification failed:\n" + "\n".join(errors))
-    return manifest, classified
+    return classified
+
+
+def load_and_validate_manifest() -> tuple[dict, dict[str, list[str]]]:
+    manifest = json.loads(MANIFEST.read_text(encoding="utf-8"))
+    return manifest, validate_manifest(manifest, tracked_test_files())
+
+
+def validate_activation_contract(
+    suite_name: str, suite: dict, tracked_files: list[str], *, required: bool,
+) -> dict[str, str] | None:
+    activation = suite.get("activation")
+    if activation is None:
+        return {}
+    expected_fields = {"requiredWhenPaths", "requiredPaths", "artifactPatterns"}
+    if not isinstance(activation, dict) or set(activation) != expected_fields:
+        raise SystemExit(f"suite {suite_name}: activation contract fields differ")
+    for field in ("requiredWhenPaths", "requiredPaths"):
+        values = activation[field]
+        if (
+            not isinstance(values, list) or not values
+            or len(values) != len(set(values))
+            or not all(isinstance(value, str) and value for value in values)
+        ):
+            raise SystemExit(f"suite {suite_name}: activation {field} is invalid")
+    patterns = activation["artifactPatterns"]
+    required_labels = {
+        "freezeJson", "freezeSha256", "freezeSchema",
+        "receiptJson", "receiptSha256", "receiptSchema",
+        "apiPreExpandMigration", "physicalCutMigration",
+    }
+    if (
+        not isinstance(patterns, dict) or set(patterns) != required_labels
+        or not all(isinstance(value, str) and value for value in patterns.values())
+        or len(patterns.values()) != len(set(patterns.values()))
+    ):
+        raise SystemExit(f"suite {suite_name}: activation artifactPatterns is invalid")
+    activated_by = sorted(
+        path for path in tracked_files
+        if any(PurePosixPath(path).match(pattern) for pattern in activation["requiredWhenPaths"])
+    )
+    if not activated_by and not required:
+        return None
+    errors = [
+        f"missing required activation path {path}"
+        for path in activation["requiredPaths"] if path not in tracked_files
+    ]
+    artifacts: dict[str, str] = {}
+    for label, pattern in patterns.items():
+        matches = sorted(
+            path for path in tracked_files if PurePosixPath(path).match(pattern)
+        )
+        if len(matches) != 1:
+            errors.append(
+                f"activation artifact {label} must match exactly once: {pattern}; "
+                f"matches={matches}"
+            )
+        else:
+            artifacts[label] = matches[0]
+    versioned_labels = {
+        "freezeJson", "freezeSha256", "freezeSchema",
+        "receiptJson", "receiptSha256", "receiptSchema",
+    }
+    versions = {
+        match.group(1)
+        for label, path in artifacts.items() if label in versioned_labels
+        if (match := re.search(r"\.v(\d+)(?:\.schema)?\.(?:json|sha256)$", path))
+    }
+    if len(artifacts.keys() & versioned_labels) == len(versioned_labels) and len(versions) != 1:
+        errors.append(f"activation freeze/receipt artifact versions differ: {sorted(versions)}")
+    if errors:
+        reason = ", ".join(activated_by) if activated_by else "explicit invocation"
+        raise SystemExit(
+            f"suite {suite_name}: partial activation triggered by {reason}:\n"
+            + "\n".join(errors)
+        )
+    return artifacts
+
+
+def run_activation_verifiers(artifacts: dict[str, str]) -> None:
+    if not artifacts:
+        return
+    verifier = ROOT / "scripts/freeze_issue_357_expand_manifest.py"
+    for label, relative in {"verifier": verifier.relative_to(ROOT).as_posix(), **artifacts}.items():
+        path = ROOT / relative
+        if not path.is_file() or path.is_symlink():
+            raise SystemExit(
+                f"Issue #357 activation {label} must be a regular non-symlink file: {relative}"
+            )
+    run([
+        sys.executable, str(verifier), "check-freeze",
+        "--freeze", artifacts["freezeJson"],
+        "--sha256", artifacts["freezeSha256"],
+    ])
+    run([
+        sys.executable, str(verifier), "check-receipt",
+        "--receipt", artifacts["receiptJson"],
+        "--receipt-sha256", artifacts["receiptSha256"],
+        "--freeze", artifacts["freezeJson"],
+        "--freeze-sha256", artifacts["freezeSha256"],
+    ])
 
 
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--suite", default="canonical-local")
+    parser.add_argument("--validate-manifest-only", action="store_true")
+    parser.add_argument("--list", action="store_true", help="list the exact selected test files and exit")
+    parser.add_argument(
+        "--if-activated", action="store_true",
+        help="exit successfully only when no activation path exists; partial activation fails closed",
+    )
     parser.add_argument("--skip-reset", action="store_true")
     parser.add_argument("--skip-lint", action="store_true")
     parser.add_argument("--skip-data-api", action="store_true")
@@ -283,6 +501,33 @@ def main() -> int:
         ),
     )
     args = parser.parse_args()
+    manifest, classified = load_and_validate_manifest()
+    tracked_files = tracked_repository_files()
+    if args.suite not in manifest["suites"]:
+        raise SystemExit(f"unknown suite: {args.suite}")
+    suite = manifest["suites"][args.suite]
+    activation_artifacts = validate_activation_contract(
+        args.suite, suite, tracked_files, required=not args.if_activated,
+    )
+    if activation_artifacts is None:
+        print(f"suite {args.suite}: not activated")
+        return 0
+    run_activation_verifiers(activation_artifacts)
+    files = suite.get("files") or [
+        path for path in classified[suite["classification"]]
+        if path not in suite.get("excludedFiles", {})
+    ]
+    if not files:
+        raise SystemExit(f"suite {args.suite} selected no files")
+    if args.validate_manifest_only:
+        print("manifest classification passed")
+        return 0
+    if args.list:
+        print(json.dumps(
+            suite_evidence(args.suite, files, len(suite.get("excludedFiles", {}))),
+            indent=2, sort_keys=True,
+        ))
+        return 0
     qualification = [
         args.security_definer_transition_workdir,
         args.security_definer_transition_source_workdir,
@@ -309,16 +554,6 @@ def main() -> int:
             raise SystemExit(
                 "SECURITY DEFINER transition qualification requires the complete canonical-local CI mode"
             )
-    manifest, classified = load_and_validate_manifest()
-    if args.suite not in manifest["suites"]:
-        raise SystemExit(f"unknown suite: {args.suite}")
-    suite = manifest["suites"][args.suite]
-    files = suite.get("files") or [
-        path for path in classified[suite["classification"]]
-        if path not in suite.get("excludedFiles", {})
-    ]
-    if not files:
-        raise SystemExit(f"suite {args.suite} selected no files")
     identity_qualification = "supabase/tests/20260801_identity_collaboration_expand.sql" in files
     if args.run_destructive_identity_qualification and not identity_qualification:
         raise SystemExit("selected suite does not contain the Issue #355 identity contract")

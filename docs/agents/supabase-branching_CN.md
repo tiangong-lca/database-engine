@@ -75,7 +75,7 @@ related:
 - 把 `supabase/migrations/` 中已提交的文件视为 production、`dev` 和 preview 分支共同遵循的 schema 真相源。
 - 分支差异放在 `supabase/config.toml` 的 `[remotes.<branch>]` 中。
 - 不要为不同 Git 分支复制多套 `supabase/` 目录。
-- 把 `.github/workflows/supabase-dev.yml` 作为本仓唯一会修改持久化 Supabase `dev` 的 GitHub Actions 流程。该流程必须串行部署，先执行 `supabase db push`，再调用仓库自有的 PostgREST 白名单配置 gate。
+- 把 `.github/workflows/supabase-dev.yml` 作为本仓唯一会修改持久化 Supabase `dev` 的 GitHub Actions 流程。该流程必须串行部署，先通过全新本地栈的 canonical/freeze-activated contract，再执行 `supabase db push`、仓库自有的 PostgREST 白名单配置 apply 和独立 hosted readback。
 - 不要为 Git `main` 增加 checked-in 的 GitHub Actions 生产部署流程；生产项目由绑定到本仓的 Supabase GitHub integration 自动迁移。
 - 不要先手改远端数据库再回头补 migration。
 - Data API schema 必须配置即代码：只暴露 `api`、`public` 和 `graphql_public`；不得把 `private`、`util` 或 `archive` 加入 exposed schemas 或 `extra_search_path`。
@@ -86,7 +86,8 @@ related:
 ## 需要维护的文件
 
 - `supabase/config.toml`：共享基线加 `[remotes.dev]`
-- `.github/workflows/supabase-dev.yml`：在 Git `dev` 更新时，把已提交 migration 推送到持久化 Supabase `dev` 分支
+- `.github/workflows/database-validation.yml`：在 PR 上使用全新 disposable 本地栈验证数据库 contract，不修改 Hosted
+- `.github/workflows/supabase-dev.yml`：在 Git `dev` 更新时先做本地验证，再把已提交 migration 推送到持久化 Supabase `dev` 分支并完成配置 readback
 - `supabase/migrations/*.sql`：已提交的 migration 历史
 - `supabase/seed.sql`：共享 seed 数据
 - `supabase/seeds/dev.sql`：可选的持久化 dev 专属 seed 数据

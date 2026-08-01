@@ -25,6 +25,7 @@ checkPaths:
   - supabase/seeds/**
   - scripts/**
   - .github/workflows/supabase-dev.yml
+  - .github/workflows/database-validation.yml
   - .github/workflows/ai-doc-lint.yml
   - .githooks/pre-push
   - scripts/docpact
@@ -61,6 +62,7 @@ The checked-in canonical entry point is:
 
 ```bash
 python scripts/run_database_contract.py --suite canonical-local
+python scripts/run_database_contract.py --suite canonical-local --list
 ```
 
 It classifies every test asset, excludes benchmark/fixture/Preview/upgrade
@@ -76,11 +78,30 @@ anonymous access, and reject the `private` profile. The probe sends explicit
 `public` profile headers so the reviewed `api`-first exposed-schema order
 cannot silently change its target schema.
 
-The canonical green suite currently runs 56 top-level files. Nineteen stale
-top-level files are visible, reasoned exclusions—not passes—and are tracked for
-repair or explicit retirement in
-`tiangong-lca/database-engine#336`. A green canonical result must not be
-reported as those 19 files passing.
+The manifest currently derives 64 canonical files from 83 top-level pgTAP
+files and 19 exact, metadata-bearing exclusions. The runner reports the live
+counts and exact file list; documentation must not become a second count source.
+The 19 exclusions are visible debt—not passes—and remain tracked in
+`tiangong-lca/database-engine#336`. Each exclusion carries its category,
+disposition, tracking Issue, and supported-behavior replacements where known;
+the exact 19-path baseline fails on silent growth or substitution.
+
+Never use bare `supabase test db` as a repository-level pass gate. It recursively
+discovers 97 SQL files and incorrectly mixes 14 benchmark, fixture, Preview,
+upgrade, and transition-migration assets with the 83 top-level pgTAP files.
+Always use the manifest runner or pass an explicitly reviewed file list.
+
+`lca-private-expand` is an activation-gated focused suite. The manifest owns
+only stable activation and artifact-closure rules; it does not duplicate the
+versioned freeze's physical-object or exposure-surface topology. The Issue #357
+freezer is the authoritative verifier for canonical bytes, identity, physical
+inventory, dynamic exposure surfaces, counts, fingerprints, and receipt
+semantics. CI may report the suite inactive only while no #357 generator,
+contract, or migration activation path is tracked. Once any activation path
+appears, exactly one version-matched freeze/sidecar/schema, receipt
+artifact/sidecar/schema, and each reviewed migration phase are mandatory;
+partial or ambiguous activation fails before SQL and cannot become an empty
+green suite.
 
 ## Proof Matrix
 

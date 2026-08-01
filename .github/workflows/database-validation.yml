@@ -1,0 +1,78 @@
+name: Database Contract Validation
+
+on:
+  pull_request:
+    branches: [dev, main]
+    paths:
+      - "supabase/**"
+      - "scripts/**"
+      - ".github/workflows/database-validation.yml"
+      - ".github/workflows/supabase-dev.yml"
+      - "docs/agents/**"
+      - "AGENTS.md"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  canonical-local:
+    name: Fresh-stack canonical database contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+    steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: 2.98.0
+
+      - name: Validate manifest and offline runner contracts
+        run: |
+          python -m unittest \
+            scripts.test_database_contract_manifest \
+            scripts.test_database_contract_targeting \
+            scripts.test_production_equivalent_upgrade_unit
+          python scripts/run_database_contract.py \
+            --suite canonical-local \
+            --validate-manifest-only
+          python scripts/run_database_contract.py \
+            --suite canonical-local \
+            --list > "$RUNNER_TEMP/canonical-test-list.json"
+
+      - name: Start fresh local Supabase stack
+        run: supabase start
+
+      - name: Run canonical contract from a fresh reset
+        run: python scripts/run_database_contract.py --suite canonical-local
+
+      - name: Run freeze-driven LCA private Expand suite when activated
+        run: >-
+          python scripts/run_database_contract.py
+          --suite lca-private-expand
+          --if-activated
+
+      - name: Stop disposable stack
+        if: always()
+        run: supabase stop --no-backup
+
+      - name: Upload exact canonical file list
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: canonical-database-test-list
+          path: ${{ runner.temp }}/canonical-test-list.json
+          retention-days: 14

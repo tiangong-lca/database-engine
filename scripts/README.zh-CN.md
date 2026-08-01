@@ -262,6 +262,26 @@ python scripts/new_migration.py --name "update policy roles update" --source-pat
 
 通常不作为日常命令行入口直接使用。
 
+### `run_database_contract.py`
+
+裸跑 `supabase test db` 不是仓库级门禁：递归发现会把 benchmark、fixture、
+Preview、upgrade 与 transition-migration 支持 SQL 混入 pgTAP。使用 manifest
+runner 查看精确清单，不会访问数据库：
+
+```bash
+python scripts/run_database_contract.py --suite canonical-local --validate-manifest-only
+python scripts/run_database_contract.py --suite canonical-local --list
+```
+
+当前 manifest 动态得到 64 个 canonical 顶层 pgTAP，并保留 19 个带分类、
+处置状态、跟踪 Issue 与 replacement 元数据的显式 exclusion。`lca-private-expand`
+使用 `--if-activated` 时，仅在仓库尚未跟踪任何 #357 generator、contract 或
+migration 激活路径时报告未激活。一旦出现任一激活路径，完整的 freeze/receipt、
+sidecar/schema、capture/generator 脚本与两阶段 reviewed migration 都必须各自
+唯一匹配；versioned physical-object、动态 exposure-surface、fingerprint 与 receipt
+语义委托给 #357 官方 freezer 校验。闭包不完整或匹配不唯一会在执行 SQL 前
+fail-closed，不会产生空绿色结果。
+
 ### `public_inventory_closure.py`
 
 该脚本把 workspace #533 的逐对象 ledger 与 database #337 merge head 的实时

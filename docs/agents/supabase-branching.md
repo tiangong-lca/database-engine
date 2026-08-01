@@ -77,7 +77,7 @@ When review changes an already-applied PR migration, add a later migration that 
 - Treat committed files in `supabase/migrations/` as the schema source of truth for production, `dev`, and preview branches.
 - Keep branch-specific overrides in `[remotes.<branch>]` inside `supabase/config.toml`.
 - Do not create a separate `supabase/` directory per Git branch.
-- Keep `.github/workflows/supabase-dev.yml` as the only GitHub Actions flow that mutates the persistent Supabase `dev` branch. It serializes deployments, runs `supabase db push` first, then calls the repository-owned allowlisted PostgREST config gate.
+- Keep `.github/workflows/supabase-dev.yml` as the only GitHub Actions flow that mutates the persistent Supabase `dev` branch. It serializes deployments, first passes the fresh local canonical/freeze-activated contract, then runs `supabase db push`, the repository-owned allowlisted PostgREST config apply, and a separate hosted readback.
 - Do not add a checked-in GitHub Actions production deploy for Git `main`; the production project is migrated by the Supabase GitHub integration bound to this repository.
 - Do not author normal schema changes by editing the remote database first and reconstructing migrations later.
 - Keep Data API schemas configuration-as-code: expose `api`, `public`, and `graphql_public`; never add `private`, `util`, or `archive` to exposed schemas or `extra_search_path`.
@@ -88,7 +88,8 @@ When review changes an already-applied PR migration, add a later migration that 
 ## Files to maintain
 
 - `supabase/config.toml`: shared baseline plus `[remotes.dev]`
-- `.github/workflows/supabase-dev.yml`: serializes and pushes committed migrations, then allowlisted PostgREST configuration, to persistent Supabase `dev`
+- `.github/workflows/database-validation.yml`: validates database PRs on a fresh disposable local stack without hosted mutation
+- `.github/workflows/supabase-dev.yml`: validates locally, then serializes and pushes committed migrations plus allowlisted PostgREST configuration to persistent Supabase `dev`, followed by hosted readback
 - `scripts/apply_postgrest_config.py`: fail-closed persistent-dev PostgREST diff/apply/readback gate
 - `supabase/migrations/*.sql`: committed migration history
 - `supabase/seed.sql`: shared seed data
