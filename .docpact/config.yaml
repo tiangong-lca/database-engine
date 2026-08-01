@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-01"
-lastReviewedCommit: "05d1387cc073da8161db782db978a77431ff8b3f"
-lastReviewedNote: "Reviewed through the Issue #354 hosted repair and for #333: routes retain immutable ACL provenance and blank-to-head convergence while covering the full SECURITY DEFINER owner/runtime audit, exact role matrix, and fail-closed Contract handoff."
+lastReviewedCommit: "87d3ca6a69435e611fc6f64a420da1f16f5c0978"
+lastReviewedNote: "Reviewed for Issue #356: routing now covers Worker control-plane migrations, rollback operators, tests, and qualification scripts; ownership and governance rules remain unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -179,7 +179,11 @@ routing:
     worker-jobs:
       paths:
         - supabase/migrations/*worker_jobs*.sql
+        - supabase/migrations/*worker_control_plane*.sql
+        - supabase/operator/*worker_control_plane*.sql
         - supabase/tests/*worker_jobs*.sql
+        - supabase/tests/*worker_control_plane*.sql
+        - scripts/*worker_control_plane*.py
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
     branch-config:

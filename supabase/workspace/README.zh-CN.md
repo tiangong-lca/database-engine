@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 05d1387cc073da8161db782db978a77431ff8b3f
-lastReviewedNote: "已为 Issue #333 lineage v2 复核：生成工作区继续与 immutable genesis、live 跨 schema SECURITY DEFINER 合同、transition receipt 和 lifecycle 证据分离。"
+lastReviewedCommit: 87d3ca6a69435e611fc6f64a420da1f16f5c0978
+lastReviewedNote: "已为 Issue #356 复核：生成工作区继续与权威 migration、跨 schema lineage/transition 合同分离，现有五 schema 导出已覆盖迁移后的 Worker 对象。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

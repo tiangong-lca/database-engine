@@ -343,22 +343,34 @@ artifact receipt、结算 sequence 0 并开启 sequence 1，同时输出 exact r
 迁移 PR 必须物化并校验 plan 中的全部文件，禁止手工拼接 `completedTransitions`，也不能
 把会被覆盖的 `security_definer_audit_v2.json` 当作历史产物。
 
+资格收据本身必须是当前 clean source HEAD 中的受审普通文件。为避免收据把自身所在
+commit SHA 写进自身而形成不可满足的 Git 哈希自引用，收据中的 `source.commitSha`
+明确指向包含 migration 与 rollback 精确 bytes 的受审祖先提交。runner 直接从该
+commit 的 immutable Git blob 重放 SQL，并证明 base → source → receipt HEAD 的祖先链；
+fixture 与资格收据仍由当前 HEAD 的精确 SHA-256 单独绑定。
+
 #356 PR gate 还必须运行真实的双 stack integration harness；不存在可计为成功的 skip：
 
 ```bash
 python scripts/run_database_contract.py --suite canonical-local \
   --security-definer-transition-workdir <clean-stack-a> \
   --security-definer-transition-workdir <clean-stack-b> \
+  --security-definer-transition-source-workdir <clean-source-worktree> \
   --security-definer-transition-migration <issue-356-migration.sql> \
   --security-definer-transition-rollback <issue-356-operator-rollback.sql> \
+  --security-definer-transition-qualification-receipt \
+    supabase/tests/contracts/security_definer_transition_qualification_receipt.issue-356.json \
+  --security-definer-transition-qualification-receipt-sha256 <exact-sha256> \
   --security-definer-transition-migration-sha256 <exact-sha256> \
   --security-definer-transition-rollback-sha256 <exact-sha256> \
-  --security-definer-transition-base 1b94c1ce7c132e5481c4a2594d6d9a957d7dc683
+  --security-definer-transition-base 597072ca34a62cdc93df9bf0896a9d361901852c
 ```
 
 两个 workdir 必须是处于 exact base 的独立 loopback stack。gate 会执行 baseline audit、
 migration、live transition audit、operator rollback、baseline bytes 恢复、rollforward，
-并比较第二个 stack 的 bytes/SHA。缺少输入、SQL bytes 改变、reset 失败或 audit drift
+并从 immutable sequence-0 lineage/audit 读取 baseline，禁止结算后用 mutable current
+lineage 替代历史基线，同时比较第二个 stack 的 bytes/SHA。缺少输入、SQL bytes 改变、
+reset 失败或 audit drift
 都会 fail closed。
 
 ### Security ACL Expand 验证

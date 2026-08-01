@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 05d1387cc073da8161db782db978a77431ff8b3f
-lastReviewedNote: "Reviewed through the Issue #354 hosted repair and for #333: exact ACL convergence, immutable provenance, and five-schema boundaries remain intact while the stable contract adds a full SECURITY DEFINER evidence ledger without performing Contract migration."
+lastReviewedCommit: 87d3ca6a69435e611fc6f64a420da1f16f5c0978
+lastReviewedNote: "Reviewed for Issue #356: Worker physical tables now live in private during Expand behind public compatibility views and invoker wrappers; Contract still requires consumer-zero before public residue removal."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -69,7 +69,11 @@ This repo is organized around one checked-in Supabase project plus a generated s
 - `util` and `archive` retain operations/history responsibilities and are never exposed Data API schemas.
 - Realtime publishes explicitly selected physical tables; `api` views are not a Realtime source.
 
-Physical moves happen only after consumers use the `api` or `private` contract and the Contract gate proves zero compatibility callers. Expand views and wrappers must preserve one physical source of truth.
+An individually qualified physical move may occur during Expand when it
+preserves one physical source of truth and keeps the reviewed compatibility
+views, wrappers, composite bridges, and grants. Contract removes those public
+residues only after consumers use the `api` or `private` contract and the gate
+proves zero compatibility callers.
 
 The versioned `schema_boundary_phase.v1` contract keeps that transition explicit. In Expand, the nine core tables remain in `public`, each other inventoried public table must have a non-public target, and reviewed compatibility relations may remain. Contract is a separate approval that enforces exactly the nine tables and no application views, materialized views, functions, or procedures in `public`.
 
@@ -233,14 +237,18 @@ or duplicate indexes.
 
 `worker_jobs` is the canonical lifecycle and queue-control table for work that cannot be safely carried by Edge Function request/response execution.
 
-The first private-boundary rollout is additive: `private.worker_jobs`,
-`private.worker_job_events`, `private.worker_job_artifacts`, and
-`private.worker_job_kinds` are security-invoker views over the one physical
-public source during Expand. Public RPC signatures and composite types remain
-stable; there is no dual write. A physical schema move is a later Contract step
-gated by exact consumer SHAs, zero compatibility calls, burn-in, rollback-window
-closure, and the checked residue report. `public.worker_job_domain_refs` remains
-a public cross-domain projection rather than Worker control-plane storage.
+The Worker control-plane Expand keeps one physical source and no dual write:
+`private.worker_jobs`, `private.worker_job_events`,
+`private.worker_job_artifacts`, and `private.worker_job_kinds` are the physical
+tables, while the same-name `public` relations are temporary security-invoker
+compatibility views. The canonical Worker routines are private; exact-signature
+public wrappers and versioned `api` adapters are security-invoker delegates.
+This physical move is still Expand, not Contract, because the compatibility
+views, wrappers, and public composite bridge remain. Removing those public
+objects requires exact consumer SHAs, zero compatibility calls, hosted burn-in,
+rollback-window closure, and the checked residue report.
+`public.worker_job_domain_refs` remains a public cross-domain projection rather
+than Worker control-plane storage.
 The bounded concurrency snapshot uses the partial composite index
 `worker_jobs_job_kind_concurrency_created_idx` on job kind, concurrency key,
 and descending creation/id order, so the equality prefix is an index condition

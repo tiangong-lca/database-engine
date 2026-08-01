@@ -122,9 +122,23 @@ class TransitionIntegrationRunnerTest(unittest.TestCase):
         root = Path("/tmp/qualification-root")
         with mock.patch.object(harness, "git_root", return_value=root), \
                 mock.patch.object(harness, "exact_head", return_value="a" * 40), \
-                mock.patch.object(harness, "capture", return_value=" M supabase/migrations/dirty.sql"):
+                mock.patch.object(
+                    harness, "_git_output", return_value=b" M supabase/migrations/dirty.sql\n",
+                ):
             with self.assertRaisesRegex(ValueError, "non-local-config changes"):
                 harness.validate_stack_root(root, "a" * 40)
+
+    def test_porcelain_status_preserves_leading_worktree_column(self) -> None:
+        root = Path("/tmp/qualification-root")
+        committed = 'project_id = "base"\n[db]\nport = 5432\n'
+        current = 'project_id = "local"\n[db]\nport = 5433\n'
+        with mock.patch.object(harness, "git_root", return_value=root), \
+                mock.patch.object(harness, "exact_head", return_value="a" * 40), \
+                mock.patch.object(harness, "_git_output", return_value=b" M supabase/config.toml\n"), \
+                mock.patch.object(harness, "capture", return_value=committed), \
+                mock.patch.object(Path, "read_text", return_value=current):
+            config = harness.validate_stack_root(root, "a" * 40)
+        self.assertEqual(config["project_id"], "local")
 
     def test_receipt_byte_tamper_fails_against_reviewed_hash(self) -> None:
         raw = b'{"tampered":true}\n'
@@ -206,6 +220,49 @@ class TransitionIntegrationRunnerTest(unittest.TestCase):
             tracked.write_text("select 1;\n", encoding="utf-8")
             with self.assertRaisesRegex(ValueError, "index differs from HEAD"):
                 harness.validate_source_file("tracked.sql", root)
+
+    def test_source_sql_is_read_from_reviewed_ancestor_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            tracked = root / "tracked.sql"
+            tracked.write_text("select 1;\n", encoding="utf-8")
+            subprocess.run(["git", "add", "tracked.sql"], cwd=root, check=True)
+            subprocess.run([
+                "git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                "commit", "-q", "-m", "source",
+            ], cwd=root, check=True)
+            source_commit = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, check=True, text=True,
+                stdout=subprocess.PIPE,
+            ).stdout.strip()
+            tracked.write_text("select 2;\n", encoding="utf-8")
+            subprocess.run(["git", "add", "tracked.sql"], cwd=root, check=True)
+            subprocess.run([
+                "git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                "commit", "-q", "-m", "evidence",
+            ], cwd=root, check=True)
+            reviewed = harness.validate_commit_source_file("tracked.sql", root, source_commit)
+            self.assertEqual(reviewed.raw, b"select 1;\n")
+            head = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, check=True, text=True,
+                stdout=subprocess.PIPE,
+            ).stdout.strip()
+            harness.require_ancestor(source_commit, head, source_root=root, label="source")
+            with self.assertRaisesRegex(ValueError, "not an ancestor"):
+                harness.require_ancestor(head, source_commit, source_root=root, label="source")
+
+    def test_frozen_sql_rejects_external_psql_includes(self) -> None:
+        for directive in (b"\\i other.sql\n", b"  \\ir ../other.sql\n"):
+            with self.subTest(directive=directive), self.assertRaisesRegex(
+                ValueError, "external psql include",
+            ):
+                harness.reject_external_psql_includes(
+                    harness.ReviewedFile("reviewed.sql", b"select 1;\n" + directive),
+                )
+        harness.reject_external_psql_includes(
+            harness.ReviewedFile("reviewed.sql", b"select '\\\\ir literal';\n"),
+        )
 
     def test_pending_migration_detection_is_version_exact(self) -> None:
         with tempfile.TemporaryDirectory() as directory:

@@ -5,24 +5,27 @@ set local search_path = extensions, public, auth;
 
 select plan(46);
 
-select ok(to_regclass('public.worker_job_kinds') is not null, 'worker job kind registry exists');
-select ok(to_regclass('public.worker_jobs') is not null, 'worker_jobs table exists');
-select ok(to_regclass('public.worker_job_events') is not null, 'worker job events table exists');
-select ok(to_regclass('public.worker_job_artifacts') is not null, 'worker job artifacts table exists');
+select ok(to_regclass('public.worker_job_kinds') is not null, 'worker job kind public contract exists');
+select ok(to_regclass('public.worker_jobs') is not null, 'worker_jobs public contract exists');
+select ok(to_regclass('public.worker_job_events') is not null, 'worker job events public contract exists');
+select ok(to_regclass('public.worker_job_artifacts') is not null, 'worker job artifacts public contract exists');
 
 select ok(
-  (select relrowsecurity from pg_class where oid = 'public.worker_jobs'::regclass),
-  'worker_jobs has RLS enabled'
+  (select c.relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname in ('public','private') and c.relname='worker_jobs' and c.relkind='r'),
+  'physical worker_jobs has RLS enabled'
 );
 
 select ok(
-  (select relrowsecurity from pg_class where oid = 'public.worker_job_events'::regclass),
-  'worker_job_events has RLS enabled'
+  (select c.relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname in ('public','private') and c.relname='worker_job_events' and c.relkind='r'),
+  'physical worker_job_events has RLS enabled'
 );
 
 select ok(
-  (select relrowsecurity from pg_class where oid = 'public.worker_job_artifacts'::regclass),
-  'worker_job_artifacts has RLS enabled'
+  (select c.relrowsecurity from pg_class c join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname in ('public','private') and c.relname='worker_job_artifacts' and c.relkind='r'),
+  'physical worker_job_artifacts has RLS enabled'
 );
 
 select ok(
@@ -254,13 +257,17 @@ from (
   ) as result
 ) as enqueue;
 
-update public.worker_jobs
+-- Fixture-only mutation of non-runtime columns; production service access is
+-- intentionally narrower and is asserted by the boundary contract suite.
+reset role;
+update private.worker_jobs
 set payload_ref = '{"nested":{"is":null}}'::jsonb,
     result_json = '{"nested":{"is":null}}'::jsonb,
     result_ref = '{"nested":{"is":null}}'::jsonb,
     diagnostics = '{"nested":{"is":null}}'::jsonb,
     error_details = '{"nested":{"is":null}}'::jsonb
 where id = (select job_id from worker_job_test_ids where label = 'nested_null_payload');
+set local role service_role;
 
 select is(
   (
@@ -436,16 +443,20 @@ select is(
   'completed jobs cannot be cancelled'
 );
 
+-- Inspect the internal event ledger as the test owner; runtime consumers do
+-- not receive direct event-table access.
+reset role;
 select cmp_ok(
   (
     select count(*)
-    from public.worker_job_events
+    from private.worker_job_events
     where job_id = (select job_id from worker_job_test_ids where label = 'gate_primary')
   ),
   '>=',
   4::bigint,
   'enqueue, claim, heartbeat, and result events are recorded'
 );
+set local role service_role;
 
 insert into worker_job_test_ids (label, job_id)
 select

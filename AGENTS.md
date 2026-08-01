@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 05d1387cc073da8161db782db978a77431ff8b3f
-lastReviewedNote: "Reviewed through the Issue #354 hosted repair and for #333: exact ACL convergence and immutable five-schema proof remain intact while the full SECURITY DEFINER audit separates current evidence, inferred signals, required Contract proof, and confirmed boundaries without resolving #352."
+lastReviewedCommit: 87d3ca6a69435e611fc6f64a420da1f16f5c0978
+lastReviewedNote: "Reviewed for Issue #356: the Worker physical Expand, compatibility boundary, five-schema lineage proof, branch policy, and repo/workspace ownership rules remain consistent; Issue #352 remains unresolved."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
