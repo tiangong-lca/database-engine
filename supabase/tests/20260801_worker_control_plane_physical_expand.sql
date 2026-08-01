@@ -92,7 +92,7 @@ select is((select count(*)::integer from pg_proc p join pg_namespace n on n.oid=
      'worker_job_payload','worker_list_jobs','worker_list_jobs_by_concurrency_key',
      'worker_read_job','worker_read_jobs_by_ids','worker_read_latest_job',
      'worker_record_job_result','worker_retry_job')
-    and not coalesce(p.proconfig,'{}') @> array['search_path=pg_catalog, private, util, public']
+    and not coalesce(p.proconfig,'{}') @> array['search_path=pg_catalog, private, util, public, pg_temp']
 ), 0, 'all twelve private Worker routines have the reviewed fixed search_path');
 
 select is((select count(*)::integer from pg_proc p join pg_namespace n on n.oid=p.pronamespace

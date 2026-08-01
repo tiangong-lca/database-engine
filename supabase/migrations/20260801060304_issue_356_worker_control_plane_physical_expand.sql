@@ -345,36 +345,36 @@ $rewrite_postflight$;
 
 -- None of the moved core routines may resolve an unqualified caller-controlled
 -- object.  public remains last only for explicitly retained shared helpers;
--- pg_catalog, private, and util are resolved first and pg_temp is absent.
+-- pg_catalog, private, and util are resolved first; explicit pg_temp is last.
 alter function private.worker_cancel_job(uuid, uuid, text)
-  set search_path = pg_catalog, private, util, public;
+  set search_path = pg_catalog, private, util, public, pg_temp;
 alter function private.worker_claim_jobs(text, text, integer, integer)
-  set search_path = pg_catalog, private, util, public;
+  set search_path = pg_catalog, private, util, public, pg_temp;
 alter function private.worker_enqueue_job(
   text, jsonb, text, text, uuid, text, uuid, text, uuid, text, text,
   text, integer, text, timestamp with time zone, text, integer,
   timestamp with time zone, jsonb, uuid, uuid
-) set search_path = pg_catalog, private, util, public;
+) set search_path = pg_catalog, private, util, public, pg_temp;
 alter function private.worker_heartbeat_job(uuid, uuid, text, numeric, jsonb, integer)
-  set search_path = pg_catalog, private, util, public;
+  set search_path = pg_catalog, private, util, public, pg_temp;
 alter function private.worker_job_payload(private.worker_jobs, boolean)
-  set search_path = pg_catalog, private, util, public;
+  set search_path = pg_catalog, private, util, public, pg_temp;
 alter function private.worker_list_jobs(uuid, text, uuid, text[], text, integer, boolean)
-  set search_path = pg_catalog, private, util, public;
+  set search_path = pg_catalog, private, util, public, pg_temp;
 alter function private.worker_list_jobs_by_concurrency_key(text, text, text[], integer, boolean)
-  set search_path = pg_catalog, private, util, public;
+  set search_path = pg_catalog, private, util, public, pg_temp;
 alter function private.worker_read_job(uuid, boolean)
-  set search_path = pg_catalog, private, util, public;
+  set search_path = pg_catalog, private, util, public, pg_temp;
 alter function private.worker_read_jobs_by_ids(uuid[], boolean)
-  set search_path = pg_catalog, private, util, public;
+  set search_path = pg_catalog, private, util, public, pg_temp;
 alter function private.worker_read_latest_job(uuid, text, uuid, text, text, text[], boolean)
-  set search_path = pg_catalog, private, util, public;
+  set search_path = pg_catalog, private, util, public, pg_temp;
 alter function private.worker_record_job_result(
   uuid, uuid, text, jsonb, text, jsonb, jsonb, text, text, jsonb,
   text[], text, boolean
-) set search_path = pg_catalog, private, util, public;
+) set search_path = pg_catalog, private, util, public, pg_temp;
 alter function private.worker_retry_job(uuid, timestamp with time zone, integer, text)
-  set search_path = pg_catalog, private, util, public;
+  set search_path = pg_catalog, private, util, public, pg_temp;
 
 -- Recreate eleven exact SECURITY INVOKER public compatibility signatures and
 -- eleven stable API v1 adapters from the private routines' catalog arguments.
@@ -407,7 +407,7 @@ begin
 
     execute format(
       'create or replace function public.%I(%s) returns jsonb '
-      'language sql security invoker set search_path = '''' '
+      'language sql security invoker set search_path = pg_catalog, pg_temp '
       'as $wrapper$ select private.%I(%s) $wrapper$',
       r.proname, r.arguments, r.proname, v_call_args
     );
@@ -422,7 +422,7 @@ begin
 
     execute format(
       'create or replace function api.%I(%s) returns jsonb '
-      'language sql security invoker set search_path = '''' '
+      'language sql security invoker set search_path = pg_catalog, pg_temp '
       'as $adapter$ select private.%I(%s) $adapter$',
       r.proname || '_v1', r.arguments, r.proname, v_call_args
     );
@@ -447,7 +447,7 @@ create or replace function public.worker_job_payload(
 language sql
 stable
 security invoker
-set search_path = ''
+set search_path = pg_catalog, pg_temp
 as $wrapper$
   select private.worker_job_payload(
     pg_catalog.jsonb_populate_record(
@@ -474,7 +474,7 @@ create or replace function public.lcia_scope_closure_artifact_lineage_eligible(
 language sql
 stable
 security invoker
-set search_path = ''
+set search_path = pg_catalog, pg_temp
 as $compat$
   select public.lcia_scope_closure_artifact_lineage_eligible(
     p_check,
