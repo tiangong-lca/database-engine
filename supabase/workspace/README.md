@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-31
-lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
-lastReviewedNote: "Reviewed through Issues #323 and #329: generated and stable-overlay boundaries remain unchanged; review migrations, local cutover, and provider qualification adapters do not make generated workspace paths authoritative."
+lastReviewedAt: 2026-08-01
+lastReviewedCommit: b32072d5a38509c4a25d866692958f0ced1303cf
+lastReviewedNote: "Reviewed for Issue #346: the persistent Dev PostgREST configuration gate does not change generated workspace behavior or source-of-truth boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

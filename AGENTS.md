@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 907f7b6a47b98c401d98184a8b7452aaaa429bbf
-lastReviewedNote: "Reviewed for Issue #340 hosted closure: API boundary validation supports both legacy JWT and opaque Supabase keys; private, util, and archive remain non-exposed."
+lastReviewedCommit: b32072d5a38509c4a25d866692958f0ced1303cf
+lastReviewedNote: "Reviewed for Issue #346: persistent dev serializes migration then allowlisted PostgREST config with exact readback; production integration and repository ownership remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -111,6 +111,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 
 - local baseline: `supabase start`, `supabase db reset`, `supabase migration list`
 - Data API exposure is explicit and staged: create and validate `api` before a later configuration deployment exposes `api`, `public`, and `graphql_public`; `private`, `util`, and `archive` must remain absent from both exposed schemas and `extra_search_path`
+- persistent `dev` deployment is serialized and runs `supabase db push` before `scripts/apply_postgrest_config.py --apply`; the script may PATCH only `db_schema`, `db_extra_search_path`, and `max_rows`, then must GET-readback the same exact project ref
 - `supabase/seed.sql` must remain an executable SQL batch even when it seeds no rows; retain a data-neutral no-op rather than comments only
 - hosted mutation E2E assets under `supabase/tests/preview/**` must hard-bind the exact Preview project ref, use disposable actors and UUID namespaces, clean up only their own effects, and never become migrations, seeds, Dev data rehearsals, or production execution paths
 - disposable Hosted actors must use an outer-frozen request/namespace and deterministic role email, be registered before creation, carry exact fixture/request/namespace/role metadata, recover only one exact filtered metadata match, use global logout, and treat hard admin DELETE as incomplete until both GET-by-ID returns 404 and a fresh exact filtered census is empty; the outer wrapper must create the exact empty owner-only non-symlink private temp directory and durably fsync each secret-free inner recovery checkpoint before returning its exact IPC ACK, so an actor ID is durable before sign-in or fixture mutation; cleanup must hold the derivative coordinator lock and remain before external dispatch, any missing or ambiguous global logout must retain the actor and forbid hard DELETE, and temporary credential files must be proven removed independently by the inner and outer processes; offline lifecycle and 39-surface residue contracts prove the local control/readback shape without replacing the later exact-head Hosted run and independent Auth/SQL readback execution

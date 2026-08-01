@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-31
-lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
-lastReviewedNote: "已为 Issue #323 与 #329 复核：记录本地 Root/Reference Review 备份/切换 runner，以及与 Worker 精确兼容的隔离数据库和存储资格验证入口，不改变 schema workspace 行为。"
+lastReviewedAt: 2026-08-01
+lastReviewedCommit: b32072d5a38509c4a25d866692958f0ced1303cf
+lastReviewedNote: "已为 Issue #346 复核：记录持久化 Dev PostgREST 配置的字段白名单 diff/apply/回读 gate 及其离线测试。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -46,6 +46,19 @@ related:
 本地迁移输出和审计 JSONL 文件应写入 `_artifacts/`，该目录已被 Git 忽略。
 
 ## 脚本列表
+
+### `apply_postgrest_config.py`
+
+该脚本只对一个精确的持久化 Supabase 分支同步已审核的 PostgREST 字段。`--check` 只读；`--apply` 只 PATCH 发生漂移的 `db_schema`、`db_extra_search_path`、`max_rows`，随后 GET 回读验证。目标 project ref 必须且只能匹配一个 checked-in `[remotes.*].project_id`。
+
+```bash
+SUPABASE_ACCESS_TOKEN='<由 secret store 注入>' \
+python scripts/apply_postgrest_config.py \
+  --project-ref fotofiyqnuyvgtotswie \
+  --check
+```
+
+修改 gate 前运行 `python -m unittest scripts/test_apply_postgrest_config.py`。不得用无条件 `supabase config push` 替代，也不得打印 Management API response body。
 
 ### `data_migrations/tidas_schema_202606/runner.py`
 

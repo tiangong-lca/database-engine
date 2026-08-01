@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 907f7b6a47b98c401d98184a8b7452aaaa429bbf
-lastReviewedNote: "Reviewed for Issue #340 hosted closure: opaque API-key handling changes validation only; the api DTO/RPC and private runtime architecture remains unchanged."
+lastReviewedCommit: b32072d5a38509c4a25d866692958f0ced1303cf
+lastReviewedNote: "Reviewed for Issue #346: persistent Dev now reconciles the reviewed PostgREST allowlist after migrations without changing the api/private ownership model."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -54,7 +54,7 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | `supabase/tests/preview/**` | exact-ref-bound disposable Hosted Preview mutation fixtures, cleanup, rollback-only fault assertions, and offline transport/lifecycle contracts; test-only and excluded from migrations, seeds, Dev data rehearsal, and production execution |
 | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |
 | `scripts/**` | export, refresh, change-copy, and migration-generation helpers |
-| `.github/workflows/supabase-dev.yml` | only checked-in GitHub Actions automation for pushing committed migrations to the persistent remote `dev` branch |
+| `.github/workflows/supabase-dev.yml` | serialized automation for pushing committed migrations to persistent remote `dev`, then reconciling and readback-verifying only the reviewed PostgREST fields |
 | `supabase/workspace/changes/**` | manual overlay area used when generating migrations from workspace files |
 | `supabase/workspace/remote_schema.sql` | generated full raw dump from the remote database |
 | `supabase/workspace/global/**` | generated split-out global objects rebuilt on workspace refresh |
