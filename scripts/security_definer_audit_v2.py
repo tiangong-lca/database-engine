@@ -923,7 +923,7 @@ def validate_transition_fixture(fixture: dict[str, Any], baseline_lineage_hash: 
     source = fixture.get("source", {})
     expected = {
         "issue": "tiangong-lca/database-engine#356",
-        "exactBaseDatabaseCommitSha": "1b94c1ce7c132e5481c4a2594d6d9a957d7dc683",
+        "exactBaseDatabaseCommitSha": "597072ca34a62cdc93df9bf0896a9d361901852c",
         "baselineDatabaseSchemaSha": BASELINE_PROVENANCE["databaseSchemaSha"],
         "baselineLineageSha256": baseline_lineage_hash,
         "migrationVersion": "20260801060304",

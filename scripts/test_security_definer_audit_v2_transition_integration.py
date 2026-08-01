@@ -271,6 +271,30 @@ def validate_source_file(path: str | Path, source_root: Path) -> ReviewedFile:
     return ReviewedFile(relative, raw)
 
 
+def validate_commit_source_file(
+    path: str | Path, source_root: Path, commit_sha: str,
+) -> ReviewedFile:
+    """Read one immutable regular-file blob from an explicitly reviewed commit."""
+    relative = canonical_relative_path(path)
+    if not re.fullmatch(r"[0-9a-f]{40}", commit_sha):
+        raise ValueError("reviewed source commit must be an exact 40-hex commit")
+    record = _git_output(
+        ["git", "ls-tree", "-z", commit_sha, "--", relative], cwd=source_root,
+    )
+    object_id = _git_regular_blob(record, relative, source=f"commit {commit_sha}")
+    raw = _git_output(["git", "cat-file", "blob", object_id], cwd=source_root)
+    return ReviewedFile(relative, raw)
+
+
+def require_ancestor(ancestor: str, descendant: str, *, source_root: Path, label: str) -> None:
+    result = subprocess.run(
+        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
+        cwd=source_root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
+    )
+    if result.returncode != 0:
+        raise ValueError(f"{label} is not an ancestor of the reviewed source history")
+
+
 def validate_receipt(
     args: argparse.Namespace, source_root: Path,
 ) -> tuple[dict[str, Any], bytes, bytes]:
@@ -284,8 +308,16 @@ def validate_receipt(
         raise ValueError("qualification receipt is not JSON") from exc
     if raw != canonical(receipt):
         raise ValueError("qualification receipt is not canonical byte-for-byte")
-    migration_file = validate_source_file(args.migration, source_root)
-    rollback_file = validate_source_file(args.rollback, source_root)
+    receipt_source = receipt.get("source", {})
+    source_commit = receipt_source.get("commitSha", "")
+    if not re.fullmatch(r"[0-9a-f]{40}", source_commit):
+        raise ValueError("qualification receipt source commit must be an exact 40-hex commit")
+    require_ancestor(args.expected_base, source_commit, source_root=source_root,
+                     label="reviewed base commit")
+    require_ancestor(source_commit, exact_head(source_root), source_root=source_root,
+                     label="receipt source commit")
+    migration_file = validate_commit_source_file(args.migration, source_root, source_commit)
+    rollback_file = validate_commit_source_file(args.rollback, source_root, source_commit)
     if hashlib.sha256(migration_file.raw).hexdigest() != args.expected_migration_sha256:
         raise ValueError("migration bytes differ from reviewed SHA-256")
     if hashlib.sha256(rollback_file.raw).hexdigest() != args.expected_rollback_sha256:
@@ -303,7 +335,7 @@ def validate_receipt(
         "issue": source["issue"],
         "source": {
             "repository": REPOSITORY,
-            "commitSha": exact_head(source_root),
+            "commitSha": source_commit,
             "fixturePath": "supabase/tests/contracts/security_definer_transition_fixture.v1.json",
             "fixtureSha256": fixture_sha,
         },

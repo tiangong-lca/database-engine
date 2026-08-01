@@ -207,6 +207,37 @@ class TransitionIntegrationRunnerTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "index differs from HEAD"):
                 harness.validate_source_file("tracked.sql", root)
 
+    def test_source_sql_is_read_from_reviewed_ancestor_commit(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            subprocess.run(["git", "init", "-q", str(root)], check=True)
+            tracked = root / "tracked.sql"
+            tracked.write_text("select 1;\n", encoding="utf-8")
+            subprocess.run(["git", "add", "tracked.sql"], cwd=root, check=True)
+            subprocess.run([
+                "git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                "commit", "-q", "-m", "source",
+            ], cwd=root, check=True)
+            source_commit = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, check=True, text=True,
+                stdout=subprocess.PIPE,
+            ).stdout.strip()
+            tracked.write_text("select 2;\n", encoding="utf-8")
+            subprocess.run(["git", "add", "tracked.sql"], cwd=root, check=True)
+            subprocess.run([
+                "git", "-c", "user.name=Test", "-c", "user.email=test@example.invalid",
+                "commit", "-q", "-m", "evidence",
+            ], cwd=root, check=True)
+            reviewed = harness.validate_commit_source_file("tracked.sql", root, source_commit)
+            self.assertEqual(reviewed.raw, b"select 1;\n")
+            head = subprocess.run(
+                ["git", "rev-parse", "HEAD"], cwd=root, check=True, text=True,
+                stdout=subprocess.PIPE,
+            ).stdout.strip()
+            harness.require_ancestor(source_commit, head, source_root=root, label="source")
+            with self.assertRaisesRegex(ValueError, "not an ancestor"):
+                harness.require_ancestor(head, source_commit, source_root=root, label="source")
+
     def test_pending_migration_detection_is_version_exact(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)

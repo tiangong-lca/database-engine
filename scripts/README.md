@@ -389,6 +389,14 @@ opens sequence 1, and emits the exact reviewed-code constants. A migration PR
 must materialize every planned file and validate the hashes; it must not hand-edit
 `completedTransitions` or advance from the mutable `security_definer_audit_v2.json`.
 
+The qualification receipt itself must be a reviewed regular file in the clean
+source HEAD. To avoid the impossible Git hash self-reference that would result
+from embedding that same HEAD in the receipt, `source.commitSha` names the
+reviewed ancestor commit containing the exact migration and rollback bytes. The
+runner replays those immutable Git blobs and proves the base → source → receipt
+HEAD ancestry chain; current fixture and receipt bytes remain independently
+bound by exact SHA-256.
+
 The #356 PR gate must additionally run the real two-stack integration harness;
 there is no successful skip mode:
 
@@ -400,7 +408,7 @@ python scripts/run_database_contract.py --suite canonical-local \
   --security-definer-transition-rollback <issue-356-operator-rollback.sql> \
   --security-definer-transition-migration-sha256 <exact-sha256> \
   --security-definer-transition-rollback-sha256 <exact-sha256> \
-  --security-definer-transition-base 1b94c1ce7c132e5481c4a2594d6d9a957d7dc683
+  --security-definer-transition-base 597072ca34a62cdc93df9bf0896a9d361901852c
 ```
 
 Both workdirs must be independent loopback stacks at the exact base. The gate
