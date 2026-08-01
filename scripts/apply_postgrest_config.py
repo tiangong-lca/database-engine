@@ -106,6 +106,36 @@ def changed_fields(desired: dict[str, Any], remote: dict[str, Any]) -> list[str]
     ]
 
 
+def _snapshot_allowlisted(remote: dict[str, Any]) -> dict[str, Any]:
+    snapshot = {field: remote.get(field) for field in ALLOWED_FIELDS}
+    invalid = []
+    for field, value in snapshot.items():
+        canonical = _canonical(field, value)
+        if canonical is None or canonical == ():
+            invalid.append(field)
+    if invalid:
+        raise ConfigError(
+            f"remote config cannot form a rollback snapshot: {','.join(invalid)}"
+        )
+    return snapshot
+
+
+def _restore_allowlisted(
+    snapshot: dict[str, Any],
+    get_remote: Callable[[], dict[str, Any]],
+    patch_remote: Callable[[dict[str, Any]], None],
+) -> None:
+    rollback_drift = changed_fields(snapshot, get_remote())
+    if not rollback_drift:
+        return
+    patch_remote({field: snapshot[field] for field in rollback_drift})
+    rollback_remaining = changed_fields(snapshot, get_remote())
+    if rollback_remaining:
+        raise ConfigError(
+            f"rollback readback mismatch: {','.join(rollback_remaining)}"
+        )
+
+
 class ManagementClient:
     def __init__(
         self,
@@ -164,16 +194,41 @@ def reconcile(
     patch_remote: Callable[[dict[str, Any]], None],
     apply: bool,
 ) -> tuple[str, ...]:
-    drift = changed_fields(desired, get_remote())
+    remote_before = get_remote()
+    drift = changed_fields(desired, remote_before)
     if not drift:
         return ()
     if not apply:
         raise ConfigError(f"PostgREST config drift: {','.join(drift)}")
 
-    patch_remote({field: desired[field] for field in drift})
+    rollback_snapshot = _snapshot_allowlisted(remote_before)
+    try:
+        patch_remote({field: desired[field] for field in drift})
+    except ConfigError as exc:
+        try:
+            if not changed_fields(desired, get_remote()):
+                return tuple(drift)
+            _restore_allowlisted(rollback_snapshot, get_remote, patch_remote)
+        except ConfigError as rollback_exc:
+            raise ConfigError(
+                f"PostgREST config PATCH failed; outcome reconciliation failed: {rollback_exc}"
+            ) from None
+        raise ConfigError(
+            f"PostgREST config PATCH failed; previous allowlisted config restored: {exc}"
+        ) from None
     remaining = changed_fields(desired, get_remote())
     if remaining:
-        raise ConfigError(f"PostgREST config readback mismatch: {','.join(remaining)}")
+        try:
+            _restore_allowlisted(rollback_snapshot, get_remote, patch_remote)
+        except ConfigError as exc:
+            raise ConfigError(
+                "PostgREST config readback mismatch: "
+                f"{','.join(remaining)}; rollback failed: {exc}"
+            ) from None
+        raise ConfigError(
+            "PostgREST config readback mismatch: "
+            f"{','.join(remaining)}; previous allowlisted config restored"
+        )
     return tuple(drift)
 
 
