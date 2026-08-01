@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
-lastReviewedNote: "Reviewed for Issue #355 delegated-ACL hardening: the Expand boundary keeps eight physical tables public, converges target relation/column/routine delegation chains without touching unrelated objects, and leaves Contract gated on consumer-zero and hosted evidence."
+lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
+lastReviewedNote: "Reviewed for Issue #355 mandatory destructive qualification: the canonical opt-in runner now enforces dual-predecessor actor-RLS proof before rollback/roll-forward proof; compatibility and ownership boundaries are unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

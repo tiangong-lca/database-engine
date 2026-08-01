@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase/migrations/20260801061000_issue_355_identity_collaboration_expand.sql"
 CONTRACT = ROOT / "supabase/tests/contracts/identity_collaboration_expand.v1.json"
 INVENTORY = ROOT / "supabase/tests/contracts/public_object_inventory.json"
+RUNNER = ROOT / "scripts/run_database_contract.py"
 
 
 class IdentityCollaborationExpandStaticTest(unittest.TestCase):
@@ -14,6 +15,7 @@ class IdentityCollaborationExpandStaticTest(unittest.TestCase):
         self.sql = MIGRATION.read_text()
         self.contract = json.loads(CONTRACT.read_text())
         self.inventory = json.loads(INVENTORY.read_text())
+        self.runner = RUNNER.read_text()
 
     def test_exact_inventory_batch_is_covered(self) -> None:
         expected = {
@@ -67,6 +69,28 @@ class IdentityCollaborationExpandStaticTest(unittest.TestCase):
         self.assertIn("from unnest(policy.polroles) role_oid", normalized)
         self.assertIn("then 'public' else role_name.rolname", normalized)
 
+    def test_users_policy_admits_only_exact_observed_predecessors(self) -> None:
+        normalized = self.sql.lower()
+        policy_contract = self.contract["sourcePolicyCompatibility"][
+            "public.users/select by self and team and admin"
+        ]
+        self.assertEqual(
+            [
+                "57fd9c26617c29dc6edc92d231bbec85",
+                "6ab74729e7e0ec6e9378542059d17cd0",
+            ],
+            policy_contract["admittedPolicySetMd5"],
+        )
+        self.assertEqual("preserve-exact-predecessor", policy_contract["expandDisposition"])
+        self.assertEqual(
+            "compatibility-only-not-approved-target",
+            policy_contract["legacyVariantSecurityDisposition"],
+        )
+        for fingerprint in policy_contract["admittedPolicySetMd5"]:
+            self.assertEqual(1, normalized.count(fingerprint))
+        self.assertIn("actual.policy_hash = any(expected.policy_hashes)", normalized)
+        self.assertIn("is distinct from baseline.policy_hash", normalized)
+
     def test_target_column_acl_is_converged_and_evidenced(self) -> None:
         normalized = self.sql.lower()
         self.assertIn("cross join lateral aclexplode(attribute.attacl)", normalized)
@@ -78,6 +102,20 @@ class IdentityCollaborationExpandStaticTest(unittest.TestCase):
         self.assertGreaterEqual(normalized.count("order by min(acl.ordinality)"), 5)
         self.assertIn("target column acl postcondition failed", normalized)
         self.assertEqual("none", self.contract["targetColumnAclPolicy"])
+
+    def test_destructive_canonical_gate_includes_policy_matrix(self) -> None:
+        self.assertIn(
+            '"scripts/test_identity_collaboration_policy_variants.py"',
+            self.runner,
+        )
+        self.assertIn(
+            '"scripts/test_identity_collaboration_rollback.py"',
+            self.runner,
+        )
+        self.assertIn(
+            "enabled=args.run_destructive_identity_qualification",
+            self.runner,
+        )
 
 
 if __name__ == "__main__":
