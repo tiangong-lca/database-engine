@@ -16,6 +16,11 @@ SHA = ROOT / "supabase/tests/contracts/database_catalog.sha256"
 QUERY = r"""
 with contract as (
   select jsonb_build_object(
+    'schemas', (select coalesce(jsonb_agg(to_jsonb(x) order by name), '[]') from (
+      select n.nspname name, owner.rolname owner, coalesce(n.nspacl::text,'null') acl
+      from pg_namespace n join pg_roles owner on owner.oid=n.nspowner
+      where n.nspname in ('public','api','private','util','archive')
+    ) x),
     'relations', (select coalesce(jsonb_agg(x order by x->>'schema', x->>'name'), '[]') from (
       select jsonb_build_object('schema',n.nspname,'name',c.relname,'kind',c.relkind,
         'rls',c.relrowsecurity,'forceRls',c.relforcerowsecurity,'acl',coalesce(c.relacl::text,'null')) x

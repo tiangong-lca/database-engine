@@ -1,0 +1,76 @@
+{
+  "schemaVersion": "schema-boundary-phase.v1",
+  "phase": "expand",
+  "applicationSchemas": {
+    "api": {
+      "owner": "postgres",
+      "usageRoles": ["anon", "authenticated", "service_role"]
+    },
+    "private": {
+      "owner": "postgres",
+      "usageRoles": ["service_role"]
+    },
+    "util": {
+      "owner": "postgres",
+      "usageRoles": ["service_role"]
+    },
+    "archive": {
+      "owner": "postgres",
+      "usageRoles": ["service_role"]
+    }
+  },
+  "corePublicTables": [
+    "contacts",
+    "flowproperties",
+    "flows",
+    "ilcd",
+    "lciamethods",
+    "lifecyclemodels",
+    "processes",
+    "sources",
+    "unitgroups"
+  ],
+  "movedViews": [
+    {
+      "name": "worker_domain_traceability_cutoffs",
+      "targetSchema": "private"
+    },
+    {
+      "name": "worker_domain_traceability_violations",
+      "targetSchema": "util"
+    },
+    {
+      "name": "worker_job_domain_refs",
+      "targetSchema": "api"
+    },
+    {
+      "name": "worker_legacy_lifecycle_audit",
+      "targetSchema": "util"
+    },
+    {
+      "name": "worker_legacy_table_retirement_blockers",
+      "targetSchema": "util"
+    }
+  ],
+  "expand": {
+    "compatibilitySchema": "public",
+    "approvedReadRole": "service_role",
+    "contractReady": false
+  },
+  "contract": {
+    "allowedPublicTables": [
+      "contacts",
+      "flowproperties",
+      "flows",
+      "ilcd",
+      "lciamethods",
+      "lifecyclemodels",
+      "processes",
+      "sources",
+      "unitgroups"
+    ],
+    "allowedPublicViews": [],
+    "allowedPublicMaterializedViews": [],
+    "allowedPublicRoutines": []
+  }
+}
