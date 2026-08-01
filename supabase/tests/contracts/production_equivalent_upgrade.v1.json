@@ -1,12 +1,13 @@
 {
   "schemaVersion": "production-equivalent-upgrade-contract.v1",
   "baseVersion": "20260731124000",
-  "expectedHeadVersion": "20260801061000",
+  "expectedHeadVersion": "20260801131918",
   "defaultRepresentativeRows": 1000000,
   "minimumQualificationRows": 1000000,
   "compatibleReaderDuringUpgrade": false,
   "rehearsalCleanupScripts": [
-    "supabase/operator/issue_339_restore_expand_acl.sql"
+    "supabase/operator/issue_339_restore_expand_acl.sql",
+    "supabase/operator/issue_339_restore_postgres_global_function_defaults.sql"
   ],
   "budgets": {
     "fixtureSeconds": 300,
@@ -67,6 +68,8 @@
     "util.worker_legacy_lifecycle_audit",
     "util.worker_legacy_table_retirement_blockers",
     "util.schema_boundary_phase",
+    "util.security_acl_effective_default_privileges",
+    "archive.security_acl_postgres_global_functions_20260801_snapshot",
     "public.worker_domain_traceability_cutoffs",
     "public.worker_domain_traceability_violations",
     "public.worker_job_domain_refs",

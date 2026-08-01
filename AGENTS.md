@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "Reviewed for Issue #355 mandatory destructive qualification: the canonical opt-in runner now enforces dual-predecessor actor-RLS proof before rollback/roll-forward proof; compatibility and ownership boundaries are unchanged."
+lastReviewedCommit: 87159d6331a793685d5a381380665a697bacce37
+lastReviewedNote: "Reviewed for Issues #355/#339 and PR #367 findings: the canonical opt-in runner enforces dual-predecessor actor-RLS proof before rollback/roll-forward proof, while exact layered default-ACL restore and dynamic snapshot ACL convergence remain repo-owned; Issue #352 stays separate."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

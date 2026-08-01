@@ -189,11 +189,17 @@ catalog 查询替代 hosted exposure 证据。
 USAGE/EXECUTE。两个 lifecycle bundle RPC 仍是 authenticated compatibility
 contract。Expand 明确记录该边界；consumer-zero 证据成立后，Contract 才移除它们。
 
-Migration 负责关闭 `postgres` owner 的 default privileges。内部
-`supabase_admin` owner defaults 需要有权限的 owner session 执行
-`supabase/operator/issue_339_supabase_admin_default_privileges.sql`，随后 hosted
-gate 必须返回 `hostedOperatorReady=true`。这两个 readback 未同时通过前，
-Preview/dev/production security proof 保持 blocked。
+Migration 负责关闭 `postgres` owner 的 default privileges。future function 必须
+使用 database-wide 的 `ALTER DEFAULT PRIVILEGES ... REVOKE EXECUTE ON FUNCTIONS`，
+因为 PostgreSQL 内建的 `PUBLIC EXECUTE` 是 global default，per-schema revoke 无法
+从中减权；table/sequence default 仍限定在五个 application schema。catalog/hosted
+gate 必须合并计算 built-in、explicit global 与 additive per-schema 三层 effective
+defaults，不能把缺少 `pg_default_acl` 显式行当成安全；重复 ACL identity 的
+grantability 通过 `bool_or` 收敛。operator restore 同时快照并重建 global 与五个
+additive function 层，snapshot 动态移除所有 non-owner ACL grantee，而不是依赖固定角色
+列表。内部 `supabase_admin` 的
+effective residue 继续由 #352 fail-closed 跟踪，直到受支持的 platform-owner 通道
+收口并使 `hostedOperatorReady=true`。
 
 ## 默认工作流
 

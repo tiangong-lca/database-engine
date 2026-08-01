@@ -63,7 +63,13 @@ with contract as (
       select d.defaclrole::regrole::text owner,coalesce(n.nspname,'*') schema,
         d.defaclobjtype object_type,coalesce(d.defaclacl::text,'null') acl
       from pg_default_acl d left join pg_namespace n on n.oid=d.defaclnamespace
-      where n.nspname in ('public','api','private','util','archive')
+      where d.defaclnamespace=0 or n.nspname in ('public','api','private','util','archive')
+    ) x),
+    'effectiveDefaultPrivileges', (select coalesce(jsonb_agg(to_jsonb(x)
+      order by owner_name,schema_name,object_type,grantee,privilege_type,is_grantable), '[]') from (
+      select owner_name,schema_name,object_type,grantee,privilege_type,is_grantable
+      from util.security_acl_effective_default_privileges
+      where grantee in ('PUBLIC','anon','authenticated','service_role')
     ) x)
   ) payload
 )
@@ -117,20 +123,50 @@ with forbidden_maintain as (
   where n.nspname='public'
     and p.proname in ('save_lifecycle_model_bundle','delete_lifecycle_model_bundle')
     and has_function_privilege(role_name,p.oid,'EXECUTE')
+), repo_owner_default_residue as (
+  select schema_name,object_type,grantee,privilege_type,is_grantable
+  from util.security_acl_effective_default_privileges
+  where owner_name='postgres'
+    and grantee in ('PUBLIC','anon','authenticated','service_role')
+), platform_owner_default_residue as (
+  select schema_name,object_type,grantee,privilege_type,is_grantable
+  from util.security_acl_effective_default_privileges
+  where owner_name='supabase_admin'
+    and grantee in ('PUBLIC','anon','authenticated','service_role')
 )
 select jsonb_build_object(
   'serviceRoleMaintain', coalesce((select jsonb_agg(to_jsonb(x)) from forbidden_maintain x),'[]'),
   'forbiddenInternalExecute', coalesce((select jsonb_agg(to_jsonb(x)) from forbidden_internal_execute x),'[]'),
-  'forbiddenLifecycleExecute', coalesce((select jsonb_agg(to_jsonb(x)) from forbidden_lifecycle_execute x),'[]')
+  'forbiddenLifecycleExecute', coalesce((select jsonb_agg(to_jsonb(x)) from forbidden_lifecycle_execute x),'[]'),
+  'repoOwnerDefaultPrivilegeResidue', coalesce((select jsonb_agg(to_jsonb(x)) from repo_owner_default_residue x),'[]'),
+  'platformOwnerDefaultPrivilegeResidue', coalesce((select jsonb_agg(to_jsonb(x)) from platform_owner_default_residue x),'[]'),
+  'platformOwnerBlocker', 'tiangong-lca/database-engine#352'
 )::text;
 """
 
 
 def validate_generation_guard(guard: dict[str, object]) -> None:
-    expected = {"serviceRoleMaintain", "forbiddenInternalExecute", "forbiddenLifecycleExecute"}
+    expected = {
+        "serviceRoleMaintain",
+        "forbiddenInternalExecute",
+        "forbiddenLifecycleExecute",
+        "repoOwnerDefaultPrivilegeResidue",
+        "platformOwnerDefaultPrivilegeResidue",
+        "platformOwnerBlocker",
+    }
     if set(guard) != expected:
         raise SystemExit("database catalog generation guard returned an unexpected shape")
-    polluted = [name for name in sorted(expected) if guard[name] != []]
+    if guard["platformOwnerBlocker"] != "tiangong-lca/database-engine#352":
+        raise SystemExit("database catalog generation guard lost the platform-owner blocker")
+    if not isinstance(guard["platformOwnerDefaultPrivilegeResidue"], list):
+        raise SystemExit("database catalog generation guard returned invalid platform-owner residue")
+    must_be_empty = {
+        "serviceRoleMaintain",
+        "forbiddenInternalExecute",
+        "forbiddenLifecycleExecute",
+        "repoOwnerDefaultPrivilegeResidue",
+    }
+    polluted = [name for name in sorted(must_be_empty) if guard[name] != []]
     if polluted:
         raise SystemExit("database catalog generation refused polluted ACL state: " + ",".join(polluted))
 

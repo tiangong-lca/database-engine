@@ -1766,6 +1766,10 @@ select is(
   'protected closure proves exact process/index/internal-id/direction occurrence'
 );
 
+-- Test helpers are intentionally explicit consumers after postgres-owned future
+-- functions become deny-by-default for API roles.
+grant execute on all functions in schema pg_temp to authenticated;
+
 set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config(
