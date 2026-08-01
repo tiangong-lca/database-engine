@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 05d1387cc073da8161db782db978a77431ff8b3f
-lastReviewedNote: "Reviewed through the Issue #354 hosted repair and for #333: exact ACL convergence, immutable provenance, and five-schema boundaries remain intact while the stable contract adds a full SECURITY DEFINER evidence ledger without performing Contract migration."
+lastReviewedCommit: 87d3ca6a69435e611fc6f64a420da1f16f5c0978
+lastReviewedNote: "Reviewed for Issue #356: Worker physical tables now live in private during Expand behind public compatibility views and invoker wrappers; Contract still requires consumer-zero before public residue removal."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
