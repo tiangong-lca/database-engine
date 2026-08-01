@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "已为 Issue #355 前置 policy 兼容合同复核：disposable-local variant harness 验证精确准入、source policy 不变、projection 权限不越界、retry、rollback/reapply 与 unknown 原子拒绝。"
+lastReviewedNote: "已为 Issue #355 前置 policy 兼容合同复核：disposable-local variant harness 验证精确准入、逐角色 source/projection RLS 一致性、source policy 不变、projection 权限不越界、retry、rollback/reapply 与 unknown 原子拒绝。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

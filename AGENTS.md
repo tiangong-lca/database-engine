@@ -37,7 +37,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "Reviewed for Issue #355 predecessor-policy compatibility: Expand preserves either exact public.users predecessor and leaves live legacy-policy tightening gated on consumer-zero and owner review."
+lastReviewedNote: "Reviewed for Issue #355 predecessor-policy compatibility and actor-level RLS proof: Expand preserves either exact public.users predecessor and leaves live legacy-policy tightening gated on consumer-zero and owner review."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

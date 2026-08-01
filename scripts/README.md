@@ -513,7 +513,9 @@ consumer SHAs, versioned DTO names, transaction/timeouts, and Contract gates.
 `test_identity_collaboration_policy_variants.py` is disposable-local only. It
 rehearses the exact blank/repository and persistent Dev/Production users-policy
 fingerprints, proves Expand preserves either predecessor, bounds every
-security-invoker projection by its source grants, and rejects an unknown third
+security-invoker projection by its source grants, exercises self, same-team,
+cross-tenant, public-team, owner, global-admin, review-admin, and review-member
+RLS visibility through both the source table and projection, and rejects an unknown third
 variant before mutation. The live legacy variant is compatibility evidence,
 not the approved security target; retirement remains tracked in Next #753 and
 database-engine #358.

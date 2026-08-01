@@ -32,7 +32,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "Reviewed for Issue #355 predecessor-policy compatibility: disposable-local validation covers both exact public.users inputs, unchanged source policy, bounded projection authority, retry, rollback/reapply, and atomic rejection of unknown variants."
+lastReviewedNote: "Reviewed for Issue #355 predecessor-policy compatibility: disposable-local validation covers both exact public.users inputs, actor-level source/projection RLS parity, unchanged source policy, bounded projection authority, retry, rollback/reapply, and atomic rejection of unknown variants."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
