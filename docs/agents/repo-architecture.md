@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: b32072d5a38509c4a25d866692958f0ced1303cf
-lastReviewedNote: "Reviewed for Issue #346: persistent Dev now reconciles the reviewed PostgREST allowlist after migrations without changing the api/private ownership model."
+lastReviewedCommit: 833564c7ced2037d07e09d3f5bb800f5b430e469
+lastReviewedNote: "Reviewed for Issue #346 follow-up: the config gate restores and verifies its prior allowlisted snapshot on readback mismatch without changing the api/private ownership model."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
