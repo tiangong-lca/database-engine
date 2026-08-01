@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 03566bee31d66dc2264a337595854cbf13faaaf9
-lastReviewedNote: "已为 Issues #339/#341、#346 与 #351 复核：记录 opaque-key-safe Worker probe、ACL-aware rehearsal、fresh populated CLI roll-forward、fail-closed 证据、URL 脱敏、零 WAL retry 与 PostgREST rollback/readback。"
+lastReviewedCommit: 20f56228c21e8e677154c3e77fbf0e243dde677d
+lastReviewedNote: "已为 Issues #339/#341、#346、#351 与 #353 复核：保留 probe/rehearsal/rollback 指引，并记录 immutable inventory schema replay、provenance 验证与 deterministic committed-artifact gate。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -250,6 +250,7 @@ FK/rewrite/trigger/policy/composite/function-body 依赖。输出还包含 SCC-a
 
 ```bash
 python scripts/public_inventory_closure.py --scan-consumers <lca-workspace-root>
+python scripts/public_inventory_closure.py --verify-provenance <lca-workspace-root>
 python scripts/public_inventory_closure.py --write
 python scripts/public_inventory_closure.py --check
 python -m unittest scripts/test_public_inventory_closure.py
@@ -258,6 +259,12 @@ python -m unittest scripts/test_public_inventory_closure.py
 只有 consumer SHA 变化时才重新扫描。`contractReady=false` 表示仍有 dynamic SQL
 或 runtime/owner 证据待关闭；缺少 mapping、无效 target、非精确 SHA、重复 key 或
 live/ledger 漂移会直接失败。未知 consumer 始终保留为 blocker，不能据此退休对象。
+
+`source` 将 workspace baseline、其精确 `database-engine` gitlink、历史
+review/source/merge-base lineage，与唯一用于 migration/catalog 重放的
+`databaseSchemaSha` 明确分离；旧 #338 artifact hash 仅作为 lineage。
+`--verify-provenance` 不读取移动 remote 即可重放这些关系；`--check` 先验证
+canonical JSON bytes 与 committed SHA-256，再执行 committed-vs-generated 对比。
 
 ### Security ACL Expand 验证
 
