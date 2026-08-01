@@ -2,7 +2,7 @@ version: 1
 layout: repo
 lastReviewedAt: "2026-08-01"
 lastReviewedCommit: "a253f381e25ba514758536268bc6a47f02691f3d"
-lastReviewedNote: "Reviewed for Issue #355 predecessor-policy compatibility and actor-level RLS proof: routing still requires exact source-catalog admission plus local rollback/reapply proof; ownership and source-of-truth rules are unchanged."
+lastReviewedNote: "Reviewed for Issue #355 mandatory destructive qualification: routing still requires exact source-catalog admission and actor-RLS proof plus local rollback/reapply proof through one canonical opt-in gate; ownership and source-of-truth rules are unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

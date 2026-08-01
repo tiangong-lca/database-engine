@@ -7,6 +7,7 @@ ROOT = Path(__file__).resolve().parents[1]
 MIGRATION = ROOT / "supabase/migrations/20260801061000_issue_355_identity_collaboration_expand.sql"
 CONTRACT = ROOT / "supabase/tests/contracts/identity_collaboration_expand.v1.json"
 INVENTORY = ROOT / "supabase/tests/contracts/public_object_inventory.json"
+RUNNER = ROOT / "scripts/run_database_contract.py"
 
 
 class IdentityCollaborationExpandStaticTest(unittest.TestCase):
@@ -14,6 +15,7 @@ class IdentityCollaborationExpandStaticTest(unittest.TestCase):
         self.sql = MIGRATION.read_text()
         self.contract = json.loads(CONTRACT.read_text())
         self.inventory = json.loads(INVENTORY.read_text())
+        self.runner = RUNNER.read_text()
 
     def test_exact_inventory_batch_is_covered(self) -> None:
         expected = {
@@ -100,6 +102,20 @@ class IdentityCollaborationExpandStaticTest(unittest.TestCase):
         self.assertGreaterEqual(normalized.count("order by min(acl.ordinality)"), 5)
         self.assertIn("target column acl postcondition failed", normalized)
         self.assertEqual("none", self.contract["targetColumnAclPolicy"])
+
+    def test_destructive_canonical_gate_includes_policy_matrix(self) -> None:
+        self.assertIn(
+            '"scripts/test_identity_collaboration_policy_variants.py"',
+            self.runner,
+        )
+        self.assertIn(
+            '"scripts/test_identity_collaboration_rollback.py"',
+            self.runner,
+        )
+        self.assertIn(
+            "enabled=args.run_destructive_identity_qualification",
+            self.runner,
+        )
 
 
 if __name__ == "__main__":

@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "已为 Issue #355 前置 policy 兼容合同和逐角色 RLS 证明复核：生成 workspace 仍只作检查证据；migration/contract 持有两个精确 live/replay hash 及其不变性证明。"
+lastReviewedNote: "已为 Issue #355 mandatory destructive qualification 复核：生成 workspace 仍只作检查证据；canonical opt-in runner 现强制执行 exact-hash/RLS 与 rollback/roll-forward 两组证明。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -29,7 +29,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "Reviewed for Issue #355 predecessor-policy compatibility and actor-level RLS proof: Expand admits and preserves only the exact blank/repository and persistent Dev/Production public.users variants; tightening the live legacy clause remains gated by #753/#358."
+lastReviewedNote: "Reviewed for Issue #355 mandatory destructive qualification: canonical opt-in enforcement now binds dual-predecessor actor-RLS proof to rollback/roll-forward proof; architecture and #753/#358 retirement gates are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "已为 Issue #355 前置 policy 兼容合同复核：disposable-local variant harness 验证精确准入、逐角色 source/projection RLS 一致性、source policy 不变、projection 权限不越界、retry、rollback/reapply 与 unknown 原子拒绝。"
+lastReviewedNote: "已为 Issue #355 mandatory destructive qualification 复核：canonical opt-in gate 先调用 dual exact-hash/逐角色 RLS harness，再调用 rollback/roll-forward harness，并传播任一失败。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -421,9 +421,12 @@ canonical runner 只解析一次显式 loopback stack：先把 database identity
 `SUPABASE_WORKDIR` 对账，再向每一个 SQL、Data API、catalog、schema phase、inventory、
 lint 和 SECURITY DEFINER gate 覆盖并传递同一组 `DATABASE_URL`、REST credentials 与
 workdir。`test_database_contract_targeting.py` 提供离线双 stack 混拼负向测试。
-canonical runner 默认不执行 rollback DDL；只可在 disposable local stack 上用
-`--run-destructive-identity-qualification` 显式启用。`--skip-data-api` 只跳过 HTTP
-probe，不选择或重定向破坏性测试目标。
+canonical runner 默认不执行 destructive identity DDL；只可在 disposable local stack
+上用 `--run-destructive-identity-qualification` 显式启用。该 mandatory gate 先执行
+dual exact-hash preservation/retry、unknown 原子拒绝与逐角色 RLS matrix harness，再执行
+rollback/roll-forward/lock-failure harness；任一失败都会终止 canonical runner。
+`--skip-data-api` 只跳过 HTTP probe，不选择或重定向破坏性测试目标。runner control-flow
+合同位于 `test_database_contract_identity_qualification.py`。
 
 可重复 operator rollback 为
 `supabase/operator/issue_355_restore_identity_collaboration_expand.sql`；它只删除新增

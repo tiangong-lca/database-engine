@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "Reviewed for Issue #355 predecessor-policy compatibility and actor-level RLS proof: generated workspace remains inspection evidence, while migrations/contracts own the two exact admitted live/replay hashes and their preservation proof."
+lastReviewedNote: "Reviewed for Issue #355 mandatory destructive qualification: generated workspace remains inspection evidence, while the canonical opt-in runner now enforces both exact-hash/RLS and rollback/roll-forward proof."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

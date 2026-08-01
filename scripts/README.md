@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "Reviewed for Issue #355 predecessor-policy compatibility: the disposable-local variant harness proves exact admission, unchanged source policy, bounded projection authority, retry, rollback/reapply, and atomic unknown rejection."
+lastReviewedNote: "Reviewed for Issue #355 mandatory destructive qualification: the canonical opt-in gate invokes the dual exact-hash/actor-RLS harness before the rollback/roll-forward harness and propagates either failure."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -532,9 +532,14 @@ database identity against `SUPABASE_WORKDIR`, then overwrites and passes the
 same `DATABASE_URL`, REST credentials, and workdir to every SQL, Data API,
 catalog, schema-phase, inventory, lint, and SECURITY DEFINER gate. Offline
 two-stack negatives live in `test_database_contract_targeting.py`. The runner
-does not execute rollback DDL by default. On a disposable local stack, opt in
-with `--run-destructive-identity-qualification`; `--skip-data-api` skips only
-HTTP probes and does not select or redirect the destructive target.
+does not execute destructive identity DDL by default. On a disposable local
+stack, opt in with `--run-destructive-identity-qualification`. That mandatory
+gate runs the dual exact-hash preservation/retry, unknown atomic-rejection, and
+actor RLS matrix harness before the rollback/roll-forward/lock-failure harness;
+either failure terminates the canonical runner. `--skip-data-api` skips only
+HTTP probes and does not select or redirect the destructive target. The
+runner-level control-flow contract is
+`test_database_contract_identity_qualification.py`.
 
 The operator rollback is
 `supabase/operator/issue_355_restore_identity_collaboration_expand.sql`. It is

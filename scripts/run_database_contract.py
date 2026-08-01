@@ -18,6 +18,10 @@ from identity_collaboration_target import apply_target_environment, resolve_targ
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "supabase/tests/manifest.json"
 TRANSITION_FIXTURE = ROOT / "supabase/tests/contracts/security_definer_transition_fixture.v1.json"
+IDENTITY_QUALIFICATION_SCRIPTS = (
+    "scripts/test_identity_collaboration_policy_variants.py",
+    "scripts/test_identity_collaboration_rollback.py",
+)
 
 
 def supabase_command(*args: str) -> list[str]:
@@ -31,6 +35,16 @@ def supabase_command(*args: str) -> list[str]:
 def run(command: list[str], *, env: dict[str, str] | None = None) -> None:
     print("+", " ".join(command), flush=True)
     subprocess.run(command, cwd=ROOT, env=env, check=True)
+
+
+def run_destructive_identity_qualification(*, enabled: bool, contract_selected: bool) -> None:
+    """Run the complete fail-closed Issue #355 destructive qualification gate."""
+    if not enabled:
+        return
+    if not contract_selected:
+        raise SystemExit("selected suite does not contain the Issue #355 identity contract")
+    for script in IDENTITY_QUALIFICATION_SCRIPTS:
+        run([sys.executable, script])
 
 
 def database_cli_target(value: str) -> tuple[str, dict[str, str]]:
@@ -195,7 +209,10 @@ def main() -> int:
     parser.add_argument("--security-definer-transition-base")
     parser.add_argument(
         "--run-destructive-identity-qualification", action="store_true",
-        help="opt in to Issue #355 rollback/roll-forward and lock-failure DDL",
+        help=(
+            "opt in to the complete Issue #355 dual-policy/RLS plus "
+            "rollback/roll-forward and lock-failure DDL gate"
+        ),
     )
     args = parser.parse_args()
     qualification = [
@@ -260,8 +277,10 @@ def main() -> int:
         if not args.skip_data_api:
             run([sys.executable, "scripts/test_identity_collaboration_data_api.py"])
         run([sys.executable, "scripts/test_identity_collaboration_concurrency.py"])
-        if args.run_destructive_identity_qualification:
-            run([sys.executable, "scripts/test_identity_collaboration_rollback.py"])
+        run_destructive_identity_qualification(
+            enabled=args.run_destructive_identity_qualification,
+            contract_selected=identity_qualification,
+        )
     if not args.skip_lint:
         # CLI defaults to exit zero even when it prints ERROR diagnostics.
         check_lint()
