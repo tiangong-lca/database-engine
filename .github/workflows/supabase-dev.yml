@@ -34,6 +34,11 @@ jobs:
         with:
           version: 2.98.0
 
+      - name: Prefetch pinned PostgREST conformance image
+        run: >-
+          docker pull
+          public.ecr.aws/supabase/postgrest@sha256:8b53afca2e239bc90a0facdb880710232886c38dae5743a57d66056e96d5596a
+
       - name: Run manifest contract tests
         run: python -m unittest scripts.test_database_contract_manifest
 

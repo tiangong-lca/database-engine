@@ -32,7 +32,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
+lastReviewedCommit: 1a0fc514e41724bd513b4126429c38dff10339c0
 lastReviewedNote: "Reviewed for Issue #355 mandatory destructive qualification: the canonical opt-in gate now runs both exact public.users predecessors, actor-level source/projection RLS parity, retry/unknown atomic rejection, and the rollback/roll-forward harness."
 related:
   - ../../AGENTS.md
@@ -109,7 +109,10 @@ green suite.
 The GitHub fresh-stack jobs install the pinned `jsonschema==4.23.0` dependency
 before invoking the canonical runner. This dependency is required by the
 SECURITY DEFINER v2 JSON Schema tests; omitting it is an invalid CI environment,
-not a skippable test result.
+not a skippable test result. They also prefetch the digest-pinned PostgREST
+v14.7 conformance image before starting the suite. The conformance test refuses
+to pull an image itself, so a missing or tag-only image cannot silently change
+the runtime under test or become a skipped result.
 
 ## Proof Matrix
 

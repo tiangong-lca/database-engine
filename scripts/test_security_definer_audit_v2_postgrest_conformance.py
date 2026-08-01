@@ -23,7 +23,10 @@ import security_definer_audit_v2 as audit
 
 ARTIFACT = ROOT / "supabase/tests/contracts/security_definer_audit_v2.json"
 ARTIFACT_SHA256 = ARTIFACT.with_suffix(".sha256")
-POSTGREST_IMAGE = "public.ecr.aws/supabase/postgrest:v14.7"
+POSTGREST_IMAGE = (
+    "public.ecr.aws/supabase/postgrest@"
+    "sha256:8b53afca2e239bc90a0facdb880710232886c38dae5743a57d66056e96d5596a"
+)
 STARTUP_TIMEOUT_SECONDS = 30
 
 

@@ -22,7 +22,7 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: b32072d5a38509c4a25d866692958f0ced1303cf
+lastReviewedCommit: 1a0fc514e41724bd513b4126429c38dff10339c0
 lastReviewedNote: "Reviewed Issue #346: persistent dev explicitly serializes migration and allowlisted PostgREST config while production remains Supabase-integration owned."
 related:
   - ../../AGENTS.md
