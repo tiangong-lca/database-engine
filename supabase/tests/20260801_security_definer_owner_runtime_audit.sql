@@ -1,16 +1,16 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(10);
+select extensions.plan(16);
 
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
    where n.nspname='public' and p.prokind='f' and p.prosecdef),
-  241::bigint, 'all public SECURITY DEFINER signatures are present');
+  230::bigint, 'public SECURITY DEFINER inventory excludes the eleven moved Worker canonicals');
 
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
    where n.nspname='public' and p.prosecdef and pg_get_userbyid(p.proowner)='postgres'),
-  225::bigint, '225 SECURITY DEFINER signatures retain postgres ownership');
+  214::bigint, '214 public SECURITY DEFINER signatures retain postgres ownership');
 
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
@@ -41,7 +41,77 @@ select extensions.is(
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
    where n.nspname='public' and p.prosecdef and has_function_privilege('service_role',p.oid,'EXECUTE')),
-  171::bigint, 'current service_role effective EXECUTE count is explicit');
+  160::bigint, 'public service_role effective EXECUTE count excludes the eleven private Worker canonicals');
+
+select extensions.is(
+  (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+   where n.nspname in ('public','api','private','util','archive') and p.prosecdef),
+  315::bigint, 'the governed SECURITY DEFINER inventory is conserved across schema moves');
+
+select extensions.is(
+  (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+   where n.nspname='private' and p.prosecdef and pg_get_userbyid(p.proowner)='postgres'
+     and p.proname in (
+       'worker_cancel_job','worker_claim_jobs','worker_enqueue_job','worker_heartbeat_job',
+       'worker_list_jobs','worker_list_jobs_by_concurrency_key','worker_read_job',
+       'worker_read_jobs_by_ids','worker_read_latest_job','worker_record_job_result','worker_retry_job'
+     )),
+  11::bigint, 'all eleven moved Worker canonicals remain postgres-owned SECURITY DEFINER routines');
+
+select extensions.is(
+  (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+   where n.nspname='private' and p.prosecdef
+     and p.proname in (
+       'worker_cancel_job','worker_claim_jobs','worker_enqueue_job','worker_heartbeat_job',
+       'worker_list_jobs','worker_list_jobs_by_concurrency_key','worker_read_job',
+       'worker_read_jobs_by_ids','worker_read_latest_job','worker_record_job_result','worker_retry_job'
+     )
+     and p.proconfig @> array['search_path=pg_catalog, private, util, public, pg_temp']),
+  11::bigint, 'all moved Worker canonicals use the reviewed trusted search_path with pg_temp last');
+
+select extensions.is(
+  (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+   where n.nspname='private' and p.prosecdef
+     and p.proname in (
+       'worker_cancel_job','worker_claim_jobs','worker_enqueue_job','worker_heartbeat_job',
+       'worker_list_jobs','worker_list_jobs_by_concurrency_key','worker_read_job',
+       'worker_read_jobs_by_ids','worker_read_latest_job','worker_record_job_result','worker_retry_job'
+     )
+     and (has_function_privilege('anon',p.oid,'EXECUTE')
+       or has_function_privilege('authenticated',p.oid,'EXECUTE')
+       or has_function_privilege('public',p.oid,'EXECUTE'))),
+  0::bigint, 'browser roles and PUBLIC cannot execute moved private Worker canonicals');
+
+select extensions.is(
+  (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+   where n.nspname='public' and not p.prosecdef
+     and p.proname in (
+       'worker_cancel_job','worker_claim_jobs','worker_enqueue_job','worker_heartbeat_job',
+       'worker_list_jobs','worker_list_jobs_by_concurrency_key','worker_read_job',
+       'worker_read_jobs_by_ids','worker_read_latest_job','worker_record_job_result','worker_retry_job'
+     )
+     and p.proconfig @> array['search_path=pg_catalog, pg_temp']
+     and has_function_privilege('service_role',p.oid,'EXECUTE')
+     and has_function_privilege('api_internal_executor',p.oid,'EXECUTE')
+     and not has_function_privilege('anon',p.oid,'EXECUTE')
+     and not has_function_privilege('authenticated',p.oid,'EXECUTE')
+     and not has_function_privilege('public',p.oid,'EXECUTE')),
+  11::bigint, 'all eleven public Worker wrappers are safe invokers with the exact service-only execution edge');
+
+select extensions.is(
+  (select count(*)::bigint
+   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+   where (
+     n.nspname='public' and p.prosecdef and has_function_privilege('service_role',p.oid,'EXECUTE')
+   ) or (
+     n.nspname='private' and p.prosecdef and has_function_privilege('service_role',p.oid,'EXECUTE')
+     and p.proname in (
+       'worker_cancel_job','worker_claim_jobs','worker_enqueue_job','worker_heartbeat_job',
+       'worker_list_jobs','worker_list_jobs_by_concurrency_key','worker_read_job',
+       'worker_read_jobs_by_ids','worker_read_latest_job','worker_record_job_result','worker_retry_job'
+     )
+   )),
+  171::bigint, 'service_role effective EXECUTE is conserved across the eleven public-to-private moves');
 
 select extensions.is(
   (select jsonb_array_length(posture->'forbiddenInternalExecute') from util.security_acl_expand_posture),

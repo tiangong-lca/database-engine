@@ -45,10 +45,12 @@ select ok((
   where n.nspname = 'api' and p.proname = 'cmd_review_save_comment_draft_v1'
 ), 'authenticated adapter is invoker-rights with an empty search_path');
 select ok((
-  select bool_and(not p.prosecdef and p.proconfig @> array['search_path=""'])
+  select count(*) = 11
+    and bool_and(not p.prosecdef)
+    and bool_and(p.proconfig @> array['search_path=pg_catalog, pg_temp'])
   from pg_proc p join pg_namespace n on n.oid = p.pronamespace
   where n.nspname = 'api' and p.proname like 'worker_%_v1'
-), 'service adapters are invoker-rights with an empty search_path');
+), 'all eleven service adapters are invoker-rights with a trusted explicit search_path');
 
 select ok((
   select exists (
@@ -92,9 +94,17 @@ select ok((
   )
 ), 'DTO and private schemas are not accidental Realtime publication sources');
 select ok((
-  select pg_get_functiondef('public.worker_list_jobs_by_concurrency_key(text,text,text[],integer,boolean)'::regprocedure)
-    like '%null::public.worker_jobs%'
-), 'Expand preserves the public worker_jobs composite dependency until Contract');
+  select p.proargtypes[0] = (
+      select c.reltype from pg_class c where c.oid = 'public.worker_jobs'::regclass
+    )
+    and not p.prosecdef
+    and p.proconfig @> array['search_path=pg_catalog, pg_temp']
+    and pg_get_functiondef(p.oid) like '%private.worker_job_payload(%'
+    and pg_get_functiondef(p.oid) like '%null::private.worker_jobs%'
+    and pg_get_functiondef(p.oid) like '%pg_catalog.to_jsonb(p_job)%'
+  from pg_proc p
+  where p.oid = 'public.worker_job_payload(public.worker_jobs,boolean)'::regprocedure
+), 'Expand preserves the public worker_jobs composite bridge and delegates explicitly to the private canonical payload');
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', '81000000-0000-0000-0000-000000000001', true);
