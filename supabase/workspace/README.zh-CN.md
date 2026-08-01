@@ -60,6 +60,7 @@ related:
 - 这些路径下如果存在尚未提交到 Git 的改动，在刷新时也可能被覆盖或删除。
 - 执行刷新命令前，先检查 `git status`，把需要保留的内容提交或暂存。
 - 这个工作区应该被视为远程数据库的生成视图，而不是手工维护 schema 变更的真相源。
+- 不要把 public 对象去向或 consumer/dependency 证据写进本生成区。稳定、可机器检查的边界合同位于 `supabase/tests/contracts/public_object_*`，由 `scripts/public_inventory_closure.py` 重建。
 
 ## 建议用法
 
