@@ -269,7 +269,7 @@ select jsonb_build_object(
   'repoOwnerFunctionDefaultScope', 'database-global-all-schemas',
   'evaluatedApplicationSchemas', jsonb_build_array('public', 'api', 'private', 'util', 'archive'),
   'defaultPrivilegeEvaluation', 'built-in+global+per-schema-effective',
-  'expectedHostedExposedSchemas', jsonb_build_array('public', 'api', 'graphql_public'),
+  'expectedHostedExposedSchemas', jsonb_build_array('api', 'public', 'graphql_public'),
   'migrationReady', (select ready from migration_state),
   'facadeExecutorReady', coalesce((select ready from executor_state), false),
   'hostedOperatorReady',

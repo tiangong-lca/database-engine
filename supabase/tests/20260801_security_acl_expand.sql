@@ -131,7 +131,7 @@ select ok(not (select (posture->>'hostedOperatorReady')::boolean from util.secur
 select ok(not (select (posture->>'contractReady')::boolean from util.security_acl_expand_posture),
   'Expand does not claim Contract readiness while public compatibility remains');
 select is((select posture->'expectedHostedExposedSchemas' from util.security_acl_expand_posture),
-  '["public", "api", "graphql_public"]'::jsonb, 'hosted exposure readback publishes the exact expected set');
+  '["api", "public", "graphql_public"]'::jsonb, 'hosted exposure readback publishes the exact expected order');
 
 select ok(has_table_privilege('service_role', 'archive.security_acl_expand_20260801_snapshot', 'SELECT'),
   'service role can read the catalog-only rollback snapshot');

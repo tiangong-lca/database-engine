@@ -23,7 +23,7 @@ REPO_OWNER_FUNCTION_DEFAULT_SCOPE = "database-global-all-schemas"
 
 
 def normalized_schemas(value: str) -> tuple[str, ...]:
-    return tuple(sorted(part.strip() for part in value.split(",") if part.strip()))
+    return tuple(part.strip() for part in value.split(",") if part.strip())
 
 
 def request_json(url: str, headers: dict[str, str], *, method: str = "GET", body: bytes | None = None) -> tuple[int, dict]:
@@ -164,10 +164,11 @@ def main() -> int:
         raise SystemExit("SECURITY_ACL_ANON_KEY and SUPABASE_ACCESS_TOKEN are required")
 
     config = management_config(project_ref, access_token)
-    if normalized_schemas(config.get("db_schema", "")) != tuple(sorted(EXPECTED_SCHEMAS)):
+    exposed_schemas = normalized_schemas(config.get("db_schema", ""))
+    if exposed_schemas != EXPECTED_SCHEMAS:
         raise SystemExit(f"hosted exposed schemas mismatch: expected {EXPECTED_SCHEMAS}")
     evidence["projectRef"] = project_ref
-    evidence["exposedSchemas"] = list(EXPECTED_SCHEMAS)
+    evidence["exposedSchemas"] = list(exposed_schemas)
     evidence["rest"] = assert_rest_boundaries(supabase_url, public_credential)
     if args.evidence:
         descriptor = os.open(args.evidence, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
