@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 03566bee31d66dc2264a337595854cbf13faaaf9
-lastReviewedNote: "Reviewed through Issues #339/#341, #346, and #351: document opaque-key-safe Worker probes, ACL-aware rehearsal, fresh populated CLI roll-forward, fail-closed evidence, URL redaction, zero-WAL retry, and PostgREST rollback/readback."
+lastReviewedCommit: 20f56228c21e8e677154c3e77fbf0e243dde677d
+lastReviewedNote: "Reviewed through Issues #339/#341, #346, #351, and #353: retain probe/rehearsal/rollback guidance and document immutable inventory schema replay, provenance verification, and deterministic committed-artifact gates."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -278,6 +278,7 @@ consumer manifest without switching those repositories:
 
 ```bash
 python scripts/public_inventory_closure.py --scan-consumers <lca-workspace-root>
+python scripts/public_inventory_closure.py --verify-provenance <lca-workspace-root>
 ```
 
 After a local reset, write or verify the deterministic database contract:
@@ -293,6 +294,14 @@ dynamic-SQL or runtime/owner-confirmation blockers. A missing mapping, invalid
 target, non-exact repository SHA, duplicate key, or live/ledger count drift is
 always a hard failure; an unknown consumer is retained as an explicit blocker
 and is never silently converted to `retire`.
+
+The source block separates the reviewed workspace baseline, its exact
+`database-engine` gitlink, and historical review/source/merge-base lineage from
+`databaseSchemaSha`, the sole migration/catalog replay input. The prior #338
+artifact hash is lineage, not the current artifact hash. `--verify-provenance`
+replays those relationships
+without consulting a moving remote. `--check` first verifies canonical JSON
+bytes and the committed SHA-256, then performs committed-vs-generated comparison.
 
 ### `test_worker_control_plane_upgrade.py`
 

@@ -6,7 +6,21 @@
   "required": ["schemaVersion", "source", "counts", "objects", "dependencies", "migrationPlan", "security", "consumerEvidence", "residue", "contractReady"],
   "properties": {
     "schemaVersion": {"const": "database.public-object-inventory-closure.v1"},
-    "source": {"type": "object", "required": ["baseline", "baselineMergeSha", "databaseBaseSha"]},
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["baseline", "workspaceBaselineSha", "workspacePinnedDatabaseSha", "databaseSchemaSha", "databaseBaseSha", "databaseInventorySha", "databaseMergeBaseSha", "previousArtifactSha256"],
+      "properties": {
+        "baseline": {"const": "tiangong-lca/workspace#533"},
+        "workspaceBaselineSha": {"pattern": "^[0-9a-f]{40}$"},
+        "workspacePinnedDatabaseSha": {"pattern": "^[0-9a-f]{40}$"},
+        "databaseSchemaSha": {"pattern": "^[0-9a-f]{40}$"},
+        "databaseBaseSha": {"pattern": "^[0-9a-f]{40}$"},
+        "databaseInventorySha": {"pattern": "^[0-9a-f]{40}$"},
+        "databaseMergeBaseSha": {"pattern": "^[0-9a-f]{40}$"},
+        "previousArtifactSha256": {"pattern": "^[0-9a-f]{64}$"}
+      }
+    },
     "counts": {"type": "object", "required": ["table", "view", "function"]},
     "objects": {
       "type": "array",
