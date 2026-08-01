@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(60);
+select plan(61);
 
 select has_table('public', name, 'Expand retains public physical table ' || name)
 from unnest(array['comments','identity_center_processed_events','identity_center_users','notifications','reviews','roles','teams','users']) as name;
@@ -125,6 +125,15 @@ select ok(
    join pg_namespace npriv on npriv.oid=priv.pronamespace and npriv.nspname='private'
    where pub.proname in ('review_append_scope_snapshot_v1','review_revision_fingerprint_v1','review_scope_all_reference_ids_v1','review_scope_checksum_v1','review_scope_current_items_v1','review_scope_current_reference_ids_v1','review_scope_current_snapshot_v1','review_validate_scope_history_v1')),
   'private adapters retain exact public result contracts'
+);
+
+select ok(
+  (select bool_and(not priv.prosecdef)
+   from pg_proc pub join pg_namespace npub on npub.oid=pub.pronamespace and npub.nspname='public'
+   join pg_proc priv on priv.proname=pub.proname and priv.proargtypes=pub.proargtypes
+   join pg_namespace npriv on npriv.oid=priv.pronamespace and npriv.nspname='private'
+   where pub.proname in ('review_append_scope_snapshot_v1','review_revision_fingerprint_v1','review_scope_all_reference_ids_v1','review_scope_checksum_v1','review_scope_current_items_v1','review_scope_current_reference_ids_v1','review_scope_current_snapshot_v1','review_validate_scope_history_v1')),
+  'private adapters are invoker-only compatibility aliases'
 );
 
 select ok(

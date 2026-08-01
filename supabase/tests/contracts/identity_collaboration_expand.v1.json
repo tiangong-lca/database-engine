@@ -1,7 +1,7 @@
 {
   "schemaVersion": "identity-collaboration-expand.v1",
   "phase": "expand",
-  "databaseBaseSha": "1b94c1ce7c132e5481c4a2594d6d9a957d7dc683",
+  "databaseBaseSha": "49ea2a2a7d6ed306bbcb95db20656e3acc221381",
   "singleWritePhysicalSchema": "public",
   "tablePhysicalMoveReady": false,
   "productionMutationAllowed": false,

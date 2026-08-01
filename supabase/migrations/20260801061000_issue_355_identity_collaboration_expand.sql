@@ -371,7 +371,7 @@ create or replace function private.review_append_scope_snapshot_v1(
   p_root_review_id uuid, p_scope_basis text, p_root_revision_checksum text,
   p_items jsonb, p_created_by uuid
 ) returns jsonb
-language sql volatile security definer
+language sql volatile security invoker
 set search_path = ''
 as $wrapper$
   select public.review_append_scope_snapshot_v1(
@@ -423,7 +423,7 @@ as $wrapper$ select public.review_scope_current_snapshot_v1(p_scope_history) $wr
 
 create or replace function private.review_validate_scope_history_v1(p_root_review_id uuid, p_scope_history jsonb)
 returns void language sql volatile
-security definer
+security invoker
 set search_path = ''
 as $wrapper$ select public.review_validate_scope_history_v1(p_root_review_id, p_scope_history) $wrapper$;
 
@@ -532,7 +532,7 @@ begin
     join pg_namespace adapter_namespace on adapter_namespace.oid=adapter.pronamespace
     where adapter_namespace.nspname='private'
       and (adapter.proowner<>source.proowner or adapter.provolatile<>source.provolatile
-        or adapter.prosecdef<>source.prosecdef or adapter.proisstrict<>source.proisstrict
+        or adapter.prosecdef or adapter.proisstrict<>source.proisstrict
         or adapter.proparallel<>source.proparallel or adapter.proconfig is distinct from source.proconfig
         or adapter.proleakproof<>source.proleakproof or adapter.procost<>source.procost
         or adapter.prorows<>source.prorows
@@ -555,7 +555,7 @@ begin
         )
       )
   ) then
-    raise exception 'Issue #355 private adapter owner/property/ACL parity failed';
+    raise exception 'Issue #355 private invoker adapter owner/property/ACL parity failed';
   end if;
 
 end

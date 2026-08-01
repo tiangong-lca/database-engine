@@ -30,7 +30,7 @@ class IdentityCollaborationExpandStaticTest(unittest.TestCase):
         self.assertFalse(self.contract["tablePhysicalMoveReady"])
         self.assertFalse(self.contract["productionMutationAllowed"])
         self.assertEqual(
-            "1b94c1ce7c132e5481c4a2594d6d9a957d7dc683",
+            "49ea2a2a7d6ed306bbcb95db20656e3acc221381",
             self.contract["databaseBaseSha"],
         )
         for item in self.contract["objects"]:
@@ -54,6 +54,8 @@ class IdentityCollaborationExpandStaticTest(unittest.TestCase):
         self.assertNotIn("access exclusive", normalized)
         self.assertIn("create or replace view private.comments", normalized)
         self.assertIn("create or replace function private.review_scope_checksum_v1", normalized)
+        self.assertNotIn("language sql volatile security definer", normalized)
+        self.assertNotIn("returns void language sql volatile\nsecurity definer", normalized)
         self.assertIn("issue355_routine_baseline", normalized)
         self.assertIn("reviewed predecessor routine signature/definition/property/acl fingerprint mismatch", normalized)
         self.assertIn("from actual except select signature,fingerprint from expected", normalized)

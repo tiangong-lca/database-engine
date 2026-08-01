@@ -27,12 +27,12 @@ SOURCE = {
     "workspaceBaselineSha": "520b7af67240beb0f08419ab432a018d93542170",
     "workspacePinnedDatabaseSha": "1516ad7bb3f74734095756e741f00f60e93b79b3",
     # The only migration/catalog input for current artifact regeneration.
-    "databaseSchemaSha": "017f70b378bd28bd18f91ab4cce027f8241e3564",
+    "databaseSchemaSha": "05d1387cc073da8161db782db978a77431ff8b3f",
     # Historical #345 branch lineage; never use these as the schema reset target.
     "databaseBaseSha": "157ef7bb4e844edb26525dfb89f4fde188ee0cef",
     "databaseInventorySha": "86203c9190b11f12109a7fdd3f310ff47a47c9e5",
     "databaseMergeBaseSha": "907f7b6a47b98c401d98184a8b7452aaaa429bbf",
-    "previousArtifactSha256": "2526146dc64e2b32bdf9afb2ebcc0495f5a174f241c2abbd7f0f1b5348aa8c18",
+    "previousArtifactSha256": "250d91d0df9edcf2a187b635b35829c4bdba93cfc73d330b9c30320479838adf",
 }
 SOURCE_SHA_FIELDS = (
     "workspaceBaselineSha",
@@ -623,11 +623,10 @@ def validate(contract: dict[str, Any]) -> None:
         errors.append(f"expected baseline counts {expected}, got {contract['counts']}")
     if len(contract["objects"]) != 393:
         errors.append(f"expected 393 objects, got {len(contract['objects'])}")
-    # Issue #354 adds explicit compatibility-wrapper edges. Issue #355 then
-    # adds versioned API/private projections while retaining the public
-    # physical single source during Expand, bringing the exact closure to 1138.
-    if len(contract["dependencies"]) != 1138:
-        errors.append(f"expected 1138 dependency edges, got {len(contract['dependencies'])}")
+    # Issue #354 replaces one public-to-public canonical view edge with five
+    # explicit public compatibility-wrapper edges to non-public targets.
+    if len(contract["dependencies"]) != 1123:
+        errors.append(f"expected 1123 dependency edges, got {len(contract['dependencies'])}")
     if len(contract["residue"]["objectsWithoutConsumerClosure"]) != 206:
         errors.append("expected 206 owner/consumer residue entries")
     if len(contract["residue"]["dynamicSqlReviewRequired"]) != 35:

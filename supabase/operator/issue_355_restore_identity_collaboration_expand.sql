@@ -53,14 +53,14 @@ begin
       ('private.roles','dd51afa95e88506a3804414d41be5c5d'),
       ('private.teams','e546e2511bb4f9ca92976833995da9e7'),
       ('private.users','20aaa4cff623d1672520d63fa5ce3a49'),
-      ('private.review_append_scope_snapshot_v1(uuid, text, text, jsonb, uuid)','41dcb6f570cc80f96a71984a4b159a2e'),
+      ('private.review_append_scope_snapshot_v1(uuid, text, text, jsonb, uuid)','74e7e38c656be3fe2bda8d193541a735'),
       ('private.review_revision_fingerprint_v1(text, jsonb)','70bda6d266f53694330bbff2de4a2af5'),
       ('private.review_scope_all_reference_ids_v1(jsonb)','0b9a9a4e3a14286d692b255b06d7fbe4'),
       ('private.review_scope_checksum_v1(jsonb)','0939e03d0aeca18f6a43bb134d0cb290'),
       ('private.review_scope_current_items_v1(jsonb)','daa614c38c20eab2c0aa94dcb46c5414'),
       ('private.review_scope_current_reference_ids_v1(jsonb)','d3475440e76cfe56ac24b93b3c99e076'),
       ('private.review_scope_current_snapshot_v1(jsonb)','cb0ea228ccb04c9764b7507debad0c0c'),
-      ('private.review_validate_scope_history_v1(uuid, jsonb)','c59f18e876461393cf534245bad84f71')
+      ('private.review_validate_scope_history_v1(uuid, jsonb)','8c3bc1ba6736330ec3de21c0133e49ba')
     ), relation_actual as (
       select namespace.nspname||'.'||relation.relname as object_key,
         md5(concat_ws('|',owner.rolname,relation.relkind::text,coalesce(relation.reloptions::text,''),
