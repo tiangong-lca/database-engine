@@ -29,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-31
-lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
-lastReviewedNote: "Reviewed through Issues #323, #324, and #329: retain Flow identity/rebuild and Root/Reference Review backup/cutover proofs; the existing #308/#316 scope-closure matrix remains authoritative and is executed by isolated owner adapters."
+lastReviewedAt: 2026-08-01
+lastReviewedCommit: cccdb4e90b65cc7b56dbae72946637cede599ba3
+lastReviewedNote: "Reviewed for Issue #340 api/private boundary POC: add staged schema/config deployment plus SQL ACL/parity, local REST profile, and hosted exact-ref proof requirements."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -103,6 +103,7 @@ reported as those 19 files passing.
 | `supabase/tests/**` only | run the relevant SQL assertion files against a reset local DB | add a nearby migration or policy smoke check if the new assertions expose a gap | This repo stores PGTAP-style SQL assertions, not a single canonical runner wrapper. |
 | `supabase/seed.sql` or `supabase/seeds/dev.sql` | `supabase db reset` succeeds with expected seed behavior | rerun targeted SQL assertions that depend on the seeded rows; for shared-seed changes, confirm the hosted Preview seed stage completes | Keep shared seed and dev-only seed expectations separate. A shared seed with no data must still contain an executable no-op statement; a comments-only batch is not deployment-safe. |
 | `supabase/config.toml` | `supabase start` and `supabase db reset` still work locally | verify the changed branch-binding or auth assumption against `docs/agents/supabase-branching.md` | Config changes can affect preview, persistent dev, and local behavior together. |
+| Data API exposed-schema or `api` DTO/RPC boundary | deploy in two stages: first `supabase db reset` and `supabase/tests/20260801_api_private_boundary_poc.sql`; only after that exact migration is hosted, change exposed schemas and run `node --test supabase/tests/20260801_api_private_boundary_config_contract.mjs` plus the read-only `20260801_api_private_boundary_rest_contract.mjs` with local URL/keys | after the schema-only stage succeeds on persistent `dev`, deploy configuration separately; on that exact ref rerun the REST contract with `EXPECTED_PROJECT_REF` and prove `api` succeeds, `private`/`util`/`archive` return PGRST106, anonymous service RPC calls fail, authenticated write and service/direct-SQL paths succeed, and schema-cache reload plus generated types see the intended contract | Supabase applies `Configure` before `Migrate`; never expose a schema in the same deployment that first creates it. `api` views are `security_invoker`; every object has explicit grants; private schemas stay out of exposed schemas and `extra_search_path`; Realtime remains on explicitly published physical tables rather than API views. |
 | `.github/workflows/supabase-dev.yml` | inspect YAML changes and confirm referenced secrets and vars still exist in docs | verify the intended deploy path in a PR note because the real push occurs only on Git `dev`; for `main -> dev` reconciliation, prove an older-timestamped committed migration is installed with `--include-all` without reapplying recorded history | Local dry-run for GitHub-hosted execution is limited; document the expected remote proof. |
 | `scripts/**` | run the touched script with `--help` when possible, or execute the narrowest safe non-destructive path | if a script changes generated workspace behavior, refresh the workspace in a safe environment and inspect git diff | Avoid remote-destructive script runs unless the task explicitly requires them. |
 | `supabase/workspace/**` | prove whether the touched file is generated or stable | if stable manual overlay files changed, explain how they feed migration generation | Generated files alone are not sufficient evidence of a durable schema change. |

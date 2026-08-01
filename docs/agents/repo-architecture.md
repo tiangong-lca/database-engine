@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-31
-lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
-lastReviewedNote: "Reviewed through Issues #323, #324, and #329: schema truth remains migration-owned; the narrowed Flow fence and Root/Reference Review workflow preserve ownership and generated-workspace boundaries, while isolated provider evidence stays script-owned."
+lastReviewedAt: 2026-08-01
+lastReviewedCommit: cccdb4e90b65cc7b56dbae72946637cede599ba3
+lastReviewedNote: "Reviewed for Issue #340 api/private boundary POC: record the staged api DTO/RPC layer and non-exposed private runtime boundary without changing repo ownership or source-of-truth paths."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -59,6 +59,16 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | `supabase/workspace/remote_schema.sql` | generated full raw dump from the remote database |
 | `supabase/workspace/global/**` | generated split-out global objects rebuilt on workspace refresh |
 | `supabase/workspace/schemas/**` | generated human-browsable split schema objects rebuilt on workspace refresh |
+
+## Schema Boundary Model
+
+- `public` retains the nine core entity tables and existing compatibility objects during Expand.
+- `api` is the explicit versioned PostgREST DTO/RPC layer. Views use `security_invoker`, routines have fixed search paths, and grants are per object. Its schema and objects are deployed before a later configuration change exposes it.
+- `private` owns internal runtime and control-plane objects and is never an exposed Data API schema.
+- `util` and `archive` retain operations/history responsibilities and are never exposed Data API schemas.
+- Realtime publishes explicitly selected physical tables; `api` views are not a Realtime source.
+
+Physical moves happen only after consumers use the `api` or `private` contract and the Contract gate proves zero compatibility callers. Expand views and wrappers must preserve one physical source of truth.
 
 ## Branch Model In Practice
 
