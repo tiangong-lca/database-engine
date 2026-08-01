@@ -14,6 +14,9 @@ class DatabaseCatalogGenerationGuardTest(unittest.TestCase):
             "serviceRoleMaintain": [],
             "forbiddenInternalExecute": [],
             "forbiddenLifecycleExecute": [],
+            "repoOwnerDefaultPrivilegeResidue": [],
+            "platformOwnerDefaultPrivilegeResidue": [{"issue": 352}],
+            "platformOwnerBlocker": "tiangong-lca/database-engine#352",
         })
 
     def test_each_polluted_surface_is_rejected(self) -> None:
@@ -21,12 +24,41 @@ class DatabaseCatalogGenerationGuardTest(unittest.TestCase):
             "serviceRoleMaintain": [],
             "forbiddenInternalExecute": [],
             "forbiddenLifecycleExecute": [],
+            "repoOwnerDefaultPrivilegeResidue": [],
+            "platformOwnerDefaultPrivilegeResidue": [{"issue": 352}],
+            "platformOwnerBlocker": "tiangong-lca/database-engine#352",
         }
-        for key in clean:
+        for key in (
+            "serviceRoleMaintain",
+            "forbiddenInternalExecute",
+            "forbiddenLifecycleExecute",
+            "repoOwnerDefaultPrivilegeResidue",
+        ):
             with self.subTest(key=key), self.assertRaisesRegex(SystemExit, key):
                 polluted = dict(clean)
                 polluted[key] = [{"unexpected": "grant"}]
                 validate_generation_guard(polluted)
+
+    def test_platform_residue_is_retained_as_issue_352_evidence(self) -> None:
+        validate_generation_guard({
+            "serviceRoleMaintain": [],
+            "forbiddenInternalExecute": [],
+            "forbiddenLifecycleExecute": [],
+            "repoOwnerDefaultPrivilegeResidue": [],
+            "platformOwnerDefaultPrivilegeResidue": [{"grantee": "PUBLIC"}],
+            "platformOwnerBlocker": "tiangong-lca/database-engine#352",
+        })
+
+    def test_platform_blocker_cannot_be_omitted_or_relabelled(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "platform-owner blocker"):
+            validate_generation_guard({
+                "serviceRoleMaintain": [],
+                "forbiddenInternalExecute": [],
+                "forbiddenLifecycleExecute": [],
+                "repoOwnerDefaultPrivilegeResidue": [],
+                "platformOwnerDefaultPrivilegeResidue": [],
+                "platformOwnerBlocker": "resolved",
+            })
 
     def test_unexpected_guard_shape_is_rejected(self) -> None:
         with self.assertRaisesRegex(SystemExit, "unexpected shape"):

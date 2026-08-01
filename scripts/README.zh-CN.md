@@ -378,16 +378,28 @@ reset 失败或 audit drift
 `test_security_acl_upgrade.py` 对 Issue #339 migration 执行带数据 base-to-head、
 事务内故障注入、重试、数据 parity、按环境快照恢复 ACL 和再次 roll-forward。
 
+`test_security_acl_global_function_defaults_upgrade.py` 从 PostgreSQL 17 follow-up
+migration 之前启动，以真实新函数复现内建 global `PUBLIC EXECUTE`，再通过 scratch
+non-application schema 证明 revoke 影响 `postgres` 在整个数据库创建的未来函数。
+它同时覆盖带 grant option 的显式 global row、owner execute、built-in/global/per-schema
+effective catalog、当前对象 ACL 与 application row-count parity、事务故障、幂等重试、
+精确 restore 和 roll-forward。本迁移不扫描或改写 application relation，因此百万行
+夹具不会改变其锁、WAL 或执行行为，不适用。共享 local stack 不干净时，通过
+`SUPABASE_WORKDIR` 指向独立的一次性项目根目录。
+
 ```bash
 python scripts/test_security_acl_upgrade.py
+python scripts/test_security_acl_global_function_defaults_upgrade.py
 ```
 
 `hosted_security_acl.py` 是 fail-closed hosted operator gate：组合数据库 posture、
 Management API `db_schema` readback 和真实 anon REST negative probes。默认只读；
 hosted PostgREST 配置须另行通过 `scripts/apply_postgrest_config.py` 的受审 diff、
 readback 和 rollback 合同应用或协调。
-`supabase_admin` default privileges 由有权限的 owner session 单独执行
-`supabase/operator/issue_339_supabase_admin_default_privileges.sql`。
+posture 会计算 built-in、global 和 per-schema effective defaults。repo-owned global
+revoke 影响 `postgres` 在整个数据库创建的未来函数，gate 的部署目标仍是五个 application
+schema。platform-owned `supabase_admin` residue 继续作为 #352 的 fail-closed blocker，
+本 migration 不得宣称已修复它。
 
 精确 exposed schema 集合及受审顺序为 `api,public,graphql_public`；不得包含
 `private`、`util` 或 `archive`。opaque `sb_publishable_` credential 仅作为

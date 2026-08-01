@@ -13,6 +13,56 @@ import hosted_security_acl as target
 
 
 class HostedSecurityAclContractTest(unittest.TestCase):
+    def effective_posture(self) -> dict:
+        return {
+            "contractVersion": target.POSTURE_CONTRACT_VERSION,
+            "defaultPrivilegeEvaluation": target.DEFAULT_PRIVILEGE_EVALUATION,
+            "repoOwnerFunctionDefaultScope": target.REPO_OWNER_FUNCTION_DEFAULT_SCOPE,
+            "evaluatedApplicationSchemas": ["public", "api", "private", "util", "archive"],
+            "migrationReady": True,
+            "hostedOperatorReady": False,
+            "repoOwnerDefaultPrivilegeResidue": [],
+            "platformOwnerDefaultPrivilegeResidue": [
+                {
+                    "schema_name": "public",
+                    "object_type": "f",
+                    "grantee": "PUBLIC",
+                    "privilege_type": "EXECUTE",
+                }
+            ],
+        }
+
+    def test_database_only_accepts_repo_closure_with_issue_352_visible(self) -> None:
+        target.validate_posture(self.effective_posture(), require_platform_owner=False)
+
+    def test_hosted_gate_rejects_issue_352_effective_residue(self) -> None:
+        with self.assertRaisesRegex(SystemExit, "issue #352"):
+            target.validate_posture(self.effective_posture(), require_platform_owner=True)
+
+    def test_hosted_gate_accepts_all_owner_defaults_closed(self) -> None:
+        posture = self.effective_posture()
+        posture["platformOwnerDefaultPrivilegeResidue"] = []
+        posture["hostedOperatorReady"] = True
+        target.validate_posture(posture, require_platform_owner=True)
+
+    def test_old_explicit_row_only_posture_is_rejected(self) -> None:
+        posture = self.effective_posture()
+        posture["contractVersion"] = "security-acl.expand.v1"
+        with self.assertRaisesRegex(SystemExit, "effective-default contract"):
+            target.validate_posture(posture, require_platform_owner=False)
+
+    def test_missing_effective_residue_arrays_are_rejected(self) -> None:
+        posture = self.effective_posture()
+        del posture["repoOwnerDefaultPrivilegeResidue"]
+        with self.assertRaisesRegex(SystemExit, "invalid shape"):
+            target.validate_posture(posture, require_platform_owner=False)
+
+    def test_application_target_cannot_hide_global_function_scope(self) -> None:
+        posture = self.effective_posture()
+        posture["repoOwnerFunctionDefaultScope"] = "application-schemas-only"
+        with self.assertRaisesRegex(SystemExit, "database-global"):
+            target.validate_posture(posture, require_platform_owner=False)
+
     def test_schema_normalization_is_order_independent_and_exact(self) -> None:
         self.assertEqual(target.normalized_schemas(" graphql_public,public, api "), ("api", "graphql_public", "public"))
         self.assertNotEqual(target.normalized_schemas("public,api,graphql_public,private"), tuple(sorted(target.EXPECTED_SCHEMAS)))

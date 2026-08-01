@@ -29,7 +29,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "Reviewed for Issue #355 mandatory destructive qualification: canonical opt-in enforcement now binds dual-predecessor actor-RLS proof to rollback/roll-forward proof; architecture and #753/#358 retirement gates are unchanged."
+lastReviewedNote: "Reviewed for Issues #355 and #339: canonical opt-in enforcement binds dual-predecessor actor-RLS proof to rollback/roll-forward proof, while the global postgres function-default policy and five-schema effective-ACL gate fit the existing test-proof architecture."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

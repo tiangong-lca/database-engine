@@ -37,7 +37,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "Reviewed for Issue #355 mandatory destructive qualification: the canonical opt-in runner now enforces dual-predecessor actor-RLS proof before rollback/roll-forward proof; compatibility and ownership boundaries are unchanged."
+lastReviewedNote: "Reviewed for Issues #355 and #339: the canonical opt-in runner enforces dual-predecessor actor-RLS proof before rollback/roll-forward proof, while database-global postgres function defaults, five-schema effective ACL evaluation, and layered operator restore remain consistent with repo governance."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

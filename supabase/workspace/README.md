@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "Reviewed for Issue #355 mandatory destructive qualification: generated workspace remains inspection evidence, while the canonical opt-in runner now enforces both exact-hash/RLS and rollback/roll-forward proof."
+lastReviewedNote: "Reviewed for Issues #355 and #339: generated workspace remains inspection evidence, while the canonical opt-in runner enforces exact-hash/RLS plus rollback/roll-forward proof and remains separate from the authoritative layered global default-privilege contract."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
