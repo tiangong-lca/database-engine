@@ -10,6 +10,8 @@ set local statement_timeout = '2min';
 
 do $preflight$
 declare
+  v_physical_count integer;
+  v_physical_hash text;
   v_moved_count integer;
   v_moved_definer_count integer;
   v_moved_invoker_count integer;
@@ -25,20 +27,84 @@ declare
 begin
   if not (
     (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
-      where n.nspname='private' and c.relkind='r' and c.relname in
-        ('worker_job_kinds','worker_jobs','worker_job_events','worker_job_artifacts')) = 4
-    and
-    (select count(*) from pg_class c join pg_namespace n on n.oid=c.relnamespace
       where n.nspname='public' and c.relkind='v' and c.relname in
         ('worker_job_kinds','worker_jobs','worker_job_events','worker_job_artifacts')) = 4
   ) then
     raise exception using errcode='55000', message='Issue 356 rollback requires the exact physical Expand phase';
   end if;
 
+  -- Bind the complete mutable catalog surface of the four physical relations.
+  -- OIDs are deliberately excluded because they differ across independent
+  -- stacks; every OID-attached property is represented by its canonical name,
+  -- definition, ACL, or state instead.
+  with targets as (
+    select c.oid,c.relname,pg_get_userbyid(c.relowner) owner,c.relkind,
+      c.relrowsecurity,c.relforcerowsecurity,c.relreplident,
+      coalesce(c.relacl::text,'') acl
+    from pg_class c join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname='private' and c.relkind='r' and c.relname in
+      ('worker_job_kinds','worker_jobs','worker_job_events','worker_job_artifacts')
+  ), entries as (
+    select jsonb_build_object(
+      'name',t.relname,'owner',t.owner,'kind',t.relkind,
+      'rls',t.relrowsecurity,'forceRls',t.relforcerowsecurity,
+      'replicaIdentity',t.relreplident,'acl',t.acl,
+      'columns',(select coalesce(jsonb_agg(jsonb_build_object(
+        'num',a.attnum,'name',a.attname,
+        'type',format_type(a.atttypid,a.atttypmod),'notNull',a.attnotnull,
+        'identity',a.attidentity,'generated',a.attgenerated,
+        'default',pg_get_expr(d.adbin,d.adrelid),
+        'acl',coalesce(a.attacl::text,'')) order by a.attnum),'[]')
+        from pg_attribute a left join pg_attrdef d
+          on d.adrelid=a.attrelid and d.adnum=a.attnum
+        where a.attrelid=t.oid and a.attnum>0 and not a.attisdropped),
+      'constraints',(select coalesce(jsonb_agg(jsonb_build_object(
+        'name',x.conname,'type',x.contype,
+        'definition',pg_get_constraintdef(x.oid,true),
+        'validated',x.convalidated,'deferrable',x.condeferrable,
+        'deferred',x.condeferred) order by x.conname),'[]')
+        from pg_constraint x where x.conrelid=t.oid),
+      'indexes',(select coalesce(jsonb_agg(jsonb_build_object(
+        'name',ic.relname,'definition',pg_get_indexdef(i.indexrelid),
+        'unique',i.indisunique,'valid',i.indisvalid,'ready',i.indisready,
+        'replicaIdentity',i.indisreplident,'clustered',i.indisclustered)
+        order by ic.relname),'[]')
+        from pg_index i join pg_class ic on ic.oid=i.indexrelid
+        where i.indrelid=t.oid),
+      'triggers',(select coalesce(jsonb_agg(jsonb_build_object(
+        'name',g.tgname,'definition',pg_get_triggerdef(g.oid,true),
+        'enabled',g.tgenabled) order by g.tgname),'[]')
+        from pg_trigger g where g.tgrelid=t.oid and not g.tgisinternal),
+      'policies',(select coalesce(jsonb_agg(jsonb_build_object(
+        'name',p.polname,'command',p.polcmd,'permissive',p.polpermissive,
+        'roles',p.polroles,'qual',pg_get_expr(p.polqual,p.polrelid),
+        'check',pg_get_expr(p.polwithcheck,p.polrelid)) order by p.polname),'[]')
+        from pg_policy p where p.polrelid=t.oid),
+      'publications',(select coalesce(jsonb_agg(pub.pubname order by pub.pubname),'[]')
+        from pg_publication_rel pr join pg_publication pub on pub.oid=pr.prpubid
+        where pr.prrelid=t.oid)
+    ) entry from targets t
+  )
+  select count(*),md5(jsonb_agg(entry order by entry->>'name')::text)
+    into v_physical_count,v_physical_hash from entries;
+  if (v_physical_count,v_physical_hash)
+     is distinct from (4,'7c3d286ec5acfe907cf7718ded0727c9') then
+    raise exception using errcode='55000', message=format(
+      'Issue 356 rollback physical-relation fingerprint drift: count=%s hash=%s',
+      v_physical_count,v_physical_hash
+    );
+  end if;
+
   with moved as (
-    select p.oid::regprocedure::text as signature, p.prosecdef,
-           pg_get_functiondef(p.oid) as definition
+    select jsonb_build_object(
+      'signature',p.oid::regprocedure::text,
+      'owner',pg_get_userbyid(p.proowner),'acl',coalesce(p.proacl::text,''),
+      'config',coalesce(p.proconfig::text,''),'securityDefiner',p.prosecdef,
+      'language',l.lanname,'volatility',p.provolatile,'strict',p.proisstrict,
+      'parallel',p.proparallel,'definition',pg_get_functiondef(p.oid)
+    ) entry, p.prosecdef
     from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+    join pg_language l on l.oid=p.prolang
     where n.nspname='private' and p.proname in (
       'worker_cancel_job','worker_claim_jobs','worker_enqueue_job','worker_heartbeat_job',
       'worker_job_payload','worker_list_jobs','worker_list_jobs_by_concurrency_key',
@@ -48,11 +114,11 @@ begin
   )
   select count(*), count(*) filter (where prosecdef),
          count(*) filter (where not prosecdef),
-         md5(string_agg(signature||':'||md5(definition),E'\n' order by signature))
+         md5(jsonb_agg(entry order by entry->>'signature')::text)
     into v_moved_count, v_moved_definer_count, v_moved_invoker_count, v_moved_hash
   from moved;
   if (v_moved_count,v_moved_definer_count,v_moved_invoker_count,v_moved_hash)
-     is distinct from (12,11,1,'f27c18012405b65322fa7352ca663365') then
+     is distinct from (12,11,1,'8f7ee9db66241c84495b66ce991640ce') then
     raise exception using errcode='55000', message=format(
       'Issue 356 rollback moved-routine fingerprint drift: count=%s definer=%s invoker=%s hash=%s',
       v_moved_count,v_moved_definer_count,v_moved_invoker_count,v_moved_hash
@@ -61,7 +127,12 @@ begin
 
   with adapters as (
     select n.nspname, p.oid::regprocedure::text as signature, p.prosecdef,
-           pg_get_functiondef(p.oid) as definition
+      jsonb_build_object(
+        'schema',n.nspname,'signature',p.oid::regprocedure::text,
+        'owner',pg_get_userbyid(p.proowner),'acl',coalesce(p.proacl::text,''),
+        'config',coalesce(p.proconfig::text,''),'securityDefiner',p.prosecdef,
+        'definition',pg_get_functiondef(p.oid)
+      ) entry
     from pg_proc p join pg_namespace n on n.oid=p.pronamespace
     where (n.nspname='public' and p.proname in (
       'worker_cancel_job','worker_claim_jobs','worker_enqueue_job','worker_heartbeat_job',
@@ -77,12 +148,11 @@ begin
     ))
   )
   select count(*), count(*) filter (where prosecdef),
-         md5(string_agg(nspname||':'||signature||':'||md5(definition),E'\n'
-                        order by nspname,signature))
+         md5(jsonb_agg(entry order by nspname,signature)::text)
     into v_adapter_count,v_adapter_definer_count,v_adapter_hash
   from adapters;
   if (v_adapter_count,v_adapter_definer_count,v_adapter_hash)
-     is distinct from (23,0,'58145e2a0a05853e4bff98371f4dbcab') then
+     is distinct from (23,0,'22576b4a61cec24ff864a7a793fc7e45') then
     raise exception using errcode='55000', message=format(
       'Issue 356 rollback adapter fingerprint drift: count=%s definer=%s hash=%s',
       v_adapter_count,v_adapter_definer_count,v_adapter_hash
@@ -109,14 +179,25 @@ begin
     );
   end if;
 
-  select count(*),md5(string_agg(c.relname||':'||md5(pg_get_viewdef(c.oid,true))||':'||
-    coalesce(c.relacl::text,'')||':'||coalesce(c.reloptions::text,''),E'\n' order by c.relname))
-    into v_compat_count,v_compat_hash
-  from pg_class c join pg_namespace n on n.oid=c.relnamespace
-  where n.nspname='public' and c.relkind='v' and c.relname in
-    ('worker_job_kinds','worker_jobs','worker_job_events','worker_job_artifacts');
+  with views as (
+    select jsonb_build_object(
+      'name',c.relname,'owner',pg_get_userbyid(c.relowner),
+      'acl',coalesce(c.relacl::text,''),
+      'columnAcl',(select coalesce(jsonb_agg(jsonb_build_object(
+        'num',a.attnum,'name',a.attname,'acl',coalesce(a.attacl::text,''))
+        order by a.attnum),'[]') from pg_attribute a
+        where a.attrelid=c.oid and a.attnum>0 and not a.attisdropped),
+      'options',coalesce(c.reloptions::text,''),
+      'definition',pg_get_viewdef(c.oid,true)
+    ) entry
+    from pg_class c join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname='public' and c.relkind='v' and c.relname in
+      ('worker_job_kinds','worker_jobs','worker_job_events','worker_job_artifacts')
+  )
+  select count(*),md5(jsonb_agg(entry order by entry->>'name')::text)
+    into v_compat_count,v_compat_hash from views;
   if (v_compat_count,v_compat_hash)
-     is distinct from (4,'a9450eff0ba5ecfa7b42da563a62e459') then
+     is distinct from (4,'a6bf84cca731bf107b98ecc74e226c9d') then
     raise exception using errcode='55000', message=format(
       'Issue 356 rollback compatibility-view fingerprint drift: count=%s hash=%s',
       v_compat_count,v_compat_hash
@@ -164,6 +245,12 @@ alter table private.worker_job_artifacts set schema public;
 -- Restore the predecessor's legacy public-table ACL exactly. The Expand
 -- migration deliberately narrows this ACL; rollback must reverse that policy
 -- change as well as the namespace move before recreating private pilot views.
+-- REVOKE ALL also clears the Expand-only pg_attribute.attacl entries; a table-
+-- level GRANT alone would leave those column ACL rows behind and would not be
+-- an exact catalog rollback.
+revoke all on table public.worker_job_kinds, public.worker_jobs,
+  public.worker_job_events, public.worker_job_artifacts
+  from public, anon, authenticated, service_role, api_internal_executor;
 grant all on table public.worker_job_kinds, public.worker_jobs,
   public.worker_job_events, public.worker_job_artifacts to service_role;
 grant select on table public.worker_job_kinds, public.worker_jobs,

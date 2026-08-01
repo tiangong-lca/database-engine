@@ -42,6 +42,10 @@ def snapshot(url: str) -> str:
       with rel as (
         select c.oid,c.reltype,n.nspname,c.relname,c.relowner,c.relrowsecurity,
           c.relforcerowsecurity,c.relreplident,coalesce(c.relacl::text,'') acl,
+          (select jsonb_agg(jsonb_build_object(
+            'num',a.attnum,'name',a.attname,'acl',coalesce(a.attacl::text,''))
+            order by a.attnum) from pg_attribute a
+            where a.attrelid=c.oid and a.attnum>0 and not a.attisdropped) column_acl,
           (select jsonb_agg(pg_get_indexdef(i.indexrelid) order by i.indexrelid)
             from pg_index i where i.indrelid=c.oid) indexes,
           (select jsonb_agg(pg_get_constraintdef(x.oid,true) order by x.oid)
@@ -85,7 +89,35 @@ def physical_expand_snapshot(url: str) -> str:
         select * from pg_proc where prokind='f'
       ), objects as (
         select 'relation' kind,n.nspname||'.'||c.relname object_key,c.oid::text oid,
-          c.relkind::text properties,coalesce(c.relacl::text,'') acl,
+          jsonb_build_object(
+            'kind',c.relkind,'owner',c.relowner,'rls',c.relrowsecurity,
+            'forceRls',c.relforcerowsecurity,'replicaIdentity',c.relreplident,
+            'columns',(select coalesce(jsonb_agg(jsonb_build_object(
+              'num',a.attnum,'name',a.attname,
+              'type',format_type(a.atttypid,a.atttypmod),'notNull',a.attnotnull,
+              'identity',a.attidentity,'generated',a.attgenerated,
+              'default',pg_get_expr(d.adbin,d.adrelid),
+              'acl',coalesce(a.attacl::text,'')) order by a.attnum),'[]')
+              from pg_attribute a left join pg_attrdef d
+                on d.adrelid=a.attrelid and d.adnum=a.attnum
+              where a.attrelid=c.oid and a.attnum>0 and not a.attisdropped),
+            'constraints',(select coalesce(jsonb_agg(jsonb_build_object(
+              'name',x.conname,'definition',pg_get_constraintdef(x.oid,true),
+              'validated',x.convalidated) order by x.conname),'[]')
+              from pg_constraint x where x.conrelid=c.oid),
+            'indexes',(select coalesce(jsonb_agg(jsonb_build_object(
+              'name',ic.relname,'definition',pg_get_indexdef(i.indexrelid),
+              'valid',i.indisvalid,'ready',i.indisready) order by ic.relname),'[]')
+              from pg_index i join pg_class ic on ic.oid=i.indexrelid
+              where i.indrelid=c.oid),
+            'triggers',(select coalesce(jsonb_agg(jsonb_build_object(
+              'name',t.tgname,'definition',pg_get_triggerdef(t.oid,true),
+              'enabled',t.tgenabled) order by t.tgname),'[]')
+              from pg_trigger t where t.tgrelid=c.oid and not t.tgisinternal),
+            'publications',(select coalesce(jsonb_agg(p.pubname order by p.pubname),'[]')
+              from pg_publication_rel pr join pg_publication p on p.oid=pr.prpubid
+              where pr.prrelid=c.oid)
+          )::text properties,coalesce(c.relacl::text,'') acl,
           case when c.relkind='v' then pg_get_viewdef(c.oid,true) else '' end definition
         from pg_class c join pg_namespace n on n.oid=c.relnamespace
         where n.nspname in ('public','private') and c.relname in
@@ -108,6 +140,31 @@ def physical_expand_snapshot(url: str) -> str:
           E'\n' order by id)) from private.worker_jobs),'')
       );
     """)
+
+
+def wal_insert_lsn(url: str) -> str:
+    return psql(url, "select pg_current_wal_insert_lsn();")
+
+
+def assert_preflight_rejects_without_mutation(
+    url: str, *, label: str, tamper: str, repair: str | None = None,
+) -> None:
+    """Prove one reviewed malicious catalog state fails before rollback DDL."""
+    psql(url, tamper)
+    before = physical_expand_snapshot(url)
+    wal_before = wal_insert_lsn(url)
+    apply_rollback(url, fail=True)
+    wal_after = wal_insert_lsn(url)
+    after = physical_expand_snapshot(url)
+    if after != before:
+        raise SystemExit(f"{label}: failed rollback preflight mutated catalog or data")
+    if wal_after != wal_before:
+        raise SystemExit(
+            f"{label}: failed rollback preflight emitted WAL: {wal_before} -> {wal_after}"
+        )
+    if repair:
+        psql(url, repair)
+    psql(url, MIGRATION.read_text(encoding="utf-8"))
 
 
 def apply_rollback(url: str, *, fail: bool = False) -> None:
@@ -142,20 +199,55 @@ def main() -> int:
     valid_expand = physical_expand_snapshot(url)
     data_api.qualify_phase("v", label="rollback initial Expand")
 
-    # Any definition drift must fail before the first DROP and leave the
-    # deliberately tampered Expand phase byte-for-byte unchanged.
-    psql(url, "alter function public.worker_cancel_job(uuid,uuid,text) set search_path=public;")
-    tampered_expand = physical_expand_snapshot(url)
-    if tampered_expand == valid_expand:
-        raise SystemExit("rollback malicious preflight fixture did not change the post-state")
-    apply_rollback(url, fail=True)
-    if physical_expand_snapshot(url) != tampered_expand:
-        raise SystemExit("failed rollback preflight mutated the physical Expand phase")
-
-    # The migration retry is the only reviewed repair for a drifted adapter.
-    psql(url,MIGRATION.read_text(encoding="utf-8"))
-    if physical_expand_snapshot(url) != valid_expand:
-        raise SystemExit("migration retry did not restore the exact reviewed Expand phase")
+    # Every mutable surface bound by the rollback preflight must fail before
+    # the first DROP/ALTER and emit no WAL.  Direct repair is needed only for
+    # owner and structural tampering; the migration retry converges ACLs and
+    # compatibility objects.
+    scenarios = (
+        {
+            "label": "moved canonical owner tamper",
+            "tamper": """
+              create role issue_356_rollback_owner nologin;
+              grant create on schema private to issue_356_rollback_owner;
+              grant issue_356_rollback_owner to postgres;
+              alter function private.worker_cancel_job(uuid,uuid,text)
+                owner to issue_356_rollback_owner;
+            """,
+            "repair": """
+              alter function private.worker_cancel_job(uuid,uuid,text) owner to postgres;
+              revoke create on schema private from issue_356_rollback_owner;
+              revoke issue_356_rollback_owner from postgres;
+              drop role issue_356_rollback_owner;
+            """,
+        },
+        {
+            "label": "moved canonical ACL tamper",
+            "tamper": "grant execute on function private.worker_cancel_job(uuid,uuid,text) to anon;",
+        },
+        {
+            "label": "physical column ACL tamper",
+            "tamper": "grant update(error_message) on private.worker_jobs to service_role;",
+        },
+        {
+            "label": "physical structure tamper",
+            "tamper": "alter table private.worker_jobs add column issue_356_rollback_tamper text;",
+            "repair": "alter table private.worker_jobs drop column issue_356_rollback_tamper;",
+        },
+        {
+            "label": "compatibility wrapper ACL tamper",
+            "tamper": "grant execute on function public.worker_cancel_job(uuid,uuid,text) to anon;",
+        },
+        {
+            "label": "compatibility view column ACL tamper",
+            "tamper": "grant update(status) on public.worker_jobs to service_role;",
+        },
+    )
+    for scenario in scenarios:
+        assert_preflight_rejects_without_mutation(url, **scenario)
+        if physical_expand_snapshot(url) != valid_expand:
+            raise SystemExit(
+                f"{scenario['label']}: repair did not restore the exact reviewed Expand phase"
+            )
     apply_rollback(url)
     after=json.loads(snapshot(url))
     if after != before:
