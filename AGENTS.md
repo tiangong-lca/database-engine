@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a3b1f19aaceef1cb6037180dc55e454d00ac08eb
-lastReviewedNote: "Reviewed through Issue #339 and the Issue #346 follow-up: ACL migration truth and serialized persistent-dev PostgREST reconciliation, including restoration and verification of the prior allowlisted snapshot after readback failure, preserve production integration, repository ownership, and hosted evidence boundaries."
+lastReviewedCommit: a46bb023873f3ae17cd5a9b34a443201515793c0
+lastReviewedNote: "Reviewed for the Issue #339 hosted follow-up: Worker Data API probes preserve explicit public profiles, opaque-key semantics, and credential-redacted schema reload failures without changing repository ownership or integration boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

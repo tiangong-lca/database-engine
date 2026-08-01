@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a3b1f19aaceef1cb6037180dc55e454d00ac08eb
-lastReviewedNote: "Reviewed through Issue #339 and the Issue #346 follow-up: ACL/catalog changes and persistent Dev PostgREST reconciliation, including rollback/readback semantics, do not change generated workspace behavior or source-of-truth boundaries."
+lastReviewedCommit: a46bb023873f3ae17cd5a9b34a443201515793c0
+lastReviewedNote: "Reviewed for Issue #339 hosted follow-up: Worker probe credential/profile behavior does not change generated workspace behavior or source-of-truth boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
