@@ -10,8 +10,57 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  validate-local-contract:
+    name: Validate Fresh Local Database Contract
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Setup Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: "3.12"
+
+      - name: Install Python contract dependencies
+        run: python -m pip install --disable-pip-version-check "jsonschema==4.23.0"
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: 2.98.0
+
+      - name: Prefetch pinned PostgREST conformance image
+        run: >-
+          docker pull
+          public.ecr.aws/supabase/postgrest@sha256:8b53afca2e239bc90a0facdb880710232886c38dae5743a57d66056e96d5596a
+
+      - name: Run manifest contract tests
+        run: python -m unittest scripts.test_database_contract_manifest
+
+      - name: Start fresh local Supabase stack
+        run: supabase start
+
+      - name: Run canonical contract
+        run: python scripts/run_database_contract.py --suite canonical-local
+
+      - name: Verify Issue 357 artifacts, generated phases, unit contracts, and focused suite
+        run: >-
+          python scripts/run_database_contract.py
+          --suite lca-private-expand
+          --if-activated
+
+      - name: Stop disposable stack
+        if: always()
+        run: supabase stop --no-backup
+
   deploy-supabase-dev:
     name: Deploy Supabase Migrations to Dev
+    needs: validate-local-contract
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -39,3 +88,9 @@ jobs:
           python3 scripts/apply_postgrest_config.py
           --project-ref "$SUPABASE_PROJECT_ID"
           --apply
+
+      - name: Read back hosted PostgREST configuration
+        run: >-
+          python3 scripts/apply_postgrest_config.py
+          --project-ref "$SUPABASE_PROJECT_ID"
+          --check

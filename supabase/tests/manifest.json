@@ -1,5 +1,5 @@
 {
-  "schemaVersion": "database-test-manifest.v1",
+  "schemaVersion": "database-test-manifest.v2",
   "classifications": [
     {"name": "canonical-pgtap", "glob": "supabase/tests/*.sql"},
     {"name": "offline-node", "glob": "supabase/tests/*.mjs"},
@@ -13,28 +13,84 @@
   "suites": {
     "canonical-local": {
       "classification": "canonical-pgtap",
-      "excludedFollowUp": "https://github.com/tiangong-lca/database-engine/issues/336",
+      "exclusionBaseline": {
+        "count": 19,
+        "pathsSha256": "43b7d99bc258681bce65b63531bb0beda869604ca3be52eb0ce4b5992030ce72"
+      },
       "excludedFiles": {
-        "supabase/tests/20260403_update_security_smoke.sql": "review_v2 blocks legacy review fixture creation",
-        "supabase/tests/20260404_review_submit_rpc.sql": "review_v2 disables legacy review submit path",
-        "supabase/tests/20260405_membership_profile_rpcs.sql": "review_v2 blocks legacy review fixture creation",
-        "supabase/tests/20260405_notification_query_command_rpcs.sql": "review_v2 blocks legacy review fixture creation",
-        "supabase/tests/20260405_review_workflow_rpcs.sql": "review_v2 disables legacy review workflow",
-        "supabase/tests/20260409_comments_select_rls.sql": "review_v2 blocks legacy review fixture creation",
-        "supabase/tests/20260415_review_read_query_boundaries.sql": "review_v2 blocks legacy review fixture creation",
-        "supabase/tests/20260520_contacts_latest_version_query_rpcs.sql": "review_v2 immutable guard blocks historical approved fixture updates",
-        "supabase/tests/20260520_core_datasets_latest_version_query_rpcs.sql": "review_v2 immutable guard blocks historical approved fixture updates",
-        "supabase/tests/20260520_flowproperties_latest_version_query_rpcs.sql": "review_v2 immutable guard blocks historical approved fixture updates",
-        "supabase/tests/20260520_sources_latest_version_query_rpcs.sql": "review_v2 immutable guard blocks historical approved fixture updates",
-        "supabase/tests/20260520_unitgroups_latest_version_query_rpcs.sql": "review_v2 immutable guard blocks historical approved fixture updates",
-        "supabase/tests/20260525_review_submit_gate_runs.sql": "review_v2 disables legacy review submit path",
-        "supabase/tests/20260529_review_submit_jobs.sql": "later review-submit coordinator semantics changed five assertions",
-        "supabase/tests/20260531_lca_snapshot_retention_contract.sql": "later retention semantics changed two assertions",
-        "supabase/tests/20260711_guarded_dataset_alias_batch.sql": "review_v2 immutable guard blocks historical approved fixture updates",
-        "supabase/tests/20260722_admin_review_reject_shared_references.sql": "review_v2 blocks legacy review fixture creation",
-        "supabase/tests/20260728_review_publication_path_roles.sql": "review_v2 blocks legacy review fixture creation",
-        "supabase/tests/20260731_flow_identity_derivative_fence.sql": "review_v2 immutable guard currently precedes derivative-only allowance"
+        "supabase/tests/20260403_update_security_smoke.sql": {"reason":"review_v2 blocks legacy review fixture creation","category":"review-v2-legacy-disabled","disposition":"pending-repair-or-retirement","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":[]},
+        "supabase/tests/20260404_review_submit_rpc.sql": {"reason":"review_v2 disables legacy review submit path","category":"review-v2-legacy-disabled","disposition":"issue-357-supported-behavior-replaced","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":["supabase/tests/20260602_worker_jobs_canonical_task_contract.sql","supabase/tests/20260603_worker_domain_artifact_contracts.sql"]},
+        "supabase/tests/20260405_membership_profile_rpcs.sql": {"reason":"review_v2 blocks legacy review fixture creation","category":"review-v2-legacy-disabled","disposition":"pending-repair-or-retirement","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":[]},
+        "supabase/tests/20260405_notification_query_command_rpcs.sql": {"reason":"review_v2 blocks legacy review fixture creation","category":"review-v2-legacy-disabled","disposition":"pending-repair-or-retirement","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":[]},
+        "supabase/tests/20260405_review_workflow_rpcs.sql": {"reason":"review_v2 disables legacy review workflow","category":"review-v2-legacy-disabled","disposition":"pending-repair-or-retirement","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":[]},
+        "supabase/tests/20260409_comments_select_rls.sql": {"reason":"review_v2 blocks legacy review fixture creation","category":"review-v2-legacy-disabled","disposition":"pending-repair-or-retirement","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":[]},
+        "supabase/tests/20260415_review_read_query_boundaries.sql": {"reason":"review_v2 blocks legacy review fixture creation","category":"review-v2-legacy-disabled","disposition":"pending-repair-or-retirement","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":[]},
+        "supabase/tests/20260520_contacts_latest_version_query_rpcs.sql": {"reason":"review_v2 immutable guard blocks historical approved fixture updates","category":"approved-dataset-immutable-fixture","disposition":"pending-fixture-repair","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":[]},
+        "supabase/tests/20260520_core_datasets_latest_version_query_rpcs.sql": {"reason":"review_v2 immutable guard blocks historical approved fixture updates","category":"approved-dataset-immutable-fixture","disposition":"pending-fixture-repair","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":[]},
+        "supabase/tests/20260520_flowproperties_latest_version_query_rpcs.sql": {"reason":"review_v2 immutable guard blocks historical approved fixture updates","category":"approved-dataset-immutable-fixture","disposition":"pending-fixture-repair","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":[]},
+        "supabase/tests/20260520_sources_latest_version_query_rpcs.sql": {"reason":"review_v2 immutable guard blocks historical approved fixture updates","category":"approved-dataset-immutable-fixture","disposition":"pending-fixture-repair","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":[]},
+        "supabase/tests/20260520_unitgroups_latest_version_query_rpcs.sql": {"reason":"review_v2 immutable guard blocks historical approved fixture updates","category":"approved-dataset-immutable-fixture","disposition":"pending-fixture-repair","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":[]},
+        "supabase/tests/20260525_review_submit_gate_runs.sql": {"reason":"review_v2 disables legacy review submit path","category":"review-v2-legacy-disabled","disposition":"issue-357-supported-behavior-replaced","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":["supabase/tests/20260602_worker_jobs_canonical_task_contract.sql","supabase/tests/20260603_worker_domain_artifact_contracts.sql"]},
+        "supabase/tests/20260529_review_submit_jobs.sql": {"reason":"later review-submit coordinator semantics changed five assertions","category":"superseded-coordinator-semantics","disposition":"issue-357-supported-behavior-replaced","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":["supabase/tests/20260601_review_submit_worker_coordinator_cron.sql","supabase/tests/20260602_worker_jobs_canonical_task_contract.sql","supabase/tests/20260603_worker_domain_artifact_contracts.sql"]},
+        "supabase/tests/20260531_lca_snapshot_retention_contract.sql": {"reason":"later retention semantics changed two assertions","category":"superseded-retention-semantics","disposition":"issue-357-supported-behavior-replaced","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":["supabase/tests/20260602_lca_results_retention_contract.sql","supabase/tests/20260603_lca_worker_job_projection.sql","supabase/tests/20260608_missing_fk_support_indexes.sql"]},
+        "supabase/tests/20260711_guarded_dataset_alias_batch.sql": {"reason":"review_v2 immutable guard blocks historical approved fixture updates","category":"approved-dataset-immutable-fixture","disposition":"issue-357-supported-behavior-replaced","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":["supabase/tests/20260715_protected_dataset_alias_execution.sql"]},
+        "supabase/tests/20260722_admin_review_reject_shared_references.sql": {"reason":"review_v2 blocks legacy review fixture creation","category":"review-v2-legacy-disabled","disposition":"pending-fixture-repair","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":[]},
+        "supabase/tests/20260728_review_publication_path_roles.sql": {"reason":"review_v2 blocks legacy review fixture creation","category":"review-v2-legacy-disabled","disposition":"issue-357-supported-behavior-replaced","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":["supabase/tests/20260404_dataset_command_rpcs.sql","supabase/tests/20260731_root_reference_review_v2.sql"]},
+        "supabase/tests/20260731_flow_identity_derivative_fence.sql": {"reason":"review_v2 immutable guard currently precedes derivative-only allowance","category":"approved-dataset-immutable-fixture","disposition":"pending-fixture-repair","trackingIssue":"https://github.com/tiangong-lca/database-engine/issues/336","replacementFiles":[]}
       }
+    },
+    "lca-private-expand": {
+      "activation": {
+        "requiredWhenPaths": [
+          "scripts/freeze_issue_357*",
+          "scripts/generate_issue_357*",
+          "scripts/issue_357_*",
+          "supabase/migrations/*issue_357*",
+          "supabase/tests/contracts/lca_private_expand_*"
+        ],
+        "requiredPaths": [
+          "scripts/freeze_issue_357_expand_manifest.py",
+          "scripts/generate_issue_357_expand_sql.py",
+          "scripts/issue_357_catalog_projection.py",
+          "scripts/issue_357_exposure_contract.py",
+          "scripts/test_freeze_issue_357_expand_manifest.py",
+          "scripts/test_generate_issue_357_expand_sql.py",
+          "scripts/test_issue_357_exposure_contract.py"
+        ],
+        "artifactPatterns": {
+          "freezeJson": "supabase/tests/contracts/lca_private_expand_freeze.v[0-9].json",
+          "freezeSha256": "supabase/tests/contracts/lca_private_expand_freeze.v[0-9].sha256",
+          "freezeSchema": "supabase/tests/contracts/lca_private_expand_freeze.v[0-9].schema.json",
+          "receiptJson": "supabase/tests/contracts/lca_private_expand_*receipt*.v[0-9].json",
+          "receiptSha256": "supabase/tests/contracts/lca_private_expand_*receipt*.v[0-9].sha256",
+          "receiptSchema": "supabase/tests/contracts/lca_private_expand_*receipt*.v[0-9].schema.json",
+          "apiPreExpandMigration": "supabase/migrations/*issue_357*api*pre*expand.sql",
+          "physicalCutMigration": "supabase/migrations/*issue_357*physical*cut.sql"
+        }
+      },
+      "files": [
+        "supabase/tests/20260404_dataset_command_rpcs.sql",
+        "supabase/tests/20260529_lca_package_retention_dry_run.sql",
+        "supabase/tests/20260601_review_submit_worker_coordinator_cron.sql",
+        "supabase/tests/20260602_lca_results_retention_contract.sql",
+        "supabase/tests/20260602_worker_jobs_canonical_task_contract.sql",
+        "supabase/tests/20260603_lca_worker_job_projection.sql",
+        "supabase/tests/20260603_worker_domain_artifact_contracts.sql",
+        "supabase/tests/20260608_missing_fk_support_indexes.sql",
+        "supabase/tests/20260715_protected_dataset_alias_execution.sql",
+        "supabase/tests/20260716_lci_lcia_release_control_plane.sql",
+        "supabase/tests/20260722_data_product_scope_closure_and_task_feed.sql",
+        "supabase/tests/20260722_scope_closure_release_binding_e2e.sql",
+        "supabase/tests/20260729_scope_closure_artifact_retention.sql",
+        "supabase/tests/20260729_scope_closure_owner_artifact_projection.sql",
+        "supabase/tests/20260729_scope_closure_publication_staging_and_gc_control.sql",
+        "supabase/tests/20260730_scope_closure_staged_write_set_v2.sql",
+        "supabase/tests/20260731_root_reference_review_v2.sql",
+        "supabase/tests/20260801_public_inventory_dependency_closure.sql",
+        "supabase/tests/20260801_schema_boundary_view_compat.sql",
+        "supabase/tests/20260801_security_acl_expand.sql",
+        "supabase/tests/20260801_security_definer_owner_runtime_audit.sql"
+      ]
     },
     "worker-control-plane": {
       "files": [

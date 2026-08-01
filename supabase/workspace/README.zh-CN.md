@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-01
-lastReviewedCommit: 87159d6331a793685d5a381380665a697bacce37
-lastReviewedNote: "已为 Issue #355/#339 与 PR #367 findings 复核：生成 workspace 仍只作检查证据，并与 canonical actor-RLS/rollback gate 以及权威的分层 ACL restore、effective grantability 及 snapshot access 合同分离。"
+lastReviewedAt: 2026-08-02
+lastReviewedCommit: 1a0fc514e41724bd513b4126429c38dff10339c0
+lastReviewedNote: "已为 Issue #369 复核：manifest 门禁、PR CI 与 #357 phase gate 不改变生成 workspace 的所有权或刷新语义。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
