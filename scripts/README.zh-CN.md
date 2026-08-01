@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a46bb023873f3ae17cd5a9b34a443201515793c0
-lastReviewedNote: "已为 Issue #339 hosted follow-up 复核：Worker Data API probe 正确处理 opaque key、显式 public profile 和数据库 URL 脱敏。"
+lastReviewedCommit: 03566bee31d66dc2264a337595854cbf13faaaf9
+lastReviewedNote: "已为 Issues #339/#341、#346 与 #351 复核：记录 opaque-key-safe Worker probe、ACL-aware rehearsal、fresh populated CLI roll-forward、fail-closed 证据、URL 脱敏、零 WAL retry 与 PostgREST rollback/readback。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -281,6 +281,33 @@ readback 和 rollback 合同应用或协调。
 
 ```bash
 python -m unittest scripts/test_hosted_security_acl.py
+```
+
+### `test_production_equivalent_upgrade.py`
+
+这是只连接当前本地 Supabase 项目的全局 populated-upgrade 资格验证入口。它从
+审定的 `20260731124000` base 升级到仓库精确 head，生成身份、评审、通知、审计、
+Worker 生命周期、package、cache、release、closure 以及百万行 package evidence
+夹具；对全库行数、主键和内容哈希建立 oracle（仅规范化 reset 生成的通用
+`created_at`/`updated_at`/`modified_at` 重置时间戳和 migration evidence 的
+`captured_at` 时间戳）；对每个待执行 migration 注入事务
+故障并逐项 rehearsal；在真实 CLI roll-forward 前使用合同固定的 Issue #339 operator
+rollback 清理其 database-global rehearsal role，再 reset 并确定性加载 populated
+base；验证五秒锁超时及并发只读兼容；证明所有 base relation oracle 保持不变，
+同时让新增物理 evidence relation 精确匹配 rehearsed head；最后将 constraint、
+ACL/RLS、policy、trigger、publication 对账到该 head，并验证 WAL、重试和预期对象。
+
+脚本不会连接 linked/hosted 项目，也不会把凭据或原始行写入证据；命令和失败
+输出中的 `postgres://` 与 `postgresql://` URL 都会脱敏。证据路径必须显式指定
+并放在 worktree 外，只能以 exclusive/no-follow 语义新建 mode-0600 regular
+file；成功前会 fsync 文件与目录，任何已存在目标（包括 symlink）都会被拒绝。
+正式资格验证要求 clean commit 和至少一百万行；`--allow-dirty` 与较小规模只用于
+开发。`--db-url` 可显式选择隔离的本地 stack，但会拒绝所有非 loopback host；
+no-op migration retry 必须产生精确的零 WAL bytes。
+
+```bash
+python scripts/test_production_equivalent_upgrade.py \
+  --evidence-out /tmp/database-engine-upgrade-evidence.json
 ```
 
 ### `test_scope_closure_staged_write_set_v2_fixture.sh`

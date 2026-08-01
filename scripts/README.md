@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a46bb023873f3ae17cd5a9b34a443201515793c0
-lastReviewedNote: "Reviewed for Issue #339 hosted follow-up: document opaque-key-safe Worker Data API probes and credential-redacted reload failures."
+lastReviewedCommit: 03566bee31d66dc2264a337595854cbf13faaaf9
+lastReviewedNote: "Reviewed through Issues #339/#341, #346, and #351: document opaque-key-safe Worker probes, ACL-aware rehearsal, fresh populated CLI roll-forward, fail-closed evidence, URL redaction, zero-WAL retry, and PostgREST rollback/readback."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -354,6 +354,40 @@ The required set, in reviewed order, is `api,public,graphql_public`; `private`,
 are sent only as `apikey`; legacy JWT-shaped anon keys are also sent as Bearer.
 Run `python -m unittest scripts/test_hosted_security_acl.py` for the offline
 argument and normalization contract.
+
+### `test_production_equivalent_upgrade.py`
+
+Runs the local-only global populated-upgrade qualification from the reviewed
+`20260731124000` base through the exact checked-in head. It generates the
+representative identity/review/notification/audit, Worker lifecycle, package,
+cache, release, closure, and million-row package-evidence fixture; captures
+whole-database row/primary-key/content-hash oracles (normalizing only generic
+`created_at`/`updated_at`/`modified_at` reset timestamps and migration-evidence
+`captured_at` timestamps); fault-injects and rehearses
+every pending migration; resets and deterministically reloads the populated
+base before the real CLI roll-forward, using the contract-pinned Issue #339
+operator rollback to remove its database-global rehearsal role; proves the five-second lock timeout and
+a compatible concurrent reader; then proves every base relation oracle is
+preserved while any new physical evidence relation matches the rehearsed head,
+and reconciles constraints, ACL/RLS, policies, triggers, and publication
+membership against that head together with WAL, retry, and expected objects.
+
+The runner resets only the currently selected local Supabase project. It never
+connects to a linked or hosted project, never retains credentials or row
+contents, redacts both `postgres://` and `postgresql://` URLs from command and
+failure output, and requires evidence output outside the worktree. Evidence is
+created as a new mode-0600 regular file with exclusive/no-follow semantics and
+is file- and directory-fsynced before success; existing targets, including
+symlinks, are refused. A qualification run requires a clean commit and at least
+one million representative rows; `--allow-dirty` and smaller counts are
+development-only. `--db-url` may select an isolated local stack explicitly,
+but rejects every non-loopback host. The no-op migration retry must emit exactly
+zero WAL bytes.
+
+```bash
+python scripts/test_production_equivalent_upgrade.py \
+  --evidence-out /tmp/database-engine-upgrade-evidence.json
+```
 
 ### `test_scope_closure_staged_write_set_v2_fixture.sh`
 
