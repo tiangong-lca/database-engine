@@ -5,6 +5,10 @@ on:
     branches:
       - dev
 
+concurrency:
+  group: supabase-dev
+  cancel-in-progress: false
+
 jobs:
   deploy-supabase-dev:
     name: Deploy Supabase Migrations to Dev
@@ -29,3 +33,9 @@ jobs:
 
       - name: Push migrations to Supabase dev branch
         run: supabase db push --include-all
+
+      - name: Apply allowlisted PostgREST configuration
+        run: >-
+          python3 scripts/apply_postgrest_config.py
+          --project-ref "$SUPABASE_PROJECT_ID"
+          --apply

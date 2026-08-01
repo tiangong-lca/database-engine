@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-01"
-lastReviewedCommit: "907f7b6a47b98c401d98184a8b7452aaaa429bbf"
-lastReviewedNote: "Reviewed for Issue #340 hosted closure: validation routes cover both legacy JWT and new opaque Supabase API keys without weakening the api/private exposure contract."
+lastReviewedCommit: "b32072d5a38509c4a25d866692958f0ced1303cf"
+lastReviewedNote: "Reviewed for Issue #346: branch automation routes cover the serialized, allowlisted persistent-dev PostgREST config gate and its redacted readback proof."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
