@@ -293,12 +293,23 @@ def validate(audit: dict[str, Any], inventory: dict[str, Any], inventory_hash: s
         raise ValueError("unexpected SECURITY DEFINER audit schemaVersion")
     if audit.get("source", {}).get("inventorySha256") != inventory_hash:
         raise ValueError("SECURITY DEFINER audit is not bound to the committed inventory hash")
+    if audit.get("source", {}).get("inventorySchemaVersion") != inventory["schemaVersion"]:
+        raise ValueError("SECURITY DEFINER audit inventory schemaVersion differs from its source")
     if audit.get("source", {}).get("databaseSchemaSha") != inventory["source"]["databaseSchemaSha"]:
         raise ValueError("SECURITY DEFINER audit schema SHA differs from inventory provenance")
+    if audit.get("source", {}).get("issue") != "tiangong-lca/database-engine#333":
+        raise ValueError("SECURITY DEFINER audit source Issue is not #333")
     if audit.get("summary") != EXPECTED:
         raise ValueError(f"SECURITY DEFINER audit summary differs from reviewed baseline: {audit.get('summary')}")
+    if audit.get("auditArtifactComplete") is not True:
+        raise ValueError("SECURITY DEFINER audit artifact is not complete")
     if audit.get("contractReady") is not False:
         raise ValueError("SECURITY DEFINER audit must remain fail closed before Issue #358")
+    if audit.get("boundaries", {}).get("repoOwnedAcl") != {
+        "issue": "tiangong-lca/database-engine#339",
+        "status": "validated",
+    }:
+        raise ValueError("Issue #339 repo-owned ACL boundary differs from validated evidence")
     platform = audit.get("boundaries", {}).get("platformOwnerDefaultPrivileges", {})
     if platform != {
         "issue": "tiangong-lca/database-engine#352",
@@ -306,17 +317,63 @@ def validate(audit: dict[str, Any], inventory: dict[str, Any], inventory_hash: s
         "coveredByThisAudit": False,
     }:
         raise ValueError("Issue #352 platform-owner blocker must remain explicit and unresolved")
+    if audit.get("boundaries", {}).get("contractMigration") != {
+        "issue": "tiangong-lca/database-engine#358",
+        "status": "not-started",
+        "coveredByThisAudit": False,
+    }:
+        raise ValueError("Issue #358 Contract handoff must remain explicit and unresolved")
     routines = audit.get("routines", [])
     keys = [item.get("objectKey") for item in routines]
     if len(keys) != len(set(keys)):
         raise ValueError("SECURITY DEFINER audit contains duplicate signatures")
+
+    inventory_objects = {
+        obj["objectKey"]: obj for obj in inventory["objects"]
+        if obj["objectType"] == "function" and obj["catalog"]["security_definer"]
+    }
+    if set(keys) != set(inventory_objects):
+        raise ValueError("SECURITY DEFINER audit signature set differs from immutable inventory")
+    acl_by_object: dict[str, set[str]] = {}
+    for grant in inventory["security"]["routineAcl"]:
+        if grant["privilege_type"] == "EXECUTE":
+            acl_by_object.setdefault(grant["object_key"], set()).add(grant["grantee"])
+
     for item in routines:
+        obj = inventory_objects[item["objectKey"]]
+        expected_observed = {
+            "ownerRole": obj["ownerRole"],
+            "securityDefiner": True,
+            "searchPath": sorted(
+                value for value in obj["catalog"]["config"] if value.startswith("search_path=")
+            ),
+            "definitionSha256": obj["catalog"]["definitionSha256"],
+            "dynamicSql": bool(obj["catalog"].get("dynamicSql")),
+            "consumerClosure": obj["consumerClosure"],
+            "intendedConsumers": obj["intendedConsumers"],
+            "directConsumerEvidence": obj.get("consumerEvidence", []),
+            "transitiveConsumerEvidence": obj.get("transitiveConsumerEvidence", []),
+            "dependencyCount": len(obj.get("dependencies", [])),
+            "dependentCount": len(obj.get("dependents", [])),
+        }
+        if item.get("targetSchema") != obj["targetSchema"] or item.get("migrationBatch") != obj["migrationBatch"]:
+            raise ValueError(f"routing facts differ from immutable inventory: {item['objectKey']}")
+        if item.get("cohort") != cohort(obj):
+            raise ValueError(f"audit cohort differs from immutable inventory: {item['objectKey']}")
+        for field, expected_value in expected_observed.items():
+            if item.get("observed", {}).get(field) != expected_value:
+                raise ValueError(f"observed {field} differs from immutable inventory: {item['objectKey']}")
         if item["observed"]["securityDefiner"] is not True:
             raise ValueError(f"non-SECURITY DEFINER routine entered audit: {item['objectKey']}")
         if not item["observed"]["searchPath"]:
             raise ValueError(f"fixed search_path evidence is missing: {item['objectKey']}")
         if [row["role"] for row in item["required"]["roleMatrix"]] != list(ROLES):
             raise ValueError(f"role matrix is incomplete or unordered: {item['objectKey']}")
+        grants = acl_by_object.get(item["objectKey"], set())
+        for row in item["required"]["roleMatrix"]:
+            expected_sources = sorted(source for source in grants if source in (row["role"], "PUBLIC"))
+            if row["observedGrantSources"] != expected_sources or row["observedCurrentExecute"] != bool(expected_sources):
+                raise ValueError(f"observed role matrix differs from immutable inventory: {item['objectKey']}")
         if item["confirmed"]["ownerRuntime"] is not False:
             raise ValueError(f"static evidence cannot claim runtime owner confirmation: {item['objectKey']}")
         if item["inferred"]["signalLimit"] != "static-signals-are-not-runtime-authorization-proof":

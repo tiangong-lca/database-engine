@@ -70,6 +70,18 @@ class SecurityDefinerAuditTest(unittest.TestCase):
         with self.assertRaisesRegex(ValueError, "reviewed baseline"):
             audit.validate(tampered, self.inventory, self.inventory_hash)
 
+    def test_rehashed_signature_swap_fails_closed_offline(self) -> None:
+        tampered = copy.deepcopy(self.committed)
+        tampered["routines"][0]["objectKey"] = "public.fabricated_signature()"
+        with self.assertRaisesRegex(ValueError, "signature set differs"):
+            audit.validate(tampered, self.inventory, self.inventory_hash)
+
+    def test_contract_handoff_cannot_be_marked_started(self) -> None:
+        tampered = copy.deepcopy(self.committed)
+        tampered["boundaries"]["contractMigration"]["status"] = "in-progress"
+        with self.assertRaisesRegex(ValueError, "#358 Contract handoff"):
+            audit.validate(tampered, self.inventory, self.inventory_hash)
+
     def test_role_matrix_tamper_fails_closed(self) -> None:
         tampered = copy.deepcopy(self.committed)
         tampered["routines"][0]["required"]["roleMatrix"].pop()
