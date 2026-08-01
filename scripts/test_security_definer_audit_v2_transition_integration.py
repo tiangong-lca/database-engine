@@ -295,6 +295,12 @@ def require_ancestor(ancestor: str, descendant: str, *, source_root: Path, label
         raise ValueError(f"{label} is not an ancestor of the reviewed source history")
 
 
+def reject_external_psql_includes(reviewed: ReviewedFile) -> None:
+    """Require frozen replay inputs to be self-contained SQL bytes."""
+    if re.search(rb"(?m)^\s*\\i(?:r)?(?:\s|$)", reviewed.raw):
+        raise ValueError(f"reviewed SQL contains an external psql include: {reviewed.relative}")
+
+
 def validate_receipt(
     args: argparse.Namespace, source_root: Path,
 ) -> tuple[dict[str, Any], bytes, bytes]:
@@ -318,6 +324,8 @@ def validate_receipt(
                      label="receipt source commit")
     migration_file = validate_commit_source_file(args.migration, source_root, source_commit)
     rollback_file = validate_commit_source_file(args.rollback, source_root, source_commit)
+    reject_external_psql_includes(migration_file)
+    reject_external_psql_includes(rollback_file)
     if hashlib.sha256(migration_file.raw).hexdigest() != args.expected_migration_sha256:
         raise ValueError("migration bytes differ from reviewed SHA-256")
     if hashlib.sha256(rollback_file.raw).hexdigest() != args.expected_rollback_sha256:

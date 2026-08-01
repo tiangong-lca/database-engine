@@ -252,6 +252,18 @@ class TransitionIntegrationRunnerTest(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "not an ancestor"):
                 harness.require_ancestor(head, source_commit, source_root=root, label="source")
 
+    def test_frozen_sql_rejects_external_psql_includes(self) -> None:
+        for directive in (b"\\i other.sql\n", b"  \\ir ../other.sql\n"):
+            with self.subTest(directive=directive), self.assertRaisesRegex(
+                ValueError, "external psql include",
+            ):
+                harness.reject_external_psql_includes(
+                    harness.ReviewedFile("reviewed.sql", b"select 1;\n" + directive),
+                )
+        harness.reject_external_psql_includes(
+            harness.ReviewedFile("reviewed.sql", b"select '\\\\ir literal';\n"),
+        )
+
     def test_pending_migration_detection_is_version_exact(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
