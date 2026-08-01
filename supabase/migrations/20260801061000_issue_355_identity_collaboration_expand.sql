@@ -372,7 +372,7 @@ create or replace function private.review_append_scope_snapshot_v1(
   p_items jsonb, p_created_by uuid
 ) returns jsonb
 language sql volatile security invoker
-set search_path = ''
+set search_path = pg_catalog, pg_temp
 as $wrapper$
   select public.review_append_scope_snapshot_v1(
     p_root_review_id, p_scope_basis, p_root_revision_checksum, p_items, p_created_by
@@ -381,17 +381,17 @@ $wrapper$;
 
 create or replace function private.review_revision_fingerprint_v1(p_target_table text, p_target_row jsonb)
 returns text language sql immutable strict parallel safe
-set search_path = ''
+set search_path = pg_catalog, pg_temp
 as $wrapper$ select public.review_revision_fingerprint_v1(p_target_table, p_target_row) $wrapper$;
 
 create or replace function private.review_scope_all_reference_ids_v1(p_scope_history jsonb)
 returns uuid[] language sql immutable parallel safe
-set search_path = ''
+set search_path = pg_catalog, pg_temp
 as $wrapper$ select public.review_scope_all_reference_ids_v1(p_scope_history) $wrapper$;
 
 create or replace function private.review_scope_checksum_v1(p_items jsonb)
 returns text language sql immutable strict parallel safe
-set search_path = ''
+set search_path = pg_catalog, pg_temp
 as $wrapper$ select public.review_scope_checksum_v1(p_items) $wrapper$;
 
 create or replace function private.review_scope_current_items_v1(p_scope_history jsonb)
@@ -402,7 +402,7 @@ returns table(
   relation_path text, introduced_by text, introduced_field_path text
 )
 language sql immutable parallel safe
-set search_path = ''
+set search_path = pg_catalog, pg_temp
 as $wrapper$
   select item_kind, target_table, data_id, data_version,
          submitted_revision_checksum, reference_review_id,
@@ -413,18 +413,18 @@ $wrapper$;
 
 create or replace function private.review_scope_current_reference_ids_v1(p_scope_history jsonb)
 returns uuid[] language sql immutable parallel safe
-set search_path = ''
+set search_path = pg_catalog, pg_temp
 as $wrapper$ select public.review_scope_current_reference_ids_v1(p_scope_history) $wrapper$;
 
 create or replace function private.review_scope_current_snapshot_v1(p_scope_history jsonb)
 returns jsonb language sql immutable parallel safe
-set search_path = ''
+set search_path = pg_catalog, pg_temp
 as $wrapper$ select public.review_scope_current_snapshot_v1(p_scope_history) $wrapper$;
 
 create or replace function private.review_validate_scope_history_v1(p_root_review_id uuid, p_scope_history jsonb)
 returns void language sql volatile
 security invoker
-set search_path = ''
+set search_path = pg_catalog, pg_temp
 as $wrapper$ select public.review_validate_scope_history_v1(p_root_review_id, p_scope_history) $wrapper$;
 
 alter function private.review_append_scope_snapshot_v1(uuid,text,text,jsonb,uuid) owner to postgres;
@@ -533,7 +533,8 @@ begin
     where adapter_namespace.nspname='private'
       and (adapter.proowner<>source.proowner or adapter.provolatile<>source.provolatile
         or adapter.prosecdef or adapter.proisstrict<>source.proisstrict
-        or adapter.proparallel<>source.proparallel or adapter.proconfig is distinct from source.proconfig
+        or adapter.proparallel<>source.proparallel
+        or adapter.proconfig is distinct from array['search_path=pg_catalog, pg_temp']::text[]
         or adapter.proleakproof<>source.proleakproof or adapter.procost<>source.procost
         or adapter.prorows<>source.prorows
         or exists (

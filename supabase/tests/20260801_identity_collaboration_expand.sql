@@ -202,7 +202,7 @@ select is(
 );
 
 select ok(
-  (select bool_and(coalesce(array_to_string(p.proconfig, ','), '') like '%search_path=""%')
+  (select bool_and(coalesce(array_to_string(p.proconfig, ','), '') = 'search_path=pg_catalog, pg_temp')
    from pg_proc p join pg_namespace n on n.oid=p.pronamespace
    where n.nspname in ('public','private')
      and p.proname in ('review_append_scope_snapshot_v1','review_revision_fingerprint_v1','review_scope_all_reference_ids_v1','review_scope_checksum_v1','review_scope_current_items_v1','review_scope_current_reference_ids_v1','review_scope_current_snapshot_v1','review_validate_scope_history_v1')),
