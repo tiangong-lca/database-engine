@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-31
-lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
-lastReviewedNote: "Reviewed through Issues #323, #324, and #329: database ownership, migration source-of-truth, dev-first delivery, and later workspace integration remain unchanged; the Flow fence stays narrow, Root/Reference Review stays migration/test owned, and isolated provider adapters add executable evidence only."
+lastReviewedAt: 2026-08-01
+lastReviewedCommit: cccdb4e90b65cc7b56dbae72946637cede599ba3
+lastReviewedNote: "Reviewed for Issue #340 api/private boundary POC: api is created before its separately deployed exposure; private, util, and archive remain non-exposed, and database ownership, dev-first delivery, and workspace integration remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -110,6 +110,7 @@ Do not start from generated schema workspace files, long migration history, or G
 Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md` and the narrow source docs for the full details.
 
 - local baseline: `supabase start`, `supabase db reset`, `supabase migration list`
+- Data API exposure is explicit and staged: create and validate `api` before a later configuration deployment exposes `api`, `public`, and `graphql_public`; `private`, `util`, and `archive` must remain absent from both exposed schemas and `extra_search_path`
 - `supabase/seed.sql` must remain an executable SQL batch even when it seeds no rows; retain a data-neutral no-op rather than comments only
 - hosted mutation E2E assets under `supabase/tests/preview/**` must hard-bind the exact Preview project ref, use disposable actors and UUID namespaces, clean up only their own effects, and never become migrations, seeds, Dev data rehearsals, or production execution paths
 - disposable Hosted actors must use an outer-frozen request/namespace and deterministic role email, be registered before creation, carry exact fixture/request/namespace/role metadata, recover only one exact filtered metadata match, use global logout, and treat hard admin DELETE as incomplete until both GET-by-ID returns 404 and a fresh exact filtered census is empty; the outer wrapper must create the exact empty owner-only non-symlink private temp directory and durably fsync each secret-free inner recovery checkpoint before returning its exact IPC ACK, so an actor ID is durable before sign-in or fixture mutation; cleanup must hold the derivative coordinator lock and remain before external dispatch, any missing or ambiguous global logout must retain the actor and forbid hard DELETE, and temporary credential files must be proven removed independently by the inner and outer processes; offline lifecycle and 39-surface residue contracts prove the local control/readback shape without replacing the later exact-head Hosted run and independent Auth/SQL readback execution

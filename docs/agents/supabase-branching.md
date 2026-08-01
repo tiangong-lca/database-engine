@@ -20,9 +20,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-07-29
-lastReviewedCommit: 6577b7a48f90ae449cbdd2ef419d92d13c273a0c
-lastReviewedNote: "Reviewed Issue #308 rollout follow-up: the additive publication/GC migration reapplies final guards and RPCs so an existing Preview can advance even when earlier PR migrations were already recorded."
+lastReviewedAt: 2026-08-01
+lastReviewedCommit: cccdb4e90b65cc7b56dbae72946637cede599ba3
+lastReviewedNote: "Reviewed Issue #340 api/private boundary POC: document the required schema-first, configuration-second rollout for the api/public/graphql_public exposure contract."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -80,6 +80,8 @@ When review changes an already-applied PR migration, add a later migration that 
 - Keep `.github/workflows/supabase-dev.yml` as the only GitHub Actions flow in this repo that runs `supabase db push` for the persistent Supabase `dev` branch.
 - Do not add a checked-in GitHub Actions production deploy for Git `main`; the production project is migrated by the Supabase GitHub integration bound to this repository.
 - Do not author normal schema changes by editing the remote database first and reconstructing migrations later.
+- Keep Data API schemas configuration-as-code: the target is `api`, `public`, and `graphql_public`; never add `private`, `util`, or `archive` to exposed schemas or `extra_search_path`.
+- Supabase's GitHub deployment DAG applies `Configure` before `Migrate`. Therefore, first deploy and verify a new schema and its API objects with the existing exposure configuration; only a later commit/PR may expose that already-hosted schema. Never introduce a schema and expose it in the same deployment.
 
 ## Files to maintain
 

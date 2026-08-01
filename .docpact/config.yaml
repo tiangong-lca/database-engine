@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-07-31"
-lastReviewedCommit: "be5b5db38fd34649524c1b18b2e582ad84b4f6bc"
-lastReviewedNote: "Reviewed through Issues #323, #324, and #329: existing ownership, guarded-flow-identity routing, generated-workspace boundaries, and workspace-integration requirements remain correct; Root/Reference Review stays migration/test owned and provider qualification stays script/proof owned."
+lastReviewedAt: "2026-08-01"
+lastReviewedCommit: "cccdb4e90b65cc7b56dbae72946637cede599ba3"
+lastReviewedNote: "Reviewed for Issue #340 api/private boundary POC: config ownership and validation routes cover the staged api exposure contract while private/util/archive remain non-exposed."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
