@@ -397,6 +397,32 @@ readback 和 rollback 合同应用或协调。
 python -m unittest scripts/test_hosted_security_acl.py
 ```
 
+### identity/collaboration Expand 验证
+
+`test_identity_collaboration_data_api.py` 验证 Issue #355 版本化 DTO、notification
+浏览器 RPC-only 合同、authenticated/service/anonymous 角色分离、PostgREST schema
+cache reload 和 internal schema 负向 profile。`test_identity_collaboration_concurrency.py`
+使用 8 个并发 session 执行 800 次 public/private checksum parity 调用。静态测试固定
+16 个精确 inventory 对象、consumer SHA、版本化 DTO、事务/timeout 与 Contract gate。
+
+```bash
+python -m unittest scripts/test_identity_collaboration_expand_static.py
+python scripts/test_identity_collaboration_data_api.py
+python scripts/test_identity_collaboration_concurrency.py
+```
+
+三个 probe 都通过 `IDENTITY_COLLABORATION_DATABASE_URL`（或 `DATABASE_URL`）
+绑定同一个显式 loopback database，并与所选 `SUPABASE_WORKDIR` stack 做 identity
+对账。canonical runner 默认不执行 rollback DDL；只可在 disposable local stack 上用
+`--run-destructive-identity-qualification` 显式启用。`--skip-data-api` 只跳过 HTTP
+probe，不选择或重定向破坏性测试目标。
+
+可重复 operator rollback 为
+`supabase/operator/issue_355_restore_identity_collaboration_expand.sql`；它只删除新增
+api/private Expand 对象，不改动受审 public 物理 routine 或其 OID。
+rollback harness 还验证任意 custom ACL/owner 收敛、连续两次 rollback 后目标对象为零、
+dependency/comment/property 指纹与 roll-forward。
+
 ### `test_production_equivalent_upgrade.py`
 
 这是只连接当前本地 Supabase 项目的全局 populated-upgrade 资格验证入口。它从

@@ -10,9 +10,29 @@ begin;
 set local lock_timeout = '5s';
 set local statement_timeout = '60s';
 
+lock table
+  public.comments, public.identity_center_processed_events,
+  public.identity_center_users, public.notifications, public.reviews,
+  public.roles, public.teams, public.users
+in access share mode;
+
+create temporary table issue355_relation_baseline on commit drop as
+select c.oid,c.relowner,c.relkind,c.relrowsecurity,c.relforcerowsecurity,c.relacl,
+  (select md5(coalesce(string_agg(
+    policy.polname||':'||policy.polcmd::text||':'||policy.polpermissive::text||':'||
+    coalesce(array_to_string(policy.polroles,','),'')||':'||
+    coalesce(pg_get_expr(policy.polqual,policy.polrelid),'')||':'||
+    coalesce(pg_get_expr(policy.polwithcheck,policy.polrelid),''),
+    '|' order by policy.polname),''))
+   from pg_policy policy where policy.polrelid=c.oid) as policy_hash
+from pg_class c join pg_namespace n on n.oid=c.relnamespace
+where n.nspname='public' and c.relname in
+  ('comments','identity_center_processed_events','identity_center_users','notifications','reviews','roles','teams','users');
+
 do $preflight$
 declare
   v_missing text[];
+  v_drift text[];
 begin
   select array_agg(object_key order by object_key)
     into v_missing
@@ -41,6 +61,41 @@ begin
     raise exception 'Issue #355 preflight missing exact objects: %', v_missing;
   end if;
 
+  with expected(relname, acl_hash, policy_hash) as (values
+    ('comments','01325751d110098b0c41305bc21ee772','2f8bdfde6841f70c7d64541ddfbd4371'),
+    ('identity_center_processed_events','3a6eef6333e35dd973f1d4b8cef7e564','d41d8cd98f00b204e9800998ecf8427e'),
+    ('identity_center_users','3a6eef6333e35dd973f1d4b8cef7e564','d41d8cd98f00b204e9800998ecf8427e'),
+    ('notifications','80b5dc3f8df5de03126ed3ef949dcd26','4538df8d90e484e71d3c7c7d154ac106'),
+    ('reviews','01325751d110098b0c41305bc21ee772','02f320ac2de2a923848d218e3444d639'),
+    ('roles','01325751d110098b0c41305bc21ee772','e932287b0560cf79600c5f97f572d58d'),
+    ('teams','01325751d110098b0c41305bc21ee772','0ddbfc30f5f11ed4c1fec80a15cbccab'),
+    ('users','01325751d110098b0c41305bc21ee772','242f6e314391dc2bdb9c78fa9a0c73e9')
+  ), actual as (
+    select c.relname, c.relkind, c.relrowsecurity, c.relforcerowsecurity,
+      md5(string_agg(coalesce(grantee_role.rolname,'PUBLIC')||':'||acl.privilege_type||':'||acl.is_grantable::text,
+        '|' order by coalesce(grantee_role.rolname,'PUBLIC'),acl.privilege_type,acl.is_grantable)) as acl_hash,
+      (select md5(coalesce(string_agg(
+        policy.polname||':'||policy.polcmd::text||':'||policy.polpermissive::text||':'||
+        coalesce(array_to_string(policy.polroles,','),'')||':'||
+        coalesce(pg_get_expr(policy.polqual,policy.polrelid),'')||':'||
+        coalesce(pg_get_expr(policy.polwithcheck,policy.polrelid),''),
+        '|' order by policy.polname),''))
+       from pg_policy policy where policy.polrelid=c.oid) as policy_hash
+    from pg_class c
+    join pg_namespace n on n.oid=c.relnamespace
+    cross join lateral aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl
+    left join pg_roles grantee_role on grantee_role.oid=acl.grantee
+    where n.nspname='public' and c.relname in (select relname from expected)
+    group by c.oid,c.relname,c.relkind,c.relrowsecurity,c.relforcerowsecurity
+  )
+  select array_agg(expected.relname order by expected.relname) into v_drift
+  from expected join actual using (relname)
+  where actual.relkind <> 'r' or not actual.relrowsecurity or actual.relforcerowsecurity
+     or actual.acl_hash <> expected.acl_hash or actual.policy_hash <> expected.policy_hash;
+  if v_drift is not null then
+    raise exception 'Issue #355 source relation relkind/RLS/ACL/policy preflight drift: %', v_drift;
+  end if;
+
   if exists (
     select 1
     from pg_class c join pg_namespace n on n.oid = c.relnamespace
@@ -58,12 +113,6 @@ begin
   end if;
 end
 $preflight$;
-
-lock table
-  public.comments, public.identity_center_processed_events,
-  public.identity_center_users, public.notifications, public.reviews,
-  public.roles, public.teams, public.users
-in access exclusive mode;
 
 create temporary table issue355_routine_baseline on commit drop as
 select
@@ -91,24 +140,24 @@ where n.nspname = 'public'
 
 -- Internal projections.  Only the already-approved service role can read them;
 -- browser roles receive neither private USAGE nor relation privileges.
-create view private.comments with (security_invoker = true) as
+create or replace view private.comments with (security_invoker = true) as
 select review_id, reviewer_id, "json", created_at, modified_at, state_code
 from public.comments;
 
-create view private.identity_center_processed_events with (security_invoker = true) as
+create or replace view private.identity_center_processed_events with (security_invoker = true) as
 select event_id, event_type, processed_at
 from public.identity_center_processed_events;
 
-create view private.identity_center_users with (security_invoker = true) as
+create or replace view private.identity_center_users with (security_invoker = true) as
 select keycloak_sub, user_id, status, desired_role, metadata, created_at, modified_at
 from public.identity_center_users;
 
-create view private.notifications with (security_invoker = true) as
+create or replace view private.notifications with (security_invoker = true) as
 select id, recipient_user_id, sender_user_id, type, dataset_type, dataset_id,
        dataset_version, "json", created_at, modified_at
 from public.notifications;
 
-create view private.reviews with (security_invoker = true) as
+create or replace view private.reviews with (security_invoker = true) as
 select id, data_id, created_at, modified_at, state_code, data_version,
        reviewer_id, "json", deadline, review_kind, target_table,
        submitted_revision_checksum, approved_revision_checksum,
@@ -116,17 +165,46 @@ select id, data_id, created_at, modified_at, state_code, data_version,
        current_reference_review_ids, all_reference_review_ids
 from public.reviews;
 
-create view private.roles with (security_invoker = true) as
+create or replace view private.roles with (security_invoker = true) as
 select user_id, team_id, role, created_at, modified_at
 from public.roles;
 
-create view private.teams with (security_invoker = true) as
+create or replace view private.teams with (security_invoker = true) as
 select id, "json", created_at, modified_at, rank, is_public
 from public.teams;
 
-create view private.users with (security_invoker = true) as
+create or replace view private.users with (security_invoker = true) as
 select id, raw_user_meta_data, contact
 from public.users;
+
+alter view private.comments owner to postgres;
+alter view private.identity_center_processed_events owner to postgres;
+alter view private.identity_center_users owner to postgres;
+alter view private.notifications owner to postgres;
+alter view private.reviews owner to postgres;
+alter view private.roles owner to postgres;
+alter view private.teams owner to postgres;
+alter view private.users owner to postgres;
+
+do $converge_private_view_acl$
+declare target_oid oid; grantee_name text;
+begin
+  for target_oid in
+    select c.oid from pg_class c join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname='private' and c.relname in
+      ('comments','identity_center_processed_events','identity_center_users','notifications','reviews','roles','teams','users')
+  loop
+    execute format('revoke all privileges on table %s from public',target_oid::regclass);
+    for grantee_name in
+      select distinct role.rolname from pg_class c
+      cross join lateral aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl
+      join pg_roles role on role.oid=acl.grantee where c.oid=target_oid and role.rolname<>'postgres'
+    loop
+      execute format('revoke all privileges on table %s from %I',target_oid::regclass,grantee_name);
+    end loop;
+  end loop;
+end
+$converge_private_view_acl$;
 
 revoke all on
   private.comments,
@@ -153,12 +231,12 @@ to service_role;
 -- Browser cutover projections.  They are read-only grants over the existing
 -- RLS-protected public physical source; mutations continue through reviewed
 -- command RPCs and existing compatibility paths during Expand.
-create view api.notifications_v1 with (security_invoker = true) as
+create or replace view api.notifications_v1 with (security_invoker = true) as
 select id, recipient_user_id, sender_user_id, type, dataset_type, dataset_id,
        dataset_version, "json", created_at, modified_at
 from public.notifications;
 
-create view api.reviews_v1 with (security_invoker = true) as
+create or replace view api.reviews_v1 with (security_invoker = true) as
 select id, data_id, created_at, modified_at, state_code, data_version,
        reviewer_id, "json", deadline, review_kind, target_table,
        submitted_revision_checksum, approved_revision_checksum,
@@ -166,26 +244,55 @@ select id, data_id, created_at, modified_at, state_code, data_version,
        current_reference_review_ids, all_reference_review_ids
 from public.reviews;
 
-create view api.team_roles_v1 with (security_invoker = true) as
+create or replace view api.team_roles_v1 with (security_invoker = true) as
 select user_id, team_id, role, created_at, modified_at
 from public.roles;
 
-create view api.teams_v1 with (security_invoker = true) as
+create or replace view api.teams_v1 with (security_invoker = true) as
 select id, "json", created_at, modified_at, rank, is_public
 from public.teams;
 
-create view api.user_profiles_v1 with (security_invoker = true) as
+create or replace view api.user_profiles_v1 with (security_invoker = true) as
 select id, contact, raw_user_meta_data ->> 'email' as email,
        raw_user_meta_data ->> 'display_name' as display_name
 from public.users;
 
-create view api.identity_center_processed_events_v1 with (security_invoker = true) as
+create or replace view api.identity_center_processed_events_v1 with (security_invoker = true) as
 select event_id, event_type, processed_at
 from public.identity_center_processed_events;
 
-create view api.identity_center_users_v1 with (security_invoker = true) as
+create or replace view api.identity_center_users_v1 with (security_invoker = true) as
 select keycloak_sub, user_id, status, desired_role, metadata, created_at, modified_at
 from public.identity_center_users;
+
+alter view api.notifications_v1 owner to postgres;
+alter view api.reviews_v1 owner to postgres;
+alter view api.team_roles_v1 owner to postgres;
+alter view api.teams_v1 owner to postgres;
+alter view api.user_profiles_v1 owner to postgres;
+alter view api.identity_center_processed_events_v1 owner to postgres;
+alter view api.identity_center_users_v1 owner to postgres;
+
+do $converge_api_view_acl$
+declare target_oid oid; grantee_name text;
+begin
+  for target_oid in
+    select c.oid from pg_class c join pg_namespace n on n.oid=c.relnamespace
+    where n.nspname='api' and c.relname in
+      ('notifications_v1','reviews_v1','team_roles_v1','teams_v1','user_profiles_v1',
+       'identity_center_processed_events_v1','identity_center_users_v1')
+  loop
+    execute format('revoke all privileges on table %s from public',target_oid::regclass);
+    for grantee_name in
+      select distinct role.rolname from pg_class c
+      cross join lateral aclexplode(coalesce(c.relacl,acldefault('r',c.relowner))) acl
+      join pg_roles role on role.oid=acl.grantee where c.oid=target_oid and role.rolname<>'postgres'
+    loop
+      execute format('revoke all privileges on table %s from %I',target_oid::regclass,grantee_name);
+    end loop;
+  end loop;
+end
+$converge_api_view_acl$;
 
 revoke all on
   api.notifications_v1, api.reviews_v1,
@@ -195,7 +302,7 @@ from public, anon, authenticated, service_role, api_internal_executor;
 
 grant select on api.reviews_v1,
   api.team_roles_v1, api.teams_v1, api.user_profiles_v1
-to anon, authenticated, service_role;
+to authenticated, service_role;
 
 grant select on api.notifications_v1,
   api.identity_center_processed_events_v1, api.identity_center_users_v1
@@ -204,11 +311,11 @@ to service_role;
 -- Keep the audited SECURITY DEFINER routines physically public during Expand.
 -- Private invoker adapters create the internal cutover target without adding a
 -- second privileged routine or changing the #333 public audit population.
-create function private.review_append_scope_snapshot_v1(
+create or replace function private.review_append_scope_snapshot_v1(
   p_root_review_id uuid, p_scope_basis text, p_root_revision_checksum text,
   p_items jsonb, p_created_by uuid
 ) returns jsonb
-language sql volatile
+language sql volatile security definer
 set search_path = ''
 as $wrapper$
   select public.review_append_scope_snapshot_v1(
@@ -216,22 +323,22 @@ as $wrapper$
   )
 $wrapper$;
 
-create function private.review_revision_fingerprint_v1(p_target_table text, p_target_row jsonb)
+create or replace function private.review_revision_fingerprint_v1(p_target_table text, p_target_row jsonb)
 returns text language sql immutable strict parallel safe
 set search_path = ''
 as $wrapper$ select public.review_revision_fingerprint_v1(p_target_table, p_target_row) $wrapper$;
 
-create function private.review_scope_all_reference_ids_v1(p_scope_history jsonb)
+create or replace function private.review_scope_all_reference_ids_v1(p_scope_history jsonb)
 returns uuid[] language sql immutable parallel safe
 set search_path = ''
 as $wrapper$ select public.review_scope_all_reference_ids_v1(p_scope_history) $wrapper$;
 
-create function private.review_scope_checksum_v1(p_items jsonb)
+create or replace function private.review_scope_checksum_v1(p_items jsonb)
 returns text language sql immutable strict parallel safe
 set search_path = ''
 as $wrapper$ select public.review_scope_checksum_v1(p_items) $wrapper$;
 
-create function private.review_scope_current_items_v1(p_scope_history jsonb)
+create or replace function private.review_scope_current_items_v1(p_scope_history jsonb)
 returns table(
   item_kind text, target_table text, data_id uuid, data_version text,
   submitted_revision_checksum text, reference_review_id uuid,
@@ -248,41 +355,97 @@ as $wrapper$
   from public.review_scope_current_items_v1(p_scope_history)
 $wrapper$;
 
-create function private.review_scope_current_reference_ids_v1(p_scope_history jsonb)
+create or replace function private.review_scope_current_reference_ids_v1(p_scope_history jsonb)
 returns uuid[] language sql immutable parallel safe
 set search_path = ''
 as $wrapper$ select public.review_scope_current_reference_ids_v1(p_scope_history) $wrapper$;
 
-create function private.review_scope_current_snapshot_v1(p_scope_history jsonb)
+create or replace function private.review_scope_current_snapshot_v1(p_scope_history jsonb)
 returns jsonb language sql immutable parallel safe
 set search_path = ''
 as $wrapper$ select public.review_scope_current_snapshot_v1(p_scope_history) $wrapper$;
 
-create function private.review_validate_scope_history_v1(p_root_review_id uuid, p_scope_history jsonb)
+create or replace function private.review_validate_scope_history_v1(p_root_review_id uuid, p_scope_history jsonb)
 returns void language sql volatile
+security definer
 set search_path = ''
 as $wrapper$ select public.review_validate_scope_history_v1(p_root_review_id, p_scope_history) $wrapper$;
 
-revoke all on function private.review_append_scope_snapshot_v1(uuid,text,text,jsonb,uuid) from public, anon, authenticated, service_role, api_internal_executor;
-revoke all on function private.review_revision_fingerprint_v1(text,jsonb) from public, anon, authenticated, service_role, api_internal_executor;
-revoke all on function private.review_scope_all_reference_ids_v1(jsonb) from public, anon, authenticated, service_role, api_internal_executor;
-revoke all on function private.review_scope_checksum_v1(jsonb) from public, anon, authenticated, service_role, api_internal_executor;
-revoke all on function private.review_scope_current_items_v1(jsonb) from public, anon, authenticated, service_role, api_internal_executor;
-revoke all on function private.review_scope_current_reference_ids_v1(jsonb) from public, anon, authenticated, service_role, api_internal_executor;
-revoke all on function private.review_scope_current_snapshot_v1(jsonb) from public, anon, authenticated, service_role, api_internal_executor;
-revoke all on function private.review_validate_scope_history_v1(uuid,jsonb) from public, anon, authenticated, service_role, api_internal_executor;
+alter function private.review_append_scope_snapshot_v1(uuid,text,text,jsonb,uuid) owner to postgres;
+alter function private.review_revision_fingerprint_v1(text,jsonb) owner to postgres;
+alter function private.review_scope_all_reference_ids_v1(jsonb) owner to postgres;
+alter function private.review_scope_checksum_v1(jsonb) owner to postgres;
+alter function private.review_scope_current_items_v1(jsonb) owner to postgres;
+alter function private.review_scope_current_reference_ids_v1(jsonb) owner to postgres;
+alter function private.review_scope_current_snapshot_v1(jsonb) owner to postgres;
+alter function private.review_validate_scope_history_v1(uuid,jsonb) owner to postgres;
 
-grant execute on function private.review_append_scope_snapshot_v1(uuid,text,text,jsonb,uuid) to api_internal_executor;
-grant execute on function private.review_revision_fingerprint_v1(text,jsonb) to service_role, api_internal_executor;
-grant execute on function private.review_scope_all_reference_ids_v1(jsonb) to api_internal_executor;
-grant execute on function private.review_scope_checksum_v1(jsonb) to api_internal_executor;
-grant execute on function private.review_scope_current_items_v1(jsonb) to api_internal_executor;
-grant execute on function private.review_scope_current_reference_ids_v1(jsonb) to api_internal_executor;
-grant execute on function private.review_scope_current_snapshot_v1(jsonb) to api_internal_executor;
-grant execute on function private.review_validate_scope_history_v1(uuid,jsonb) to api_internal_executor;
+-- Exact source signatures own the adapter callable matrix.  Remove every
+-- current grantee first, including custom roles left by an earlier replay, then
+-- copy non-owner grants and grant options from the audited public source.
+do $converge_adapter_acl$
+declare
+  mapping record;
+  grantee_record record;
+begin
+  for mapping in
+    select source_oid, target_oid from (values
+      (to_regprocedure('public.review_append_scope_snapshot_v1(uuid,text,text,jsonb,uuid)'),to_regprocedure('private.review_append_scope_snapshot_v1(uuid,text,text,jsonb,uuid)')),
+      (to_regprocedure('public.review_revision_fingerprint_v1(text,jsonb)'),to_regprocedure('private.review_revision_fingerprint_v1(text,jsonb)')),
+      (to_regprocedure('public.review_scope_all_reference_ids_v1(jsonb)'),to_regprocedure('private.review_scope_all_reference_ids_v1(jsonb)')),
+      (to_regprocedure('public.review_scope_checksum_v1(jsonb)'),to_regprocedure('private.review_scope_checksum_v1(jsonb)')),
+      (to_regprocedure('public.review_scope_current_items_v1(jsonb)'),to_regprocedure('private.review_scope_current_items_v1(jsonb)')),
+      (to_regprocedure('public.review_scope_current_reference_ids_v1(jsonb)'),to_regprocedure('private.review_scope_current_reference_ids_v1(jsonb)')),
+      (to_regprocedure('public.review_scope_current_snapshot_v1(jsonb)'),to_regprocedure('private.review_scope_current_snapshot_v1(jsonb)')),
+      (to_regprocedure('public.review_validate_scope_history_v1(uuid,jsonb)'),to_regprocedure('private.review_validate_scope_history_v1(uuid,jsonb)'))
+    ) pair(source_oid,target_oid)
+  loop
+    execute format('revoke all privileges on function %s from public',mapping.target_oid::regprocedure);
+    for grantee_record in
+      select distinct role.rolname from pg_proc p
+      cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+      join pg_roles role on role.oid=acl.grantee
+      where p.oid=mapping.target_oid and role.rolname<>'postgres'
+    loop
+      execute format('revoke all privileges on function %s from %I',mapping.target_oid::regprocedure,grantee_record.rolname);
+    end loop;
+    for grantee_record in
+      select case when acl.grantee=0 then 'PUBLIC' else role.rolname end as rolname,
+        acl.is_grantable
+      from pg_proc p
+      cross join lateral aclexplode(coalesce(p.proacl,acldefault('f',p.proowner))) acl
+      left join pg_roles role on role.oid=acl.grantee
+      where p.oid=mapping.source_oid and acl.privilege_type='EXECUTE'
+        and acl.grantee<>p.proowner
+    loop
+      execute format('grant execute on function %s to %I%s',mapping.target_oid::regprocedure,
+        grantee_record.rolname,case when grantee_record.is_grantable then ' with grant option' else '' end);
+    end loop;
+  end loop;
+end
+$converge_adapter_acl$;
 
 do $parity$
 begin
+  if exists (
+    select 1 from issue355_relation_baseline baseline
+    left join pg_class current on current.oid=baseline.oid
+    where current.relowner is distinct from baseline.relowner
+       or current.relkind is distinct from baseline.relkind
+       or current.relrowsecurity is distinct from baseline.relrowsecurity
+       or current.relforcerowsecurity is distinct from baseline.relforcerowsecurity
+       or current.relacl is distinct from baseline.relacl
+       or (select md5(coalesce(string_agg(
+         policy.polname||':'||policy.polcmd::text||':'||policy.polpermissive::text||':'||
+         coalesce(array_to_string(policy.polroles,','),'')||':'||
+         coalesce(pg_get_expr(policy.polqual,policy.polrelid),'')||':'||
+         coalesce(pg_get_expr(policy.polwithcheck,policy.polrelid),''),
+         '|' order by policy.polname),''))
+         from pg_policy policy where policy.polrelid=current.oid) is distinct from baseline.policy_hash
+  ) then
+    raise exception 'Issue #355 source relation owner/relkind/RLS/ACL/policy changed during migration';
+  end if;
+
   if exists (
     select 1
     from issue355_routine_baseline b
@@ -300,6 +463,40 @@ begin
        or pg_get_functiondef(p.oid) is distinct from b.function_definition
   ) then
     raise exception 'Issue #355 audited public routine OID/property/ACL parity failed';
+  end if;
+
+  if exists (
+    select 1
+    from issue355_routine_baseline b
+    join pg_proc source on source.oid=b.oid
+    join pg_proc adapter on adapter.proname=source.proname and adapter.proargtypes=source.proargtypes
+    join pg_namespace adapter_namespace on adapter_namespace.oid=adapter.pronamespace
+    where adapter_namespace.nspname='private'
+      and (adapter.proowner<>source.proowner or adapter.provolatile<>source.provolatile
+        or adapter.prosecdef<>source.prosecdef or adapter.proisstrict<>source.proisstrict
+        or adapter.proparallel<>source.proparallel or adapter.proconfig is distinct from source.proconfig
+        or adapter.proleakproof<>source.proleakproof or adapter.procost<>source.procost
+        or adapter.prorows<>source.prorows
+        or exists (
+          (select case when acl.grantee=0 then 'PUBLIC' else role.rolname end,acl.privilege_type,acl.is_grantable
+           from aclexplode(coalesce(source.proacl,acldefault('f',source.proowner))) acl
+           left join pg_roles role on role.oid=acl.grantee where acl.grantee<>source.proowner
+           except
+           select case when acl.grantee=0 then 'PUBLIC' else role.rolname end,acl.privilege_type,acl.is_grantable
+           from aclexplode(coalesce(adapter.proacl,acldefault('f',adapter.proowner))) acl
+           left join pg_roles role on role.oid=acl.grantee where acl.grantee<>adapter.proowner)
+          union all
+          (select case when acl.grantee=0 then 'PUBLIC' else role.rolname end,acl.privilege_type,acl.is_grantable
+           from aclexplode(coalesce(adapter.proacl,acldefault('f',adapter.proowner))) acl
+           left join pg_roles role on role.oid=acl.grantee where acl.grantee<>adapter.proowner
+           except
+           select case when acl.grantee=0 then 'PUBLIC' else role.rolname end,acl.privilege_type,acl.is_grantable
+           from aclexplode(coalesce(source.proacl,acldefault('f',source.proowner))) acl
+           left join pg_roles role on role.oid=acl.grantee where acl.grantee<>source.proowner)
+        )
+      )
+  ) then
+    raise exception 'Issue #355 private adapter owner/property/ACL parity failed';
   end if;
 
 end

@@ -50,6 +50,10 @@ class IdentityCollaborationExpandStaticTest(unittest.TestCase):
         self.assertIn("commit;", normalized)
         self.assertIn("set local lock_timeout = '5s'", normalized)
         self.assertIn("set local statement_timeout = '60s'", normalized)
+        self.assertIn("in access share mode", normalized)
+        self.assertNotIn("access exclusive", normalized)
+        self.assertIn("create or replace view private.comments", normalized)
+        self.assertIn("create or replace function private.review_scope_checksum_v1", normalized)
         self.assertIn("issue355_routine_baseline", normalized)
 
 

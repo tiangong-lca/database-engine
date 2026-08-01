@@ -502,6 +502,35 @@ are sent only as `apikey`; legacy JWT-shaped anon keys are also sent as Bearer.
 Run `python -m unittest scripts/test_hosted_security_acl.py` for the offline
 argument and normalization contract.
 
+### Identity/collaboration Expand qualification
+
+`test_identity_collaboration_data_api.py` proves the versioned Issue #355 DTOs,
+notification RPC-only browser contract, authenticated/service/anonymous role
+split, PostgREST schema-cache reload, and negative internal-schema profiles.
+`test_identity_collaboration_concurrency.py` runs 800 checksum parity calls over
+eight sessions. The static test binds the exact 16-object inventory batch,
+consumer SHAs, versioned DTO names, transaction/timeouts, and Contract gates.
+
+```bash
+python -m unittest scripts/test_identity_collaboration_expand_static.py
+python scripts/test_identity_collaboration_data_api.py
+python scripts/test_identity_collaboration_concurrency.py
+```
+
+All three probes resolve one explicit loopback database through
+`IDENTITY_COLLABORATION_DATABASE_URL` (or `DATABASE_URL`) and verify that it is
+the database behind the selected `SUPABASE_WORKDIR` stack. The canonical runner
+does not execute rollback DDL by default. On a disposable local stack, opt in
+with `--run-destructive-identity-qualification`; `--skip-data-api` skips only
+HTTP probes and does not select or redirect the destructive target.
+
+The operator rollback is
+`supabase/operator/issue_355_restore_identity_collaboration_expand.sql`. It is
+repeatable and removes only the additive API/private Expand objects; the audited
+public physical routines and their OIDs remain untouched. The rollback harness
+also proves arbitrary custom ACL/owner convergence, complete target absence
+after two rollbacks, dependency/comment/property fingerprints, and roll-forward.
+
 ### `test_production_equivalent_upgrade.py`
 
 Runs the local-only global populated-upgrade qualification from the reviewed

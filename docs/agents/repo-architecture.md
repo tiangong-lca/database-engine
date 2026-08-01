@@ -75,6 +75,14 @@ views, wrappers, composite bridges, and grants. Contract removes those public
 residues only after consumers use the `api` or `private` contract and the gate
 proves zero compatibility callers.
 
+The identity/collaboration Expand follows that rule explicitly. Its sixteen
+tables/routines remain the audited physical `public` source while versioned
+`api` read DTOs and non-exposed `private` invoker adapters are introduced.
+Notification browser traffic remains RPC-only, identity-center projections are
+service-only, and user profiles expose named `id`/`contact`/`email`/`display_name`
+fields rather than raw Auth metadata. Physical moves wait for exact-SHA consumer
+zero, hosted-dev burn-in, and a separately reviewed Contract change.
+
 The versioned `schema_boundary_phase.v1` contract keeps that transition explicit. In Expand, the nine core tables remain in `public`, each other inventoried public table must have a non-public target, and reviewed compatibility relations may remain. Contract is a separate approval that enforces exactly the nine tables and no application views, materialized views, functions, or procedures in `public`.
 
 The stable public-boundary inventory lives under
