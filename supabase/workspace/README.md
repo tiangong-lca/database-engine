@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a46bb023873f3ae17cd5a9b34a443201515793c0
-lastReviewedNote: "Reviewed for Issue #339 hosted follow-up: Worker probe credential/profile behavior does not change generated workspace behavior or source-of-truth boundaries."
+lastReviewedCommit: 03566bee31d66dc2264a337595854cbf13faaaf9
+lastReviewedNote: "Reviewed through Issues #339/#341, #346, and #351: ACL/catalog changes, opaque-key Worker probe behavior, the populated-upgrade harness, and PostgREST rollback/readback do not change generated-workspace or source-of-truth boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

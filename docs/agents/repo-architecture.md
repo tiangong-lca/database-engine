@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a46bb023873f3ae17cd5a9b34a443201515793c0
-lastReviewedNote: "Reviewed for Issue #339 hosted follow-up: opaque-key and explicit-public-profile probe behavior does not change the api/private ownership model."
+lastReviewedCommit: 03566bee31d66dc2264a337595854cbf13faaaf9
+lastReviewedNote: "Reviewed through Issues #339/#341, #346, and #351: ACL convergence, opaque-key probes, the production-equivalent upgrade proof layer, and PostgREST rollback/readback preserve api/private ownership and operator evidence boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -92,6 +92,18 @@ This means branch behavior is part of the repo architecture, not just delivery p
 ## Test Proof Layers
 
 SQL assertions own database semantics and ACL regressions. Offline Node contracts own runner-only control flow, including outer-frozen request/namespace selectors, deterministic role emails, an outer-created exact empty mode-0700 private temp directory, fsync-before-ACK secret-free recovery checkpoints, exact filtered metadata recovery, global logout, hard DELETE followed by GET-404 plus a fresh empty filtered census, in-connection application-name binding, and fail-closed rendering/parsing of the 39-surface read-only residue proof. The inner runner may not begin actor sign-in or fixture mutation until the outer process has durably acknowledged the exact actor/selectors checkpoint. Cleanup shares the derivative coordinator advisory lock and is allowed only before either exact child crosses external dispatch; otherwise it fails into separately authorized durable recovery. A missing or ambiguous global logout always retains the actor and forbids hard DELETE. Those offline contracts use no Hosted database authority and do not replace the later exact-head Hosted mutation proof or independent Auth/SQL readback execution.
+
+The global populated-upgrade harness is a separate local-only proof layer. Its
+checked contract pins a reviewed migration base and exact head, one-million-row
+representative package-evidence scale, fixture surfaces, expected boundary
+objects, and time/WAL budgets. The runner creates only synthetic deterministic
+data, hashes rather than exports physical rows, injects a terminal error into
+every pending transaction, exercises incompatible and compatible lock holders,
+then verifies roll-forward and no-op retry against row/primary-key/content
+oracles plus constraint, ACL/RLS, policy, trigger, and publication invariants.
+It is not a production snapshot, hosted deployment, or authorization to mutate
+a linked project; advancing the migration head requires explicit contract
+review.
 
 ## Current Hotspot Themes
 

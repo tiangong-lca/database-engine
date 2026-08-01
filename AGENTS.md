@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a46bb023873f3ae17cd5a9b34a443201515793c0
-lastReviewedNote: "Reviewed for the Issue #339 hosted follow-up: Worker Data API probes preserve explicit public profiles, opaque-key semantics, and credential-redacted schema reload failures without changing repository ownership or integration boundaries."
+lastReviewedCommit: 03566bee31d66dc2264a337595854cbf13faaaf9
+lastReviewedNote: "Reviewed through Issues #339/#341, #346, and #351: ACL migration truth, opaque-key Worker probes, the local populated-upgrade harness, and persistent-dev rollback/readback preserve repository ownership, production integration, and hosted evidence boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
