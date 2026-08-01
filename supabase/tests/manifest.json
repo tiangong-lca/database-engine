@@ -47,6 +47,9 @@
     },
     "role-matrix": {
       "files": ["supabase/tests/20260731_worker_control_plane_private_expand.sql"]
+    },
+    "security-acl": {
+      "files": ["supabase/tests/20260801_security_acl_expand.sql"]
     }
   }
 }

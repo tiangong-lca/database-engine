@@ -183,7 +183,8 @@ from (
   select 'd3000000-0000-0000-0000-000000000111'::uuid, '01.00.000'::character(9), '{"search":"semantic-outsider-lifecycle"}'::jsonb, '{"search":"semantic-outsider-lifecycle"}'::json, 'b2000000-0000-0000-0000-000000000111'::uuid, 0, null::uuid, 'semantic-outsider-lifecycle'::text, test_vector.value, true, now(), now() from test_vector
 ) rows;
 
-set local role authenticated;
+grant api_internal_executor to postgres;
+set local role api_internal_executor;
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', 'a1000000-0000-0000-0000-000000000111', true);
 

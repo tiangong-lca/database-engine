@@ -307,7 +307,8 @@ python scripts/test_worker_control_plane_upgrade.py
 ### `test_worker_control_plane_data_api.py`
 
 After a clean local reset, sends a post-ready schema reload, polls until
-PostgREST exposes both additive Worker RPCs, verifies service-role calls return
+PostgREST exposes both additive Worker RPCs through an explicit `public`
+profile (independent of the reviewed `api`-first exposed-schema order), verifies service-role calls return
 the expected empty envelope, and proves anon calls fail closed. It reads local
 keys from `supabase status` and never prints them. Isolated stacks can instead
 set `DATABASE_URL`, `SUPABASE_REST_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and
@@ -315,7 +316,42 @@ set `DATABASE_URL`, `SUPABASE_REST_URL`, `SUPABASE_SERVICE_ROLE_KEY`, and
 
 ```bash
 python scripts/test_worker_control_plane_data_api.py
+python -m unittest scripts/test_worker_control_plane_data_api_unit.py
 ```
+
+### Security ACL Expand qualification
+
+`test_security_acl_upgrade.py` rehearses the Issue #339 migration from the
+populated canonical base, injects an in-transaction failure, retries the
+migration, proves row parity, restores the environment-specific ACL snapshot,
+and reapplies the migration.
+
+```bash
+python scripts/test_security_acl_upgrade.py
+```
+
+`hosted_security_acl.py` is the fail-closed hosted operator gate. It combines
+the database posture view, Management API `db_schema` readback, and real anon
+REST negative probes. It never prints credentials. The hosted gate is read-only;
+apply or reconcile hosted PostgREST configuration separately
+through `scripts/apply_postgrest_config.py`, which owns the reviewed diff,
+readback, and rollback contract. `supabase/operator/issue_339_supabase_admin_default_privileges.sql`
+must be executed separately by an authorized `supabase_admin` owner session.
+
+```bash
+SECURITY_ACL_DATABASE_URL='postgresql://...' \
+SECURITY_ACL_PROJECT_REF='<20-letter-ref>' \
+SECURITY_ACL_SUPABASE_URL='https://<20-letter-ref>.supabase.co' \
+SECURITY_ACL_ANON_KEY='<anon-or-publishable-key>' \
+SUPABASE_ACCESS_TOKEN='<management-token>' \
+python scripts/hosted_security_acl.py --evidence /new/private/evidence.json
+```
+
+The required set, in reviewed order, is `api,public,graphql_public`; `private`,
+`util`, and `archive` must remain absent. Opaque `sb_publishable_` credentials
+are sent only as `apikey`; legacy JWT-shaped anon keys are also sent as Bearer.
+Run `python -m unittest scripts/test_hosted_security_acl.py` for the offline
+argument and normalization contract.
 
 ### `test_scope_closure_staged_write_set_v2_fixture.sh`
 

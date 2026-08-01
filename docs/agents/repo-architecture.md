@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 833564c7ced2037d07e09d3f5bb800f5b430e469
-lastReviewedNote: "Reviewed for Issue #346 follow-up: the config gate restores and verifies its prior allowlisted snapshot on readback mismatch without changing the api/private ownership model."
+lastReviewedCommit: a3b1f19aaceef1cb6037180dc55e454d00ac08eb
+lastReviewedNote: "Reviewed through Issue #339 and the Issue #346 follow-up: ACL convergence and persistent Dev PostgREST reconciliation, including restoration and verification of the prior allowlisted snapshot on readback mismatch, preserve the api/private ownership model and operator evidence boundary."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
