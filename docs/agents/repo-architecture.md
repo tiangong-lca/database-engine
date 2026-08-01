@@ -29,7 +29,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 1a0fc514e41724bd513b4126429c38dff10339c0
+lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
 lastReviewedNote: "Reviewed for Issues #355/#339 and PR #367 findings: canonical enforcement binds actor-RLS to rollback/roll-forward proof, while global/five-schema ACL layer restore, bool_or effective grantability, and owner-only snapshot proof fit the current architecture."
 related:
   - ../../AGENTS.md

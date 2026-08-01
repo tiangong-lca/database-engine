@@ -32,7 +32,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 1a0fc514e41724bd513b4126429c38dff10339c0
+lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
 lastReviewedNote: "Reviewed for Issue #355 mandatory destructive qualification: the canonical opt-in gate now runs both exact public.users predecessors, actor-level source/projection RLS parity, retry/unknown atomic rejection, and the rollback/roll-forward harness."
 related:
   - ../../AGENTS.md
@@ -113,6 +113,11 @@ not a skippable test result. They also prefetch the digest-pinned PostgREST
 v14.7 conformance image before starting the suite. The conformance test refuses
 to pull an image itself, so a missing or tag-only image cannot silently change
 the runtime under test or become a skipped result.
+
+Every workflow that invokes the canonical runner must check out full Git
+history (`fetch-depth: 0`). The immutable public-inventory provenance gate
+verifies its recorded source commit with Git; a shallow checkout is an invalid
+validation environment and must fail before any hosted deployment job starts.
 
 ## Proof Matrix
 

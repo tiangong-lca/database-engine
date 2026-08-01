@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 1a0fc514e41724bd513b4126429c38dff10339c0
+lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
 lastReviewedNote: "Reviewed for Issue #369: manifest-owned validation, PR CI, and Issue #357 phase gates do not change generated workspace ownership or refresh semantics."
 related:
   - ../../AGENTS.md
