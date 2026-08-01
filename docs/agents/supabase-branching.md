@@ -221,7 +221,11 @@ form because PostgreSQL's built-in `PUBLIC EXECUTE` is global and cannot be
 subtracted by a per-schema revoke; table and sequence defaults remain scoped to
 the five application schemas. Catalog and hosted gates compute effective
 defaults from built-in, explicit global, and additive per-schema layers, so an
-absent `pg_default_acl` row is not accepted as safe. Supabase's internal
+absent `pg_default_acl` row is not accepted as safe. Duplicate effective ACL
+identities fold grantability with `bool_or`. The operator restore snapshots and
+rebuilds both the global and five additive function layers; its snapshot
+dynamically removes every non-owner ACL grantee instead of assuming a fixed role
+list. Supabase's internal
 `supabase_admin` effective defaults remain independently blocked by #352 until
 a supported platform-owner path closes them and `hostedOperatorReady=true`.
 Never treat a local config value or SQL catalog check alone as hosted Data API

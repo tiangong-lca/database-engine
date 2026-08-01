@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "已为 Issue #355 与 #339 复核：生成 workspace 仍只作检查证据；canonical opt-in runner 强制执行 exact-hash/RLS 与 rollback/roll-forward 两组证明，并继续与权威的分层全局默认权限合同分离。"
+lastReviewedCommit: 87159d6331a793685d5a381380665a697bacce37
+lastReviewedNote: "已为 Issue #355/#339 与 PR #367 findings 复核：生成 workspace 仍只作检查证据，并与 canonical actor-RLS/rollback gate 以及权威的分层 ACL restore、effective grantability 及 snapshot access 合同分离。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

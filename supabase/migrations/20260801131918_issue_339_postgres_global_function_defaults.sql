@@ -7,19 +7,73 @@ set local statement_timeout = '2min';
 -- built-in global default.  A per-schema REVOKE cannot subtract that global
 -- privilege, so preserve the pre-migration global posture before converging it.
 create table if not exists archive.security_acl_postgres_global_functions_20260801_snapshot (
+  scope_schema text not null,
   grantee text not null,
   privilege_type text not null,
   is_grantable boolean not null,
   captured_at timestamptz not null default statement_timestamp(),
-  primary key (grantee, privilege_type, is_grantable)
+  primary key (scope_schema, grantee, privilege_type),
+  check (scope_schema in ('*', 'public', 'api', 'private', 'util', 'archive')),
+  check (privilege_type = 'EXECUTE')
 );
 
-revoke all on archive.security_acl_postgres_global_functions_20260801_snapshot
-  from public, anon, authenticated, service_role;
+-- The snapshot may inherit table defaults granted to roles unknown to this
+-- migration. Remove every ACL identity other than the table owner rather than
+-- relying on a fixed role list, then prove the resulting object is owner-only.
+do $snapshot_acl$
+declare
+  acl_grantee record;
+  grant_target text;
+begin
+  for acl_grantee in
+    select distinct acl.grantee, grantee.rolname
+    from pg_class relation
+    cross join lateral aclexplode(coalesce(
+      relation.relacl, acldefault('r', relation.relowner)
+    )) acl
+    left join pg_roles grantee on grantee.oid = acl.grantee
+    where relation.oid = 'archive.security_acl_postgres_global_functions_20260801_snapshot'::regclass
+      and acl.grantee <> relation.relowner
+  loop
+    if acl_grantee.grantee = 0 then
+      grant_target := 'PUBLIC';
+    elsif acl_grantee.rolname is null then
+      raise exception 'snapshot ACL contains unknown role oid %', acl_grantee.grantee;
+    else
+      grant_target := format('%I', acl_grantee.rolname);
+    end if;
+    execute format(
+      'REVOKE ALL ON archive.security_acl_postgres_global_functions_20260801_snapshot FROM %s',
+      grant_target
+    );
+  end loop;
+
+  if exists (
+    select 1
+    from pg_class relation
+    cross join lateral aclexplode(coalesce(
+      relation.relacl, acldefault('r', relation.relowner)
+    )) acl
+    where relation.oid = 'archive.security_acl_postgres_global_functions_20260801_snapshot'::regclass
+      and acl.grantee <> relation.relowner
+  ) then
+    raise exception 'snapshot ACL convergence left a non-owner grantee';
+  end if;
+
+  if not has_table_privilege(
+    'postgres',
+    'archive.security_acl_postgres_global_functions_20260801_snapshot',
+    'SELECT'
+  ) then
+    raise exception 'postgres owner lost snapshot SELECT';
+  end if;
+end
+$snapshot_acl$;
 
 insert into archive.security_acl_postgres_global_functions_20260801_snapshot
-  (grantee, privilege_type, is_grantable)
+  (scope_schema, grantee, privilege_type, is_grantable)
 select
+  '*',
   case when acl.grantee = 0 then 'PUBLIC' else grantee.rolname end,
   acl.privilege_type,
   acl.is_grantable
@@ -36,6 +90,20 @@ from aclexplode(coalesce(
 left join pg_roles grantee on grantee.oid = acl.grantee
 where acl.grantee = 0
    or grantee.rolname in ('anon', 'authenticated', 'service_role')
+union all
+select
+  namespace.nspname,
+  case when acl.grantee = 0 then 'PUBLIC' else grantee.rolname end,
+  acl.privilege_type,
+  acl.is_grantable
+from pg_default_acl defaults
+join pg_namespace namespace on namespace.oid = defaults.defaclnamespace
+cross join lateral aclexplode(defaults.defaclacl) acl
+left join pg_roles grantee on grantee.oid = acl.grantee
+where defaults.defaclrole = 'postgres'::regrole
+  and defaults.defaclobjtype = 'f'
+  and namespace.nspname in ('public', 'api', 'private', 'util', 'archive')
+  and (acl.grantee = 0 or grantee.rolname in ('anon', 'authenticated', 'service_role'))
 on conflict do nothing;
 
 -- Functions require both layers: the global revoke removes PostgreSQL's
@@ -101,15 +169,18 @@ with application_schemas as (
       and schema_defaults.defaclobjtype = targets.object_type
   ) acl
 )
-select distinct
+select
   effective_acl.owner_name,
   effective_acl.schema_name,
   effective_acl.object_type,
   case when effective_acl.grantee = 0 then 'PUBLIC' else grantee.rolname end as grantee,
   effective_acl.privilege_type,
-  effective_acl.is_grantable
+  bool_or(effective_acl.is_grantable) as is_grantable
 from effective_acl
-left join pg_roles grantee on grantee.oid = effective_acl.grantee;
+left join pg_roles grantee on grantee.oid = effective_acl.grantee
+group by effective_acl.owner_name, effective_acl.schema_name,
+  effective_acl.object_type, effective_acl.grantee, grantee.rolname,
+  effective_acl.privilege_type;
 
 revoke all on util.security_acl_effective_default_privileges
   from public, anon, authenticated;

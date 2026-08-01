@@ -383,7 +383,9 @@ migration 之前启动，以真实新函数复现内建 global `PUBLIC EXECUTE`�
 non-application schema 证明 revoke 影响 `postgres` 在整个数据库创建的未来函数。
 它同时覆盖带 grant option 的显式 global row、owner execute、built-in/global/per-schema
 effective catalog、当前对象 ACL 与 application row-count parity、事务故障、幂等重试、
-精确 restore 和 roll-forward。本迁移不扫描或改写 application relation，因此百万行
+global 与五个 additive per-schema 层的精确 restore 和 roll-forward。custom per-schema
+grant option 证明 layering/grantability 被精确恢复；custom table-default role 证明 snapshot
+动态移除所有 non-owner grantee，同时保留 `postgres` owner。本迁移不扫描或改写 application relation，因此百万行
 夹具不会改变其锁、WAL 或执行行为，不适用。共享 local stack 不干净时，通过
 `SUPABASE_WORKDIR` 指向独立的一次性项目根目录。
 

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(42);
+select plan(45);
 
 select is(
   (select posture->>'contractVersion' from util.security_acl_expand_posture),
@@ -54,6 +54,27 @@ select is((
     and grantee = 'PUBLIC'
     and privilege_type = 'EXECUTE'
 ), 5, 'supabase_admin built-in PUBLIC EXECUTE is not hidden by absent explicit catalog rows');
+
+alter default privileges for role postgres
+  grant execute on functions to service_role;
+alter default privileges for role postgres in schema api
+  grant execute on functions to service_role with grant option;
+select is((
+  select count(*)::integer
+  from util.security_acl_effective_default_privileges
+  where owner_name='postgres' and schema_name='api' and object_type='f'
+    and grantee='service_role' and privilege_type='EXECUTE'
+), 1, 'effective defaults fold global and additive schema ACLs to one identity');
+select ok((
+  select is_grantable
+  from util.security_acl_effective_default_privileges
+  where owner_name='postgres' and schema_name='api' and object_type='f'
+    and grantee='service_role' and privilege_type='EXECUTE'
+), 'effective defaults preserve grant-option precedence with bool_or');
+alter default privileges for role postgres in schema api
+  revoke execute on functions from service_role;
+alter default privileges for role postgres
+  revoke execute on functions from service_role;
 
 create schema issue_339_non_application_probe authorization postgres;
 create function issue_339_non_application_probe.future_function() returns integer
@@ -155,6 +176,13 @@ select ok(not exists (
     and acl.grantee = 0
     and acl.privilege_type = 'SELECT'
 ), 'PUBLIC cannot read the operator-only global-default rollback snapshot');
+select ok(not exists (
+  select 1
+  from pg_class c
+  cross join lateral aclexplode(coalesce(c.relacl, acldefault('r', c.relowner))) acl
+  where c.oid = 'archive.security_acl_postgres_global_functions_20260801_snapshot'::regclass
+    and acl.grantee <> c.relowner
+), 'snapshot ACL contains no non-owner grantee, including unknown custom roles');
 select ok(
   not has_table_privilege('anon', 'archive.security_acl_postgres_global_functions_20260801_snapshot', 'SELECT'),
   'anon cannot read the global-default rollback snapshot'

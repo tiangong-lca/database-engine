@@ -66,7 +66,7 @@ with contract as (
       where d.defaclnamespace=0 or n.nspname in ('public','api','private','util','archive')
     ) x),
     'effectiveDefaultPrivileges', (select coalesce(jsonb_agg(to_jsonb(x)
-      order by owner_name,schema_name,object_type,grantee,privilege_type), '[]') from (
+      order by owner_name,schema_name,object_type,grantee,privilege_type,is_grantable), '[]') from (
       select owner_name,schema_name,object_type,grantee,privilege_type,is_grantable
       from util.security_acl_effective_default_privileges
       where grantee in ('PUBLIC','anon','authenticated','service_role')

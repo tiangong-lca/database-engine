@@ -104,20 +104,41 @@ def current_object_acl_signature(database_url: str) -> str:
     """).stdout.strip()
 
 
-def global_function_default_signature(database_url: str) -> str:
+def function_default_layer_signature(database_url: str) -> str:
     return psql(database_url, r"""
-      select md5(coalesce(jsonb_agg(to_jsonb(x) order by grantee,privilege_type,is_grantable)::text, '[]'))
-      from (
-        select case when acl.grantee=0 then 'PUBLIC' else grantee.rolname end grantee,
+      with scopes(scope_schema,schema_oid) as (
+        values
+          ('*'::text,0::oid),
+          ('public',(select oid from pg_namespace where nspname='public')),
+          ('api',(select oid from pg_namespace where nspname='api')),
+          ('private',(select oid from pg_namespace where nspname='private')),
+          ('util',(select oid from pg_namespace where nspname='util')),
+          ('archive',(select oid from pg_namespace where nspname='archive'))
+      ), layers as (
+        select scopes.scope_schema, defaults.oid is not null explicit_row,
+          case when scopes.scope_schema='*'
+            then coalesce(defaults.defaclacl,acldefault('f','postgres'::regrole))
+            else defaults.defaclacl
+          end acl
+        from scopes
+        left join pg_default_acl defaults
+          on defaults.defaclrole='postgres'::regrole
+         and defaults.defaclnamespace=scopes.schema_oid
+         and defaults.defaclobjtype='f'
+      ), entries as (
+        select layers.scope_schema,
+          case when acl.grantee=0 then 'PUBLIC' else grantee.rolname end grantee,
           acl.privilege_type,acl.is_grantable
-        from aclexplode(coalesce(
-          (select d.defaclacl from pg_default_acl d
-           where d.defaclrole='postgres'::regrole and d.defaclnamespace=0 and d.defaclobjtype='f'),
-          acldefault('f','postgres'::regrole)
-        )) acl
+        from layers
+        cross join lateral aclexplode(layers.acl) acl
         left join pg_roles grantee on grantee.oid=acl.grantee
-        where acl.grantee=0 or grantee.rolname in ('anon','authenticated','service_role')
-      ) x;
+      )
+      select md5(jsonb_build_object(
+        'explicitLayers',(select jsonb_agg(scope_schema order by scope_schema)
+                          from layers where explicit_row),
+        'entries',(select coalesce(jsonb_agg(to_jsonb(entries)
+          order by scope_schema,grantee,privilege_type,is_grantable),'[]') from entries)
+      )::text);
     """).stdout.strip()
 
 
@@ -160,13 +181,18 @@ def main() -> int:
     if "t" not in implicit_public:
         raise SystemExit("pre-migration PostgreSQL built-in PUBLIC EXECUTE was not reproduced")
 
-    # Exercise restore against explicit global rows as well as the implicit
-    # PUBLIC default. The service role's grant option proves the snapshot does
-    # not flatten ACL grantability.
+    # Exercise restore against explicit global rows, the implicit PUBLIC
+    # default, and an additive per-schema grant option. The custom table-default
+    # grantee proves snapshot ACL convergence is not limited to known API roles.
     psql(database_url, r"""
+      create role issue_339_snapshot_reader nologin;
+      alter default privileges for role postgres in schema archive
+        grant select on tables to issue_339_snapshot_reader;
       alter default privileges for role postgres
         grant execute on functions to anon, authenticated;
       alter default privileges for role postgres
+        grant execute on functions to service_role with grant option;
+      alter default privileges for role postgres in schema api
         grant execute on functions to service_role with grant option;
     """)
     explicit_global = psql(database_url, r"""
@@ -181,18 +207,30 @@ def main() -> int:
           where d.defaclrole='postgres'::regrole and d.defaclnamespace=0 and d.defaclobjtype='f'
             and acl.grantee='authenticated'::regrole and acl.privilege_type='EXECUTE'
         ),
-        'serviceGrantable', exists(
+        'serviceGlobalGrantable', exists(
           select 1 from pg_default_acl d cross join lateral aclexplode(d.defaclacl) acl
           where d.defaclrole='postgres'::regrole and d.defaclnamespace=0 and d.defaclobjtype='f'
+            and acl.grantee='service_role'::regrole and acl.privilege_type='EXECUTE' and acl.is_grantable
+        ),
+        'serviceApiGrantable', exists(
+          select 1 from pg_default_acl d
+          join pg_namespace n on n.oid=d.defaclnamespace
+          cross join lateral aclexplode(d.defaclacl) acl
+          where d.defaclrole='postgres'::regrole and d.defaclobjtype='f' and n.nspname='api'
             and acl.grantee='service_role'::regrole and acl.privilege_type='EXECUTE' and acl.is_grantable
         )
       )::text;
     """).stdout.strip()
-    if json.loads(explicit_global) != {"anon": True, "authenticated": True, "serviceGrantable": True}:
-        raise SystemExit("explicit global function-default fixture was not established")
+    if json.loads(explicit_global) != {
+        "anon": True,
+        "authenticated": True,
+        "serviceGlobalGrantable": True,
+        "serviceApiGrantable": True,
+    }:
+        raise SystemExit("global and per-schema function-default fixture was not established")
 
     before_acl = current_object_acl_signature(database_url)
-    before_defaults = global_function_default_signature(database_url)
+    before_defaults = function_default_layer_signature(database_url)
     before_rows = application_row_count_signature(database_url)
     migration = MIGRATION.read_text(encoding="utf-8")
     for required in (
@@ -207,11 +245,16 @@ def main() -> int:
     psql(database_url, failed, expect_failure=True)
     if current_object_acl_signature(database_url) != before_acl:
         raise SystemExit("failed migration changed current object ACLs")
-    if global_function_default_signature(database_url) != before_defaults:
-        raise SystemExit("failed migration changed global function defaults")
-    residue = psql(database_url, "select to_regclass('util.security_acl_effective_default_privileges');").stdout.strip()
+    if function_default_layer_signature(database_url) != before_defaults:
+        raise SystemExit("failed migration changed global or per-schema function defaults")
+    residue = psql(database_url, r"""
+      select concat_ws(',',
+        to_regclass('util.security_acl_effective_default_privileges'),
+        to_regclass('archive.security_acl_postgres_global_functions_20260801_snapshot')
+      );
+    """).stdout.strip()
     if residue:
-        raise SystemExit(f"failed migration left effective-default view residue: {residue}")
+        raise SystemExit(f"failed migration left snapshot/effective-default residue: {residue}")
 
     psql(database_url, migration)
     after_acl = current_object_acl_signature(database_url)
@@ -219,6 +262,47 @@ def main() -> int:
         raise SystemExit("global-default migration drifted current object ACLs")
     if application_row_count_signature(database_url) != before_rows:
         raise SystemExit("global-default migration changed application row counts")
+    snapshot_acl = json.loads(psql(database_url, r"""
+      select jsonb_build_object(
+        'customDenied',not has_table_privilege(
+          'issue_339_snapshot_reader',
+          'archive.security_acl_postgres_global_functions_20260801_snapshot','SELECT'
+        ),
+        'ownerAllowed',has_table_privilege(
+          'postgres','archive.security_acl_postgres_global_functions_20260801_snapshot','SELECT'
+        ),
+        'nonOwnerAclCount',(
+          select count(*)
+          from pg_class relation
+          cross join lateral aclexplode(coalesce(
+            relation.relacl,acldefault('r',relation.relowner)
+          )) acl
+          where relation.oid='archive.security_acl_postgres_global_functions_20260801_snapshot'::regclass
+            and acl.grantee<>relation.relowner
+        ),
+        'apiGrantOptionCaptured',exists(
+          select 1
+          from archive.security_acl_postgres_global_functions_20260801_snapshot
+          where scope_schema='api' and grantee='service_role'
+            and privilege_type='EXECUTE' and is_grantable
+        )
+      )::text;
+    """).stdout.strip())
+    if snapshot_acl != {
+        "customDenied": True,
+        "ownerAllowed": True,
+        "nonOwnerAclCount": 0,
+        "apiGrantOptionCaptured": True,
+    }:
+        raise SystemExit(f"snapshot owner-only/layer capture failed: {snapshot_acl}")
+
+    # Remove only the custom fixture's still-active table default before the
+    # final catalog is inspected; the snapshot itself no longer references it.
+    psql(database_url, r"""
+      alter default privileges for role postgres in schema archive
+        revoke select on tables from issue_339_snapshot_reader;
+      drop role issue_339_snapshot_reader;
+    """)
 
     psql(database_url, migration)
     if current_object_acl_signature(database_url) != after_acl:
@@ -226,8 +310,8 @@ def main() -> int:
     run(supabase_command("test", "db", str(TEST.relative_to(ROOT)), "--local"))
 
     run(["psql", database_url, "-X", "-v", "ON_ERROR_STOP=1", "-f", str(RESTORE)])
-    if global_function_default_signature(database_url) != before_defaults:
-        raise SystemExit("restore did not reproduce the pre-migration global function defaults")
+    if function_default_layer_signature(database_url) != before_defaults:
+        raise SystemExit("restore did not reproduce every global/per-schema function-default layer")
     if current_object_acl_signature(database_url) != after_acl:
         raise SystemExit("restore changed current object ACLs")
     if application_row_count_signature(database_url) != before_rows:
@@ -237,7 +321,8 @@ def main() -> int:
     run(supabase_command("test", "db", str(TEST.relative_to(ROOT)), "--local"))
     print(
         "PASS PG17 implicit PUBLIC default; failure atomic; effective global+schema gate; "
-        "retry stable; current ACL/data parity; exact restore; roll-forward stable"
+        "dynamic owner-only snapshot ACL; additive grant-option restore; retry stable; "
+        "current ACL/data parity; exact layered restore; roll-forward stable"
     )
     return 0
 

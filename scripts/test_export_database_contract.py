@@ -5,10 +5,16 @@ from __future__ import annotations
 
 import unittest
 
-from scripts.export_database_contract import validate_generation_guard
+from scripts.export_database_contract import QUERY, validate_generation_guard
 
 
 class DatabaseCatalogGenerationGuardTest(unittest.TestCase):
+    def test_effective_default_privilege_order_includes_grantability(self) -> None:
+        self.assertIn(
+            "order by owner_name,schema_name,object_type,grantee,privilege_type,is_grantable",
+            QUERY,
+        )
+
     def test_clean_issue_339_posture_is_accepted(self) -> None:
         validate_generation_guard({
             "serviceRoleMaintain": [],

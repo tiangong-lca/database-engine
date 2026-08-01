@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "Reviewed for Issues #355 and #339: canonical opt-in enforcement binds dual-predecessor actor-RLS proof to rollback/roll-forward proof, while the global postgres function-default policy and five-schema effective-ACL gate fit the existing test-proof architecture."
+lastReviewedCommit: 87159d6331a793685d5a381380665a697bacce37
+lastReviewedNote: "Reviewed for Issues #355/#339 and PR #367 findings: canonical enforcement binds actor-RLS to rollback/roll-forward proof, while global/five-schema ACL layer restore, bool_or effective grantability, and owner-only snapshot proof fit the current architecture."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

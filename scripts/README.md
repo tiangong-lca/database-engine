@@ -481,8 +481,11 @@ on a real newly-created function, then qualifies the global revoke across the
 entire database, including a scratch non-application schema. It also covers
 explicit global rows with grant option, owner execution, effective
 built-in/global/per-schema catalog evaluation, current-object ACL and
-application row-count parity, failure atomicity, retry, exact restore, and
-roll-forward. A million-row fixture is not applicable because this migration
+application row-count parity, failure atomicity, retry, and exact restore of
+both the global and five additive per-schema layers. A custom per-schema grant
+option proves layering and grantability survive restore. A custom table-default
+role also proves the snapshot dynamically removes every non-owner grantee while
+retaining the `postgres` owner. A million-row fixture is not applicable because this migration
 does not scan or rewrite application relations; cardinality cannot change its
 lock, WAL, or execution behavior. Set `SUPABASE_WORKDIR` to the root of an
 independent disposable project when the shared local stack is not clean.
