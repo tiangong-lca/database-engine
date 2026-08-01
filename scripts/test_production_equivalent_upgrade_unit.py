@@ -84,6 +84,20 @@ class ProductionEquivalentUpgradeSafetyTest(unittest.TestCase):
                 {"public.rows": {"rowCount": 2}},
             )
 
+    def test_reviewed_physical_relation_move_preserves_data_oracle(self) -> None:
+        oracle = {"rowCount": 2, "primaryKeyHash": "pk", "rowHash": "rows"}
+        runner.assert_base_relations_preserved(
+            {"public.worker_jobs": oracle},
+            {"private.worker_jobs": oracle},
+            {"public.worker_jobs": "private.worker_jobs"},
+        )
+        with self.assertRaisesRegex(SystemExit, "did not occur exactly"):
+            runner.assert_base_relations_preserved(
+                {"public.worker_jobs": oracle},
+                {"public.worker_jobs": oracle, "private.worker_jobs": oracle},
+                {"public.worker_jobs": "private.worker_jobs"},
+            )
+
     def test_configured_head_must_be_repository_latest_numeric_migration(self) -> None:
         with tempfile.TemporaryDirectory() as directory:
             migrations = Path(directory)

@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 87d3ca6a69435e611fc6f64a420da1f16f5c0978
-lastReviewedNote: "Reviewed for Issue #356: Worker physical tables now live in private during Expand behind public compatibility views and invoker wrappers; Contract still requires consumer-zero before public residue removal."
+lastReviewedCommit: 9e843e67783123f859035e3a720df910e87a644e
+lastReviewedNote: "Reviewed for Issue #355: identity/collaboration remains an Expand-only single-source boundary with eight physical tables public and private/api projections; Contract still requires consumer-zero before physical movement."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

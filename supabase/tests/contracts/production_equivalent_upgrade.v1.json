@@ -4,6 +4,7 @@
   "expectedHeadVersion": "20260801061000",
   "defaultRepresentativeRows": 1000000,
   "minimumQualificationRows": 1000000,
+  "compatibleReaderDuringUpgrade": false,
   "rehearsalCleanupScripts": [
     "supabase/operator/issue_339_restore_expand_acl.sql"
   ],
@@ -31,6 +32,12 @@
     "release",
     "closure"
   ],
+  "relationMoves": {
+    "public.worker_job_artifacts": "private.worker_job_artifacts",
+    "public.worker_job_events": "private.worker_job_events",
+    "public.worker_job_kinds": "private.worker_job_kinds",
+    "public.worker_jobs": "private.worker_jobs"
+  },
   "expectedHeadObjects": [
     "api.processes_v1",
     "api.review_comments_v1",
@@ -65,6 +72,6 @@
     "public.worker_job_domain_refs",
     "public.worker_legacy_lifecycle_audit",
     "public.worker_legacy_table_retirement_blockers",
-    "public.worker_jobs_job_kind_concurrency_created_idx"
+    "private.worker_jobs_job_kind_concurrency_created_idx"
   ]
 }

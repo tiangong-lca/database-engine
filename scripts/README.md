@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a1be848fefc88d68c1073f98c9e3ecf866095399
-lastReviewedNote: "Reviewed through Issues #353/#354 and for #333: retain immutable provenance and five-schema qualification entrypoints while documenting deterministic SECURITY DEFINER audit generation and fail-closed #352/#358 boundaries."
+lastReviewedCommit: 9e843e67783123f859035e3a720df910e87a644e
+lastReviewedNote: "Reviewed for Issue #355 after #356 integration: script entrypoints retain immutable provenance, five-schema lineage qualification, deterministic rollback, and production-equivalent upgrade proof."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

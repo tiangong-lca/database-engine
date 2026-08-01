@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 87d3ca6a69435e611fc6f64a420da1f16f5c0978
-lastReviewedNote: "Reviewed for Issue #356: generated workspace output remains separate from authoritative migrations and cross-schema lineage/transition contracts, and its five-schema export already covers moved Worker objects."
+lastReviewedCommit: 9e843e67783123f859035e3a720df910e87a644e
+lastReviewedNote: "Reviewed for Issue #355: generated workspace output remains separate from authoritative migrations and cross-schema lineage/transition contracts; the live export covers Worker movement plus identity/collaboration projections."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

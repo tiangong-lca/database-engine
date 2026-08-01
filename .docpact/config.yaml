@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-01"
-lastReviewedCommit: "87d3ca6a69435e611fc6f64a420da1f16f5c0978"
-lastReviewedNote: "Reviewed for Issue #356: routing now covers Worker control-plane migrations, rollback operators, tests, and qualification scripts; ownership and governance rules remain unchanged."
+lastReviewedCommit: "9e843e67783123f859035e3a720df910e87a644e"
+lastReviewedNote: "Reviewed for Issue #355: identity/collaboration Expand, rollback, generated contracts, and qualification tooling remain covered; ownership and governance rules are unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
