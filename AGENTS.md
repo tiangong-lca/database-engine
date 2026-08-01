@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 87d3ca6a69435e611fc6f64a420da1f16f5c0978
-lastReviewedNote: "Reviewed for Issue #356: the Worker physical Expand, compatibility boundary, five-schema lineage proof, branch policy, and repo/workspace ownership rules remain consistent; Issue #352 remains unresolved."
+lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
+lastReviewedNote: "Reviewed for Issue #355 delegated-ACL hardening: the Expand boundary keeps eight physical tables public, converges target relation/column/routine delegation chains without touching unrelated objects, and leaves Contract gated on consumer-zero and hosted evidence."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

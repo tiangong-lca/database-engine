@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a1be848fefc88d68c1073f98c9e3ecf866095399
-lastReviewedNote: "已为 Issues #353/#354 与 #333 复核：保留 immutable provenance 和五 schema 验证入口，并记录 deterministic SECURITY DEFINER audit、role matrix 与 fail-closed #352/#358 边界。"
+lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
+lastReviewedNote: "已为 Issue #355 delegated ACL 加固复核：脚本入口继续保留 immutable provenance，并验证 relation/column/routine 授权链收敛、无关对象隔离、三类篡改拒绝与 production-equivalent 行为。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -396,6 +396,35 @@ readback 和 rollback 合同应用或协调。
 ```bash
 python -m unittest scripts/test_hosted_security_acl.py
 ```
+
+### identity/collaboration Expand 验证
+
+`test_identity_collaboration_data_api.py` 验证 Issue #355 版本化 DTO、notification
+浏览器 RPC-only 合同、authenticated/service/anonymous 角色分离、PostgREST schema
+cache reload 和 internal schema 负向 profile。`test_identity_collaboration_concurrency.py`
+使用 8 个并发 session 执行 800 次 public/private checksum parity 调用。静态测试固定
+16 个精确 inventory 对象、consumer SHA、版本化 DTO、事务/timeout 与 Contract gate。
+
+```bash
+python -m unittest scripts/test_identity_collaboration_expand_static.py
+python scripts/test_identity_collaboration_data_api.py
+python scripts/test_identity_collaboration_concurrency.py
+```
+
+canonical runner 只解析一次显式 loopback stack：先把 database identity 与所选
+`SUPABASE_WORKDIR` 对账，再向每一个 SQL、Data API、catalog、schema phase、inventory、
+lint 和 SECURITY DEFINER gate 覆盖并传递同一组 `DATABASE_URL`、REST credentials 与
+workdir。`test_database_contract_targeting.py` 提供离线双 stack 混拼负向测试。
+canonical runner 默认不执行 rollback DDL；只可在 disposable local stack 上用
+`--run-destructive-identity-qualification` 显式启用。`--skip-data-api` 只跳过 HTTP
+probe，不选择或重定向破坏性测试目标。
+
+可重复 operator rollback 为
+`supabase/operator/issue_355_restore_identity_collaboration_expand.sql`；它只删除新增
+api/private Expand 对象，不改动受审 public 物理 routine 或其 OID。
+rollback harness 还验证 reviewed predecessor routine/额外 overload 拒绝、任意 custom
+ACL/owner 收敛、精确 migration head 与完整 target fingerprint 删除门、tamper/partial-state
+拒绝、连续两次 rollback 后目标对象为零，以及精确 roll-forward。
 
 ### `test_production_equivalent_upgrade.py`
 

@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 87d3ca6a69435e611fc6f64a420da1f16f5c0978
-lastReviewedNote: "Reviewed for Issue #356: Worker physical tables now live in private during Expand behind public compatibility views and invoker wrappers; Contract still requires consumer-zero before public residue removal."
+lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
+lastReviewedNote: "Reviewed for Issue #355 delegated-ACL hardening: identity/collaboration remains Expand-only with public physical sources and private/api targets whose relation, column, and adapter-routine ACLs converge from delegated chains; Contract still requires consumer-zero."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -74,6 +74,14 @@ preserves one physical source of truth and keeps the reviewed compatibility
 views, wrappers, composite bridges, and grants. Contract removes those public
 residues only after consumers use the `api` or `private` contract and the gate
 proves zero compatibility callers.
+
+The identity/collaboration Expand follows that rule explicitly. Its sixteen
+tables/routines remain the audited physical `public` source while versioned
+`api` read DTOs and non-exposed `private` invoker adapters are introduced.
+Notification browser traffic remains RPC-only, identity-center projections are
+service-only, and user profiles expose named `id`/`contact`/`email`/`display_name`
+fields rather than raw Auth metadata. Physical moves wait for exact-SHA consumer
+zero, hosted-dev burn-in, and a separately reviewed Contract change.
 
 The versioned `schema_boundary_phase.v1` contract keeps that transition explicit. In Expand, the nine core tables remain in `public`, each other inventoried public table must have a non-public target, and reviewed compatibility relations may remain. Contract is a separate approval that enforces exactly the nine tables and no application views, materialized views, functions, or procedures in `public`.
 

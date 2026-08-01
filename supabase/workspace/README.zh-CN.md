@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 87d3ca6a69435e611fc6f64a420da1f16f5c0978
-lastReviewedNote: "已为 Issue #356 复核：生成工作区继续与权威 migration、跨 schema lineage/transition 合同分离，现有五 schema 导出已覆盖迁移后的 Worker 对象。"
+lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
+lastReviewedNote: "已为 Issue #355 delegated ACL 加固复核：生成工作区继续与权威 migration/catalog 合同分离；relation/column/routine 授权链证据由 live catalog qualification 持有。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

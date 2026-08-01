@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-01"
-lastReviewedCommit: "87d3ca6a69435e611fc6f64a420da1f16f5c0978"
-lastReviewedNote: "Reviewed for Issue #356: routing now covers Worker control-plane migrations, rollback operators, tests, and qualification scripts; ownership and governance rules remain unchanged."
+lastReviewedCommit: "c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8"
+lastReviewedNote: "Reviewed for Issue #355 delegated-ACL hardening: target-scoped relation, column, and routine CASCADE convergence, rollback fingerprints, isolation evidence, and adversarial qualification remain covered; ownership rules are unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

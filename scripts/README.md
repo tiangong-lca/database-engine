@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a1be848fefc88d68c1073f98c9e3ecf866095399
-lastReviewedNote: "Reviewed through Issues #353/#354 and for #333: retain immutable provenance and five-schema qualification entrypoints while documenting deterministic SECURITY DEFINER audit generation and fail-closed #352/#358 boundaries."
+lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
+lastReviewedNote: "Reviewed for Issue #355 delegated-ACL hardening: script entrypoints retain immutable provenance and now prove relation/column/routine grant-option-chain convergence, unrelated-object isolation, three-class tamper rejection, and production-equivalent behavior."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -501,6 +501,39 @@ The required set, in reviewed order, is `api,public,graphql_public`; `private`,
 are sent only as `apikey`; legacy JWT-shaped anon keys are also sent as Bearer.
 Run `python -m unittest scripts/test_hosted_security_acl.py` for the offline
 argument and normalization contract.
+
+### Identity/collaboration Expand qualification
+
+`test_identity_collaboration_data_api.py` proves the versioned Issue #355 DTOs,
+notification RPC-only browser contract, authenticated/service/anonymous role
+split, PostgREST schema-cache reload, and negative internal-schema profiles.
+`test_identity_collaboration_concurrency.py` runs 800 checksum parity calls over
+eight sessions. The static test binds the exact 16-object inventory batch,
+consumer SHAs, versioned DTO names, transaction/timeouts, and Contract gates.
+
+```bash
+python -m unittest scripts/test_identity_collaboration_expand_static.py
+python scripts/test_identity_collaboration_data_api.py
+python scripts/test_identity_collaboration_concurrency.py
+```
+
+The canonical runner resolves one explicit loopback stack once, verifies its
+database identity against `SUPABASE_WORKDIR`, then overwrites and passes the
+same `DATABASE_URL`, REST credentials, and workdir to every SQL, Data API,
+catalog, schema-phase, inventory, lint, and SECURITY DEFINER gate. Offline
+two-stack negatives live in `test_database_contract_targeting.py`. The runner
+does not execute rollback DDL by default. On a disposable local stack, opt in
+with `--run-destructive-identity-qualification`; `--skip-data-api` skips only
+HTTP probes and does not select or redirect the destructive target.
+
+The operator rollback is
+`supabase/operator/issue_355_restore_identity_collaboration_expand.sql`. It is
+repeatable and removes only the additive API/private Expand objects; the audited
+public physical routines and their OIDs remain untouched. The rollback harness
+also proves reviewed-predecessor routine and extra-overload rejection, arbitrary
+custom ACL/owner convergence, exact migration-head plus complete target
+fingerprints before deletion, tamper/partial-state rejection, complete target
+absence after two rollbacks, and exact roll-forward.
 
 ### `test_production_equivalent_upgrade.py`
 
