@@ -52,7 +52,7 @@ begin
     into v_moved_count, v_moved_definer_count, v_moved_invoker_count, v_moved_hash
   from moved;
   if (v_moved_count,v_moved_definer_count,v_moved_invoker_count,v_moved_hash)
-     is distinct from (12,11,1,'9fde6463206ad32158657d78c2b60f6b') then
+     is distinct from (12,11,1,'f27c18012405b65322fa7352ca663365') then
     raise exception using errcode='55000', message=format(
       'Issue 356 rollback moved-routine fingerprint drift: count=%s definer=%s invoker=%s hash=%s',
       v_moved_count,v_moved_definer_count,v_moved_invoker_count,v_moved_hash
@@ -82,7 +82,7 @@ begin
     into v_adapter_count,v_adapter_definer_count,v_adapter_hash
   from adapters;
   if (v_adapter_count,v_adapter_definer_count,v_adapter_hash)
-     is distinct from (23,0,'bd814e9fbb1f502a70ff2853d0e392bb') then
+     is distinct from (23,0,'58145e2a0a05853e4bff98371f4dbcab') then
     raise exception using errcode='55000', message=format(
       'Issue 356 rollback adapter fingerprint drift: count=%s definer=%s hash=%s',
       v_adapter_count,v_adapter_definer_count,v_adapter_hash
@@ -102,7 +102,7 @@ begin
     into v_ref_count,v_ref_definer_count,v_ref_hash
   from refs;
   if (v_ref_count,v_ref_definer_count,v_ref_hash)
-     is distinct from (66,59,'5ea2663d4315fe53f6af184bb6c6cf26') then
+     is distinct from (66,59,'271afd812e119e19c2e943877c6a2fdd') then
     raise exception using errcode='55000', message=format(
       'Issue 356 rollback reference fingerprint drift: count=%s definer=%s hash=%s',
       v_ref_count,v_ref_definer_count,v_ref_hash
