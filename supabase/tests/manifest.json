@@ -51,7 +51,11 @@
         "requiredPaths": [
           "scripts/freeze_issue_357_expand_manifest.py",
           "scripts/generate_issue_357_expand_sql.py",
-          "scripts/issue_357_catalog_projection.py"
+          "scripts/issue_357_catalog_projection.py",
+          "scripts/issue_357_exposure_contract.py",
+          "scripts/test_freeze_issue_357_expand_manifest.py",
+          "scripts/test_generate_issue_357_expand_sql.py",
+          "scripts/test_issue_357_exposure_contract.py"
         ],
         "artifactPatterns": {
           "freezeJson": "supabase/tests/contracts/lca_private_expand_freeze.v[0-9].json",

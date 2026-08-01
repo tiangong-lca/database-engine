@@ -40,7 +40,7 @@ jobs:
       - name: Run canonical contract
         run: python scripts/run_database_contract.py --suite canonical-local
 
-      - name: Run freeze-driven LCA private Expand suite when activated
+      - name: Verify Issue 357 artifacts, generated phases, unit contracts, and focused suite
         run: >-
           python scripts/run_database_contract.py
           --suite lca-private-expand

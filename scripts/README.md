@@ -289,7 +289,11 @@ was dirty, so local development output cannot masquerade as clean exact-commit
 evidence. `lca-private-expand` additionally requires the
 canonical hashed Issue #357 freeze and delegates its versioned physical-object,
 exposure-surface, fingerprint, and receipt semantics to the official #357
-freezer. CI uses `--if-activated`: it skips only when
+freezer. The official `check-delivery` contract must validate both versioned
+JSON Schemas, require phase authorization from the receipt, regenerate API
+pre-expand and physical-cut SQL, and reject any byte drift before the focused
+suite runs. The #357 freezer/generator/exposure unit modules are mandatory in
+the activated gate. CI uses `--if-activated`: it skips only when
 no #357 generator, contract, or migration activation path is tracked. Any partial
 or ambiguous activation requires exactly one version-matched freeze/receipt,
 sidecar and schema, the capture and generator scripts, plus both reviewed

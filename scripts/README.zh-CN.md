@@ -281,7 +281,10 @@ exact commit、migration head、CLI 版本、manifest/文件清单 hash 与 work
 migration 激活路径时报告未激活。一旦出现任一激活路径，完整的 freeze/receipt、
 sidecar/schema、capture/generator 脚本与两阶段 reviewed migration 都必须各自
 唯一匹配；versioned physical-object、动态 exposure-surface、fingerprint 与 receipt
-语义委托给 #357 官方 freezer 校验。闭包不完整或匹配不唯一会在执行 SQL 前
+语义委托给 #357 官方 freezer 校验。官方 `check-delivery` 必须验证两份 JSON
+Schema、receipt 对 phase 的明确授权，并重新生成 API pre-expand/physical-cut SQL
+逐字节对比；激活后还必须运行 #357 freezer/generator/exposure 专项单测。闭包不完整、
+未授权、SQL 漂移或匹配不唯一会在执行 SQL 前
 fail-closed，不会产生空绿色结果。
 
 ### `public_inventory_closure.py`

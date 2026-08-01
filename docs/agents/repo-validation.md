@@ -96,7 +96,10 @@ only stable activation and artifact-closure rules; it does not duplicate the
 versioned freeze's physical-object or exposure-surface topology. The Issue #357
 freezer is the authoritative verifier for canonical bytes, identity, physical
 inventory, dynamic exposure surfaces, counts, fingerprints, and receipt
-semantics. CI may report the suite inactive only while no #357 generator,
+semantics. Its stable verification CLI must validate both JSON Schemas, require
+an authorized receipt, regenerate both reviewed migration phases, and compare
+their exact bytes before focused SQL can run; the #357 freezer, generator, and
+exposure-contract unit modules then run in the same gate. CI may report the suite inactive only while no #357 generator,
 contract, or migration activation path is tracked. Once any activation path
 appears, exactly one version-matched freeze/sidecar/schema, receipt
 artifact/sidecar/schema, and each reviewed migration phase are mandatory;

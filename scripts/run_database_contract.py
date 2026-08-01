@@ -453,11 +453,16 @@ def validate_activation_contract(
     return artifacts
 
 
-def run_activation_verifiers(artifacts: dict[str, str]) -> None:
+def run_activation_verifiers(
+    artifacts: dict[str, str], required_paths: list[str],
+) -> None:
     if not artifacts:
         return
     verifier = ROOT / "scripts/freeze_issue_357_expand_manifest.py"
-    for label, relative in {"verifier": verifier.relative_to(ROOT).as_posix(), **artifacts}.items():
+    runtime_paths = {
+        f"required:{relative}": relative for relative in required_paths
+    } | artifacts
+    for label, relative in runtime_paths.items():
         path = ROOT / relative
         if not path.is_file() or path.is_symlink():
             raise SystemExit(
@@ -467,13 +472,36 @@ def run_activation_verifiers(artifacts: dict[str, str]) -> None:
         sys.executable, str(verifier), "check-freeze",
         "--freeze", artifacts["freezeJson"],
         "--sha256", artifacts["freezeSha256"],
+        "--schema", artifacts["freezeSchema"],
     ])
     run([
         sys.executable, str(verifier), "check-receipt",
         "--receipt", artifacts["receiptJson"],
         "--receipt-sha256", artifacts["receiptSha256"],
+        "--schema", artifacts["receiptSchema"],
         "--freeze", artifacts["freezeJson"],
         "--freeze-sha256", artifacts["freezeSha256"],
+        "--require-authorized",
+    ])
+    run([
+        sys.executable, str(verifier), "check-delivery",
+        "--freeze", artifacts["freezeJson"],
+        "--freeze-sha256", artifacts["freezeSha256"],
+        "--freeze-schema", artifacts["freezeSchema"],
+        "--receipt", artifacts["receiptJson"],
+        "--receipt-sha256", artifacts["receiptSha256"],
+        "--receipt-schema", artifacts["receiptSchema"],
+        "--generator", "scripts/generate_issue_357_expand_sql.py",
+        "--api-pre-expand-migration", artifacts["apiPreExpandMigration"],
+        "--physical-cut-migration", artifacts["physicalCutMigration"],
+        "--require-phase-authorization",
+        "--require-exact-generated-bytes",
+    ])
+    run([
+        sys.executable, "-m", "unittest",
+        "scripts.test_freeze_issue_357_expand_manifest",
+        "scripts.test_generate_issue_357_expand_sql",
+        "scripts.test_issue_357_exposure_contract",
     ])
 
 
@@ -517,7 +545,9 @@ def main() -> int:
     if activation_artifacts is None:
         print(f"suite {args.suite}: not activated")
         return 0
-    run_activation_verifiers(activation_artifacts)
+    run_activation_verifiers(
+        activation_artifacts, suite.get("activation", {}).get("requiredPaths", []),
+    )
     files = suite.get("files") or [
         path for path in classified[suite["classification"]]
         if path not in suite.get("excludedFiles", {})

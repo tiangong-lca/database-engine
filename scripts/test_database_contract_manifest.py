@@ -151,7 +151,7 @@ class DatabaseContractManifestTest(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             for relative in {
-                "scripts/freeze_issue_357_expand_manifest.py", *artifacts.values(),
+                *suite["activation"]["requiredPaths"], *artifacts.values(),
             }:
                 path = root / relative
                 path.parent.mkdir(parents=True, exist_ok=True)
@@ -164,14 +164,107 @@ class DatabaseContractManifestTest(unittest.TestCase):
                     value = json.loads(freeze_path.read_text(encoding="utf-8"))
                     self.assertIn("physicalObjects", value)
                     self.assertIn("exposureSurfaces", value)
+                    self.assertIn("--schema", command)
+                elif "check-receipt" in command:
+                    self.assertIn("--require-authorized", command)
+                    self.assertIn("--schema", command)
+                elif "check-delivery" in command:
+                    self.assertIn(artifacts["apiPreExpandMigration"], command)
+                    self.assertIn(artifacts["physicalCutMigration"], command)
+                    self.assertIn("scripts/generate_issue_357_expand_sql.py", command)
+                    self.assertIn("--require-phase-authorization", command)
+                    self.assertIn("--require-exact-generated-bytes", command)
 
             with mock.patch.object(runner, "ROOT", root), mock.patch.object(
                 runner, "run", side_effect=official_verifier,
             ) as delegated:
-                runner.run_activation_verifiers(artifacts)
-        self.assertEqual(delegated.call_count, 2)
+                runner.run_activation_verifiers(
+                    artifacts, suite["activation"]["requiredPaths"],
+                )
+        self.assertEqual(delegated.call_count, 4)
         self.assertIn("check-freeze", delegated.call_args_list[0].args[0])
         self.assertIn("check-receipt", delegated.call_args_list[1].args[0])
+        self.assertIn("check-delivery", delegated.call_args_list[2].args[0])
+        self.assertIn("scripts.test_generate_issue_357_expand_sql", delegated.call_args_list[3].args[0])
+
+    def test_official_verifier_rejects_empty_stale_unauthorized_and_malformed_inputs(self) -> None:
+        suite = self.manifest["suites"]["lca-private-expand"]
+        repository_files = runner.tracked_repository_files()
+        complete = repository_files + suite["activation"]["requiredPaths"] + [
+            "supabase/tests/contracts/lca_private_expand_freeze.v3.json",
+            "supabase/tests/contracts/lca_private_expand_freeze.v3.sha256",
+            "supabase/tests/contracts/lca_private_expand_freeze.v3.schema.json",
+            "supabase/tests/contracts/lca_private_expand_cut_receipts.v3.json",
+            "supabase/tests/contracts/lca_private_expand_cut_receipts.v3.sha256",
+            "supabase/tests/contracts/lca_private_expand_cut_receipts.v3.schema.json",
+            "supabase/migrations/20260802010101_issue_357_api_pre_expand.sql",
+            "supabase/migrations/20260802020202_issue_357_physical_cut.sql",
+        ]
+        artifacts = runner.validate_activation_contract(
+            "lca-private-expand", suite, complete, required=False,
+        )
+        cases = {
+            "empty-api": {"api": ""},
+            "stale-physical": {"physical": "select 'stale';\n"},
+            "unauthorized-receipt": {"authorized": False},
+            "malformed-freeze-schema": {"freezeSchema": "{"},
+        }
+        for label, override in cases.items():
+            with self.subTest(label=label), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                for relative in {
+                    *suite["activation"]["requiredPaths"], *artifacts.values(),
+                }:
+                    path = root / relative
+                    path.parent.mkdir(parents=True, exist_ok=True)
+                    path.write_text("fixture\n", encoding="utf-8")
+                (root / artifacts["freezeJson"]).write_text(
+                    json.dumps({
+                        "schemaVersion": "database.lca-private-expand-freeze.v3",
+                        "physicalObjects": [], "exposureSurfaces": [],
+                    }), encoding="utf-8",
+                )
+                (root / artifacts["receiptJson"]).write_text(
+                    json.dumps({"authorized": override.get("authorized", True)}),
+                    encoding="utf-8",
+                )
+                (root / artifacts["freezeSchema"]).write_text(
+                    override.get("freezeSchema", "{}"), encoding="utf-8",
+                )
+                (root / artifacts["receiptSchema"]).write_text("{}", encoding="utf-8")
+                (root / artifacts["apiPreExpandMigration"]).write_text(
+                    override.get("api", "-- exact generated api pre-expand\n"), encoding="utf-8",
+                )
+                (root / artifacts["physicalCutMigration"]).write_text(
+                    override.get("physical", "-- exact generated physical cut\n"), encoding="utf-8",
+                )
+
+                def fail_closed_verifier(command: list[str], **_kwargs: object) -> None:
+                    failed = False
+                    if "check-freeze" in command:
+                        try:
+                            json.loads((root / artifacts["freezeSchema"]).read_text())
+                        except json.JSONDecodeError:
+                            failed = True
+                    elif "check-receipt" in command:
+                        receipt = json.loads((root / artifacts["receiptJson"]).read_text())
+                        failed = receipt.get("authorized") is not True
+                    elif "check-delivery" in command:
+                        failed = (
+                            (root / artifacts["apiPreExpandMigration"]).read_text()
+                            != "-- exact generated api pre-expand\n"
+                            or (root / artifacts["physicalCutMigration"]).read_text()
+                            != "-- exact generated physical cut\n"
+                        )
+                    if failed:
+                        raise subprocess.CalledProcessError(1, command)
+
+                with mock.patch.object(runner, "ROOT", root), mock.patch.object(
+                    runner, "run", side_effect=fail_closed_verifier,
+                ), self.assertRaises(subprocess.CalledProcessError):
+                    runner.run_activation_verifiers(
+                        artifacts, suite["activation"]["requiredPaths"],
+                    )
 
 
 if __name__ == "__main__":
