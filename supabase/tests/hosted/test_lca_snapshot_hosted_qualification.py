@@ -165,6 +165,12 @@ class CleanupTests(unittest.TestCase):
 class WorkflowSecurityTests(unittest.TestCase):
     def test_workflow_is_dev_only_and_has_no_arbitrary_selector(self):
         text = (ROOT / ".github/workflows/lca-snapshot-hosted-qualification.yml").read_text()
+        trigger = text.split("permissions:", 1)[0]
+        self.assertIn("  workflow_dispatch:\n", trigger)
+        self.assertIn("  push:\n    branches:\n      - dev\n", trigger)
+        self.assertIn("      - .github/workflows/lca-snapshot-hosted-qualification.yml\n", trigger)
+        self.assertIn("      - supabase/tests/hosted/lca_snapshot_hosted_qualification.py\n", trigger)
+        self.assertEqual(trigger.count("      - "), 3)
         self.assertIn("github.ref }}\" != 'refs/heads/dev'", text)
         self.assertIn("permissions:\n  contents: read", text)
         self.assertNotIn("repository:", text)

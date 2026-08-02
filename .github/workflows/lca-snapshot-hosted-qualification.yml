@@ -2,6 +2,12 @@ name: Persistent Dev LCA Snapshot Hosted Qualification
 
 on:
   workflow_dispatch:
+  push:
+    branches:
+      - dev
+    paths:
+      - .github/workflows/lca-snapshot-hosted-qualification.yml
+      - supabase/tests/hosted/lca_snapshot_hosted_qualification.py
 
 permissions:
   contents: read
