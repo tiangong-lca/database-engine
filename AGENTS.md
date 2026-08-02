@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
-lastReviewedNote: "Reviewed for Issue #372 first real Expand slice: repository ownership, migration discipline, Preview qualification, and dev-branch delivery rules already govern the bounded api/private change; no contract change is required."
+lastReviewedCommit: 1ff6d2775bed146379d50dc91eaf43c7915dca0f
+lastReviewedNote: "Reviewed for Issue #323: repository ownership, additive migration discipline, local database proof, dev-branch delivery, and later workspace integration already govern the root-grouped review queue change; no contract rule changes are required."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

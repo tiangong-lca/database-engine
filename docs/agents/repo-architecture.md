@@ -29,8 +29,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
-lastReviewedNote: "Reviewed for Issue #372 first real Expand slice: a JWT-preserving api facade and private Worker implementation with a public compatibility wrapper follow the existing five-schema architecture and Expand/Contract boundary."
+lastReviewedCommit: 1ff6d2775bed146379d50dc91eaf43c7915dca0f
+lastReviewedNote: "Reviewed for Issue #323: the additive root-grouped queue RPCs stay within the existing Root/Reference Review v2 database boundary and do not change the repository shape or cross-repo ownership."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
