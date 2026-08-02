@@ -35,9 +35,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-01
-lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
-lastReviewedNote: "Reviewed for Issues #355/#339 and PR #367 findings: the canonical opt-in runner enforces dual-predecessor actor-RLS proof before rollback/roll-forward proof, while exact layered default-ACL restore and dynamic snapshot ACL convergence remain repo-owned; Issue #352 stays separate."
+lastReviewedAt: 2026-08-02
+lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
+lastReviewedNote: "Reviewed for Issue #372 first real Expand slice: repository ownership, migration discipline, Preview qualification, and dev-branch delivery rules already govern the bounded api/private change; no contract change is required."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

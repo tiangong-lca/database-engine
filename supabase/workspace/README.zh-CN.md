@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
-lastReviewedNote: "已为 Issue #369 复核：manifest 门禁、PR CI 与 #357 phase gate 不改变生成 workspace 的所有权或刷新语义。"
+lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
+lastReviewedNote: "已为 Issue #372 CI 收口复核：canonical manifest/head 维护和有限子任务迁移不改变生成 workspace 的所有权、刷新语义或部署边界。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

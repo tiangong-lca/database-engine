@@ -31,9 +31,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-01
-lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
-lastReviewedNote: "Reviewed for Issue #355 mandatory destructive qualification: the canonical opt-in gate now runs both exact public.users predecessors, actor-level source/projection RLS parity, retry/unknown atomic rejection, and the rollback/roll-forward harness."
+lastReviewedAt: 2026-08-02
+lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
+lastReviewedNote: "Reviewed for Issue #372 first real Expand slice: blank/populated upgrades, retry, forced failure atomicity, rollback/roll-forward, JWT/direct-SQL checks, focused pgTAP, baseline differential, lint, and hosted Preview remain the required validation layers."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

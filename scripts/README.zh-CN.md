@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-01
-lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
-lastReviewedNote: "已为 Issue #355 mandatory destructive qualification 复核：canonical opt-in gate 先调用 dual exact-hash/逐角色 RLS harness，再调用 rollback/roll-forward harness，并传播任一失败。"
+lastReviewedAt: 2026-08-02
+lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
+lastReviewedNote: "已为 Issue #372 CI 收口复核：新增 pgTAP 资产推进 canonical 数量与 migration-head evidence；子任务迁移命名不会误激活已冻结的 Issue #357 全批次 verifier。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
