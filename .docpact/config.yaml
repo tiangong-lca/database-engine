@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-02"
-lastReviewedCommit: "ca686b19f359eb90e78d12b789e08a8ccb89afe0"
-lastReviewedNote: "Reviewed for the Issue #380 hosted anonymous status contract: existing hosted-proof routing treats the verify_jwt pre-handler body as platform-owned while exact 401 denial, authenticated DTO validation, and canonical parent-cascade cleanup remain enforced."
+lastReviewedAt: "2026-08-03"
+lastReviewedCommit: "2cb88b079a8e50f7630378b9f565739c4144df60"
+lastReviewedNote: "Reviewed for Issue #390: lca-result-family routing includes the exact facade migration, pgTAP contract, loopback runtime qualification, and canonical runner wiring."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -126,6 +126,15 @@ routing:
         - supabase/workspace/README.zh-CN.md
         - scripts/test_issue_390_pre_ddl_gate.py
         - scripts/issue_390_pre_ddl_gate.py
+        - scripts/test_issue_390_result_api_facade_runtime.py
+        - scripts/test_issue_390_result_api_facade_runtime_unit.py
+        - scripts/run_database_contract.py
+        - supabase/tests/manifest.json
+        - supabase/tests/contracts/database_catalog.*
+        - scripts/export_database_contract.py
+        - scripts/test_export_database_contract.py
+        - supabase/migrations/*issue_390_result_api_facade*.sql
+        - supabase/tests/*issue_390_result_api_facade*.sql
         - .github/workflows/database-validation.yml
         - .github/workflows/supabase-dev.yml
         - scripts/test_database_contract_manifest.py

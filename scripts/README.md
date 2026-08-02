@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
-lastReviewedNote: "Reviewed for Issue #372 CI closure: the new pgTAP asset advances canonical counts and migration-head evidence, while the child migration name intentionally does not activate the frozen Issue #357 full-batch verifier."
+lastReviewedAt: 2026-08-03
+lastReviewedCommit: 2cb88b079a8e50f7630378b9f565739c4144df60
+lastReviewedNote: "Reviewed for Issue #390: canonical-local automatically runs the exact result API facade Data API, concurrency, and cleanup qualification when its pgTAP contract is selected."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -627,6 +627,19 @@ python -m unittest scripts/test_identity_collaboration_expand_static.py
 python scripts/test_identity_collaboration_policy_variants.py
 python scripts/test_identity_collaboration_data_api.py
 python scripts/test_identity_collaboration_concurrency.py
+```
+
+### Issue #390 result API facade runtime
+
+`test_issue_390_result_api_facade_runtime.py` is a loopback-only qualification
+for the eight service-only `api` routines. It freezes the positive DTO values,
+exact anonymous/authenticated/private-profile denials, one eight-request HTTP
+admission race, one eight-backend PostgreSQL race, same-binding replay, and
+post-cleanup zero residue. `canonical-local` runs it automatically whenever the
+Issue #390 pgTAP contract is selected.
+
+```bash
+python scripts/test_issue_390_result_api_facade_runtime.py
 ```
 
 The canonical runner resolves one explicit loopback stack once, verifies its

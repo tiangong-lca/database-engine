@@ -20,8 +20,8 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2e7b3ba2a3fcdcbc59cb26416512808465262049
+lastReviewedAt: 2026-08-03
+lastReviewedCommit: 2cb88b079a8e50f7630378b9f565739c4144df60
 lastReviewedNote: "已为 Issue #376 CI 修复复核：qualification runner 的 manifest evidence 与无凭证命令示例不改变生成 workspace 的所有权、刷新语义或部署边界。"
 related:
   - ../../AGENTS.md

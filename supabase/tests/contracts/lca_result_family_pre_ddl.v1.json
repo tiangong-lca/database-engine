@@ -15,13 +15,19 @@
   "apiFacadeProtection": {
     "schema": "api",
     "namePrefixes": ["lca_", "cmd_lca_"],
-    "serviceGrantees": ["service_role", "api_internal_executor"]
+    "serviceGrantees": ["service_role"]
   },
   "migrationGate": {
     "baseMigrationBlobsImmutable": true,
     "committedMigrationHistoryAppendOnly": true,
     "newMigrationsAllowed": "target-neutral-static-or-reviewed-ast-facade",
-    "allowedTargetTouchingMigrations": [],
+    "allowedTargetTouchingMigrations": [
+      {
+        "path": "supabase/migrations/20260802172930_issue_390_result_api_facade_v1.sql",
+        "gitBlob": "6b183aa2b92d6d5457207f712d70e4855a7a394d",
+        "classification": "additive-api-service-only-reviewed"
+      }
+    ],
     "relationMovingDdlAllowed": false,
     "browserPrivateCompatibilityGrantAllowed": false,
     "historicalAuthenticatedSelectRemovalAllowed": false

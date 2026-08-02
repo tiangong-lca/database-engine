@@ -21,8 +21,8 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-02
-lastReviewedCommit: c467a09dcfddc81ad4a57cd4db354ed1c8930fe7
+lastReviewedAt: 2026-08-03
+lastReviewedCommit: 2cb88b079a8e50f7630378b9f565739c4144df60
 lastReviewedNote: "Reviewed for Issue #390 target-aware pre-DDL validation: both local PR qualification and serialized persistent-dev deployment install the same pinned PostgreSQL AST parser before running the canonical contract; branch targeting and hosted mutation boundaries are unchanged."
 related:
   - ../../AGENTS.md

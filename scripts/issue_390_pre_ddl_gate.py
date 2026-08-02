@@ -73,7 +73,10 @@ SAFE_FACADE_BUILTINS = {
     "jsonb_agg",
     "jsonb_build_array",
     "jsonb_build_object",
+    "jsonb_strip_nulls",
+    "jsonb_typeof",
     "least",
+    "length",
     "lower",
     "max",
     "min",
@@ -1309,10 +1312,7 @@ def _facade_review_violations(sql: str) -> list[str]:
             if root.get("grant_option"):
                 violations.append("facade:grant-option-change-forbidden")
                 continue
-            if root.get("is_grant") and not roles <= {
-                "service_role",
-                "api_internal_executor",
-            }:
+            if root.get("is_grant") and not roles <= {"service_role"}:
                 violations.append("facade:grant-role-not-service-only")
             for identity in identities:
                 for role in roles:

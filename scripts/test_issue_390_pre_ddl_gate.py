@@ -161,7 +161,7 @@ class Issue390PreDdlGateTest(unittest.TestCase):
             {
                 "schema": "api",
                 "namePrefixes": ["lca_", "cmd_lca_"],
-                "serviceGrantees": ["service_role", "api_internal_executor"],
+                "serviceGrantees": ["service_role"],
             },
         )
         migration_gate = self.contract["migrationGate"]
@@ -630,6 +630,13 @@ class Issue390PreDdlGateTest(unittest.TestCase):
             AS $$ SELECT to_jsonb(r) FROM lca_result_cache AS r $$;
             REVOKE ALL ON FUNCTION api.lca_cache_read(pg_catalog.uuid) FROM PUBLIC, anon, authenticated;
             GRANT EXECUTE ON FUNCTION api.lca_cache_read(pg_catalog.uuid) TO service_role;
+            """,
+            """
+            CREATE FUNCTION api.lca_cache_read(p_id pg_catalog.uuid)
+            RETURNS pg_catalog.jsonb LANGUAGE sql SECURITY INVOKER SET search_path = ''
+            AS $$ SELECT to_jsonb(r) FROM public.lca_result_cache AS r $$;
+            REVOKE ALL ON FUNCTION api.lca_cache_read(pg_catalog.uuid) FROM PUBLIC, anon, authenticated;
+            GRANT EXECUTE ON FUNCTION api.lca_cache_read(pg_catalog.uuid) TO api_internal_executor;
             """,
         ]
         for sql in cases:

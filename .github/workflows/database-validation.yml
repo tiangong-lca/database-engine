@@ -53,6 +53,7 @@ jobs:
           python -m unittest \
             scripts.test_database_contract_manifest \
             scripts.test_database_contract_targeting \
+            scripts.test_issue_390_result_api_facade_runtime_unit \
             scripts.test_production_equivalent_upgrade_unit
           python scripts/run_database_contract.py \
             --suite canonical-local \

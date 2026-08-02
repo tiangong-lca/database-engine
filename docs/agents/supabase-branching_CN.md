@@ -21,8 +21,8 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-02
-lastReviewedCommit: c467a09dcfddc81ad4a57cd4db354ed1c8930fe7
+lastReviewedAt: 2026-08-03
+lastReviewedCommit: 2cb88b079a8e50f7630378b9f565739c4144df60
 lastReviewedNote: "已针对 Issue #390 target-aware pre-DDL 校验复核：PR 本地 qualification 与持久化 dev 串行部署在 canonical contract 前安装同一固定版本 PostgreSQL AST parser；分支目标和 Hosted mutation 边界保持不变。"
 related:
   - ../../AGENTS.md
