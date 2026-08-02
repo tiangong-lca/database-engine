@@ -6,7 +6,7 @@ select plan(16);
 select is((select count(*)::bigint from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p')), 52::bigint, 'public physical table inventory is exact after the four-table Worker move');
 select is((select count(*)::bigint from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='v'), 9::bigint, 'public view inventory includes the four Worker compatibility views');
 select is((select count(*)::bigint from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='m'), 0::bigint, 'public materialized-view inventory is exact');
-select is((select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prokind='f'), 333::bigint, 'public function inventory includes the #337 adapters and the Worker composite bridge');
+select is((select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prokind='f'), 336::bigint, 'public function inventory includes the #337 adapters, Worker composite bridge, and root-grouped review RPCs');
 select is((select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prokind='p'), 0::bigint, 'public procedure inventory is exact');
 
 select is((

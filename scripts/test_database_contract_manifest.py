@@ -64,7 +64,7 @@ class DatabaseContractManifestTest(unittest.TestCase):
             evidence = runner.suite_evidence("canonical-local", files, 19)
         self.assertEqual(evidence["gitCommit"], "a" * 40)
         self.assertFalse(evidence["worktreeDirty"])
-        self.assertEqual(evidence["migrationHead"], "20260802090000")
+        self.assertEqual(evidence["migrationHead"], "20260802173000")
         self.assertEqual(evidence["supabaseCliVersion"], "2.98.0")
         self.assertEqual(evidence["filesSha256"], runner.stable_json_sha256(files))
         self.assertEqual(

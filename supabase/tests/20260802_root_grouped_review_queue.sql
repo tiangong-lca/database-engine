@@ -3,7 +3,35 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(27);
+select plan(30);
+
+select is(
+  (
+    select proconfig
+    from pg_catalog.pg_proc
+    where oid = 'public.qry_review_get_admin_root_queue_items_v2(text,integer,integer,text,text)'::pg_catalog.regprocedure
+  ),
+  array['search_path=pg_catalog, public, pg_temp']::text[],
+  'grouped Admin queue uses an explicit trusted search path'
+);
+select is(
+  (
+    select proconfig
+    from pg_catalog.pg_proc
+    where oid = 'public.qry_review_get_member_root_queue_items_v2(text,integer,integer,text,text)'::pg_catalog.regprocedure
+  ),
+  array['search_path=pg_catalog, public, pg_temp']::text[],
+  'grouped Member queue uses an explicit trusted search path'
+);
+select is(
+  (
+    select proconfig
+    from pg_catalog.pg_proc
+    where oid = 'public.qry_root_review_reference_progress_v2(uuid)'::pg_catalog.regprocedure
+  ),
+  array['search_path=pg_catalog, public, pg_temp']::text[],
+  'root Reference Review progress uses an explicit trusted search path'
+);
 
 select is(
   public.cmd_review_get_dataset_name(
