@@ -96,7 +96,10 @@ setup and in `finally`; it discovers actual remote state, cancels matching Worke
 jobs before dependency-ordered deletion, tolerates already-absent Storage/Auth
 resources, and aggregates every cleanup/readback error with the primary failure.
 It therefore does not depend on receiving successful create or enqueue
-responses. Preview, mock, or consumer-repo test output does not replace this
+responses. Hosted result fixtures use only canonical physical
+`private.worker_jobs` rows and bind `worker_job_id` across caches/results; the
+retired `lca_jobs` relation is not a valid fixture or cleanup dependency.
+Preview, mock, or consumer-repo test output does not replace this
 persistent Dev proof.
 
 The checked-in canonical entry point is:

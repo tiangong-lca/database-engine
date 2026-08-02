@@ -340,7 +340,7 @@ def reconcile_namespace(client: HostedClient, run: RunNamespace) -> None:
     worker_rows = attempt(
         "discover-worker-jobs",
         lambda: _rows(
-            client.sql(f"select id::text from public.worker_jobs where {worker_predicate} order by id"),
+            client.sql(f"select id::text from private.worker_jobs where {worker_predicate} order by id"),
             "Worker discovery",
         ),
     )
@@ -350,7 +350,7 @@ def reconcile_namespace(client: HostedClient, run: RunNamespace) -> None:
         attempt(
             "cancel-worker-jobs",
             lambda: client.sql(
-                f"update public.worker_jobs set status='cancelled', finished_at=coalesce(finished_at,now()), "
+                f"update private.worker_jobs set status='cancelled', finished_at=coalesce(finished_at,now()), "
                 f"cancelled_at=coalesce(cancelled_at,now()), leased_by=null, lease_token=null, lease_expires_at=null, "
                 f"updated_at=now() where id in ({ids}) and status not in ('completed','failed','cancelled')"
             ),
@@ -362,7 +362,6 @@ def reconcile_namespace(client: HostedClient, run: RunNamespace) -> None:
         ("delete-result-cache", f"delete from public.lca_result_cache where snapshot_id in ({fixture},{create})"),
         ("delete-latest-results", f"delete from public.lca_latest_all_unit_results where snapshot_id in ({fixture},{create})"),
         ("delete-results", f"delete from public.lca_results where snapshot_id in ({fixture},{create})"),
-        ("delete-lca-jobs", f"delete from public.lca_jobs where snapshot_id in ({fixture},{create})"),
     ):
         attempt(label, lambda query=query: client.sql(query))
     if worker_ids:
@@ -370,10 +369,10 @@ def reconcile_namespace(client: HostedClient, run: RunNamespace) -> None:
         attempt(
             "detach-worker-job-lineage",
             lambda: client.sql(
-                f"update public.worker_jobs set root_job_id=null,parent_job_id=null where id in ({ids})"
+                f"update private.worker_jobs set root_job_id=null,parent_job_id=null where id in ({ids})"
             ),
         )
-        attempt("delete-worker-jobs", lambda: client.sql(f"delete from public.worker_jobs where id in ({ids})"))
+        attempt("delete-worker-jobs", lambda: client.sql(f"delete from private.worker_jobs where id in ({ids})"))
     for label, query in (
         ("delete-active", f"delete from private.lca_active_snapshots where snapshot_id in ({fixture},{create})"),
         ("delete-artifacts", f"delete from private.lca_snapshot_artifacts where snapshot_id in ({fixture},{create})"),
@@ -437,8 +436,7 @@ def reconcile_namespace(client: HostedClient, run: RunNamespace) -> None:
                 f"(select count(*)::int from private.lca_snapshot_artifacts where snapshot_id in ({fixture},{create})) artifact,"
                 f"(select count(*)::int from private.lca_active_snapshots where snapshot_id in ({fixture},{create})) active,"
                 f"(select count(*)::int from public.lca_result_cache where snapshot_id in ({fixture},{create})) result_cache,"
-                f"(select count(*)::int from public.worker_jobs where {worker_predicate}) worker_jobs,"
-                f"(select count(*)::int from public.lca_jobs where snapshot_id in ({fixture},{create})) lca_jobs,"
+                f"(select count(*)::int from private.worker_jobs where {worker_predicate}) worker_jobs,"
                 f"(select count(*)::int from public.lca_results where snapshot_id in ({fixture},{create})) lca_results,"
                 f"(select count(*)::int from public.lca_latest_all_unit_results where snapshot_id in ({fixture},{create})) latest_results,"
                 f"(select count(*)::int from storage.objects where bucket_id={sql_literal(run.bucket)}) storage_objects,"
@@ -466,6 +464,35 @@ def finish_with_reconcile(primary_error: BaseException | None, client: HostedCli
         raise ExceptionGroup("hosted qualification or namespace reconciliation failed", errors)
 
 
+def canonical_worker_fixture_sql(
+    snapshot_id: uuid.UUID,
+    requested_by: str,
+    marker: str,
+    jobs: list[tuple[uuid.UUID, str, str, dict[str, Any]]],
+) -> str:
+    rows: list[str] = []
+    for job_id, job_kind, payload_schema_version, payload in jobs:
+        payload_json = json.dumps(payload, separators=(",", ":"))
+        rows.append(
+            "("
+            f"'{job_id}',{sql_literal(job_kind)},'calculator','solver',0,{sql_literal(str(snapshot_id))},"
+            f"'lca_job','{job_id}','{snapshot_id}','user','{requested_by}',"
+            f"{sql_literal(marker + ':' + str(job_id))},{sql_literal(canonical_hash(payload))},"
+            f"'completed','user',1,3,{sql_literal(payload_schema_version)},{sql_literal(payload_json)}::jsonb,"
+            "'{}'::jsonb,now(),now(),now(),now()"
+            ")"
+        )
+    return (
+        "insert into private.worker_jobs("
+        "id,job_kind,worker_runtime,worker_queue,priority,queue_key,subject_type,subject_id,"
+        "subject_version,requester_type,requested_by,idempotency_key,request_hash,status,visibility,"
+        "attempt_count,max_attempts,payload_schema_version,payload_json,diagnostics,created_at,updated_at,"
+        "started_at,finished_at) values "
+        + ",".join(rows)
+        + ";"
+    )
+
+
 def qualify(config: Config) -> None:
     config.validate()
     publishable_key, secret_key = resolve_keys(config)
@@ -475,6 +502,8 @@ def qualify(config: Config) -> None:
     fixture_id, create_id = run.fixture_id, run.create_id
     artifact_id, impact_id = uuid.uuid5(namespace, "artifact"), uuid.uuid5(namespace, "impact")
     solve_job, contribution_job, all_unit_job = (uuid.uuid5(namespace, name) for name in ("solve-job", "contribution-job", "all-unit-job"))
+    solve_result_id = uuid.uuid5(namespace, "solve-result")
+    contribution_result_id = uuid.uuid5(namespace, "contribution-result")
     result_id = uuid.uuid5(namespace, "all-unit-result")
     bucket, email, marker = run.bucket, run.email, run.marker
     password = f"Issue380-{secrets.token_urlsafe(24)}-Aa1!"
@@ -570,10 +599,19 @@ def qualify(config: Config) -> None:
         solve_request = {"version": "lca_solve_v2", "scope": "prod", "snapshot_id": str(fixture_id), "demand_mode": "all_unit", "solve": {"return_x": False, "return_g": False, "return_h": True}, "print_level": 0}
         contribution_request = {"version": "lca_contribution_path_v1", "scope": "prod", "snapshot_id": str(fixture_id), "data_scope": "open_data", "process_id": process_id, "process_version": process_version, "process_index": 0, "impact_id": str(impact_id), "impact_index": 0, "amount": 1, "options": {"max_depth": 4, "top_k_children": 5, "cutoff_share": 0.01, "max_nodes": 200}, "print_level": 0}
         client.sql(
-            f"insert into public.lca_jobs(id,job_type,snapshot_id,status,requested_by) values('{solve_job}','solve_all_unit','{fixture_id}','completed','{user_id}'),('{contribution_job}','analyze_contribution_path','{fixture_id}','completed','{user_id}'),('{all_unit_job}','solve_all_unit','{fixture_id}','completed','{user_id}');"
-            f"insert into public.lca_result_cache(scope,snapshot_id,request_key,request_payload,status,job_id) values('prod','{fixture_id}','{canonical_hash(solve_request)}','{json.dumps(solve_request, separators=(',', ':'))}'::jsonb,'pending','{solve_job}'),('prod','{fixture_id}','{canonical_hash(contribution_request)}','{json.dumps(contribution_request, separators=(',', ':'))}'::jsonb,'pending','{contribution_job}');"
-            f"insert into public.lca_results(id,job_id,snapshot_id,payload) values('{result_id}','{all_unit_job}','{fixture_id}','{{}}');"
-            f"insert into public.lca_latest_all_unit_results(snapshot_id,job_id,result_id,query_artifact_url,query_artifact_sha256,query_artifact_byte_size,query_artifact_format,status,computed_at) values('{fixture_id}','{all_unit_job}','{result_id}','https://{DEV_REF}.supabase.co/storage/v1/s3/{bucket}/{run.prefix}/query.json','{'b' * 64}',{len(json.dumps(query_envelope, separators=(',', ':')).encode())},'all-unit-query:v1','ready','2099-08-02T00:00:03Z');"
+            canonical_worker_fixture_sql(
+                fixture_id,
+                user_id,
+                marker,
+                [
+                    (solve_job, "lca.solve_all_unit", "lca.solve_all_unit.request.v1", {"type": "solve_all_unit", "snapshot_id": str(fixture_id), "namespace": marker}),
+                    (contribution_job, "lca.contribution_path", "lca.contribution_path.request.v1", {"type": "analyze_contribution_path", "snapshot_id": str(fixture_id), "namespace": marker}),
+                    (all_unit_job, "lca.solve_all_unit", "lca.solve_all_unit.request.v1", {"type": "solve_all_unit", "snapshot_id": str(fixture_id), "namespace": marker, "artifact": "query"}),
+                ],
+            )
+            + f"insert into public.lca_results(id,job_id,worker_job_id,snapshot_id,payload) values('{solve_result_id}','{solve_job}','{solve_job}','{fixture_id}','{{}}'),('{contribution_result_id}','{contribution_job}','{contribution_job}','{fixture_id}','{{}}'),('{result_id}','{all_unit_job}','{all_unit_job}','{fixture_id}','{{}}');"
+            f"insert into public.lca_result_cache(scope,snapshot_id,request_key,request_payload,status,job_id,worker_job_id,result_id) values('prod','{fixture_id}','{canonical_hash(solve_request)}','{json.dumps(solve_request, separators=(',', ':'))}'::jsonb,'ready','{solve_job}','{solve_job}','{solve_result_id}'),('prod','{fixture_id}','{canonical_hash(contribution_request)}','{json.dumps(contribution_request, separators=(',', ':'))}'::jsonb,'ready','{contribution_job}','{contribution_job}','{contribution_result_id}');"
+            f"insert into public.lca_latest_all_unit_results(snapshot_id,job_id,worker_job_id,result_id,query_artifact_url,query_artifact_sha256,query_artifact_byte_size,query_artifact_format,status,computed_at) values('{fixture_id}','{all_unit_job}','{all_unit_job}','{result_id}','https://{DEV_REF}.supabase.co/storage/v1/s3/{bucket}/{run.prefix}/query.json','{'b' * 64}',{len(json.dumps(query_envelope, separators=(',', ':')).encode())},'all-unit-query:v1','ready','2099-08-02T00:00:03Z');"
         )
 
         bodies = {
@@ -585,10 +623,14 @@ def qualify(config: Config) -> None:
             if client.edge(name, method="OPTIONS", body=None, bearer=None)[0] not in (200, 204):
                 raise QualificationError(f"Edge CORS mismatch: {name}")
             require_response(client.edge(name, method="POST", body=body, bearer=None), 401, {"error": "unauthorized"})
-        for name in ("lca_solve", "lca_contribution_path"):
+        expected_endpoint_results = {
+            "lca_solve": str(solve_result_id),
+            "lca_contribution_path": str(contribution_result_id),
+        }
+        for name, expected_result_id in expected_endpoint_results.items():
             first = require_response(client.edge(name, method="POST", body=bodies[name], bearer=access_token), 200)
             second = require_response(client.edge(name, method="POST", body=bodies[name], bearer=access_token), 200)
-            if first != second or first.get("mode") != "in_progress" or first.get("snapshot_id") != str(fixture_id) or not first.get("cache_key") or not first.get("job_id"):
+            if first != second or first.get("mode") != "cache_hit" or first.get("snapshot_id") != str(fixture_id) or not first.get("cache_key") or first.get("result_id") != expected_result_id:
                 raise QualificationError(f"Edge success/retry identity mismatch: {name}")
         for attempt in range(2):
             query = require_response(client.edge("lca_query_results", method="POST", body=bodies["lca_query_results"], bearer=access_token), 200)

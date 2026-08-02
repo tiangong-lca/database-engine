@@ -21,9 +21,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-01
-lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
-lastReviewedNote: "Reviewed Issue #346: persistent dev explicitly serializes migration and allowlisted PostgREST config while production remains Supabase-integration owned."
+lastReviewedAt: 2026-08-02
+lastReviewedCommit: c63f42aaa396792292c5a99f938331ece291cc4b
+lastReviewedNote: "Reviewed for the Issue #380 canonical Worker fixture repair: hosted cleanup follows current private Worker ownership while persistent-dev and production branch bindings remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
