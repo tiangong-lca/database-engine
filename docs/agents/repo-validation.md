@@ -33,8 +33,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 8adf0c825c143ded099b325f01d089e316119bef
-lastReviewedNote: "Reviewed for Issue #380 hosted anonymous authorization contract: exact handler/gateway 401 DTO acceptance remains content-silent while authenticated success, retry, and negative checks stay fail-closed."
+lastReviewedCommit: a258c190e440f2cf388b5827086fe13b7da1a9bb
+lastReviewedNote: "Reviewed for Issue #380 hosted gateway/cascade contract: strict known gateway 401 acceptance remains content-silent while parent-cascade artifact cleanup retains mandatory zero-residue readback and authenticated checks stay fail-closed."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

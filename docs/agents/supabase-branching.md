@@ -22,8 +22,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 8adf0c825c143ded099b325f01d089e316119bef
-lastReviewedNote: "Reviewed for the Issue #380 hosted anonymous authorization contract: qualification-only handler/gateway 401 acceptance preserves canonical dev targeting, serialized persistent-dev execution, and the unchanged production boundary."
+lastReviewedCommit: a258c190e440f2cf388b5827086fe13b7da1a9bb
+lastReviewedNote: "Reviewed for the Issue #380 hosted gateway/cascade contract: qualification-only known gateway 401 acceptance and canonical parent-cascade cleanup preserve dev targeting, serialized execution, and the unchanged production boundary."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
