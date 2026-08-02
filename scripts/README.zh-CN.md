@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: 2cb88b079a8e50f7630378b9f565739c4144df60
-lastReviewedNote: "已为 Issue #390 复核：canonical-local 在选中 result API facade pgTAP 合同时自动执行精确 Data API、并发与零残留验证。"
+lastReviewedCommit: 4dbea4a0ee7102a07b68613628e56022a37a5cf0
+lastReviewedNote: "已为 Issue #395 复核：result API runtime 同时验证 cancelled 到 failed 的并发收敛与两阶段重试，且不增加第九个 facade。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -506,12 +506,15 @@ python scripts/test_identity_collaboration_data_api.py
 python scripts/test_identity_collaboration_concurrency.py
 ```
 
-### Issue #390 result API facade runtime
+### Issue #390/#395 result API facade runtime
 
 `test_issue_390_result_api_facade_runtime.py` 是仅允许 loopback 的八个 service-only
 `api` routine 验证器。它冻结服务成功 DTO、anon/authenticated/private profile 精确拒绝、
 8 请求 HTTP admission race、8 个独立 PostgreSQL backend race、same-binding replay 与
-清理后的零残留。canonical-local 选中 Issue #390 pgTAP 合同时会自动执行该脚本。
+清理后的零残留。Issue #395 进一步用 8 个并发请求验证同一 cancelled Worker job
+收敛为 failed：每次调用仅增加一次 hit 且不改变任何身份字段，随后第二阶段 retry
+原子清除旧 result/error 并重新绑定。canonical-local 选中 Issue #390 facade pgTAP
+合同时会自动执行该脚本。
 
 ```bash
 python scripts/test_issue_390_result_api_facade_runtime.py

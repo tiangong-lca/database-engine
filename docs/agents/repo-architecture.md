@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: 2cb88b079a8e50f7630378b9f565739c4144df60
-lastReviewedNote: "Reviewed for the Issue #380 hosted anonymous status contract: qualification-only status handling of the platform-owned gateway body does not change schema sources, generated workspaces, cascade ownership, or repository boundaries."
+lastReviewedCommit: 4dbea4a0ee7102a07b68613628e56022a37a5cf0
+lastReviewedNote: "Reviewed for Issue #395: replacing one existing api facade through a forward migration does not change schema source ownership, generated workspace boundaries, or the eight-routine result facade shape."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

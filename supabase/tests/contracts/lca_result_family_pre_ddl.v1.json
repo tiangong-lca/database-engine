@@ -6,7 +6,7 @@
   "predecessorMigrationHead": "20260802091342",
   "phase": "pre-ddl-consumer-cut",
   "ddlAuthorized": false,
-  "authorizationRule": "No migration may move or replace the protected family, remove its historical authenticated contract, weaken a protected api LCA facade, or grant non-service access to internal/target objects until static, runtime, and owner evidence satisfy the gate. Target-neutral non-executing static migrations remain allowed; an additive service-only api facade requires an exact reviewed blob plus AST semantic proof, while top-level data execution, opaque or dynamic execution remains hard denied.",
+  "authorizationRule": "No migration may move or replace the protected physical family, remove its historical authenticated contract, weaken a protected api LCA facade, or grant non-service access to internal/target objects until static, runtime, and owner evidence satisfy the gate. Target-neutral non-executing static migrations remain allowed. An additive service-only api facade or the exact cmd_lca_reconcile_result_cache_v1(uuid,uuid) service-only replacement requires its own exact reviewed blob plus AST semantic proof; top-level data execution and opaque or dynamic execution remain hard denied.",
   "sqlParser": {
     "name": "pglast",
     "version": "8.4",
@@ -20,12 +20,17 @@
   "migrationGate": {
     "baseMigrationBlobsImmutable": true,
     "committedMigrationHistoryAppendOnly": true,
-    "newMigrationsAllowed": "target-neutral-static-or-reviewed-ast-facade",
+    "newMigrationsAllowed": "target-neutral-static-or-reviewed-ast-facade-operation",
     "allowedTargetTouchingMigrations": [
       {
         "path": "supabase/migrations/20260802172930_issue_390_result_api_facade_v1.sql",
         "gitBlob": "6b183aa2b92d6d5457207f712d70e4855a7a394d",
         "classification": "additive-api-service-only-reviewed"
+      },
+      {
+        "path": "supabase/migrations/20260802190427_issue_395_reconcile_cancelled_worker_cache.sql",
+        "gitBlob": "435fd3c8e541b85aea497f79e61c2cd0c99010ae",
+        "classification": "reconcile-v1-service-only-replacement-reviewed"
       }
     ],
     "relationMovingDdlAllowed": false,
