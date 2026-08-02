@@ -12,7 +12,9 @@ from supabase.tests.hosted.lca_snapshot_hosted_qualification import (
     reconcile_namespace,
     require_response,
     resolve_keys,
+    safe_diagnostic_details,
     select_current_keys,
+    unexpected_phase_error,
 )
 
 
@@ -185,6 +187,43 @@ class CleanupTests(unittest.TestCase):
         messages = [str(error) for error in raised.exception.exceptions]
         self.assertTrue(any("primary" in message for message in messages))
         self.assertTrue(any("discover-auth-actors" in message for message in messages))
+
+    def test_unexpected_phase_error_names_phase_and_type_without_value(self):
+        secret = "do-not-print-this-value"
+        error = unexpected_phase_error("auth-boundary", RuntimeError(secret))
+        self.assertEqual(str(error), "hosted phase failed: auth-boundary: RuntimeError")
+        self.assertNotIn(secret, str(error))
+
+    def test_nested_primary_and_cleanup_diagnostics_are_recursive_and_secret_safe(self):
+        primary_secret = "primary-secret-value"
+        cleanup_secret = "cleanup-secret-value"
+        error = ExceptionGroup(
+            "outer group contains no reportable detail",
+            [
+                unexpected_phase_error("worker-artifact-fixture", ValueError(primary_secret)),
+                ExceptionGroup(
+                    "nested group contains no reportable detail",
+                    [
+                        QualificationError("namespace reconcile failed: discover-auth-actors: RuntimeError"),
+                        RuntimeError(cleanup_secret),
+                    ],
+                ),
+            ],
+        )
+        details = safe_diagnostic_details(error)
+        self.assertEqual(
+            details,
+            [
+                "hosted phase failed: worker-artifact-fixture: ValueError",
+                "namespace reconcile failed: discover-auth-actors: RuntimeError",
+                "RuntimeError",
+            ],
+        )
+        rendered = "; ".join(details)
+        self.assertNotIn(primary_secret, rendered)
+        self.assertNotIn(cleanup_secret, rendered)
+        self.assertNotIn("outer group", rendered)
+        self.assertNotIn("nested group", rendered)
 
 
 class WorkflowSecurityTests(unittest.TestCase):

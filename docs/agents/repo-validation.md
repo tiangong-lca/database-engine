@@ -33,8 +33,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2e7b3ba2a3fcdcbc59cb26416512808465262049
-lastReviewedNote: "Reviewed for Issue #376 after Issue #323 integration and fresh-stack CI repair: blank/populated upgrades, OID/full-row parity, compatibility/API behavior, physical-catalog/global-inventory assertions, receipt-bound SECURITY DEFINER lineage and PostgREST evidence, regenerated catalog/audit hashes, failure/retry/rollback, canonical manifest evidence, secret scanning, the complete canonical pgTAP suite, lint, and hosted Preview remain the required layers."
+lastReviewedCommit: 0e4000b68abe97f11bf10f0ff972e8a453af643b
+lastReviewedNote: "Reviewed for Issue #380 hosted phase diagnostics: fixed phase/type labels and recursive nested-error reporting remain secret-safe while preserving the canonical hosted cleanup and fail-closed validation contract."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

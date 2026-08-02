@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-02"
-lastReviewedCommit: "c63f42aaa396792292c5a99f938331ece291cc4b"
-lastReviewedNote: "Reviewed for the Issue #380 canonical Worker fixture repair: existing hosted-proof routing covers the private Worker fixture, retired-relation regression, and dependency-ordered cleanup without changing ownership or schema routing."
+lastReviewedCommit: "0e4000b68abe97f11bf10f0ff972e8a453af643b"
+lastReviewedNote: "Reviewed for the Issue #380 hosted phase diagnostics: existing hosted-proof routing covers secret-safe phase/type reporting and nested cleanup failures without changing ownership, targeting, or schema routing."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

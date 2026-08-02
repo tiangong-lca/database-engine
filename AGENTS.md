@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: c63f42aaa396792292c5a99f938331ece291cc4b
-lastReviewedNote: "Reviewed for the Issue #380 canonical Worker fixture repair: hosted proof removes the retired lca_jobs assumption, uses the physical private Worker contract, and does not change schema or production ownership."
+lastReviewedCommit: 0e4000b68abe97f11bf10f0ff972e8a453af643b
+lastReviewedNote: "Reviewed for the Issue #380 hosted phase diagnostics: secret-safe phase/type reporting preserves trusted targeting, cleanup, and production ownership without exposing response or exception values."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
