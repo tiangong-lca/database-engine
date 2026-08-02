@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: c86e6237dc72d412223a10eb74d4468dbe1f5713
-lastReviewedNote: "已为 Issue #377 CI 修复复核：数据库目录刷新和测试专用死锁修复不改变生成 workspace 的所有权、刷新语义或部署边界。"
+lastReviewedCommit: 86ba7eeaa3d038902084c03def77410c2f038ad2
+lastReviewedNote: "已在同步 Issue #376/#323 集成后为 Issue #377 复核：flow-identity 测试专用死锁修复不改变生成 workspace 的所有权、刷新语义或部署边界。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

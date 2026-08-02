@@ -29,8 +29,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: c86e6237dc72d412223a10eb74d4468dbe1f5713
-lastReviewedNote: "Reviewed for Issue #377 CI repair: the test-only deadlock fix and generated catalog refresh do not change repository shape, schema ownership, or deployment boundaries."
+lastReviewedCommit: 86ba7eeaa3d038902084c03def77410c2f038ad2
+lastReviewedNote: "Reviewed for Issue #377 after syncing Issue #376/#323 integration: the test-only deadlock fix does not change repository shape, schema ownership, or deployment boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -95,7 +95,7 @@ select ok(
   exists (
     select 1
     from pg_constraint
-    where conrelid = 'public.lca_network_snapshots'::regclass
+    where conrelid = 'private.lca_network_snapshots'::regclass
       and conname = 'lca_network_snapshots_scope_chk'
       and pg_get_constraintdef(oid) like '%data_product%'
   ),

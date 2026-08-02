@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-02"
-lastReviewedCommit: "c86e6237dc72d412223a10eb74d4468dbe1f5713"
-lastReviewedNote: "Reviewed for Issue #377 CI repair: the flow-identity test fixture and database catalog refresh stay within the existing test, artifact, and deployment governance rules."
+lastReviewedCommit: "86ba7eeaa3d038902084c03def77410c2f038ad2"
+lastReviewedNote: "Reviewed for Issue #377 after syncing Issue #376/#323 integration: existing routing covers the flow-identity test-only deadlock fix without changing governance rules."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

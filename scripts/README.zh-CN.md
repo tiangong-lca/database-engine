@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: c86e6237dc72d412223a10eb74d4468dbe1f5713
-lastReviewedNote: "已为 Issue #377 CI 修复复核：目录导出器记录分组审核 RPC 和最终 search_path，不改变脚本用法。"
+lastReviewedCommit: 86ba7eeaa3d038902084c03def77410c2f038ad2
+lastReviewedNote: "已在同步 Issue #376/#323 集成后为 Issue #377 复核：flow-identity 测试专用死锁修复不改变脚本用法。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -273,7 +273,7 @@ python scripts/run_database_contract.py --suite canonical-local --validate-manif
 python scripts/run_database_contract.py --suite canonical-local --list
 ```
 
-当前 manifest 动态得到 66 个 canonical 顶层 pgTAP，并保留 19 个带分类、
+当前 manifest 动态得到 67 个 canonical 顶层 pgTAP，并保留 19 个带分类、
 处置状态、跟踪 Issue 与 replacement 元数据的显式 exclusion。清单证据同时记录
 exact commit、migration head、CLI 版本、manifest/文件清单 hash 与 worktree dirty
 状态，避免把本地 dirty 内容误写成 clean commit 证据。`lca-private-expand`
@@ -286,6 +286,23 @@ Schema、receipt 对 phase 的明确授权，并重新生成 API pre-expand/phys
 逐字节对比；激活后还必须运行 #357 freezer/generator/exposure 专项单测。闭包不完整、
 未授权、SQL 漂移或匹配不唯一会在执行 SQL 前
 fail-closed，不会产生空绿色结果。
+
+### `test_lca_snapshot_family_upgrade.py`
+
+对一个显式 disposable loopback Supabase 数据库执行 Issue #376 的本地破坏性迁移
+qualification：
+
+```bash
+python scripts/test_lca_snapshot_family_upgrade.py \
+  --db-url "$ISSUE_376_DB_URL"
+```
+
+checked contract 固定 ancestor database commit 及其精确 predecessor migration
+head、唯一允许的 committed migration delta、10,000 行 network/artifact fixture 与
+lock/time/WAL budgets。runner 验证 OID、行数、主键与完整行内容 hash，第二个
+`ALTER TABLE` 的失败原子性、clean upgrade、直接迁移重试、
+private-state drift 拒绝，以及 committed rollback/roll-forward。它拒绝非 loopback
+URL，并会破坏性 reset 所选数据库。
 
 ### `public_inventory_closure.py`
 

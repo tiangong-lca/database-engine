@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: c86e6237dc72d412223a10eb74d4468dbe1f5713
-lastReviewedNote: "Reviewed for Issue #377 CI repair: the catalog exporter records the grouped review RPCs and final search paths without changing script usage."
+lastReviewedCommit: 86ba7eeaa3d038902084c03def77410c2f038ad2
+lastReviewedNote: "Reviewed for Issue #377 after syncing Issue #376/#323 integration: the flow-identity test-only deadlock fix does not change script usage."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -282,7 +282,7 @@ python scripts/run_database_contract.py --suite canonical-local --validate-manif
 python scripts/run_database_contract.py --suite canonical-local --list
 ```
 
-The current derived baseline is 66 selected top-level pgTAP files plus 19
+The current derived baseline is 67 selected top-level pgTAP files plus 19
 metadata-bearing exclusions. The list evidence records the exact commit,
 migration head, CLI version, manifest/file-list hashes, and whether the worktree
 was dirty, so local development output cannot masquerade as clean exact-commit
@@ -298,6 +298,24 @@ no #357 generator, contract, or migration activation path is tracked. Any partia
 or ambiguous activation requires exactly one version-matched freeze/receipt,
 sidecar and schema, the capture and generator scripts, plus both reviewed
 migration phases, and fails before SQL if that closure is incomplete.
+
+### `test_lca_snapshot_family_upgrade.py`
+
+Runs the destructive, local-only Issue #376 migration qualification against an
+explicit disposable loopback Supabase database:
+
+```bash
+python scripts/test_lca_snapshot_family_upgrade.py \
+  --db-url "$ISSUE_376_DB_URL"
+```
+
+The checked contract fixes an ancestor database commit with an exact predecessor
+migration head, the only permitted committed migration delta, a 10,000-row
+network/artifact fixture, and lock/time/WAL budgets. The runner proves OID plus
+full-row/primary-key/content parity, failure atomicity at the
+second `ALTER TABLE`, clean upgrade, direct migration retry, private-state drift
+rejection, and committed rollback/roll-forward. It refuses non-loopback URLs;
+the selected database is reset destructively.
 
 The canonical contract also runs `public_inventory_closure.py --check` and
 `security_definer_audit.py --check`. The inventory
