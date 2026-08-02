@@ -134,6 +134,15 @@ Repository configuration expected by `.github/workflows/supabase-dev.yml`:
 - secret `SUPABASE_ACCESS_TOKEN`
 - secret `SUPABASE_DEV_DB_PASSWORD`
 
+The manual Issue #380 hosted consumer qualification additionally uses the same
+repository variable and access token, but never deploys migrations. It resolves
+current modern API keys through the Management API. If the access token lacks
+key-reveal permission, configure both project-specific repository secrets
+`SUPABASE_DEV_PUBLISHABLE_KEY` and `SUPABASE_DEV_SECRET_KEY`; absence or an
+invalid key is a hard blocker, not a reason to retry legacy disabled keys. The
+workflow refuses every ref except canonical `refs/heads/dev` and explicitly
+rejects production project `qgzvkongdjqiiamzbbts`.
+
 ## PR to Supabase migration path
 
 Committed migration files do not affect any remote database until one of the

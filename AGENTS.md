@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2e7b3ba2a3fcdcbc59cb26416512808465262049
-lastReviewedNote: "Reviewed for Issue #376 after Issue #323 integration and CI repair: repository ownership, migration discipline, exact consumer binding, canonical manifest evidence, credential-safe docs, Preview qualification, and dev delivery rules already govern this change."
+lastReviewedCommit: 86ba7ee2c33e45df8008117a2dec3ee4deedc32c
+lastReviewedNote: "Reviewed for Issue #380: the trusted persistent-Dev consumer qualification remains database-owned proof automation, uses canonical dev and repository secrets as its current boundary, and does not change schema or production ownership."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -147,6 +147,7 @@ At a human-readable level, this repo owns:
 - `scripts/**` for schema export, workspace refresh, change copying, and migration generation
 - `.github/workflows/supabase-dev.yml`
 - `.github/workflows/database-validation.yml`
+- `.github/workflows/lca-snapshot-hosted-qualification.yml`
 - production Supabase GitHub integration contract for Git `main`
 - `.env.supabase.dev.local.example`
 - `.env.supabase.main.local.example`
