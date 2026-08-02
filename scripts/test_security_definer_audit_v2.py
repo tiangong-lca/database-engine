@@ -191,14 +191,47 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
         return lineage, catalog
 
     def test_current_transition_covers_public_private_and_util_once(self) -> None:
-        self.assertEqual(self.committed["summary"]["lineageCount"], 315)
+        self.assertEqual(self.committed["summary"]["lineageCount"], 318)
         self.assertEqual(self.committed["summary"]["originalPublicLineageCount"], 241)
         self.assertEqual(self.committed["summary"]["genesisNativeNonPublicLineageCount"], 74)
+        self.assertEqual(self.committed["summary"]["transitionNativeLineageCount"], 3)
         self.assertEqual(
             self.committed["summary"]["globalPrivilegedBySchema"],
-            {"api": 0, "archive": 0, "private": 49, "public": 230, "util": 36},
+            {"api": 0, "archive": 0, "private": 49, "public": 233, "util": 36},
         )
         self.assertEqual(self.committed["summary"]["unregisteredPrivilegedEndpointCount"], 0)
+
+    def test_issue323_registration_preserves_birth_definition_before_hardening(self) -> None:
+        expected_birth_hashes = {
+            "public.qry_review_get_admin_root_queue_items_v2(p_status text, p_page integer, p_page_size integer, p_sort_by text, p_sort_order text)":
+                "7267786d450407a0c85d2dac189caf55280bedfc7a1313fa710f12b51e136017",
+            "public.qry_review_get_member_root_queue_items_v2(p_status text, p_page integer, p_page_size integer, p_sort_by text, p_sort_order text)":
+                "2fb6bc9b281de9c950e5d9ae0247de4dc7af9bc173182e40062171c256b2d463",
+            "public.qry_root_review_reference_progress_v2(p_root_review_id uuid)":
+                "11f1b3d83755e2ab0c460e7451a8b516482722d0097b667b906cd054f422cb57",
+        }
+        audit_by_key = {
+            row["canonical"]["currentObjectKey"]: row
+            for row in self.committed["routines"]
+            if row["origin"] == "transition-native"
+        }
+        registered = [
+            row for row in self.lineage["lineages"]
+            if row["migrationBatch"] == "issue-323-root-grouped-review-queue"
+        ]
+        self.assertEqual(len(registered), 3)
+        for row in registered:
+            object_key = row["originalObjectKey"]
+            receipt = json.loads(audit.read_reviewed_contract_bytes(
+                row["birthTransition"]["receiptPath"],
+            ))
+            self.assertEqual(row["originalDefinitionSha256"], expected_birth_hashes[object_key])
+            self.assertEqual(receipt["original"]["definitionSha256"], expected_birth_hashes[object_key])
+            self.assertNotEqual(
+                row["originalDefinitionSha256"],
+                audit_by_key[object_key]["canonical"]["definitionSha256"],
+            )
+            self.assertTrue(audit_by_key[object_key]["canonical"]["safeSearchPath"])
 
     def test_catalog_input_argument_names_use_one_based_ordinality_not_oid_array_bounds(self) -> None:
         self.assertIn("with ordinality g(type_oid, ordinality)", audit.CATALOG_QUERY)
@@ -337,15 +370,25 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
         after = {row["originalObjectKey"]: row["lineageKey"] for row in transitioned["lineages"]}
         self.assertEqual(before, after)
         self.assertTrue(all(
-            key == audit.lineage_key(original)
-            for original, key in before.items()
+            key == (
+                audit.transition_lineage_key(original, row["birthTransition"])
+                if row["birthTransition"] is not None
+                else audit.lineage_key(original)
+            )
+            for row in self.lineage["lineages"]
+            for original, key in [(row["originalObjectKey"], row["lineageKey"])]
         ))
 
-    def test_unrelated_current_inventory_hash_cannot_rekey_315_frozen_lineages(self) -> None:
+    def test_unrelated_current_inventory_hash_cannot_rekey_frozen_or_registered_lineages(self) -> None:
         before = [row["lineageKey"] for row in self.lineage["lineages"]]
         simulated_current_inventory_hash = "f" * 64
         self.assertNotEqual(simulated_current_inventory_hash, audit.BASELINE_PROVENANCE["inventorySha256"])
-        after = [audit.lineage_key(row["originalObjectKey"]) for row in self.lineage["lineages"]]
+        after = [
+            audit.transition_lineage_key(row["originalObjectKey"], row["birthTransition"])
+            if row["birthTransition"] is not None
+            else audit.lineage_key(row["originalObjectKey"])
+            for row in self.lineage["lineages"]
+        ]
         self.assertEqual(before, after)
 
     def test_issue356_transition_fixture_preserves_315_privileged_lineages(self) -> None:
@@ -367,6 +410,14 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
                 self.assertEqual(
                     transitioned["summary"][field], self.committed["summary"][field], field,
                 )
+                continue
+            if field in {"lineageCount", "globalPrivilegedEndpointCount"}:
+                self.assertEqual(transitioned["summary"][field], value + 3, field)
+                continue
+            if field in {"canonicalPrivilegedBySchema", "globalPrivilegedBySchema"}:
+                registered = dict(value)
+                registered["public"] += 3
+                self.assertEqual(transitioned["summary"][field], registered, field)
                 continue
             self.assertEqual(transitioned["summary"][field], value, field)
         self.assertEqual(len(self.fixture["moves"]), 12)
@@ -396,7 +447,7 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
             lineage, audit.sha256_text(audit.canonical(lineage)), self.baseline, catalog,
             audit.exposed_schemas(),
         )
-        self.assertEqual(observed["summary"]["globalPrivilegedEndpointCount"], 315)
+        self.assertEqual(observed["summary"]["globalPrivilegedEndpointCount"], 318)
         self.assertEqual(
             observed["summary"]["compatibilityEndpointCount"],
             self.committed["summary"]["compatibilityEndpointCount"],
@@ -478,8 +529,8 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
                 lineage, audit.sha256_text(audit.canonical(lineage)), self.baseline, catalog,
                 audit.exposed_schemas(),
             )
-            self.assertEqual(observed["summary"]["lineageCount"], 316)
-            self.assertEqual(observed["summary"]["transitionNativeLineageCount"], 1)
+            self.assertEqual(observed["summary"]["lineageCount"], 319)
+            self.assertEqual(observed["summary"]["transitionNativeLineageCount"], 4)
             without_receipt = copy.deepcopy(lineage)
             without_receipt["lineages"][-1]["birthTransition"]["receiptPath"] = "missing.json"
             with self.assertRaisesRegex(ValueError, "registration receipt path"):

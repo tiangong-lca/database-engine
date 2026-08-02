@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
-lastReviewedNote: "已为 Issue #372 CI 收口复核：新增 pgTAP 资产推进 canonical 数量与 migration-head evidence；子任务迁移命名不会误激活已冻结的 Issue #357 全批次 verifier。"
+lastReviewedCommit: 2e7b3ba2a3fcdcbc59cb26416512808465262049
+lastReviewedNote: "已为 Issue #376 LCA snapshot-family Expand 复核：新增本地 upgrade runner 固化 exact-base populated、故障、重试、锁、WAL 与回滚/前滚证据，不改变 schema-workspace 生成流程。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -286,6 +286,23 @@ Schema、receipt 对 phase 的明确授权，并重新生成 API pre-expand/phys
 逐字节对比；激活后还必须运行 #357 freezer/generator/exposure 专项单测。闭包不完整、
 未授权、SQL 漂移或匹配不唯一会在执行 SQL 前
 fail-closed，不会产生空绿色结果。
+
+### `test_lca_snapshot_family_upgrade.py`
+
+对一个显式 disposable loopback Supabase 数据库执行 Issue #376 的本地破坏性迁移
+qualification：
+
+```bash
+python scripts/test_lca_snapshot_family_upgrade.py \
+  --db-url "$ISSUE_376_DB_URL"
+```
+
+checked contract 固定 ancestor database commit 及其精确 predecessor migration
+head、唯一允许的 committed migration delta、10,000 行 network/artifact fixture 与
+lock/time/WAL budgets。runner 验证 OID、行数、主键与完整行内容 hash，第二个
+`ALTER TABLE` 的失败原子性、clean upgrade、直接迁移重试、
+private-state drift 拒绝，以及 committed rollback/roll-forward。它拒绝非 loopback
+URL，并会破坏性 reset 所选数据库。
 
 ### `public_inventory_closure.py`
 

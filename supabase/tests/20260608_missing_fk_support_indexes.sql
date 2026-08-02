@@ -49,11 +49,11 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'lca_network_snapshots',
     array['lcia_method_id', 'lcia_method_version']
   ),
-  'lca_network_snapshots has a usable LCIA method support index'
+  'private lca_network_snapshots physical table has a usable LCIA method support index'
 );
 
 select ok(
