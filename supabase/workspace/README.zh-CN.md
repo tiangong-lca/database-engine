@@ -64,7 +64,7 @@ related:
 - 这个工作区应该被视为远程数据库的生成视图，而不是手工维护 schema 变更的真相源。
 - 不要把 public 对象去向或 consumer/dependency 证据写进本生成区。稳定、可机器检查的边界合同位于 `supabase/tests/contracts/public_object_*`，由 `scripts/public_inventory_closure.py` 重建。
 - 不要把 SECURITY DEFINER owner/runtime 或 lineage 决定写进本生成区。v1 genesis 总账与 live v2 lineage/audit/transition receipts 位于 `supabase/tests/contracts/`，分别由 `scripts/security_definer_audit.py` 与 `scripts/security_definer_audit_v2.py` 管理。
-- 不要把 pre-DDL consumer-cut 授权证据写进本生成区。稳定的 `*_pre_ddl.v1.json` 合同位于 `supabase/tests/contracts/`；它保持已提交 migration history append-only，允许 target-neutral static migration，要求 additive service-only `api` facade 同时通过精确受审 blob 与 PostgreSQL AST 语义校验，并在 static、runtime 与 owner 门禁授权 physical DDL 前对 opaque/dynamic execution 保持 hard deny。
+- 不要把 pre-DDL consumer-cut 授权证据写进本生成区。稳定的 `*_pre_ddl.v1.json` 合同及精确 external Git-tree evidence artifact 位于 `supabase/tests/contracts/`；它保持已提交 migration history append-only，允许 target-neutral static migration，要求 additive service-only `api` facade 同时通过精确受审 blob 与 PostgreSQL AST 语义校验，并在 static、runtime 与 owner 门禁授权 physical DDL 前对未解析或 opaque/dynamic execution 保持 hard deny。
 
 ## 建议用法
 

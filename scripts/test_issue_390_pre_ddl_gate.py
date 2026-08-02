@@ -10,6 +10,7 @@ import tempfile
 import unittest
 from pathlib import Path
 
+from scripts import issue_390_external_git_tree as external_tree
 from scripts.issue_390_pre_ddl_gate import (
     PGLAST_PARSER_VERSION,
     PGLAST_VERSION,
@@ -1474,31 +1475,34 @@ class Issue390PreDdlGateTest(unittest.TestCase):
     def test_active_source_inventory_distinguishes_canonical_and_candidates(self) -> None:
         sources = self.contract["sourceInventory"]
         expected_canonical = {
-            "edge": ("dev", "8b9629387d839bdff343a21353438a513eb54d9c", 40),
-            "worker": ("main", "cabb2518a69272c20abe61692eadb292b95596f2", 28),
-            "utilities": ("main", "9c00c9adb3d1afcb3173381d9247fa611cf5c0ec", 39),
-            "next": ("dev", "ea70e7415c630443aa1112566e3c37f4344777e8", 1),
-            "cli": ("main", "5cb359f1d0860df560c7571fa7547b2822b37c71", 0),
-            "mcp": ("main", "0ab741e0881c70ce526e936d222939e38f4a4911", 0),
-            "release": ("main", "f8d37018d898d23a51655272d129417eb9fad13a", 1),
-            "dataFoundry": ("main", "c3c74555b71e1ba33ee80a5c5919630a27ba79df", 0),
+            "edge": ("dev", "8588f1b9dbe5c24dfbad7d704f956a09ba3b7904"),
+            "worker": ("main", "cabb2518a69272c20abe61692eadb292b95596f2"),
+            "utilities": ("main", "9c00c9adb3d1afcb3173381d9247fa611cf5c0ec"),
+            "next": ("dev", "ea70e7415c630443aa1112566e3c37f4344777e8"),
+            "cli": ("main", "5cb359f1d0860df560c7571fa7547b2822b37c71"),
+            "mcp": ("main", "0ab741e0881c70ce526e936d222939e38f4a4911"),
+            "release": ("main", "f8d37018d898d23a51655272d129417eb9fad13a"),
+            "dataFoundry": ("main", "c3c74555b71e1ba33ee80a5c5919630a27ba79df"),
         }
         self.assertEqual(
             {key for key, value in sources.items() if isinstance(value, dict) and "repository" in value},
             set(expected_canonical),
         )
-        for name, (branch, commit, count) in expected_canonical.items():
+        artifact = external_tree.checked_artifact(self.contract)
+        artifact_repositories = {row["key"]: row for row in artifact["repositories"]}
+        for name, (branch, commit) in expected_canonical.items():
             canonical = sources[name]["canonical"]
             self.assertEqual(canonical["branch"], branch)
             self.assertEqual(canonical["commit"], commit)
-            self.assertEqual(canonical["scanMatchCount"], count)
+            self.assertNotIn("scanMatchCount", canonical)
             self.assertRegex(canonical["commit"], r"^[0-9a-f]{40}$")
+            self.assertEqual(artifact_repositories[name]["commit"], commit)
 
         self.assertEqual(
             sources["edge"]["candidate"],
             {
-                "qualifiedSourceCommit": "6080b4c2c95b00c2666f98af6bb90610042fc3da",
-                "mergedAsCommit": "8b9629387d839bdff343a21353438a513eb54d9c",
+                "qualifiedSourceCommit": "282ab4f21575f924721f91322690647e56bcc4b3",
+                "mergedAsCommit": "8588f1b9dbe5c24dfbad7d704f956a09ba3b7904",
             },
         )
         worker_candidate = sources["worker"]["candidate"]
@@ -1529,15 +1533,15 @@ class Issue390PreDdlGateTest(unittest.TestCase):
         self.assertFalse(sources["staticEvidenceComplete"])
         self.assertEqual(
             sources["next"]["canonical"]["classification"],
-            "indirect-edge-http-consumer",
+            "mixed-indirect-http-and-active-generated-runtime",
         )
         self.assertEqual(
             sources["cli"]["canonical"]["classification"],
-            "no-direct-family-match",
+            "no-recognized-direct-match-with-unresolved-dynamic-selectors",
         )
         self.assertEqual(
             sources["mcp"]["canonical"]["classification"],
-            "no-direct-family-match",
+            "no-recognized-direct-match-with-unresolved-dynamic-selectors",
         )
 
 

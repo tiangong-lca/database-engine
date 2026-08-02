@@ -149,6 +149,17 @@ This means branch behavior is part of the repo architecture, not just delivery p
 
 SQL assertions own database semantics and ACL regressions. Offline Node contracts own runner-only control flow, including outer-frozen request/namespace selectors, deterministic role emails, an outer-created exact empty mode-0700 private temp directory, fsync-before-ACK secret-free recovery checkpoints, exact filtered metadata recovery, global logout, hard DELETE followed by GET-404 plus a fresh empty filtered census, in-connection application-name binding, and fail-closed rendering/parsing of the 39-surface read-only residue proof. The inner runner may not begin actor sign-in or fixture mutation until the outer process has durably acknowledged the exact actor/selectors checkpoint. Cleanup shares the derivative coordinator advisory lock and is allowed only before either exact child crosses external dispatch; otherwise it fails into separately authorized durable recovery. A missing or ambiguous global logout always retains the actor and forbids hard DELETE. Those offline contracts use no Hosted database authority and do not replace the later exact-head Hosted mutation proof or independent Auth/SQL readback execution.
 
+The LCA result-family pre-DDL proof also has an exact external Git-tree layer.
+It binds eight canonical repository origins and full commit SHAs, scans all
+regular blobs directly from Git objects, and stores a hash-only semantic ledger.
+Source kind and execution reachability remain separate dimensions: generated
+Next Edge mirrors and the generated database snapshot are active runtime, while
+historical migrations and fixtures remain visible without being promoted to
+runtime consumers. Dynamic selectors and unresolved lexical evidence prevent a
+semantic-zero claim; recognized direct-token occurrences are only a lower
+bound. Mirror receipt identity, source-tree parity, current-Edge staleness, and
+database snapshot provenance are independent fail-closed checks.
+
 The global populated-upgrade harness is a separate local-only proof layer. Its
 checked contract pins a reviewed migration base and exact head, one-million-row
 representative package-evidence scale, fixture surfaces, expected boundary

@@ -323,7 +323,7 @@ Runs the offline, non-mutating pre-DDL authorization gate for the LCA
 result/cache/latest/factorization family:
 
 ```bash
-python -m pip install --disable-pip-version-check "pglast==8.4"
+python -m pip install --disable-pip-version-check "jsonschema==4.23.0" "pglast==8.4"
 python -m unittest scripts.test_issue_390_pre_ddl_gate
 ```
 
@@ -353,6 +353,27 @@ remain protected from later replacement, privilege, and security-mode changes.
 HEAD, index, and worktree each use their own contract revision. The gate
 never treats one zero-match query as burn-in. The canonical manifest-contract
 module imports this test case, so existing CI runs it without a second workflow.
+
+### `issue_390_external_git_tree.py`
+
+Builds the non-authorizing Issue #397 consumer ledger directly from eight exact
+external Git commits. It validates each canonical origin, walks every regular
+blob with Git object commands (including the active Next database snapshot),
+records only blob/line hashes and semantic classifications, and fails closed on
+unsupported entries, unresolved active-runtime tokens, or dynamic selectors.
+The Next Edge mirror receipt and exact source tree are checked independently;
+staleness and content parity are separate blockers. Recognized direct-token
+occurrences are not an exhaustive consumer count.
+
+```bash
+python scripts/issue_390_external_git_tree.py --check
+python scripts/issue_390_external_git_tree.py --verify-external /absolute/path/to/lca-workspace
+python -m unittest scripts.test_issue_390_external_git_tree
+```
+
+`--scan-external` rewrites the canonical JSON artifact and SHA sidecar and is
+only for a reviewed evidence refresh. These commands do not authorize DDL or
+contact Supabase Hosted projects.
 
 The canonical contract also runs `public_inventory_closure.py --check` and
 `security_definer_audit.py --check`. The inventory
