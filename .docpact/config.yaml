@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-02"
-lastReviewedCommit: "2510d66a67f9f6dd8933a8282c11c36d4d398009"
-lastReviewedNote: "Reviewed for Issue #372 first real Expand slice: the existing migration/test routing covers the transactional api/private move, explicit ACL convergence, compatibility wrappers, and focused plus baseline-differential validation without changing governance rules."
+lastReviewedCommit: "1ff6d2775bed146379d50dc91eaf43c7915dca0f"
+lastReviewedNote: "Reviewed for Issue #323: the existing migration and SQL-test routing covers the additive Root/Reference Review v2 grouped-queue RPCs and focused regression proof without changing governance rules."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

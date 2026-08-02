@@ -32,8 +32,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
-lastReviewedNote: "Reviewed for Issue #372 first real Expand slice: blank/populated upgrades, retry, forced failure atomicity, rollback/roll-forward, JWT/direct-SQL checks, focused pgTAP, baseline differential, lint, and hosted Preview remain the required validation layers."
+lastReviewedCommit: 1ff6d2775bed146379d50dc91eaf43c7915dca0f
+lastReviewedNote: "Reviewed for Issue #323: local fresh-stack reset plus the Root/Reference Review v2 and root-grouped queue pgTAP suites remain the minimum proof; hosted Preview and persistent-dev proof stay deferred to deployment."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
