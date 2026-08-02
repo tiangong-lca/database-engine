@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 070958386e7cc3609105105c4dfd37a76e9080f1
-lastReviewedNote: "Reviewed for the Issue #380 hosted DTO labels: fixed phase/type diagnostics preserve trusted targeting, fail-closed DTO checks, cleanup, and production ownership without exposing response or exception values."
+lastReviewedCommit: 8adf0c825c143ded099b325f01d089e316119bef
+lastReviewedNote: "Reviewed for the Issue #380 hosted anonymous authorization contract: the exact handler/gateway 401 DTO union preserves trusted targeting, fail-closed authenticated DTO checks, cleanup, and production ownership without logging payloads."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
