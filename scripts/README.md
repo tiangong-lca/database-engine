@@ -323,18 +323,36 @@ Runs the offline, non-mutating pre-DDL authorization gate for the LCA
 result/cache/latest/factorization family:
 
 ```bash
+python -m pip install --disable-pip-version-check "pglast==8.4"
 python -m unittest scripts.test_issue_390_pre_ddl_gate
 ```
 
 The checked contract binds the exact `dev` base and migration head, seven target
-objects, digest-bound repository catalog plus hosted owner receipt, active
+objects plus their recursive application-object dependency closure, a digest-bound repository catalog plus hosted owner receipt, active
 consumer canonical/candidate tuples, a reproducible non-authorizing runtime
 receipt, advisor baseline, and owner-signoff state.
-While `ddlAuthorized=false`, the test rejects any Issue #390 relation-moving
-migration. It never treats one zero-match log query as burn-in and never permits
-an authenticated browser grant on `private` as a compatibility mechanism. The
-canonical manifest-contract module imports this test case so existing CI runs
-the gate without adding a second workflow path.
+While `ddlAuthorized=false`, committed migration history remains append-only. New
+target-neutral static migrations are allowed. A separately tested additive
+service-only `api` facade must match one exact reviewed path/blob/classification
+entry in its first commit and pass fixed-version `pglast` PostgreSQL-AST semantic
+checks. A later commit cannot retroactively authorize it. Opaque or
+dynamic execution, relation-moving DDL, historical authenticated-access removal,
+and browser grants on `private` remain hard denied and cannot be overridden by an
+allowlist. Static exclusions include, but are not limited to, top-level DML,
+CTAS/SELECT, index or exclusion-index builds, validated constraints and
+partitions, column type or storage rewrites, non-metadata-only column additions,
+`SET NOT NULL`, custom types/access methods, trigger/rule state changes, and
+migration identity/owner switches because existing triggers, views, FDWs,
+operators, casts, constraints, or access methods can execute unproven code.
+Moves into exposed `api`/`public` are denied; newly created exposed views must be
+security-invoker, and exposed routines may neither be security-definer nor
+reference internal objects. Reviewed facade signatures use explicitly qualified
+`pg_catalog` types so migration-session type shadowing cannot change identities.
+Created `api.lca_*` and `api.cmd_lca_*` facades
+remain protected from later replacement, privilege, and security-mode changes.
+HEAD, index, and worktree each use their own contract revision. The gate
+never treats one zero-match query as burn-in. The canonical manifest-contract
+module imports this test case, so existing CI runs it without a second workflow.
 
 The canonical contract also runs `public_inventory_closure.py --check` and
 `security_definer_audit.py --check`. The inventory

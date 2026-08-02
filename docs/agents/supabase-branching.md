@@ -22,8 +22,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: ca686b19f359eb90e78d12b789e08a8ccb89afe0
-lastReviewedNote: "Reviewed for the Issue #380 hosted anonymous status contract: qualification-only exact 401 denial ignores the platform-owned gateway body while preserving dev targeting, serialized execution, cascade cleanup, and the production boundary."
+lastReviewedCommit: c467a09dcfddc81ad4a57cd4db354ed1c8930fe7
+lastReviewedNote: "Reviewed for Issue #390 target-aware pre-DDL validation: both local PR qualification and serialized persistent-dev deployment install the same pinned PostgreSQL AST parser before running the canonical contract; branch targeting and hosted mutation boundaries are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -91,6 +91,7 @@ When review changes an already-applied PR migration, add a later migration that 
 - `supabase/config.toml`: shared baseline plus `[remotes.dev]`
 - `.github/workflows/database-validation.yml`: validates database PRs on a fresh disposable local stack without hosted mutation
 - `.github/workflows/supabase-dev.yml`: validates locally, then serializes and pushes committed migrations plus allowlisted PostgREST configuration to persistent Supabase `dev`, followed by hosted readback
+- Both workflows install the same exact `pglast==8.4` parser before the canonical Python contract so target-aware migration authorization has identical PostgreSQL-AST semantics in PR and persistent-dev qualification.
 - `scripts/apply_postgrest_config.py`: fail-closed persistent-dev PostgREST diff/apply/readback gate
 - `supabase/migrations/*.sql`: committed migration history
 - `supabase/seed.sql`: shared seed data

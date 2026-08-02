@@ -119,8 +119,15 @@ routing:
         - supabase/tests/**
     lca-result-family:
       paths:
+        - AGENTS.md
+        - .docpact/config.yaml
         - supabase/tests/contracts/lca_result_family_pre_ddl.v1.json
+        - supabase/workspace/README.md
+        - supabase/workspace/README.zh-CN.md
         - scripts/test_issue_390_pre_ddl_gate.py
+        - scripts/issue_390_pre_ddl_gate.py
+        - .github/workflows/database-validation.yml
+        - .github/workflows/supabase-dev.yml
         - scripts/test_database_contract_manifest.py
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
