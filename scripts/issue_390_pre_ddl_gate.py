@@ -1193,12 +1193,25 @@ def pre_ddl_sql_signals(sql: str) -> list[str]:
     return sorted(set(signals))
 
 
-def _facade_review_violations(sql: str) -> list[str]:
+RECONCILE_REPLACEMENT_IDENTITY = (
+    "api",
+    "cmd_lca_reconcile_result_cache_v1",
+    (
+        (("pg_catalog", "uuid"), 0),
+        (("pg_catalog", "uuid"), 0),
+    ),
+)
+
+
+def _facade_review_violations(
+    sql: str, *, replacement_identity: tuple | None = None
+) -> list[str]:
     statements, errors = _parse_sql(sql)
     if errors:
         return errors
     created: set[tuple] = set()
     acl_state: dict[tuple, dict[str, bool]] = {}
+    explicitly_revoked: dict[tuple, set[str]] = {}
     violations = []
     for statement in statements:
         root_type, root = next(iter(statement.items()))
@@ -1221,14 +1234,26 @@ def _facade_review_violations(sql: str) -> list[str]:
                 violations.append("facade:duplicate-function-identity")
             created.add(identity)
             acl_state[identity] = {
-                "PUBLIC": True,
-                "anon": False,
-                "authenticated": False,
-                "service_role": False,
-                "api_internal_executor": False,
+                # CREATE grants EXECUTE to PUBLIC by default. A replacement,
+                # however, preserves the existing ACL, so model every governed
+                # runtime grantee as privileged until this exact migration
+                # explicitly revokes it.
+                role: replacement_identity is not None or role == "PUBLIC"
+                for role in (
+                    "PUBLIC",
+                    "anon",
+                    "authenticated",
+                    "service_role",
+                    "api_internal_executor",
+                )
             }
-            if root.get("replace"):
+            explicitly_revoked[identity] = set()
+            if root.get("replace") and replacement_identity is None:
                 violations.append("facade:create-or-replace-forbidden")
+            if replacement_identity is not None and (
+                not root.get("replace") or identity != replacement_identity
+            ):
+                violations.append("facade:replacement-identity-forbidden")
             if not _function_is_invoker_with_empty_search_path(root):
                 violations.append("facade:function-must-be-invoker-empty-search-path")
             options = _function_options(root)
@@ -1317,17 +1342,32 @@ def _facade_review_violations(sql: str) -> list[str]:
             for identity in identities:
                 for role in roles:
                     acl_state[identity][role] = bool(root.get("is_grant"))
+                    if not root.get("is_grant"):
+                        explicitly_revoked[identity].add(role)
         elif root_type != "CommentStmt":
             violations.append(f"facade:statement-forbidden:{root_type}")
     for identity in created:
         identity_text = _identity_text(identity)
         if any(
             acl_state[identity][role]
-            for role in ("PUBLIC", "anon", "authenticated")
+            for role in (
+                "PUBLIC",
+                "anon",
+                "authenticated",
+                "api_internal_executor",
+            )
         ):
             violations.append(f"facade:missing-browser-revoke:{identity_text}")
         if not acl_state[identity]["service_role"]:
             violations.append(f"facade:missing-service-grant:{identity_text}")
+        if replacement_identity is not None and not {
+            "PUBLIC",
+            "anon",
+            "authenticated",
+            "service_role",
+            "api_internal_executor",
+        } <= explicitly_revoked[identity]:
+            violations.append(f"facade:missing-exact-acl-reset:{identity_text}")
     if not created:
         violations.append("facade:no-api-function-created")
     return sorted(set(violations))
@@ -1347,11 +1387,16 @@ def pre_ddl_migration_violations(
         for row in allowlist
         if row.get("path") == path and row.get("gitBlob") == git_blob
     ]
-    if len(matching) != 1 or matching[0].get("classification") != (
-        "additive-api-service-only-reviewed"
-    ):
+    if len(matching) != 1:
         return signals
-    return _facade_review_violations(sql)
+    classification = matching[0].get("classification")
+    if classification == "additive-api-service-only-reviewed":
+        return _facade_review_violations(sql)
+    if classification == "reconcile-v1-service-only-replacement-reviewed":
+        return _facade_review_violations(
+            sql, replacement_identity=RECONCILE_REPLACEMENT_IDENTITY
+        )
+    return signals
 
 
 __all__ = [

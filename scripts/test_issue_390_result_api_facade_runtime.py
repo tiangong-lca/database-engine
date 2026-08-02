@@ -199,6 +199,12 @@ def main() -> None:
     reconcile_worker_job = str(uuid.uuid4())
     reconcile_legacy_job = str(uuid.uuid4())
     reconcile_result_id = str(uuid.uuid4())
+    cancelled_worker_job = str(uuid.uuid4())
+    cancelled_legacy_job = str(uuid.uuid4())
+    cancelled_result_id = str(uuid.uuid4())
+    cancelled_cache = str(uuid.uuid4())
+    retry_worker_job = str(uuid.uuid4())
+    retry_legacy_job = str(uuid.uuid4())
     ready_cache = str(uuid.uuid4())
     reconcile_cache = str(uuid.uuid4())
     latest_id = str(uuid.uuid4())
@@ -219,6 +225,24 @@ def main() -> None:
          '{snapshot}', 'user', '{actor}', 'completed', 'lca.solve_one.request.v1',
          jsonb_build_object('job_id', '{legacy_job}', 'snapshot_id', '{snapshot}'),
          'lca.solve.result.v1', '{{"ok":true}}'::jsonb, now());
+      insert into private.worker_jobs
+        (id, job_kind, worker_queue, subject_type, subject_id, subject_version,
+         requester_type, requested_by, status, payload_schema_version, payload_json,
+         error_code, error_message, finished_at, cancelled_at)
+      values
+        ('{cancelled_worker_job}', 'lca.solve_one', 'solver', 'lca_job',
+         '{cancelled_legacy_job}', '{snapshot}', 'user', '{actor}', 'cancelled',
+         'lca.solve_one.request.v1',
+         jsonb_build_object('job_id', '{cancelled_legacy_job}', 'snapshot_id', '{snapshot}'),
+         'cancelled_by_test', 'cancelled by Issue #395 runtime', now(), now());
+      insert into private.worker_jobs
+        (id, job_kind, worker_queue, subject_type, subject_id, subject_version,
+         requester_type, requested_by, status, payload_schema_version, payload_json)
+      values
+        ('{retry_worker_job}', 'lca.solve_one', 'solver', 'lca_job',
+         '{retry_legacy_job}', '{snapshot}', 'user', '{actor}', 'queued',
+         'lca.solve_one.request.v1',
+         jsonb_build_object('job_id', '{retry_legacy_job}', 'snapshot_id', '{snapshot}'));
       insert into private.worker_jobs
         (id, job_kind, worker_queue, subject_type, subject_id, subject_version,
          requester_type, requested_by, status, payload_schema_version, payload_json,
@@ -244,6 +268,14 @@ def main() -> None:
          '{snapshot}', '{{}}'::jsonb, '{{}}'::jsonb,
          'storage://lca_results/{namespace}/reconcile-result.h5',
          repeat('c', 64), 768, 'hdf5:v1');
+      insert into public.lca_results
+        (id, job_id, worker_job_id, snapshot_id, payload, diagnostics,
+         artifact_url, artifact_sha256, artifact_byte_size, artifact_format)
+      values
+        ('{cancelled_result_id}', '{cancelled_legacy_job}', '{cancelled_worker_job}',
+         '{snapshot}', '{{}}'::jsonb, '{{}}'::jsonb,
+         'storage://lca_results/{namespace}/cancelled-preserved.h5',
+         repeat('d', 64), 395, 'hdf5:v1');
       insert into public.lca_result_cache
         (id, scope, snapshot_id, request_key, request_payload, status,
          job_id, worker_job_id, result_id, hit_count)
@@ -253,7 +285,10 @@ def main() -> None:
          'ready', '{legacy_job}', '{worker_job}', '{result_id}', 0),
         ('{reconcile_cache}', 'prod', '{snapshot}', '{namespace}-reconcile',
          '{{}}'::jsonb, 'pending', '{reconcile_legacy_job}',
-         '{reconcile_worker_job}', null, 0);
+         '{reconcile_worker_job}', null, 0),
+        ('{cancelled_cache}', 'prod', '{snapshot}', '{namespace}-cancelled',
+         '{{}}'::jsonb, 'pending', '{cancelled_legacy_job}',
+         '{cancelled_worker_job}', '{cancelled_result_id}', 0);
       insert into public.lca_latest_all_unit_results
         (id, snapshot_id, job_id, worker_job_id, result_id, query_artifact_url,
          query_artifact_sha256, query_artifact_byte_size, query_artifact_format, status)
@@ -266,7 +301,10 @@ def main() -> None:
       delete from public.lca_result_cache where snapshot_id = '{snapshot}';
       delete from public.lca_latest_all_unit_results where snapshot_id = '{snapshot}';
       delete from public.lca_results where snapshot_id = '{snapshot}';
-      delete from private.worker_jobs where id in ('{worker_job}', '{reconcile_worker_job}');
+      delete from private.worker_jobs where id in (
+        '{worker_job}', '{reconcile_worker_job}', '{cancelled_worker_job}',
+        '{retry_worker_job}'
+      );
       delete from public.lca_network_snapshots where id = '{snapshot}';
     """
 
@@ -371,6 +409,86 @@ def main() -> None:
         reconciled_cache = require_object(reconcile_data["cache"], "reconciled cache")
         if reconcile["ok"] is not True or reconcile["code"] != "reconciled" or reconciled_cache.get("resultId") != reconcile_result_id or reconciled_cache.get("hitCount") != 1:
             raise AssertionError("service reconcile did not bind and touch exactly once")
+
+        def reconcile_cancelled(_: int) -> object:
+            return expect_ok(
+                rpc(
+                    rest_url,
+                    "cmd_lca_reconcile_result_cache_v1",
+                    {"p_requested_by": actor, "p_cache_id": cancelled_cache},
+                    api_header=service_key,
+                    bearer=service_key,
+                ),
+                "concurrent cancelled reconcile",
+            )
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=8) as executor:
+            cancelled_responses = list(executor.map(reconcile_cancelled, range(8)))
+        for response in cancelled_responses:
+            item = expect_keys(
+                response, {"ok", "code", "data"}, "cancelled reconcile"
+            )
+            data = require_object(item["data"], "cancelled reconcile data")
+            cache_state = require_object(data["cache"], "cancelled cache state")
+            if (
+                item["ok"] is not True
+                or item["code"] != "reconciled"
+                or data.get("workerStatus") != "cancelled"
+                or cache_state.get("status") != "failed"
+                or cache_state.get("legacyJobId") != cancelled_legacy_job
+                or cache_state.get("workerJobId") != cancelled_worker_job
+                or cache_state.get("resultId") != cancelled_result_id
+            ):
+                raise AssertionError(
+                    f"cancelled reconcile changed contract or identity: {item}"
+                )
+
+        cancelled_row = psql(
+            db_url,
+            f"select concat_ws(':', status, job_id::text, worker_job_id::text, "
+            f"result_id::text, hit_count::text) from public.lca_result_cache "
+            f"where id='{cancelled_cache}';",
+        )
+        expected_cancelled_row = (
+            f"failed:{cancelled_legacy_job}:{cancelled_worker_job}:"
+            f"{cancelled_result_id}:8"
+        )
+        if cancelled_row != expected_cancelled_row:
+            raise AssertionError(
+                "concurrent cancelled reconcile lost an increment or identity: "
+                f"{cancelled_row}"
+            )
+
+        retry = expect_ok(
+            rpc(
+                rest_url,
+                "cmd_lca_admit_result_cache_v1",
+                {
+                    "p_scope": "prod",
+                    "p_snapshot_id": snapshot,
+                    "p_request_key": f"{namespace}-cancelled",
+                    "p_request_payload": {"retry": True},
+                    "p_legacy_job_id": retry_legacy_job,
+                    "p_worker_job_id": retry_worker_job,
+                    "p_replace_ready": False,
+                },
+                api_header=service_key,
+                bearer=service_key,
+            ),
+            "cancelled retry admission",
+        )
+        retry_item = expect_keys(retry, {"ok", "outcome", "data"}, "retry")
+        retry_cache = require_object(retry_item["data"], "retry cache")
+        if (
+            retry_item["ok"] is not True
+            or retry_item["outcome"] != "accepted"
+            or retry_cache.get("status") != "pending"
+            or retry_cache.get("legacyJobId") != retry_legacy_job
+            or retry_cache.get("workerJobId") != retry_worker_job
+            or retry_cache.get("resultId") is not None
+            or retry_cache.get("hitCount") != 9
+        ):
+            raise AssertionError(f"cancelled retry was not atomically rebound: {retry}")
 
         latest_all = expect_keys(service_results["lca_read_latest_all_unit_result_v1"], {"ok", "data"}, "latest all-unit")
         latest_all_data = expect_keys(
@@ -503,6 +621,9 @@ def main() -> None:
                     "differentBindingOutcomes": {"accepted": 1, "reused": 7},
                     "sameBindingAccepted": 8,
                     "finalHitCount": 16,
+                    "cancelledConcurrentReconciles": 8,
+                    "cancelledFinalHitCountBeforeRetry": 8,
+                    "cancelledRetryHitCount": 9,
                 },
                 sort_keys=True,
             )
@@ -514,7 +635,10 @@ def main() -> None:
             f"""
               select
                 (select count(*) from public.lca_network_snapshots where id = '{snapshot}'),
-                (select count(*) from private.worker_jobs where id in ('{worker_job}', '{reconcile_worker_job}')),
+                (select count(*) from private.worker_jobs where id in (
+                  '{worker_job}', '{reconcile_worker_job}', '{cancelled_worker_job}',
+                  '{retry_worker_job}'
+                )),
                 (select count(*) from public.lca_results where snapshot_id = '{snapshot}'),
                 (select count(*) from public.lca_result_cache where snapshot_id = '{snapshot}'),
                 (select count(*) from public.lca_latest_all_unit_results where snapshot_id = '{snapshot}'),

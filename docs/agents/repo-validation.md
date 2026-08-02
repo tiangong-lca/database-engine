@@ -33,8 +33,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: 2cb88b079a8e50f7630378b9f565739c4144df60
-lastReviewedNote: "Reviewed for Issue #390: canonical-local now binds the exact service-only result facade pgTAP contract to its loopback Data API, concurrency, and zero-residue runtime qualification."
+lastReviewedCommit: 4dbea4a0ee7102a07b68613628e56022a37a5cf0
+lastReviewedNote: "Reviewed for Issue #395: result-cache qualification now covers cancelled-to-failed reconciliation, exact ACL convergence, concurrent touch accounting, and two-stage retry admission."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

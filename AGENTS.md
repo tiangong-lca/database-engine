@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: 2cb88b079a8e50f7630378b9f565739c4144df60
-lastReviewedNote: "Reviewed for the Issue #380 hosted anonymous status contract: exact anonymous 401 denial ignores the platform-owned verify_jwt body while authenticated checks, zero-residue cascade cleanup, trusted targeting, and production ownership remain enforced."
+lastReviewedCommit: 4dbea4a0ee7102a07b68613628e56022a37a5cf0
+lastReviewedNote: "Reviewed for Issue #395: a forward-only service facade replacement and its exact reviewed-blob gate preserve repository ownership, migration immutability, local-first validation, and production-mutation boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

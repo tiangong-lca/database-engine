@@ -169,7 +169,7 @@ class Issue390PreDdlGateTest(unittest.TestCase):
         self.assertTrue(migration_gate["committedMigrationHistoryAppendOnly"])
         self.assertEqual(
             migration_gate["newMigrationsAllowed"],
-            "target-neutral-static-or-reviewed-ast-facade",
+            "target-neutral-static-or-reviewed-ast-facade-operation",
         )
         self.assertFalse(migration_gate["relationMovingDdlAllowed"])
         self.assertFalse(migration_gate["browserPrivateCompatibilityGrantAllowed"])
@@ -188,8 +188,12 @@ class Issue390PreDdlGateTest(unittest.TestCase):
             self.assertTrue(row["path"].startswith("supabase/migrations/"))
             self.assertTrue(row["path"].endswith(".sql"))
             self.assertRegex(row["gitBlob"], r"^[0-9a-f]{40}$")
-            self.assertEqual(
-                row["classification"], "additive-api-service-only-reviewed"
+            self.assertIn(
+                row["classification"],
+                {
+                    "additive-api-service-only-reviewed",
+                    "reconcile-v1-service-only-replacement-reviewed",
+                },
             )
 
     def test_target_neutral_migrations_are_allowed_without_global_freeze(self) -> None:
@@ -733,6 +737,93 @@ class Issue390PreDdlGateTest(unittest.TestCase):
             signals,
         )
 
+    def test_reviewed_reconcile_replacement_requires_exact_identity_and_acl_reset(self) -> None:
+        path = "supabase/migrations/20990101000012_reconcile_replace.sql"
+        blob = "c" * 40
+        reviewed = [
+            {
+                "path": path,
+                "gitBlob": blob,
+                "classification": (
+                    "reconcile-v1-service-only-replacement-reviewed"
+                ),
+            }
+        ]
+
+        def migration(
+            *,
+            name: str = "cmd_lca_reconcile_result_cache_v1",
+            replace: str = "OR REPLACE ",
+            revoke_roles: str = (
+                "PUBLIC, anon, authenticated, service_role, "
+                "api_internal_executor"
+            ),
+            grant_role: str = "service_role",
+        ) -> str:
+            return f"""
+            CREATE {replace}FUNCTION api.{name}(
+              p_requested_by pg_catalog.uuid,
+              p_cache_id pg_catalog.uuid
+            ) RETURNS pg_catalog.jsonb LANGUAGE sql SECURITY INVOKER
+            SET search_path = '' AS $$
+              SELECT pg_catalog.to_jsonb(cache_row)
+              FROM public.lca_result_cache AS cache_row
+              WHERE cache_row.id = p_cache_id
+            $$;
+            REVOKE ALL ON FUNCTION api.{name}(
+              pg_catalog.uuid, pg_catalog.uuid
+            ) FROM {revoke_roles};
+            GRANT EXECUTE ON FUNCTION api.{name}(
+              pg_catalog.uuid, pg_catalog.uuid
+            ) TO {grant_role};
+            """
+
+        self.assertEqual(
+            pre_ddl_migration_violations(
+                path=path,
+                git_blob=blob,
+                sql=migration(),
+                allowlist=reviewed,
+            ),
+            [],
+        )
+
+        rejected = [
+            migration(name="cmd_lca_reconcile_result_cache_v2"),
+            migration(replace=""),
+            migration(
+                revoke_roles=(
+                    "PUBLIC, anon, authenticated, api_internal_executor"
+                )
+            ),
+            migration(
+                revoke_roles=(
+                    "PUBLIC, anon, authenticated, service_role"
+                )
+            ),
+            migration(grant_role="api_internal_executor"),
+        ]
+        for sql in rejected:
+            self.assertNotEqual(
+                pre_ddl_migration_violations(
+                    path=path,
+                    git_blob=blob,
+                    sql=sql,
+                    allowlist=reviewed,
+                ),
+                [],
+                sql,
+            )
+
+        self.assertNotEqual(
+            pre_ddl_migration_violations(
+                path=path,
+                git_blob="d" * 40,
+                sql=migration(),
+                allowlist=reviewed,
+            ),
+            [],
+        )
     def test_checkout_descends_from_base_and_preserves_base_migrations(self) -> None:
         base = FREEZE_BASE_COMMIT
         ancestry = subprocess.run(

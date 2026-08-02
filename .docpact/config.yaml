@@ -135,6 +135,8 @@ routing:
         - scripts/test_export_database_contract.py
         - supabase/migrations/*issue_390_result_api_facade*.sql
         - supabase/tests/*issue_390_result_api_facade*.sql
+        - supabase/migrations/*issue_395_reconcile_cancelled*.sql
+        - supabase/tests/*issue_395_reconcile_cancelled*.sql
         - .github/workflows/database-validation.yml
         - .github/workflows/supabase-dev.yml
         - scripts/test_database_contract_manifest.py

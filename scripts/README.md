@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: 2cb88b079a8e50f7630378b9f565739c4144df60
-lastReviewedNote: "Reviewed for Issue #390: canonical-local automatically runs the exact result API facade Data API, concurrency, and cleanup qualification when its pgTAP contract is selected."
+lastReviewedCommit: 4dbea4a0ee7102a07b68613628e56022a37a5cf0
+lastReviewedNote: "Reviewed for Issue #395: the result API runtime also proves concurrent cancelled-to-failed reconciliation and retry admission without adding a ninth facade."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -629,14 +629,17 @@ python scripts/test_identity_collaboration_data_api.py
 python scripts/test_identity_collaboration_concurrency.py
 ```
 
-### Issue #390 result API facade runtime
+### Issue #390/#395 result API facade runtime
 
 `test_issue_390_result_api_facade_runtime.py` is a loopback-only qualification
 for the eight service-only `api` routines. It freezes the positive DTO values,
 exact anonymous/authenticated/private-profile denials, one eight-request HTTP
 admission race, one eight-backend PostgreSQL race, same-binding replay, and
-post-cleanup zero residue. `canonical-local` runs it automatically whenever the
-Issue #390 pgTAP contract is selected.
+post-cleanup zero residue. The Issue #395 extension also runs eight concurrent
+reconciliations of one cancelled Worker job, proves every call contributes
+exactly one hit while preserving all identities, then admits a retry that
+atomically clears the old result/error binding. `canonical-local` runs it
+automatically whenever the Issue #390 facade pgTAP contract is selected.
 
 ```bash
 python scripts/test_issue_390_result_api_facade_runtime.py
