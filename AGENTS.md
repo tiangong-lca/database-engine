@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2ff09eaec4381354af04f4ba333bf25f02a361e8
-lastReviewedNote: "Reviewed for the Issue #380 hosted-trigger repair: the path-scoped canonical-dev push bootstrap remains database-owned proof automation, preserves the trusted secret boundary, and does not change schema or production ownership."
+lastReviewedCommit: c63f42aaa396792292c5a99f938331ece291cc4b
+lastReviewedNote: "Reviewed for the Issue #380 canonical Worker fixture repair: hosted proof removes the retired lca_jobs assumption, uses the physical private Worker contract, and does not change schema or production ownership."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

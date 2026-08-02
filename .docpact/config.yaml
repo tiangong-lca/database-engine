@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-02"
-lastReviewedCommit: "2ff09eaec4381354af04f4ba333bf25f02a361e8"
-lastReviewedNote: "Reviewed for the Issue #380 hosted-trigger repair: existing hosted-proof routing covers the path-scoped canonical-dev push bootstrap, its offline trigger contract, and the required validation/architecture/branch documentation without changing ownership or schema routing."
+lastReviewedCommit: "c63f42aaa396792292c5a99f938331ece291cc4b"
+lastReviewedNote: "Reviewed for the Issue #380 canonical Worker fixture repair: existing hosted-proof routing covers the private Worker fixture, retired-relation regression, and dependency-ordered cleanup without changing ownership or schema routing."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

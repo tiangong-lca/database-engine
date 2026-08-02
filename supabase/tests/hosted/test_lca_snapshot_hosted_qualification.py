@@ -7,6 +7,7 @@ from supabase.tests.hosted.lca_snapshot_hosted_qualification import (
     Config,
     QualificationError,
     RunNamespace,
+    canonical_worker_fixture_sql,
     finish_with_reconcile,
     reconcile_namespace,
     require_response,
@@ -101,7 +102,7 @@ class CleanupTests(unittest.TestCase):
                 if self.fail_actor:
                     raise RuntimeError("lost recovery transport")
                 return [{"id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"}] if self.actor else []
-            if query.startswith("select id::text from public.worker_jobs"):
+            if query.startswith("select id::text from private.worker_jobs"):
                 return [{"id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}] if self.worker else []
             if query.startswith("select name from storage.objects"):
                 return [{"name": "runs/marker/query.json"}] if self.storage else []
@@ -110,7 +111,7 @@ class CleanupTests(unittest.TestCase):
             if query.startswith("select (select count"):
                 return [{
                     "network": 0, "artifact": 0, "active": 0, "result_cache": 0,
-                    "worker_jobs": 0, "lca_jobs": 0, "lca_results": 0,
+                    "worker_jobs": 0, "lca_results": 0,
                     "latest_results": 0, "storage_objects": 0, "storage_buckets": 0,
                     "users": 0, "sessions": 0,
                 }]
@@ -143,8 +144,32 @@ class CleanupTests(unittest.TestCase):
         worker_sql = "\n".join(client.sql_calls)
         self.assertIn("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb", worker_sql)
         self.assertIn("status='cancelled'", worker_sql)
-        self.assertIn("delete from public.worker_jobs", worker_sql)
+        self.assertIn("delete from private.worker_jobs", worker_sql)
         self.assertIn("subject_version", worker_sql)
+
+    def test_canonical_worker_fixture_has_no_retired_legacy_dependency(self):
+        import uuid
+
+        runner = (ROOT / "supabase/tests/hosted/lca_snapshot_hosted_qualification.py").read_text()
+        self.assertNotIn("public.lca_jobs", runner)
+        snapshot_id = uuid.UUID("11111111-1111-4111-8111-111111111111")
+        actor_id = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        sql = canonical_worker_fixture_sql(
+            snapshot_id,
+            actor_id,
+            "marker",
+            [
+                (uuid.UUID("bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"), "lca.solve_all_unit", "lca.solve_all_unit.request.v1", {"snapshot_id": str(snapshot_id)}),
+                (uuid.UUID("cccccccc-cccc-4ccc-8ccc-cccccccccccc"), "lca.contribution_path", "lca.contribution_path.request.v1", {"snapshot_id": str(snapshot_id)}),
+            ],
+        )
+        self.assertIn("insert into private.worker_jobs", sql)
+        for column in ("worker_runtime", "worker_queue", "requester_type", "requested_by", "subject_version", "payload_json", "attempt_count", "visibility", "diagnostics"):
+            self.assertIn(column, sql)
+        self.assertIn("'lca.solve_all_unit'", sql)
+        self.assertIn("'lca.contribution_path'", sql)
+        self.assertIn("'calculator','solver'", sql)
+        self.assertNotIn("lca_jobs", sql)
 
     def test_storage_cleanup_is_unconditional_and_404_idempotent(self):
         client = self.FakeClient(actor=False, worker=False, storage=True)

@@ -31,7 +31,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
 lastReviewedCommit: 86ba7ee2c33e45df8008117a2dec3ee4deedc32c
-lastReviewedNote: "Reviewed for Issue #380: add the trusted persistent-Dev hosted qualification path without changing schema-source or generated-workspace boundaries."
+lastReviewedNote: "Reviewed for the Issue #380 canonical Worker fixture repair: hosted proof uses the private Worker source and no retired legacy-job relation without changing schema-source or generated-workspace boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
