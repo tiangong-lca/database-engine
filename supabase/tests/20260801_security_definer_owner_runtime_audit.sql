@@ -1,6 +1,6 @@
 begin;
 create extension if not exists pgtap with schema extensions;
-select extensions.plan(16);
+select extensions.plan(17);
 
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
@@ -10,7 +10,18 @@ select extensions.is(
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
    where n.nspname='public' and p.prosecdef and pg_get_userbyid(p.proowner)='postgres'),
-  217::bigint, '217 public SECURITY DEFINER signatures retain postgres ownership');
+  216::bigint, '216 public SECURITY DEFINER signatures retain postgres ownership after the reviewed Issue #323 owner split');
+
+select extensions.is(
+  (select array_agg(
+      format('%I.%I(%s)', n.nspname, p.proname, pg_get_function_identity_arguments(p.oid))
+      order by n.nspname, p.proname, pg_get_function_identity_arguments(p.oid)
+    )
+   from pg_proc p join pg_namespace n on n.oid=p.pronamespace
+   where n.nspname='public' and p.prosecdef
+     and pg_get_userbyid(p.proowner)='review_progress_executor'),
+  array['public.qry_root_review_reference_progress_v2(p_root_review_id uuid)']::text[],
+  'Issue #323 confines the dedicated review-progress owner to the one reviewed public facade');
 
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace

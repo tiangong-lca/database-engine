@@ -364,6 +364,28 @@ HEAD, index, and worktree each use their own contract revision. The gate
 never treats one zero-match query as burn-in. The canonical manifest-contract
 module imports this test case, so existing CI runs it without a second workflow.
 
+The Issue #323 Review-progress migration does not weaken those generic hard
+denies. Its exact first-appearance path and Git blob may enter the dedicated
+`issue_323_review_progress_semantic_gate.py` qualification only through the
+`review-progress-least-privilege-reviewed` contract classification. That
+qualifier binds the normalized AST and exact statement sequence; proves the
+non-login/non-inheriting executor attributes, two-relation read-only ACL, five
+helper EXECUTE grants, trusted search path, RPC signature and browser ACL; and
+requires the temporary `postgres` ownership-transfer membership to be revoked
+by its grantor. Any source, AST, role, ACL, owner, search-path, relation, or
+procedural-body drift fails closed while the original hard-deny signals remain
+unchanged for every other migration.
+
+The companion `issue_323_review_notification_semantic_gate.py` qualifier binds
+the exact notification-event identity migration without suppressing its five
+generic hard-deny signals. It permits only one legacy-only partial unique index
+replacement and one byte/AST-pinned replacement of the pre-existing validation
+notification command. The verifier freezes the predecessor security envelope,
+signature, authorization/error contract, exact public relation/helper set,
+legacy conflict predicate, owner/ACL non-change, and command-audit write; any
+additional statement, relation, privilege, dynamic execution, or event-key
+predicate drift fails closed.
+
 ### `issue_390_physical_qualification.py`
 
 Defines the non-authorizing physical-move qualification harness before any

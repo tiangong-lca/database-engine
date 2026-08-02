@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(28);
+select plan(32);
 
 select is(
   public.cmd_review_get_dataset_name(
@@ -105,6 +105,15 @@ values
     'review-admin'
   );
 
+insert into public.sources (id, version, json, user_id, state_code)
+values (
+  '48200000-0000-4000-8000-000000000202',
+  '01.00.000',
+  '{"sourceDataSet":{"sourceInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"en","#text":"Fallback Source"}]}}}}',
+  '48200000-0000-4000-8000-000000000001',
+  20
+);
+
 -- One unassigned shared Reference Review and two independently assigned
 -- Reference Reviews provide mixed-status and access-isolation fixtures.
 insert into public.reviews (
@@ -124,7 +133,7 @@ values
     '48200000-0000-4000-8000-000000000102',
     '48200000-0000-4000-8000-000000000202', '01.00.000', 1,
     '["48200000-0000-4000-8000-000000000002"]',
-    '{"review_kind":"reference","data":{"id":"48200000-0000-4000-8000-000000000202","version":"01.00.000","table":"sources","name":{"baseName":{"en":"Reviewer A Source"}}}}',
+    '{"review_kind":"reference","data":{"id":"48200000-0000-4000-8000-000000000202","version":"01.00.000","table":"sources","name":{}}}',
     'reference', 'sources', repeat('2', 64),
     '48200000-0000-4000-8000-000000000001', now(), now()
   ),
@@ -286,8 +295,7 @@ select is(
     where n.nspname = 'public'
       and format('%I(%s)', p.proname, pg_get_function_identity_arguments(p.oid)) = any (array[
         'qry_review_get_admin_root_queue_items_v2(p_status text, p_page integer, p_page_size integer, p_sort_by text, p_sort_order text)',
-        'qry_review_get_member_root_queue_items_v2(p_status text, p_page integer, p_page_size integer, p_sort_by text, p_sort_order text)',
-        'qry_root_review_reference_progress_v2(p_root_review_id uuid)'
+        'qry_review_get_member_root_queue_items_v2(p_status text, p_page integer, p_page_size integer, p_sort_by text, p_sort_order text)'
       ])
       and p.prosecdef
       and p.proconfig = array['search_path=pg_catalog, pg_temp']
@@ -297,8 +305,124 @@ select is(
       and has_function_privilege('authenticated', p.oid, 'EXECUTE')
       and has_function_privilege('service_role', p.oid, 'EXECUTE')
   ),
-  3::bigint,
-  'exact grouped root Review SECURITY DEFINER signatures retain trusted owner, ACL, and search_path posture'
+  2::bigint,
+  'grouped root queue functions retain their existing owner, ACL, and search_path posture'
+);
+
+select is(
+  (
+    select count(*)::bigint
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    where n.nspname = 'public'
+      and format('%I(%s)', p.proname, pg_get_function_identity_arguments(p.oid)) =
+        'qry_root_review_reference_progress_v2(p_root_review_id uuid)'
+      and p.prosecdef
+      and p.proconfig = array['search_path=pg_catalog, pg_temp']
+      and pg_get_userbyid(p.proowner) = 'review_progress_executor'
+      and not has_function_privilege('anon', p.oid, 'EXECUTE')
+      and has_function_privilege('authenticated', p.oid, 'EXECUTE')
+      and has_function_privilege('service_role', p.oid, 'EXECUTE')
+  ),
+  1::bigint,
+  'child projection runs as the dedicated read-only executor with a trusted search_path'
+);
+
+select is(
+  (
+    select
+      not rolcanlogin
+      and not rolinherit
+      and not rolsuper
+      and not rolcreatedb
+      and not rolcreaterole
+      and not rolreplication
+      and not rolbypassrls
+    from pg_roles
+    where rolname = 'review_progress_executor'
+  ),
+  true,
+  'review progress executor is a non-login, non-administrative role'
+);
+
+select ok(
+  has_table_privilege('review_progress_executor', 'public.reviews', 'SELECT')
+  and has_table_privilege('review_progress_executor', 'public.comments', 'SELECT')
+  and not has_table_privilege('review_progress_executor', 'public.reviews', 'INSERT')
+  and not has_table_privilege('review_progress_executor', 'public.reviews', 'UPDATE')
+  and not has_table_privilege('review_progress_executor', 'public.reviews', 'DELETE')
+  and not has_table_privilege('review_progress_executor', 'public.comments', 'INSERT')
+  and not has_table_privilege('review_progress_executor', 'public.comments', 'UPDATE')
+  and not has_table_privilege('review_progress_executor', 'public.comments', 'DELETE')
+  and (
+    select array_agg(
+      n.nspname || '.' || c.relname || ':' || acl.privilege_type
+      order by n.nspname, c.relname, acl.privilege_type
+    )
+    from pg_class c
+    join pg_namespace n on n.oid = c.relnamespace
+    cross join lateral aclexplode(c.relacl) acl
+    join pg_roles grantee on grantee.oid = acl.grantee
+    where grantee.rolname = 'review_progress_executor'
+  ) = array[
+    'public.comments:SELECT',
+    'public.reviews:SELECT'
+  ]::text[]
+  and (
+    select array_agg(
+      n.nspname || '.' || p.proname || '('
+        || pg_get_function_identity_arguments(p.oid) || '):'
+        || acl.privilege_type
+      order by n.nspname, p.proname, pg_get_function_identity_arguments(p.oid),
+        acl.privilege_type
+    )
+    from pg_proc p
+    join pg_namespace n on n.oid = p.pronamespace
+    cross join lateral aclexplode(p.proacl) acl
+    join pg_roles grantee on grantee.oid = acl.grantee
+    where grantee.rolname = 'review_progress_executor'
+  ) = array[
+    'public.cmd_review_get_dataset_name(p_table text, p_row jsonb):EXECUTE',
+    'public.cmd_review_get_dataset_row(p_table text, p_id uuid, p_version text, p_lock boolean):EXECUTE',
+    'public.cmd_review_is_review_admin(p_actor uuid):EXECUTE',
+    'public.cmd_review_is_review_member(p_actor uuid):EXECUTE',
+    'public.policy_review_can_read(p_review_id uuid, p_actor uuid):EXECUTE',
+    'public.qry_root_review_reference_progress_v2(p_root_review_id uuid):EXECUTE'
+  ]::text[]
+  and has_schema_privilege('review_progress_executor', 'public', 'USAGE')
+  and not has_schema_privilege('review_progress_executor', 'public', 'CREATE')
+  and pg_has_role('postgres', 'review_progress_executor', 'MEMBER')
+  and not pg_has_role('postgres', 'review_progress_executor', 'USAGE')
+  and not pg_has_role('postgres', 'review_progress_executor', 'SET')
+  and not pg_has_role('authenticated', 'review_progress_executor', 'MEMBER')
+  and not pg_has_role('service_role', 'review_progress_executor', 'MEMBER')
+  and not pg_has_role('review_progress_executor', 'anon', 'MEMBER')
+  and not pg_has_role('review_progress_executor', 'authenticated', 'MEMBER')
+  and not pg_has_role('review_progress_executor', 'service_role', 'MEMBER')
+  and not pg_has_role('review_progress_executor', 'api_internal_executor', 'MEMBER')
+  and (
+    select array_agg(member.rolname order by member.rolname)
+    from pg_auth_members membership
+    join pg_roles parent on parent.oid = membership.roleid
+    join pg_roles member on member.oid = membership.member
+    where parent.rolname = 'review_progress_executor'
+  ) = array['postgres']::name[]
+  and not exists (
+    select 1
+    from pg_auth_members membership
+    join pg_roles member on member.oid = membership.member
+    where member.rolname = 'review_progress_executor'
+  )
+  and (
+    select count(*)
+    from pg_policies
+    where schemaname = 'public'
+      and tablename in ('reviews', 'comments')
+      and policyname = 'review_progress_executor_select'
+      and roles = array['review_progress_executor']::name[]
+      and qual = 'true'
+  ) = 2,
+  'executor is read-only and no login/runtime role can inherit or assume it'
 );
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -391,6 +515,18 @@ select is(
   ),
   3,
   'Review Admin sees all current Reference Reviews under a root'
+);
+select is(
+  (
+    select data_name
+    from public.qry_root_review_reference_progress_v2(
+      '48200000-0000-4000-8000-000000000111'
+    )
+    where reference_review_id =
+      '48200000-0000-4000-8000-000000000102'
+  ),
+  '{"baseName":[{"@xml:lang":"en","#text":"Fallback Source"}]}'::jsonb,
+  'an empty legacy Reference Review name falls back to its exact dataset row'
 );
 select ok(
   pg_catalog.strpos(

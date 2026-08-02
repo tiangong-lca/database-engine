@@ -16,6 +16,12 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scripts.run_database_contract as runner
+from scripts.test_issue_323_review_progress_semantic_gate import (
+    Issue323ReviewProgressSemanticGateTest,
+)
+from scripts.test_issue_323_review_notification_semantic_gate import (
+    Issue323ReviewNotificationSemanticGateTest,
+)
 from scripts.test_issue_390_external_git_tree import Issue390ExternalGitTreeTest
 from scripts.test_issue_390_physical_qualification import Issue390PhysicalQualificationTest
 from scripts.test_issue_390_pre_ddl_gate import Issue390PreDdlGateTest
@@ -54,6 +60,17 @@ class DatabaseContractManifestTest(unittest.TestCase):
     def test_issue_398_semantic_gate_is_in_canonical_offline_suite(self) -> None:
         self.assertTrue(
             issubclass(Issue398ResultGcSemanticGateTest, unittest.TestCase)
+        )
+
+    def test_issue_323_semantic_gate_is_in_canonical_offline_suite(self) -> None:
+        self.assertTrue(
+            issubclass(Issue323ReviewProgressSemanticGateTest, unittest.TestCase)
+        )
+        self.assertTrue(
+            issubclass(
+                Issue323ReviewNotificationSemanticGateTest,
+                unittest.TestCase,
+            )
         )
 
     def test_persistent_dev_validation_fetches_immutable_provenance_history(self) -> None:

@@ -196,6 +196,8 @@ class Issue390PreDdlGateTest(unittest.TestCase):
                     "additive-disabled-result-gc-contract-reviewed",
                     "additive-result-gc-fk-covering-indexes-reviewed",
                     "reconcile-v1-service-only-replacement-reviewed",
+                    "review-notification-event-identity-semantic-reviewed",
+                    "review-progress-least-privilege-reviewed",
                 },
             )
 

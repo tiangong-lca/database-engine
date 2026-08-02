@@ -10,6 +10,16 @@ import pglast
 from pglast import parser
 from pglast.parser import ParseError
 
+from scripts.issue_323_review_progress_semantic_gate import (
+    REVIEW_PROGRESS_CLASSIFICATION,
+    REVIEW_PROGRESS_MIGRATION_PATH,
+    reviewed_review_progress_migration_violations,
+)
+from scripts.issue_323_review_notification_semantic_gate import (
+    REVIEW_NOTIFICATION_CLASSIFICATION,
+    REVIEW_NOTIFICATION_MIGRATION_PATH,
+    reviewed_review_notification_migration_violations,
+)
 from scripts.issue_398_result_gc_semantic_gate import (
     RESULT_GC_CLASSIFICATION,
     RESULT_GC_FK_INDEX_CLASSIFICATION,
@@ -1390,6 +1400,30 @@ def pre_ddl_migration_violations(
         for row in allowlist
         if row.get("path") == path and row.get("gitBlob") == git_blob
     ]
+    if path == REVIEW_PROGRESS_MIGRATION_PATH:
+        if (
+            len(matching) != 1
+            or matching[0].get("classification")
+            != REVIEW_PROGRESS_CLASSIFICATION
+        ):
+            return ["review-progress:exact-allowlist-entry-required"]
+        return reviewed_review_progress_migration_violations(
+            path=path,
+            git_blob=git_blob,
+            sql=sql,
+        )
+    if path == REVIEW_NOTIFICATION_MIGRATION_PATH:
+        if (
+            len(matching) != 1
+            or matching[0].get("classification")
+            != REVIEW_NOTIFICATION_CLASSIFICATION
+        ):
+            return ["review-notification:exact-allowlist-entry-required"]
+        return reviewed_review_notification_migration_violations(
+            path=path,
+            git_blob=git_blob,
+            sql=sql,
+        )
     if path == RESULT_GC_FK_INDEX_MIGRATION_PATH:
         if (
             len(matching) != 1

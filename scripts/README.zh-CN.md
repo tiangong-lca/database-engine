@@ -345,6 +345,24 @@ mode 弱化。HEAD、index 与 worktree
 分别读取各自版本的合同。单次日志零命中也不构成 burn-in。canonical
 manifest contract 会导入该 test case，因此沿用既有 CI 而不新增第二条 workflow。
 
+Issue #323 的 Review-progress migration 不会放宽上述通用 hard deny。只有迁移首次
+出现时的精确 path 与 Git blob 同时匹配合同中的
+`review-progress-least-privilege-reviewed` 分类，才会进入专用
+`issue_323_review_progress_semantic_gate.py` qualification。该 qualification 绑定
+规范化 AST 和精确语句顺序，并证明 executor 为不可登录、不可继承，只拥有两张表的
+只读 ACL、五个 helper 的 EXECUTE、可信 search path、固定 RPC signature 与 browser
+ACL，同时要求用于 owner transfer 的临时 `postgres` membership 由原 grantor 在同一
+migration 中撤销。source、AST、role、ACL、owner、search path、relation 或 procedural
+body 任一漂移都会 fail closed；其他 migration 的原始 hard-deny 信号保持不变。
+
+配套的 `issue_323_review_notification_semantic_gate.py` qualification 同样不会
+抑制 notification-event identity migration 原有的五个通用 hard-deny 信号。它只允许
+替换一个仅覆盖 legacy row 的 partial unique index，以及对既有 validation notification
+command 的一次 byte/AST 锁定 replacement。验证器冻结 predecessor security envelope、
+signature、authorization/error contract、精确 public relation/helper 集合、legacy
+conflict predicate、owner/ACL 不变性与 command-audit 写入；增加任何 statement、
+relation、privilege、动态执行或改变 event-key predicate 都会 fail closed。
+
 ### `issue_390_physical_qualification.py`
 
 在 Issue #390 尚无 relation-moving DDL 时，先定义不可授权的 physical-move

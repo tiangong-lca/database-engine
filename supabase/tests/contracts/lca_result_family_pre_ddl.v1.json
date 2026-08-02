@@ -87,6 +87,11 @@
     "newMigrationsAllowed": "target-neutral-static-or-reviewed-ast-facade-operation",
     "allowedTargetTouchingMigrations": [
       {
+        "path": "supabase/migrations/20260802170000_reference_review_name_fallback.sql",
+        "gitBlob": "675507ec7b04880ac0a9938e1dfa36242c0bb6e2",
+        "classification": "review-progress-least-privilege-reviewed"
+      },
+      {
         "path": "supabase/migrations/20260802172930_issue_390_result_api_facade_v1.sql",
         "gitBlob": "6b183aa2b92d6d5457207f712d70e4855a7a394d",
         "classification": "additive-api-service-only-reviewed"
@@ -105,6 +110,11 @@
         "path": "supabase/migrations/20260803090000_issue_398_result_gc_fk_indexes.sql",
         "gitBlob": "e113586c245fe562191d27810a292383f3079d83",
         "classification": "additive-result-gc-fk-covering-indexes-reviewed"
+      },
+      {
+        "path": "supabase/migrations/20260803093000_review_notification_event_identity.sql",
+        "gitBlob": "0a5e5f16b1818d64e28198752a0d594650736167",
+        "classification": "review-notification-event-identity-semantic-reviewed"
       }
     ],
     "relationMovingDdlAllowed": false,
