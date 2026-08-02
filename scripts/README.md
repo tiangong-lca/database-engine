@@ -317,6 +317,25 @@ second `ALTER TABLE`, clean upgrade, direct migration retry, private-state drift
 rejection, and committed rollback/roll-forward. It refuses non-loopback URLs;
 the selected database is reset destructively.
 
+### `test_issue_390_pre_ddl_gate.py`
+
+Runs the offline, non-mutating pre-DDL authorization gate for the LCA
+result/cache/latest/factorization family:
+
+```bash
+python -m unittest scripts.test_issue_390_pre_ddl_gate
+```
+
+The checked contract binds the exact `dev` base and migration head, seven target
+objects, digest-bound repository catalog plus hosted owner receipt, active
+consumer canonical/candidate tuples, a reproducible non-authorizing runtime
+receipt, advisor baseline, and owner-signoff state.
+While `ddlAuthorized=false`, the test rejects any Issue #390 relation-moving
+migration. It never treats one zero-match log query as burn-in and never permits
+an authenticated browser grant on `private` as a compatibility mechanism. The
+canonical manifest-contract module imports this test case so existing CI runs
+the gate without adding a second workflow path.
+
 The canonical contract also runs `public_inventory_closure.py --check` and
 `security_definer_audit.py --check`. The inventory
 gate joins the imported workspace #533 per-object ledger to the live catalog at

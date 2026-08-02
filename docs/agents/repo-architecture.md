@@ -55,6 +55,7 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | `supabase/tests/**` | PGTAP-style database assertions plus narrow offline Node contracts for test-runner control flow |
 | `supabase/tests/benchmarks/**` | explicit operator-run performance profiles; read each profile's environment guard because some are local/Preview-only while hybrid-search evidence is pinned to persistent staging |
 | `supabase/tests/preview/**` | exact-ref-bound disposable Hosted Preview mutation fixtures, cleanup, rollback-only fault assertions, and offline transport/lifecycle contracts; test-only and excluded from migrations, seeds, Dev data rehearsal, and production execution |
+| `supabase/tests/contracts/*_pre_ddl.v1.json` | stable fail-closed evidence contracts for relation families whose physical DDL is forbidden until static, runtime, and owner consumer-cut gates are complete |
 | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |
 | `scripts/**` | export, refresh, change-copy, and migration-generation helpers |
 | `.github/workflows/supabase-dev.yml` | serialized automation for pushing committed migrations to persistent remote `dev`, then reconciling and readback-verifying only the reviewed PostgREST fields |
