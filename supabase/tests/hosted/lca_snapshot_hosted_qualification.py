@@ -286,6 +286,8 @@ def require_anonymous_unauthorized(actual: tuple[int, Any]) -> dict[str, Any]:
     accepted = (
         {"error": "unauthorized"},
         {"code": 401, "message": "Missing authorization header"},
+        {"code": 401, "message": "Invalid Token or Protected Header formatting"},
+        {"code": 401, "message": "Invalid JWT"},
     )
     if status != 401:
         raise QualificationError("anonymous Edge response status mismatch")
@@ -394,7 +396,6 @@ def reconcile_namespace(client: HostedClient, run: RunNamespace) -> None:
         attempt("delete-worker-jobs", lambda: client.sql(f"delete from private.worker_jobs where id in ({ids})"))
     for label, query in (
         ("delete-active", f"delete from private.lca_active_snapshots where snapshot_id in ({fixture},{create})"),
-        ("delete-artifacts", f"delete from private.lca_snapshot_artifacts where snapshot_id in ({fixture},{create})"),
         ("delete-snapshots", f"delete from private.lca_network_snapshots where id in ({fixture},{create})"),
     ):
         attempt(label, lambda query=query: client.sql(query))

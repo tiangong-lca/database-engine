@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 8adf0c825c143ded099b325f01d089e316119bef
-lastReviewedNote: "Reviewed for the Issue #380 hosted anonymous authorization contract: the exact handler/gateway 401 DTO union preserves trusted targeting, fail-closed authenticated DTO checks, cleanup, and production ownership without logging payloads."
+lastReviewedCommit: a258c190e440f2cf388b5827086fe13b7da1a9bb
+lastReviewedNote: "Reviewed for the Issue #380 hosted gateway/cascade contract: strict known gateway 401 DTOs and parent-cascade artifact cleanup preserve trusted targeting, fail-closed authenticated checks, zero-residue readback, and production ownership."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

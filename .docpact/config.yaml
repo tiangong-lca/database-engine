@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-02"
-lastReviewedCommit: "8adf0c825c143ded099b325f01d089e316119bef"
-lastReviewedNote: "Reviewed for the Issue #380 hosted anonymous authorization contract: existing hosted-proof routing covers the exact handler/gateway 401 DTO union without changing authenticated validation, ownership, targeting, or schema routing."
+lastReviewedCommit: "a258c190e440f2cf388b5827086fe13b7da1a9bb"
+lastReviewedNote: "Reviewed for the Issue #380 hosted gateway/cascade contract: existing hosted-proof routing covers the strict known gateway 401 union and canonical parent-cascade cleanup without changing authenticated validation, ownership, targeting, or schema routing."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

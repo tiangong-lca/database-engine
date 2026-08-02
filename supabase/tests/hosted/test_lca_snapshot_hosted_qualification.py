@@ -106,6 +106,8 @@ class KeyTests(unittest.TestCase):
         accepted = (
             {"error": "unauthorized"},
             {"code": 401, "message": "Missing authorization header"},
+            {"code": 401, "message": "Invalid Token or Protected Header formatting"},
+            {"code": 401, "message": "Invalid JWT"},
         )
         for payload in accepted:
             with self.subTest(payload=payload):
@@ -120,7 +122,7 @@ class KeyTests(unittest.TestCase):
             (401, {"error": "other"}),
             (401, {"code": "401", "message": "Missing authorization header"}),
             (401, {"code": 401, "message": ""}),
-            (401, {"code": 401, "message": "Invalid JWT"}),
+            (401, {"code": 401, "message": "invalid jwt"}),
             (401, {"code": 401, "message": "Missing authorization header", "extra": True}),
             (401, {"error": secret}),
         )
@@ -249,6 +251,14 @@ class CleanupTests(unittest.TestCase):
         self.assertEqual(client.storage_calls[0][0], "object/issue380-marker")
         self.assertEqual(client.storage_calls[0][2], {"prefixes": ["runs/marker/query.json"]})
         self.assertEqual(client.storage_calls[1][0], "bucket/issue380-marker")
+
+    def test_snapshot_cleanup_uses_parent_cascade_and_retains_artifact_readback(self):
+        client = self.FakeClient(actor=False, worker=False, storage=False)
+        reconcile_namespace(client, self.run)
+        sql = "\n".join(client.sql_calls)
+        self.assertNotIn("delete from private.lca_snapshot_artifacts", sql)
+        self.assertIn("delete from private.lca_network_snapshots", sql)
+        self.assertIn("from private.lca_snapshot_artifacts where snapshot_id", sql)
 
     def test_primary_and_recovery_errors_are_aggregated(self):
         client = self.FakeClient(actor=False, worker=False, storage=False, fail_actor=True)
