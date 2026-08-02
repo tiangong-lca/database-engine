@@ -191,13 +191,14 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
         return lineage, catalog
 
     def test_current_transition_covers_public_private_and_util_once(self) -> None:
-        self.assertEqual(self.committed["summary"]["lineageCount"], 315)
+        self.assertEqual(self.committed["summary"]["lineageCount"], 318)
         self.assertEqual(self.committed["summary"]["originalPublicLineageCount"], 241)
         self.assertEqual(self.committed["summary"]["genesisNativeNonPublicLineageCount"], 74)
         self.assertEqual(
             self.committed["summary"]["globalPrivilegedBySchema"],
-            {"api": 0, "archive": 0, "private": 49, "public": 230, "util": 36},
+            {"api": 0, "archive": 0, "private": 49, "public": 233, "util": 36},
         )
+        self.assertEqual(self.committed["summary"]["transitionNativeLineageCount"], 3)
         self.assertEqual(self.committed["summary"]["unregisteredPrivilegedEndpointCount"], 0)
 
     def test_catalog_input_argument_names_use_one_based_ordinality_not_oid_array_bounds(self) -> None:
@@ -337,19 +338,35 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
         after = {row["originalObjectKey"]: row["lineageKey"] for row in transitioned["lineages"]}
         self.assertEqual(before, after)
         self.assertTrue(all(
-            key == audit.lineage_key(original)
-            for original, key in before.items()
+            row["lineageKey"] == audit.lineage_key(row["originalObjectKey"])
+            for row in self.lineage["lineages"]
+            if row["origin"] != "transition-native"
         ))
 
     def test_unrelated_current_inventory_hash_cannot_rekey_315_frozen_lineages(self) -> None:
-        before = [row["lineageKey"] for row in self.lineage["lineages"]]
+        frozen = [
+            row for row in self.lineage["lineages"]
+            if row["origin"] != "transition-native"
+        ]
+        self.assertEqual(len(frozen), 315)
+        before = [row["lineageKey"] for row in frozen]
         simulated_current_inventory_hash = "f" * 64
         self.assertNotEqual(simulated_current_inventory_hash, audit.BASELINE_PROVENANCE["inventorySha256"])
-        after = [audit.lineage_key(row["originalObjectKey"]) for row in self.lineage["lineages"]]
+        after = [audit.lineage_key(row["originalObjectKey"]) for row in frozen]
         self.assertEqual(before, after)
 
     def test_issue356_transition_fixture_preserves_315_privileged_lineages(self) -> None:
         lineage, catalog = self.transition()
+        transition_native_keys = {
+            row["canonicalObjectKey"] for row in lineage["lineages"]
+            if row["origin"] == "transition-native"
+        }
+        lineage["lineages"] = [
+            row for row in lineage["lineages"]
+            if row["origin"] != "transition-native"
+        ]
+        for key in transition_native_keys:
+            catalog.pop(key)
         transitioned = audit.build_audit(
             lineage, audit.sha256_text(audit.canonical(lineage)), self.baseline, catalog,
             audit.exposed_schemas(),
@@ -396,7 +413,7 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
             lineage, audit.sha256_text(audit.canonical(lineage)), self.baseline, catalog,
             audit.exposed_schemas(),
         )
-        self.assertEqual(observed["summary"]["globalPrivilegedEndpointCount"], 315)
+        self.assertEqual(observed["summary"]["globalPrivilegedEndpointCount"], 318)
         self.assertEqual(
             observed["summary"]["compatibilityEndpointCount"],
             self.committed["summary"]["compatibilityEndpointCount"],
@@ -478,8 +495,8 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
                 lineage, audit.sha256_text(audit.canonical(lineage)), self.baseline, catalog,
                 audit.exposed_schemas(),
             )
-            self.assertEqual(observed["summary"]["lineageCount"], 316)
-            self.assertEqual(observed["summary"]["transitionNativeLineageCount"], 1)
+            self.assertEqual(observed["summary"]["lineageCount"], 319)
+            self.assertEqual(observed["summary"]["transitionNativeLineageCount"], 4)
             without_receipt = copy.deepcopy(lineage)
             without_receipt["lineages"][-1]["birthTransition"]["receiptPath"] = "missing.json"
             with self.assertRaisesRegex(ValueError, "registration receipt path"):
@@ -707,14 +724,14 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
         )
         completed = plan["completedTransition"]
         current = plan["currentTransition"]
-        self.assertEqual(completed["sequence"], 2)
+        self.assertEqual(completed["sequence"], 3)
         self.assertEqual(completed["predecessorAuditPath"],
                          self.lineage["source"]["completedTransitions"][-1]["producedAuditV2Path"])
         self.assertEqual(completed["producedAuditV2Sha256"], produced)
         self.assertNotEqual(completed["producedAuditV2Path"],
                             "supabase/tests/contracts/security_definer_audit_v2.json")
         self.assertEqual(current, {
-            "sequence": 3, "batch": "issue-358-contract",
+            "sequence": 4, "batch": "issue-358-contract",
             "databaseSchemaSha": "a" * 40, "predecessorArtifactSha256": produced,
         })
         self.assertEqual(plan["reviewedCodeConstants"]["EXPECTED_CURRENT_TRANSITION"], current)

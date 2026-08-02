@@ -29,8 +29,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2e7b3ba2a3fcdcbc59cb26416512808465262049
-lastReviewedNote: "Reviewed for Issue #377: the database-contract manifest baseline refresh does not change repository shape, schema ownership, or deployment boundaries."
+lastReviewedCommit: 931b71b41c1db5ae10d7dd3a4343f5d2b0c7f942
+lastReviewedNote: "Reviewed for Issue #377 follow-up: grouped review RPC search-path hardening and audit registration do not change repository shape, schema ownership, or deployment boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

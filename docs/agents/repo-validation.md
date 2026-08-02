@@ -32,8 +32,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2e7b3ba2a3fcdcbc59cb26416512808465262049
-lastReviewedNote: "Reviewed for Issue #377: refreshed the canonical manifest counts and migration-head contract after the Root/Reference Review v2 migration and pgTAP asset were added."
+lastReviewedCommit: 931b71b41c1db5ae10d7dd3a4343f5d2b0c7f942
+lastReviewedNote: "Reviewed for Issue #377 follow-up: the grouped review RPC hardening migration, 66-file canonical pgTAP pass, and 318-endpoint SECURITY DEFINER audit use the existing proof matrix."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2e7b3ba2a3fcdcbc59cb26416512808465262049
-lastReviewedNote: "已为 Issue #377 复核：canonical manifest/head 维护不改变生成 workspace 的所有权、刷新语义或部署边界。"
+lastReviewedCommit: 931b71b41c1db5ae10d7dd3a4343f5d2b0c7f942
+lastReviewedNote: "已为 Issue #377 后续修复复核：分组审核 RPC 加固与审计产物不改变生成 workspace 的所有权、刷新语义或部署边界。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
