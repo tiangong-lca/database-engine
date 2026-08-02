@@ -135,7 +135,7 @@ def rpc(
     name: str,
     payload: dict[str, object],
     *,
-    apikey: str,
+    api_header: str,
     bearer: str,
     profile: str = "api",
 ) -> tuple[int, object]:
@@ -147,7 +147,7 @@ def rpc(
             "Accept-Profile": profile,
             "Content-Profile": profile,
             "Content-Type": "application/json",
-            "apikey": apikey,
+            "apikey": api_header,
             "Authorization": f"Bearer {bearer}",
         },
     )
@@ -314,7 +314,7 @@ def main() -> None:
         psql(db_url, f"begin; {setup} commit;")
         service_results = {
             name: expect_ok(
-                rpc(rest_url, name, args[name], apikey=service_key, bearer=service_key),
+                rpc(rest_url, name, args[name], api_header=service_key, bearer=service_key),
                 name,
             )
             for name in RPC_NAMES
@@ -386,7 +386,7 @@ def main() -> None:
             ("authenticated", anon_key, auth_token, 403),
         ):
             for name in RPC_NAMES:
-                status, denial = rpc(rest_url, name, args[name], apikey=key, bearer=bearer)
+                status, denial = rpc(rest_url, name, args[name], api_header=key, bearer=bearer)
                 denial_object = expect_keys(denial, {"code", "details", "hint", "message"}, f"{role}/{name} denial")
                 if status != expected_status or denial_object.get("code") != "42501" or denial_object.get("message") != f"permission denied for function {name}":
                     raise AssertionError(f"{role}/{name}: unexpected denial HTTP {status}: {denial}")
@@ -395,7 +395,7 @@ def main() -> None:
             rest_url,
             "lca_read_result_cache_v1",
             args["lca_read_result_cache_v1"],
-            apikey=service_key,
+            api_header=service_key,
             bearer=service_key,
             profile="private",
         )
@@ -420,7 +420,7 @@ def main() -> None:
                         "p_worker_job_id": None,
                         "p_replace_ready": False,
                     },
-                    apikey=service_key,
+                    api_header=service_key,
                     bearer=service_key,
                 ),
                 "concurrent admission",
