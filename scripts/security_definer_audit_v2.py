@@ -60,8 +60,8 @@ BASELINE_CURRENT_TRANSITION = {
 }
 EXPECTED_CURRENT_TRANSITION = {
     "sequence": 2,
-    "batch": "issue-355-identity-collaboration",
-    "databaseSchemaSha": "9e843e67783123f859035e3a720df910e87a644e",
+    "batch": "issue-323-root-grouped-review-queue",
+    "databaseSchemaSha": "2e7b3ba2a3fcdcbc59cb26416512808465262049",
     "predecessorArtifactSha256": "b1f7ac582b87f78786ea34a855806ffae42cb50ea419bc752f6e00c01da02b11",
 }
 EXPECTED_COMPLETED_TRANSITIONS: tuple[dict[str, Any], ...] = ({

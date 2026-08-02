@@ -299,6 +299,24 @@ or ambiguous activation requires exactly one version-matched freeze/receipt,
 sidecar and schema, the capture and generator scripts, plus both reviewed
 migration phases, and fails before SQL if that closure is incomplete.
 
+### `test_lca_snapshot_family_upgrade.py`
+
+Runs the destructive, local-only Issue #376 migration qualification against an
+explicit disposable loopback Supabase database:
+
+```bash
+python scripts/test_lca_snapshot_family_upgrade.py \
+  --db-url "$ISSUE_376_DB_URL"
+```
+
+The checked contract fixes an ancestor database commit with an exact predecessor
+migration head, the only permitted committed migration delta, a 10,000-row
+network/artifact fixture, and lock/time/WAL budgets. The runner proves OID plus
+full-row/primary-key/content parity, failure atomicity at the
+second `ALTER TABLE`, clean upgrade, direct migration retry, private-state drift
+rejection, and committed rollback/roll-forward. It refuses non-loopback URLs;
+the selected database is reset destructively.
+
 The canonical contract also runs `public_inventory_closure.py --check` and
 `security_definer_audit.py --check`. The inventory
 gate joins the imported workspace #533 per-object ledger to the live catalog at

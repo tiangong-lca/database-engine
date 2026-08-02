@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
-lastReviewedNote: "Reviewed for Issue #372 CI closure: canonical manifest/head maintenance and the bounded child migration do not change generated workspace ownership, refresh semantics, or deployment boundaries."
+lastReviewedCommit: 2e7b3ba2a3fcdcbc59cb26416512808465262049
+lastReviewedNote: "Reviewed for Issue #376 CI repair: qualification-runner manifest evidence and credential-free command examples do not change generated workspace ownership, refresh semantics, or deployment boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
