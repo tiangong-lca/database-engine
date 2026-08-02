@@ -310,16 +310,32 @@ URL，并会破坏性 reset 所选数据库。
 授权门禁：
 
 ```bash
+python -m pip install --disable-pip-version-check "pglast==8.4"
 python -m unittest scripts.test_issue_390_pre_ddl_gate
 ```
 
-checked contract 绑定精确 `dev` 基线与 migration head、七个目标对象、digest-bound
-repository catalog 与 hosted owner receipt、active consumer canonical/candidate
+checked contract 绑定精确 `dev` 基线与 migration head、七个目标对象及其递归应用对象
+依赖闭包、digest-bound repository catalog 与 hosted owner receipt、active consumer canonical/candidate
 tuple、可复算且明确不授权 DDL 的 runtime receipt、advisor baseline 与 owner sign-off
-状态。`ddlAuthorized=false` 时，测试拒绝任何
-Issue #390 relation-moving migration；单次日志零命中不构成 burn-in，也不得以
-authenticated 浏览器角色获得 `private` grant 作为兼容方案。canonical manifest
-contract 测试模块会导入该 test case，因此沿用既有 CI 而不新增第二条 workflow。
+状态。`ddlAuthorized=false` 时，已提交 migration history 保持 append-only，新增的
+target-neutral static migration 可以继续进入仓库。单独交付并测试的 additive
+service-only `api` facade 必须在 migration 第一次提交的同一 commit 中匹配精确受审的
+path/blob/classification，并通过固定版本 `pglast` 的 PostgreSQL AST 语义校验；后续
+commit 不能追溯授权。opaque/dynamic execution、
+relation-moving DDL、提前撤销历史 authenticated access，以及 browser role 的
+`private` grant 都是不可被 allowlist 覆盖的 hard deny。static 排除项包括但不限于
+顶层 DML、CTAS/SELECT、index 或 exclusion-index build、已验证 constraint 与
+partition、column type/storage rewrite、非纯 metadata 的 add-column、`SET NOT NULL`、
+custom type/access method、trigger/rule 状态变更，以及 migration identity/owner 切换，
+因为既有 trigger、view、FDW、operator、cast、constraint 或 access method 可能执行
+尚未证明安全的代码。任何对象移入 exposed `api`/`public` 都被拒绝；新 exposed view
+必须为 security-invoker，exposed routine 不得为 security-definer 或引用 internal
+对象。受审 facade signature 必须显式使用 `pg_catalog` type，避免 migration session
+中的 type shadow 改变 identity；已创建的
+`api.lca_*` 与 `api.cmd_lca_*` facade 也持续禁止后续 replacement、权限或 security
+mode 弱化。HEAD、index 与 worktree
+分别读取各自版本的合同。单次日志零命中也不构成 burn-in。canonical
+manifest contract 会导入该 test case，因此沿用既有 CI 而不新增第二条 workflow。
 
 ### `public_inventory_closure.py`
 

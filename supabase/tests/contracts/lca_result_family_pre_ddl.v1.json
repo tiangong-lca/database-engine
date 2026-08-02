@@ -6,7 +6,26 @@
   "predecessorMigrationHead": "20260802091342",
   "phase": "pre-ddl-consumer-cut",
   "ddlAuthorized": false,
-  "authorizationRule": "No Issue #390 relation-moving migration may exist until static, runtime, and owner evidence all satisfy the authenticated direct-SELECT gate.",
+  "authorizationRule": "No migration may move or replace the protected family, remove its historical authenticated contract, weaken a protected api LCA facade, or grant non-service access to internal/target objects until static, runtime, and owner evidence satisfy the gate. Target-neutral non-executing static migrations remain allowed; an additive service-only api facade requires an exact reviewed blob plus AST semantic proof, while top-level data execution, opaque or dynamic execution remains hard denied.",
+  "sqlParser": {
+    "name": "pglast",
+    "version": "8.4",
+    "postgresParserVersion": 180004
+  },
+  "apiFacadeProtection": {
+    "schema": "api",
+    "namePrefixes": ["lca_", "cmd_lca_"],
+    "serviceGrantees": ["service_role", "api_internal_executor"]
+  },
+  "migrationGate": {
+    "baseMigrationBlobsImmutable": true,
+    "committedMigrationHistoryAppendOnly": true,
+    "newMigrationsAllowed": "target-neutral-static-or-reviewed-ast-facade",
+    "allowedTargetTouchingMigrations": [],
+    "relationMovingDdlAllowed": false,
+    "browserPrivateCompatibilityGrantAllowed": false,
+    "historicalAuthenticatedSelectRemovalAllowed": false
+  },
   "physicalTargets": [
     "public.lca_factorization_registry",
     "public.lca_latest_all_unit_results",
@@ -18,12 +37,25 @@
     "public.lca_read_latest_single_solve_result(p_requested_by uuid, p_snapshot_id uuid, p_process_index integer)",
     "public.lca_read_result_projection(p_requested_by uuid, p_result_id uuid, p_required_artifact_format text, p_include_internal boolean)"
   ],
+  "dependencyClosure": {
+    "derivation": "Recursive application-object references from the final committed definitions at databaseBaseCommit; PostgreSQL catalog builtins are external anchors.",
+    "relations": [
+      "private.worker_jobs",
+      "public.worker_jobs"
+    ],
+    "routines": [
+      "private.worker_job_payload(private.worker_jobs, boolean)",
+      "public.lca_legacy_job_type(text)",
+      "public.worker_job_payload(public.worker_jobs, boolean)"
+    ]
+  },
   "persistentDevCatalog": {
     "projectRef": "fotofiyqnuyvgtotswie",
     "capturedAt": "2026-08-02T15:12:00Z",
     "migrationHead": "20260802091342",
     "repositoryCatalog": {
       "path": "supabase/tests/contracts/database_catalog.json",
+      "sourceCommit": "0e68237a036e0994b70f246653e370b7890f2b30",
       "sha256": "6e6e018f4e02a87063eb10e4f750a616b13785bbdd753f682bcace2f99e8cda7"
     },
     "hostedObservation": {
