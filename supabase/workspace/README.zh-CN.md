@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 931b71b41c1db5ae10d7dd3a4343f5d2b0c7f942
-lastReviewedNote: "已为 Issue #377 后续修复复核：分组审核 RPC 加固与审计产物不改变生成 workspace 的所有权、刷新语义或部署边界。"
+lastReviewedCommit: c86e6237dc72d412223a10eb74d4468dbe1f5713
+lastReviewedNote: "已为 Issue #377 CI 修复复核：数据库目录刷新和测试专用死锁修复不改变生成 workspace 的所有权、刷新语义或部署边界。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

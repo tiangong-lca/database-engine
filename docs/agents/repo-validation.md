@@ -32,8 +32,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 931b71b41c1db5ae10d7dd3a4343f5d2b0c7f942
-lastReviewedNote: "Reviewed for Issue #377 follow-up: the grouped review RPC hardening migration, 66-file canonical pgTAP pass, and 318-endpoint SECURITY DEFINER audit use the existing proof matrix."
+lastReviewedCommit: c86e6237dc72d412223a10eb74d4468dbe1f5713
+lastReviewedNote: "Reviewed for Issue #377 CI repair: the conditional flow-identity fault fixture, refreshed catalog artifact, and 66-file canonical pgTAP pass use the existing proof matrix."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 931b71b41c1db5ae10d7dd3a4343f5d2b0c7f942
-lastReviewedNote: "已为 Issue #377 后续修复复核：sequence 3 的分组审核 RPC 审计登记沿用现有 SECURITY DEFINER 命令面，不改变脚本用法。"
+lastReviewedCommit: c86e6237dc72d412223a10eb74d4468dbe1f5713
+lastReviewedNote: "已为 Issue #377 CI 修复复核：目录导出器记录分组审核 RPC 和最终 search_path，不改变脚本用法。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

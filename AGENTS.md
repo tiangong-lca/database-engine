@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 931b71b41c1db5ae10d7dd3a4343f5d2b0c7f942
-lastReviewedNote: "Reviewed for Issue #377 follow-up: grouped review RPC search-path hardening and SECURITY DEFINER registration follow the existing validation and dev-branch delivery rules; no repository contract changes are required."
+lastReviewedCommit: c86e6237dc72d412223a10eb74d4468dbe1f5713
+lastReviewedNote: "Reviewed for Issue #377 CI repair: the early conditional fault-injection fixture and refreshed database catalog remain within existing validation and dev-branch delivery rules; no repository contract changes are required."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

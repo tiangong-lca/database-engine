@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 931b71b41c1db5ae10d7dd3a4343f5d2b0c7f942
-lastReviewedNote: "Reviewed for Issue #377 follow-up: grouped review RPC hardening and audit artifacts do not change generated workspace ownership, refresh semantics, or deployment boundaries."
+lastReviewedCommit: c86e6237dc72d412223a10eb74d4468dbe1f5713
+lastReviewedNote: "Reviewed for Issue #377 CI repair: the database catalog refresh and test-only deadlock fix do not change generated workspace ownership, refresh semantics, or deployment boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -6,6 +6,36 @@ set local search_path = extensions, public, auth;
 
 select no_plan();
 
+-- Install the fault-injection trigger before the fixture performs any writes.
+-- Creating or dropping a trigger in the middle of this long transaction can
+-- deadlock with scheduled workers that also write command_audit_log.  The
+-- transaction rollback removes this test-only trigger automatically.
+create or replace function pg_temp.flow_identity_post_primary_fault()
+returns trigger
+language plpgsql
+security definer
+set search_path = ''
+as $$
+begin
+  if current_setting(
+      'app.flow_identity_test_post_primary_fault', true
+    ) = 'on'
+    and old.command = 'cmd_dataset_flow_identity_process_rewrite_guarded'
+    and old.payload->>'schema_version'
+      = 'dataset-flow-identity-process-rewrite.v1'
+    and new.payload->>'schema_version'
+      = 'dataset-flow-identity-process-rewrite.v2' then
+    raise exception using errcode = 'P0001',
+      message = 'FLOW_IDENTITY_TEST_POST_PRIMARY_FAULT';
+  end if;
+  return new;
+end;
+$$;
+
+create trigger dataset_flow_identity_test_post_primary_fault
+before update on public.command_audit_log
+for each row execute function pg_temp.flow_identity_post_primary_fault();
+
 create or replace function pg_temp.flow_identity_id(p_kind text)
 returns uuid
 language sql
@@ -1425,25 +1455,6 @@ begin
 end;
 $$;
 
-create or replace function pg_temp.flow_identity_post_primary_fault()
-returns trigger
-language plpgsql
-security definer
-set search_path = ''
-as $$
-begin
-  if old.command = 'cmd_dataset_flow_identity_process_rewrite_guarded'
-    and old.payload->>'schema_version'
-      = 'dataset-flow-identity-process-rewrite.v1'
-    and new.payload->>'schema_version'
-      = 'dataset-flow-identity-process-rewrite.v2' then
-    raise exception using errcode = 'P0001',
-      message = 'FLOW_IDENTITY_TEST_POST_PRIMARY_FAULT';
-  end if;
-  return new;
-end;
-$$;
-
 create or replace function pg_temp.flow_identity_orphan_derivative_probe(
   p_scope_id uuid
 ) returns jsonb
@@ -2177,11 +2188,9 @@ select 'post_primary_fault_before', pg_temp.flow_identity_atomic_state(
 from flow_identity_state as preflight
 where preflight.key = 'preflight';
 
-reset role;
-create trigger dataset_flow_identity_test_post_primary_fault
-before update on public.command_audit_log
-for each row execute function pg_temp.flow_identity_post_primary_fault();
-set local role authenticated;
+select set_config(
+  'app.flow_identity_test_post_primary_fault', 'on', true
+);
 
 select throws_ok(
   $$select public.cmd_dataset_flow_identity_process_rewrite_guarded(
@@ -2207,10 +2216,9 @@ select is(
   'post-primary fault rolls back process JSON, ledger, audit, derivative child, permit, scope, and active fence'
 );
 
-reset role;
-drop trigger dataset_flow_identity_test_post_primary_fault
-  on public.command_audit_log;
-set local role authenticated;
+select set_config(
+  'app.flow_identity_test_post_primary_fault', 'off', true
+);
 
 insert into flow_identity_state(key, value)
 select 'process_result',
