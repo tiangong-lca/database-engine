@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
-lastReviewedNote: "已为 Issue #372 CI 收口复核：新增 pgTAP 资产推进 canonical 数量与 migration-head evidence；子任务迁移命名不会误激活已冻结的 Issue #357 全批次 verifier。"
+lastReviewedCommit: 2e7b3ba2a3fcdcbc59cb26416512808465262049
+lastReviewedNote: "已为 Issue #377 复核：Root/Reference Review v2 资产合入后，同步刷新 canonical manifest 数量与 migration-head 证据。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -273,7 +273,7 @@ python scripts/run_database_contract.py --suite canonical-local --validate-manif
 python scripts/run_database_contract.py --suite canonical-local --list
 ```
 
-当前 manifest 动态得到 64 个 canonical 顶层 pgTAP，并保留 19 个带分类、
+当前 manifest 动态得到 66 个 canonical 顶层 pgTAP，并保留 19 个带分类、
 处置状态、跟踪 Issue 与 replacement 元数据的显式 exclusion。清单证据同时记录
 exact commit、migration head、CLI 版本、manifest/文件清单 hash 与 worktree dirty
 状态，避免把本地 dirty 内容误写成 clean commit 证据。`lca-private-expand`

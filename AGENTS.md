@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 1ff6d2775bed146379d50dc91eaf43c7915dca0f
-lastReviewedNote: "Reviewed for Issue #323: repository ownership, additive migration discipline, local database proof, dev-branch delivery, and later workspace integration already govern the root-grouped review queue change; no contract rule changes are required."
+lastReviewedCommit: 2e7b3ba2a3fcdcbc59cb26416512808465262049
+lastReviewedNote: "Reviewed for Issue #377: the database-contract manifest baseline refresh follows existing validation and dev-branch delivery rules; no repository contract changes are required."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

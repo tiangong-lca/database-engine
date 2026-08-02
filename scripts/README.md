@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
-lastReviewedNote: "Reviewed for Issue #372 CI closure: the new pgTAP asset advances canonical counts and migration-head evidence, while the child migration name intentionally does not activate the frozen Issue #357 full-batch verifier."
+lastReviewedCommit: 2e7b3ba2a3fcdcbc59cb26416512808465262049
+lastReviewedNote: "Reviewed for Issue #377: refreshed the canonical manifest counts and migration-head evidence after the Root/Reference Review v2 assets landed."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -282,7 +282,7 @@ python scripts/run_database_contract.py --suite canonical-local --validate-manif
 python scripts/run_database_contract.py --suite canonical-local --list
 ```
 
-The current derived baseline is 64 selected top-level pgTAP files plus 19
+The current derived baseline is 66 selected top-level pgTAP files plus 19
 metadata-bearing exclusions. The list evidence records the exact commit,
 migration head, CLI version, manifest/file-list hashes, and whether the worktree
 was dirty, so local development output cannot masquerade as clean exact-commit

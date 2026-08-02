@@ -32,8 +32,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 1ff6d2775bed146379d50dc91eaf43c7915dca0f
-lastReviewedNote: "Reviewed for Issue #323: local fresh-stack reset plus the Root/Reference Review v2 and root-grouped queue pgTAP suites remain the minimum proof; hosted Preview and persistent-dev proof stay deferred to deployment."
+lastReviewedCommit: 2e7b3ba2a3fcdcbc59cb26416512808465262049
+lastReviewedNote: "Reviewed for Issue #377: refreshed the canonical manifest counts and migration-head contract after the Root/Reference Review v2 migration and pgTAP asset were added."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -78,7 +78,7 @@ anonymous access, and reject the `private` profile. The probe sends explicit
 `public` profile headers so the reviewed `api`-first exposed-schema order
 cannot silently change its target schema.
 
-The manifest currently derives 64 canonical files from 83 top-level pgTAP
+The manifest currently derives 66 canonical files from 85 top-level pgTAP
 files and 19 exact, metadata-bearing exclusions. The runner reports the live
 counts and exact file list; documentation must not become a second count source.
 The 19 exclusions are visible debt—not passes—and remain tracked in
@@ -87,8 +87,8 @@ disposition, tracking Issue, and supported-behavior replacements where known;
 the exact 19-path baseline fails on silent growth or substitution.
 
 Never use bare `supabase test db` as a repository-level pass gate. It recursively
-discovers 97 SQL files and incorrectly mixes 14 benchmark, fixture, Preview,
-upgrade, and transition-migration assets with the 83 top-level pgTAP files.
+discovers 99 SQL files and incorrectly mixes 14 benchmark, fixture, Preview,
+upgrade, and transition-migration assets with the 85 top-level pgTAP files.
 Always use the manifest runner or pass an explicitly reviewed file list.
 
 `lca-private-expand` is an activation-gated focused suite. The manifest owns

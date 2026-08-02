@@ -29,8 +29,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 1ff6d2775bed146379d50dc91eaf43c7915dca0f
-lastReviewedNote: "Reviewed for Issue #323: the additive root-grouped queue RPCs stay within the existing Root/Reference Review v2 database boundary and do not change the repository shape or cross-repo ownership."
+lastReviewedCommit: 2e7b3ba2a3fcdcbc59cb26416512808465262049
+lastReviewedNote: "Reviewed for Issue #377: the database-contract manifest baseline refresh does not change repository shape, schema ownership, or deployment boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

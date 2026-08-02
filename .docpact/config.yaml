@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-02"
-lastReviewedCommit: "1ff6d2775bed146379d50dc91eaf43c7915dca0f"
-lastReviewedNote: "Reviewed for Issue #323: the existing migration and SQL-test routing covers the additive Root/Reference Review v2 grouped-queue RPCs and focused regression proof without changing governance rules."
+lastReviewedCommit: "2e7b3ba2a3fcdcbc59cb26416512808465262049"
+lastReviewedNote: "Reviewed for Issue #377: the database-contract manifest baseline refresh stays within the existing scripts and deployment governance rules."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
