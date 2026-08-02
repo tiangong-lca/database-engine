@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: 4dbea4a0ee7102a07b68613628e56022a37a5cf0
-lastReviewedNote: "Reviewed for Issue #395: a forward-only service facade replacement and its exact reviewed-blob gate preserve repository ownership, migration immutability, local-first validation, and production-mutation boundaries."
+lastReviewedCommit: 38e15b0274cc2f87c93acbab520c110c4b907361
+lastReviewedNote: "Reviewed for Issue #397: exact external Git-tree evidence remains repository-owned, hash-only, non-authorizing, local-first, and compatible with migration immutability and production-mutation boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

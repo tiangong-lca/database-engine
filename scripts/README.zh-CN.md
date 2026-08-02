@@ -310,7 +310,7 @@ URL，并会破坏性 reset 所选数据库。
 授权门禁：
 
 ```bash
-python -m pip install --disable-pip-version-check "pglast==8.4"
+python -m pip install --disable-pip-version-check "jsonschema==4.23.0" "pglast==8.4"
 python -m unittest scripts.test_issue_390_pre_ddl_gate
 ```
 
@@ -336,6 +336,24 @@ custom type/access method、trigger/rule 状态变更，以及 migration identit
 mode 弱化。HEAD、index 与 worktree
 分别读取各自版本的合同。单次日志零命中也不构成 burn-in。canonical
 manifest contract 会导入该 test case，因此沿用既有 CI 而不新增第二条 workflow。
+
+### `issue_390_external_git_tree.py`
+
+直接从八个外部仓库的精确 Git commit 构建 Issue #397 的非授权 consumer ledger。
+脚本校验 canonical origin，通过 Git object 命令遍历每个 regular blob（包括 Next
+运行时使用的数据库快照），只保留 blob/行 hash 与语义分类；unsupported entry、
+active-runtime 未解析 token 和动态 selector 都 fail closed。Next Edge mirror receipt、
+其精确来源树、是否陈旧及内容 parity 分别验证。被规则识别的直接 token 出现次数
+不得表述为穷尽性的 consumer 数量。
+
+```bash
+python scripts/issue_390_external_git_tree.py --check
+python scripts/issue_390_external_git_tree.py --verify-external /absolute/path/to/lca-workspace
+python -m unittest scripts.test_issue_390_external_git_tree
+```
+
+`--scan-external` 会重写 canonical JSON artifact 与 SHA sidecar，只用于受审的证据
+刷新。所有命令都不授权 DDL，也不连接 Supabase Hosted 项目。
 
 ### `public_inventory_closure.py`
 

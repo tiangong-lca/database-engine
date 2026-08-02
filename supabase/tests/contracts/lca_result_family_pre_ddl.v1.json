@@ -6,11 +6,75 @@
   "predecessorMigrationHead": "20260802091342",
   "phase": "pre-ddl-consumer-cut",
   "ddlAuthorized": false,
-  "authorizationRule": "No migration may move or replace the protected physical family, remove its historical authenticated contract, weaken a protected api LCA facade, or grant non-service access to internal/target objects until static, runtime, and owner evidence satisfy the gate. Target-neutral non-executing static migrations remain allowed. An additive service-only api facade or the exact cmd_lca_reconcile_result_cache_v1(uuid,uuid) service-only replacement requires its own exact reviewed blob plus AST semantic proof; top-level data execution and opaque or dynamic execution remain hard denied.",
+  "authorizationRule": "No migration may move or replace the protected physical family, remove its historical authenticated contract, weaken a protected api LCA facade, or grant non-service access to internal/target objects until exact external Git-tree static evidence, runtime evidence, and owner evidence satisfy the gate. Unresolved active-runtime lexical evidence, dynamic selectors, unsupported tree entries, stale generated mirrors, and generated snapshots without exact source receipts remain blockers. Target-neutral non-executing static migrations remain allowed. An additive service-only api facade or the exact cmd_lca_reconcile_result_cache_v1(uuid,uuid) service-only replacement requires its own exact reviewed blob plus AST semantic proof; top-level data execution and opaque or dynamic execution remain hard denied.",
   "sqlParser": {
     "name": "pglast",
     "version": "8.4",
     "postgresParserVersion": 180004
+  },
+  "externalGitTreeGate": {
+    "pathRuleVersion": "issue-390-external-path-rules.v1",
+    "artifact": {
+      "path": "supabase/tests/contracts/lca_result_family_external_git_tree.v1.json",
+      "sha256Path": "supabase/tests/contracts/lca_result_family_external_git_tree.v1.sha256",
+      "schemaPath": "supabase/tests/contracts/lca_result_family_external_git_tree.v1.schema.json",
+      "sha256": "89a7eda246a964198a3d1d470fd0f93e273a0b60ac377c0a1cc39a352a8c2e92",
+      "schemaVersion": "lca-result-family-external-git-tree.v1"
+    },
+    "databaseCurrentEvidence": {
+      "commit": "38e15b0274cc2f87c93acbab520c110c4b907361",
+      "migrationHead": "20260802190427"
+    },
+    "repositories": [
+      {
+        "key": "cli",
+        "repository": "tiangong-lca/tiangong-cli",
+        "workspacePath": "tiangong-lca-cli",
+        "commit": "5cb359f1d0860df560c7571fa7547b2822b37c71"
+      },
+      {
+        "key": "dataFoundry",
+        "repository": "tiangong-lca/data-foundry",
+        "workspacePath": "tiangong-lca-data-foundry",
+        "commit": "c3c74555b71e1ba33ee80a5c5919630a27ba79df"
+      },
+      {
+        "key": "edge",
+        "repository": "linancn/tiangong-lca-edge-functions",
+        "workspacePath": "tiangong-lca-edge-functions",
+        "commit": "8588f1b9dbe5c24dfbad7d704f956a09ba3b7904"
+      },
+      {
+        "key": "mcp",
+        "repository": "linancn/tiangong-lca-mcp",
+        "workspacePath": "tiangong-lca-mcp",
+        "commit": "0ab741e0881c70ce526e936d222939e38f4a4911"
+      },
+      {
+        "key": "next",
+        "repository": "linancn/tiangong-lca-next",
+        "workspacePath": "tiangong-lca-next",
+        "commit": "ea70e7415c630443aa1112566e3c37f4344777e8"
+      },
+      {
+        "key": "release",
+        "repository": "chukeaa/tiangong-lca-release",
+        "workspacePath": "tiangong-lca-release",
+        "commit": "f8d37018d898d23a51655272d129417eb9fad13a"
+      },
+      {
+        "key": "utilities",
+        "repository": "tiangong-lca/utilities",
+        "workspacePath": "tiangong-lca-utilities",
+        "commit": "9c00c9adb3d1afcb3173381d9247fa611cf5c0ec"
+      },
+      {
+        "key": "worker",
+        "repository": "linancn/tiangong-lca-worker",
+        "workspacePath": "tiangong-lca-worker",
+        "commit": "cabb2518a69272c20abe61692eadb292b95596f2"
+      }
+    ]
   },
   "apiFacadeProtection": {
     "schema": "api",
@@ -306,19 +370,17 @@
       "repository": "linancn/tiangong-lca-edge-functions",
       "canonical": {
         "branch": "dev",
-        "commit": "8b9629387d839bdff343a21353438a513eb54d9c",
-        "scanMatchCount": 40,
-        "classification": "active-service-consumer"
+        "commit": "8588f1b9dbe5c24dfbad7d704f956a09ba3b7904",
+        "classification": "stable-api-consumer-with-unresolved-dynamic-selectors"
       },
       "candidate": {
-        "qualifiedSourceCommit": "6080b4c2c95b00c2666f98af6bb90610042fc3da",
-        "mergedAsCommit": "8b9629387d839bdff343a21353438a513eb54d9c"
+        "qualifiedSourceCommit": "282ab4f21575f924721f91322690647e56bcc4b3",
+        "mergedAsCommit": "8588f1b9dbe5c24dfbad7d704f956a09ba3b7904"
       },
       "surfaces": [
-        "lca_result_cache direct Data API reads/inserts/updates in solve, contribution, and all-unit queue paths",
-        "lca_results direct service read in contribution path",
-        "lca_latest_all_unit_results direct service read in query path",
-        "three public projection RPC calls through _shared/db_rpc/lca_results.ts"
+        "eight stable api facade calls through the result-family capability repository",
+        "four public relation names retained only as explicit legacy boundary metadata",
+        "dynamic Data API selectors remain fail-closed pending an exact repo-owned semantic receipt"
       ]
     },
     "worker": {
@@ -326,8 +388,7 @@
       "canonical": {
         "branch": "main",
         "commit": "cabb2518a69272c20abe61692eadb292b95596f2",
-        "scanMatchCount": 28,
-        "classification": "active-direct-postgres-consumer"
+        "classification": "active-direct-and-unresolved-postgres-consumer"
       },
       "candidate": {
         "pullRequest": 201,
@@ -359,8 +420,7 @@
       "canonical": {
         "branch": "main",
         "commit": "9c00c9adb3d1afcb3173381d9247fa611cf5c0ec",
-        "scanMatchCount": 39,
-        "classification": "active-versioned-operator-consumer"
+        "classification": "active-versioned-operator-consumer-with-unresolved-runtime-evidence"
       },
       "surfaces": [
         "expand-public-v1 currently resolves result/cache/latest relations to public",
@@ -372,11 +432,12 @@
       "canonical": {
         "branch": "dev",
         "commit": "ea70e7415c630443aa1112566e3c37f4344777e8",
-        "scanMatchCount": 1,
-        "classification": "indirect-edge-http-consumer"
+        "classification": "mixed-indirect-http-and-active-generated-runtime"
       },
       "surfaces": [
-        "lca_results is an Edge Function route name, not a direct database relation"
+        "frontend lca_results token is an indirect Edge Function route",
+        "active Edge mirror is pinned to stale source commit de4479e43fa7abe1acf4e089eafa3612d99845fe",
+        "active generated database snapshot still contains the public result family and has no exact database source receipt"
       ]
     },
     "cli": {
@@ -384,8 +445,7 @@
       "canonical": {
         "branch": "main",
         "commit": "5cb359f1d0860df560c7571fa7547b2822b37c71",
-        "scanMatchCount": 0,
-        "classification": "no-direct-family-match"
+        "classification": "no-recognized-direct-match-with-unresolved-dynamic-selectors"
       }
     },
     "mcp": {
@@ -393,8 +453,7 @@
       "canonical": {
         "branch": "main",
         "commit": "0ab741e0881c70ce526e936d222939e38f4a4911",
-        "scanMatchCount": 0,
-        "classification": "no-direct-family-match"
+        "classification": "no-recognized-direct-match-with-unresolved-dynamic-selectors"
       }
     },
     "release": {
@@ -402,8 +461,7 @@
       "canonical": {
         "branch": "main",
         "commit": "f8d37018d898d23a51655272d129417eb9fad13a",
-        "scanMatchCount": 1,
-        "classification": "fixture-only-indirect-consumer"
+        "classification": "fixture-token-with-unresolved-dynamic-selectors"
       }
     },
     "dataFoundry": {
@@ -411,12 +469,12 @@
       "canonical": {
         "branch": "main",
         "commit": "c3c74555b71e1ba33ee80a5c5919630a27ba79df",
-        "scanMatchCount": 0,
-        "classification": "no-direct-family-match"
+        "classification": "exact-tree-no-family-or-dynamic-match"
       }
     },
+    "evidenceArtifact": "supabase/tests/contracts/lca_result_family_external_git_tree.v1.json",
     "staticEvidenceComplete": false,
-    "incompleteReason": "Edge, Worker, and Utilities remain active consumers; Worker candidate #201 is unmerged and does not contain the #197 private-hash cutover; owner sign-offs remain incomplete."
+    "incompleteReason": "The exact-tree artifact remains non-authorizing: Worker and the active Next generated runtimes contain recognized direct legacy occurrences; Edge, Worker, Utilities, Next, CLI, MCP, and Release retain unresolved active-runtime or unsupported-tree evidence; the Next Edge mirror is stale; the Next database snapshot lacks an exact source receipt; owner sign-offs remain incomplete."
   },
   "runtimeEvidence": {
     "queryInput": {

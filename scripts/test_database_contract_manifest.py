@@ -16,6 +16,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scripts.run_database_contract as runner
+from scripts.test_issue_390_external_git_tree import Issue390ExternalGitTreeTest
 from scripts.test_issue_390_pre_ddl_gate import Issue390PreDdlGateTest
 
 
@@ -35,6 +36,13 @@ class DatabaseContractManifestTest(unittest.TestCase):
         self.assertEqual(len(classified["canonical-pgtap"]), 88)
         self.assertEqual(len(suite["excludedFiles"]), 19)
         self.assertEqual(len(selected), 69)
+
+    def test_issue_397_external_tree_gate_is_in_canonical_offline_suite(self) -> None:
+        self.assertTrue(issubclass(Issue390ExternalGitTreeTest, unittest.TestCase))
+        workflow = (runner.ROOT / ".github/workflows/database-validation.yml").read_text(
+            encoding="utf-8"
+        )
+        self.assertIn("scripts.test_database_contract_manifest", workflow)
 
     def test_persistent_dev_validation_fetches_immutable_provenance_history(self) -> None:
         workflow = (runner.ROOT / ".github/workflows/supabase-dev.yml").read_text(

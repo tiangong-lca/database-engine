@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-03"
-lastReviewedCommit: "2cb88b079a8e50f7630378b9f565739c4144df60"
-lastReviewedNote: "Reviewed for Issue #390: lca-result-family routing includes the exact facade migration, pgTAP contract, loopback runtime qualification, and canonical runner wiring."
+lastReviewedCommit: "38e15b0274cc2f87c93acbab520c110c4b907361"
+lastReviewedNote: "Reviewed for Issue #397: lca-result-family routing includes the exact external Git-tree scanner, immutable evidence artifact, fail-closed tests, facade runtime qualification, and canonical runner wiring."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -122,10 +122,15 @@ routing:
         - AGENTS.md
         - .docpact/config.yaml
         - supabase/tests/contracts/lca_result_family_pre_ddl.v1.json
+        - supabase/tests/contracts/lca_result_family_external_git_tree.v1.json
+        - supabase/tests/contracts/lca_result_family_external_git_tree.v1.sha256
+        - supabase/tests/contracts/lca_result_family_external_git_tree.v1.schema.json
         - supabase/workspace/README.md
         - supabase/workspace/README.zh-CN.md
         - scripts/test_issue_390_pre_ddl_gate.py
         - scripts/issue_390_pre_ddl_gate.py
+        - scripts/issue_390_external_git_tree.py
+        - scripts/test_issue_390_external_git_tree.py
         - scripts/test_issue_390_result_api_facade_runtime.py
         - scripts/test_issue_390_result_api_facade_runtime_unit.py
         - scripts/run_database_contract.py
