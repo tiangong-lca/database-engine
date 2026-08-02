@@ -6,6 +6,8 @@ from unittest.mock import patch
 
 from supabase.tests.hosted.lca_snapshot_hosted_qualification import (
     DEV_REF,
+    EDGE_DEPLOYMENT_RECEIPT,
+    MIGRATION_HEAD,
     PRODUCTION_REF,
     _json_request,
     Config,
@@ -13,6 +15,8 @@ from supabase.tests.hosted.lca_snapshot_hosted_qualification import (
     RunNamespace,
     canonical_worker_fixture_sql,
     finish_with_reconcile,
+    qualify,
+    qualification_phase_error,
     reconcile_namespace,
     require_response,
     resolve_keys,
@@ -229,6 +233,13 @@ class CleanupTests(unittest.TestCase):
         self.assertEqual(str(error), "hosted phase failed: auth-boundary: RuntimeError")
         self.assertNotIn(secret, str(error))
 
+    def test_qualification_phase_error_adds_static_label_without_value_or_duplication(self):
+        secret = "qualification-secret-value"
+        error = qualification_phase_error("edge-lca_solve-retry", QualificationError(secret))
+        self.assertEqual(str(error), "hosted phase failed: edge-lca_solve-retry: QualificationError")
+        self.assertNotIn(secret, str(error))
+        self.assertIs(error, qualification_phase_error("ignored", error))
+
     def test_nested_primary_and_cleanup_diagnostics_are_recursive_and_secret_safe(self):
         primary_secret = "primary-secret-value"
         cleanup_secret = "cleanup-secret-value"
@@ -259,6 +270,91 @@ class CleanupTests(unittest.TestCase):
         self.assertNotIn(cleanup_secret, rendered)
         self.assertNotIn("outer group", rendered)
         self.assertNotIn("nested group", rendered)
+
+
+class QualifyPhaseFlowTests(unittest.TestCase):
+    class FakeClient:
+        def __init__(self, run, failure):
+            self.run = run
+            self.failure = failure
+            self.create_calls = 0
+
+        def management(self, path):
+            return 200, [
+                {"slug": name, "id": receipt[0], "version": receipt[1], "updated_at": receipt[2], "ezbr_sha256": receipt[3]}
+                for name, receipt in EDGE_DEPLOYMENT_RECEIPT.items()
+            ]
+
+        def sql(self, query):
+            if "supabase_migrations.schema_migrations" in query:
+                return [{"migration_head": MIGRATION_HEAD}]
+            if query.startswith("select id::text, btrim(version)"):
+                return [{"id": "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", "version": "1"}]
+            if query.startswith("insert into private.worker_jobs") and self.failure == "worker":
+                raise RuntimeError("worker-fixture-secret")
+            return []
+
+        def rest(self, name, args, *, key, bearer=None):
+            if key == "sb_publishable_test":
+                return 403, {"code": "42501"}
+            if name == "cmd_lca_snapshot_create_v1":
+                self.create_calls += 1
+                return 200, {"created": self.create_calls == 1, "snapshotId": str(self.run.create_id)}
+            rows = {
+                "lca_snapshot_active_read_v1": {"snapshot_id": str(self.run.fixture_id), "source_hash": "source", "activated_at": "time"},
+                "lca_snapshot_scope_read_v1": {"id": str(self.run.fixture_id), "scope": "full_library", "process_filter": {}, "status": "ready"},
+                "lca_snapshot_resolve_v1": {"id": str(self.run.fixture_id), "created_at": "time", "process_filter": {}},
+                "lca_snapshot_artifact_read_v1": {"snapshot_id": str(self.run.fixture_id), "artifact_url": "url", "artifact_format": "hdf5", "process_count": 1, "status": "ready", "created_at": "time"},
+                "lca_snapshot_artifact_latest_v1": {"snapshot_id": str(self.run.fixture_id), "artifact_url": "url", "artifact_format": "hdf5", "process_count": 1, "status": "ready", "created_at": "time"},
+            }
+            return 200, rows[name]
+
+        def auth(self, path, **kwargs):
+            if path == "admin/users":
+                return 200, {"user": {"id": "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"}}
+            return 200, {"access_token": "access-token"}
+
+        def storage_json(self, path, **kwargs):
+            return 200, {}
+
+        def upload_json(self, bucket, path, payload):
+            if self.failure == "upload" and path.endswith("snapshot-index-v1.json"):
+                raise RuntimeError("upload-secret")
+
+    def test_qualify_assigns_post_bucket_and_worker_fixture_failure_phases(self):
+        run = RunNamespace(
+            marker="11111111111141118111111111111111",
+            fixture_id=__import__("uuid").UUID("11111111-1111-4111-8111-111111111111"),
+            create_id=__import__("uuid").UUID("22222222-2222-4222-8222-222222222222"),
+            email="issue380-flow@example.invalid",
+            bucket="issue380-flow",
+            prefix="runs/flow",
+        )
+
+        def finish(primary_error, client, namespace):
+            if primary_error is not None:
+                raise primary_error
+
+        for failure, phase, secret in (
+            ("upload", "storage-snapshot-index-upload", "upload-secret"),
+            ("worker", "worker-result-fixture", "worker-fixture-secret"),
+        ):
+            with self.subTest(failure=failure):
+                client = self.FakeClient(run, failure)
+                stdout = io.StringIO()
+                with (
+                    patch("supabase.tests.hosted.lca_snapshot_hosted_qualification.resolve_keys", return_value=("sb_publishable_test", "sb_secret_test")),
+                    patch("supabase.tests.hosted.lca_snapshot_hosted_qualification.HostedClient", return_value=client),
+                    patch("supabase.tests.hosted.lca_snapshot_hosted_qualification.RunNamespace.create", return_value=run),
+                    patch("supabase.tests.hosted.lca_snapshot_hosted_qualification.reconcile_namespace"),
+                    patch("supabase.tests.hosted.lca_snapshot_hosted_qualification.finish_with_reconcile", side_effect=finish),
+                    contextlib.redirect_stdout(stdout),
+                    self.assertRaises(QualificationError) as raised,
+                ):
+                    qualify(config())
+                self.assertEqual(str(raised.exception), f"hosted phase failed: {phase}: RuntimeError")
+                self.assertNotIn(secret, str(raised.exception))
+                self.assertNotIn(secret, stdout.getvalue())
 
 
 class WorkflowSecurityTests(unittest.TestCase):
