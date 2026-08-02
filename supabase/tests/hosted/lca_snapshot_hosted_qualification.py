@@ -493,6 +493,18 @@ def canonical_worker_fixture_sql(
     )
 
 
+def unexpected_phase_error(phase: str, error: BaseException) -> QualificationError:
+    return QualificationError(f"hosted phase failed: {phase}: {type(error).__name__}")
+
+
+def safe_diagnostic_details(error: BaseException) -> list[str]:
+    if isinstance(error, BaseExceptionGroup):
+        return [detail for nested in error.exceptions for detail in safe_diagnostic_details(nested)]
+    if isinstance(error, QualificationError):
+        return [str(error)]
+    return [type(error).__name__]
+
+
 def qualify(config: Config) -> None:
     config.validate()
     publishable_key, secret_key = resolve_keys(config)
@@ -511,9 +523,11 @@ def qualify(config: Config) -> None:
     user_id: str | None = None
     access_token: str | None = None
     primary_error: BaseException | None = None
+    phase = "namespace-preflight"
 
     try:
         reconcile_namespace(client, run)
+        phase = "deployed-contract"
         head = _single_row(client.sql("select max(version)::text migration_head from supabase_migrations.schema_migrations"))["migration_head"]
         if head != MIGRATION_HEAD:
             raise QualificationError("persistent Dev migration head mismatch")
@@ -535,6 +549,7 @@ def qualify(config: Config) -> None:
             "and has_function_privilege('service_role',p.oid,'execute') and not has_function_privilege('anon',p.oid,'execute') and not has_function_privilege('authenticated',p.oid,'execute')) <> 6 "
             "then raise exception 'issue380_acl_mismatch'; end if; end $$;"
         )
+        phase = "snapshot-rpc-fixture"
         artifact_url = f"https://{DEV_REF}.supabase.co/storage/v1/s3/{bucket}/{run.prefix}/snapshot.h5"
         client.sql(
             f"insert into private.lca_network_snapshots(id,scope,process_filter,source_hash,status,created_by,created_at,updated_at) values('{fixture_id}','full_library','{{\"issue380\":true}}','issue380-source','ready','{uuid.uuid5(namespace, 'actor')}','2099-08-02T00:00:00Z','2099-08-02T00:00:00Z');"
@@ -574,6 +589,7 @@ def qualify(config: Config) -> None:
             if status not in (401, 403) or not isinstance(payload, dict) or payload.get("code") != "42501":
                 raise QualificationError(f"anonymous RPC boundary mismatch: {name}")
 
+        phase = "auth-boundary"
         created = require_response(client.auth("admin/users", method="POST", key=secret_key, body={"email": email, "password": password, "email_confirm": True, "user_metadata": {"issue380_marker": marker}}), 200)
         user = created.get("user", created) if isinstance(created, dict) else None
         if not isinstance(user, dict) or not user.get("id"):
@@ -588,6 +604,7 @@ def qualify(config: Config) -> None:
             if status not in (401, 403) or not isinstance(payload, dict) or payload.get("code") != "42501":
                 raise QualificationError(f"authenticated RPC boundary mismatch: {name}")
 
+        phase = "worker-artifact-fixture"
         process = _single_row(client.sql("select id::text, btrim(version)::text version from public.processes where state_code between 100 and 199 and btrim(version) <> '' order by id,version limit 1"))
         process_id, process_version = process["id"], process["version"]
         snapshot_index = {"version": 1, "snapshot_id": str(fixture_id), "process_count": 1, "impact_count": 1, "process_map": [{"process_id": process_id, "process_version": process_version, "process_index": 0}], "impact_map": [{"impact_id": str(impact_id), "impact_index": 0, "impact_key": "issue380", "impact_name": "Issue 380", "unit": "kg"}]}
@@ -614,6 +631,7 @@ def qualify(config: Config) -> None:
             f"insert into public.lca_latest_all_unit_results(snapshot_id,job_id,worker_job_id,result_id,query_artifact_url,query_artifact_sha256,query_artifact_byte_size,query_artifact_format,status,computed_at) values('{fixture_id}','{all_unit_job}','{all_unit_job}','{result_id}','https://{DEV_REF}.supabase.co/storage/v1/s3/{bucket}/{run.prefix}/query.json','{'b' * 64}',{len(json.dumps(query_envelope, separators=(',', ':')).encode())},'all-unit-query:v1','ready','2099-08-02T00:00:03Z');"
         )
 
+        phase = "edge-endpoint-contract"
         bodies = {
             "lca_solve": {"snapshot_id": str(fixture_id), "demand_mode": "all_unit"},
             "lca_query_results": {"snapshot_id": str(fixture_id), "data_scope": "open_data", "mode": "process_all_impacts", "process_id": process_id, "process_version": process_version},
@@ -638,8 +656,10 @@ def qualify(config: Config) -> None:
                 raise QualificationError(f"Edge query DTO mismatch on attempt {attempt + 1}")
         bad = dict(bodies["lca_solve"]); bad.update({"demand_mode": "single", "demand": {"process_index": 1, "amount": 1}})
         require_response(client.edge("lca_solve", method="POST", body=bad, bearer=access_token), 400, {"error": "process_index_out_of_range", "process_index": 1, "process_count": 1})
-    except BaseException as error:
+    except QualificationError as error:
         primary_error = error
+    except BaseException as error:
+        primary_error = unexpected_phase_error(phase, error)
     finally:
         finish_with_reconcile(primary_error, client, run)
 
@@ -648,13 +668,7 @@ def main() -> int:
     try:
         qualify(Config.from_env())
     except BaseException as error:
-        if isinstance(error, QualificationError):
-            detail = str(error)
-        elif isinstance(error, ExceptionGroup):
-            details = [str(item) for item in error.exceptions if isinstance(item, QualificationError)]
-            detail = "; ".join(details) if details else "aggregate failure"
-        else:
-            detail = type(error).__name__
+        detail = "; ".join(safe_diagnostic_details(error))
         print(f"hosted qualification failed: {detail}", file=sys.stderr)
         return 1
     print("persistent Dev hosted qualification passed; residue=0")

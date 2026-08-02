@@ -22,8 +22,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: c63f42aaa396792292c5a99f938331ece291cc4b
-lastReviewedNote: "Reviewed for the Issue #380 canonical Worker fixture repair: hosted cleanup follows current private Worker ownership while persistent-dev and production branch bindings remain unchanged."
+lastReviewedCommit: 0e4000b68abe97f11bf10f0ff972e8a453af643b
+lastReviewedNote: "Reviewed for the Issue #380 hosted phase diagnostics: diagnostic-only reporting preserves canonical dev targeting, serialized persistent-dev execution, and the unchanged production boundary."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
