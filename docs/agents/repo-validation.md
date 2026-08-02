@@ -33,8 +33,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: a258c190e440f2cf388b5827086fe13b7da1a9bb
-lastReviewedNote: "Reviewed for Issue #380 hosted gateway/cascade contract: strict known gateway 401 acceptance remains content-silent while parent-cascade artifact cleanup retains mandatory zero-residue readback and authenticated checks stay fail-closed."
+lastReviewedCommit: ca686b19f359eb90e78d12b789e08a8ccb89afe0
+lastReviewedNote: "Reviewed for Issue #380 hosted anonymous status contract: exact anonymous 401 is the stable denial proof; the platform-owned verify_jwt body is ignored and content-silent while authenticated DTOs and cascade zero-residue remain exact."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

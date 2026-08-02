@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: a258c190e440f2cf388b5827086fe13b7da1a9bb
-lastReviewedNote: "Reviewed for the Issue #380 hosted gateway/cascade contract: strict known gateway 401 DTOs and parent-cascade artifact cleanup preserve trusted targeting, fail-closed authenticated checks, zero-residue readback, and production ownership."
+lastReviewedCommit: ca686b19f359eb90e78d12b789e08a8ccb89afe0
+lastReviewedNote: "Reviewed for the Issue #380 hosted anonymous status contract: exact anonymous 401 denial ignores the platform-owned verify_jwt body while authenticated checks, zero-residue cascade cleanup, trusted targeting, and production ownership remain enforced."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

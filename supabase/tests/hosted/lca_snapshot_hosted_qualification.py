@@ -281,19 +281,10 @@ def require_response(actual: tuple[int, Any], status: int, payload: Any | None =
     return actual_payload
 
 
-def require_anonymous_unauthorized(actual: tuple[int, Any]) -> dict[str, Any]:
-    status, payload = actual
-    accepted = (
-        {"error": "unauthorized"},
-        {"code": 401, "message": "Missing authorization header"},
-        {"code": 401, "message": "Invalid Token or Protected Header formatting"},
-        {"code": 401, "message": "Invalid JWT"},
-    )
+def require_anonymous_401(actual: tuple[int, Any]) -> None:
+    status, _payload = actual
     if status != 401:
         raise QualificationError("anonymous Edge response status mismatch")
-    if not isinstance(payload, dict) or payload not in accepted:
-        raise QualificationError("anonymous Edge response DTO mismatch")
-    return payload
 
 
 def _single_row(payload: Any) -> dict[str, Any]:
@@ -677,7 +668,7 @@ def qualify(config: Config) -> None:
             if client.edge(name, method="OPTIONS", body=None, bearer=None)[0] not in (200, 204):
                 raise QualificationError(f"Edge CORS mismatch: {name}")
             phase = f"edge-{name}-anonymous"
-            require_anonymous_unauthorized(client.edge(name, method="POST", body=body, bearer=None))
+            require_anonymous_401(client.edge(name, method="POST", body=body, bearer=None))
         expected_endpoint_results = {
             "lca_solve": str(solve_result_id),
             "lca_contribution_path": str(contribution_result_id),
