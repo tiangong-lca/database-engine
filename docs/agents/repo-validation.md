@@ -25,6 +25,7 @@ checkPaths:
   - supabase/seeds/**
   - scripts/**
   - .github/workflows/supabase-dev.yml
+  - .github/workflows/lca-snapshot-hosted-qualification.yml
   - .github/workflows/database-validation.yml
   - .github/workflows/ai-doc-lint.yml
   - .githooks/pre-push
@@ -57,6 +58,42 @@ supabase start
 supabase db reset
 supabase migration list
 ```
+
+## Persistent Dev consumer qualification
+
+`.github/workflows/lca-snapshot-hosted-qualification.yml` is the narrow hosted
+proof path for database-engine Issue #380. It can run only by manual dispatch
+from the canonical repository's `dev` branch. It checks the fixed persistent
+Dev project, migration head, database contract SHA, and deployed Edge evidence
+before using only this repository's trusted probe. The workflow proves that the
+fixed contract commit is an ancestor of the checked-out `dev` commit and binds
+the exact migration path, Git blob, and file SHA-256. The probe independently
+compares the five deployed functions' IDs, versions, update times, and immutable
+bundle digests with the deployment-time receipt. That receipt records exact
+source-worktree and remote deployment metadata; it does not claim a standalone
+cryptographic proof from Git commit to deployed bundle. It has no repository,
+ref, script, project, or endpoint input and never checks out consumer code.
+
+The current security boundary is the canonical `dev` branch plus repository
+variables/secrets already used by Supabase Dev automation. The probe first uses
+`SUPABASE_ACCESS_TOKEN` to request the current revealed publishable and secret
+keys from the Supabase Management API and masks them before use. If that token
+cannot reveal both modern keys, operators must configure the two project-only
+repository secrets `SUPABASE_DEV_PUBLISHABLE_KEY` and
+`SUPABASE_DEV_SECRET_KEY`; the run must fail until both exist and are valid.
+This repository does not currently rely on a GitHub Environment for this path.
+
+The proof must finish with independent zero residue for network snapshots,
+snapshot artifacts, active snapshots, result caches, jobs, results, Storage
+objects/buckets, Auth users, and Auth sessions. One unique run namespace binds
+the snapshot IDs, cache/worker subject identity, Storage bucket/prefix, and Auth
+email/metadata marker. The same unconditional reconciler runs before fixture
+setup and in `finally`; it discovers actual remote state, cancels matching Worker
+jobs before dependency-ordered deletion, tolerates already-absent Storage/Auth
+resources, and aggregates every cleanup/readback error with the primary failure.
+It therefore does not depend on receiving successful create or enqueue
+responses. Preview, mock, or consumer-repo test output does not replace this
+persistent Dev proof.
 
 The checked-in canonical entry point is:
 

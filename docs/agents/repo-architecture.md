@@ -24,13 +24,14 @@ checkPaths:
   - scripts/**
   - .github/workflows/supabase-dev.yml
   - .github/workflows/database-validation.yml
+  - .github/workflows/lca-snapshot-hosted-qualification.yml
   - .githooks/pre-push
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2e7b3ba2a3fcdcbc59cb26416512808465262049
-lastReviewedNote: "Reviewed for Issue #376 after Issue #323 integration and fresh-stack CI repair: service-role api facades, private canonical tables, public compatibility views, and the three receipt-bound Issue #323 transition-native SECURITY DEFINER lineages follow the existing five-schema architecture."
+lastReviewedCommit: 86ba7ee2c33e45df8008117a2dec3ee4deedc32c
+lastReviewedNote: "Reviewed for Issue #380: add the trusted persistent-Dev hosted qualification path without changing schema-source or generated-workspace boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -58,6 +59,7 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | `scripts/**` | export, refresh, change-copy, and migration-generation helpers |
 | `.github/workflows/supabase-dev.yml` | serialized automation for pushing committed migrations to persistent remote `dev`, then reconciling and readback-verifying only the reviewed PostgREST fields |
 | `.github/workflows/database-validation.yml` | PR fresh-stack reset, manifest-owned canonical database contract, and freeze-activated focused validation before merge |
+| `.github/workflows/lca-snapshot-hosted-qualification.yml` | manual, canonical-`dev`-only trusted probe for the fixed persistent Dev LCA snapshot/Edge contract; it never checks out consumer code or accepts repository/ref/script/project selectors |
 | `supabase/workspace/changes/**` | manual overlay area used when generating migrations from workspace files |
 | `supabase/workspace/remote_schema.sql` | generated full raw dump from the remote database |
 | `supabase/workspace/global/**` | generated split-out global objects rebuilt on workspace refresh |
