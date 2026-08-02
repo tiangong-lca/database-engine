@@ -29,8 +29,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-02
-lastReviewedCommit: ca686b19f359eb90e78d12b789e08a8ccb89afe0
+lastReviewedAt: 2026-08-03
+lastReviewedCommit: 2cb88b079a8e50f7630378b9f565739c4144df60
 lastReviewedNote: "Reviewed for the Issue #380 hosted anonymous status contract: qualification-only status handling of the platform-owned gateway body does not change schema sources, generated workspaces, cascade ownership, or repository boundaries."
 related:
   - ../../AGENTS.md

@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-02
-lastReviewedCommit: 2e7b3ba2a3fcdcbc59cb26416512808465262049
-lastReviewedNote: "已为 Issue #376 LCA snapshot-family Expand 复核：新增本地 upgrade runner 固化 exact-base populated、故障、重试、锁、WAL 与回滚/前滚证据，不改变 schema-workspace 生成流程。"
+lastReviewedAt: 2026-08-03
+lastReviewedCommit: 2cb88b079a8e50f7630378b9f565739c4144df60
+lastReviewedNote: "已为 Issue #390 复核：canonical-local 在选中 result API facade pgTAP 合同时自动执行精确 Data API、并发与零残留验证。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -504,6 +504,17 @@ python -m unittest scripts/test_identity_collaboration_expand_static.py
 python scripts/test_identity_collaboration_policy_variants.py
 python scripts/test_identity_collaboration_data_api.py
 python scripts/test_identity_collaboration_concurrency.py
+```
+
+### Issue #390 result API facade runtime
+
+`test_issue_390_result_api_facade_runtime.py` 是仅允许 loopback 的八个 service-only
+`api` routine 验证器。它冻结服务成功 DTO、anon/authenticated/private profile 精确拒绝、
+8 请求 HTTP admission race、8 个独立 PostgreSQL backend race、same-binding replay 与
+清理后的零残留。canonical-local 选中 Issue #390 pgTAP 合同时会自动执行该脚本。
+
+```bash
+python scripts/test_issue_390_result_api_facade_runtime.py
 ```
 
 canonical runner 只解析一次显式 loopback stack：先把 database identity 与所选
