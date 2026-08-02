@@ -18,6 +18,7 @@ from supabase.tests.hosted.lca_snapshot_hosted_qualification import (
     qualify,
     qualification_phase_error,
     reconcile_namespace,
+    require_anonymous_unauthorized,
     require_response,
     resolve_keys,
     safe_diagnostic_details,
@@ -100,6 +101,36 @@ class KeyTests(unittest.TestCase):
     def test_invalid_current_key_semantics_fail_closed(self):
         with self.assertRaises(QualificationError):
             require_response((401, {"message": "Invalid API key"}), 200)
+
+    def test_anonymous_edge_contract_accepts_only_handler_or_gateway_401(self):
+        accepted = (
+            {"error": "unauthorized"},
+            {"code": 401, "message": "Missing authorization header"},
+        )
+        for payload in accepted:
+            with self.subTest(payload=payload):
+                self.assertEqual(require_anonymous_unauthorized((401, payload)), payload)
+
+    def test_anonymous_edge_contract_rejects_other_status_or_dto(self):
+        secret = "anonymous-response-secret"
+        rejected = (
+            (403, {"error": "unauthorized"}),
+            (401, None),
+            (401, "Missing authorization header"),
+            (401, {"error": "other"}),
+            (401, {"code": "401", "message": "Missing authorization header"}),
+            (401, {"code": 401, "message": ""}),
+            (401, {"code": 401, "message": "Invalid JWT"}),
+            (401, {"code": 401, "message": "Missing authorization header", "extra": True}),
+            (401, {"error": secret}),
+        )
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+            for response in rejected:
+                with self.subTest(response=response), self.assertRaises(QualificationError):
+                    require_anonymous_unauthorized(response)
+        self.assertNotIn(secret, stdout.getvalue())
+        self.assertNotIn(secret, stderr.getvalue())
 
     def test_management_first_and_fallback(self):
         calls = []

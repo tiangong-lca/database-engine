@@ -22,8 +22,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 070958386e7cc3609105105c4dfd37a76e9080f1
-lastReviewedNote: "Reviewed for the Issue #380 hosted DTO labels: diagnostic-only static labels preserve canonical dev targeting, serialized persistent-dev execution, and the unchanged production boundary."
+lastReviewedCommit: 8adf0c825c143ded099b325f01d089e316119bef
+lastReviewedNote: "Reviewed for the Issue #380 hosted anonymous authorization contract: qualification-only handler/gateway 401 acceptance preserves canonical dev targeting, serialized persistent-dev execution, and the unchanged production boundary."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

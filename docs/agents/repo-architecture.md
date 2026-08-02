@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 070958386e7cc3609105105c4dfd37a76e9080f1
-lastReviewedNote: "Reviewed for the Issue #380 hosted DTO labels: diagnostic-only phase labels do not change schema sources, generated workspaces, or repository ownership boundaries."
+lastReviewedCommit: 8adf0c825c143ded099b325f01d089e316119bef
+lastReviewedNote: "Reviewed for the Issue #380 hosted anonymous authorization contract: qualification-only 401 DTO handling does not change schema sources, generated workspaces, or repository ownership boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
