@@ -63,7 +63,11 @@ supabase migration list
 
 `.github/workflows/lca-snapshot-hosted-qualification.yml` is the narrow hosted
 proof path for database-engine Issue #380. It can run only by manual dispatch
-from the canonical repository's `dev` branch. It checks the fixed persistent
+from the canonical repository's `dev` branch or by a canonical `dev` push that
+changes only the workflow definition or its trusted runner. The scoped push
+trigger bootstraps and continuously requalifies the runner even while the
+workflow is absent from GitHub's default-branch workflow registry. Static
+concurrency prevents overlapping hosted runs. It checks the fixed persistent
 Dev project, migration head, database contract SHA, and deployed Edge evidence
 before using only this repository's trusted probe. The workflow proves that the
 fixed contract commit is an ancestor of the checked-out `dev` commit and binds

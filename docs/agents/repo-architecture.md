@@ -59,7 +59,7 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | `scripts/**` | export, refresh, change-copy, and migration-generation helpers |
 | `.github/workflows/supabase-dev.yml` | serialized automation for pushing committed migrations to persistent remote `dev`, then reconciling and readback-verifying only the reviewed PostgREST fields |
 | `.github/workflows/database-validation.yml` | PR fresh-stack reset, manifest-owned canonical database contract, and freeze-activated focused validation before merge |
-| `.github/workflows/lca-snapshot-hosted-qualification.yml` | manual, canonical-`dev`-only trusted probe for the fixed persistent Dev LCA snapshot/Edge contract; it never checks out consumer code or accepts repository/ref/script/project selectors |
+| `.github/workflows/lca-snapshot-hosted-qualification.yml` | canonical-`dev`-only trusted probe for the fixed persistent Dev LCA snapshot/Edge contract, triggered manually or by a path-scoped trusted-runner/workflow push; it never checks out consumer code or accepts repository/ref/script/project selectors |
 | `supabase/workspace/changes/**` | manual overlay area used when generating migrations from workspace files |
 | `supabase/workspace/remote_schema.sql` | generated full raw dump from the remote database |
 | `supabase/workspace/global/**` | generated split-out global objects rebuilt on workspace refresh |
