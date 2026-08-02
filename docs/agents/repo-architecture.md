@@ -28,9 +28,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-01
-lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
-lastReviewedNote: "Reviewed for Issues #355/#339 and PR #367 findings: canonical enforcement binds actor-RLS to rollback/roll-forward proof, while global/five-schema ACL layer restore, bool_or effective grantability, and owner-only snapshot proof fit the current architecture."
+lastReviewedAt: 2026-08-02
+lastReviewedCommit: 973dd13d4920dd913afd07066d3215140bc032dd
+lastReviewedNote: "Reviewed for Issue #372 first real Expand slice: a JWT-preserving api facade and private Worker implementation with a public compatibility wrapper follow the existing five-schema architecture and Expand/Contract boundary."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
