@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 0e4000b68abe97f11bf10f0ff972e8a453af643b
-lastReviewedNote: "Reviewed for the Issue #380 hosted phase diagnostics: secret-safe phase/type reporting preserves trusted targeting, cleanup, and production ownership without exposing response or exception values."
+lastReviewedCommit: 0abc9f8b54a289292da641c13224b52c5ee5b402
+lastReviewedNote: "Reviewed for the Issue #380 hosted non-JSON OPTIONS repair: tolerant response decoding preserves trusted targeting, fail-closed DTO checks, cleanup, and production ownership without logging response content."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
