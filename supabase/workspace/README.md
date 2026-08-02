@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
-lastReviewedNote: "Reviewed for Issue #369: manifest-owned validation, PR CI, and Issue #357 phase gates do not change generated workspace ownership or refresh semantics."
+lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
+lastReviewedNote: "Reviewed for Issue #372 CI closure: canonical manifest/head maintenance and the bounded child migration do not change generated workspace ownership, refresh semantics, or deployment boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

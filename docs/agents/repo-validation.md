@@ -32,7 +32,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 973dd13d4920dd913afd07066d3215140bc032dd
+lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
 lastReviewedNote: "Reviewed for Issue #372 first real Expand slice: blank/populated upgrades, retry, forced failure atomicity, rollback/roll-forward, JWT/direct-SQL checks, focused pgTAP, baseline differential, lint, and hosted Preview remain the required validation layers."
 related:
   - ../../AGENTS.md

@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-01
-lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
-lastReviewedNote: "Reviewed for Issue #355 mandatory destructive qualification: the canonical opt-in gate invokes the dual exact-hash/actor-RLS harness before the rollback/roll-forward harness and propagates either failure."
+lastReviewedAt: 2026-08-02
+lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
+lastReviewedNote: "Reviewed for Issue #372 CI closure: the new pgTAP asset advances canonical counts and migration-head evidence, while the child migration name intentionally does not activate the frozen Issue #357 full-batch verifier."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

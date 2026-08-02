@@ -36,7 +36,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 973dd13d4920dd913afd07066d3215140bc032dd
+lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
 lastReviewedNote: "Reviewed for Issue #372 first real Expand slice: repository ownership, migration discipline, Preview qualification, and dev-branch delivery rules already govern the bounded api/private change; no contract change is required."
 related:
   - .docpact/config.yaml

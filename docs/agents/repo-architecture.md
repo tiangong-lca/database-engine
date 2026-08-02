@@ -29,7 +29,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 973dd13d4920dd913afd07066d3215140bc032dd
+lastReviewedCommit: 2510d66a67f9f6dd8933a8282c11c36d4d398009
 lastReviewedNote: "Reviewed for Issue #372 first real Expand slice: a JWT-preserving api facade and private Worker implementation with a public compatibility wrapper follow the existing five-schema architecture and Expand/Contract boundary."
 related:
   - ../../AGENTS.md

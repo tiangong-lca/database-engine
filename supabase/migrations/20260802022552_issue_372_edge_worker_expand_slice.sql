@@ -1,4 +1,4 @@
--- Issue #357 E3-B: the first real Edge + Worker vertical Expand slice.
+-- Issue #372, parent #357 E3-B: the first real Edge + Worker vertical Expand slice.
 --
 -- Edge receives a JWT-preserving api facade for one representative dataset
 -- mutation.  The Worker hash helper moves physically to private while the old

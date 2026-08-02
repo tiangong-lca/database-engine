@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-02"
-lastReviewedCommit: "973dd13d4920dd913afd07066d3215140bc032dd"
+lastReviewedCommit: "2510d66a67f9f6dd8933a8282c11c36d4d398009"
 lastReviewedNote: "Reviewed for Issue #372 first real Expand slice: the existing migration/test routing covers the transactional api/private move, explicit ACL convergence, compatibility wrappers, and focused plus baseline-differential validation without changing governance rules."
 
 # Keep deterministic governance facts here.
