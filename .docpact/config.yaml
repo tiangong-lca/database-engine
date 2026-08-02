@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-02"
-lastReviewedCommit: "0e4000b68abe97f11bf10f0ff972e8a453af643b"
-lastReviewedNote: "Reviewed for the Issue #380 hosted phase diagnostics: existing hosted-proof routing covers secret-safe phase/type reporting and nested cleanup failures without changing ownership, targeting, or schema routing."
+lastReviewedCommit: "0abc9f8b54a289292da641c13224b52c5ee5b402"
+lastReviewedNote: "Reviewed for the Issue #380 hosted non-JSON OPTIONS repair: existing hosted-proof routing covers tolerant transport decoding without changing DTO validation, ownership, targeting, or schema routing."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

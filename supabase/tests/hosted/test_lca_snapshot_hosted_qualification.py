@@ -1,9 +1,13 @@
+import contextlib
+import io
 import unittest
 from pathlib import Path
+from unittest.mock import patch
 
 from supabase.tests.hosted.lca_snapshot_hosted_qualification import (
     DEV_REF,
     PRODUCTION_REF,
+    _json_request,
     Config,
     QualificationError,
     RunNamespace,
@@ -46,6 +50,37 @@ class TargetingTests(unittest.TestCase):
             config(git_ref="refs/heads/main").validate()
 
 class KeyTests(unittest.TestCase):
+    class FakeResponse:
+        def __init__(self, status, payload):
+            self.status = status
+            self.payload = payload
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+        def read(self):
+            return self.payload
+
+    def test_success_transport_accepts_text_and_preserves_json_without_logging_content(self):
+        secret_text = "plain-text-response-must-not-be-logged"
+        responses = [
+            self.FakeResponse(204, secret_text.encode()),
+            self.FakeResponse(200, b'{"ok":true,"value":42}'),
+        ]
+        stdout, stderr = io.StringIO(), io.StringIO()
+        with (
+            patch("urllib.request.urlopen", side_effect=responses),
+            contextlib.redirect_stdout(stdout),
+            contextlib.redirect_stderr(stderr),
+        ):
+            self.assertEqual(_json_request("https://example.invalid/options"), (204, secret_text))
+            self.assertEqual(_json_request("https://example.invalid/json"), (200, {"ok": True, "value": 42}))
+        self.assertNotIn(secret_text, stdout.getvalue())
+        self.assertNotIn(secret_text, stderr.getvalue())
+
     def test_selects_current_default_modern_keys(self):
         rows = [
             {"type": "secret", "name": "old", "api_key": "sb_secret_old", "disabled": True},
