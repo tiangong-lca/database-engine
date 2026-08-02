@@ -33,8 +33,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: 0abc9f8b54a289292da641c13224b52c5ee5b402
-lastReviewedNote: "Reviewed for Issue #380 hosted non-JSON OPTIONS repair: tolerant transport decoding remains content-silent while existing DTO/type checks preserve the fail-closed hosted validation contract."
+lastReviewedCommit: 070958386e7cc3609105105c4dfd37a76e9080f1
+lastReviewedNote: "Reviewed for Issue #380 hosted DTO labels: granular static phase/type reporting remains content-silent while preserving the fail-closed hosted validation contract."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

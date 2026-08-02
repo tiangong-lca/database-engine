@@ -503,6 +503,12 @@ def unexpected_phase_error(phase: str, error: BaseException) -> QualificationErr
     return QualificationError(f"hosted phase failed: {phase}: {type(error).__name__}")
 
 
+def qualification_phase_error(phase: str, error: QualificationError) -> QualificationError:
+    if str(error).startswith("hosted phase failed: "):
+        return error
+    return unexpected_phase_error(phase, error)
+
+
 def safe_diagnostic_details(error: BaseException) -> list[str]:
     if isinstance(error, BaseExceptionGroup):
         return [detail for nested in error.exceptions for detail in safe_diagnostic_details(nested)]
@@ -579,6 +585,7 @@ def qualify(config: Config) -> None:
             "lca_snapshot_artifact_latest_v1": {"snapshot_id", "artifact_url", "artifact_format", "process_count", "status", "created_at"},
         }
         for name, args in rpc_args.items():
+            phase = f"snapshot-rpc-{name}"
             payload = require_response(client.rest(name, args, key=secret_key), 200)
             if name == "cmd_lca_snapshot_create_v1":
                 if payload != {"created": True, "snapshotId": str(create_id)}:
@@ -589,23 +596,27 @@ def qualify(config: Config) -> None:
                     raise QualificationError(f"RPC DTO/fixture mismatch: {name}")
                 if "process_count" in row and row["process_count"] != 1:
                     raise QualificationError(f"RPC process_count mismatch: {name}")
+        phase = "snapshot-rpc-create-retry"
         require_response(client.rest("cmd_lca_snapshot_create_v1", rpc_args["cmd_lca_snapshot_create_v1"], key=secret_key), 200, {"created": False, "snapshotId": str(create_id)})
         for name, args in rpc_args.items():
+            phase = f"snapshot-rpc-anonymous-{name}"
             status, payload = client.rest(name, args, key=publishable_key)
             if status not in (401, 403) or not isinstance(payload, dict) or payload.get("code") != "42501":
                 raise QualificationError(f"anonymous RPC boundary mismatch: {name}")
 
-        phase = "auth-boundary"
+        phase = "auth-admin-create"
         created = require_response(client.auth("admin/users", method="POST", key=secret_key, body={"email": email, "password": password, "email_confirm": True, "user_metadata": {"issue380_marker": marker}}), 200)
         user = created.get("user", created) if isinstance(created, dict) else None
         if not isinstance(user, dict) or not user.get("id"):
             raise QualificationError("Auth admin create response missing user")
         user_id = str(user["id"])
+        phase = "auth-password-sign-in"
         signed_in = require_response(client.auth("token?grant_type=password", method="POST", key=publishable_key, body={"email": email, "password": password}), 200)
         if not isinstance(signed_in, dict) or not signed_in.get("access_token"):
             raise QualificationError("Auth sign-in response missing access token")
         access_token = str(signed_in["access_token"]); mask(access_token)
         for name, args in rpc_args.items():
+            phase = f"snapshot-rpc-authenticated-{name}"
             status, payload = client.rest(name, args, key=publishable_key, bearer=access_token)
             if status not in (401, 403) or not isinstance(payload, dict) or payload.get("code") != "42501":
                 raise QualificationError(f"authenticated RPC boundary mismatch: {name}")
@@ -615,12 +626,16 @@ def qualify(config: Config) -> None:
         process_id, process_version = process["id"], process["version"]
         snapshot_index = {"version": 1, "snapshot_id": str(fixture_id), "process_count": 1, "impact_count": 1, "process_map": [{"process_id": process_id, "process_version": process_version, "process_index": 0}], "impact_map": [{"impact_id": str(impact_id), "impact_index": 0, "impact_key": "issue380", "impact_name": "Issue 380", "unit": "kg"}]}
         query_envelope = {"version": 1, "format": "all-unit-query:v1", "snapshot_id": str(fixture_id), "job_id": str(all_unit_job), "process_count": 1, "impact_count": 1, "h_matrix": [[42.5]]}
+        phase = "storage-bucket-create"
         require_response(client.storage_json("bucket", method="POST", body={"id": bucket, "name": bucket, "public": False}), 200)
+        phase = "storage-snapshot-index-upload"
         client.upload_json(bucket, f"{run.prefix}/snapshot-index-v1.json", snapshot_index)
+        phase = "storage-query-upload"
         client.upload_json(bucket, f"{run.prefix}/query.json", query_envelope)
 
         solve_request = {"version": "lca_solve_v2", "scope": "prod", "snapshot_id": str(fixture_id), "demand_mode": "all_unit", "solve": {"return_x": False, "return_g": False, "return_h": True}, "print_level": 0}
         contribution_request = {"version": "lca_contribution_path_v1", "scope": "prod", "snapshot_id": str(fixture_id), "data_scope": "open_data", "process_id": process_id, "process_version": process_version, "process_index": 0, "impact_id": str(impact_id), "impact_index": 0, "amount": 1, "options": {"max_depth": 4, "top_k_children": 5, "cutoff_share": 0.01, "max_nodes": 200}, "print_level": 0}
+        phase = "worker-result-fixture"
         client.sql(
             canonical_worker_fixture_sql(
                 fixture_id,
@@ -644,26 +659,32 @@ def qualify(config: Config) -> None:
             "lca_contribution_path": {"snapshot_id": str(fixture_id), "data_scope": "open_data", "process_id": process_id, "process_version": process_version, "impact_id": str(impact_id)},
         }
         for name, body in bodies.items():
+            phase = f"edge-{name}-cors"
             if client.edge(name, method="OPTIONS", body=None, bearer=None)[0] not in (200, 204):
                 raise QualificationError(f"Edge CORS mismatch: {name}")
+            phase = f"edge-{name}-anonymous"
             require_response(client.edge(name, method="POST", body=body, bearer=None), 401, {"error": "unauthorized"})
         expected_endpoint_results = {
             "lca_solve": str(solve_result_id),
             "lca_contribution_path": str(contribution_result_id),
         }
         for name, expected_result_id in expected_endpoint_results.items():
+            phase = f"edge-{name}-authenticated"
             first = require_response(client.edge(name, method="POST", body=bodies[name], bearer=access_token), 200)
+            phase = f"edge-{name}-retry"
             second = require_response(client.edge(name, method="POST", body=bodies[name], bearer=access_token), 200)
             if first != second or first.get("mode") != "cache_hit" or first.get("snapshot_id") != str(fixture_id) or not first.get("cache_key") or first.get("result_id") != expected_result_id:
                 raise QualificationError(f"Edge success/retry identity mismatch: {name}")
         for attempt in range(2):
+            phase = f"edge-lca_query_results-attempt-{attempt + 1}"
             query = require_response(client.edge("lca_query_results", method="POST", body=bodies["lca_query_results"], bearer=access_token), 200)
             if query.get("snapshot_id") != str(fixture_id) or query.get("result_id") != str(result_id) or query.get("mode") != "process_all_impacts" or query.get("data", {}).get("values", [{}])[0].get("value") != 42.5:
                 raise QualificationError(f"Edge query DTO mismatch on attempt {attempt + 1}")
         bad = dict(bodies["lca_solve"]); bad.update({"demand_mode": "single", "demand": {"process_index": 1, "amount": 1}})
+        phase = "edge-lca_solve-negative"
         require_response(client.edge("lca_solve", method="POST", body=bad, bearer=access_token), 400, {"error": "process_index_out_of_range", "process_index": 1, "process_count": 1})
     except QualificationError as error:
-        primary_error = error
+        primary_error = qualification_phase_error(phase, error)
     except BaseException as error:
         primary_error = unexpected_phase_error(phase, error)
     finally:
