@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-02
-lastReviewedCommit: a258c190e440f2cf388b5827086fe13b7da1a9bb
-lastReviewedNote: "Reviewed for the Issue #380 hosted gateway/cascade contract: qualification-only 401 handling and existing snapshot-to-artifact cascade ownership do not change schema sources, generated workspaces, or repository boundaries."
+lastReviewedCommit: ca686b19f359eb90e78d12b789e08a8ccb89afe0
+lastReviewedNote: "Reviewed for the Issue #380 hosted anonymous status contract: qualification-only status handling of the platform-owned gateway body does not change schema sources, generated workspaces, cascade ownership, or repository boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

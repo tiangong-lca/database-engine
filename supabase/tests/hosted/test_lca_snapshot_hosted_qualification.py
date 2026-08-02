@@ -18,7 +18,7 @@ from supabase.tests.hosted.lca_snapshot_hosted_qualification import (
     qualify,
     qualification_phase_error,
     reconcile_namespace,
-    require_anonymous_unauthorized,
+    require_anonymous_401,
     require_response,
     resolve_keys,
     safe_diagnostic_details,
@@ -102,37 +102,21 @@ class KeyTests(unittest.TestCase):
         with self.assertRaises(QualificationError):
             require_response((401, {"message": "Invalid API key"}), 200)
 
-    def test_anonymous_edge_contract_accepts_only_handler_or_gateway_401(self):
-        accepted = (
-            {"error": "unauthorized"},
-            {"code": 401, "message": "Missing authorization header"},
-            {"code": 401, "message": "Invalid Token or Protected Header formatting"},
-            {"code": 401, "message": "Invalid JWT"},
-        )
-        for payload in accepted:
-            with self.subTest(payload=payload):
-                self.assertEqual(require_anonymous_unauthorized((401, payload)), payload)
-
-    def test_anonymous_edge_contract_rejects_other_status_or_dto(self):
+    def test_anonymous_edge_contract_accepts_any_body_only_with_401(self):
         secret = "anonymous-response-secret"
-        rejected = (
-            (403, {"error": "unauthorized"}),
-            (401, None),
-            (401, "Missing authorization header"),
-            (401, {"error": "other"}),
-            (401, {"code": "401", "message": "Missing authorization header"}),
-            (401, {"code": 401, "message": ""}),
-            (401, {"code": 401, "message": "invalid jwt"}),
-            (401, {"code": 401, "message": "Missing authorization header", "extra": True}),
-            (401, {"error": secret}),
-        )
-        stdout, stderr = io.StringIO(), io.StringIO()
-        with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
-            for response in rejected:
-                with self.subTest(response=response), self.assertRaises(QualificationError):
-                    require_anonymous_unauthorized(response)
-        self.assertNotIn(secret, stdout.getvalue())
-        self.assertNotIn(secret, stderr.getvalue())
+        for payload in ({"error": secret}, secret, None):
+            with self.subTest(payload=payload):
+                stdout, stderr = io.StringIO(), io.StringIO()
+                with contextlib.redirect_stdout(stdout), contextlib.redirect_stderr(stderr):
+                    self.assertIsNone(require_anonymous_401((401, payload)))
+                self.assertNotIn(secret, stdout.getvalue())
+                self.assertNotIn(secret, stderr.getvalue())
+
+    def test_anonymous_edge_contract_rejects_every_other_http_status(self):
+        for status in range(100, 600):
+            if status != 401:
+                with self.subTest(status=status), self.assertRaises(QualificationError):
+                    require_anonymous_401((status, None))
 
     def test_management_first_and_fallback(self):
         calls = []
@@ -399,6 +383,13 @@ class QualifyPhaseFlowTests(unittest.TestCase):
 
 
 class WorkflowSecurityTests(unittest.TestCase):
+    def test_authenticated_edge_dto_checks_remain_exact(self):
+        runner = (ROOT / "supabase/tests/hosted/lca_snapshot_hosted_qualification.py").read_text()
+        self.assertEqual(runner.count("require_response(client.edge("), 4)
+        self.assertIn('first != second or first.get("mode") != "cache_hit"', runner)
+        self.assertIn('query.get("data", {}).get("values", [{}])[0].get("value") != 42.5', runner)
+        self.assertIn('{"error": "process_index_out_of_range", "process_index": 1, "process_count": 1}', runner)
+
     def test_workflow_is_dev_only_and_has_no_arbitrary_selector(self):
         text = (ROOT / ".github/workflows/lca-snapshot-hosted-qualification.yml").read_text()
         trigger = text.split("permissions:", 1)[0]

@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-02"
-lastReviewedCommit: "a258c190e440f2cf388b5827086fe13b7da1a9bb"
-lastReviewedNote: "Reviewed for the Issue #380 hosted gateway/cascade contract: existing hosted-proof routing covers the strict known gateway 401 union and canonical parent-cascade cleanup without changing authenticated validation, ownership, targeting, or schema routing."
+lastReviewedCommit: "ca686b19f359eb90e78d12b789e08a8ccb89afe0"
+lastReviewedNote: "Reviewed for the Issue #380 hosted anonymous status contract: existing hosted-proof routing treats the verify_jwt pre-handler body as platform-owned while exact 401 denial, authenticated DTO validation, and canonical parent-cascade cleanup remain enforced."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
