@@ -117,6 +117,15 @@ routing:
         - supabase/seed.sql
         - supabase/seeds/**
         - supabase/tests/**
+    lca-result-family:
+      paths:
+        - supabase/tests/contracts/lca_result_family_pre_ddl.v1.json
+        - scripts/test_issue_390_pre_ddl_gate.py
+        - scripts/test_database_contract_manifest.py
+        - docs/agents/repo-validation.md
+        - docs/agents/repo-architecture.md
+        - scripts/README.md
+        - scripts/README.zh-CN.md
     public-inventory-closure:
       paths:
         - scripts/public_inventory_closure.py

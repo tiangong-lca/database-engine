@@ -16,6 +16,7 @@ from unittest import mock
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scripts.run_database_contract as runner
+from scripts.test_issue_390_pre_ddl_gate import Issue390PreDdlGateTest
 
 
 class DatabaseContractManifestTest(unittest.TestCase):

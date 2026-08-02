@@ -304,6 +304,23 @@ lock/time/WAL budgets。runner 验证 OID、行数、主键与完整行内容 ha
 private-state drift 拒绝，以及 committed rollback/roll-forward。它拒绝非 loopback
 URL，并会破坏性 reset 所选数据库。
 
+### `test_issue_390_pre_ddl_gate.py`
+
+对 LCA result/cache/latest/factorization family 执行只读、离线的 pre-DDL
+授权门禁：
+
+```bash
+python -m unittest scripts.test_issue_390_pre_ddl_gate
+```
+
+checked contract 绑定精确 `dev` 基线与 migration head、七个目标对象、digest-bound
+repository catalog 与 hosted owner receipt、active consumer canonical/candidate
+tuple、可复算且明确不授权 DDL 的 runtime receipt、advisor baseline 与 owner sign-off
+状态。`ddlAuthorized=false` 时，测试拒绝任何
+Issue #390 relation-moving migration；单次日志零命中不构成 burn-in，也不得以
+authenticated 浏览器角色获得 `private` grant 作为兼容方案。canonical manifest
+contract 测试模块会导入该 test case，因此沿用既有 CI 而不新增第二条 workflow。
+
 ### `public_inventory_closure.py`
 
 该脚本把 workspace #533 的逐对象 ledger 与 database #337 merge head 的实时
