@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: fed7edbd1478f3a9e18e0c85513ea05a7c53f7ad
-lastReviewedNote: "Reviewed for Issue #398: the additive result GC migration and isolated runtime probe do not change generated workspace ownership or refresh semantics."
+lastReviewedCommit: a29f26a9eb0a6c629ae34e187c6fce4a0c215b1d
+lastReviewedNote: "Reviewed for Issue #390: the qualification scaffold stores stable evidence contracts outside generated workspace paths and does not change refresh semantics."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

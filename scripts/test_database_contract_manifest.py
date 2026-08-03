@@ -17,6 +17,7 @@ from unittest import mock
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scripts.run_database_contract as runner
 from scripts.test_issue_390_external_git_tree import Issue390ExternalGitTreeTest
+from scripts.test_issue_390_physical_qualification import Issue390PhysicalQualificationTest
 from scripts.test_issue_390_pre_ddl_gate import Issue390PreDdlGateTest
 from scripts.test_issue_398_result_gc_semantic_gate import Issue398ResultGcSemanticGateTest
 
@@ -44,6 +45,11 @@ class DatabaseContractManifestTest(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("scripts.test_database_contract_manifest", workflow)
+
+    def test_issue_390_physical_qualification_is_in_canonical_offline_suite(self) -> None:
+        self.assertTrue(
+            issubclass(Issue390PhysicalQualificationTest, unittest.TestCase)
+        )
 
     def test_issue_398_semantic_gate_is_in_canonical_offline_suite(self) -> None:
         self.assertTrue(

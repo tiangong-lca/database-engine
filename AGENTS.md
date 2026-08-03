@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: fed7edbd1478f3a9e18e0c85513ea05a7c53f7ad
-lastReviewedNote: "Reviewed for Issue #398: additive result GC remains private, disabled by default, locally qualified, and does not authorize result-family physical DDL or production mutation."
+lastReviewedCommit: a29f26a9eb0a6c629ae34e187c6fce4a0c215b1d
+lastReviewedNote: "Reviewed for Issue #390: the local-only qualification scaffold adds no DDL, Hosted mutation, production mutation, or branch/ownership change."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

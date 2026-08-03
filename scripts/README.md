@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: fed7edbd1478f3a9e18e0c85513ea05a7c53f7ad
-lastReviewedNote: "Reviewed for Issue #398: the destructive loopback runtime probe covers real-role ACLs, recovery states, races, and exact zero residue."
+lastReviewedCommit: a29f26a9eb0a6c629ae34e187c6fce4a0c215b1d
+lastReviewedNote: "Reviewed for Issue #390: physical qualification v1 permits only offline checks and loopback read-only baseline capture; destructive execution remains disabled."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -363,6 +363,61 @@ remain protected from later replacement, privilege, and security-mode changes.
 HEAD, index, and worktree each use their own contract revision. The gate
 never treats one zero-match query as burn-in. The canonical manifest-contract
 module imports this test case, so existing CI runs it without a second workflow.
+
+### `issue_390_physical_qualification.py`
+
+Defines the non-authorizing physical-move qualification harness before any
+Issue #390 relation-moving DDL exists:
+
+```bash
+python scripts/issue_390_physical_qualification.py --check
+python scripts/issue_390_physical_qualification.py --print-run-plan
+python -m unittest scripts.test_issue_390_physical_qualification
+```
+
+The default suite keeps the live database case skipped. Exercise the complete
+SQL query and receipt validator against an exact predecessor database with:
+
+```bash
+ISSUE_390_BASELINE_DB_URL='<explicit-loopback-url>' \
+  python -m unittest \
+  scripts.test_issue_390_physical_qualification.Issue390PhysicalQualificationLiveIntegrationTest
+```
+
+The exact v1 plan is bound to `database-engine/dev@a29f26a9` and migration head
+`20260803090000`. It contains no migration, rollback, or populated-fixture
+binding and keeps `ddlAuthorized`, `relationMovingDdlAllowed`,
+`historicalAuthenticatedSelectRemovalAllowed`, and destructive qualification
+execution false. `--qualify` therefore fails closed.
+
+On an explicit loopback database, `--capture-baseline --db-url ... --output
+...` may emit a read-only repeatable-read receipt only as `postgres` or
+`supabase_admin`, after proving superuser, `BYPASSRLS`, or ownership-based full
+row visibility across the four exact ordinary relations and three exact
+functions. Loopback and read-only prove neither database disposability nor
+independent-instance isolation. The requested client endpoint must be
+loopback; a containerized PostgreSQL server can truthfully report its bridge
+interface from `inet_server_addr()`. The database receipt independently binds the
+database name/OID, server address/port, cluster system identifier, and exact
+applied migration set; the Git-derived repository plan is recorded separately.
+The receipt freezes OID, owner, ACL/column ACL,
+RLS/policy, inbound/outbound FK semantics, indexes, triggers, publications,
+row count, sorted canonical SHA-256 PK/full-row digests, routine
+properties/definition hashes, recursive
+`pg_depend`, view/`pg_rewrite`, composite/rowtype, dynamic-SQL, and regclass
+candidates. Capture fails above 100,000 rows per target or after the 120-second
+statement budget; a successor needs a separately reviewed bounded/streaming
+design for larger tables. It stores no row payload and makes no authorization
+claim.
+
+The printed future run plan reserves independent fresh and populated upgrades
+whose database receipts must have distinct cluster system identifiers,
+failure atomicity, lock timeout, WAL/time budgets, retry, rollback, and
+roll-forward receipts and requires distinct `--fresh-db-url` /
+`--populated-db-url` loopback identities plus an external `--receipt-dir`.
+Activating those steps requires a reviewed successor
+contract with exact candidate blobs and independently completed pre-DDL gates;
+v1 cannot be edited into an execution authorization.
 
 ### `issue_390_external_git_tree.py`
 

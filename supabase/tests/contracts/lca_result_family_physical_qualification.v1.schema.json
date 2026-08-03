@@ -1,0 +1,254 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tiangong-lca.github.io/database-engine/lca-result-family-physical-qualification.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "issue", "artifactBinding", "source", "authorization",
+    "scope", "candidate", "evidence", "dependencyClosure", "invariants",
+    "qualification", "nonAuthorizingStatement"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "database.lca-result-family-physical-qualification.v1"},
+    "issue": {"const": "tiangong-lca/database-engine#390"},
+    "artifactBinding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["schemaPath", "schemaSha256"],
+      "properties": {
+        "schemaPath": {"const": "supabase/tests/contracts/lca_result_family_physical_qualification.v1.schema.json"},
+        "schemaSha256": {"$ref": "#/$defs/sha256"}
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "repository", "commitSha", "predecessorMigrationHead",
+        "predecessorMigrationCount", "predecessorMigrationSetSha256"
+      ],
+      "properties": {
+        "repository": {"const": "tiangong-lca/database-engine"},
+        "commitSha": {"const": "a29f26a9eb0a6c629ae34e187c6fce4a0c215b1d"},
+        "predecessorMigrationHead": {"const": "20260803090000"},
+        "predecessorMigrationCount": {"const": 181},
+        "predecessorMigrationSetSha256": {"const": "660edebc4e24e230e3223ba76466660805d0c66d102c9fa3e1a2d76850a6c964"}
+      }
+    },
+    "authorization": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "preDdlContract", "ddlAuthorized", "relationMovingDdlAllowed",
+        "historicalAuthenticatedSelectRemovalAllowed",
+        "qualificationExecutionAllowed", "status"
+      ],
+      "properties": {
+        "preDdlContract": {"const": "supabase/tests/contracts/lca_result_family_pre_ddl.v1.json"},
+        "ddlAuthorized": {"const": false},
+        "relationMovingDdlAllowed": {"const": false},
+        "historicalAuthenticatedSelectRemovalAllowed": {"const": false},
+        "qualificationExecutionAllowed": {"const": false},
+        "status": {"const": "blocked-pending-static-runtime-owner-and-gc-closure"}
+      }
+    },
+    "scope": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relations", "routines", "excludedFamilies"],
+      "properties": {
+        "relations": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "public.lca_results"},
+            {"const": "public.lca_result_cache"},
+            {"const": "public.lca_latest_all_unit_results"},
+            {"const": "public.lca_factorization_registry"}
+          ],
+          "items": false,
+          "minItems": 4,
+          "maxItems": 4
+        },
+        "routines": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "public.lca_read_job_projection(uuid,uuid,uuid,boolean)"},
+            {"const": "public.lca_read_result_projection(uuid,uuid,text,boolean)"},
+            {"const": "public.lca_read_latest_single_solve_result(uuid,uuid,integer)"}
+          ],
+          "items": false,
+          "minItems": 3,
+          "maxItems": 3
+        },
+        "excludedFamilies": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "lca_package_*"},
+            {"const": "lca_snapshot_gc_runs/items"},
+            {"const": "lcia_result_packages/publications"},
+            {"const": "lca_enqueue_job/lca_legacy_job_type"}
+          ],
+          "items": false,
+          "minItems": 4,
+          "maxItems": 4
+        }
+      }
+    },
+    "candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "migrationPath", "migrationSha256", "rollbackPath", "rollbackSha256",
+        "populatedFixturePath", "populatedFixtureSha256", "targetMigrationHead"
+      ],
+      "properties": {
+        "migrationPath": {"type": "null"},
+        "migrationSha256": {"type": "null"},
+        "rollbackPath": {"type": "null"},
+        "rollbackSha256": {"type": "null"},
+        "populatedFixturePath": {"type": "null"},
+        "populatedFixtureSha256": {"type": "null"},
+        "targetMigrationHead": {"type": "null"}
+      }
+    },
+    "evidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "baselineReceipt", "freshUpgradeReceipt", "populatedUpgradeReceipt",
+        "rollbackRollForwardReceipt", "lockWalTimeReceipt", "status"
+      ],
+      "properties": {
+        "baselineReceipt": {"type": "null"},
+        "freshUpgradeReceipt": {"type": "null"},
+        "populatedUpgradeReceipt": {"type": "null"},
+        "rollbackRollForwardReceipt": {"type": "null"},
+        "lockWalTimeReceipt": {"type": "null"},
+        "status": {"const": "skeleton-only-no-qualification-claim"}
+      }
+    },
+    "dependencyClosure": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["requiredSurfaces", "completenessRequired", "status"],
+      "properties": {
+        "requiredSurfaces": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {
+            "enum": [
+              "pg_depend", "foreign-key-inbound-and-outbound",
+              "view-and-pg_rewrite", "routine-definition-and-prosrc",
+              "relation-composite-type-and-rowtype",
+              "dynamic-sql-lexical-candidates",
+              "regclass-and-regprocedure-candidates",
+              "policy-and-publication-membership"
+            ]
+          }
+        },
+        "completenessRequired": {"const": true},
+        "status": {"const": "pending-baseline-capture-and-independent-review"}
+      }
+    },
+    "invariants": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["relations", "routines"],
+      "properties": {
+        "relations": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 11,
+          "maxItems": 11,
+          "items": {
+            "enum": [
+              "oid", "owner", "acl-and-column-acl", "rls-force-rls-and-policy",
+              "foreign-keys-and-delete-semantics", "indexes", "triggers",
+              "publication-membership-and-row-filter", "row-count",
+              "primary-key-hash", "content-hash"
+            ]
+          }
+        },
+        "routines": {
+          "type": "array",
+          "uniqueItems": true,
+          "minItems": 8,
+          "maxItems": 8,
+          "items": {
+            "enum": [
+              "oid", "owner", "acl", "signature-and-result-type",
+              "security-volatility-strictness-parallelism", "search-path",
+              "definition-hash", "exact-cardinality-and-kind"
+            ]
+          }
+        }
+      }
+    },
+    "qualification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "runner", "localOnly", "destructiveDatabaseRequired", "phases",
+        "minimumRowsPerRelation", "baselineCapture", "budgets"
+      ],
+      "properties": {
+        "runner": {"const": "scripts/issue_390_physical_qualification.py"},
+        "localOnly": {"const": true},
+        "destructiveDatabaseRequired": {"const": true},
+        "phases": {
+          "type": "array",
+          "prefixItems": [
+            {"const": "fresh-upgrade"}, {"const": "populated-upgrade"},
+            {"const": "failure-atomicity"}, {"const": "lock-timeout"},
+            {"const": "wal-and-time-budget"}, {"const": "retry"},
+            {"const": "rollback"}, {"const": "roll-forward"}
+          ],
+          "items": false,
+          "minItems": 8,
+          "maxItems": 8
+        },
+        "minimumRowsPerRelation": {"const": 10000},
+        "baselineCapture": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "maxRowsPerRelation", "statementTimeoutSeconds", "digestAlgorithm",
+            "digestEncoding"
+          ],
+          "properties": {
+            "maxRowsPerRelation": {"const": 100000},
+            "statementTimeoutSeconds": {"const": 120},
+            "digestAlgorithm": {"const": "sha256"},
+            "digestEncoding": {"const": "ordered-jsonb-text-lines-v1"}
+          }
+        },
+        "budgets": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "lockFailureMinimumSeconds", "lockFailureMaximumSeconds",
+            "freshUpgradeSeconds", "populatedUpgradeSeconds",
+            "migrationWalBytes", "retrySeconds", "retryWalBytes"
+          ],
+          "properties": {
+            "lockFailureMinimumSeconds": {"const": 4.5},
+            "lockFailureMaximumSeconds": {"const": 8.0},
+            "freshUpgradeSeconds": {"const": 15.0},
+            "populatedUpgradeSeconds": {"const": 30.0},
+            "migrationWalBytes": {"const": 33554432},
+            "retrySeconds": {"const": 10.0},
+            "retryWalBytes": {"const": 4194304}
+          }
+        }
+      }
+    },
+    "nonAuthorizingStatement": {
+      "const": "This artifact and its read-only baseline receipt do not authorize SET SCHEMA, physical migration, historical authenticated SELECT removal, Hosted mutation, or production mutation."
+    }
+  },
+  "$defs": {
+    "sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}
+  }
+}

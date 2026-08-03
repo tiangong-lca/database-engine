@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: fed7edbd1478f3a9e18e0c85513ea05a7c53f7ad
-lastReviewedNote: "Reviewed for Issue #398: additive result GC remains a private, disabled-by-default control-plane contract and does not authorize physical result-family moves."
+lastReviewedCommit: a29f26a9eb0a6c629ae34e187c6fce4a0c215b1d
+lastReviewedNote: "Reviewed for Issue #390: the physical qualification v1 plan is a local, non-authorizing proof scaffold and does not alter schema or generated-workspace ownership."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -58,6 +58,7 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | `supabase/tests/benchmarks/**` | explicit operator-run performance profiles; read each profile's environment guard because some are local/Preview-only while hybrid-search evidence is pinned to persistent staging |
 | `supabase/tests/preview/**` | exact-ref-bound disposable Hosted Preview mutation fixtures, cleanup, rollback-only fault assertions, and offline transport/lifecycle contracts; test-only and excluded from migrations, seeds, Dev data rehearsal, and production execution |
 | `supabase/tests/contracts/*_pre_ddl.v1.json` | stable fail-closed evidence contracts for relation families whose physical DDL is forbidden until static, runtime, and owner consumer-cut gates are complete; committed migration history is append-only, target-neutral static migrations may proceed, additive service-only `api` facades need an exact reviewed blob plus fixed-version PostgreSQL AST semantic proof, and opaque/dynamic SQL remains hard denied |
+| `supabase/tests/contracts/*_physical_qualification.v1.json` | non-authorizing physical-move qualification plans that bind exact source/scope, catalog/data/dependency receipt requirements, and future local-only fault/rollback/budget phases without containing candidate DDL or enabling execution |
 | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |
 | `scripts/**` | export, refresh, change-copy, and migration-generation helpers |
 | `.github/workflows/supabase-dev.yml` | serialized automation for pushing committed migrations to persistent remote `dev`, then reconciling and readback-verifying only the reviewed PostgREST fields |
@@ -172,6 +173,19 @@ runtime consumers. Dynamic selectors and unresolved lexical evidence prevent a
 semantic-zero claim; recognized direct-token occurrences are only a lower
 bound. Mirror receipt identity, source-tree parity, current-Edge staleness, and
 database snapshot provenance are independent fail-closed checks.
+
+Its physical qualification v1 plan is a separate local proof scaffold. It can
+capture only a read-only loopback baseline under an owner-capable allowlisted
+role with proven full-row visibility, exact database/applied-migration
+provenance, bounded sorted SHA-256 data digests, catalog-native dependencies,
+policy/publication membership, and case-insensitive lexical
+dynamic-SQL/rowtype/regclass candidates. Loopback is not disposability proof;
+future fresh/populated databases must have distinct cluster system identifiers.
+The current plan contains
+no migration, rollback, or populated fixture binding and cannot execute the
+reserved fresh/populated, fault, lock, WAL/time, retry, rollback, or
+roll-forward phases. A captured baseline is not static/runtime/owner evidence
+and cannot authorize Hosted or production mutation.
 
 The global populated-upgrade harness is a separate local-only proof layer. Its
 checked contract pins a reviewed migration base and exact head, one-million-row
