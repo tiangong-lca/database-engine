@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
-lastReviewedNote: "已为 Issue #405 复核：exact-head inventory artifact 继续位于生成 workspace 之外，不改变刷新语义。"
+lastReviewedCommit: 549b68a78cc7249caf8b175b191bf352e7443962
+lastReviewedNote: "已为 PR #404 门禁撤回复核：恢复未变更的 pre-DDL hard-deny 合约不改变生成 workspace 路径或刷新语义。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

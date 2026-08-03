@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
-lastReviewedNote: "Reviewed for Issue #405: exact-head inventory artifacts remain outside generated workspace paths and do not change refresh semantics."
+lastReviewedCommit: 549b68a78cc7249caf8b175b191bf352e7443962
+lastReviewedNote: "Reviewed for the PR #404 gate retraction: restoring the unchanged pre-DDL hard-deny contract does not change generated workspace paths or refresh semantics."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
