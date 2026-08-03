@@ -114,8 +114,8 @@ select is((select count(*)::integer from pg_proc p join pg_namespace n on n.oid=
   where p.prosecdef and n.nspname='public'), 233,
   'logical SECURITY DEFINER distribution has 233 physical public routines after grouped root-review facades');
 select is((select count(*)::integer from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where p.prosecdef and n.nspname='private'), 62,
-  'logical SECURITY DEFINER distribution has 62 physical private routines including result GC');
+  where p.prosecdef and n.nspname='private'), 64,
+  'logical SECURITY DEFINER distribution has 64 physical private routines including result GC and document-validation evidence');
 select is((select count(*)::integer from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where p.prosecdef and n.nspname='util'), 36,
   'global SECURITY DEFINER coverage includes 36 util routines');

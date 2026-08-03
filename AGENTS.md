@@ -35,9 +35,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-03
-lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
-lastReviewedNote: "Reviewed for Issue #405: exact-head inventory regeneration is read-only, Contract remains unauthorized, and dev-first/root-integration boundaries remain unchanged."
+lastReviewedAt: 2026-08-04
+lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
+lastReviewedNote: "Reviewed for Issue #407 Phase A: private Worker routines, public compatibility wrappers, dual-stack qualification, and dev-first integration remain within existing repository governance."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

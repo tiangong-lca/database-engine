@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import json
+import hashlib
 from collections.abc import Iterator
 
 import pglast
@@ -68,6 +69,12 @@ PROTECTED_RUNTIME_ROLES = {
 }
 PGLAST_VERSION = "v8.4"
 PGLAST_PARSER_VERSION = 180004
+DOCUMENT_EVIDENCE_MIGRATION_PATH = (
+    "supabase/migrations/20260803163000_issue_407_document_validation_evidence_expand.sql"
+)
+DOCUMENT_EVIDENCE_CLASSIFICATION = (
+    "additive-document-evidence-private-contract-reviewed"
+)
 SAFE_FACADE_BUILTINS = {
     "array_agg",
     "clock_timestamp",
@@ -1381,6 +1388,173 @@ def _facade_review_violations(
     return sorted(set(violations))
 
 
+def reviewed_document_evidence_migration_violations(sql: str) -> list[str]:
+    """Exact PostgreSQL-AST admission for Issue #407 Phase A only."""
+    statements, errors = _parse_sql(sql)
+    if errors:
+        return errors
+    violations: list[str] = []
+    expected_types = (
+        "TransactionStmt", "VariableSetStmt", "VariableSetStmt", "DoStmt",
+        "CreateFunctionStmt", "CreateFunctionStmt", "GrantStmt", "GrantStmt",
+        "CreateFunctionStmt", "CreateFunctionStmt", "GrantStmt", "GrantStmt",
+        "CommentStmt", "CommentStmt", "CommentStmt", "CommentStmt", "DoStmt",
+        "TransactionStmt",
+    )
+    observed_types = tuple(next(iter(statement)) for statement in statements)
+    if observed_types != expected_types:
+        violations.append("document-evidence:exact-statement-sequence-required")
+        return violations
+
+    first_transaction = statements[0]["TransactionStmt"]
+    last_transaction = statements[-1]["TransactionStmt"]
+    if first_transaction.get("kind") != "TRANS_STMT_BEGIN" or last_transaction.get("kind") != "TRANS_STMT_COMMIT":
+        violations.append("document-evidence:exact-transaction-boundary-required")
+    for index, expected_name, expected_value in (
+        (1, "lock_timeout", "5s"),
+        (2, "statement_timeout", "2min"),
+    ):
+        setting = statements[index]["VariableSetStmt"]
+        values = [
+            item.get("A_Const", {}).get("sval", {}).get("sval")
+            for item in setting.get("args", [])
+        ]
+        if (
+            setting.get("kind") != "VAR_SET_VALUE"
+            or setting.get("name") != expected_name
+            or not setting.get("is_local")
+            or values != [expected_value]
+        ):
+            violations.append(f"document-evidence:exact-setting-required:{expected_name}")
+
+    do_hashes = (
+        "44ce800be93888992afb17fa6f7e4fcda90cbfcd02334524e01f4f03f00e598c",
+        "e5278b5d8cc6b6fd2cbf2608e95f4d217706550236e505579fd2ef62bf6da768",
+    )
+    function_hashes = {
+        ("private", "svc_lcia_document_validation_evidence_lookup"):
+            "ff66e2691246c21c6597cd2a15b44ae8f6d1fedc97159218b05121a3015f79d0",
+        ("private", "svc_lcia_document_validation_evidence_record"):
+            "5afa390b4f167924705db7202fcf5e618ba2be3d53e170a9a46ac64b0b408a2e",
+        ("public", "svc_lcia_document_validation_evidence_lookup"):
+            "248620282e8a5733b408948cc504bfdb828863c6682fdf1ceaf5de8ca499e74f",
+        ("public", "svc_lcia_document_validation_evidence_record"):
+            "a6b9e162382584182c7fee9c7d916f396105a8565793041a8745f1b0830acf79",
+    }
+    expected_identities = {
+        ("private", "svc_lcia_document_validation_evidence_lookup", ((('pg_catalog', 'jsonb'), 0),)),
+        ("private", "svc_lcia_document_validation_evidence_record", ((('pg_catalog', 'jsonb'), 0), (('pg_catalog', 'uuid'), 0))),
+        ("public", "svc_lcia_document_validation_evidence_lookup", ((('pg_catalog', 'jsonb'), 0),)),
+        ("public", "svc_lcia_document_validation_evidence_record", ((('pg_catalog', 'jsonb'), 0), (('pg_catalog', 'uuid'), 0))),
+    }
+    observed_identities: set[tuple] = set()
+    observed_do_hashes: list[str] = []
+    grant_shapes: list[tuple] = []
+    comments: dict[tuple, str | None] = {}
+    for statement in statements:
+        root_type, root = next(iter(statement.items()))
+        if root_type == "DoStmt":
+            bodies = [
+                item.get("DefElem", {}).get("arg", {}).get("String", {}).get("sval")
+                for item in root.get("args", [])
+                if item.get("DefElem", {}).get("defname") == "as"
+            ]
+            if len(bodies) != 1 or bodies[0] is None:
+                violations.append("document-evidence:exact-do-body-required")
+            else:
+                observed_do_hashes.append(hashlib.sha256(bodies[0].encode()).hexdigest())
+        elif root_type == "CreateFunctionStmt":
+            identity = _created_function_identity(root)
+            if identity is None:
+                violations.append("document-evidence:invalid-function-identity")
+                continue
+            observed_identities.add(identity)
+            name = tuple(_function_name(root))
+            bodies = _function_body_strings(root)
+            if not root.get("replace") or len(bodies) != 1:
+                violations.append("document-evidence:exact-function-replacement-required")
+            elif hashlib.sha256(bodies[0].encode()).hexdigest() != function_hashes.get(name):
+                violations.append(f"document-evidence:function-body-drift:{'.'.join(name)}")
+            options = _function_options(root)
+            if set(options) != {"language", "security", "set", "as"}:
+                violations.append(f"document-evidence:function-options-drift:{'.'.join(name)}")
+            language = options.get("language", {}).get("String", {}).get("sval")
+            security = options.get("security", {}).get("Boolean", {}).get("boolval")
+            setting = options.get("set", {}).get("VariableSetStmt", {})
+            search_path = [
+                item.get("A_Const", {}).get("sval", {}).get("sval")
+                for item in setting.get("args", [])
+            ]
+            if language != "plpgsql" or security is not True or setting.get("name") != "search_path" or search_path != ["pg_catalog", "pg_temp"]:
+                violations.append(f"document-evidence:function-security-drift:{'.'.join(name)}")
+            if _type_identity(root.get("returnType", {})) != (("pg_catalog", "jsonb"), 0):
+                violations.append(f"document-evidence:function-return-drift:{'.'.join(name)}")
+            parameters = [item.get("FunctionParameter", {}) for item in root.get("parameters", [])]
+            expected_parameters = (
+                [("p_cache_keys", (("pg_catalog", "jsonb"), 0), False)]
+                if name[1].endswith("lookup")
+                else [
+                    ("p_records", (("pg_catalog", "jsonb"), 0), False),
+                    ("p_source_worker_job_id", (("pg_catalog", "uuid"), 0), True),
+                ]
+            )
+            observed_parameters = [
+                (
+                    parameter.get("name"),
+                    _type_identity(parameter.get("argType", {})),
+                    parameter.get("defexpr", {}).get("A_Const", {}).get("isnull") is True,
+                )
+                for parameter in parameters
+            ]
+            if observed_parameters != expected_parameters:
+                violations.append(f"document-evidence:function-parameters-drift:{'.'.join(name)}")
+        elif root_type == "GrantStmt":
+            grant_shapes.append((
+                bool(root.get("is_grant")),
+                tuple(sorted(_role_names(root.get("grantees", [])))),
+                tuple(sorted(_granted_function_identities(root))),
+                tuple(sorted(value.lower() for value in _privilege_names(root))),
+                root.get("objtype"),
+                bool(root.get("grant_option")),
+                root.get("behavior"),
+                root.get("targtype"),
+            ))
+        elif root_type == "CommentStmt":
+            comment = root.get("object", {}).get("ObjectWithArgs", {})
+            identity = tuple(_string_list(comment.get("objname", []))) + (
+                tuple(_type_identity(arg) for arg in comment.get("objargs", [])),
+            )
+            comments[identity] = root.get("comment")
+
+    if observed_identities != expected_identities:
+        violations.append("document-evidence:exact-four-functions-required")
+    if tuple(observed_do_hashes) != do_hashes:
+        violations.append("document-evidence:preflight-postflight-body-drift")
+    expected_comments = {
+        identity: (
+            "Issue #407 Phase A canonical Worker lookup. Direct EXECUTE is restricted to lca_worker_runtime; the public relation remains physical until Contract."
+            if identity[0] == "private" and identity[1].endswith("lookup")
+            else "Issue #407 Phase A canonical Worker idempotent record command. Direct EXECUTE is restricted to lca_worker_runtime; no relation ACL is granted."
+            if identity[0] == "private"
+            else "Issue #407 Phase A compatibility wrapper with caller-category-only LOG telemetry; remove only after attributed consumer-zero evidence."
+        )
+        for identity in expected_identities
+    }
+    if comments != expected_comments:
+        violations.append("document-evidence:exact-four-comments-required")
+    private_ids = tuple(sorted(identity for identity in expected_identities if identity[0] == "private"))
+    public_ids = tuple(sorted(identity for identity in expected_identities if identity[0] == "public"))
+    expected_grants = [
+        (False, ("PUBLIC", "anon", "api_internal_executor", "authenticated", "lca_worker_runtime", "service_role"), private_ids, ("all",), "OBJECT_FUNCTION", False, "DROP_RESTRICT", "ACL_TARGET_OBJECT"),
+        (True, ("lca_worker_runtime",), private_ids, ("execute",), "OBJECT_FUNCTION", False, "DROP_RESTRICT", "ACL_TARGET_OBJECT"),
+        (False, ("PUBLIC", "anon", "api_internal_executor", "authenticated", "lca_worker_runtime", "service_role"), public_ids, ("all",), "OBJECT_FUNCTION", False, "DROP_RESTRICT", "ACL_TARGET_OBJECT"),
+        (True, ("api_internal_executor", "service_role"), public_ids, ("execute",), "OBJECT_FUNCTION", False, "DROP_RESTRICT", "ACL_TARGET_OBJECT"),
+    ]
+    if grant_shapes != expected_grants:
+        violations.append("document-evidence:exact-function-acl-statements-required")
+    return sorted(set(violations))
+
+
 def pre_ddl_migration_violations(
     *, path: str, git_blob: str, sql: str, allowlist: list[dict[str, str]]
 ) -> list[str]:
@@ -1390,6 +1564,14 @@ def pre_ddl_migration_violations(
         for row in allowlist
         if row.get("path") == path and row.get("gitBlob") == git_blob
     ]
+    if path == DOCUMENT_EVIDENCE_MIGRATION_PATH:
+        if (
+            len(matching) != 1
+            or matching[0].get("classification")
+            != DOCUMENT_EVIDENCE_CLASSIFICATION
+        ):
+            return ["document-evidence:exact-allowlist-entry-required"]
+        return reviewed_document_evidence_migration_violations(sql)
     if path == RESULT_GC_FK_INDEX_MIGRATION_PATH:
         if (
             len(matching) != 1

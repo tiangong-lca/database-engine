@@ -16,6 +16,7 @@ from scripts.issue_390_pre_ddl_gate import (
     PGLAST_VERSION,
     pre_ddl_migration_violations,
     pre_ddl_sql_signals,
+    reviewed_document_evidence_migration_violations,
 )
 
 
@@ -195,6 +196,7 @@ class Issue390PreDdlGateTest(unittest.TestCase):
                     "additive-api-service-only-reviewed",
                     "additive-disabled-result-gc-contract-reviewed",
                     "additive-result-gc-fk-covering-indexes-reviewed",
+                    "additive-document-evidence-private-contract-reviewed",
                     "reconcile-v1-service-only-replacement-reviewed",
                 },
             )
@@ -1654,6 +1656,55 @@ class Issue390PreDdlGateTest(unittest.TestCase):
             sources["mcp"]["canonical"]["classification"],
             "no-recognized-direct-match-with-unresolved-dynamic-selectors",
         )
+    def test_issue_407_exact_ast_gate_rejects_mutation_classes(self) -> None:
+        sql = (
+            ROOT
+            / "supabase/migrations/20260803163000_issue_407_document_validation_evidence_expand.sql"
+        ).read_text(encoding="utf-8")
+        self.assertEqual(reviewed_document_evidence_migration_violations(sql), [])
+        mutations = {
+            "destructive_ddl": sql + "\ndrop table public.lcia_document_validation_evidence;\n",
+            "dml": sql.replace(
+                "set local statement_timeout = '2min';",
+                "set local statement_timeout = '2min'; insert into public.lcia_document_validation_evidence default values;",
+                1,
+            ),
+            "role": sql + "\ncreate role issue407_forbidden;\n",
+            "schema_grant": sql + "\ngrant usage on schema private to authenticated;\n",
+            "extra_routine": sql + "\ncreate function private.issue407_extra() returns void language sql as $$select$$;\n",
+            "function_body": sql.replace(
+                "v_inserted integer := 0;",
+                "v_inserted integer := 1;",
+                1,
+            ),
+            "language": sql.replace("language plpgsql", "language sql", 1),
+            "security": sql.replace("security definer", "security invoker", 1),
+            "search_path": sql.replace(
+                "set search_path = pg_catalog, pg_temp",
+                "set search_path = public, pg_temp",
+                1,
+            ),
+            "return": sql.replace(
+                ") returns pg_catalog.jsonb", ") returns pg_catalog.text", 1
+            ),
+            "parameter": sql.replace("p_cache_keys pg_catalog.jsonb", "p_keys pg_catalog.jsonb", 1),
+            "default": sql.replace("pg_catalog.uuid default null", "pg_catalog.uuid default gen_random_uuid()", 1),
+            "grant_option": sql.replace(
+                "to lca_worker_runtime;", "to lca_worker_runtime with grant option;", 1
+            ),
+            "comment": sql.replace(
+                "Issue #407 Phase A canonical Worker lookup.",
+                "Issue #407 drifted Worker lookup.",
+                1,
+            ),
+            "lock_timeout": sql.replace("set local lock_timeout = '5s'", "set local lock_timeout = '6s'", 1),
+        }
+        for name, mutated in mutations.items():
+            with self.subTest(name=name):
+                self.assertTrue(
+                    reviewed_document_evidence_migration_violations(mutated),
+                    f"{name} mutation passed the exact AST gate",
+                )
 
 
 if __name__ == "__main__":

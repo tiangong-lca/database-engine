@@ -119,6 +119,15 @@ routing:
         - supabase/seed.sql
         - supabase/seeds/**
         - supabase/tests/**
+    document-evidence-cache:
+      paths:
+        - supabase/migrations/*issue_407_document_validation_evidence*.sql
+        - supabase/operator/*issue_407_document_validation_evidence*.sql
+        - supabase/tests/*issue_407_document_validation_evidence*.sql
+        - scripts/test_issue_407_document_validation_evidence_*.py
+        - docs/agents/repo-validation.md
+        - scripts/README.md
+        - scripts/README.zh-CN.md
     lca-result-family:
       paths:
         - AGENTS.md

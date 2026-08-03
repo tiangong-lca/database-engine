@@ -46,7 +46,7 @@ select extensions.is(
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
    where n.nspname in ('public','api','private','util','archive') and p.prosecdef),
-  331::bigint, 'the governed SECURITY DEFINER inventory includes grouped root-review facades and the result GC executor contract');
+  333::bigint, 'the governed SECURITY DEFINER inventory includes grouped root-review facades, result GC, and document-validation evidence contracts');
 
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace

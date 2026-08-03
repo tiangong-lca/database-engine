@@ -123,9 +123,27 @@ anonymous access, and reject the `private` profile. The probe sends explicit
 `public` profile headers so the reviewed `api`-first exposed-schema order
 cannot silently change its target schema.
 
-The manifest currently derives 68 canonical files from 87 top-level pgTAP
+The manifest currently derives 71 canonical files from 90 top-level pgTAP
 files and 19 exact, metadata-bearing exclusions. The runner remains authoritative
 for the live counts and exact file list.
+
+Issue #407 Phase A keeps `public.lcia_document_validation_evidence` as the
+physical relation, adds two `private` canonical Worker routines, and reduces the
+two public RPCs to single-path compatibility wrappers. Its proof combines the
+canonical pgTAP file with
+`python -m unittest scripts.test_issue_407_document_validation_evidence_expand`;
+qualification must cover blank and populated caches, public/private result and
+error parity, exact role ACLs, idempotent record replay, and applying the same
+migration twice without catalog or row drift.
+The destructive loopback runtime additionally requires an explicit isolation
+confirmation, one read-only exact-predecessor cluster at `20260803090000`, and
+a distinct disposable candidate hard-bound by project/container/system ID and
+head. It proves 296k rows, 0/1/50/500/1500-key lookup batches, index-plan
+use, bounded WAL and lock waits, reverse/overlap concurrency, a second-row fault
+rollback, source catalog/public OID parity, real PG17 LOGIN behavior, exact
+caller-category LOG lines, modern-key PostgREST public success, and
+private/browser denial. The predecessor remains unchanged; the candidate must
+finish at Phase A head with zero namespaced rows and zero temporary roles.
 The 19 exclusions are visible debt—not passes—and remain tracked in
 `tiangong-lca/database-engine#336`. Each exclusion carries its category,
 disposition, tracking Issue, and supported-behavior replacements where known;

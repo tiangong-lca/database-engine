@@ -29,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-03
-lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
-lastReviewedNote: "Reviewed for Issue #405: exact-head public inventory v2 is a read-only contract surface and does not alter schema or generated-workspace ownership."
+lastReviewedAt: 2026-08-04
+lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
+lastReviewedNote: "Reviewed for Issue #407 Phase A: the physical public evidence table remains in place while private Worker routines establish the intended runtime boundary."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

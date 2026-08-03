@@ -36,7 +36,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python contract dependencies
-        run: python -m pip install --disable-pip-version-check "jsonschema==4.23.0" "pglast==8.4"
+        run: python -m pip install --disable-pip-version-check "jsonschema==4.23.0" "pglast==8.4" "psycopg[binary]==3.3.2"
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v2
@@ -53,6 +53,7 @@ jobs:
           python -m unittest \
             scripts.test_database_contract_manifest \
             scripts.test_database_contract_targeting \
+            scripts.test_issue_407_document_validation_evidence_expand \
             scripts.test_issue_390_result_api_facade_runtime_unit \
             scripts.test_production_equivalent_upgrade_unit
           python scripts/run_database_contract.py \
@@ -61,12 +62,66 @@ jobs:
           python scripts/run_database_contract.py \
             --suite canonical-local \
             --list > "$RUNNER_TEMP/canonical-test-list.json"
+          python -m scripts.issue_390_pre_ddl_gate --check
 
       - name: Start fresh local Supabase stack
         run: supabase start
 
       - name: Run canonical contract from a fresh reset
         run: python scripts/run_database_contract.py --suite canonical-local
+
+      - name: Run Issue 407 exact predecessor-to-candidate qualification
+        env:
+          PGPASSWORD: postgres # gitleaks:allow -- disposable loopback Supabase default
+        run: |
+          predecessor="$RUNNER_TEMP/issue407-predecessor"
+          git worktree add --detach "$predecessor" 269ef181e103bf57a7e15c6e82f5291005f33ded
+          python - "$predecessor/supabase/config.toml" <<'PY'
+          from pathlib import Path
+          import sys
+          path = Path(sys.argv[1])
+          text = path.read_text()
+          replacements = {
+              'project_id = "database-engine"': 'project_id = "database-engine-407-predecessor"',
+              'port = 55321': 'port = 62321',
+              'port = 55322': 'port = 62322',
+              'shadow_port = 55320': 'shadow_port = 62320',
+              'port = 55329': 'port = 62329',
+              'port = 55323': 'port = 62323',
+              'port = 55324': 'port = 62324',
+              'port = 55327': 'port = 62327',
+          }
+          for source, target in replacements.items():
+              if text.count(source) != 1:
+                  raise SystemExit(f"unexpected predecessor config occurrence: {source}")
+              text = text.replace(source, target)
+          path.write_text(text)
+          PY
+          supabase start --workdir "$predecessor"
+          predecessor_system_id="$(psql -X -At --host 127.0.0.1 --port 62322 --username postgres --dbname postgres -c 'select system_identifier from pg_control_system()')"
+          candidate_system_id="$(psql -X -At --host 127.0.0.1 --port 55322 --username postgres --dbname postgres -c 'select system_identifier from pg_control_system()')"
+          candidate_status="$(supabase status --output json)"
+          export ISSUE407_ANON_KEY="$(python -c 'import json,sys; print(json.load(sys.stdin)["ANON_KEY"])' <<<"$candidate_status")"
+          export ISSUE407_SERVICE_KEY="$(python -c 'import json,sys; print(json.load(sys.stdin)["SECRET_KEY"])' <<<"$candidate_status")"
+          python scripts/test_issue_407_document_validation_evidence_runtime.py \
+            --predecessor-db-url postgresql://postgres@127.0.0.1:62322/postgres \
+            --candidate-db-url postgresql://postgres@127.0.0.1:55322/postgres \
+            --expected-predecessor-system-id "$predecessor_system_id" \
+            --expected-candidate-system-id "$candidate_system_id" \
+            --expected-predecessor-project-id database-engine-407-predecessor \
+            --expected-predecessor-container supabase_db_database-engine-407-predecessor \
+            --expected-candidate-project-id database-engine \
+            --expected-candidate-container supabase_db_database-engine \
+            --execution-mode ci-hard-bound \
+            --api-url http://127.0.0.1:55321 \
+            --confirm-isolated-destructive-test
+
+      - name: Stop Issue 407 predecessor stack
+        if: always()
+        run: |
+          if [[ -d "$RUNNER_TEMP/issue407-predecessor/supabase" ]]; then
+            supabase stop --workdir "$RUNNER_TEMP/issue407-predecessor" --no-backup
+          fi
 
       - name: Verify Issue 357 artifacts, generated phases, unit contracts, and focused suite
         run: >-

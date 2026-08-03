@@ -20,9 +20,9 @@ checkPaths:
   - supabase/migrations/20260803090000_issue_398_result_gc_fk_indexes.sql
   - supabase/tests/20260802_issue_398_result_gc_contract.sql
   - scripts/test_issue_398_result_gc_runtime.py
-lastReviewedAt: 2026-08-03
-lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
-lastReviewedNote: "Reviewed for Issue #405: inventory refresh changes no GC runtime, rollout, or deletion authority; claims and physical Contract remain separately gated."
+lastReviewedAt: 2026-08-04
+lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
+lastReviewedNote: "Reviewed for Issue #407 Phase A: document-validation RPC expansion does not change result-GC runtime, deletion authority, or Contract gates."
 related:
   - ../../AGENTS.md
   - ./repo-validation.md

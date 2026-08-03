@@ -101,11 +101,16 @@
         "gitBlob": "6b2f41c028925c9f540f124887e576351b572e48",
         "classification": "additive-disabled-result-gc-contract-reviewed"
       },
-      {
-        "path": "supabase/migrations/20260803090000_issue_398_result_gc_fk_indexes.sql",
-        "gitBlob": "e113586c245fe562191d27810a292383f3079d83",
-        "classification": "additive-result-gc-fk-covering-indexes-reviewed"
-      }
+    {
+      "path": "supabase/migrations/20260803090000_issue_398_result_gc_fk_indexes.sql",
+      "gitBlob": "e113586c245fe562191d27810a292383f3079d83",
+      "classification": "additive-result-gc-fk-covering-indexes-reviewed"
+    },
+    {
+      "path": "supabase/migrations/20260803163000_issue_407_document_validation_evidence_expand.sql",
+      "gitBlob": "68ed45114de74622194d39841a6731774bf4c6b6",
+      "classification": "additive-document-evidence-private-contract-reviewed"
+    }
     ],
     "relationMovingDdlAllowed": false,
     "browserPrivateCompatibilityGrantAllowed": false,

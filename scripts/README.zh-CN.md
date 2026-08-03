@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-03
-lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
-lastReviewedNote: "已为 Issue #405 复核：exact-head inventory 刷新与对比只接受显式 loopback URL，不生成 DDL，也不授权 Contract。"
+lastReviewedAt: 2026-08-04
+lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
+lastReviewedNote: "已为 Issue #407 Phase A 复核：破坏性双实例验证强绑定本地容器、精确 migration 集合和候选 API，不授权 Hosted mutation。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

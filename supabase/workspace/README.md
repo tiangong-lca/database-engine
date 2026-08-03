@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-03
-lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
-lastReviewedNote: "Reviewed for Issue #405: exact-head inventory artifacts remain outside generated workspace paths and do not change refresh semantics."
+lastReviewedAt: 2026-08-04
+lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
+lastReviewedNote: "Reviewed for Issue #407 Phase A: the migration and qualification harness do not change generated remote-schema workspace ownership or refresh semantics."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

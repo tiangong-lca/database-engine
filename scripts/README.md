@@ -292,8 +292,53 @@ python scripts/run_database_contract.py --suite canonical-local --validate-manif
 python scripts/run_database_contract.py --suite canonical-local --list
 ```
 
-The current derived baseline is 64 selected top-level pgTAP files plus 19
-metadata-bearing exclusions. The list evidence records the exact commit,
+Issue #407 Phase A also has a static fail-closed migration contract:
+
+```bash
+python -m unittest scripts.test_issue_407_document_validation_evidence_expand
+```
+
+The canonical pgTAP suite then proves the blank/populated cache behavior,
+public/private envelope parity, exact runtime ACLs, and idempotent record retry.
+
+The destructive runtime qualification requires an explicitly confirmed,
+disposable candidate loopback stack plus a distinct exact-predecessor loopback
+stack at migration head `20260803090000`. The predecessor is a read-only
+behavior/catalog oracle: the harness never migrates, rolls back, or cleans it.
+The candidate is hard-bound to its expected project/container/system ID and
+head. The harness performs predecessor-to-head parity, malicious
+preflight mutations, real PG17 LOGIN membership checks, 20-connection
+same-key/reverse-overlap batches, commit-before-fault and bounded-lock proof,
+296k-row hash/plan/WAL qualification, operator rollback/roll-forward, exact LOG
+readback, and optional real PostgREST transport checks. It restores Phase A and
+removes its namespaced rows and temporary roles in `finally`:
+
+```bash
+python scripts/test_issue_407_document_validation_evidence_runtime.py \
+  --confirm-isolated-destructive-test \
+  --predecessor-db-url "$ISSUE_407_PREDECESSOR_DB_URL" \
+  --candidate-db-url "$ISSUE_407_CANDIDATE_DB_URL" \
+  --expected-predecessor-system-id "$ISSUE_407_PREDECESSOR_SYSTEM_ID" \
+  --expected-candidate-system-id "$ISSUE_407_CANDIDATE_SYSTEM_ID" \
+  --expected-predecessor-project-id "$ISSUE_407_PREDECESSOR_PROJECT_ID" \
+  --expected-predecessor-container "$ISSUE_407_PREDECESSOR_CONTAINER" \
+  --expected-candidate-project-id "$ISSUE_407_CANDIDATE_PROJECT_ID" \
+  --expected-candidate-container "$ISSUE_407_CANDIDATE_CONTAINER" \
+  --execution-mode local-explicit-isolated \
+  --api-url "$ISSUE_407_API_URL"
+```
+
+Set `ISSUE407_ANON_KEY` and `ISSUE407_SERVICE_KEY` in the process environment;
+the service value must be the local modern `sb_secret_...` key, not a legacy
+disabled service-role JWT. This keeps keys and database passwords out of
+subprocess argv. Omit the API URL and both key variables together for a
+database-only run; partial HTTP configuration fails closed.
+For `local-explicit-isolated`, the candidate project ID must use a dedicated
+`database-engine-407-*` namespace; both database targets and the optional API
+must resolve to the explicitly named Supabase containers and ports.
+
+The selected top-level pgTAP count is derived by the manifest runner rather
+than duplicated here; 19 metadata-bearing exclusions remain explicit. The list evidence records the exact commit,
 migration head, CLI version, manifest/file-list hashes, and whether the worktree
 was dirty, so local development output cannot masquerade as clean exact-commit
 evidence. `lca-private-expand` additionally requires the
