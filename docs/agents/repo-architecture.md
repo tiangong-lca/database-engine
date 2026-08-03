@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: a29f26a9eb0a6c629ae34e187c6fce4a0c215b1d
-lastReviewedNote: "Reviewed for Issue #390: the physical qualification v1 plan is a local, non-authorizing proof scaffold and does not alter schema or generated-workspace ownership."
+lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
+lastReviewedNote: "Reviewed for Issue #405: exact-head public inventory v2 is a read-only contract surface and does not alter schema or generated-workspace ownership."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -113,10 +113,17 @@ and owner review in Next #753 and database-engine #358.
 The versioned `schema_boundary_phase.v1` contract keeps that transition explicit. In Expand, the nine core tables remain in `public`, each other inventoried public table must have a non-public target, and reviewed compatibility relations may remain. Contract is a separate approval that enforces exactly the nine tables and no application views, materialized views, functions, or procedures in `public`.
 
 The stable public-boundary inventory lives under
-`supabase/tests/contracts/public_object_*`. It imports the workspace #533
-baseline, reconciles the #337 delta with the current `dev` head, and is regenerated
-from a live local catalog by `scripts/public_inventory_closure.py`. Generated
-dependency and consumer evidence belongs in that contract surface, not in
+`supabase/tests/contracts/public_object_*`. The unqualified inventory is the
+Issue #405 exact-head v2 artifact: 397 public application objects at
+`database-engine@c5356d2` / migration head `20260803090000`, partitioned exactly
+once as nine core + 37 predecessor residue + 117 Issue #357 + 230 Issue #358 +
+four explicit omissions. Its 388-entry identity-only Contract checklist records
+`physicalMoved`, `compatPresent`, `adapterOnly`, and `retired` separately and
+keeps every entry blocked. `scripts/public_inventory_exact_head.py --check` is
+offline; only explicit loopback `--refresh`/`--check-live` reads a database, and
+neither path emits DDL. The immutable #338 artifact remains in
+`public_object_inventory.genesis.*` for lineage consumers. Generated dependency
+and consumer evidence belongs in this contract surface, not in
 `supabase/workspace/**`.
 
 The stable `security_definer_audit.*` v1 contract derives from that inventory and

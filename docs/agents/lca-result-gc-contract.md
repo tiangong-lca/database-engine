@@ -21,8 +21,8 @@ checkPaths:
   - supabase/tests/20260802_issue_398_result_gc_contract.sql
   - scripts/test_issue_398_result_gc_runtime.py
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: a29f26a9eb0a6c629ae34e187c6fce4a0c215b1d
-lastReviewedNote: "Reviewed for Issue #390: the non-authorizing physical-move scaffold remains separate from GC runtime and joint-qualification authority."
+lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
+lastReviewedNote: "Reviewed for Issue #405: inventory refresh changes no GC runtime, rollout, or deletion authority; claims and physical Contract remain separately gated."
 related:
   - ../../AGENTS.md
   - ./repo-validation.md

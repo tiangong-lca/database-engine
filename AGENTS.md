@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: a29f26a9eb0a6c629ae34e187c6fce4a0c215b1d
-lastReviewedNote: "Reviewed for Issue #390: the local-only qualification scaffold adds no DDL, Hosted mutation, production mutation, or branch/ownership change."
+lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
+lastReviewedNote: "Reviewed for Issue #405: exact-head inventory regeneration is read-only, Contract remains unauthorized, and dev-first/root-integration boundaries remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -125,7 +125,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - production-volume administrative backfills must fit the platform statement timeout or use a bounded session override that is restored immediately after the statement; Preview row counts alone are not sufficient volume proof
 - root workspace proof belongs later in `lca-workspace`
 - generated workspace helpers are low-risk to inspect with `python scripts/<name>.py --help`
-- public-boundary inventory changes must run `python scripts/public_inventory_closure.py --check`; the checked contract owns immutable workspace/database provenance, exact object mapping, catalog dependencies, ACL/RLS/default-privilege evidence, SCC-aware migration order, exact-SHA consumer evidence, and explicit Contract residue; generation must never derive provenance from a moving remote ref
+- public-boundary inventory changes must run offline `python scripts/public_inventory_exact_head.py --check`; Issue #405 binds exact `dev` SHA `c5356d2`, the SHA-256 of every migration blob through head `20260803090000`, the live database's exact applied-version set, the 397-object ledger, the exactly-once 388-residue partition, and a blocked identity-only Contract DROP checklist. Live regeneration and comparison require explicit loopback URLs; these commands never emit DDL and can never set `contractReady=true`. The immutable #338 baseline remains under `public_object_inventory.genesis.*` for historical lineage.
 - schema-boundary changes must run `python scripts/schema_boundary_phase.py`; Expand requires the nine core public tables plus inventory-backed non-public targets, while only a separately reviewed Contract phase may enforce zero additional public application relations
 - SECURITY DEFINER evidence changes must run artifact-only `python scripts/security_definer_audit.py --check` and live `python scripts/security_definer_audit_v2.py --check`; v1 remains the immutable 241-public-routine genesis baseline (`--check-live-baseline` is genesis-only), while v2 preserves each original lineage across `public`, `api`, `private`, `util`, and `archive`, claims every governed SECURITY DEFINER endpoint exactly once as an active canonical, requires compatibility aliases to remain SECURITY INVOKER, and retains receipt-bound births/retirements; both must leave Issue #352 blocked and `contractReady=false`
 

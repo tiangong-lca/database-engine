@@ -159,6 +159,8 @@ routing:
       paths:
         - scripts/public_inventory_closure.py
         - scripts/test_public_inventory_closure.py
+        - scripts/public_inventory_exact_head.py
+        - scripts/test_public_inventory_exact_head.py
         - supabase/tests/20260801_public_inventory_dependency_closure.sql
         - supabase/tests/contracts/public_object_*
         - docs/agents/repo-validation.md

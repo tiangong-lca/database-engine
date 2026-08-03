@@ -19,7 +19,11 @@ import public_inventory_closure as inventory
 
 class PublicInventoryClosureTest(unittest.TestCase):
     def setUp(self) -> None:
-        self.committed = json.loads(inventory.OUT.read_text(encoding="utf-8"))
+        self.committed = json.loads(
+            (inventory.CONTRACT_DIR / "public_object_inventory.genesis.json").read_text(
+                encoding="utf-8"
+            )
+        )
 
     def test_target_normalization_is_fail_safe(self) -> None:
         row = {"object_key": "public.old", "object_type": "table", "object_name": "old", "candidate_target": "private_or_retire"}
@@ -187,7 +191,7 @@ class PublicInventoryClosureTest(unittest.TestCase):
         runner = (inventory.ROOT / "scripts/run_database_contract.py").read_text(encoding="utf-8")
         self.assertIn('"scripts/public_inventory_closure.py", "--check"', runner)
 
-    def test_frozen_v1_check_does_not_read_transition_catalog(self) -> None:
+    def test_current_check_does_not_read_transition_catalog(self) -> None:
         with mock.patch.object(inventory, "load_catalog", side_effect=AssertionError("must not query live")):
             self.assertEqual(
                 inventory.check_frozen_baseline(),

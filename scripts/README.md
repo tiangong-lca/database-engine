@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: a29f26a9eb0a6c629ae34e187c6fce4a0c215b1d
-lastReviewedNote: "Reviewed for Issue #390: physical qualification v1 permits only offline checks and loopback read-only baseline capture; destructive execution remains disabled."
+lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
+lastReviewedNote: "Reviewed for Issue #405: exact-head inventory refresh and comparison require explicit loopback URLs, emit no DDL, and cannot authorize Contract."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -464,35 +464,43 @@ Run Data API proof separately against the matching explicit REST URL/keys.
 
 ### `public_inventory_closure.py`
 
-Refresh consumer evidence from the exact commits pinned in the checked-in
-consumer manifest without switching those repositories:
+`public_inventory_closure.py --check` dispatches to the current Issue #405
+offline exact-head verifier. The immutable Issue #338 generator and provenance
+helpers remain available for genesis lineage and exact-SHA consumer evidence:
 
 ```bash
 python scripts/public_inventory_closure.py --scan-consumers <lca-workspace-root>
 python scripts/public_inventory_closure.py --verify-provenance <lca-workspace-root>
 ```
 
-After a local reset, write or verify the deterministic database contract:
+Verify current committed bytes without a database, or explicitly compare a
+loopback exact-head catalog:
 
 ```bash
-python scripts/public_inventory_closure.py --write
 python scripts/public_inventory_closure.py --check
-python -m unittest scripts/test_public_inventory_closure.py
+python scripts/public_inventory_exact_head.py --check
+python scripts/public_inventory_exact_head.py --check-live --db-url postgresql://...
+python scripts/public_inventory_exact_head.py --compare-catalogs \
+  --db-url postgresql://... --other-db-url postgresql://...
+python -m unittest scripts.test_public_inventory_exact_head scripts.test_public_inventory_closure
 ```
 
-`contractReady=false` is expected while the emitted residue still contains
-dynamic-SQL or runtime/owner-confirmation blockers. A missing mapping, invalid
-target, non-exact repository SHA, duplicate key, or live/ledger count drift is
-always a hard failure; an unknown consumer is retained as an explicit blocker
-and is never silently converted to `retire`.
+Only an explicit disposable loopback database may regenerate current files:
 
-The source block separates the reviewed workspace baseline, its exact
-`database-engine` gitlink, and historical review/source/merge-base lineage from
-`databaseSchemaSha`, the sole migration/catalog replay input. The prior #338
-artifact hash is lineage, not the current artifact hash. `--verify-provenance`
-replays those relationships
-without consulting a moving remote. `--check` first verifies canonical JSON
-bytes and the committed SHA-256, then performs committed-vs-generated comparison.
+```bash
+python scripts/public_inventory_exact_head.py --refresh --db-url postgresql://...
+```
+
+The v2 artifact binds exact source `c5356d2`, migration head
+`20260803090000`, 397 live identities, partition `9+37+117+230+4`, and the full
+388-residue Contract DROP identity checklist. The checklist is non-executable
+inventory: every entry remains `blocked`, no migration is produced, and
+`contractReady=false` is invariant. Missing, unknown, duplicate, count, schema,
+hash, counterpart, or live-ledger drift is a hard failure.
+
+The prior #338 artifact and hash remain immutable in
+`public_object_inventory.genesis.*`; security lineage continues to reference
+that genesis instead of treating the v2 refresh as a historical rewrite.
 
 ### `security_definer_audit.py`
 
