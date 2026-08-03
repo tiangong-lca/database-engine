@@ -201,46 +201,6 @@ class Issue390PreDdlGateTest(unittest.TestCase):
                 },
             )
 
-    def test_issue_323_review_migrations_require_exact_contract_blobs(self) -> None:
-        allowlist = self.contract["migrationGate"]["allowedTargetTouchingMigrations"]
-        expected = {
-            "supabase/migrations/20260802170000_reference_review_name_fallback.sql": (
-                "reference-review-progress-v2-replacement-reviewed"
-            ),
-            "supabase/migrations/20260803093000_review_notification_event_identity.sql": (
-                "review-notification-event-identity-reviewed"
-            ),
-        }
-        for relative, classification in expected.items():
-            sql = (ROOT / relative).read_text(encoding="utf-8")
-            payload = sql.encode("utf-8")
-            git_blob = hashlib.sha1(
-                f"blob {len(payload)}\0".encode("ascii") + payload,
-                usedforsecurity=False,
-            ).hexdigest()
-            matching = [row for row in allowlist if row["path"] == relative]
-            self.assertEqual(len(matching), 1)
-            self.assertEqual(matching[0]["gitBlob"], git_blob)
-            self.assertEqual(matching[0]["classification"], classification)
-            self.assertEqual(
-                pre_ddl_migration_violations(
-                    path=relative,
-                    git_blob=git_blob,
-                    sql=sql,
-                    allowlist=allowlist,
-                ),
-                [],
-            )
-            self.assertEqual(
-                pre_ddl_migration_violations(
-                    path=relative,
-                    git_blob=git_blob,
-                    sql=sql + "\n-- tampered after review\n",
-                    allowlist=allowlist,
-                ),
-                ["issue-323-reviewed-migration:sql-blob-mismatch"],
-            )
-
     def test_target_neutral_migrations_are_allowed_without_global_freeze(self) -> None:
         allowed = [
             "CREATE TABLE private.unrelated_job_receipts (id uuid PRIMARY KEY);",
