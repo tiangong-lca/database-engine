@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: 4dbea4a0ee7102a07b68613628e56022a37a5cf0
-lastReviewedNote: "已为 Issue #395 复核：result facade 的前向替换不改变生成 workspace 的所有权、刷新语义或部署边界。"
+lastReviewedCommit: ae13637b48d24e24092dfc5392e1f5aa8c2ba22a
+lastReviewedNote: "已为 Issue #398 复核：additive result GC migration 与隔离 runtime probe 不改变生成 workspace 的所有权或刷新语义。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

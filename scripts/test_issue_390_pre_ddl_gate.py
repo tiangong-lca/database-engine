@@ -193,6 +193,7 @@ class Issue390PreDdlGateTest(unittest.TestCase):
                 row["classification"],
                 {
                     "additive-api-service-only-reviewed",
+                    "additive-disabled-result-gc-contract-reviewed",
                     "reconcile-v1-service-only-replacement-reviewed",
                 },
             )
@@ -1316,16 +1317,125 @@ class Issue390PreDdlGateTest(unittest.TestCase):
             )
             for name in baseline_relations
         }
-        self.assertEqual(catalog_relations, baseline_relations)
-        self.assertEqual(catalog_policies, baseline_policies)
-        self.assertEqual(catalog_indexes, baseline_indexes)
+        expected_relations = dict(baseline_relations)
+        for relation_name in (
+            "lca_latest_all_unit_results",
+            "lca_result_cache",
+        ):
+            baseline_relation = baseline_relations[relation_name]
+            expected_relations[relation_name] = {
+                **baseline_relation,
+                "acl": baseline_relation["acl"][:-1]
+                + ",lca_result_gc_executor=r/postgres}",
+            }
+        baseline_result = baseline_relations["lca_results"]
+        expected_relations["lca_results"] = {
+            **baseline_result,
+            "acl": baseline_result["acl"][:-1]
+            + ",lca_result_gc_executor=rd/postgres}",
+            "columnAcl": [{
+                "column": "retention_partition_key",
+                "grantable": False,
+                "grantee": "lca_result_gc_executor",
+                "grantor": "postgres",
+                "privilege": "UPDATE",
+            }],
+        }
+        expected_policies = dict(baseline_policies)
+        for relation_name, policy_name in (
+            (
+                "lca_latest_all_unit_results",
+                "lca_latest_all_unit_results_gc_executor_select",
+            ),
+            ("lca_result_cache", "lca_result_cache_gc_executor_select"),
+        ):
+            expected_policies[relation_name] = sorted(
+                [
+                    *baseline_policies[relation_name],
+                    {
+                        "cmd": "SELECT",
+                        "permissive": "PERMISSIVE",
+                        "policyname": policy_name,
+                        "qual": "true",
+                        "roles": ["lca_result_gc_executor"],
+                        "schemaname": "public",
+                        "tablename": relation_name,
+                        "with_check": None,
+                    },
+                ],
+                key=lambda row: row["policyname"],
+            )
+        expected_policies["lca_results"] = sorted(
+            [
+                *baseline_policies["lca_results"],
+                {
+                    "cmd": "DELETE",
+                    "permissive": "PERMISSIVE",
+                    "policyname": "lca_results_gc_executor_delete",
+                    "qual": "true",
+                    "roles": ["lca_result_gc_executor"],
+                    "schemaname": "public",
+                    "tablename": "lca_results",
+                    "with_check": None,
+                },
+                {
+                    "cmd": "SELECT",
+                    "permissive": "PERMISSIVE",
+                    "policyname": "lca_results_gc_executor_select",
+                    "qual": "true",
+                    "roles": ["lca_result_gc_executor"],
+                    "schemaname": "public",
+                    "tablename": "lca_results",
+                    "with_check": None,
+                },
+                {
+                    "cmd": "UPDATE",
+                    "permissive": "PERMISSIVE",
+                    "policyname": "lca_results_gc_executor_update",
+                    "qual": "true",
+                    "roles": ["lca_result_gc_executor"],
+                    "schemaname": "public",
+                    "tablename": "lca_results",
+                    "with_check": "true",
+                },
+            ],
+            key=lambda row: row["policyname"],
+        )
+        expected_indexes = dict(baseline_indexes)
+        expected_indexes["lca_results"] = sorted(
+            [
+                *baseline_indexes["lca_results"],
+                {
+                    "indexdef": "CREATE UNIQUE INDEX lca_results_gc_locator_uidx "
+                    "ON public.lca_results USING btree (artifact_url) WHERE "
+                    "((retention_partition_key IS NOT NULL) AND "
+                    "(artifact_url IS NOT NULL))",
+                    "indexname": "lca_results_gc_locator_uidx",
+                    "schemaname": "public",
+                    "tablename": "lca_results",
+                },
+                {
+                    "indexdef": "CREATE INDEX lca_results_gc_partition_created_idx "
+                    "ON public.lca_results USING btree (retention_partition_key, "
+                    "created_at DESC, id DESC) WHERE "
+                    "(retention_partition_key IS NOT NULL)",
+                    "indexname": "lca_results_gc_partition_created_idx",
+                    "schemaname": "public",
+                    "tablename": "lca_results",
+                },
+            ],
+            key=lambda row: row["indexname"],
+        )
+        self.assertEqual(catalog_relations, expected_relations)
+        self.assertEqual(catalog_policies, expected_policies)
+        self.assertEqual(catalog_indexes, expected_indexes)
 
         relations = evidence["relations"]
         self.assertEqual({row["name"] for row in relations}, set(catalog_relations))
         for row in relations:
             name = row["name"]
-            self.assertEqual(row["canonicalCatalog"], catalog_relations[name])
-            self.assertEqual(row["policies"], catalog_policies[name])
+            self.assertEqual(row["canonicalCatalog"], baseline_relations[name])
+            self.assertEqual(row["policies"], baseline_policies[name])
             self.assertEqual(row["hostedOwner"], "postgres")
             acl = row["canonicalCatalog"]["acl"]
             self.assertEqual(

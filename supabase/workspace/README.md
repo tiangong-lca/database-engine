@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: 4dbea4a0ee7102a07b68613628e56022a37a5cf0
-lastReviewedNote: "Reviewed for Issue #395: the forward-only result facade replacement does not change generated workspace ownership, refresh semantics, or deployment boundaries."
+lastReviewedCommit: ae13637b48d24e24092dfc5392e1f5aa8c2ba22a
+lastReviewedNote: "Reviewed for Issue #398: the additive result GC migration and isolated runtime probe do not change generated workspace ownership or refresh semantics."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

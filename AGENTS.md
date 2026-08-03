@@ -36,12 +36,13 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: 38e15b0274cc2f87c93acbab520c110c4b907361
-lastReviewedNote: "Reviewed for Issue #397: exact external Git-tree evidence remains repository-owned, hash-only, non-authorizing, local-first, and compatible with migration immutability and production-mutation boundaries."
+lastReviewedCommit: ae13637b48d24e24092dfc5392e1f5aa8c2ba22a
+lastReviewedNote: "Reviewed for Issue #398: additive result GC remains private, disabled by default, locally qualified, and does not authorize result-family physical DDL or production mutation."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
   - docs/agents/repo-architecture.md
+  - docs/agents/lca-result-gc-contract.md
   - docs/agents/supabase-branching.md
 ---
 

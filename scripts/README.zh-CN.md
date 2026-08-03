@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: 4dbea4a0ee7102a07b68613628e56022a37a5cf0
-lastReviewedNote: "已为 Issue #395 复核：result API runtime 同时验证 cancelled 到 failed 的并发收敛与两阶段重试，且不增加第九个 facade。"
+lastReviewedCommit: ae13637b48d24e24092dfc5392e1f5aa8c2ba22a
+lastReviewedNote: "已为 Issue #398 复核：破坏性 loopback runtime probe 覆盖真实角色 ACL、恢复状态、并发竞态与精确零残留。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -44,6 +44,14 @@ related:
 
 这类 runner 应在自己的 `README.md` 中保留 dry-run、apply 和 validate 示例。
 本地迁移输出和审计 JSONL 文件应写入 `_artifacts/`，该目录已被 Git 忽略。
+
+### `test_issue_398_result_gc_runtime.py`
+
+该脚本只对显式 loopback 数据库 URL 运行破坏性的 result-GC 真实登录角色与多会话验证。
+它强制要求 `--confirm-isolated-destructive-test`，创建唯一临时登录角色，覆盖
+renew/fail/takeover/finalize 与并发竞态，并精确清理、回读数据库和角色零残留。
+必须使用 `docs/agents/lca-result-gc-contract.md` 中固定的唯一 project ID 与端口，
+不得指向 linked 或持久化数据库。
 
 ## 脚本列表
 
