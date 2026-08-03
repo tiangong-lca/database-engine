@@ -187,11 +187,11 @@ select ok(
       and index_row.indexprs is null
       and index_row.indnkeyatts = 1
       and index_row.indnatts = 1
-      and index_row.indkey::smallint[] = array[
-        (select attnum from pg_attribute
-         where attrelid = 'private.lca_result_gc_operations'::regclass
-           and attname = 'live_result_id')
-      ]::smallint[]
+      and index_row.indkey[0] = (
+        select attnum from pg_attribute
+        where attrelid = 'private.lca_result_gc_operations'::regclass
+          and attname = 'live_result_id'
+      )
   ),
   'operations live-result FK has the exact valid single-column covering index'
 );
@@ -211,11 +211,11 @@ select ok(
       and index_row.indexprs is null
       and index_row.indnkeyatts = 1
       and index_row.indnatts = 1
-      and index_row.indkey::smallint[] = array[
-        (select attnum from pg_attribute
-         where attrelid = 'private.lca_result_gc_finalize_context'::regclass
-           and attname = 'operation_id')
-      ]::smallint[]
+      and index_row.indkey[0] = (
+        select attnum from pg_attribute
+        where attrelid = 'private.lca_result_gc_finalize_context'::regclass
+          and attname = 'operation_id'
+      )
   ),
   'finalize-context operation FK has the exact valid single-column covering index'
 );
