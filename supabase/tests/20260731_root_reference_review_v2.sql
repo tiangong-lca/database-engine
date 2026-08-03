@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(14);
+select plan(23);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password,
@@ -195,6 +195,175 @@ select throws_ok(
   'APPROVED_DATASET_IMMUTABLE',
   'published dataset business fields are immutable'
 );
+
+insert into public.contacts (
+  id, version, json, json_ordered, user_id, state_code, team_id,
+  rule_verification
+)
+values (
+  '39000000-0000-0000-0000-000000000002',
+  '01.00.000',
+  '{"contactDataSet":{"contactInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"en","#text":"Rejected Contact"}]}}}}',
+  '{"contactDataSet":{"contactInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"en","#text":"Rejected Contact"}]}}}}',
+  '19000000-0000-0000-0000-000000000001',
+  0,
+  '29000000-0000-0000-0000-000000000001',
+  true
+);
+
+select set_config(
+  'request.jwt.claim.sub',
+  '19000000-0000-0000-0000-000000000001',
+  true
+);
+
+create temporary table review_v2_reject_result as
+select public.cmd_review_submit_v2(
+  'contacts',
+  '39000000-0000-0000-0000-000000000002',
+  '01.00.000',
+  null,
+  '{}'::jsonb
+) as result;
+
+select set_config(
+  'request.jwt.claim.sub',
+  '19000000-0000-0000-0000-000000000003',
+  true
+);
+
+select private.review_notify_event_v1(
+  'root_entered_review',
+  (select id from public.reviews
+    where review_kind = 'root'
+      and data_id = '39000000-0000-0000-0000-000000000002'),
+  '19000000-0000-0000-0000-000000000001',
+  '19000000-0000-0000-0000-000000000003',
+  'contacts',
+  '39000000-0000-0000-0000-000000000002',
+  '01.00.000',
+  (select id from public.reviews
+    where review_kind = 'root'
+      and data_id = '39000000-0000-0000-0000-000000000002'),
+  1,
+  null
+);
+
+select ok((
+  public.cmd_review_finalize_reject(
+    (select id from public.reviews
+      where review_kind = 'root'
+        and data_id = '39000000-0000-0000-0000-000000000002'),
+    'notification identity regression',
+    '{}'::jsonb
+  )->>'ok'
+)::boolean, 'Review Admin rejection succeeds after an earlier review event');
+
+select is((
+  select state_code
+  from public.contacts
+  where id = '39000000-0000-0000-0000-000000000002'
+    and version = '01.00.000'
+), 0, 'successful rejection atomically restores the dataset to editable state 0');
+
+select is((
+  select count(*)::integer
+  from public.notifications
+  where recipient_user_id = '19000000-0000-0000-0000-000000000001'
+    and sender_user_id = '19000000-0000-0000-0000-000000000003'
+    and type = 'review_event'
+    and dataset_type = 'contacts'
+    and dataset_id = '39000000-0000-0000-0000-000000000002'
+    and dataset_version = '01.00.000'
+), 2, 'distinct review lifecycle events can share the legacy dataset identity');
+
+select private.review_notify_event_v1(
+  'root_rejected',
+  (select id from public.reviews
+    where review_kind = 'root'
+      and data_id = '39000000-0000-0000-0000-000000000002'),
+  '19000000-0000-0000-0000-000000000001',
+  '19000000-0000-0000-0000-000000000003',
+  'contacts',
+  '39000000-0000-0000-0000-000000000002',
+  '01.00.000',
+  (select id from public.reviews
+    where review_kind = 'root'
+      and data_id = '39000000-0000-0000-0000-000000000002'),
+  1,
+  'ADMIN_REJECTED'
+);
+
+select is((
+  select count(*)::integer
+  from public.notifications
+  where recipient_user_id = '19000000-0000-0000-0000-000000000001'
+    and sender_user_id = '19000000-0000-0000-0000-000000000003'
+    and type = 'review_event'
+    and dataset_type = 'contacts'
+    and dataset_id = '39000000-0000-0000-0000-000000000002'
+    and dataset_version = '01.00.000'
+), 2, 'replaying the same review event remains idempotent by event key');
+
+select matches((
+  select pg_get_expr(indexrel.indpred, indexrel.indrelid)
+  from pg_index as indexrel
+  join pg_class as indexclass on indexclass.oid = indexrel.indexrelid
+  join pg_namespace as namespace on namespace.oid = indexclass.relnamespace
+  where namespace.nspname = 'public'
+    and indexclass.relname = 'notifications_recipient_sender_type_dataset_uq'
+), 'event_key.*IS NULL',
+  'legacy notification identity applies only when event_key is absent');
+
+select ok((
+  public.cmd_notification_send_validation_issue(
+    '19000000-0000-0000-0000-000000000001',
+    'contact data set',
+    '39000000-0000-0000-0000-000000000001',
+    '01.00.000',
+    null,
+    array['firstIssue'],
+    array['contactInformation'],
+    1,
+    '{}'::jsonb
+  )->>'ok'
+)::boolean, 'legacy validation notification insert uses the partial identity');
+
+select ok((
+  public.cmd_notification_send_validation_issue(
+    '19000000-0000-0000-0000-000000000001',
+    'contact data set',
+    '39000000-0000-0000-0000-000000000001',
+    '01.00.000',
+    null,
+    array['secondIssue'],
+    array['contactInformation'],
+    2,
+    '{}'::jsonb
+  )->>'ok'
+)::boolean, 'legacy validation notification update infers the partial index');
+
+select is((
+  select count(*)::integer
+  from public.notifications
+  where recipient_user_id = '19000000-0000-0000-0000-000000000001'
+    and sender_user_id = '19000000-0000-0000-0000-000000000003'
+    and type = 'validation_issue'
+    and dataset_type = 'contact data set'
+    and dataset_id = '39000000-0000-0000-0000-000000000001'
+    and dataset_version = '01.00.000'
+), 1, 'legacy validation notification identity still keeps one row');
+
+select is((
+  select json->>'issueCount'
+  from public.notifications
+  where recipient_user_id = '19000000-0000-0000-0000-000000000001'
+    and sender_user_id = '19000000-0000-0000-0000-000000000003'
+    and type = 'validation_issue'
+    and dataset_type = 'contact data set'
+    and dataset_id = '39000000-0000-0000-0000-000000000001'
+    and dataset_version = '01.00.000'
+), '2', 'legacy validation notification upsert still updates its payload');
 
 select * from finish();
 rollback;
