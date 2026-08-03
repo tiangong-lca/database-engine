@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
-lastReviewedNote: "Reviewed for Issue #405: exact-head public inventory v2 is a read-only contract surface and does not alter schema or generated-workspace ownership."
+lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
+lastReviewedNote: "Reviewed for the PR #404 replay on Issue #405: Issue #323 reference-name fallback and per-review notification identity change no repository ownership, stable/generated path, or schema-workspace boundary."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -213,7 +213,7 @@ The current migration and test history clusters around these themes:
 1. access control and policy hardening
 2. review workflow command/query RPCs
 3. dataset lifecycle, protected one-shot private owner-draft FP/UG alias rewrites, durable process-atomic Step 3 public-flow identity rewrites, guarded flow/process derivative rebuild coordination with dynamic 1..50 and retained fixed 23+27 closure proofs, and publish/delete flows
-4. notification and membership query boundaries
+4. notification and membership query boundaries, including review-event identity that permits distinct review notifications for the same dataset version while keeping one review event idempotent
 5. lifecycle bundle cleanup, embedding compatibility, and measured process/flow plus foundation-dataset Semantic/Hybrid HNSW plan governance
 6. remote schema reconciliation and preview-branch validation
 7. review-submit gate persistence, Process-only Gate enforcement, Root/Reference Review v2 range history and shared exact-reference reviews, `worker_jobs` queue state, final submit-review assertions, and retired legacy job-table archives
@@ -379,7 +379,7 @@ Remote `dev` is the canonical refresh target. `--environment local` is a validat
 
 This repo owns database truth, but not every runtime consequence:
 
-- `database-engine` owns persisted review-submit gate runs, `worker_jobs` lifecycle schema/RPCs, review-submit job coordinator state, access checks, idempotent gate lookup, result recording, legacy lifecycle cutover cleanup, retired legacy job-table archives under `archive.worker_legacy_job_table_rows`, and the final submit-review assertion
+- `database-engine` owns persisted review-submit gate runs, `worker_jobs` lifecycle schema/RPCs, review-submit job coordinator state, access checks, idempotent gate lookup, result recording, legacy lifecycle cutover cleanup, retired legacy job-table archives under `archive.worker_legacy_job_table_rows`, and the final submit-review assertion. Root-grouped review queues preserve each reference review's name snapshot and resolve legacy gaps from the exact business row without changing review identity.
 - `database-engine` owns authoring-row review/publication lifecycle closure. It classifies references by JSON path and lifecycle role, keeps Lineage read-only, preserves RequiredSupport submit/approve linkage, requires `json_tg.submodels` and ILCD `processInstance` to agree on exact composition versions, and applies transaction-final locks and assertions before submit, approve, or direct-publish writes. A same-id/version Process/LifecycleModel pair participates only when both rows exist. Private and missing composition dependencies use the same non-disclosing error envelope; Worker numeric/source closure semantics remain outside this database role matrix.
 - `database-engine` owns durable LCI/LCIA release facts and final authorization: exact plan/artifact hashes, manager approval/publication, service-only artifact finalization, immutable pinning, and readback; it does not materialize TIDAS/ILCD bytes or place generated datasets in authoring tables
 - `database-engine` owns the protected one-shot owner-draft FP/UG alias execution contract. Authenticated callers may only run the guarded preflight, three ordered live gates, one admission, and read-only status polling; a nonce-bound service executor alone can invoke the private replay-capable whole-plan and per-dimension primitives. The sealed `dataset-alias-plan.v1` request keeps time followed by length-time, one plan hash and operation ID, `target_visibility=owner_draft`, 52 distinct action rows, 59 exchange mutations, 55 immutable alias audits, and atomic admission of all 23-flow plus 27-process derivative children. Preflight and execution independently enforce actor-owned `state_code=0`, unchanged support, embedded identity, canonical exchange hashes, no public/foreign/non-draft parent, exact closure, stable row locks, table-specific allowed paths, and exact factors; indexed `json_ordered` subtrees provide candidates, while legacy `json` is never evidence. A timeout or any primary, audit, or derivative-admission mismatch rolls back every business effect, and the sealed approval permits no redispatch or replay. Production owner-draft data execution is allowed only against a freshly frozen production state with exact human approval; Preview/Dev validate the toolchain rather than replaying that production mutation. Status polling defers the full 50-target causal proof until terminal evidence is available and returns an explicit read-only conflict if the parent ledger changes while evidence is assembled.

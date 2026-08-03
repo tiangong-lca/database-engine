@@ -21,8 +21,8 @@ checkPaths:
   - supabase/tests/20260802_issue_398_result_gc_contract.sql
   - scripts/test_issue_398_result_gc_runtime.py
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
-lastReviewedNote: "Reviewed for Issue #405: inventory refresh changes no GC runtime, rollout, or deletion authority; claims and physical Contract remain separately gated."
+lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
+lastReviewedNote: "Reviewed for the PR #404 replay on Issue #405: Issue #323 review-queue and notification changes do not alter GC runtime, rollout, deletion authority, claims, physical-Contract gates, or joint-qualification authority."
 related:
   - ../../AGENTS.md
   - ./repo-validation.md

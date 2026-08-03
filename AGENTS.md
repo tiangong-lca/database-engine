@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
-lastReviewedNote: "Reviewed for Issue #405: exact-head inventory regeneration is read-only, Contract remains unauthorized, and dev-first/root-integration boundaries remain unchanged."
+lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
+lastReviewedNote: "Reviewed for the PR #404 replay on Issue #405: Issue #323 reference-name fallback and review-event notification identity remain database-owned, pre-DDL hard-deny rules remain unchanged, inventory Contract remains unauthorized, and branch/ownership boundaries are unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
