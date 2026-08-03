@@ -1,0 +1,326 @@
+{
+  "schemaVersion": "database.lca-worker-runtime-external-callers.v1",
+  "issue": "tiangong-lca/database-engine#408",
+  "workerCapabilityRole": "lca_worker_runtime",
+  "contractRule": "Every row is a non-Worker caller or operator/test identity. It is evidence for an independent capability boundary and can never justify a grant or membership on lca_worker_runtime.",
+  "callers": [
+    {
+      "id": "edge-postgrest-service-runtime",
+      "identityOwner": "linancn/tiangong-lca-edge-functions",
+      "capabilityOwner": "Edge public/API service capability",
+      "transport": "Supabase PostgREST client using request JWT or service/secret key",
+      "runtimeRole": "service_role or authenticated request role",
+      "includedInWorkerManifest": false,
+      "exclusionReason": "Edge owns API transport and public RPC authorization; it is not a Worker database runtime.",
+      "dynamicSelectorDisposition": {
+        "classification": "closed-callsite-rpc-selector",
+        "status": "closed",
+        "detail": "Shared helpers accept an fn string, but exported call sites bind fixed public RPC names; the nine lca_worker_runtime private routines are absent from these exact blobs."
+      },
+      "hostedTelemetryRequired": true,
+      "hostedTelemetryReason": "Static source cannot exclude low-frequency or externally deployed PostgREST callers; public compatibility removal still requires exact-deployment telemetry and burn-in.",
+      "observedCapabilityReferences": [],
+      "provenance": [
+        {
+          "repository": "linancn/tiangong-lca-edge-functions",
+          "commit": "42b2d0bf0e4503353ca942958a564b179cfab0eb",
+          "path": "supabase/functions/_shared/supabase_client.ts",
+          "gitBlob": "4e5fbd57eabafdbf29d363b4c99f84bdc6fa73c2",
+          "classification": "service/request identity construction"
+        },
+        {
+          "repository": "linancn/tiangong-lca-edge-functions",
+          "commit": "42b2d0bf0e4503353ca942958a564b179cfab0eb",
+          "path": "supabase/functions/_shared/db_rpc/worker_jobs.ts",
+          "gitBlob": "9174fd01afdb9af2a5d5227bb52701b8e40630b9",
+          "classification": "dynamic helper with fixed exported RPC call sites"
+        }
+      ]
+    },
+    {
+      "id": "edge-direct-postgres-embedding-runtime",
+      "identityOwner": "linancn/tiangong-lca-edge-functions",
+      "capabilityOwner": "Edge embedding and PGMQ capability",
+      "transport": "Direct PostgreSQL through the Edge runtime SUPABASE_DB_URL",
+      "runtimeRole": "Supabase Edge built-in database identity",
+      "includedInWorkerManifest": false,
+      "exclusionReason": "Embedding and queue SQL require an Edge-owned capability and must not widen or inherit the Worker role.",
+      "dynamicSelectorDisposition": {
+        "classification": "payload-derived-schema-table-routine-column",
+        "status": "separately-tracked",
+        "detail": "schema, table, contentFunction and embeddingColumn come from queue payloads and PGMQ operations are direct SQL; the Edge owner must freeze the producer/payload allowlist independently."
+      },
+      "hostedTelemetryRequired": true,
+      "hostedTelemetryReason": "Exact deployed queue producers, payloads and Edge database identity must be observed before moved-object consumer closure.",
+      "observedCapabilityReferences": [],
+      "provenance": [
+        {
+          "repository": "linancn/tiangong-lca-edge-functions",
+          "commit": "42b2d0bf0e4503353ca942958a564b179cfab0eb",
+          "path": "supabase/functions/embedding/index.ts",
+          "gitBlob": "35ae518d8ecb4b19e935d281f440cfb585a5bafd",
+          "classification": "dynamic direct PostgreSQL and PGMQ consumer"
+        },
+        {
+          "repository": "linancn/tiangong-lca-edge-functions",
+          "commit": "42b2d0bf0e4503353ca942958a564b179cfab0eb",
+          "path": "supabase/functions/embedding_ft/index.ts",
+          "gitBlob": "8782180a4fa14699476c0e556bab83673f088410",
+          "classification": "dynamic direct PostgreSQL and retrying PGMQ consumer"
+        }
+      ]
+    },
+    {
+      "id": "release-actor-public-cli",
+      "identityOwner": "chukeaa/tiangong-lca-release",
+      "capabilityOwner": "Release data_product_manager actor capability",
+      "transport": "Actor-scoped tiangong-lca public API/CLI with publishable key",
+      "runtimeRole": "authenticated data_product_manager actor",
+      "includedInWorkerManifest": false,
+      "exclusionReason": "Release forbids service credentials and direct SQL; Edge and Database authorize its public actor requests.",
+      "dynamicSelectorDisposition": {
+        "classification": "no-direct-database-selector",
+        "status": "not-applicable",
+        "detail": "The exact source delegates remote actions to the public CLI and contains no direct PostgreSQL or private Worker routine selector."
+      },
+      "hostedTelemetryRequired": false,
+      "hostedTelemetryReason": "No Worker-role or direct-database claim is derived from Release; its own public API qualification remains separately owned.",
+      "observedCapabilityReferences": [],
+      "provenance": [
+        {
+          "repository": "chukeaa/tiangong-lca-release",
+          "commit": "3d1bc4edd49e62cfb8518248e096b561a2be65d2",
+          "path": "README.md",
+          "gitBlob": "d6b49882ea3cc918ed4f1126624bbc51e427b228",
+          "classification": "credential and direct-SQL prohibition"
+        },
+        {
+          "repository": "chukeaa/tiangong-lca-release",
+          "commit": "3d1bc4edd49e62cfb8518248e096b561a2be65d2",
+          "path": "src/target/profile.ts",
+          "gitBlob": "3c0b46748a757eec21a926a00ca7813fdb567dd0",
+          "classification": "actor/public target binding"
+        },
+        {
+          "repository": "chukeaa/tiangong-lca-release",
+          "commit": "3d1bc4edd49e62cfb8518248e096b561a2be65d2",
+          "path": "src/tools/external.ts",
+          "gitBlob": "90b709afacab064e0e56419c4e36535a2976c6ea",
+          "classification": "public CLI execution boundary"
+        }
+      ]
+    },
+    {
+      "id": "utilities-service-operator-runtime",
+      "identityOwner": "tiangong-lca/utilities",
+      "capabilityOwner": "Utilities service/operator database contract",
+      "transport": "Direct PostgreSQL using profile-resolved api/private routines and relations",
+      "runtimeRole": "service_role-compatible operator connection",
+      "includedInWorkerManifest": false,
+      "exclusionReason": "Utilities owns low-frequency investigation/recompute capabilities and explicitly disables result-GC claims; it is not Worker runtime.",
+      "dynamicSelectorDisposition": {
+        "classification": "profile-and-closed-routine-allowlist",
+        "status": "closed",
+        "detail": "Schema, relation and routine identifiers are produced only from versioned closed constants; runtime preflight validates only the requested Utilities capability."
+      },
+      "hostedTelemetryRequired": true,
+      "hostedTelemetryReason": "Low-frequency operator execution and active rollout profile must be bound to exact hosted receipts before compatibility removal.",
+      "observedCapabilityReferences": [],
+      "provenance": [
+        {
+          "repository": "tiangong-lca/utilities",
+          "commit": "aede60d66891213c216325d915f6224d41bae93e",
+          "path": "contracts/database-schema-consumer.v1.json",
+          "gitBlob": "8f7ee0aa18c510203ad084b7c854cf297c2363e0",
+          "classification": "versioned service/operator capability and gcClaims-disabled contract"
+        },
+        {
+          "repository": "tiangong-lca/utilities",
+          "commit": "aede60d66891213c216325d915f6224d41bae93e",
+          "path": "src/lcia_auditor/database_contract.py",
+          "gitBlob": "30e1a723a6427a98c91a9247c79a2dc3c8bbbb0c",
+          "classification": "closed dynamic identifier and capability preflight"
+        },
+        {
+          "repository": "tiangong-lca/utilities",
+          "commit": "aede60d66891213c216325d915f6224d41bae93e",
+          "path": "src/lcia_auditor/workflow_cli.py",
+          "gitBlob": "bc857195cdfb929e86424236b891137c1ae7094e",
+          "classification": "direct PostgreSQL polling and recompute consumer"
+        }
+      ]
+    },
+    {
+      "id": "utilities-manual-investigation-runbook",
+      "identityOwner": "tiangong-lca/utilities",
+      "capabilityOwner": "Utilities manual investigation-read operator capability",
+      "transport": "Operator-selected psql/direct PostgreSQL repeatable-read transaction",
+      "runtimeRole": "operator-selected read identity",
+      "includedInWorkerManifest": false,
+      "exclusionReason": "Manual investigation SQL bypasses runtime preflight and therefore requires a separate operator capability, never Worker membership.",
+      "dynamicSelectorDisposition": {
+        "classification": "profile-selected-manual-sql-block",
+        "status": "closed",
+        "detail": "The runbook provides complete SQL blocks for exact rollout profiles and forbids mixing them; operator execution remains separately authorized."
+      },
+      "hostedTelemetryRequired": true,
+      "hostedTelemetryReason": "Manual low-frequency use cannot be closed by static scan and needs owner confirmation plus hosted audit evidence before compatibility removal.",
+      "observedCapabilityReferences": [],
+      "provenance": [
+        {
+          "repository": "tiangong-lca/utilities",
+          "commit": "aede60d66891213c216325d915f6224d41bae93e",
+          "path": "runbooks/lcia-result-anomaly-analysis.md",
+          "gitBlob": "6f2f9b0f39eb896bf69f00ab11d997599b5c05e2",
+          "classification": "profile-specific manual SQL consumer"
+        }
+      ]
+    },
+    {
+      "id": "workspace-worker-identity-operator",
+      "identityOwner": "tiangong-lca/workspace",
+      "capabilityOwner": "Workspace deployment identity lifecycle operator",
+      "transport": "Admin PostgreSQL plus pinned SSH/systemd rollout; candidate family URL is verified separately",
+      "runtimeRole": "workspace deployment admin identity",
+      "includedInWorkerManifest": false,
+      "exclusionReason": "The operator provisions and verifies a Worker-owned LOGIN but is not itself a Worker runtime SQL consumer.",
+      "dynamicSelectorDisposition": {
+        "classification": "exact-versioned-role-and-routine-census",
+        "status": "closed",
+        "detail": "The operator freezes PG17 membership options, exact private routine identities and deployment units; observed role references are lifecycle evidence only."
+      },
+      "hostedTelemetryRequired": false,
+      "hostedTelemetryReason": "This identity is qualified by exact state/receipt and readback rather than consumer telemetry; hosted Worker cutover evidence is a separate gate.",
+      "observedCapabilityReferences": ["lca_worker_runtime"],
+      "provenance": [
+        {
+          "repository": "tiangong-lca/workspace",
+          "commit": "c69ef1615a0555352c1c183d6732b8b98f33761d",
+          "path": "workspace_ops/worker/identity.py",
+          "gitBlob": "4dbddf3826f0b66676777a3fe8549fa2da4cb501",
+          "classification": "role/login lifecycle and exact runtime readback"
+        },
+        {
+          "repository": "tiangong-lca/workspace",
+          "commit": "c69ef1615a0555352c1c183d6732b8b98f33761d",
+          "path": "workspace_ops/worker/README.md",
+          "gitBlob": "43524e9793ad9c9b50b2fa39c1e3ce31b5deff22",
+          "classification": "operator boundary and rollout state machine"
+        },
+        {
+          "repository": "tiangong-lca/workspace",
+          "commit": "c69ef1615a0555352c1c183d6732b8b98f33761d",
+          "path": "workspace_ops/cli.py",
+          "gitBlob": "0b3c5bc88f31c1fd74d388615a3807523f841959",
+          "classification": "operator command entrypoint"
+        }
+      ]
+    },
+    {
+      "id": "workspace-manual-database-runbooks",
+      "identityOwner": "tiangong-lca/workspace",
+      "capabilityOwner": "Workspace diagnostic/operator capability",
+      "transport": "Operator-selected psql connection and documented SQL templates",
+      "runtimeRole": "operator-selected database identity",
+      "includedInWorkerManifest": false,
+      "exclusionReason": "Workspace runbooks include diagnostic and historical SQL, including non-core writes, and must migrate under an operator contract rather than widen Worker permissions.",
+      "dynamicSelectorDisposition": {
+        "classification": "operator-template-with-profile-migration-required",
+        "status": "separately-tracked",
+        "detail": "SQL is copied and parameterized by operators; active, historical and retired blocks require explicit classification during the full schema Contract."
+      },
+      "hostedTelemetryRequired": true,
+      "hostedTelemetryReason": "Documentation usage is low-frequency and cannot be disproved by repository scan; owner confirmation and hosted audit evidence are required.",
+      "observedCapabilityReferences": [],
+      "provenance": [
+        {
+          "repository": "tiangong-lca/workspace",
+          "commit": "c69ef1615a0555352c1c183d6732b8b98f33761d",
+          "path": "_docs/runbooks/lca-compute-task-triage.md",
+          "gitBlob": "046c63c4ad29e2d1e0f29e0ec744511e49e91072",
+          "classification": "active manual diagnostic SQL"
+        },
+        {
+          "repository": "tiangong-lca/workspace",
+          "commit": "c69ef1615a0555352c1c183d6732b8b98f33761d",
+          "path": "_docs/reference/lca-matrix-supply-chain-data-quality-analysis.md",
+          "gitBlob": "110febe4f116e0eede39dd8a1f58e493d635b4d6",
+          "classification": "reference SQL with direct non-core reads and writes"
+        }
+      ]
+    },
+    {
+      "id": "database-pgtap-capability-fixtures",
+      "identityOwner": "tiangong-lca/database-engine",
+      "capabilityOwner": "Database disposable pgTAP contract fixtures",
+      "transport": "Local disposable PostgreSQL test transaction",
+      "runtimeRole": "postgres-owned pgTAP fixture session",
+      "includedInWorkerManifest": false,
+      "exclusionReason": "Database tests inspect and temporarily grant the Worker capability only as test fixture evidence, never as a deployed non-Worker runtime.",
+      "dynamicSelectorDisposition": {
+        "classification": "fixed-test-sql-and-name-filter",
+        "status": "test-only",
+        "detail": "The pgTAP source uses fixed routine names and rollback-scoped role grants; its caller identity is disposable test evidence."
+      },
+      "hostedTelemetryRequired": false,
+      "hostedTelemetryReason": "Test identities are proven by disposable local/preview isolation and are excluded from hosted runtime consumer attribution.",
+      "observedCapabilityReferences": ["lca_worker_runtime"],
+      "provenance": [
+        {
+          "repository": "tiangong-lca/database-engine",
+          "commit": "269ef181e103bf57a7e15c6e82f5291005f33ded",
+          "path": "supabase/tests/20260802_issue_398_result_gc_contract.sql",
+          "gitBlob": "6ded3beb23fca7fbaa4f4e39b0fdd5f95a9ab6e0",
+          "classification": "seven-routine result-GC pgTAP fixture"
+        },
+        {
+          "repository": "tiangong-lca/database-engine",
+          "commit": "06ab3e6b017e732b15d1edd9c7ef8f4a35139187",
+          "path": "supabase/tests/20260803_issue_407_document_validation_evidence_expand.sql",
+          "gitBlob": "d0eb3e5ea5f4ffe52e53581b10e107bdcce699f1",
+          "classification": "open-pr-409-candidate: two-routine document-validation pgTAP fixture"
+        }
+      ]
+    },
+    {
+      "id": "database-python-runtime-capability-fixtures",
+      "identityOwner": "tiangong-lca/database-engine",
+      "capabilityOwner": "Database disposable runtime/security test harness",
+      "transport": "Direct PostgreSQL against a disposable PG17 candidate with run-owned temporary LOGINs",
+      "runtimeRole": "disposable database test admin and temporary LOGIN identities",
+      "includedInWorkerManifest": false,
+      "exclusionReason": "The Python harness creates negative and positive role fixtures solely for tests and cleans them; it is not a production caller.",
+      "dynamicSelectorDisposition": {
+        "classification": "generated-negative-role-and-catalog-mutations",
+        "status": "test-only",
+        "detail": "Role names and negative SQL are generated from run-owned fixtures while protected routine identities remain fixed and overload-aware."
+      },
+      "hostedTelemetryRequired": false,
+      "hostedTelemetryReason": "Disposable test mutations require exact target sentinels and cleanup, not production caller telemetry.",
+      "observedCapabilityReferences": ["lca_worker_runtime"],
+      "provenance": [
+        {
+          "repository": "tiangong-lca/database-engine",
+          "commit": "269ef181e103bf57a7e15c6e82f5291005f33ded",
+          "path": "scripts/test_issue_398_result_gc_runtime.py",
+          "gitBlob": "3bde5ba38f81cc8ed120778c46a26ecdfad69ac6",
+          "classification": "result-GC runtime role fixture"
+        },
+        {
+          "repository": "tiangong-lca/database-engine",
+          "commit": "06ab3e6b017e732b15d1edd9c7ef8f4a35139187",
+          "path": "scripts/test_issue_407_document_validation_evidence_runtime.py",
+          "gitBlob": "c19e5dce23447a2cf4ed1d95c170d42b539f971d",
+          "classification": "open-pr-409-candidate: document-validation runtime role fixture"
+        },
+        {
+          "repository": "tiangong-lca/database-engine",
+          "commit": "269ef181e103bf57a7e15c6e82f5291005f33ded",
+          "path": "scripts/issue_398_result_gc_semantic_gate.py",
+          "gitBlob": "e130e452b4bee6e5de900b3468fb9e7aba3c8ebf",
+          "classification": "fixed result-GC routine set semantic gate"
+        }
+      ]
+    }
+  ]
+}

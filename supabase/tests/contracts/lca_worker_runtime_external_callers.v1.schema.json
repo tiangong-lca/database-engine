@@ -1,0 +1,91 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "database.lca-worker-runtime-external-callers.v1",
+  "title": "Issue 408 non-Worker database caller registry",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "issue",
+    "workerCapabilityRole",
+    "contractRule",
+    "callers"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "database.lca-worker-runtime-external-callers.v1"},
+    "issue": {"const": "tiangong-lca/database-engine#408"},
+    "workerCapabilityRole": {"const": "lca_worker_runtime"},
+    "contractRule": {"type": "string", "minLength": 1},
+    "callers": {
+      "type": "array",
+      "minItems": 1,
+      "items": {"$ref": "#/$defs/caller"}
+    }
+  },
+  "$defs": {
+    "caller": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "identityOwner",
+        "capabilityOwner",
+        "transport",
+        "runtimeRole",
+        "includedInWorkerManifest",
+        "exclusionReason",
+        "dynamicSelectorDisposition",
+        "hostedTelemetryRequired",
+        "hostedTelemetryReason",
+        "observedCapabilityReferences",
+        "provenance"
+      ],
+      "properties": {
+        "id": {"type": "string", "minLength": 1},
+        "identityOwner": {"type": "string", "minLength": 1},
+        "capabilityOwner": {"type": "string", "minLength": 1},
+        "transport": {"type": "string", "minLength": 1},
+        "runtimeRole": {"type": "string", "minLength": 1},
+        "includedInWorkerManifest": {"const": false},
+        "exclusionReason": {"type": "string", "minLength": 1},
+        "dynamicSelectorDisposition": {"$ref": "#/$defs/dynamicSelectorDisposition"},
+        "hostedTelemetryRequired": {"type": "boolean"},
+        "hostedTelemetryReason": {"type": "string", "minLength": 1},
+        "observedCapabilityReferences": {
+          "type": "array",
+          "uniqueItems": true,
+          "items": {"type": "string", "minLength": 1}
+        },
+        "provenance": {
+          "type": "array",
+          "minItems": 1,
+          "items": {"$ref": "#/$defs/provenance"}
+        }
+      }
+    },
+    "dynamicSelectorDisposition": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["classification", "status", "detail"],
+      "properties": {
+        "classification": {"type": "string", "minLength": 1},
+        "status": {
+          "enum": ["closed", "separately-tracked", "not-applicable", "test-only"]
+        },
+        "detail": {"type": "string", "minLength": 1}
+      }
+    },
+    "provenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["repository", "commit", "path", "gitBlob", "classification"],
+      "properties": {
+        "repository": {"type": "string", "minLength": 1},
+        "commit": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "path": {"type": "string", "minLength": 1},
+        "gitBlob": {"type": "string", "pattern": "^[0-9a-f]{40}$"},
+        "classification": {"type": "string", "minLength": 1}
+      }
+    }
+  }
+}

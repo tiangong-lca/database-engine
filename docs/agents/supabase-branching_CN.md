@@ -22,8 +22,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-04
-lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
-lastReviewedNote: "已针对 Issue #407 Phase A 复核：双实例精确前置版本验证仅在本地或 CI 执行，不改变 dev-first Hosted 部署边界。"
+lastReviewedCommit: 06ab3e6b017e732b15d1edd9c7ef8f4a35139187
+lastReviewedNote: "已针对 Issues #407/#408 复核：双实例前置版本验证与公开 Worker 精确 provenance 仅在本地或 CI 执行；dev-first 目标、串行部署和 Hosted mutation 边界不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

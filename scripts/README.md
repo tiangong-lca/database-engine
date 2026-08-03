@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-04
-lastReviewedCommit: e1d467ce3d16ad2d09fed080a4a05e71736ca52e
-lastReviewedNote: "Reviewed for Issue #407 Phase A: exact-head inventory advances to migration 20260803163000; refresh remains loopback-only, emits no DDL, and cannot authorize Contract."
+lastReviewedCommit: 06ab3e6b017e732b15d1edd9c7ef8f4a35139187
+lastReviewedNote: "Reviewed for Issues #407/#408: exact-head inventory advances to migration 20260803163000 and the B0 permission/consumer/caller checkers remain loopback/read-only and non-authorizing."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -922,6 +922,28 @@ Run the offline control-flow and safety regressions with:
 ```bash
 python3 -m unittest scripts/test_scope_closure_provider_qualification.py
 ```
+
+## Issue #408 Worker runtime permission B0
+
+These three checkers are read-only and non-authorizing:
+
+```bash
+python scripts/issue_408_worker_runtime_permission.py --check
+ISSUE408_WORKER_REPO=<clean-exact-worker-checkout> \
+  python scripts/issue_408_worker_source_consumer.py --check
+ISSUE408_WORKSPACE_ROOT=<exact-workspace-root> \
+  python scripts/issue_408_external_caller_registry.py
+```
+
+The permission checker accepts only the exact seven- and nine-routine capability
+generations; runtime LOGIN membership belongs to a separate workspace deployment
+receipt. The source checker reads committed Worker blobs only. Its current artifact
+is explicitly an open-PR candidate and remains incomplete because runtime traces,
+unqualified SQL parsing, dynamic values, and non-runtime surfaces are unresolved.
+The external registry proves exact commit/path/blob provenance for callers that
+must never be included in `lca_worker_runtime`; its full replay requires the private
+Release checkout available in a controlled workspace. CI checks the exact public
+Worker candidate plus all closed JSON schemas, hashes, and mutation-negative cases.
 
 ## Local Docpact Push Gate
 

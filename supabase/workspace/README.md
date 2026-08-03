@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-04
-lastReviewedCommit: e1d467ce3d16ad2d09fed080a4a05e71736ca52e
-lastReviewedNote: "Reviewed for Issue #407 Phase A exact-head governance: generated remote-schema workspace ownership and refresh semantics remain unchanged."
+lastReviewedCommit: 06ab3e6b017e732b15d1edd9c7ef8f4a35139187
+lastReviewedNote: "Reviewed for Issues #407/#408: exact-head and Worker permission artifacts remain outside generated workspace paths; ownership and refresh semantics are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

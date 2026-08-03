@@ -21,8 +21,8 @@ checkPaths:
   - supabase/tests/20260802_issue_398_result_gc_contract.sql
   - scripts/test_issue_398_result_gc_runtime.py
 lastReviewedAt: 2026-08-04
-lastReviewedCommit: e1d467ce3d16ad2d09fed080a4a05e71736ca52e
-lastReviewedNote: "Reviewed for Issue #407 Phase A exact-head governance: document-validation routines do not change result-GC runtime, deletion authority, lineage, or Contract gates."
+lastReviewedCommit: 06ab3e6b017e732b15d1edd9c7ef8f4a35139187
+lastReviewedNote: "Reviewed for Issues #407/#408: document-validation adds two EXECUTE grants to the seven-routine GC generation without changing GC runtime, deletion authority, lineage, or Contract gates."
 related:
   - ../../AGENTS.md
   - ./repo-validation.md
@@ -98,6 +98,13 @@ unexpired, shared-locator, legacy, incomplete, actively referenced, and newest
 rows remain present.
 
 ## Roles and rollout
+
+Issue #408 records the seven `private.worker_lca_result_gc_*_v1` EXECUTE grants
+as the `pre407-seven` capability generation. The document-validation Expand adds
+exactly two unrelated private routines to the same capability role and yields
+`issue407-nine`. This versioned census does not grant result-GC table access,
+enable claims, or include deployment LOGIN membership; the latter requires a
+separate workspace identity receipt.
 
 Only a real login that is a member of `lca_worker_runtime` can execute the seven
 versioned routines. Those routines run as the dedicated NOLOGIN,

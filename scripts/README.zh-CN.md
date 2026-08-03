@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-04
-lastReviewedCommit: e1d467ce3d16ad2d09fed080a4a05e71736ca52e
-lastReviewedNote: "已为 Issue #407 Phase A 复核：精确头部 inventory 推进到 migration 20260803163000；破坏性双实例验证仍不授权 Hosted mutation。"
+lastReviewedCommit: 06ab3e6b017e732b15d1edd9c7ef8f4a35139187
+lastReviewedNote: "已为 Issues #407/#408 复核：精确头部 inventory 推进到 migration 20260803163000；B0 permission/consumer/caller checker 保持只读且不授权 Hosted mutation。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -717,6 +717,26 @@ scripts/verify_scope_closure_worker_aggregator.py \
 ```bash
 python3 -m unittest scripts/test_scope_closure_provider_qualification.py
 ```
+
+## Issue #408 Worker runtime permission B0
+
+以下三个 checker 均为只读、不可授权：
+
+```bash
+python scripts/issue_408_worker_runtime_permission.py --check
+ISSUE408_WORKER_REPO=<clean-exact-worker-checkout> \
+  python scripts/issue_408_worker_source_consumer.py --check
+ISSUE408_WORKSPACE_ROOT=<exact-workspace-root> \
+  python scripts/issue_408_external_caller_registry.py
+```
+
+permission checker 只接受精确的 7/9 routine capability generations；runtime
+LOGIN membership 必须由独立的 workspace deployment receipt 证明。source checker
+只读取已提交的 Worker Git blobs；当前 artifact 明确绑定 open PR candidate，并因
+runtime trace、unqualified SQL parser、dynamic values 与 non-runtime surfaces 未闭合而
+保持不完整。external registry 用精确 commit/path/blob 证明非 Worker caller 不得进入
+`lca_worker_runtime`；完整回放需要受控 workspace 中可访问的私有 Release checkout。
+CI 会校验公开 Worker candidate、递归封闭的 JSON schemas、hash 与 mutation-negative cases。
 
 ## Local Docpact Push Gate
 

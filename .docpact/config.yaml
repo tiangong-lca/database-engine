@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-04"
-lastReviewedCommit: "e1d467ce3d16ad2d09fed080a4a05e71736ca52e"
-lastReviewedNote: "Reviewed for Issue #407 Phase A: exact-head public inventory and privileged-routine lineage evidence remain within existing schema, scripts, tests, and documentation ownership."
+lastReviewedCommit: "06ab3e6b017e732b15d1edd9c7ef8f4a35139187"
+lastReviewedNote: "Reviewed for Issues #407/#408: exact-head Phase A evidence stays in existing ownership and B0 adds a direct route for non-authorizing Worker permission, consumer, caller, and rollout contracts."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -239,6 +239,22 @@ routing:
         - scripts/*worker_control_plane*.py
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
+    worker-runtime-permission:
+      paths:
+        - scripts/issue_408_worker_runtime_permission.py
+        - scripts/test_issue_408_worker_runtime_permission.py
+        - scripts/issue_408_worker_source_consumer.py
+        - scripts/test_issue_408_worker_source_consumer.py
+        - scripts/issue_408_external_caller_registry.py
+        - scripts/test_issue_408_external_caller_registry.py
+        - supabase/tests/contracts/lca_worker_runtime_*
+        - .github/workflows/database-validation.yml
+        - .github/workflows/supabase-dev.yml
+        - docs/agents/repo-validation.md
+        - docs/agents/repo-architecture.md
+        - docs/agents/lca-result-gc-contract.md
+        - scripts/README.md
+        - scripts/README.zh-CN.md
     branch-config:
       paths:
         - supabase/config.toml

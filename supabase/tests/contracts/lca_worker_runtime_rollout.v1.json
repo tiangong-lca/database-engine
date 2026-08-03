@@ -1,0 +1,28 @@
+{
+  "schemaVersion": "database.lca-worker-runtime-rollout.v1",
+  "issue": "tiangong-lca/database-engine#408",
+  "role": "lca_worker_runtime",
+  "strategy": "exact-old-or-new-only",
+  "old": {
+    "generation": "pre407-seven",
+    "databaseCommit": "269ef181e103bf57a7e15c6e82f5291005f33ded",
+    "migrationHead": "20260803090000",
+    "manifestSha256": "1abb179d9efd092876017ec90b18f69aa5e32d1892ce2daeb8c490e7305d087b"
+  },
+  "new": {
+    "generation": "issue407-nine",
+    "databaseCommit": "06ab3e6b017e732b15d1edd9c7ef8f4a35139187",
+    "migrationHead": "20260803163000",
+    "manifestSha256": "61aabd44b8854cfa72769a09faeae2d3bad0f5473f2e006a364112193b9b5325"
+  },
+  "acceptedManifestSha256": [
+    "1abb179d9efd092876017ec90b18f69aa5e32d1892ce2daeb8c490e7305d087b",
+    "61aabd44b8854cfa72769a09faeae2d3bad0f5473f2e006a364112193b9b5325"
+  ],
+  "supersetPolicy": "reject",
+  "candidateFull": {
+    "status": "blocked",
+    "manifestSha256": null,
+    "reason": "full Worker consumer and permission closure is not complete"
+  }
+}

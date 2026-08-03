@@ -1,0 +1,285 @@
+{
+  "schemaVersion": "database.lca-worker-runtime-permission.v1",
+  "issue": "tiangong-lca/database-engine#408",
+  "role": "lca_worker_runtime",
+  "policy": {
+    "comparison": "ordered-exact-equality",
+    "equalityScope": "capability-role-definition-and-object-privileges",
+    "missingEntry": "reject",
+    "extraEntry": "reject",
+    "signatureDrift": "reject",
+    "hashDrift": "reject",
+    "schemaWideFutureGrants": "forbidden",
+    "defaultPrivileges": "forbidden",
+    "runtimeLoginMemberships": "excluded-require-exact-deployment-receipt",
+    "roleAndCreatorEvidence": "exact-migration-self-guard-plus-hosted-receipt-required"
+  },
+  "generations": [
+    {
+      "generation": "pre407-seven",
+      "databaseCommit": "269ef181e103bf57a7e15c6e82f5291005f33ded",
+      "migrationHead": "20260803090000",
+      "role": "lca_worker_runtime",
+      "roleAttributes": {
+        "login": false,
+        "inherit": true,
+        "superuser": false,
+        "createDatabase": false,
+        "createRole": false,
+        "bypassRls": false,
+        "replication": false,
+        "roleConfig": null
+      },
+      "creatorMembershipEdges": [
+        {
+          "member": "postgres",
+          "role": "lca_worker_runtime",
+          "grantor": "supabase_admin",
+          "inherit": false,
+          "set": false,
+          "admin": true
+        }
+      ],
+      "runtimeLoginMembershipPolicy": {
+        "includedInManifest": false,
+        "requiredReceipt": "workspace-identity-run-exact-readback",
+        "memberClass": "deployment-owned-login",
+        "role": "lca_worker_runtime",
+        "inherit": true,
+        "set": false,
+        "admin": false
+      },
+      "schemaPrivileges": [
+        {
+          "schema": "private",
+          "usage": true,
+          "create": false
+        }
+      ],
+      "relationPrivileges": [],
+      "sequencePrivileges": [],
+      "routinePrivileges": [
+        {
+          "objectKey": "private.worker_lca_result_gc_attest_v1(p_result_id uuid)",
+          "schema": "private",
+          "name": "worker_lca_result_gc_attest_v1",
+          "identityArguments": "p_result_id uuid",
+          "objectOwner": "lca_result_gc_executor",
+          "privilege": "EXECUTE",
+          "grantor": "lca_result_gc_executor",
+          "grantable": false
+        },
+        {
+          "objectKey": "private.worker_lca_result_gc_claim_v1(p_worker_id text, p_limit integer, p_lease_seconds integer)",
+          "schema": "private",
+          "name": "worker_lca_result_gc_claim_v1",
+          "identityArguments": "p_worker_id text, p_limit integer, p_lease_seconds integer",
+          "objectOwner": "lca_result_gc_executor",
+          "privilege": "EXECUTE",
+          "grantor": "lca_result_gc_executor",
+          "grantable": false
+        },
+        {
+          "objectKey": "private.worker_lca_result_gc_fail_v1(p_operation_id uuid, p_claim_token uuid, p_error_code text)",
+          "schema": "private",
+          "name": "worker_lca_result_gc_fail_v1",
+          "identityArguments": "p_operation_id uuid, p_claim_token uuid, p_error_code text",
+          "objectOwner": "lca_result_gc_executor",
+          "privilege": "EXECUTE",
+          "grantor": "lca_result_gc_executor",
+          "grantable": false
+        },
+        {
+          "objectKey": "private.worker_lca_result_gc_fence_v1(p_operation_id uuid, p_claim_token uuid)",
+          "schema": "private",
+          "name": "worker_lca_result_gc_fence_v1",
+          "identityArguments": "p_operation_id uuid, p_claim_token uuid",
+          "objectOwner": "lca_result_gc_executor",
+          "privilege": "EXECUTE",
+          "grantor": "lca_result_gc_executor",
+          "grantable": false
+        },
+        {
+          "objectKey": "private.worker_lca_result_gc_finalize_v1(p_operation_id uuid, p_claim_token uuid, p_object_outcome text)",
+          "schema": "private",
+          "name": "worker_lca_result_gc_finalize_v1",
+          "identityArguments": "p_operation_id uuid, p_claim_token uuid, p_object_outcome text",
+          "objectOwner": "lca_result_gc_executor",
+          "privilege": "EXECUTE",
+          "grantor": "lca_result_gc_executor",
+          "grantable": false
+        },
+        {
+          "objectKey": "private.worker_lca_result_gc_preview_v1(p_limit integer)",
+          "schema": "private",
+          "name": "worker_lca_result_gc_preview_v1",
+          "identityArguments": "p_limit integer",
+          "objectOwner": "lca_result_gc_executor",
+          "privilege": "EXECUTE",
+          "grantor": "lca_result_gc_executor",
+          "grantable": false
+        },
+        {
+          "objectKey": "private.worker_lca_result_gc_renew_v1(p_operation_id uuid, p_claim_token uuid, p_lease_seconds integer)",
+          "schema": "private",
+          "name": "worker_lca_result_gc_renew_v1",
+          "identityArguments": "p_operation_id uuid, p_claim_token uuid, p_lease_seconds integer",
+          "objectOwner": "lca_result_gc_executor",
+          "privilege": "EXECUTE",
+          "grantor": "lca_result_gc_executor",
+          "grantable": false
+        }
+      ],
+      "counts": {
+        "schemaPrivilegeCount": 1,
+        "relationPrivilegeCount": 0,
+        "sequencePrivilegeCount": 0,
+        "routinePrivilegeCount": 7
+      },
+      "manifestSha256": "1abb179d9efd092876017ec90b18f69aa5e32d1892ce2daeb8c490e7305d087b"
+    },
+    {
+      "generation": "issue407-nine",
+      "databaseCommit": "06ab3e6b017e732b15d1edd9c7ef8f4a35139187",
+      "migrationHead": "20260803163000",
+      "role": "lca_worker_runtime",
+      "roleAttributes": {
+        "login": false,
+        "inherit": true,
+        "superuser": false,
+        "createDatabase": false,
+        "createRole": false,
+        "bypassRls": false,
+        "replication": false,
+        "roleConfig": null
+      },
+      "creatorMembershipEdges": [
+        {
+          "member": "postgres",
+          "role": "lca_worker_runtime",
+          "grantor": "supabase_admin",
+          "inherit": false,
+          "set": false,
+          "admin": true
+        }
+      ],
+      "runtimeLoginMembershipPolicy": {
+        "includedInManifest": false,
+        "requiredReceipt": "workspace-identity-run-exact-readback",
+        "memberClass": "deployment-owned-login",
+        "role": "lca_worker_runtime",
+        "inherit": true,
+        "set": false,
+        "admin": false
+      },
+      "schemaPrivileges": [
+        {
+          "schema": "private",
+          "usage": true,
+          "create": false
+        }
+      ],
+      "relationPrivileges": [],
+      "sequencePrivileges": [],
+      "routinePrivileges": [
+        {
+          "objectKey": "private.worker_lca_result_gc_attest_v1(p_result_id uuid)",
+          "schema": "private",
+          "name": "worker_lca_result_gc_attest_v1",
+          "identityArguments": "p_result_id uuid",
+          "objectOwner": "lca_result_gc_executor",
+          "privilege": "EXECUTE",
+          "grantor": "lca_result_gc_executor",
+          "grantable": false
+        },
+        {
+          "objectKey": "private.worker_lca_result_gc_claim_v1(p_worker_id text, p_limit integer, p_lease_seconds integer)",
+          "schema": "private",
+          "name": "worker_lca_result_gc_claim_v1",
+          "identityArguments": "p_worker_id text, p_limit integer, p_lease_seconds integer",
+          "objectOwner": "lca_result_gc_executor",
+          "privilege": "EXECUTE",
+          "grantor": "lca_result_gc_executor",
+          "grantable": false
+        },
+        {
+          "objectKey": "private.worker_lca_result_gc_fail_v1(p_operation_id uuid, p_claim_token uuid, p_error_code text)",
+          "schema": "private",
+          "name": "worker_lca_result_gc_fail_v1",
+          "identityArguments": "p_operation_id uuid, p_claim_token uuid, p_error_code text",
+          "objectOwner": "lca_result_gc_executor",
+          "privilege": "EXECUTE",
+          "grantor": "lca_result_gc_executor",
+          "grantable": false
+        },
+        {
+          "objectKey": "private.worker_lca_result_gc_fence_v1(p_operation_id uuid, p_claim_token uuid)",
+          "schema": "private",
+          "name": "worker_lca_result_gc_fence_v1",
+          "identityArguments": "p_operation_id uuid, p_claim_token uuid",
+          "objectOwner": "lca_result_gc_executor",
+          "privilege": "EXECUTE",
+          "grantor": "lca_result_gc_executor",
+          "grantable": false
+        },
+        {
+          "objectKey": "private.worker_lca_result_gc_finalize_v1(p_operation_id uuid, p_claim_token uuid, p_object_outcome text)",
+          "schema": "private",
+          "name": "worker_lca_result_gc_finalize_v1",
+          "identityArguments": "p_operation_id uuid, p_claim_token uuid, p_object_outcome text",
+          "objectOwner": "lca_result_gc_executor",
+          "privilege": "EXECUTE",
+          "grantor": "lca_result_gc_executor",
+          "grantable": false
+        },
+        {
+          "objectKey": "private.worker_lca_result_gc_preview_v1(p_limit integer)",
+          "schema": "private",
+          "name": "worker_lca_result_gc_preview_v1",
+          "identityArguments": "p_limit integer",
+          "objectOwner": "lca_result_gc_executor",
+          "privilege": "EXECUTE",
+          "grantor": "lca_result_gc_executor",
+          "grantable": false
+        },
+        {
+          "objectKey": "private.worker_lca_result_gc_renew_v1(p_operation_id uuid, p_claim_token uuid, p_lease_seconds integer)",
+          "schema": "private",
+          "name": "worker_lca_result_gc_renew_v1",
+          "identityArguments": "p_operation_id uuid, p_claim_token uuid, p_lease_seconds integer",
+          "objectOwner": "lca_result_gc_executor",
+          "privilege": "EXECUTE",
+          "grantor": "lca_result_gc_executor",
+          "grantable": false
+        },
+        {
+          "objectKey": "private.svc_lcia_document_validation_evidence_lookup(p_cache_keys jsonb)",
+          "schema": "private",
+          "name": "svc_lcia_document_validation_evidence_lookup",
+          "identityArguments": "p_cache_keys jsonb",
+          "objectOwner": "postgres",
+          "privilege": "EXECUTE",
+          "grantor": "postgres",
+          "grantable": false
+        },
+        {
+          "objectKey": "private.svc_lcia_document_validation_evidence_record(p_records jsonb, p_source_worker_job_id uuid)",
+          "schema": "private",
+          "name": "svc_lcia_document_validation_evidence_record",
+          "identityArguments": "p_records jsonb, p_source_worker_job_id uuid",
+          "objectOwner": "postgres",
+          "privilege": "EXECUTE",
+          "grantor": "postgres",
+          "grantable": false
+        }
+      ],
+      "counts": {
+        "schemaPrivilegeCount": 1,
+        "relationPrivilegeCount": 0,
+        "sequencePrivilegeCount": 0,
+        "routinePrivilegeCount": 9
+      },
+      "manifestSha256": "61aabd44b8854cfa72769a09faeae2d3bad0f5473f2e006a364112193b9b5325"
+    }
+  ]
+}

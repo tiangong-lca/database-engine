@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-04
-lastReviewedCommit: e1d467ce3d16ad2d09fed080a4a05e71736ca52e
-lastReviewedNote: "Reviewed for Issue #407 Phase A: private Worker routines preserve the physical public evidence table and the exact-head public inventory remains 397 objects."
+lastReviewedCommit: 06ab3e6b017e732b15d1edd9c7ef8f4a35139187
+lastReviewedNote: "Reviewed for Issues #407/#408: private Worker routines preserve the physical public table and 397-object inventory; database-engine owns capability generations while deployment receipts remain workspace-owned."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -76,6 +76,21 @@ This repo is organized around one checked-in Supabase project plus a generated s
 - `private` owns internal runtime and control-plane objects and is never an exposed Data API schema.
 - `util` and `archive` retain operations/history responsibilities and are never exposed Data API schemas.
 - Realtime publishes explicitly selected physical tables; `api` views are not a Realtime source.
+
+## Worker runtime permission evidence
+
+Issue #408 separates three truths that must not be collapsed:
+
+- database-engine owns the exact capability-role definition and object-grant generations;
+- the exact Worker Git tree supplies candidate source-consumer evidence, but does not authorize grants;
+- workspace deployment owns run-specific LOGIN creation, membership, secret handling, and exact readback receipts.
+
+The B0 artifacts accept only the reviewed seven-routine and nine-routine capability
+hashes. Runtime LOGIN memberships are excluded from those hashes and must be proven
+by a separate run-owned receipt with PG17 `INHERIT=true / SET=false / ADMIN=false`.
+External callers are recorded independently and may never expand
+`lca_worker_runtime`. Parser-incomplete unqualified SQL and hosted telemetry remain
+blocking, so B0 keeps `sourceArtifactComplete=false` and `contractReady=false`.
 
 ## Result GC boundary
 

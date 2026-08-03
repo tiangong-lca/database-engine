@@ -20,6 +20,9 @@ from scripts.test_issue_390_external_git_tree import Issue390ExternalGitTreeTest
 from scripts.test_issue_390_physical_qualification import Issue390PhysicalQualificationTest
 from scripts.test_issue_390_pre_ddl_gate import Issue390PreDdlGateTest
 from scripts.test_issue_398_result_gc_semantic_gate import Issue398ResultGcSemanticGateTest
+from scripts.test_issue_408_external_caller_registry import ExternalCallerRegistryTest
+from scripts.test_issue_408_worker_runtime_permission import WorkerRuntimePermissionTest
+from scripts.test_issue_408_worker_source_consumer import WorkerSourceConsumerTest
 
 
 class DatabaseContractManifestTest(unittest.TestCase):
@@ -55,6 +58,26 @@ class DatabaseContractManifestTest(unittest.TestCase):
         self.assertTrue(
             issubclass(Issue398ResultGcSemanticGateTest, unittest.TestCase)
         )
+
+    def test_issue_408_b0_contracts_are_in_canonical_offline_suite(self) -> None:
+        self.assertTrue(issubclass(WorkerRuntimePermissionTest, unittest.TestCase))
+        self.assertTrue(issubclass(WorkerSourceConsumerTest, unittest.TestCase))
+        self.assertTrue(issubclass(ExternalCallerRegistryTest, unittest.TestCase))
+        for relative in (
+            ".github/workflows/database-validation.yml",
+            ".github/workflows/supabase-dev.yml",
+        ):
+            workflow = (runner.ROOT / relative).read_text(encoding="utf-8")
+            checkout = "repository: linancn/tiangong-lca-worker"
+            exclusion = "echo '/.issue408-worker/' >> .git/info/exclude"
+            self.assertIn(checkout, workflow)
+            self.assertIn("ref: 7c0a95f8aa4b8952e002bff7b91847e31cf2487b", workflow)
+            self.assertIn(exclusion, workflow)
+            self.assertLess(workflow.index(checkout), workflow.index(exclusion))
+            self.assertIn(
+                "ISSUE408_WORKER_REPO: ${{ github.workspace }}/.issue408-worker",
+                workflow,
+            )
 
     def test_persistent_dev_validation_fetches_immutable_provenance_history(self) -> None:
         workflow = (runner.ROOT / ".github/workflows/supabase-dev.yml").read_text(

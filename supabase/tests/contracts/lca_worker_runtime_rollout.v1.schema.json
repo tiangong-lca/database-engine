@@ -1,0 +1,58 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tiangong-lca.local/contracts/lca_worker_runtime_rollout.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "issue", "role", "strategy", "old", "new", "acceptedManifestSha256", "supersetPolicy", "candidateFull"],
+  "properties": {
+    "schemaVersion": {"const": "database.lca-worker-runtime-rollout.v1"},
+    "issue": {"const": "tiangong-lca/database-engine#408"},
+    "role": {"const": "lca_worker_runtime"},
+    "strategy": {"const": "exact-old-or-new-only"},
+    "old": {
+      "allOf": [
+        {"$ref": "#/$defs/generationRef"},
+        {"properties": {
+          "generation": {"const": "pre407-seven"},
+          "databaseCommit": {"const": "269ef181e103bf57a7e15c6e82f5291005f33ded"},
+          "migrationHead": {"const": "20260803090000"}
+        }}
+      ]
+    },
+    "new": {
+      "allOf": [
+        {"$ref": "#/$defs/generationRef"},
+        {"properties": {
+          "generation": {"const": "issue407-nine"},
+          "databaseCommit": {"const": "06ab3e6b017e732b15d1edd9c7ef8f4a35139187"},
+          "migrationHead": {"const": "20260803163000"}
+        }}
+      ]
+    },
+    "acceptedManifestSha256": {
+      "type": "array", "minItems": 2, "maxItems": 2, "uniqueItems": true,
+      "items": {"pattern": "^[0-9a-f]{64}$"}
+    },
+    "supersetPolicy": {"const": "reject"},
+    "candidateFull": {
+      "type": "object", "additionalProperties": false,
+      "required": ["status", "manifestSha256", "reason"],
+      "properties": {
+        "status": {"const": "blocked"}, "manifestSha256": {"type": "null"},
+        "reason": {"const": "full Worker consumer and permission closure is not complete"}
+      }
+    }
+  },
+  "$defs": {
+    "generationRef": {
+      "type": "object", "additionalProperties": false,
+      "required": ["generation", "databaseCommit", "migrationHead", "manifestSha256"],
+      "properties": {
+        "generation": {"enum": ["pre407-seven", "issue407-nine"]},
+        "databaseCommit": {"pattern": "^[0-9a-f]{40}$"},
+        "migrationHead": {"pattern": "^[0-9]{14}$"},
+        "manifestSha256": {"pattern": "^[0-9a-f]{64}$"}
+      }
+    }
+  }
+}

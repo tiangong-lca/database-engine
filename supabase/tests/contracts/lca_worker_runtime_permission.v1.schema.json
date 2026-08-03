@@ -1,0 +1,156 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tiangong-lca.local/contracts/lca_worker_runtime_permission.v1.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["schemaVersion", "issue", "role", "policy", "generations"],
+  "properties": {
+    "schemaVersion": {"const": "database.lca-worker-runtime-permission.v1"},
+    "issue": {"const": "tiangong-lca/database-engine#408"},
+    "role": {"const": "lca_worker_runtime"},
+    "policy": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["comparison", "equalityScope", "missingEntry", "extraEntry", "signatureDrift", "hashDrift", "schemaWideFutureGrants", "defaultPrivileges", "runtimeLoginMemberships", "roleAndCreatorEvidence"],
+      "properties": {
+        "comparison": {"const": "ordered-exact-equality"},
+        "equalityScope": {"const": "capability-role-definition-and-object-privileges"},
+        "missingEntry": {"const": "reject"},
+        "extraEntry": {"const": "reject"},
+        "signatureDrift": {"const": "reject"},
+        "hashDrift": {"const": "reject"},
+        "schemaWideFutureGrants": {"const": "forbidden"},
+        "defaultPrivileges": {"const": "forbidden"},
+        "runtimeLoginMemberships": {"const": "excluded-require-exact-deployment-receipt"},
+        "roleAndCreatorEvidence": {"const": "exact-migration-self-guard-plus-hosted-receipt-required"}
+      }
+    },
+    "generations": {
+      "type": "array",
+      "minItems": 2,
+      "maxItems": 2,
+      "prefixItems": [
+        {
+          "allOf": [
+            {"$ref": "#/$defs/generation"},
+            {"properties": {
+              "generation": {"const": "pre407-seven"},
+              "databaseCommit": {"const": "269ef181e103bf57a7e15c6e82f5291005f33ded"},
+              "migrationHead": {"const": "20260803090000"},
+              "counts": {"properties": {"routinePrivilegeCount": {"const": 7}}}
+            }}
+          ]
+        },
+        {
+          "allOf": [
+            {"$ref": "#/$defs/generation"},
+            {"properties": {
+              "generation": {"const": "issue407-nine"},
+              "databaseCommit": {"const": "06ab3e6b017e732b15d1edd9c7ef8f4a35139187"},
+              "migrationHead": {"const": "20260803163000"},
+              "counts": {"properties": {"routinePrivilegeCount": {"const": 9}}}
+            }}
+          ]
+        }
+      ],
+      "items": false
+    }
+  },
+  "$defs": {
+    "generation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["generation", "databaseCommit", "migrationHead", "role", "roleAttributes", "creatorMembershipEdges", "runtimeLoginMembershipPolicy", "schemaPrivileges", "relationPrivileges", "sequencePrivileges", "routinePrivileges", "counts", "manifestSha256"],
+      "properties": {
+        "generation": {"enum": ["pre407-seven", "issue407-nine"]},
+        "databaseCommit": {"pattern": "^[0-9a-f]{40}$"},
+        "migrationHead": {"pattern": "^[0-9]{14}$"},
+        "role": {"const": "lca_worker_runtime"},
+        "roleAttributes": {"$ref": "#/$defs/roleAttributes"},
+        "creatorMembershipEdges": {
+          "type": "array", "minItems": 1, "maxItems": 1,
+          "items": {"$ref": "#/$defs/creatorMembership"}
+        },
+        "runtimeLoginMembershipPolicy": {"$ref": "#/$defs/runtimeLoginMembershipPolicy"},
+        "schemaPrivileges": {
+          "type": "array", "minItems": 1, "maxItems": 1,
+          "items": {"$ref": "#/$defs/schemaPrivilege"}
+        },
+        "relationPrivileges": {"type": "array", "maxItems": 0},
+        "sequencePrivileges": {"type": "array", "maxItems": 0},
+        "routinePrivileges": {
+          "type": "array", "minItems": 7, "maxItems": 9,
+          "items": {"$ref": "#/$defs/routinePrivilege"}
+        },
+        "counts": {"$ref": "#/$defs/counts"},
+        "manifestSha256": {"pattern": "^[0-9a-f]{64}$"}
+      }
+    },
+    "roleAttributes": {
+      "type": "object", "additionalProperties": false,
+      "required": ["login", "inherit", "superuser", "createDatabase", "createRole", "bypassRls", "replication", "roleConfig"],
+      "properties": {
+        "login": {"const": false}, "inherit": {"const": true},
+        "superuser": {"const": false}, "createDatabase": {"const": false},
+        "createRole": {"const": false}, "bypassRls": {"const": false},
+        "replication": {"const": false}, "roleConfig": {"type": "null"}
+      }
+    },
+    "creatorMembership": {
+      "type": "object", "additionalProperties": false,
+      "required": ["member", "role", "grantor", "inherit", "set", "admin"],
+      "properties": {
+        "member": {"const": "postgres"}, "role": {"const": "lca_worker_runtime"},
+        "grantor": {"const": "supabase_admin"}, "inherit": {"const": false},
+        "set": {"const": false}, "admin": {"const": true}
+      }
+    },
+    "runtimeLoginMembershipPolicy": {
+      "type": "object", "additionalProperties": false,
+      "required": ["includedInManifest", "requiredReceipt", "memberClass", "role", "inherit", "set", "admin"],
+      "properties": {
+        "includedInManifest": {"const": false},
+        "requiredReceipt": {"const": "workspace-identity-run-exact-readback"},
+        "memberClass": {"const": "deployment-owned-login"},
+        "role": {"const": "lca_worker_runtime"}, "inherit": {"const": true},
+        "set": {"const": false}, "admin": {"const": false}
+      }
+    },
+    "schemaPrivilege": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schema", "usage", "create"],
+      "properties": {"schema": {"const": "private"}, "usage": {"const": true}, "create": {"const": false}}
+    },
+    "routinePrivilege": {
+      "type": "object", "additionalProperties": false,
+      "required": ["objectKey", "schema", "name", "identityArguments", "objectOwner", "privilege", "grantor", "grantable"],
+      "properties": {
+        "objectKey": {"pattern": "^private\\.[a-z_][a-z0-9_]*\\(.+\\)$"},
+        "schema": {"const": "private"}, "name": {"pattern": "^[a-z_][a-z0-9_]*$"},
+        "identityArguments": {"type": "string", "minLength": 1},
+        "objectOwner": {"enum": ["postgres", "lca_result_gc_executor"]},
+        "privilege": {"const": "EXECUTE"},
+        "grantor": {"enum": ["postgres", "lca_result_gc_executor"]},
+        "grantable": {"const": false}
+      },
+      "allOf": [
+        {
+          "if": {"properties": {"objectOwner": {"const": "postgres"}}},
+          "then": {"properties": {"grantor": {"const": "postgres"}}}
+        },
+        {
+          "if": {"properties": {"objectOwner": {"const": "lca_result_gc_executor"}}},
+          "then": {"properties": {"grantor": {"const": "lca_result_gc_executor"}}}
+        }
+      ]
+    },
+    "counts": {
+      "type": "object", "additionalProperties": false,
+      "required": ["schemaPrivilegeCount", "relationPrivilegeCount", "sequencePrivilegeCount", "routinePrivilegeCount"],
+      "properties": {
+        "schemaPrivilegeCount": {"const": 1}, "relationPrivilegeCount": {"const": 0},
+        "sequencePrivilegeCount": {"const": 0}, "routinePrivilegeCount": {"enum": [7, 9]}
+      }
+    }
+  }
+}
