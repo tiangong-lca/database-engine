@@ -451,7 +451,7 @@ python -m unittest scripts.test_public_inventory_exact_head scripts.test_public_
 python scripts/public_inventory_exact_head.py --refresh --db-url postgresql://...
 ```
 
-v2 绑定 exact source `c5356d2`、migration head `20260803090000`、397 个 live
+v2 绑定 exact source `c5356d2`、migration head `20260803093000`、397 个 live
 identity、`9+37+117+230+4` exactly-once partition，以及完整的 388-residue
 Contract DROP identity checklist。checklist 不是可执行 SQL：所有 identity 均为
 `blocked`，不生成 migration，`contractReady=false` 永远成立。missing、unknown、

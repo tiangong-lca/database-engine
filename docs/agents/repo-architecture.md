@@ -115,7 +115,7 @@ The versioned `schema_boundary_phase.v1` contract keeps that transition explicit
 The stable public-boundary inventory lives under
 `supabase/tests/contracts/public_object_*`. The unqualified inventory is the
 Issue #405 exact-head v2 artifact: 397 public application objects at
-`database-engine@c5356d2` / migration head `20260803090000`, partitioned exactly
+`database-engine@c5356d2` / migration head `20260803093000`, partitioned exactly
 once as nine core + 37 predecessor residue + 117 Issue #357 + 230 Issue #358 +
 four explicit omissions. Its 388-entry identity-only Contract checklist records
 `physicalMoved`, `compatPresent`, `adapterOnly`, and `retired` separately and
