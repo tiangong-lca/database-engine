@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: fed7edbd1478f3a9e18e0c85513ea05a7c53f7ad
-lastReviewedNote: "已为 Issue #398 复核：additive result GC migration 与隔离 runtime probe 不改变生成 workspace 的所有权或刷新语义。"
+lastReviewedCommit: a29f26a9eb0a6c629ae34e187c6fce4a0c215b1d
+lastReviewedNote: "已为 Issue #390 复核：qualification scaffold 将稳定证据合同保留在生成 workspace 之外，不改变刷新语义。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

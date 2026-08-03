@@ -21,8 +21,8 @@ checkPaths:
   - supabase/tests/20260802_issue_398_result_gc_contract.sql
   - scripts/test_issue_398_result_gc_runtime.py
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: ae13637b48d24e24092dfc5392e1f5aa8c2ba22a
-lastReviewedNote: "Created for database-engine Issue #398 additive, disabled-by-default result GC contract."
+lastReviewedCommit: a29f26a9eb0a6c629ae34e187c6fce4a0c215b1d
+lastReviewedNote: "Reviewed for Issue #390: the non-authorizing physical-move scaffold remains separate from GC runtime and joint-qualification authority."
 related:
   - ../../AGENTS.md
   - ./repo-validation.md
@@ -138,3 +138,10 @@ confirmation. It proves real-login ACLs and the double-fence,
 update-versus-fence, and reference-versus-fence races with separate database
 sessions. It must never target a linked, hosted, persistent, or production
 database.
+
+The Issue #390 physical-move qualification v1 plan is separate from this GC
+runtime proof. Its optional baseline capture is read-only and non-authorizing;
+it does not enable claims, prove Worker locator adoption, or satisfy the GC
+joint-qualification dependency. Physical DDL execution remains blocked until a
+reviewed successor binds exact candidate artifacts and every pre-DDL gate is
+independently complete.

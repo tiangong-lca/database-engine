@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: fed7edbd1478f3a9e18e0c85513ea05a7c53f7ad
-lastReviewedNote: "已为 Issue #398 复核：破坏性 loopback runtime probe 覆盖真实角色 ACL、恢复状态、并发竞态与精确零残留。"
+lastReviewedCommit: a29f26a9eb0a6c629ae34e187c6fce4a0c215b1d
+lastReviewedNote: "已为 Issue #390 复核：新增 physical qualification v1 仅允许离线检查与 loopback 只读 baseline，破坏性执行保持关闭。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -344,6 +344,53 @@ custom type/access method、trigger/rule 状态变更，以及 migration identit
 mode 弱化。HEAD、index 与 worktree
 分别读取各自版本的合同。单次日志零命中也不构成 burn-in。canonical
 manifest contract 会导入该 test case，因此沿用既有 CI 而不新增第二条 workflow。
+
+### `issue_390_physical_qualification.py`
+
+在 Issue #390 尚无 relation-moving DDL 时，先定义不可授权的 physical-move
+qualification harness：
+
+```bash
+python scripts/issue_390_physical_qualification.py --check
+python scripts/issue_390_physical_qualification.py --print-run-plan
+python -m unittest scripts.test_issue_390_physical_qualification
+```
+
+默认 suite 会跳过真实数据库 case。使用以下 opt-in 命令在 exact predecessor 数据库上
+完整执行 SQL query 与 receipt validator：
+
+```bash
+ISSUE_390_BASELINE_DB_URL='<explicit-loopback-url>' \
+  python -m unittest \
+  scripts.test_issue_390_physical_qualification.Issue390PhysicalQualificationLiveIntegrationTest
+```
+
+v1 plan 精确绑定 `database-engine/dev@a29f26a9` 与 migration head
+`20260803090000`，不绑定 migration、rollback 或 populated fixture，并保持
+`ddlAuthorized`、`relationMovingDdlAllowed`、
+`historicalAuthenticatedSelectRemovalAllowed` 与破坏性 qualification execution
+全部为 false，因此 `--qualify` 必须 fail closed。
+
+显式 loopback 数据库可以运行 `--capture-baseline --db-url ... --output ...`，但只允许
+`postgres` 或 `supabase_admin`，且必须证明其通过 superuser、`BYPASSRLS` 或全部对象
+owner 身份获得四个精确普通 relation 的完整行可见性，并验证三个精确 function。
+loopback 与只读都不证明数据库 disposable，也不证明实例相互独立。数据库 receipt
+要求 loopback 的是客户端连接 endpoint；容器内 PostgreSQL 的 `inet_server_addr()`
+可以如实返回 bridge interface。数据库 receipt 独立绑定 database name/OID、server
+address/port、cluster system identifier 与实际应用的
+完整 migration set；Git 推导的 repository plan 另行记录。receipt 覆盖 OID、owner、
+ACL/column ACL、RLS/policy、双向 FK、index、trigger、publication、行数、PK/content
+按主键排序的 canonical SHA-256 PK/完整行 digest、routine property/definition hash，
+以及递归 `pg_depend`、view/`pg_rewrite`、
+composite/rowtype、dynamic-SQL、regclass candidate。它不存储行 payload，也不提出
+授权结论。每个 target 超过 100,000 行或 statement 超过 120 秒时 capture 会失败；
+更大表需要 successor 单独受审的 bounded/streaming 设计。
+
+未来 run plan 预留 cluster system identifier 必须不同的独立 fresh/populated upgrade、failure atomicity、lock timeout、
+WAL/time budget、retry、rollback 与 roll-forward receipt，并要求不同的
+`--fresh-db-url` / `--populated-db-url` loopback 身份及外部 `--receipt-dir`。只有受审 successor
+contract 精确绑定 candidate blobs 且全部 pre-DDL gate 独立完成后，才可实现这些执行
+阶段；v1 不允许直接改成授权合同。
 
 ### `issue_390_external_git_tree.py`
 

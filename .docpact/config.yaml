@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-03"
-lastReviewedCommit: "fed7edbd1478f3a9e18e0c85513ea05a7c53f7ad"
-lastReviewedNote: "Reviewed for Issue #398: result-family routing includes the additive disabled-by-default GC contract, exact semantic gate, pgTAP, real-login concurrency, PostgREST denial, and zero-residue proof."
+lastReviewedCommit: "a29f26a9eb0a6c629ae34e187c6fce4a0c215b1d"
+lastReviewedNote: "Reviewed for Issue #390: the non-authorizing physical qualification harness remains within existing scripts/tests ownership and does not change routing or governance facts."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
