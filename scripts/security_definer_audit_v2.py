@@ -59,10 +59,10 @@ BASELINE_CURRENT_TRANSITION = {
     "predecessorArtifactSha256": "8fca15a8728c79a73784199950f182a9465c33098e3c0b6e5edd54836c6669f7",
 }
 EXPECTED_CURRENT_TRANSITION = {
-    "sequence": 2,
-    "batch": "issue-323-root-grouped-review-queue",
-    "databaseSchemaSha": "2e7b3ba2a3fcdcbc59cb26416512808465262049",
-    "predecessorArtifactSha256": "b1f7ac582b87f78786ea34a855806ffae42cb50ea419bc752f6e00c01da02b11",
+    "sequence": 3,
+    "batch": "issue-398-result-gc-contract",
+    "databaseSchemaSha": "6223f23dc85eb83fef706750a1ba03db091c891e",
+    "predecessorArtifactSha256": "9837e283717fd875536b5010aa8db11e58096bfa74819e3e01be7e4ea734dd81",
 }
 EXPECTED_COMPLETED_TRANSITIONS: tuple[dict[str, Any], ...] = ({
     "sequence": 0,
@@ -99,6 +99,25 @@ EXPECTED_COMPLETED_TRANSITIONS: tuple[dict[str, Any], ...] = ({
         "security_definer_transition_receipt.001-issue-356-worker-control-plane.json"
     ),
     "receiptSha256": "31f3028d15985e7403025ab25aed0e33bd67a6b3a0d1f19e7a6e1318eff85ce1",
+}, {
+    "sequence": 2,
+    "batch": "issue-323-root-grouped-review-queue",
+    "databaseSchemaSha": "2e7b3ba2a3fcdcbc59cb26416512808465262049",
+    "predecessorArtifactSha256": "b1f7ac582b87f78786ea34a855806ffae42cb50ea419bc752f6e00c01da02b11",
+    "predecessorAuditPath": (
+        "supabase/tests/contracts/"
+        "security_definer_audit_v2.transition-001-issue-356-worker-control-plane.json"
+    ),
+    "producedAuditV2Sha256": "9837e283717fd875536b5010aa8db11e58096bfa74819e3e01be7e4ea734dd81",
+    "producedAuditV2Path": (
+        "supabase/tests/contracts/"
+        "security_definer_audit_v2.transition-002-issue-323-root-grouped-review-queue.json"
+    ),
+    "receiptPath": (
+        "supabase/tests/contracts/"
+        "security_definer_transition_receipt.002-issue-323-root-grouped-review-queue.json"
+    ),
+    "receiptSha256": "fc37086415f040321a552a1f10e24f4b628aae0ed5d1def26ee011d1be814ed2",
 })
 
 CATALOG_QUERY = r"""

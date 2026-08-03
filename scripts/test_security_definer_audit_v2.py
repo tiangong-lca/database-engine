@@ -191,13 +191,13 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
         return lineage, catalog
 
     def test_current_transition_covers_public_private_and_util_once(self) -> None:
-        self.assertEqual(self.committed["summary"]["lineageCount"], 318)
+        self.assertEqual(self.committed["summary"]["lineageCount"], 331)
         self.assertEqual(self.committed["summary"]["originalPublicLineageCount"], 241)
         self.assertEqual(self.committed["summary"]["genesisNativeNonPublicLineageCount"], 74)
-        self.assertEqual(self.committed["summary"]["transitionNativeLineageCount"], 3)
+        self.assertEqual(self.committed["summary"]["transitionNativeLineageCount"], 16)
         self.assertEqual(
             self.committed["summary"]["globalPrivilegedBySchema"],
-            {"api": 0, "archive": 0, "private": 49, "public": 233, "util": 36},
+            {"api": 0, "archive": 0, "private": 62, "public": 233, "util": 36},
         )
         self.assertEqual(self.committed["summary"]["unregisteredPrivilegedEndpointCount"], 0)
 
@@ -412,11 +412,12 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
                 )
                 continue
             if field in {"lineageCount", "globalPrivilegedEndpointCount"}:
-                self.assertEqual(transitioned["summary"][field], value + 3, field)
+                self.assertEqual(transitioned["summary"][field], value + 16, field)
                 continue
             if field in {"canonicalPrivilegedBySchema", "globalPrivilegedBySchema"}:
                 registered = dict(value)
                 registered["public"] += 3
+                registered["private"] += 13
                 self.assertEqual(transitioned["summary"][field], registered, field)
                 continue
             self.assertEqual(transitioned["summary"][field], value, field)
@@ -447,7 +448,7 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
             lineage, audit.sha256_text(audit.canonical(lineage)), self.baseline, catalog,
             audit.exposed_schemas(),
         )
-        self.assertEqual(observed["summary"]["globalPrivilegedEndpointCount"], 318)
+        self.assertEqual(observed["summary"]["globalPrivilegedEndpointCount"], 331)
         self.assertEqual(
             observed["summary"]["compatibilityEndpointCount"],
             self.committed["summary"]["compatibilityEndpointCount"],
@@ -529,8 +530,8 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
                 lineage, audit.sha256_text(audit.canonical(lineage)), self.baseline, catalog,
                 audit.exposed_schemas(),
             )
-            self.assertEqual(observed["summary"]["lineageCount"], 319)
-            self.assertEqual(observed["summary"]["transitionNativeLineageCount"], 4)
+            self.assertEqual(observed["summary"]["lineageCount"], 332)
+            self.assertEqual(observed["summary"]["transitionNativeLineageCount"], 17)
             without_receipt = copy.deepcopy(lineage)
             without_receipt["lineages"][-1]["birthTransition"]["receiptPath"] = "missing.json"
             with self.assertRaisesRegex(ValueError, "registration receipt path"):
@@ -758,14 +759,14 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
         )
         completed = plan["completedTransition"]
         current = plan["currentTransition"]
-        self.assertEqual(completed["sequence"], 2)
+        self.assertEqual(completed["sequence"], 3)
         self.assertEqual(completed["predecessorAuditPath"],
                          self.lineage["source"]["completedTransitions"][-1]["producedAuditV2Path"])
         self.assertEqual(completed["producedAuditV2Sha256"], produced)
         self.assertNotEqual(completed["producedAuditV2Path"],
                             "supabase/tests/contracts/security_definer_audit_v2.json")
         self.assertEqual(current, {
-            "sequence": 3, "batch": "issue-358-contract",
+            "sequence": 4, "batch": "issue-358-contract",
             "databaseSchemaSha": "a" * 40, "predecessorArtifactSha256": produced,
         })
         self.assertEqual(plan["reviewedCodeConstants"]["EXPECTED_CURRENT_TRANSITION"], current)
