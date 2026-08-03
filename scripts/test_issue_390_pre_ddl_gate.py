@@ -194,6 +194,7 @@ class Issue390PreDdlGateTest(unittest.TestCase):
                 {
                     "additive-api-service-only-reviewed",
                     "additive-disabled-result-gc-contract-reviewed",
+                    "additive-result-gc-fk-covering-indexes-reviewed",
                     "reconcile-v1-service-only-replacement-reviewed",
                 },
             )

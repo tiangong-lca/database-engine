@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: ae13637b48d24e24092dfc5392e1f5aa8c2ba22a
+lastReviewedCommit: fed7edbd1478f3a9e18e0c85513ea05a7c53f7ad
 lastReviewedNote: "Reviewed for Issue #398: additive result GC remains a private, disabled-by-default control-plane contract and does not authorize physical result-family moves."
 related:
   - ../../AGENTS.md

@@ -11,11 +11,16 @@ from pathlib import Path
 from scripts.issue_390_pre_ddl_gate import pre_ddl_migration_violations
 from scripts.issue_398_result_gc_semantic_gate import (
     REVIEWED_AST_SHA256,
+    REVIEWED_FK_INDEX_AST_SHA256,
+    REVIEWED_FK_INDEX_GIT_BLOB,
     REVIEWED_GIT_BLOB,
     RESULT_GC_CLASSIFICATION,
+    RESULT_GC_FK_INDEX_CLASSIFICATION,
+    RESULT_GC_FK_INDEX_MIGRATION_PATH,
     RESULT_GC_MIGRATION_PATH,
     git_blob_oid,
     normalized_ast_sha256,
+    reviewed_result_gc_fk_index_migration_violations,
     reviewed_result_gc_migration_violations,
     semantic_violations,
 )
@@ -351,6 +356,7 @@ class Issue398FrozenMigrationMutationTest(unittest.TestCase):
             "result-gc:role-grant-admin-or-grantor",
         )
 
+
     def test_control_acl_policy_and_owner_mutations(self) -> None:
         self.mutate_regex(
             r"values\s*\(\s*true\s*,\s*false\s*,",
@@ -436,6 +442,96 @@ class Issue398FrozenMigrationMutationTest(unittest.TestCase):
             "force row level security",
             "no force row level security",
             "result-gc:private-table-rls-shape-differs",
+        )
+
+
+class Issue398FkIndexMigrationGateTest(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls) -> None:
+        root = Path(__file__).resolve().parents[1]
+        cls.path = root / RESULT_GC_FK_INDEX_MIGRATION_PATH
+        cls.sql = cls.path.read_text(encoding="utf-8")
+
+    def exact_allowlist(self) -> list[dict[str, str]]:
+        return [
+            {
+                "path": RESULT_GC_FK_INDEX_MIGRATION_PATH,
+                "gitBlob": REVIEWED_FK_INDEX_GIT_BLOB,
+                "classification": RESULT_GC_FK_INDEX_CLASSIFICATION,
+            }
+        ]
+
+    def test_exact_blob_ast_and_pre_ddl_dispatch_pass(self) -> None:
+        self.assertEqual(git_blob_oid(self.sql), REVIEWED_FK_INDEX_GIT_BLOB)
+        self.assertEqual(
+            normalized_ast_sha256(self.sql), REVIEWED_FK_INDEX_AST_SHA256
+        )
+        self.assertEqual(
+            reviewed_result_gc_fk_index_migration_violations(
+                path=RESULT_GC_FK_INDEX_MIGRATION_PATH,
+                git_blob=REVIEWED_FK_INDEX_GIT_BLOB,
+                sql=self.sql,
+            ),
+            [],
+        )
+        self.assertEqual(
+            pre_ddl_migration_violations(
+                path=RESULT_GC_FK_INDEX_MIGRATION_PATH,
+                git_blob=REVIEWED_FK_INDEX_GIT_BLOB,
+                sql=self.sql,
+                allowlist=self.exact_allowlist(),
+            ),
+            [],
+        )
+
+    def test_path_requires_the_exact_narrow_allowlist_entry(self) -> None:
+        for allowlist in (
+            [],
+            [
+                {
+                    "path": RESULT_GC_FK_INDEX_MIGRATION_PATH,
+                    "gitBlob": REVIEWED_FK_INDEX_GIT_BLOB,
+                    "classification": RESULT_GC_CLASSIFICATION,
+                }
+            ],
+        ):
+            with self.subTest(allowlist=allowlist):
+                self.assertEqual(
+                    pre_ddl_migration_violations(
+                        path=RESULT_GC_FK_INDEX_MIGRATION_PATH,
+                        git_blob=REVIEWED_FK_INDEX_GIT_BLOB,
+                        sql=self.sql,
+                        allowlist=allowlist,
+                    ),
+                    ["result-gc-fk-index:exact-allowlist-entry-required"],
+                )
+
+    def test_any_sql_or_ast_mutation_is_rejected(self) -> None:
+        changed = self.sql.replace("live_result_id", "target_result_id", 1)
+        violations = reviewed_result_gc_fk_index_migration_violations(
+            path=RESULT_GC_FK_INDEX_MIGRATION_PATH,
+            git_blob=REVIEWED_FK_INDEX_GIT_BLOB,
+            sql=changed,
+        )
+        self.assertIn("result-gc-fk-index:git-blob-differs", violations)
+        self.assertIn("result-gc-fk-index:normalized-ast-differs", violations)
+
+    def test_receipt_cannot_be_reused_at_another_path_or_blob(self) -> None:
+        self.assertIn(
+            "result-gc-fk-index:path-differs",
+            reviewed_result_gc_fk_index_migration_violations(
+                path="supabase/migrations/20990101000000_copy.sql",
+                git_blob=REVIEWED_FK_INDEX_GIT_BLOB,
+                sql=self.sql,
+            ),
+        )
+        self.assertIn(
+            "result-gc-fk-index:git-blob-differs",
+            reviewed_result_gc_fk_index_migration_violations(
+                path=RESULT_GC_FK_INDEX_MIGRATION_PATH,
+                git_blob="0" * 40,
+                sql=self.sql,
+            ),
         )
 
 

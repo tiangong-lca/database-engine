@@ -171,6 +171,54 @@ select ok(
   ),
   'runtime role cannot read coordinator storage directly'
 );
+select ok(
+  exists (
+    select 1
+    from pg_index index_row
+    join pg_class index_relation on index_relation.oid = index_row.indexrelid
+    where index_row.indrelid =
+          'private.lca_result_gc_operations'::regclass
+      and index_relation.relname =
+          'lca_result_gc_operations_live_result_idx'
+      and index_row.indisvalid
+      and index_row.indisready
+      and not index_row.indisunique
+      and index_row.indpred is null
+      and index_row.indexprs is null
+      and index_row.indnkeyatts = 1
+      and index_row.indnatts = 1
+      and index_row.indkey[0] = (
+        select attnum from pg_attribute
+        where attrelid = 'private.lca_result_gc_operations'::regclass
+          and attname = 'live_result_id'
+      )
+  ),
+  'operations live-result FK has the exact valid single-column covering index'
+);
+select ok(
+  exists (
+    select 1
+    from pg_index index_row
+    join pg_class index_relation on index_relation.oid = index_row.indexrelid
+    where index_row.indrelid =
+          'private.lca_result_gc_finalize_context'::regclass
+      and index_relation.relname =
+          'lca_result_gc_finalize_context_operation_idx'
+      and index_row.indisvalid
+      and index_row.indisready
+      and not index_row.indisunique
+      and index_row.indpred is null
+      and index_row.indexprs is null
+      and index_row.indnkeyatts = 1
+      and index_row.indnatts = 1
+      and index_row.indkey[0] = (
+        select attnum from pg_attribute
+        where attrelid = 'private.lca_result_gc_finalize_context'::regclass
+          and attname = 'operation_id'
+      )
+  ),
+  'finalize-context operation FK has the exact valid single-column covering index'
+);
 
 grant lca_worker_runtime, lca_result_gc_executor to postgres;
 

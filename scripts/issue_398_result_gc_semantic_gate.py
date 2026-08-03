@@ -29,6 +29,17 @@ REVIEWED_AST_SHA256: str | None = (
 )
 PARSER_VERSION = 180004
 
+RESULT_GC_FK_INDEX_CLASSIFICATION = (
+    "additive-result-gc-fk-covering-indexes-reviewed"
+)
+RESULT_GC_FK_INDEX_MIGRATION_PATH = (
+    "supabase/migrations/20260803090000_issue_398_result_gc_fk_indexes.sql"
+)
+REVIEWED_FK_INDEX_GIT_BLOB = "e113586c245fe562191d27810a292383f3079d83"
+REVIEWED_FK_INDEX_AST_SHA256 = (
+    "7f9b2d43774dcdebb8a3ae533f4978bc32a4154c139a35bfdcba9099860996bb"
+)
+
 EXECUTOR = "lca_result_gc_executor"
 WORKER = "lca_worker_runtime"
 CREATED_TABLES = {
@@ -943,13 +954,41 @@ def reviewed_result_gc_migration_violations(
     return sorted(set(violations))
 
 
+def reviewed_result_gc_fk_index_migration_violations(
+    *, path: str, git_blob: str, sql: str
+) -> list[str]:
+    """Bind the post-deploy Advisor repair to one exact two-index migration."""
+
+    violations = []
+    if path != RESULT_GC_FK_INDEX_MIGRATION_PATH:
+        violations.append("result-gc-fk-index:path-differs")
+    if (
+        git_blob != REVIEWED_FK_INDEX_GIT_BLOB
+        or git_blob_oid(sql) != REVIEWED_FK_INDEX_GIT_BLOB
+    ):
+        violations.append("result-gc-fk-index:git-blob-differs")
+    try:
+        digest = normalized_ast_sha256(sql)
+    except ResultGcSemanticError as error:
+        violations.append("result-gc-fk-index:" + str(error))
+    else:
+        if digest != REVIEWED_FK_INDEX_AST_SHA256:
+            violations.append("result-gc-fk-index:normalized-ast-differs")
+    return sorted(set(violations))
+
+
 __all__ = [
     "RESULT_GC_CLASSIFICATION",
+    "RESULT_GC_FK_INDEX_CLASSIFICATION",
+    "RESULT_GC_FK_INDEX_MIGRATION_PATH",
     "RESULT_GC_MIGRATION_PATH",
     "REVIEWED_GIT_BLOB",
     "REVIEWED_AST_SHA256",
+    "REVIEWED_FK_INDEX_GIT_BLOB",
+    "REVIEWED_FK_INDEX_AST_SHA256",
     "git_blob_oid",
     "normalized_ast_sha256",
     "reviewed_result_gc_migration_violations",
+    "reviewed_result_gc_fk_index_migration_violations",
     "semantic_violations",
 ]

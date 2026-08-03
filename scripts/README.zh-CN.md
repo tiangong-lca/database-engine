@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: ae13637b48d24e24092dfc5392e1f5aa8c2ba22a
+lastReviewedCommit: fed7edbd1478f3a9e18e0c85513ea05a7c53f7ad
 lastReviewedNote: "已为 Issue #398 复核：破坏性 loopback runtime probe 覆盖真实角色 ACL、恢复状态、并发竞态与精确零残留。"
 related:
   - ../AGENTS.md

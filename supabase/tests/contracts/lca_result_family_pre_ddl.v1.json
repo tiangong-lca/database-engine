@@ -100,6 +100,11 @@
         "path": "supabase/migrations/20260802201933_issue_398_result_gc_contract.sql",
         "gitBlob": "6b2f41c028925c9f540f124887e576351b572e48",
         "classification": "additive-disabled-result-gc-contract-reviewed"
+      },
+      {
+        "path": "supabase/migrations/20260803090000_issue_398_result_gc_fk_indexes.sql",
+        "gitBlob": "e113586c245fe562191d27810a292383f3079d83",
+        "classification": "additive-result-gc-fk-covering-indexes-reviewed"
       }
     ],
     "relationMovingDdlAllowed": false,

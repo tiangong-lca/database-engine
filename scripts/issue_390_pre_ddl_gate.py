@@ -12,6 +12,9 @@ from pglast.parser import ParseError
 
 from scripts.issue_398_result_gc_semantic_gate import (
     RESULT_GC_CLASSIFICATION,
+    RESULT_GC_FK_INDEX_CLASSIFICATION,
+    RESULT_GC_FK_INDEX_MIGRATION_PATH,
+    reviewed_result_gc_fk_index_migration_violations,
     reviewed_result_gc_migration_violations,
 )
 
@@ -1382,13 +1385,25 @@ def pre_ddl_migration_violations(
     *, path: str, git_blob: str, sql: str, allowlist: list[dict[str, str]]
 ) -> list[str]:
     signals = pre_ddl_sql_signals(sql)
-    if not signals:
-        return []
     matching = [
         row
         for row in allowlist
         if row.get("path") == path and row.get("gitBlob") == git_blob
     ]
+    if path == RESULT_GC_FK_INDEX_MIGRATION_PATH:
+        if (
+            len(matching) != 1
+            or matching[0].get("classification")
+            != RESULT_GC_FK_INDEX_CLASSIFICATION
+        ):
+            return ["result-gc-fk-index:exact-allowlist-entry-required"]
+        return reviewed_result_gc_fk_index_migration_violations(
+            path=path,
+            git_blob=git_blob,
+            sql=sql,
+        )
+    if not signals:
+        return []
     if (
         len(matching) == 1
         and matching[0].get("classification") == RESULT_GC_CLASSIFICATION

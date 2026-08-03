@@ -17,6 +17,7 @@ whenToUpdate:
 checkPaths:
   - docs/agents/lca-result-gc-contract.md
   - supabase/migrations/20260802201933_issue_398_result_gc_contract.sql
+  - supabase/migrations/20260803090000_issue_398_result_gc_fk_indexes.sql
   - supabase/tests/20260802_issue_398_result_gc_contract.sql
   - scripts/test_issue_398_result_gc_runtime.py
 lastReviewedAt: 2026-08-03
