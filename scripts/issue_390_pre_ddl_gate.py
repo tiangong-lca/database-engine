@@ -10,6 +10,11 @@ import pglast
 from pglast import parser
 from pglast.parser import ParseError
 
+from scripts.issue_398_result_gc_semantic_gate import (
+    RESULT_GC_CLASSIFICATION,
+    reviewed_result_gc_migration_violations,
+)
+
 
 TARGET_RELATION_NAMES = {
     "lca_factorization_registry",
@@ -1379,14 +1384,23 @@ def pre_ddl_migration_violations(
     signals = pre_ddl_sql_signals(sql)
     if not signals:
         return []
-    hard = [signal for signal in signals if signal.startswith("hard-deny:")]
-    if hard:
-        return hard
     matching = [
         row
         for row in allowlist
         if row.get("path") == path and row.get("gitBlob") == git_blob
     ]
+    if (
+        len(matching) == 1
+        and matching[0].get("classification") == RESULT_GC_CLASSIFICATION
+    ):
+        return reviewed_result_gc_migration_violations(
+            path=path,
+            git_blob=git_blob,
+            sql=sql,
+        )
+    hard = [signal for signal in signals if signal.startswith("hard-deny:")]
+    if hard:
+        return hard
     if len(matching) != 1:
         return signals
     classification = matching[0].get("classification")

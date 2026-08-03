@@ -18,6 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import scripts.run_database_contract as runner
 from scripts.test_issue_390_external_git_tree import Issue390ExternalGitTreeTest
 from scripts.test_issue_390_pre_ddl_gate import Issue390PreDdlGateTest
+from scripts.test_issue_398_result_gc_semantic_gate import Issue398ResultGcSemanticGateTest
 
 
 class DatabaseContractManifestTest(unittest.TestCase):
@@ -26,16 +27,16 @@ class DatabaseContractManifestTest(unittest.TestCase):
         cls.manifest = json.loads(runner.MANIFEST.read_text(encoding="utf-8"))
         cls.tracked = runner.tracked_test_files()
 
-    def test_checked_manifest_has_unique_classification_and_69_canonical_files(self) -> None:
+    def test_checked_manifest_has_unique_classification_and_70_canonical_files(self) -> None:
         classified = runner.validate_manifest(self.manifest, self.tracked)
         suite = self.manifest["suites"]["canonical-local"]
         selected = [
             path for path in classified[suite["classification"]]
             if path not in suite["excludedFiles"]
         ]
-        self.assertEqual(len(classified["canonical-pgtap"]), 88)
+        self.assertEqual(len(classified["canonical-pgtap"]), 89)
         self.assertEqual(len(suite["excludedFiles"]), 19)
-        self.assertEqual(len(selected), 69)
+        self.assertEqual(len(selected), 70)
 
     def test_issue_397_external_tree_gate_is_in_canonical_offline_suite(self) -> None:
         self.assertTrue(issubclass(Issue390ExternalGitTreeTest, unittest.TestCase))
@@ -43,6 +44,11 @@ class DatabaseContractManifestTest(unittest.TestCase):
             encoding="utf-8"
         )
         self.assertIn("scripts.test_database_contract_manifest", workflow)
+
+    def test_issue_398_semantic_gate_is_in_canonical_offline_suite(self) -> None:
+        self.assertTrue(
+            issubclass(Issue398ResultGcSemanticGateTest, unittest.TestCase)
+        )
 
     def test_persistent_dev_validation_fetches_immutable_provenance_history(self) -> None:
         workflow = (runner.ROOT / ".github/workflows/supabase-dev.yml").read_text(
@@ -73,7 +79,7 @@ class DatabaseContractManifestTest(unittest.TestCase):
             evidence = runner.suite_evidence("canonical-local", files, 19)
         self.assertEqual(evidence["gitCommit"], "a" * 40)
         self.assertFalse(evidence["worktreeDirty"])
-        self.assertEqual(evidence["migrationHead"], "20260802190427")
+        self.assertEqual(evidence["migrationHead"], "20260802201933")
         self.assertEqual(evidence["supabaseCliVersion"], "2.98.0")
         self.assertEqual(evidence["filesSha256"], runner.stable_json_sha256(files))
         self.assertEqual(
@@ -81,13 +87,13 @@ class DatabaseContractManifestTest(unittest.TestCase):
             hashlib.sha256(runner.MANIFEST.read_bytes()).hexdigest(),
         )
 
-    def test_all_102_sql_assets_are_owned_once_but_only_88_are_canonical_pgtap(self) -> None:
+    def test_all_103_sql_assets_are_owned_once_but_only_89_are_canonical_pgtap(self) -> None:
         classified = runner.validate_manifest(self.manifest, self.tracked)
         sql_paths = [path for path in self.tracked if path.endswith(".sql")]
         owned = [path for paths in classified.values() for path in paths if path.endswith(".sql")]
-        self.assertEqual(len(sql_paths), 102)
+        self.assertEqual(len(sql_paths), 103)
         self.assertEqual(sorted(owned), sorted(sql_paths))
-        self.assertEqual(len(classified["canonical-pgtap"]), 88)
+        self.assertEqual(len(classified["canonical-pgtap"]), 89)
 
     def test_issue_390_runtime_is_mandatory_exact_canonical_local_wiring(self) -> None:
         contract = runner.RESULT_API_FACADE_CONTRACT

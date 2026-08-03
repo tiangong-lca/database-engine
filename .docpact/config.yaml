@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-03"
-lastReviewedCommit: "38e15b0274cc2f87c93acbab520c110c4b907361"
-lastReviewedNote: "Reviewed for Issue #397: lca-result-family routing includes the exact external Git-tree scanner, immutable evidence artifact, fail-closed tests, facade runtime qualification, and canonical runner wiring."
+lastReviewedCommit: "ae13637b48d24e24092dfc5392e1f5aa8c2ba22a"
+lastReviewedNote: "Reviewed for Issue #398: result-family routing includes the additive disabled-by-default GC contract, exact semantic gate, pgTAP, real-login concurrency, PostgREST denial, and zero-residue proof."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -17,6 +17,7 @@ catalog:
       workflowDocs:
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
+        - docs/agents/lca-result-gc-contract.md
       workspaceIntegrationRequired: true
 
 ownership:
@@ -74,6 +75,7 @@ coverage:
     - .docpact/**
     - docs/agents/repo-validation.md
     - docs/agents/repo-architecture.md
+    - docs/agents/lca-result-gc-contract.md
     - docs/agents/supabase-branching.md
     - docs/agents/supabase-branching_CN.md
     - scripts/README.md
@@ -142,6 +144,10 @@ routing:
         - supabase/tests/*issue_390_result_api_facade*.sql
         - supabase/migrations/*issue_395_reconcile_cancelled*.sql
         - supabase/tests/*issue_395_reconcile_cancelled*.sql
+        - supabase/migrations/*issue_398_result_gc*.sql
+        - supabase/tests/*issue_398_result_gc*.sql
+        - scripts/test_issue_398_result_gc_runtime.py
+        - docs/agents/lca-result-gc-contract.md
         - .github/workflows/database-validation.yml
         - .github/workflows/supabase-dev.yml
         - scripts/test_database_contract_manifest.py
@@ -309,6 +315,8 @@ rules:
         kind: deep-doc
       - path: docs/agents/repo-architecture.md
         kind: deep-doc
+      - path: docs/agents/lca-result-gc-contract.md
+        kind: deep-doc
       - path: docs/agents/supabase-branching.md
         kind: deep-doc
       - path: docs/agents/supabase-branching_CN.md
@@ -321,6 +329,8 @@ rules:
       - path: docs/agents/repo-validation.md
         mode: review_or_update
       - path: docs/agents/repo-architecture.md
+        mode: review_or_update
+      - path: docs/agents/lca-result-gc-contract.md
         mode: review_or_update
     reason: Repo entry guidance, machine-readable routing, and retained source docs must stay aligned.
   - id: database-engine-readme-and-landing-contract
@@ -404,6 +414,8 @@ rules:
         mode: review_or_update
       - path: docs/agents/repo-architecture.md
         mode: review_or_update
+      - path: docs/agents/lca-result-gc-contract.md
+        mode: review_or_update
     reason: Schema and seed changes affect authoring routes, source-of-truth boundaries, and minimum proof expectations.
   - id: database-engine-review-submit-gate-contract
     scope: repo
@@ -440,6 +452,8 @@ rules:
         mode: review_or_update
       - path: docs/agents/repo-validation.md
         mode: review_or_update
+      - path: docs/agents/lca-result-gc-contract.md
+        mode: review_or_update
     reason: SQL assertions and offline Node test contracts can alter the minimum proof story for future database and Hosted-runner work.
   - id: database-engine-schema-workspace-tooling
     scope: repo
@@ -455,6 +469,8 @@ rules:
       - path: docs/agents/repo-validation.md
         mode: review_or_update
       - path: docs/agents/repo-architecture.md
+        mode: review_or_update
+      - path: docs/agents/lca-result-gc-contract.md
         mode: review_or_update
       - path: scripts/README.md
         mode: review_or_update

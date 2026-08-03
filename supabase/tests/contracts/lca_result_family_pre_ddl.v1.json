@@ -95,6 +95,11 @@
         "path": "supabase/migrations/20260802190427_issue_395_reconcile_cancelled_worker_cache.sql",
         "gitBlob": "435fd3c8e541b85aea497f79e61c2cd0c99010ae",
         "classification": "reconcile-v1-service-only-replacement-reviewed"
+      },
+      {
+        "path": "supabase/migrations/20260802201933_issue_398_result_gc_contract.sql",
+        "gitBlob": "6b2f41c028925c9f540f124887e576351b572e48",
+        "classification": "additive-disabled-result-gc-contract-reviewed"
       }
     ],
     "relationMovingDdlAllowed": false,

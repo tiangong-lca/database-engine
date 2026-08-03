@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: 4dbea4a0ee7102a07b68613628e56022a37a5cf0
-lastReviewedNote: "Reviewed for Issue #395: the result API runtime also proves concurrent cancelled-to-failed reconciliation and retry admission without adding a ninth facade."
+lastReviewedCommit: ae13637b48d24e24092dfc5392e1f5aa8c2ba22a
+lastReviewedNote: "Reviewed for Issue #398: the destructive loopback runtime probe covers real-role ACLs, recovery states, races, and exact zero residue."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -44,6 +44,16 @@ One-off or dated data remediation runners live under:
 
 Those runners should keep their own `README.md` with dry-run, apply, and validation examples.
 Local migration outputs and audit JSONL files should be written under `_artifacts/`, which is intentionally ignored by Git.
+
+### `test_issue_398_result_gc_runtime.py`
+
+Runs the destructive result-GC real-login and multi-session qualification only
+against an explicit loopback database URL. It requires
+`--confirm-isolated-destructive-test`, creates unique temporary login roles,
+exercises renew/fail/takeover/finalize and concurrency races, and performs exact
+database/role zero-residue cleanup. Use the fixed unique project ID and ports in
+`docs/agents/lca-result-gc-contract.md`; never point it at a linked or persistent
+database.
 
 ## Script List
 

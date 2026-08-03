@@ -30,12 +30,13 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: 4dbea4a0ee7102a07b68613628e56022a37a5cf0
-lastReviewedNote: "Reviewed for Issue #395: replacing one existing api facade through a forward migration does not change schema source ownership, generated workspace boundaries, or the eight-routine result facade shape."
+lastReviewedCommit: ae13637b48d24e24092dfc5392e1f5aa8c2ba22a
+lastReviewedNote: "Reviewed for Issue #398: additive result GC remains a private, disabled-by-default control-plane contract and does not authorize physical result-family moves."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
   - ./repo-validation.md
+  - ./lca-result-gc-contract.md
   - ./supabase-branching.md
 ---
 
@@ -53,6 +54,7 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | `supabase/seed.sql` | shared seed data; when no rows are needed, retain an executable no-op statement instead of a comments-only file so hosted Preview seeding has a valid SQL batch |
 | `supabase/seeds/dev.sql` | persistent dev-only seed overlay |
 | `supabase/tests/**` | PGTAP-style database assertions plus narrow offline Node contracts for test-runner control flow |
+| `docs/agents/lca-result-gc-contract.md` | authoritative result attestation, claim/fence/finalize, role, recovery, and rollout contract |
 | `supabase/tests/benchmarks/**` | explicit operator-run performance profiles; read each profile's environment guard because some are local/Preview-only while hybrid-search evidence is pinned to persistent staging |
 | `supabase/tests/preview/**` | exact-ref-bound disposable Hosted Preview mutation fixtures, cleanup, rollback-only fault assertions, and offline transport/lifecycle contracts; test-only and excluded from migrations, seeds, Dev data rehearsal, and production execution |
 | `supabase/tests/contracts/*_pre_ddl.v1.json` | stable fail-closed evidence contracts for relation families whose physical DDL is forbidden until static, runtime, and owner consumer-cut gates are complete; committed migration history is append-only, target-neutral static migrations may proceed, additive service-only `api` facades need an exact reviewed blob plus fixed-version PostgreSQL AST semantic proof, and opaque/dynamic SQL remains hard denied |
@@ -73,6 +75,17 @@ This repo is organized around one checked-in Supabase project plus a generated s
 - `private` owns internal runtime and control-plane objects and is never an exposed Data API schema.
 - `util` and `archive` retain operations/history responsibilities and are never exposed Data API schemas.
 - Realtime publishes explicitly selected physical tables; `api` views are not a Realtime source.
+
+## Result GC boundary
+
+Issue #398 adds only a private control-plane state machine around the existing
+`public.lca_results` family. The four result-family relations and three legacy
+read routines do not move. Existing and current Worker rows stay ineligible;
+only an explicitly attested future locator containing the exact
+`/results/<result UUID>/` path segment can enter claim/fence/finalize. Claims
+remain disabled until the Worker #202 producer contract and exact local
+qualification are both complete. Private coordinator storage and versioned
+Worker routines stay outside PostgREST.
 
 An individually qualified physical move may occur during Expand when it
 preserves one physical source of truth and keeps the reviewed compatibility
