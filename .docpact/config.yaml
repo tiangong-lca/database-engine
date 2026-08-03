@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-03"
-lastReviewedCommit: "a29f26a9eb0a6c629ae34e187c6fce4a0c215b1d"
-lastReviewedNote: "Reviewed for Issue #390: the non-authorizing physical qualification harness remains within existing scripts/tests ownership and does not change routing or governance facts."
+lastReviewedAt: "2026-08-04"
+lastReviewedCommit: "e1d467ce3d16ad2d09fed080a4a05e71736ca52e"
+lastReviewedNote: "Reviewed for Issue #407 Phase A: exact-head public inventory and privileged-routine lineage evidence remain within existing schema, scripts, tests, and documentation ownership."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

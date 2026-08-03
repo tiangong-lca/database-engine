@@ -21,8 +21,8 @@ checkPaths:
   - supabase/tests/20260802_issue_398_result_gc_contract.sql
   - scripts/test_issue_398_result_gc_runtime.py
 lastReviewedAt: 2026-08-04
-lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
-lastReviewedNote: "Reviewed for Issue #407 Phase A: document-validation RPC expansion does not change result-GC runtime, deletion authority, or Contract gates."
+lastReviewedCommit: e1d467ce3d16ad2d09fed080a4a05e71736ca52e
+lastReviewedNote: "Reviewed for Issue #407 Phase A exact-head governance: document-validation routines do not change result-GC runtime, deletion authority, lineage, or Contract gates."
 related:
   - ../../AGENTS.md
   - ./repo-validation.md

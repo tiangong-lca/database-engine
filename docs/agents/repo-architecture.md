@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-04
-lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
-lastReviewedNote: "Reviewed for Issue #407 Phase A: the physical public evidence table remains in place while private Worker routines establish the intended runtime boundary."
+lastReviewedCommit: e1d467ce3d16ad2d09fed080a4a05e71736ca52e
+lastReviewedNote: "Reviewed for Issue #407 Phase A: private Worker routines preserve the physical public evidence table and the exact-head public inventory remains 397 objects."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -115,7 +115,7 @@ The versioned `schema_boundary_phase.v1` contract keeps that transition explicit
 The stable public-boundary inventory lives under
 `supabase/tests/contracts/public_object_*`. The unqualified inventory is the
 Issue #405 exact-head v2 artifact: 397 public application objects at
-`database-engine@c5356d2` / migration head `20260803090000`, partitioned exactly
+`database-engine@e1d467c` / migration head `20260803163000`, partitioned exactly
 once as nine core + 37 predecessor residue + 117 Issue #357 + 230 Issue #358 +
 four explicit omissions. Its 388-entry identity-only Contract checklist records
 `physicalMoved`, `compatPresent`, `adapterOnly`, and `retired` separately and

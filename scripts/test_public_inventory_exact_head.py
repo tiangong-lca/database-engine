@@ -79,8 +79,8 @@ class PublicInventoryExactHeadTest(unittest.TestCase):
     def test_state_model_distinguishes_move_compat_adapter_and_retirement(self) -> None:
         states = [item["lifecycleState"] for item in self.inventory["objects"]]
         self.assertEqual(sum(state["physicalMoved"] for state in states), 7)
-        self.assertEqual(sum(state["compatPresent"] for state in states), 42)
-        self.assertEqual(sum(state["adapterOnly"] for state in states), 34)
+        self.assertEqual(sum(state["compatPresent"] for state in states), 44)
+        self.assertEqual(sum(state["adapterOnly"] for state in states), 36)
         self.assertEqual(sum(state["retired"] for state in states), 0)
         moved = {item["objectKey"] for item in self.inventory["objects"] if item["lifecycleState"]["physicalMoved"]}
         self.assertEqual(moved, {

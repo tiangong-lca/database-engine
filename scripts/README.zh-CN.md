@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-04
-lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
-lastReviewedNote: "已为 Issue #407 Phase A 复核：破坏性双实例验证强绑定本地容器、精确 migration 集合和候选 API，不授权 Hosted mutation。"
+lastReviewedCommit: e1d467ce3d16ad2d09fed080a4a05e71736ca52e
+lastReviewedNote: "已为 Issue #407 Phase A 复核：精确头部 inventory 推进到 migration 20260803163000；破坏性双实例验证仍不授权 Hosted mutation。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -433,7 +433,7 @@ python -m unittest scripts.test_public_inventory_exact_head scripts.test_public_
 python scripts/public_inventory_exact_head.py --refresh --db-url postgresql://...
 ```
 
-v2 绑定 exact source `c5356d2`、migration head `20260803090000`、397 个 live
+v2 绑定 exact source `e1d467c`、migration head `20260803163000`、397 个 live
 identity、`9+37+117+230+4` exactly-once partition，以及完整的 388-residue
 Contract DROP identity checklist。checklist 不是可执行 SQL：所有 identity 均为
 `blocked`，不生成 migration，`contractReady=false` 永远成立。missing、unknown、

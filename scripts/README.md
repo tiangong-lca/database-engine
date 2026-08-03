@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-03
-lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
-lastReviewedNote: "Reviewed for Issue #405: exact-head inventory refresh and comparison require explicit loopback URLs, emit no DDL, and cannot authorize Contract."
+lastReviewedAt: 2026-08-04
+lastReviewedCommit: e1d467ce3d16ad2d09fed080a4a05e71736ca52e
+lastReviewedNote: "Reviewed for Issue #407 Phase A: exact-head inventory advances to migration 20260803163000; refresh remains loopback-only, emits no DDL, and cannot authorize Contract."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -536,8 +536,8 @@ Only an explicit disposable loopback database may regenerate current files:
 python scripts/public_inventory_exact_head.py --refresh --db-url postgresql://...
 ```
 
-The v2 artifact binds exact source `c5356d2`, migration head
-`20260803090000`, 397 live identities, partition `9+37+117+230+4`, and the full
+The v2 artifact binds exact source `e1d467c`, migration head
+`20260803163000`, 397 live identities, partition `9+37+117+230+4`, and the full
 388-residue Contract DROP identity checklist. The checklist is non-executable
 inventory: every entry remains `blocked`, no migration is produced, and
 `contractReady=false` is invariant. Missing, unknown, duplicate, count, schema,

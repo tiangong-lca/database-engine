@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-04
-lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
-lastReviewedNote: "Reviewed for Issue #407 Phase A: the migration and qualification harness do not change generated remote-schema workspace ownership or refresh semantics."
+lastReviewedCommit: e1d467ce3d16ad2d09fed080a4a05e71736ca52e
+lastReviewedNote: "Reviewed for Issue #407 Phase A exact-head governance: generated remote-schema workspace ownership and refresh semantics remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
