@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://tiangong-lca.dev/contracts/database.public-object-contract-drop-checklist.v2.schema.json",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion", "sourceInventorySha256", "finalPublicAllowlist",
+    "entryCount", "entries", "contractReady"
+  ],
+  "properties": {
+    "schemaVersion": {"const": "database.public-object-contract-drop-checklist.v2"},
+    "sourceInventorySha256": {"pattern": "^[0-9a-f]{64}$"},
+    "finalPublicAllowlist": {
+      "type": "array", "minItems": 9, "maxItems": 9, "uniqueItems": true
+    },
+    "entryCount": {"const": 388},
+    "entries": {
+      "type": "array", "minItems": 388, "maxItems": 388,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "objectKey", "objectType", "partition", "targetSchema", "dropIdentity",
+          "lifecycleState", "status", "blockers"
+        ],
+        "properties": {
+          "objectKey": {"type": "string", "pattern": "^public\\."},
+          "objectType": {"enum": ["table", "partitioned_table", "view", "materialized_view", "function", "procedure"]},
+          "partition": {"enum": ["predecessor", "issue357", "issue358", "omitted-explicit"]},
+          "targetSchema": {"enum": ["api", "private", "util", "archive", "retire"]},
+          "dropIdentity": {
+            "type": "string",
+            "pattern": "^(TABLE|VIEW|MATERIALIZED VIEW|FUNCTION|PROCEDURE) public\\."
+          },
+          "lifecycleState": {
+            "type": "object", "additionalProperties": false,
+            "required": ["physicalMoved", "compatPresent", "adapterOnly", "retired"],
+            "properties": {
+              "physicalMoved": {"type": "boolean"}, "compatPresent": {"type": "boolean"},
+              "adapterOnly": {"type": "boolean"}, "retired": {"const": false}
+            }
+          },
+          "status": {"const": "blocked"},
+          "blockers": {"type": "array", "minItems": 3, "items": {"type": "string"}}
+        }
+      }
+    },
+    "contractReady": {"const": false}
+  }
+}

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-03
-lastReviewedCommit: a29f26a9eb0a6c629ae34e187c6fce4a0c215b1d
-lastReviewedNote: "已为 Issue #390 复核：新增 physical qualification v1 仅允许离线检查与 loopback 只读 baseline，破坏性执行保持关闭。"
+lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
+lastReviewedNote: "已为 Issue #405 复核：exact-head inventory 刷新与对比只接受显式 loopback URL，不生成 DDL，也不授权 Contract。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -412,29 +412,35 @@ python -m unittest scripts.test_issue_390_external_git_tree
 
 ### `public_inventory_closure.py`
 
-该脚本把 workspace #533 的逐对象 ledger 与 database #337 merge head 的实时
-catalog 合并为稳定合同，覆盖 table、view、materialized view、function/procedure、
-精确 routine identity arguments、ACL/RLS/default privileges，以及
-FK/rewrite/trigger/policy/composite/function-body 依赖。输出还包含 SCC-aware Expand
-顺序、反向 Contract 顺序、固定 consumer commit SHA 的静态证据和显式 residue。
+`public_inventory_closure.py --check` 现在转发到 Issue #405 的离线 exact-head
+校验器；旧 #338 generator/provenance 命令只保留给 genesis lineage 与 fixed-SHA
+consumer evidence。
 
 ```bash
 python scripts/public_inventory_closure.py --scan-consumers <lca-workspace-root>
 python scripts/public_inventory_closure.py --verify-provenance <lca-workspace-root>
-python scripts/public_inventory_closure.py --write
 python scripts/public_inventory_closure.py --check
-python -m unittest scripts/test_public_inventory_closure.py
+python scripts/public_inventory_exact_head.py --check
+python scripts/public_inventory_exact_head.py --check-live --db-url postgresql://...
+python scripts/public_inventory_exact_head.py --compare-catalogs \
+  --db-url postgresql://... --other-db-url postgresql://...
+python -m unittest scripts.test_public_inventory_exact_head scripts.test_public_inventory_closure
 ```
 
-只有 consumer SHA 变化时才重新扫描。`contractReady=false` 表示仍有 dynamic SQL
-或 runtime/owner 证据待关闭；缺少 mapping、无效 target、非精确 SHA、重复 key 或
-live/ledger 漂移会直接失败。未知 consumer 始终保留为 blocker，不能据此退休对象。
+只有显式 disposable loopback database 可以刷新当前 artifact：
 
-`source` 将 workspace baseline、其精确 `database-engine` gitlink、历史
-review/source/merge-base lineage，与唯一用于 migration/catalog 重放的
-`databaseSchemaSha` 明确分离；旧 #338 artifact hash 仅作为 lineage。
-`--verify-provenance` 不读取移动 remote 即可重放这些关系；`--check` 先验证
-canonical JSON bytes 与 committed SHA-256，再执行 committed-vs-generated 对比。
+```bash
+python scripts/public_inventory_exact_head.py --refresh --db-url postgresql://...
+```
+
+v2 绑定 exact source `c5356d2`、migration head `20260803090000`、397 个 live
+identity、`9+37+117+230+4` exactly-once partition，以及完整的 388-residue
+Contract DROP identity checklist。checklist 不是可执行 SQL：所有 identity 均为
+`blocked`，不生成 migration，`contractReady=false` 永远成立。missing、unknown、
+duplicate、count、schema、hash、counterpart 或 live-ledger drift 都会失败关闭。
+
+旧 #338 artifact/hash 继续以 `public_object_inventory.genesis.*` 保持不可变；
+security lineage 仍引用 genesis，不把 v2 刷新解释成历史重写。
 
 ### `security_definer_audit.py`
 
