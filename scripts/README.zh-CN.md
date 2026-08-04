@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-03
-lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
-lastReviewedNote: "已为 Issue #405 复核：exact-head inventory 刷新与对比只接受显式 loopback URL，不生成 DDL，也不授权 Contract。"
+lastReviewedAt: 2026-08-04
+lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
+lastReviewedNote: "已为 Issue #412 复核：target-neutral 内部静态 SQL SECURITY DEFINER 准入采用结构规则，不使用业务专属 allowlist。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -344,6 +344,13 @@ custom type/access method、trigger/rule 状态变更，以及 migration identit
 mode 弱化。HEAD、index 与 worktree
 分别读取各自版本的合同。单次日志零命中也不构成 burn-in。canonical
 manifest contract 会导入该 test case，因此沿用既有 CI 而不新增第二条 workflow。
+
+内部 `SECURITY DEFINER` 的 target-neutral 准入是结构规则，不是 allowlist。
+它只接受显式位于内部 schema 的 `LANGUAGE SQL` 函数，且函数体必须完整解析、
+relation 依赖必须 schema-qualified、唯一的函数级路径必须精确等于
+`pg_catalog, pg_temp`。exposed-schema 函数、过程式或动态 body、未限定 relation、
+重复或反序的路径设置，以及包含其他 schema 的路径继续 hard deny。规则不读取
+Issue 编号、migration 路径、函数名、Git blob 或 classification。
 
 ### `issue_390_physical_qualification.py`
 
