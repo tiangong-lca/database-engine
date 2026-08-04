@@ -42,11 +42,11 @@ DROP_CHECKLIST_SCHEMA = CONTRACT_DIR / "public_object_contract_drop_checklist.v2
 
 SCHEMA_VERSION = "database.public-object-inventory-closure.v2"
 DROP_SCHEMA_VERSION = "database.public-object-contract-drop-checklist.v2"
-DATABASE_SOURCE_SHA = "e1d467ce3d16ad2d09fed080a4a05e71736ca52e"
-MIGRATION_HEAD = "20260803163000"
-MIGRATION_TREE_SHA256 = "ede03ee1a1a67e494bcf3272926588b24fc0b1a6145999b2faa71217d6e43945"
-PREDECESSOR_SHA256 = "2526146dc64e2b32bdf9afb2ebcc0495f5a174f241c2abbd7f0f1b5348aa8c18"
-EXPECTED_COUNTS = {"function": 336, "table": 49, "view": 12}
+DATABASE_SOURCE_SHA = "06af268bc76b39e6c318e7b8b0d9b8452ed66d3e"
+MIGRATION_HEAD = "20260804100000"
+MIGRATION_TREE_SHA256 = "c772666e6f45d854f37cf36ff78c8f692c7c79d86c14f7a1ac30865eef4b9a3b"
+PREDECESSOR_SHA256 = "add6f85c68cf6aa45de0600a9e287287e49e3dba884a6ff45e0793fe337df4c5"
+EXPECTED_COUNTS = {"function": 336, "table": 48, "view": 13}
 EXPECTED_PARTITIONS = {
     "core": 9,
     "predecessor": 37,

@@ -37,7 +37,7 @@ class DatabaseContractManifestTest(unittest.TestCase):
         ]
         self.assertEqual(len(classified["canonical-pgtap"]), 91)
         self.assertEqual(len(suite["excludedFiles"]), 19)
-        self.assertEqual(len(selected), 71)
+        self.assertEqual(len(selected), 72)
 
     def test_issue_397_external_tree_gate_is_in_canonical_offline_suite(self) -> None:
         self.assertTrue(issubclass(Issue390ExternalGitTreeTest, unittest.TestCase))
@@ -99,7 +99,7 @@ class DatabaseContractManifestTest(unittest.TestCase):
         owned = [path for paths in classified.values() for path in paths if path.endswith(".sql")]
         self.assertEqual(len(sql_paths), 105)
         self.assertEqual(sorted(owned), sorted(sql_paths))
-        self.assertEqual(len(classified["canonical-pgtap"]), 90)
+        self.assertEqual(len(classified["canonical-pgtap"]), 91)
 
     def test_issue_390_runtime_is_mandatory_exact_canonical_local_wiring(self) -> None:
         contract = runner.RESULT_API_FACADE_CONTRACT

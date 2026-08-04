@@ -974,13 +974,25 @@ def assert_telemetry(url: str, container: str) -> None:
         conn.execute("select public.svc_lcia_document_validation_evidence_lookup('[]'::jsonb)")
         conn.execute("select public.svc_lcia_document_validation_evidence_record('[]'::jsonb,null)")
         conn.commit()
-    time.sleep(0.2)
-    logs = subprocess.run(
-        ["docker", "logs", "--since", since, container],
-        text=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
-    ).stdout
-    lookup = [line for line in logs.splitlines() if "issue_407_public_compat function=lookup" in line]
-    record = [line for line in logs.splitlines() if "issue_407_public_compat function=record" in line]
+    deadline = time.monotonic() + 5
+    lookup: list[str] = []
+    record: list[str] = []
+    while time.monotonic() < deadline:
+        logs = subprocess.run(
+            ["docker", "logs", "--since", since, container],
+            text=True, check=True, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
+        ).stdout
+        lookup = [
+            line for line in logs.splitlines()
+            if "issue_407_public_compat function=lookup" in line
+        ]
+        record = [
+            line for line in logs.splitlines()
+            if "issue_407_public_compat function=record" in line
+        ]
+        if len(lookup) == 1 and len(record) == 1:
+            break
+        time.sleep(0.2)
     if len(lookup) != 1 or len(record) != 1:
         raise AssertionError(f"telemetry count mismatch: lookup={len(lookup)} record={len(record)}")
     if PREFIX in "\n".join(lookup + record):

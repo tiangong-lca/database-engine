@@ -61,7 +61,7 @@ class PublicInventoryExactHeadTest(unittest.TestCase):
 
     def test_exact_counts_and_partition_are_closed(self) -> None:
         self.assertEqual(len(self.inventory["objects"]), 397)
-        self.assertEqual(self.inventory["counts"], {"function": 336, "table": 49, "view": 12})
+        self.assertEqual(self.inventory["counts"], {"function": 336, "table": 48, "view": 13})
         self.assertEqual(self.inventory["partitionCounts"], dict(sorted(exact.EXPECTED_PARTITIONS.items())))
         self.assertEqual(set(self.inventory["finalPublicAllowlist"]), exact.CORE_KEYS)
 
@@ -78,14 +78,16 @@ class PublicInventoryExactHeadTest(unittest.TestCase):
 
     def test_state_model_distinguishes_move_compat_adapter_and_retirement(self) -> None:
         states = [item["lifecycleState"] for item in self.inventory["objects"]]
-        self.assertEqual(sum(state["physicalMoved"] for state in states), 7)
-        self.assertEqual(sum(state["compatPresent"] for state in states), 44)
-        self.assertEqual(sum(state["adapterOnly"] for state in states), 36)
+        self.assertEqual(sum(state["physicalMoved"] for state in states), 8)
+        self.assertEqual(sum(state["compatPresent"] for state in states), 45)
+        self.assertEqual(sum(state["adapterOnly"] for state in states), 37)
         self.assertEqual(sum(state["retired"] for state in states), 0)
         moved = {item["objectKey"] for item in self.inventory["objects"] if item["lifecycleState"]["physicalMoved"]}
         self.assertEqual(moved, {
             "public.lca_active_snapshots", "public.lca_network_snapshots",
-            "public.lca_snapshot_artifacts", "public.worker_job_artifacts",
+            "public.lca_snapshot_artifacts",
+            "public.lcia_document_validation_evidence",
+            "public.worker_job_artifacts",
             "public.worker_job_events", "public.worker_job_kinds", "public.worker_jobs",
         })
 

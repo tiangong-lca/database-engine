@@ -103,11 +103,11 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'lcia_document_validation_evidence',
     array['source_worker_job_id']
   ),
-  'lcia_document_validation_evidence has a usable worker job support index'
+  'private lcia_document_validation_evidence has a usable worker job support index'
 );
 
 select ok(
