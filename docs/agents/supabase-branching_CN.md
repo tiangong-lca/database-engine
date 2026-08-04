@@ -22,7 +22,7 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
+lastReviewedCommit: 1a0fc514e41724bd513b4126429c38dff10339c0
 lastReviewedNote: "已针对 Issue #346 复核：持久化 dev 显式串行执行 migration 与白名单 PostgREST 配置，production 仍由 Supabase integration 管理。"
 related:
   - ../../AGENTS.md

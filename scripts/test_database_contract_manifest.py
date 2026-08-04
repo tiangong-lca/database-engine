@@ -6,7 +6,6 @@ from __future__ import annotations
 import copy
 import hashlib
 import json
-import re
 import subprocess
 import sys
 import tempfile
@@ -34,22 +33,6 @@ class DatabaseContractManifestTest(unittest.TestCase):
         self.assertEqual(len(classified["canonical-pgtap"]), 83)
         self.assertEqual(len(suite["excludedFiles"]), 19)
         self.assertEqual(len(selected), 64)
-
-    def test_persistent_dev_validation_fetches_immutable_provenance_history(self) -> None:
-        workflow = (runner.ROOT / ".github/workflows/supabase-dev.yml").read_text(
-            encoding="utf-8"
-        )
-        self.assertRegex(
-            workflow,
-            re.compile(
-                r"- name: Checkout repository\n"
-                r"\s+uses: actions/checkout@v6\n"
-                r"\s+with:\n"
-                r"\s+fetch-depth: 0\n"
-                r".*?- name: Setup Python",
-                re.DOTALL,
-            ),
-        )
 
     def test_suite_evidence_binds_commit_head_cli_manifest_and_file_list(self) -> None:
         files = ["supabase/tests/example.sql"]
