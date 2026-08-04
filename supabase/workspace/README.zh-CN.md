@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a3b1f19aaceef1cb6037180dc55e454d00ac08eb
-lastReviewedNote: "已为 Issue #339 与 Issue #346 follow-up 复核：ACL/catalog 变更和持久化 Dev PostgREST 协调（包括回滚/readback 语义）不改变生成 workspace 的行为或真相源边界。"
+lastReviewedCommit: 833564c7ced2037d07e09d3f5bb800f5b430e469
+lastReviewedNote: "已为 Issue #346 follow-up 复核：PostgREST 配置回滚语义仍不改变生成 workspace 的行为或真相源边界。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

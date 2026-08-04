@@ -20,16 +20,16 @@ with contract as (
       select jsonb_build_object('schema',n.nspname,'name',c.relname,'kind',c.relkind,
         'rls',c.relrowsecurity,'forceRls',c.relforcerowsecurity,'acl',coalesce(c.relacl::text,'null')) x
       from pg_class c join pg_namespace n on n.oid=c.relnamespace
-      where n.nspname in ('public','api','private','util','archive') and c.relkind in ('r','p','v','m','S')
+      where n.nspname in ('public','private','util','archive') and c.relkind in ('r','p','v','m','S')
     ) q),
     'indexes', (select coalesce(jsonb_agg(to_jsonb(x) order by schemaname,tablename,indexname), '[]') from (
       select schemaname,tablename,indexname,indexdef
       from pg_indexes
-      where schemaname in ('public','api','private','util','archive')
+      where schemaname in ('public','private','util','archive')
     ) x),
     'policies', (select coalesce(jsonb_agg(to_jsonb(x) order by schemaname,tablename,policyname), '[]') from (
       select schemaname,tablename,policyname,permissive,roles,cmd,qual,with_check from pg_policies
-      where schemaname in ('public','api','private','util','archive')
+      where schemaname in ('public','private','util','archive')
     ) x),
     'functions', (select coalesce(jsonb_agg(x order by x->>'schema',x->>'name',x->>'identityArguments'), '[]') from (
       select jsonb_build_object('schema',n.nspname,'name',p.proname,
@@ -37,13 +37,13 @@ with contract as (
         'result',pg_get_function_result(p.oid),'securityDefiner',p.prosecdef,
         'config',coalesce(to_jsonb(p.proconfig),'[]'::jsonb),'acl',coalesce(p.proacl::text,'null')) x
       from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-      where p.prokind='f' and n.nspname in ('public','api','private','util','archive')
+      where p.prokind='f' and n.nspname in ('public','private','util','archive')
     ) q),
     'defaultPrivileges', (select coalesce(jsonb_agg(to_jsonb(x) order by owner,schema,object_type), '[]') from (
       select d.defaclrole::regrole::text owner,coalesce(n.nspname,'*') schema,
         d.defaclobjtype object_type,coalesce(d.defaclacl::text,'null') acl
       from pg_default_acl d left join pg_namespace n on n.oid=d.defaclnamespace
-      where n.nspname in ('public','api','private','util','archive')
+      where n.nspname in ('public','private','util','archive')
     ) x)
   ) payload
 )

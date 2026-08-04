@@ -24,21 +24,14 @@ RPC_CASES = {
 }
 
 
-def request_headers(key: str, *, payload: dict | None, profile: str) -> dict[str, str]:
-    headers = {
-        "apikey": key,
-        "Authorization": f"Bearer {key}",
-        "Accept": "application/openapi+json" if payload is None else "application/json",
-    }
-    headers["Accept-Profile" if payload is None else "Content-Profile"] = profile
-    if payload is not None:
-        headers["Content-Type"] = "application/json"
-    return headers
-
-
-def request(url: str, key: str, *, payload: dict | None = None, profile: str = "public") -> tuple[int, dict]:
+def request(url: str, key: str, *, payload: dict | None = None) -> tuple[int, dict]:
     data = None if payload is None else json.dumps(payload).encode()
-    req = urllib.request.Request(url, data=data, headers=request_headers(key, payload=payload, profile=profile))
+    req = urllib.request.Request(url, data=data)
+    req.add_header("apikey", key)
+    req.add_header("Authorization", f"Bearer {key}")
+    req.add_header("Accept", "application/openapi+json" if payload is None else "application/json")
+    if payload is not None:
+        req.add_header("Content-Type", "application/json")
     try:
         with urllib.request.urlopen(req, timeout=10) as response:
             return response.status, json.loads(response.read())
@@ -70,7 +63,7 @@ def main() -> int:
         cwd=ROOT, check=True, stdout=subprocess.DEVNULL,
     )
     for _ in range(40):
-        openapi_status, openapi = request(f"{rest_url}/", service_credential, profile="public")
+        openapi_status, openapi = request(f"{rest_url}/", service_credential)
         paths = openapi.get("paths", {}) if openapi_status == 200 else {}
         if all(f"/rpc/{name}" in paths for name in RPC_CASES):
             break
@@ -80,12 +73,10 @@ def main() -> int:
 
     for name, payload in RPC_CASES.items():
         service_status, service_body = request(
-            f"{rest_url}/rpc/{name}", service_credential, payload=payload, profile="public",
+            f"{rest_url}/rpc/{name}", service_credential, payload=payload,
         )
         assert service_status == 200 and service_body == {"ok": True, "data": []}, service_body
-        anon_status, anon_body = request(
-            f"{rest_url}/rpc/{name}", anonymous_credential, payload=payload, profile="public"
-        )
+        anon_status, anon_body = request(f"{rest_url}/rpc/{name}", anonymous_credential, payload=payload)
         assert anon_status in (401, 403, 404) and anon_body.get("code") in ("42501", "PGRST202"), anon_body
 
     print("PASS PostgREST exposes both Worker RPCs to service_role and denies anon")

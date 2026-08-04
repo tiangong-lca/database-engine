@@ -24,10 +24,8 @@ select ok(
 );
 
 select ok(
-  (select p.prosecdef and owner_role.rolname = 'api_internal_executor'
-   from pg_proc p join pg_roles owner_role on owner_role.oid = p.proowner
-   where p.oid = 'public.search_dataset_json_uuid_mentions(uuid,text[],text,text,uuid,integer,integer)'::regprocedure),
-  'public JSON UUID mention wrapper uses the RLS-bound internal executor'
+  not (select prosecdef from pg_proc where oid = 'public.search_dataset_json_uuid_mentions(uuid,text[],text,text,uuid,integer,integer)'::regprocedure),
+  'public JSON UUID mention wrapper remains security invoker'
 );
 
 select ok(

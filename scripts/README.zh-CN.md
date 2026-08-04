@@ -259,30 +259,6 @@ python -m unittest scripts/test_public_inventory_closure.py
 或 runtime/owner 证据待关闭；缺少 mapping、无效 target、非精确 SHA、重复 key 或
 live/ledger 漂移会直接失败。未知 consumer 始终保留为 blocker，不能据此退休对象。
 
-### Security ACL Expand 验证
-
-`test_security_acl_upgrade.py` 对 Issue #339 migration 执行带数据 base-to-head、
-事务内故障注入、重试、数据 parity、按环境快照恢复 ACL 和再次 roll-forward。
-
-```bash
-python scripts/test_security_acl_upgrade.py
-```
-
-`hosted_security_acl.py` 是 fail-closed hosted operator gate：组合数据库 posture、
-Management API `db_schema` readback 和真实 anon REST negative probes。默认只读；
-hosted PostgREST 配置须另行通过 `scripts/apply_postgrest_config.py` 的受审 diff、
-readback 和 rollback 合同应用或协调。
-`supabase_admin` default privileges 由有权限的 owner session 单独执行
-`supabase/operator/issue_339_supabase_admin_default_privileges.sql`。
-
-精确 exposed schema 集合及受审顺序为 `api,public,graphql_public`；不得包含
-`private`、`util` 或 `archive`。opaque `sb_publishable_` credential 仅作为
-`apikey` 发送；legacy JWT 形态 anon key 才同时作为 Bearer。离线参数合同用以下命令验证：
-
-```bash
-python -m unittest scripts/test_hosted_security_acl.py
-```
-
 ### `test_scope_closure_staged_write_set_v2_fixture.sh`
 
 用于校验 Worker/数据库逐字共享的 staged write-set v2 fixture，包括
