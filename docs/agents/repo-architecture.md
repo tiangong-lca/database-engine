@@ -173,19 +173,6 @@ or duplicate indexes.
 
 `worker_jobs` is the canonical lifecycle and queue-control table for work that cannot be safely carried by Edge Function request/response execution.
 
-The first private-boundary rollout is additive: `private.worker_jobs`,
-`private.worker_job_events`, `private.worker_job_artifacts`, and
-`private.worker_job_kinds` are security-invoker views over the one physical
-public source during Expand. Public RPC signatures and composite types remain
-stable; there is no dual write. A physical schema move is a later Contract step
-gated by exact consumer SHAs, zero compatibility calls, burn-in, rollback-window
-closure, and the checked residue report. `public.worker_job_domain_refs` remains
-a public cross-domain projection rather than Worker control-plane storage.
-The bounded concurrency snapshot uses the partial composite index
-`worker_jobs_job_kind_concurrency_created_idx` on job kind, concurrency key,
-and descending creation/id order, so the equality prefix is an index condition
-and the twenty-row result needs no filtered sort.
-
 Retained domain tables such as `lca_package_artifacts`, `lca_package_export_items`, `lca_package_request_cache`, `lca_results`, `lca_result_cache`, `lca_latest_all_unit_results`, `lca_network_snapshots`, `dataset_review_submit_requests`, and `dataset_review_submit_gate_runs` are not replacement job tables. They store worker-produced artifacts, caches, projections, reports, or coordinator domain state. Post-cutover rows should be traceable back to `worker_jobs` through the appropriate worker job reference columns, except for explicitly documented exceptions such as snapshot identity rows that are traced through downstream worker-linked records.
 
 Use `public.worker_domain_traceability_cutoffs` and `public.worker_domain_traceability_violations` for DB-side audit checks when validating that new worker-produced domain rows remain traceable.
