@@ -6,20 +6,6 @@
   "tablePhysicalMoveReady": false,
   "targetColumnAclPolicy": "none",
   "productionMutationAllowed": false,
-  "sourcePolicyCompatibility": {
-    "public.users/select by self and team and admin": {
-      "admittedPolicySetMd5": [
-        "57fd9c26617c29dc6edc92d231bbec85",
-        "6ab74729e7e0ec6e9378542059d17cd0"
-      ],
-      "expandDisposition": "preserve-exact-predecessor",
-      "legacyVariantSecurityDisposition": "compatibility-only-not-approved-target",
-      "retirementIssues": [
-        "linancn/tiangong-lca-next#753",
-        "tiangong-lca/database-engine#358"
-      ]
-    }
-  },
   "consumerEvidence": {
     "next": "b8b32228f6debd2165512c26fc186801bd3bcfe2",
     "edge": "facc70a7ae1f4787cff5751f778f3cbc109ca950",

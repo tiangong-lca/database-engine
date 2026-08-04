@@ -114,23 +114,15 @@ begin
     raise exception 'Issue #355 preflight missing exact objects: %', v_missing;
   end if;
 
-  -- public.users has two independently observed predecessor contracts. The
-  -- repo/blank replay variant and persistent Dev/Production legacy variant are
-  -- both source-only inputs to Expand. Expand preserves either exact hash; it
-  -- does not endorse or narrow the legacy global-owner clause. Retirement
-  -- requires the separately governed #753/#358 consumer-zero and owner review.
-  with expected(relname, acl_hash, policy_hashes) as (values
-    ('comments','01325751d110098b0c41305bc21ee772',array['380f1a0c3b1970af16ec71425b65f2f0']),
-    ('identity_center_processed_events','3a6eef6333e35dd973f1d4b8cef7e564',array['d41d8cd98f00b204e9800998ecf8427e']),
-    ('identity_center_users','3a6eef6333e35dd973f1d4b8cef7e564',array['d41d8cd98f00b204e9800998ecf8427e']),
-    ('notifications','80b5dc3f8df5de03126ed3ef949dcd26',array['f08c612310fbeecf938d31e0a5e4806a']),
-    ('reviews','01325751d110098b0c41305bc21ee772',array['7f1955b6ee25bf7afd937f1ec32f941b']),
-    ('roles','01325751d110098b0c41305bc21ee772',array['0be7e710b6b38a985dafe00754395c74']),
-    ('teams','01325751d110098b0c41305bc21ee772',array['dc47a8e9365d969154020c196bbfa23e']),
-    ('users','01325751d110098b0c41305bc21ee772',array[
-      '57fd9c26617c29dc6edc92d231bbec85',
-      '6ab74729e7e0ec6e9378542059d17cd0'
-    ])
+  with expected(relname, acl_hash, policy_hash) as (values
+    ('comments','01325751d110098b0c41305bc21ee772','380f1a0c3b1970af16ec71425b65f2f0'),
+    ('identity_center_processed_events','3a6eef6333e35dd973f1d4b8cef7e564','d41d8cd98f00b204e9800998ecf8427e'),
+    ('identity_center_users','3a6eef6333e35dd973f1d4b8cef7e564','d41d8cd98f00b204e9800998ecf8427e'),
+    ('notifications','80b5dc3f8df5de03126ed3ef949dcd26','f08c612310fbeecf938d31e0a5e4806a'),
+    ('reviews','01325751d110098b0c41305bc21ee772','7f1955b6ee25bf7afd937f1ec32f941b'),
+    ('roles','01325751d110098b0c41305bc21ee772','0be7e710b6b38a985dafe00754395c74'),
+    ('teams','01325751d110098b0c41305bc21ee772','dc47a8e9365d969154020c196bbfa23e'),
+    ('users','01325751d110098b0c41305bc21ee772','57fd9c26617c29dc6edc92d231bbec85')
   ), actual as (
     select c.relname, c.relkind, c.relrowsecurity, c.relforcerowsecurity,
       md5(string_agg(coalesce(grantee_role.rolname,'PUBLIC')||':'||acl.privilege_type||':'||acl.is_grantable::text,
@@ -155,8 +147,7 @@ begin
   select array_agg(expected.relname order by expected.relname) into v_drift
   from expected join actual using (relname)
   where actual.relkind <> 'r' or not actual.relrowsecurity or actual.relforcerowsecurity
-     or actual.acl_hash <> expected.acl_hash
-     or not (actual.policy_hash = any(expected.policy_hashes));
+     or actual.acl_hash <> expected.acl_hash or actual.policy_hash <> expected.policy_hash;
   if v_drift is not null then
     raise exception 'Issue #355 source relation relkind/RLS/ACL/policy preflight drift: %', v_drift;
   end if;

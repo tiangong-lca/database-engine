@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "已为 Issue #355 mandatory destructive qualification 复核：canonical opt-in gate 先调用 dual exact-hash/逐角色 RLS harness，再调用 rollback/roll-forward harness，并传播任一失败。"
+lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
+lastReviewedNote: "已为 Issue #355 delegated ACL 加固复核：脚本入口继续保留 immutable provenance，并验证 relation/column/routine 授权链收敛、无关对象隔离、三类篡改拒绝与 production-equivalent 行为。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -404,15 +404,9 @@ python -m unittest scripts/test_hosted_security_acl.py
 cache reload 和 internal schema 负向 profile。`test_identity_collaboration_concurrency.py`
 使用 8 个并发 session 执行 800 次 public/private checksum parity 调用。静态测试固定
 16 个精确 inventory 对象、consumer SHA、版本化 DTO、事务/timeout 与 Contract gate。
-`test_identity_collaboration_policy_variants.py` 只允许在 disposable local 运行：它复现
-blank/repository 与 persistent Dev/Production 两个精确 users-policy fingerprint，证明
-Expand 保留任一 predecessor、所有 security-invoker projection 权限不超过 source，并在
-mutation 前拒绝第三种 unknown variant。live legacy variant 只是兼容证据，不是批准的
-安全目标；收紧继续由 Next #753 与 database-engine #358 跟踪。
 
 ```bash
 python -m unittest scripts/test_identity_collaboration_expand_static.py
-python scripts/test_identity_collaboration_policy_variants.py
 python scripts/test_identity_collaboration_data_api.py
 python scripts/test_identity_collaboration_concurrency.py
 ```
@@ -421,12 +415,9 @@ canonical runner 只解析一次显式 loopback stack：先把 database identity
 `SUPABASE_WORKDIR` 对账，再向每一个 SQL、Data API、catalog、schema phase、inventory、
 lint 和 SECURITY DEFINER gate 覆盖并传递同一组 `DATABASE_URL`、REST credentials 与
 workdir。`test_database_contract_targeting.py` 提供离线双 stack 混拼负向测试。
-canonical runner 默认不执行 destructive identity DDL；只可在 disposable local stack
-上用 `--run-destructive-identity-qualification` 显式启用。该 mandatory gate 先执行
-dual exact-hash preservation/retry、unknown 原子拒绝与逐角色 RLS matrix harness，再执行
-rollback/roll-forward/lock-failure harness；任一失败都会终止 canonical runner。
-`--skip-data-api` 只跳过 HTTP probe，不选择或重定向破坏性测试目标。runner control-flow
-合同位于 `test_database_contract_identity_qualification.py`。
+canonical runner 默认不执行 rollback DDL；只可在 disposable local stack 上用
+`--run-destructive-identity-qualification` 显式启用。`--skip-data-api` 只跳过 HTTP
+probe，不选择或重定向破坏性测试目标。
 
 可重复 operator rollback 为
 `supabase/operator/issue_355_restore_identity_collaboration_expand.sql`；它只删除新增

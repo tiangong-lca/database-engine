@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "已为 Issue #355 mandatory destructive qualification 复核：生成 workspace 仍只作检查证据；canonical opt-in runner 现强制执行 exact-hash/RLS 与 rollback/roll-forward 两组证明。"
+lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
+lastReviewedNote: "已为 Issue #355 delegated ACL 加固复核：生成工作区继续与权威 migration/catalog 合同分离；relation/column/routine 授权链证据由 live catalog qualification 持有。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -83,14 +83,6 @@ service-only, and user profiles expose named `id`/`contact`/`email`/`display_nam
 fields rather than raw Auth metadata. Physical moves wait for exact-SHA consumer
 zero, hosted-dev burn-in, and a separately reviewed Contract change.
 
-The `public.users` predecessor currently has two exact catalog variants: the
-blank/repository policy set and a persistent Dev/Production legacy policy set
-with an additional global team-owner visibility clause. Identity/collaboration
-Expand admits only those two fingerprints and preserves whichever predecessor
-it receives. The live variant is compatibility evidence, not an approved
-security target; narrowing it requires the separately tracked consumer-zero
-and owner review in Next #753 and database-engine #358.
-
 The versioned `schema_boundary_phase.v1` contract keeps that transition explicit. In Expand, the nine core tables remain in `public`, each other inventoried public table must have a non-public target, and reviewed compatibility relations may remain. Contract is a separate approval that enforces exactly the nine tables and no application views, materialized views, functions, or procedures in `public`.
 
 The stable public-boundary inventory lives under

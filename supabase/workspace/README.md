@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
-lastReviewedNote: "Reviewed for Issue #355 mandatory destructive qualification: generated workspace remains inspection evidence, while the canonical opt-in runner now enforces both exact-hash/RLS and rollback/roll-forward proof."
+lastReviewedCommit: c42fed5d7568f7f1b2cf693d88b9c02e4e19b4f8
+lastReviewedNote: "Reviewed for Issue #355 delegated-ACL hardening: generated workspace output remains separate from authoritative migrations and catalog contracts; relation/column/routine delegation evidence belongs to live-catalog qualification."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
