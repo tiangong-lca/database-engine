@@ -75,6 +75,13 @@ DOCUMENT_EVIDENCE_MIGRATION_PATH = (
 DOCUMENT_EVIDENCE_CLASSIFICATION = (
     "additive-document-evidence-private-contract-reviewed"
 )
+DOCUMENT_EVIDENCE_PHYSICAL_MIGRATION_PATH = (
+    "supabase/migrations/20260804100000_issue_407_document_validation_evidence_physical_expand.sql"
+)
+DOCUMENT_EVIDENCE_PHYSICAL_CLASSIFICATION = (
+    "physical-document-evidence-private-expand-reviewed"
+)
+DOCUMENT_EVIDENCE_PHYSICAL_GIT_BLOB = "534f7ddb13ff52a62e949e8f098859af038c5d4c"
 SAFE_FACADE_BUILTINS = {
     "array_agg",
     "clock_timestamp",
@@ -1555,6 +1562,72 @@ def reviewed_document_evidence_migration_violations(sql: str) -> list[str]:
     return sorted(set(violations))
 
 
+def reviewed_document_evidence_physical_migration_violations(
+    *, path: str, git_blob: str, sql: str
+) -> list[str]:
+    """Exact PostgreSQL-AST admission for Issue #407 Phase B only."""
+    if (
+        path != DOCUMENT_EVIDENCE_PHYSICAL_MIGRATION_PATH
+        or git_blob != DOCUMENT_EVIDENCE_PHYSICAL_GIT_BLOB
+    ):
+        return ["document-evidence-physical:exact-blob-required"]
+    statements, errors = _parse_sql(sql)
+    if errors:
+        return errors
+    expected_types = (
+        "TransactionStmt", "VariableSetStmt", "VariableSetStmt", "DoStmt",
+        "DoStmt", "CreateTableAsStmt", "DoStmt", "ViewStmt",
+        "AlterTableStmt", "GrantStmt", "GrantStmt", "GrantStmt",
+        "CommentStmt", "CommentStmt", "DoStmt", "CommentStmt",
+        "CommentStmt", "DoStmt", "NotifyStmt", "TransactionStmt",
+    )
+    observed_types = tuple(next(iter(statement)) for statement in statements)
+    violations: list[str] = []
+    if observed_types != expected_types:
+        violations.append(
+            "document-evidence-physical:exact-statement-sequence-required"
+        )
+        return violations
+    if (
+        statements[0]["TransactionStmt"].get("kind") != "TRANS_STMT_BEGIN"
+        or statements[-1]["TransactionStmt"].get("kind") != "TRANS_STMT_COMMIT"
+    ):
+        violations.append(
+            "document-evidence-physical:exact-transaction-boundary-required"
+        )
+    normalized = " ".join(sql.lower().split())
+    lock = normalized.find(
+        "lock table public.lcia_document_validation_evidence in access exclusive mode"
+    )
+    snapshot = normalized.find(
+        "create temporary table issue_407_phase_b_relation_before"
+    )
+    move = normalized.find(
+        "alter table public.lcia_document_validation_evidence set schema private"
+    )
+    if min(lock, snapshot, move) < 0 or not lock < snapshot < move:
+        violations.append(
+            "document-evidence-physical:lock-snapshot-move-order-required"
+        )
+    if (
+        "create or replace view public.lcia_document_validation_evidence "
+        "with (security_invoker = true)" not in normalized
+    ):
+        violations.append(
+            "document-evidence-physical:security-invoker-view-required"
+        )
+    for forbidden in (
+        "drop table public.lcia_document_validation_evidence",
+        "create table private.lcia_document_validation_evidence",
+        "insert into private.lcia_document_validation_evidence select",
+    ):
+        if forbidden in normalized:
+            violations.append(
+                "document-evidence-physical:copy-or-drop-forbidden"
+            )
+    return sorted(set(violations))
+
+
 def pre_ddl_migration_violations(
     *, path: str, git_blob: str, sql: str, allowlist: list[dict[str, str]]
 ) -> list[str]:
@@ -1572,6 +1645,16 @@ def pre_ddl_migration_violations(
         ):
             return ["document-evidence:exact-allowlist-entry-required"]
         return reviewed_document_evidence_migration_violations(sql)
+    if path == DOCUMENT_EVIDENCE_PHYSICAL_MIGRATION_PATH:
+        if (
+            len(matching) != 1
+            or matching[0].get("classification")
+            != DOCUMENT_EVIDENCE_PHYSICAL_CLASSIFICATION
+        ):
+            return ["document-evidence-physical:exact-allowlist-entry-required"]
+        return reviewed_document_evidence_physical_migration_violations(
+            path=path, git_blob=git_blob, sql=sql
+        )
     if path == RESULT_GC_FK_INDEX_MIGRATION_PATH:
         if (
             len(matching) != 1

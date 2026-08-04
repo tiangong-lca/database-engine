@@ -5,12 +5,12 @@ set local search_path = extensions, public, auth;
 select no_plan();
 
 select has_table(
-  'public', 'lcia_document_validation_evidence',
-  'Phase A retains the public physical evidence table'
+  'private', 'lcia_document_validation_evidence',
+  'Phase B moves the physical evidence table into private'
 );
-select ok(
-  to_regclass('private.lcia_document_validation_evidence') is null,
-  'Phase A does not create a private relation, view, or shadow copy'
+select has_view(
+  'public', 'lcia_document_validation_evidence',
+  'Phase B retains an invoker-rights public compatibility view'
 );
 select has_function(
   'private', 'svc_lcia_document_validation_evidence_lookup', array['jsonb'],
@@ -64,9 +64,9 @@ select is(
      and obj_description(procedure.oid, 'pg_proc') = case
        when namespace.nspname = 'private'
         and procedure.proname = 'svc_lcia_document_validation_evidence_lookup'
-         then 'Issue #407 Phase A canonical Worker lookup. Direct EXECUTE is restricted to lca_worker_runtime; the public relation remains physical until Contract.'
+         then 'Issue #407 Phase B canonical Worker lookup over private.lcia_document_validation_evidence. Direct EXECUTE is restricted to lca_worker_runtime.'
        when namespace.nspname = 'private'
-         then 'Issue #407 Phase A canonical Worker idempotent record command. Direct EXECUTE is restricted to lca_worker_runtime; no relation ACL is granted.'
+         then 'Issue #407 Phase B canonical Worker idempotent record command over private.lcia_document_validation_evidence. Direct EXECUTE is restricted to lca_worker_runtime; no relation ACL is granted.'
        else 'Issue #407 Phase A compatibility wrapper with caller-category-only LOG telemetry; remove only after attributed consumer-zero evidence.' end),
   4,
   'the exact four-function catalog freezes signature/default/language/runtime metadata/comments'

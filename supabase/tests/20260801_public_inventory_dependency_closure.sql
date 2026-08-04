@@ -3,8 +3,8 @@ create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, pg_catalog;
 select plan(16);
 
-select is((select count(*)::bigint from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p')), 49::bigint, 'public physical table inventory is exact after Worker and LCA snapshot-family moves');
-select is((select count(*)::bigint from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='v'), 12::bigint, 'public view inventory includes Worker and LCA snapshot-family compatibility views');
+select is((select count(*)::bigint from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind in ('r','p')), 48::bigint, 'public physical table inventory is exact after Worker, LCA snapshot-family, and document-evidence moves');
+select is((select count(*)::bigint from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='v'), 13::bigint, 'public view inventory includes Worker, LCA snapshot-family, and document-evidence compatibility views');
 select is((select count(*)::bigint from pg_class c join pg_namespace n on n.oid=c.relnamespace where n.nspname='public' and c.relkind='m'), 0::bigint, 'public materialized-view inventory is exact');
 select is((select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prokind='f'), 336::bigint, 'public function inventory includes the grouped root-review facades, #337 adapters, and Worker composite bridge');
 select is((select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace where n.nspname='public' and p.prokind='p'), 0::bigint, 'public procedure inventory is exact');

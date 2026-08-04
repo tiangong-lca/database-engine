@@ -54,6 +54,7 @@ jobs:
             scripts.test_database_contract_manifest \
             scripts.test_database_contract_targeting \
             scripts.test_issue_407_document_validation_evidence_expand \
+            scripts.test_issue_407_document_validation_evidence_physical_expand \
             scripts.test_issue_390_result_api_facade_runtime_unit \
             scripts.test_production_equivalent_upgrade_unit
           python scripts/run_database_contract.py \
@@ -75,7 +76,7 @@ jobs:
           PGPASSWORD: postgres # gitleaks:allow -- disposable loopback Supabase default
         run: |
           predecessor="$RUNNER_TEMP/issue407-predecessor"
-          git worktree add --detach "$predecessor" 269ef181e103bf57a7e15c6e82f5291005f33ded
+          git worktree add --detach "$predecessor" 06ab3e6b017e732b15d1edd9c7ef8f4a35139187
           python - "$predecessor/supabase/config.toml" <<'PY'
           from pathlib import Path
           import sys

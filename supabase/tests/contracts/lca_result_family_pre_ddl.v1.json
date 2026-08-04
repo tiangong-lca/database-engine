@@ -110,6 +110,11 @@
       "path": "supabase/migrations/20260803163000_issue_407_document_validation_evidence_expand.sql",
       "gitBlob": "68ed45114de74622194d39841a6731774bf4c6b6",
       "classification": "additive-document-evidence-private-contract-reviewed"
+    },
+    {
+      "path": "supabase/migrations/20260804100000_issue_407_document_validation_evidence_physical_expand.sql",
+      "gitBlob": "534f7ddb13ff52a62e949e8f098859af038c5d4c",
+      "classification": "physical-document-evidence-private-expand-reviewed"
     }
     ],
     "relationMovingDdlAllowed": false,

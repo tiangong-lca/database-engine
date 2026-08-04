@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
-"""Destructive loopback-only Phase A qualification for Issue #407.
+"""Destructive loopback-only Phase B physical qualification for Issue #407.
 
 The predecessor URL is a distinct read-only exact-head oracle. The candidate
-URL must be a separately identified disposable local stack at Phase A head.
+URL must be a separately identified disposable local stack at Phase B head.
 This probe rolls only the candidate backward and forward, creates randomized
 LOGIN roles, loads 296k namespaced rows, and removes its roles/rows before
 returning.
@@ -30,8 +30,9 @@ import psycopg
 
 
 ROOT = Path(__file__).resolve().parents[1]
-MIGRATION = ROOT / "supabase/migrations/20260803163000_issue_407_document_validation_evidence_expand.sql"
-ROLLBACK = ROOT / "supabase/operator/20260803_issue_407_document_validation_evidence_expand_rollback.sql"
+MIGRATION = ROOT / "supabase/migrations/20260804100000_issue_407_document_validation_evidence_physical_expand.sql"
+ROLLBACK = ROOT / "supabase/operator/20260804_issue_407_document_validation_evidence_physical_expand_rollback.sql"
+ROLLFORWARD = ROOT / "supabase/operator/20260804_issue_407_document_validation_evidence_physical_expand_rollforward.sql"
 RUN_TOKEN = secrets.token_hex(8)
 RUN_NAMESPACE = uuid.uuid4()
 LOGIN = f"issue407_worker_{RUN_TOKEN}"
@@ -285,33 +286,29 @@ def capture_behavior(url: str) -> dict:
 
 def migration_inner() -> str:
     sql = MIGRATION.read_text(encoding="utf-8")
-    sql = re.sub(r"^\s*begin;\s*", "", sql, count=1, flags=re.IGNORECASE)
-    sql = re.sub(r"\s*commit;\s*$", "", sql, count=1, flags=re.IGNORECASE)
-    return sql
+    begin = re.search(r"(?im)^begin;\s*", sql)
+    commit = list(re.finditer(r"(?im)^commit;\s*$", sql))
+    if begin is None or not commit:
+        raise AssertionError("Phase B migration transaction envelope is missing")
+    return sql[begin.end():commit[-1].start()]
 
 
 def rollback_inner() -> str:
     sql = ROLLBACK.read_text(encoding="utf-8")
-    sql = re.sub(r"^\s*begin;\s*", "", sql, count=1, flags=re.IGNORECASE)
-    return re.sub(r"\s*commit;\s*$", "", sql, count=1, flags=re.IGNORECASE)
+    begin = re.search(r"(?im)^begin;\s*", sql)
+    commit = list(re.finditer(r"(?im)^commit;\s*$", sql))
+    if begin is None or not commit:
+        raise AssertionError("Phase B rollback transaction envelope is missing")
+    return sql[begin.end():commit[-1].start()]
 
 
 def assert_preflight_negatives(url: str) -> None:
     bad_owner = f"issue407_bad_owner_{RUN_TOKEN}"
-    unknown_member = f"issue407_unknown_{RUN_TOKEN}"
-    admin_member = f"issue407_admin_{RUN_TOKEN}"
-    replication_member = f"issue407_replication_{RUN_TOKEN}"
-    configured_member = f"issue407_configured_{RUN_TOKEN}"
-    wrong_grantor_member = f"issue407_grantor_{RUN_TOKEN}"
     cases = {
         "overload": "create function private.svc_lcia_document_validation_evidence_lookup(text) returns jsonb language sql as $$select '{}'::jsonb$$",
-        "owner": f"create role {bad_owner}; alter function public.svc_lcia_document_validation_evidence_lookup(jsonb) owner to {bad_owner}",
-        "search_path": "alter function public.svc_lcia_document_validation_evidence_lookup(jsonb) set search_path=public",
-        "unknown_member": f"create role {unknown_member} nologin; grant lca_worker_runtime to {unknown_member}",
-        "admin_member": f"create role {admin_member} login; grant lca_worker_runtime to {admin_member} with admin option",
-        "replication_member": f"create role {replication_member} login replication; grant lca_worker_runtime to {replication_member} with inherit true, set false, admin false",
-        "configured_member": f"create role {configured_member} login; alter role {configured_member} set statement_timeout='1s'; grant lca_worker_runtime to {configured_member} with inherit true, set false, admin false",
-        "wrong_grantor": f"create role {wrong_grantor_member} login; set role supabase_admin; grant lca_worker_runtime to {wrong_grantor_member} with inherit true, set false, admin false",
+        "owner": f"create role {bad_owner}; alter function private.svc_lcia_document_validation_evidence_lookup(jsonb) owner to {bad_owner}",
+        "search_path": "alter function private.svc_lcia_document_validation_evidence_lookup(jsonb) set search_path=public",
+        "body": "create or replace function private.svc_lcia_document_validation_evidence_lookup(p_cache_keys jsonb) returns jsonb language plpgsql security definer set search_path=pg_catalog,pg_temp as $$begin return '{\"ok\":false}'::jsonb; end$$",
         "source_index": "drop index public.lcia_document_validation_evidence_lookup_idx",
         "source_default": "alter table public.lcia_document_validation_evidence alter column summary set default jsonb_build_object('drift',true)",
         "source_reloptions": "alter table public.lcia_document_validation_evidence set (fillfactor=80)",
@@ -337,8 +334,17 @@ def assert_preflight_negatives(url: str) -> None:
               select count(*) from pg_proc p join pg_namespace n on n.oid=p.pronamespace
               where n.nspname='private' and p.proname like 'svc_lcia_document_validation_evidence_%%'
             """)
-            if count:
-                raise AssertionError(f"{name} executed DDL before failing")
+            topology = check.execute("""
+              select to_regclass('public.lcia_document_validation_evidence') is not null,
+                     to_regclass('private.lcia_document_validation_evidence') is null,
+                     (select relkind from pg_class
+                      where oid='public.lcia_document_validation_evidence'::regclass)
+            """).fetchone()
+            if count != 2 or topology != (True, True, "r"):
+                raise AssertionError(
+                    f"{name} executed physical DDL before failing: "
+                    f"routines={count} topology={topology}"
+                )
 
 
 def assert_retry_negatives(url: str) -> None:
@@ -357,7 +363,7 @@ def assert_retry_negatives(url: str) -> None:
                 conn.execute(mutation)
                 conn.execute(inner, prepare=False)
             except psycopg.Error as error:
-                if "retry state definition or ACL drifted" not in str(error):
+                if "private canonical routine definition or ACL drifted" not in str(error):
                     raise AssertionError(f"{name} failed for the wrong reason: {error}") from error
                 conn.rollback()
             else:
@@ -782,7 +788,7 @@ def assert_fault_and_lock_atomicity(url: str) -> dict:
             function_created = True
             admin.execute(f"""
               create trigger {FAULT_TRIGGER}
-              before insert on public.lcia_document_validation_evidence
+              before insert on private.lcia_document_validation_evidence
               for each row execute function public.{FAULT_FUNCTION}()
             """)
             trigger_created = True
@@ -810,7 +816,10 @@ def assert_fault_and_lock_atomicity(url: str) -> dict:
     finally:
         with psycopg.connect(url, autocommit=True) as admin:
             if trigger_created:
-                admin.execute(f"drop trigger {FAULT_TRIGGER} on public.lcia_document_validation_evidence")
+                admin.execute(
+                    f"drop trigger {FAULT_TRIGGER} "
+                    "on private.lcia_document_validation_evidence"
+                )
             if function_created:
                 admin.execute(f"drop function public.{FAULT_FUNCTION}()")
             if sequence_created:
@@ -848,7 +857,9 @@ def assert_fault_and_lock_atomicity(url: str) -> dict:
     return {"faultStep": 2, "lockTimeoutMs": 1500, "partialRows": 0}
 
 
-def assert_volume_retry_rollback(url: str, predecessor_public: list) -> dict:
+def assert_volume_retry_rollback(
+    url: str, predecessor_public: list, predecessor_catalog_sha: str
+) -> dict:
     with psycopg.connect(url) as conn:
         conn.execute(
             "delete from public.lcia_document_validation_evidence where dataset_version=%s",
@@ -932,13 +943,22 @@ def assert_volume_retry_rollback(url: str, predecessor_public: list) -> dict:
         """)
         rollback_catalog = catalog_snapshot(conn)
         rollback_public = public_function_catalog(conn, include_oid=False)
-    if after_rollback != before or private_count or rollback_catalog != baseline_catalog or rollback_public != predecessor_public:
+    if (
+        after_rollback != before
+        or private_count != 2
+        or rollback_catalog["catalogSha256"] != predecessor_catalog_sha
+        or rollback_public != predecessor_public
+    ):
         raise AssertionError("operator rollback changed rows or retained private routines")
-    psql(url, MIGRATION)
+    psql(url, ROLLFORWARD)
     with psycopg.connect(url) as conn:
         rollforward_catalog = catalog_snapshot(conn)
         rollforward_functions = public_function_catalog(conn, include_oid=True)
-        if table_hash(conn) != before or rollforward_catalog != baseline_catalog or rollforward_functions != baseline_functions:
+        if (
+            table_hash(conn) != before
+            or rollforward_catalog["catalogSha256"] != baseline_catalog["catalogSha256"]
+            or rollforward_functions != baseline_functions
+        ):
             raise AssertionError("roll-forward changed the 296k fixture hash")
     return {
         "rows": before[0], "fixtureHash": before[1],
@@ -1021,8 +1041,8 @@ def main() -> None:
         "--execution-mode", choices=("ci-hard-bound", "local-explicit-isolated"),
         required=True,
     )
-    parser.add_argument("--expected-predecessor-head", default="20260803090000")
-    parser.add_argument("--expected-candidate-head", default="20260803163000")
+    parser.add_argument("--expected-predecessor-head", default="20260803163000")
+    parser.add_argument("--expected-candidate-head", default="20260804100000")
     parser.add_argument("--api-url")
     parser.add_argument("--confirm-isolated-destructive-test", action="store_true")
     args = parser.parse_args()
@@ -1091,6 +1111,9 @@ def main() -> None:
             predecessor_public = public_function_catalog(
                 predecessor_conn, include_oid=False
             )
+            predecessor_catalog_sha = catalog_snapshot(
+                predecessor_conn
+            )["catalogSha256"]
         head = capture_behavior(args.candidate_db_url)
         if predecessor != head or predecessor["mixedRows"] != 0:
             raise AssertionError(f"predecessor/head parity failed: {predecessor} != {head}")
@@ -1109,7 +1132,7 @@ def main() -> None:
         concurrency = assert_concurrency(args.candidate_db_url)
         atomicity = assert_fault_and_lock_atomicity(args.candidate_db_url)
         volume = assert_volume_retry_rollback(
-            args.candidate_db_url, predecessor_public
+            args.candidate_db_url, predecessor_public, predecessor_catalog_sha
         )
         assert_telemetry(args.candidate_db_url, args.expected_candidate_container)
         if args.api_url and anon_key and service_key:
@@ -1136,8 +1159,13 @@ def main() -> None:
                 'svc_lcia_document_validation_evidence_record'
               )
             """)
-        if private_count == 0:
-            psql(args.candidate_db_url, MIGRATION)
+        with psycopg.connect(args.candidate_db_url) as check:
+            private_table_exists = scalar(
+                check,
+                "select to_regclass('private.lcia_document_validation_evidence') is not null",
+            )
+        if not private_table_exists:
+            psql(args.candidate_db_url, ROLLFORWARD)
         if database_identity(args.candidate_db_url)[1] != expected_candidate_versions:
             raise AssertionError("candidate migration head drifted during cleanup")
 

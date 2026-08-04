@@ -13,7 +13,7 @@ select has_table('public', 'lcia_scope_closure_issue_occurrences', 'closure issu
 select has_table('public', 'lcia_scope_closure_issue_roots', 'closure issue roots preserve affected-scope provenance');
 select has_table('public', 'lcia_scope_closure_data_snapshots', 'requested scope membership is frozen into a durable data snapshot');
 select has_table('public', 'lcia_scope_closure_scan_executions', 'scan execution is distinct from an explicit closure run');
-select has_table('public', 'lcia_document_validation_evidence', 'document validation evidence is reusable by exact identity');
+select has_table('private', 'lcia_document_validation_evidence', 'document validation evidence is reusable by exact identity in the private physical table');
 select col_is_pk('public', 'lcia_scope_closure_checks', 'id', 'closure check has a primary key');
 select col_is_pk('public', 'lcia_scope_closure_issues', 'id', 'closure issue has a primary key');
 select has_column('public', 'lcia_scope_closure_checks', 'scan_execution_id', 'closure run references reusable scan execution');
@@ -133,7 +133,7 @@ select ok(exists (select 1 from pg_indexes where schemaname = 'public' and index
 select ok(exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'lcia_scope_closure_issues_check_id_idx'), 'closure issue keyset index exists');
 select ok(exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'lcia_scope_closure_certificate_events_check_created_idx'), 'certificate event readback index exists');
 select ok(exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'lcia_scope_closure_issue_occurrences_issue_idx'), 'occurrence pagination index exists');
-select ok(exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'lcia_document_validation_evidence_lookup_idx'), 'document evidence cache has exact identity lookup index');
+select ok(exists (select 1 from pg_indexes where schemaname = 'private' and indexname = 'lcia_document_validation_evidence_lookup_idx'), 'document evidence cache has exact identity lookup index');
 select ok(exists (select 1 from pg_indexes where schemaname = 'public' and indexname = 'lcia_result_packages_closure_check_idx'), 'result package closure causality index exists');
 select ok(not exists (
   select 1 from pg_constraint
