@@ -111,15 +111,6 @@ routing:
         - supabase/seed.sql
         - supabase/seeds/**
         - supabase/tests/**
-    public-inventory-closure:
-      paths:
-        - scripts/public_inventory_closure.py
-        - scripts/test_public_inventory_closure.py
-        - supabase/tests/20260801_public_inventory_dependency_closure.sql
-        - supabase/tests/contracts/public_object_*
-        - docs/agents/repo-validation.md
-        - docs/agents/repo-architecture.md
-        - scripts/README.md
     hybrid-search-performance:
       paths:
         - supabase/migrations/*hybrid_search*.sql

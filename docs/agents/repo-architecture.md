@@ -70,13 +70,6 @@ This repo is organized around one checked-in Supabase project plus a generated s
 
 Physical moves happen only after consumers use the `api` or `private` contract and the Contract gate proves zero compatibility callers. Expand views and wrappers must preserve one physical source of truth.
 
-The stable public-boundary inventory lives under
-`supabase/tests/contracts/public_object_*`. It imports the workspace #533
-baseline, reconciles the #337 delta with the current `dev` head, and is regenerated
-from a live local catalog by `scripts/public_inventory_closure.py`. Generated
-dependency and consumer evidence belongs in that contract surface, not in
-`supabase/workspace/**`.
-
 ## Branch Model In Practice
 
 `database-engine` is an M2 repo:

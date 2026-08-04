@@ -227,25 +227,6 @@ python scripts/new_migration.py --name "update policy roles update" --source-pat
 
 通常不作为日常命令行入口直接使用。
 
-### `public_inventory_closure.py`
-
-该脚本把 workspace #533 的逐对象 ledger 与 database #337 merge head 的实时
-catalog 合并为稳定合同，覆盖 table、view、materialized view、function/procedure、
-精确 routine identity arguments、ACL/RLS/default privileges，以及
-FK/rewrite/trigger/policy/composite/function-body 依赖。输出还包含 SCC-aware Expand
-顺序、反向 Contract 顺序、固定 consumer commit SHA 的静态证据和显式 residue。
-
-```bash
-python scripts/public_inventory_closure.py --scan-consumers <lca-workspace-root>
-python scripts/public_inventory_closure.py --write
-python scripts/public_inventory_closure.py --check
-python -m unittest scripts/test_public_inventory_closure.py
-```
-
-只有 consumer SHA 变化时才重新扫描。`contractReady=false` 表示仍有 dynamic SQL
-或 runtime/owner 证据待关闭；缺少 mapping、无效 target、非精确 SHA、重复 key 或
-live/ledger 漂移会直接失败。未知 consumer 始终保留为 blocker，不能据此退休对象。
-
 ### `test_scope_closure_staged_write_set_v2_fixture.sh`
 
 用于校验 Worker/数据库逐字共享的 staged write-set v2 fixture，包括

@@ -16,11 +16,8 @@ if (expectedProjectRef) {
 async function request({ key, path, method = 'GET', profile, body }) {
   const headers = {
     apikey: key,
+    Authorization: `Bearer ${key}`,
   };
-  // Legacy anon/service_role keys are JWTs and may be used as bearer tokens.
-  // New hosted publishable/secret keys are gateway API keys, not JWTs; sending
-  // them as Authorization Bearer values makes the gateway reject the request.
-  if (key.startsWith('eyJ')) headers.Authorization = `Bearer ${key}`;
   if (profile) {
     headers[method === 'GET' || method === 'HEAD' ? 'Accept-Profile' : 'Content-Profile'] = profile;
   }
