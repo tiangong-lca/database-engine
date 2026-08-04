@@ -80,28 +80,6 @@ from a live local catalog by `scripts/public_inventory_closure.py`. Generated
 dependency and consumer evidence belongs in that contract surface, not in
 `supabase/workspace/**`.
 
-The stable `security_definer_audit.*` v1 contract derives from that inventory and
-the exact live definitions at its immutable schema SHA. Its normal `--check` is
-artifact-only; `--check-live-baseline` applies only to that genesis stack, while
-v2 is the live current-state gate. It keeps the complete
-241-signature ledger, including #339 facades, while separating observed ACL and
-owner facts from inferred static authorization signals, required #358 proof,
-and actually confirmed evidence. It never substitutes for runtime telemetry,
-the blocked platform-owner work in #352, or physical api/private migration.
-
-The additive `privileged_routine_lineage.*` and
-`security_definer_audit_v2.*` contracts preserve that v1 baseline instead of
-rewriting it after physical moves. A genesis lineage key is derived only from
-the immutable inventory hash and its original exact signature; a later native
-lineage key is bound to its reviewed birth transition and original signature.
-The observed v2 audit scans every routine in `public`, `api`,
-`private`, `util`, and `archive`, requires exactly one SECURITY DEFINER
-canonical endpoint per active lineage, permits only SECURITY INVOKER compatibility
-wrappers, retains receipt-backed retired lineages with zero endpoints, and rejects
-every unregistered privileged endpoint. Current definition, body,
-properties, effective schema USAGE/EXECUTE, and Data API exposure remain
-endpoint facts rather than object identity.
-
 Its provenance separates the exact workspace baseline/gitlink and historical
 review/source/merge-base lineage from `databaseSchemaSha`, the only immutable
 migration/catalog replay input. Regeneration may compare only a catalog reset

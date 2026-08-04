@@ -122,23 +122,6 @@ routing:
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
         - scripts/README.md
-    security-definer-audit:
-      paths:
-        - scripts/security_definer_audit.py
-        - scripts/test_security_definer_audit.py
-        - scripts/security_definer_audit_v2.py
-        - scripts/test_security_definer_audit_v2.py
-        - scripts/test_security_definer_audit_v2_postgrest_conformance.py
-        - scripts/test_security_definer_audit_v2_transition_integration.py
-        - scripts/test_security_definer_audit_v2_transition_integration_runner.py
-        - supabase/tests/20260801_security_definer_owner_runtime_audit.sql
-        - supabase/tests/contracts/security_definer_audit.*
-        - supabase/tests/contracts/privileged_routine_lineage.*
-        - supabase/tests/contracts/security_definer_transition_fixture.*
-        - docs/agents/repo-validation.md
-        - docs/agents/repo-architecture.md
-        - scripts/README.md
-        - scripts/README.zh-CN.md
     hybrid-search-performance:
       paths:
         - supabase/migrations/*hybrid_search*.sql

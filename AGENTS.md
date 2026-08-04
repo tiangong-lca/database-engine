@@ -125,7 +125,6 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - generated workspace helpers are low-risk to inspect with `python scripts/<name>.py --help`
 - public-boundary inventory changes must run `python scripts/public_inventory_closure.py --check`; the checked contract owns immutable workspace/database provenance, exact object mapping, catalog dependencies, ACL/RLS/default-privilege evidence, SCC-aware migration order, exact-SHA consumer evidence, and explicit Contract residue; generation must never derive provenance from a moving remote ref
 - schema-boundary changes must run `python scripts/schema_boundary_phase.py`; Expand requires the nine core public tables plus inventory-backed non-public targets, while only a separately reviewed Contract phase may enforce zero additional public application relations
-- SECURITY DEFINER evidence changes must run artifact-only `python scripts/security_definer_audit.py --check` and live `python scripts/security_definer_audit_v2.py --check`; v1 remains the immutable 241-public-routine genesis baseline (`--check-live-baseline` is genesis-only), while v2 preserves each original lineage across `public`, `api`, `private`, `util`, and `archive`, claims every governed SECURITY DEFINER endpoint exactly once as an active canonical, requires compatibility aliases to remain SECURITY INVOKER, and retains receipt-bound births/retirements; both must leave Issue #352 blocked and `contractReady=false`
 
 ## Ownership Boundaries
 

@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: a1be848fefc88d68c1073f98c9e3ecf866095399
-lastReviewedNote: "Reviewed through Issues #353/#354 and for #333: retain immutable provenance and five-schema qualification entrypoints while documenting deterministic SECURITY DEFINER audit generation and fail-closed #352/#358 boundaries."
+lastReviewedNote: "Reviewed through Issues #353/#354: retain immutable provenance gates and document five-schema export plus phase, REST, rollback, and upgrade qualification entrypoints."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -273,8 +273,7 @@ test assets, keeps Preview/upgrade/fixture/benchmark assets out of the canonical
 pgTAP suite, checks the exact reviewed lint-error baseline, and verifies the
 stable catalog hash and generated-workspace cleanliness.
 
-The canonical contract also runs `public_inventory_closure.py --check` and
-`security_definer_audit.py --check`. The inventory
+The canonical contract also runs `public_inventory_closure.py --check`. That
 gate joins the imported workspace #533 per-object ledger to the live catalog at
 the database #337 merge base, records tables/views/materialized views/functions/
 procedures, exact routine identity arguments, ACL/RLS/default privileges, and
@@ -325,88 +324,6 @@ artifact hash is lineage, not the current artifact hash. `--verify-provenance`
 replays those relationships
 without consulting a moving remote. `--check` first verifies canonical JSON
 bytes and the committed SHA-256, then performs committed-vs-generated comparison.
-
-### `security_definer_audit.py`
-
-Verify the frozen public SECURITY DEFINER baseline artifact, or deliberately
-compare it with the exact genesis schema stack:
-
-```bash
-python scripts/security_definer_audit.py --write
-python scripts/security_definer_audit.py --check
-DATABASE_URL=<genesis-loopback-url> python scripts/security_definer_audit.py --check-live-baseline
-python -m unittest scripts/test_security_definer_audit.py
-```
-
-`--check` is artifact-only and does not describe current catalog state;
-`--check-live-baseline` is valid only for the exact genesis schema. Current
-catalog state is gated by the live v2 audit. The v1 artifact retains all 241 signatures. It distinguishes 129 unresolved #333
-owner/runtime signatures (90 api, 39 private), 14 #339 RLS-bound facades, and 98
-inventory static closures. Per-signature fields deliberately separate observed
-catalog evidence, inferred signals, required Contract proof, and confirmed
-facts. Static signals never prove runtime authorization; #352 remains blocked,
-#358 owns physical migration, and the gate always keeps `contractReady=false`.
-
-### `security_definer_audit_v2.py`
-
-Preserve the immutable v1 public baseline while generating the cross-schema
-privileged-routine lineage and observed endpoint audit:
-
-```bash
-DATABASE_URL=<loopback-url> python scripts/security_definer_audit_v2.py --bootstrap-write
-DATABASE_URL=<loopback-url> python scripts/security_definer_audit_v2.py --write
-DATABASE_URL=<loopback-url> python scripts/security_definer_audit_v2.py --check
-python scripts/security_definer_audit_v2.py --plan-transition-advance \
-  --batch issue-356-worker-control-plane --database-schema-sha <exact-40-hex-commit>
-python -m unittest scripts/test_security_definer_audit_v2.py
-ISSUE333_DATABASE_URL=<loopback-url> \
-  python -m unittest scripts/test_security_definer_audit_v2_postgrest_conformance.py
-```
-
-`--bootstrap-write` is only for the reviewed exact baseline schema. Normal
-transition batches edit the lineage mapping deliberately, then use `--write`
-after an exact-SHA clean reset. The audit scans `public`, `api`, `private`,
-`util`, and `archive`; every SECURITY DEFINER endpoint must be claimed exactly
-once as the canonical endpoint of one active lineage. Compatibility aliases
-must be SECURITY INVOKER; a future privileged exception requires a reviewed
-new lineage/version, never a privileged alias. Invoker wrappers remain aliases,
-never replacement canonicals. The role matrix records
-schema USAGE, effective EXECUTE, effective callability, and Data API exposure
-separately. Data API evidence preserves the configured exposed-schema order,
-separates PostgREST schema-cache eligibility, request resolution, and direct SQL
-invocability, and proves that `authenticator` can `SET ROLE` to each supported
-transport role. The v14.7 conformance test compares anonymous OpenAPI routes,
-the default first-schema route set, and negative internal-schema profiles with
-a disposable loopback-only PostgREST container. Database credentials are passed
-to `psql` only through `PGPASSWORD`, never argv. Reviewed transition paths must
-be canonical repository-relative Git regular files and are read without
-following symlinks. The committed #356 fixture proves 315 lineage identities survive
-11 Worker moves and one composite-signature move while 23 invoker aliases do
-not increase the privileged endpoint count.
-The transition-advance plan deterministically freezes the current v2 bytes,
-builds the immutable predecessor/produced artifact receipt, settles sequence 0,
-opens sequence 1, and emits the exact reviewed-code constants. A migration PR
-must materialize every planned file and validate the hashes; it must not hand-edit
-`completedTransitions` or advance from the mutable `security_definer_audit_v2.json`.
-
-The #356 PR gate must additionally run the real two-stack integration harness;
-there is no successful skip mode:
-
-```bash
-python scripts/run_database_contract.py --suite canonical-local \
-  --security-definer-transition-workdir <clean-stack-a> \
-  --security-definer-transition-workdir <clean-stack-b> \
-  --security-definer-transition-migration <issue-356-migration.sql> \
-  --security-definer-transition-rollback <issue-356-operator-rollback.sql> \
-  --security-definer-transition-migration-sha256 <exact-sha256> \
-  --security-definer-transition-rollback-sha256 <exact-sha256> \
-  --security-definer-transition-base 1b94c1ce7c132e5481c4a2594d6d9a957d7dc683
-```
-
-Both workdirs must be independent loopback stacks at the exact base. The gate
-performs baseline audit, migration, live transition audit, operator rollback,
-baseline byte restoration, rollforward, and a second-stack byte/SHA comparison.
-Missing inputs, changed SQL bytes, reset failure, or any audit drift fails closed.
 
 ### `test_worker_control_plane_upgrade.py`
 

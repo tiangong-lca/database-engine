@@ -661,33 +661,11 @@ def write_or_check(write: bool) -> str:
     return digest.strip()
 
 
-def check_frozen_baseline() -> str:
-    """Verify the immutable v1 baseline without comparing it to transition state."""
-    try:
-        contract = verify_committed_artifacts()
-        validate(contract)
-    except ValueError as error:
-        raise SystemExit(f"public inventory committed artifact invalid: {error}") from None
-    digest = SHA.read_text(encoding="utf-8").strip()
-    print(json.dumps({
-        "sha256": digest,
-        "objectCount": len(contract["objects"]),
-        "dependencyCount": len(contract["dependencies"]),
-        "frozenBaseline": True,
-        "contractReady": contract["contractReady"],
-    }, sort_keys=True))
-    return digest
-
-
 def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     action = parser.add_mutually_exclusive_group(required=True)
     action.add_argument("--write", action="store_true", help="write the reviewed deterministic contract")
-    action.add_argument("--check", action="store_true", help="verify immutable v1 baseline bytes and provenance")
-    action.add_argument(
-        "--check-live-baseline", action="store_true",
-        help="compare an exact baseline-schema local catalog to the frozen v1 contract",
-    )
+    action.add_argument("--check", action="store_true", help="compare the live catalog to the contract")
     action.add_argument("--scan-consumers", metavar="WORKSPACE_ROOT", help="refresh exact-SHA static evidence")
     action.add_argument(
         "--verify-provenance", metavar="WORKSPACE_ROOT",
@@ -704,10 +682,7 @@ def main() -> int:
         )
         print(json.dumps(contract["source"], sort_keys=True))
         return 0
-    if args.check:
-        check_frozen_baseline()
-    else:
-        write_or_check(args.write)
+    write_or_check(args.write)
     return 0
 
 

@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
 lastReviewedCommit: 05d1387cc073da8161db782db978a77431ff8b3f
-lastReviewedNote: "已为 Issue #333 lineage v2 复核：生成工作区继续与 immutable genesis、live 跨 schema SECURITY DEFINER 合同、transition receipt 和 lifecycle 证据分离。"
+lastReviewedNote: "已为 Issue #354 hosted repair 复核：generated workspace 范围保持稳定，blank-to-head ACL convergence 与 guarded catalog generation 保持五 schema 输出 byte-identical。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -63,7 +63,6 @@ related:
 - 执行刷新命令前，先检查 `git status`，把需要保留的内容提交或暂存。
 - 这个工作区应该被视为远程数据库的生成视图，而不是手工维护 schema 变更的真相源。
 - 不要把 public 对象去向或 consumer/dependency 证据写进本生成区。稳定、可机器检查的边界合同位于 `supabase/tests/contracts/public_object_*`，由 `scripts/public_inventory_closure.py` 重建。
-- 不要把 SECURITY DEFINER owner/runtime 或 lineage 决定写进本生成区。v1 genesis 总账与 live v2 lineage/audit/transition receipts 位于 `supabase/tests/contracts/`，分别由 `scripts/security_definer_audit.py` 与 `scripts/security_definer_audit_v2.py` 管理。
 
 ## 建议用法
 
