@@ -22,8 +22,6 @@ IDENTITY_QUALIFICATION_SCRIPTS = (
     "scripts/test_identity_collaboration_policy_variants.py",
     "scripts/test_identity_collaboration_rollback.py",
 )
-IDENTITY_QUALIFICATION_VERSION = "20260801061000"
-TRANSIENT_LOCAL_RESET_MARKERS = ("context deadline exceeded", "Error status 502")
 
 
 def supabase_command(*args: str) -> list[str]:
@@ -39,80 +37,14 @@ def run(command: list[str], *, env: dict[str, str] | None = None) -> None:
     subprocess.run(command, cwd=ROOT, env=env, check=True)
 
 
-def latest_migration_version() -> str:
-    versions = [
-        path.name.split("_", 1)[0]
-        for path in (ROOT / "supabase/migrations").glob("*.sql")
-    ]
-    if not versions:
-        raise SystemExit("repository contains no migration version")
-    return max(versions)
-
-
-def reset_local_database(*, version: str | None = None) -> None:
-    """Reset one selected local stack and tolerate only proved CLI restart noise."""
-    command = supabase_command("db", "reset", "--local")
-    if version is not None:
-        command.extend(["--version", version])
-    print("+", " ".join(command), flush=True)
-    result = subprocess.run(
-        command, cwd=ROOT, text=True, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-    )
-    if result.returncode == 0:
-        return
-    combined = result.stdout + result.stderr
-    expected_version = version or latest_migration_version()
-    if any(marker in combined for marker in TRANSIENT_LOCAL_RESET_MARKERS):
-        database_url = canonical_database_url()
-        cli_database_url, environment = database_cli_target(database_url)
-        head = subprocess.run(
-            [
-                "psql", cli_database_url, "-XAt", "-v", "ON_ERROR_STOP=1", "-c",
-                "select max(version) from supabase_migrations.schema_migrations;",
-            ],
-            cwd=ROOT, env=environment, text=True,
-            stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-        )
-        if head.returncode == 0 and head.stdout.strip() == expected_version:
-            print(
-                "accepted transient Supabase service restart failure after exact "
-                f"migration-head readback: {expected_version}",
-                flush=True,
-            )
-            return
-    sys.stdout.write(result.stdout)
-    sys.stderr.write(result.stderr)
-    result.check_returncode()
-
-
 def run_destructive_identity_qualification(*, enabled: bool, contract_selected: bool) -> None:
     """Run the complete fail-closed Issue #355 destructive qualification gate."""
     if not enabled:
         return
     if not contract_selected:
         raise SystemExit("selected suite does not contain the Issue #355 identity contract")
-    # The reviewed operator rollback intentionally admits only the exact Issue
-    # #355 migration head. Later migrations must not weaken that production
-    # guard, so rehearse this destructive gate at its own exact version and
-    # restore the selected stack to the current repository head afterwards.
-    reset_local_database(version=IDENTITY_QUALIFICATION_VERSION)
-    qualification_error: Exception | None = None
-    try:
-        for script in IDENTITY_QUALIFICATION_SCRIPTS:
-            run([sys.executable, script])
-    except Exception as exc:
-        qualification_error = exc
-    try:
-        reset_local_database()
-    except Exception as restore_error:
-        if qualification_error is not None:
-            qualification_error.add_note(
-                f"restoring the canonical migration head also failed: {restore_error}"
-            )
-            raise qualification_error
-        raise
-    if qualification_error is not None:
-        raise qualification_error
+    for script in IDENTITY_QUALIFICATION_SCRIPTS:
+        run([sys.executable, script])
 
 
 def database_cli_target(value: str) -> tuple[str, dict[str, str]]:
@@ -332,7 +264,7 @@ def main() -> int:
     if not args.skip_reset:
         if os.environ.get("DATABASE_URL") and not os.environ.get("SUPABASE_WORKDIR"):
             raise SystemExit("DATABASE_URL qualification requires --skip-reset or SUPABASE_WORKDIR")
-        reset_local_database()
+        run(supabase_command("db", "reset", "--local"))
     target = resolve_target()
     apply_target_environment(target)
     test_command = supabase_command("test", "db", *files)

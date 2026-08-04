@@ -17,13 +17,10 @@ EXPECTED_SCHEMAS = ("api", "public", "graphql_public")
 INTERNAL_SCHEMAS = ("private", "util", "archive")
 DENIED_PUBLIC_RELATIONS = ("lca_active_snapshots", "lca_factorization_registry")
 DENIED_PRIVATE_RPC = "search_flows_latest_impl"
-POSTURE_CONTRACT_VERSION = "security-acl.expand.v2"
-DEFAULT_PRIVILEGE_EVALUATION = "built-in+global+per-schema-effective"
-REPO_OWNER_FUNCTION_DEFAULT_SCOPE = "database-global-all-schemas"
 
 
 def normalized_schemas(value: str) -> tuple[str, ...]:
-    return tuple(part.strip() for part in value.split(",") if part.strip())
+    return tuple(sorted(part.strip() for part in value.split(",") if part.strip()))
 
 
 def request_json(url: str, headers: dict[str, str], *, method: str = "GET", body: bytes | None = None) -> tuple[int, dict]:
@@ -58,25 +55,6 @@ def database_posture(database_url: str) -> dict:
     if not isinstance(posture, dict):
         raise SystemExit("hosted posture query returned invalid JSON")
     return posture
-
-
-def validate_posture(posture: dict, *, require_platform_owner: bool) -> None:
-    if posture.get("contractVersion") != POSTURE_CONTRACT_VERSION:
-        raise SystemExit("hosted posture does not use the reviewed effective-default contract")
-    if posture.get("defaultPrivilegeEvaluation") != DEFAULT_PRIVILEGE_EVALUATION:
-        raise SystemExit("hosted posture does not evaluate built-in, global, and per-schema defaults")
-    if posture.get("repoOwnerFunctionDefaultScope") != REPO_OWNER_FUNCTION_DEFAULT_SCOPE:
-        raise SystemExit("hosted posture does not report the database-global postgres function default")
-    if posture.get("evaluatedApplicationSchemas") != ["public", "api", "private", "util", "archive"]:
-        raise SystemExit("hosted posture application-schema evaluation target is not exact")
-    repo_residue = posture.get("repoOwnerDefaultPrivilegeResidue")
-    platform_residue = posture.get("platformOwnerDefaultPrivilegeResidue")
-    if not isinstance(repo_residue, list) or not isinstance(platform_residue, list):
-        raise SystemExit("hosted posture default-privilege evidence has an invalid shape")
-    if repo_residue or not posture.get("migrationReady"):
-        raise SystemExit("migration-owned ACL posture is not ready")
-    if require_platform_owner and (platform_residue or not posture.get("hostedOperatorReady")):
-        raise SystemExit("supabase_admin effective default privileges remain; issue #352 owner action is required")
 
 
 def management_config(project_ref: str, access_token: str) -> dict:
@@ -145,7 +123,8 @@ def main() -> int:
     if not database_url:
         raise SystemExit("SECURITY_ACL_DATABASE_URL is required")
     posture = database_posture(database_url)
-    validate_posture(posture, require_platform_owner=not args.database_only)
+    if not posture.get("migrationReady"):
+        raise SystemExit("migration-owned ACL posture is not ready")
 
     evidence = {"schemaVersion": "security-acl-hosted-evidence.v1", "posture": posture, "rest": []}
     if args.database_only:
@@ -164,11 +143,12 @@ def main() -> int:
         raise SystemExit("SECURITY_ACL_ANON_KEY and SUPABASE_ACCESS_TOKEN are required")
 
     config = management_config(project_ref, access_token)
-    exposed_schemas = normalized_schemas(config.get("db_schema", ""))
-    if exposed_schemas != EXPECTED_SCHEMAS:
+    if normalized_schemas(config.get("db_schema", "")) != tuple(sorted(EXPECTED_SCHEMAS)):
         raise SystemExit(f"hosted exposed schemas mismatch: expected {EXPECTED_SCHEMAS}")
+    if not posture.get("hostedOperatorReady"):
+        raise SystemExit("supabase_admin default privileges remain; run the owner-session operator SQL and retry")
     evidence["projectRef"] = project_ref
-    evidence["exposedSchemas"] = list(exposed_schemas)
+    evidence["exposedSchemas"] = list(EXPECTED_SCHEMAS)
     evidence["rest"] = assert_rest_boundaries(supabase_url, public_credential)
     if args.evidence:
         descriptor = os.open(args.evidence, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)

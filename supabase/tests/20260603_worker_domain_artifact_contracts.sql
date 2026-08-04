@@ -17,8 +17,6 @@ as $$
   );
 $$;
 
-grant execute on function pg_temp.has_empty_search_path(text) to service_role;
-
 select plan(40);
 
 select ok(

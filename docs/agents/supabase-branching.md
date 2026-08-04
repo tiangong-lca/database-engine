@@ -215,21 +215,14 @@ receive no direct `private` USAGE or EXECUTE. Two lifecycle bundle RPCs remain
 authenticated compatibility contracts. Expand records that fact instead of
 silently breaking callers; Contract removes them after consumer-zero evidence.
 
-Migrations close default privileges owned by `postgres`. Future functions use
-the database-wide `ALTER DEFAULT PRIVILEGES ... REVOKE EXECUTE ON FUNCTIONS`
-form because PostgreSQL's built-in `PUBLIC EXECUTE` is global and cannot be
-subtracted by a per-schema revoke; table and sequence defaults remain scoped to
-the five application schemas. Catalog and hosted gates compute effective
-defaults from built-in, explicit global, and additive per-schema layers, so an
-absent `pg_default_acl` row is not accepted as safe. Duplicate effective ACL
-identities fold grantability with `bool_or`. The operator restore snapshots and
-rebuilds both the global and five additive function layers; its snapshot
-dynamically removes every non-owner ACL grantee instead of assuming a fixed role
-list. Supabase's internal
-`supabase_admin` effective defaults remain independently blocked by #352 until
-a supported platform-owner path closes them and `hostedOperatorReady=true`.
-Never treat a local config value or SQL catalog check alone as hosted Data API
-exposure evidence.
+Migrations close default privileges owned by `postgres`. Supabase's internal
+`supabase_admin` defaults cannot be altered by the migration owner; an
+authorized owner session must run
+`supabase/operator/issue_339_supabase_admin_default_privileges.sql`, then the
+hosted gate must report `hostedOperatorReady=true`. Until both exposed-schema
+and owner-default readbacks pass, Preview/dev/production security proof is
+blocked. Never treat a local config value or SQL catalog check alone as hosted
+Data API exposure evidence.
 
 ## Default workflow
 

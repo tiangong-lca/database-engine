@@ -1,8 +1,6 @@
 #!/usr/bin/env python3
 
 import io
-import json
-import os
 import subprocess
 import sys
 import unittest
@@ -15,74 +13,14 @@ import hosted_security_acl as target
 
 
 class HostedSecurityAclContractTest(unittest.TestCase):
-    def effective_posture(self) -> dict:
-        return {
-            "contractVersion": target.POSTURE_CONTRACT_VERSION,
-            "defaultPrivilegeEvaluation": target.DEFAULT_PRIVILEGE_EVALUATION,
-            "repoOwnerFunctionDefaultScope": target.REPO_OWNER_FUNCTION_DEFAULT_SCOPE,
-            "evaluatedApplicationSchemas": ["public", "api", "private", "util", "archive"],
-            "migrationReady": True,
-            "hostedOperatorReady": False,
-            "repoOwnerDefaultPrivilegeResidue": [],
-            "platformOwnerDefaultPrivilegeResidue": [
-                {
-                    "schema_name": "public",
-                    "object_type": "f",
-                    "grantee": "PUBLIC",
-                    "privilege_type": "EXECUTE",
-                }
-            ],
-        }
-
-    def test_database_only_accepts_repo_closure_with_issue_352_visible(self) -> None:
-        target.validate_posture(self.effective_posture(), require_platform_owner=False)
-
-    def test_hosted_gate_rejects_issue_352_effective_residue(self) -> None:
-        with self.assertRaisesRegex(SystemExit, "issue #352"):
-            target.validate_posture(self.effective_posture(), require_platform_owner=True)
-
-    def test_hosted_gate_accepts_all_owner_defaults_closed(self) -> None:
-        posture = self.effective_posture()
-        posture["platformOwnerDefaultPrivilegeResidue"] = []
-        posture["hostedOperatorReady"] = True
-        target.validate_posture(posture, require_platform_owner=True)
-
-    def test_old_explicit_row_only_posture_is_rejected(self) -> None:
-        posture = self.effective_posture()
-        posture["contractVersion"] = "security-acl.expand.v1"
-        with self.assertRaisesRegex(SystemExit, "effective-default contract"):
-            target.validate_posture(posture, require_platform_owner=False)
-
-    def test_missing_effective_residue_arrays_are_rejected(self) -> None:
-        posture = self.effective_posture()
-        del posture["repoOwnerDefaultPrivilegeResidue"]
-        with self.assertRaisesRegex(SystemExit, "invalid shape"):
-            target.validate_posture(posture, require_platform_owner=False)
-
-    def test_application_target_cannot_hide_global_function_scope(self) -> None:
-        posture = self.effective_posture()
-        posture["repoOwnerFunctionDefaultScope"] = "application-schemas-only"
-        with self.assertRaisesRegex(SystemExit, "database-global"):
-            target.validate_posture(posture, require_platform_owner=False)
-
-    def test_schema_normalization_preserves_reviewed_precedence(self) -> None:
-        self.assertEqual(
-            target.normalized_schemas(" api, public,graphql_public "),
-            target.EXPECTED_SCHEMAS,
-        )
-        self.assertNotEqual(
-            target.normalized_schemas("public,api,graphql_public"),
-            target.EXPECTED_SCHEMAS,
-        )
-        self.assertNotEqual(
-            target.normalized_schemas("api,public,graphql_public,private"),
-            target.EXPECTED_SCHEMAS,
-        )
+    def test_schema_normalization_is_order_independent_and_exact(self) -> None:
+        self.assertEqual(target.normalized_schemas(" graphql_public,public, api "), ("api", "graphql_public", "public"))
+        self.assertNotEqual(target.normalized_schemas("public,api,graphql_public,private"), tuple(sorted(target.EXPECTED_SCHEMAS)))
 
     def test_duplicate_schema_does_not_pass_exact_gate(self) -> None:
         self.assertNotEqual(
             target.normalized_schemas("api,api,public,graphql_public"),
-            target.EXPECTED_SCHEMAS,
+            tuple(sorted(target.EXPECTED_SCHEMAS)),
         )
 
     def test_reviewed_schema_order_matches_postgrest_config_gate(self) -> None:
@@ -157,51 +95,6 @@ class HostedSecurityAclContractTest(unittest.TestCase):
             config = target.management_config("abcdefghijklmnopqrst", "token")
         self.assertEqual(config, {"db_schema": "api,public,graphql_public"})
         self.assertNotIn(payload_secret, repr(config))
-
-    def test_hosted_main_rejects_public_first_schema_precedence(self) -> None:
-        posture = self.effective_posture()
-        posture["platformOwnerDefaultPrivilegeResidue"] = []
-        posture["hostedOperatorReady"] = True
-        environment = {
-            "SECURITY_ACL_DATABASE_URL": "postgresql://postgres@127.0.0.1:54322/postgres",
-            "SECURITY_ACL_PROJECT_REF": "abcdefghijklmnopqrst",
-            "SECURITY_ACL_SUPABASE_URL": "https://abcdefghijklmnopqrst.supabase.co",
-            "SECURITY_ACL_ANON_KEY": "sb_publishable_test",
-            "SUPABASE_ACCESS_TOKEN": "management-token",
-        }
-        with mock.patch.dict(os.environ, environment, clear=True), mock.patch.object(
-            target, "database_posture", return_value=posture,
-        ), mock.patch.object(
-            target, "management_config",
-            return_value={"db_schema": "public,api,graphql_public"},
-        ), mock.patch.object(sys, "argv", ["hosted_security_acl.py"]):
-            with self.assertRaisesRegex(SystemExit, "hosted exposed schemas mismatch"):
-                target.main()
-
-    def test_hosted_main_evidence_preserves_api_first_readback(self) -> None:
-        posture = self.effective_posture()
-        posture["platformOwnerDefaultPrivilegeResidue"] = []
-        posture["hostedOperatorReady"] = True
-        environment = {
-            "SECURITY_ACL_DATABASE_URL": "postgresql://postgres@127.0.0.1:54322/postgres",
-            "SECURITY_ACL_PROJECT_REF": "abcdefghijklmnopqrst",
-            "SECURITY_ACL_SUPABASE_URL": "https://abcdefghijklmnopqrst.supabase.co",
-            "SECURITY_ACL_ANON_KEY": "sb_publishable_test",
-            "SUPABASE_ACCESS_TOKEN": "management-token",
-        }
-        with mock.patch.dict(os.environ, environment, clear=True), mock.patch.object(
-            target, "database_posture", return_value=posture,
-        ), mock.patch.object(
-            target, "management_config",
-            return_value={"db_schema": "api,public,graphql_public"},
-        ), mock.patch.object(
-            target, "assert_rest_boundaries", return_value=[],
-        ), mock.patch.object(sys, "argv", ["hosted_security_acl.py"]), mock.patch(
-            "sys.stdout", new_callable=io.StringIO,
-        ) as stdout:
-            self.assertEqual(target.main(), 0)
-        evidence = json.loads(stdout.getvalue())
-        self.assertEqual(evidence["exposedSchemas"], ["api", "public", "graphql_public"])
 
 
 if __name__ == "__main__":

@@ -475,24 +475,8 @@ populated canonical base, injects an in-transaction failure, retries the
 migration, proves row parity, restores the environment-specific ACL snapshot,
 and reapplies the migration.
 
-`test_security_acl_global_function_defaults_upgrade.py` starts on PostgreSQL
-17 before the follow-up migration, proves the built-in global `PUBLIC EXECUTE`
-on a real newly-created function, then qualifies the global revoke across the
-entire database, including a scratch non-application schema. It also covers
-explicit global rows with grant option, owner execution, effective
-built-in/global/per-schema catalog evaluation, current-object ACL and
-application row-count parity, failure atomicity, retry, and exact restore of
-both the global and five additive per-schema layers. A custom per-schema grant
-option proves layering and grantability survive restore. A custom table-default
-role also proves the snapshot dynamically removes every non-owner grantee while
-retaining the `postgres` owner. A million-row fixture is not applicable because this migration
-does not scan or rewrite application relations; cardinality cannot change its
-lock, WAL, or execution behavior. Set `SUPABASE_WORKDIR` to the root of an
-independent disposable project when the shared local stack is not clean.
-
 ```bash
 python scripts/test_security_acl_upgrade.py
-python scripts/test_security_acl_global_function_defaults_upgrade.py
 ```
 
 `hosted_security_acl.py` is the fail-closed hosted operator gate. It combines
@@ -500,12 +484,8 @@ the database posture view, Management API `db_schema` readback, and real anon
 REST negative probes. It never prints credentials. The hosted gate is read-only;
 apply or reconcile hosted PostgREST configuration separately
 through `scripts/apply_postgrest_config.py`, which owns the reviewed diff,
-readback, and rollback contract. The posture computes built-in, global, and
-per-schema effective defaults. The repo-owned global revoke affects every
-future function created by `postgres` in the database, while the gate evaluates
-the five application schemas as its deployment target. Platform-owned
-`supabase_admin` residue remains a fail-closed #352 blocker and is never claimed
-as repaired by this migration.
+readback, and rollback contract. `supabase/operator/issue_339_supabase_admin_default_privileges.sql`
+must be executed separately by an authorized `supabase_admin` owner session.
 
 ```bash
 SECURITY_ACL_DATABASE_URL='postgresql://...' \
@@ -556,9 +536,7 @@ does not execute destructive identity DDL by default. On a disposable local
 stack, opt in with `--run-destructive-identity-qualification`. That mandatory
 gate runs the dual exact-hash preservation/retry, unknown atomic-rejection, and
 actor RLS matrix harness before the rollback/roll-forward/lock-failure harness;
-it resets the selected stack to exact Issue #355 head `20260801061000` for that
-rehearsal and restores the current repository head afterwards. Qualification
-and restoration failures both terminate the canonical runner. `--skip-data-api` skips only
+either failure terminates the canonical runner. `--skip-data-api` skips only
 HTTP probes and does not select or redirect the destructive target. The
 runner-level control-flow contract is
 `test_database_contract_identity_qualification.py`.
