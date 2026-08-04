@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 03566bee31d66dc2264a337595854cbf13faaaf9
-lastReviewedNote: "已为 Issues #339/#341、#346 与 #351 复核：opaque-key Worker probe、ACL-aware rehearsal、fresh populated CLI roll-forward 与 fail-closed 证据保留 PostgREST rollback 和 workspace 真相源边界。"
+lastReviewedCommit: a46bb023873f3ae17cd5a9b34a443201515793c0
+lastReviewedNote: "已为 Issue #339 hosted follow-up 复核：Worker probe 的凭据/profile 行为不改变生成 workspace 的行为或真相源边界。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
