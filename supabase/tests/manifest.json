@@ -7,7 +7,6 @@
     {"name": "preview", "glob": "supabase/tests/preview/*"},
     {"name": "benchmark", "glob": "supabase/tests/benchmarks/*"},
     {"name": "fixture", "glob": "supabase/tests/fixtures/*"}
-    ,{"name": "hosted-python", "glob": "supabase/tests/hosted/*.py"}
     ,{"name": "runner-contract", "glob": "supabase/tests/manifest.json"}
     ,{"name": "catalog-contract", "glob": "supabase/tests/contracts/*"}
   ],

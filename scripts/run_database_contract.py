@@ -28,8 +28,6 @@ IDENTITY_QUALIFICATION_SCRIPTS = (
     "scripts/test_identity_collaboration_rollback.py",
 )
 IDENTITY_QUALIFICATION_VERSION = "20260801061000"
-RESULT_API_FACADE_CONTRACT = "supabase/tests/20260802_issue_390_result_api_facade_v1.sql"
-RESULT_API_FACADE_RUNTIME_SCRIPT = "scripts/test_issue_390_result_api_facade_runtime.py"
 TRANSIENT_LOCAL_RESET_MARKERS = ("context deadline exceeded", "Error status 502")
 
 
@@ -44,14 +42,6 @@ def supabase_command(*args: str) -> list[str]:
 def run(command: list[str], *, env: dict[str, str] | None = None) -> None:
     print("+", " ".join(command), flush=True)
     subprocess.run(command, cwd=ROOT, env=env, check=True)
-
-
-def result_api_facade_runtime_scripts(
-    files: list[str], *, skip_data_api: bool,
-) -> list[str]:
-    if skip_data_api or RESULT_API_FACADE_CONTRACT not in files:
-        return []
-    return [RESULT_API_FACADE_RUNTIME_SCRIPT]
 
 
 def latest_migration_version() -> str:
@@ -621,10 +611,6 @@ def main() -> int:
     run(test_command, env=test_environment)
     if not args.skip_data_api:
         run([sys.executable, "scripts/test_worker_control_plane_data_api.py"])
-    for script in result_api_facade_runtime_scripts(
-        files, skip_data_api=args.skip_data_api,
-    ):
-        run([sys.executable, script])
     if identity_qualification:
         if not args.skip_data_api:
             run([sys.executable, "scripts/test_identity_collaboration_data_api.py"])

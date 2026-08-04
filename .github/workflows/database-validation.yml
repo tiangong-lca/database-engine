@@ -36,7 +36,7 @@ jobs:
           python-version: "3.12"
 
       - name: Install Python contract dependencies
-        run: python -m pip install --disable-pip-version-check "jsonschema==4.23.0" "pglast==8.4"
+        run: python -m pip install --disable-pip-version-check "jsonschema==4.23.0"
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v2
@@ -53,7 +53,6 @@ jobs:
           python -m unittest \
             scripts.test_database_contract_manifest \
             scripts.test_database_contract_targeting \
-            scripts.test_issue_390_result_api_facade_runtime_unit \
             scripts.test_production_equivalent_upgrade_unit
           python scripts/run_database_contract.py \
             --suite canonical-local \

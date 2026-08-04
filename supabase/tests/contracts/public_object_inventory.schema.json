@@ -1,114 +1,44 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
-  "$id": "https://tiangong-lca.dev/contracts/database.public-object-inventory-closure.v2.schema.json",
-  "title": "Exact-head public object inventory and dependency closure",
+  "$id": "https://tiangong-lca.dev/contracts/database.public-object-inventory-closure.v1.schema.json",
+  "title": "Public object inventory and dependency closure",
   "type": "object",
-  "additionalProperties": false,
-  "required": [
-    "schemaVersion", "source", "counts", "partitionCounts", "finalPublicAllowlist",
-    "objects", "dependencies", "migrationPlan", "contractDropPlan", "security",
-    "consumerEvidence", "residue", "contractReady"
-  ],
+  "required": ["schemaVersion", "source", "counts", "objects", "dependencies", "migrationPlan", "security", "consumerEvidence", "residue", "contractReady"],
   "properties": {
-    "schemaVersion": {"const": "database.public-object-inventory-closure.v2"},
+    "schemaVersion": {"const": "database.public-object-inventory-closure.v1"},
     "source": {
       "type": "object",
       "additionalProperties": false,
-      "required": [
-        "issue", "databaseSchemaSha", "migrationHead", "migrationTreeSha256", "predecessorInventorySha256",
-        "partitionSha256", "ledgerSha256"
-      ],
+      "required": ["baseline", "workspaceBaselineSha", "workspacePinnedDatabaseSha", "databaseSchemaSha", "databaseBaseSha", "databaseInventorySha", "databaseMergeBaseSha", "previousArtifactSha256"],
       "properties": {
-        "issue": {"const": "tiangong-lca/database-engine#405"},
+        "baseline": {"const": "tiangong-lca/workspace#533"},
+        "workspaceBaselineSha": {"pattern": "^[0-9a-f]{40}$"},
+        "workspacePinnedDatabaseSha": {"pattern": "^[0-9a-f]{40}$"},
         "databaseSchemaSha": {"pattern": "^[0-9a-f]{40}$"},
-        "migrationHead": {"const": "20260803090000"},
-        "migrationTreeSha256": {"const": "9fb83e143cef7dc8d12d058bbb7d22ecce38877dd3cef116f2bfd700b986bf9c"},
-        "predecessorInventorySha256": {"pattern": "^[0-9a-f]{64}$"},
-        "partitionSha256": {"pattern": "^[0-9a-f]{64}$"},
-        "ledgerSha256": {"pattern": "^[0-9a-f]{64}$"}
+        "databaseBaseSha": {"pattern": "^[0-9a-f]{40}$"},
+        "databaseInventorySha": {"pattern": "^[0-9a-f]{40}$"},
+        "databaseMergeBaseSha": {"pattern": "^[0-9a-f]{40}$"},
+        "previousArtifactSha256": {"pattern": "^[0-9a-f]{64}$"}
       }
     },
-    "counts": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["table", "view", "function"],
-      "properties": {
-        "table": {"const": 49}, "view": {"const": 12}, "function": {"const": 336}
-      }
-    },
-    "partitionCounts": {
-      "type": "object",
-      "additionalProperties": false,
-      "required": ["core", "predecessor", "issue357", "issue358", "omitted-explicit"],
-      "properties": {
-        "core": {"const": 9}, "predecessor": {"const": 37},
-        "issue357": {"const": 117}, "issue358": {"const": 230},
-        "omitted-explicit": {"const": 4}
-      }
-    },
-    "finalPublicAllowlist": {
-      "type": "array", "minItems": 9, "maxItems": 9,
-      "uniqueItems": true, "items": {"pattern": "^public\\.[a-z_]+$"}
-    },
+    "counts": {"type": "object", "required": ["table", "view", "function"]},
     "objects": {
-      "type": "array", "minItems": 397, "maxItems": 397,
+      "type": "array",
       "items": {
         "type": "object",
-        "required": [
-          "objectKey", "objectType", "targetSchema", "partition", "decision",
-          "ownerRepo", "sourceOfTruth", "migrationBatch", "testGate",
-          "intendedConsumers", "roleContract", "consumerClosure", "consumerEvidence",
-          "transitiveConsumerEvidence", "blockers", "lifecycleState", "catalog",
-          "dependencies", "dependents"
-        ],
+        "required": ["objectKey", "objectType", "targetSchema", "decision", "ownerRepo", "sourceOfTruth", "migrationBatch", "testGate", "intendedConsumers", "roleContract", "consumerClosure", "consumerEvidence", "transitiveConsumerEvidence", "blockers", "catalog", "dependencies", "dependents"],
         "properties": {
-          "objectKey": {"type": "string", "pattern": "^public\\."},
-          "objectType": {"enum": ["table", "partitioned_table", "view", "materialized_view", "function", "procedure"]},
           "targetSchema": {"enum": ["public", "api", "private", "util", "archive", "retire"]},
-          "partition": {"enum": ["core", "predecessor", "issue357", "issue358", "omitted-explicit"]},
           "consumerEvidence": {"type": "array"},
-          "blockers": {"type": "array"},
-          "lifecycleState": {
-            "type": "object", "additionalProperties": false,
-            "required": ["physicalMoved", "compatPresent", "adapterOnly", "retired"],
-            "properties": {
-              "physicalMoved": {"type": "boolean"}, "compatPresent": {"type": "boolean"},
-              "adapterOnly": {"type": "boolean"}, "retired": {"const": false}
-            }
-          }
+          "blockers": {"type": "array"}
         }
       }
     },
     "dependencies": {"type": "array"},
-    "migrationPlan": {"$ref": "#/$defs/dependencyPlan"},
-    "contractDropPlan": {"$ref": "#/$defs/dependencyPlan"},
-    "security": {
-      "type": "object",
-      "required": [
-        "relationAcl", "routineAcl", "policies", "defaultPrivileges", "schemaAcl",
-        "publications", "extensionOwnedPublicObjectsExcluded"
-      ],
-      "properties": {"extensionOwnedPublicObjectsExcluded": {"type": "array", "maxItems": 0}}
-    },
+    "migrationPlan": {"type": "object", "required": ["expandDependencyGroups", "contractDependencyGroups"]},
+    "security": {"type": "object", "required": ["relationAcl", "routineAcl", "policies", "defaultPrivileges", "schemaAcl", "publications"]},
     "consumerEvidence": {"type": "object", "required": ["repositories"]},
-    "residue": {
-      "type": "object",
-      "required": [
-        "missingFromLiveCatalog", "unmappedLiveObjects", "duplicatePartitionObjects",
-        "partitionCountDrift", "objectsWithoutConsumerClosure", "dynamicSqlReviewRequired",
-        "retirementBlocked", "contractAuthorizationMissing"
-      ]
-    },
-    "contractReady": {"const": false}
-  },
-  "$defs": {
-    "dependencyPlan": {
-      "type": "object", "additionalProperties": false,
-      "required": ["expandDependencyGroups", "contractDependencyGroups"],
-      "properties": {
-        "expandDependencyGroups": {"type": "array"},
-        "contractDependencyGroups": {"type": "array"}
-      }
-    }
+    "residue": {"type": "object", "required": ["missingFromLiveCatalog", "unmappedLiveObjects", "objectsWithoutConsumerClosure", "dynamicSqlReviewRequired", "retirementBlocked"]},
+    "contractReady": {"type": "boolean"}
   }
 }

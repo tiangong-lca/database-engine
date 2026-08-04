@@ -25,9 +25,7 @@ regexes = [
     # Exact non-secret variable-reference assignments in the Data API harness.
     '''(?:anon_key|jwt_secret) = os\.environ''',
     '''(?:anon_key = target\.anon_key|jwt_secret = target\.jwt_secret)''',
-    '''auth_token = authenticated_jwt''',
-    # Exact non-secret keyword-to-variable binding in the Issue #390 runtime harness.
-    '''apikey=service_key'''
+    '''auth_token = authenticated_jwt'''
 ]
 
 [[rules]]

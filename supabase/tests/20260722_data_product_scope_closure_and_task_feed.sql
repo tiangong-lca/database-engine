@@ -143,8 +143,8 @@ select ok(not exists (
     'lcia_scope_closure_checks_snapshot_artifact_fkey'
   )
 ), 'historical closure snapshot UUIDs are soft references rather than unconditional retention fences');
-select ok(exists (select 1 from pg_trigger where tgrelid='private.lca_network_snapshots'::regclass and tgname='lca_network_snapshots_closure_delete_guard' and tgenabled <> 'D'), 'snapshot deletion has a validity-aware certificate guard');
-select ok(exists (select 1 from pg_trigger where tgrelid='private.lca_snapshot_artifacts'::regclass and tgname='lca_snapshot_artifacts_closure_delete_guard' and tgenabled <> 'D'), 'snapshot artifact deletion has a validity-aware certificate guard');
+select ok(exists (select 1 from pg_trigger where tgrelid='public.lca_network_snapshots'::regclass and tgname='lca_network_snapshots_closure_delete_guard' and tgenabled <> 'D'), 'snapshot deletion has a validity-aware certificate guard');
+select ok(exists (select 1 from pg_trigger where tgrelid='public.lca_snapshot_artifacts'::regclass and tgname='lca_snapshot_artifacts_closure_delete_guard' and tgenabled <> 'D'), 'snapshot artifact deletion has a validity-aware certificate guard');
 select ok(exists (select 1 from pg_trigger where tgrelid='public.lcia_scope_closure_checks'::regclass and tgname='lcia_scope_closure_checks_snapshot_refs_immutable' and tgenabled <> 'D'), 'issued closure snapshot UUID references are immutable');
 
 select * from finish();

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(28);
+select plan(27);
 
 select is(
   public.cmd_review_get_dataset_name(
@@ -276,29 +276,6 @@ select has_function(
 select has_function(
   'public', 'qry_root_review_reference_progress', array['uuid'],
   'legacy root child query remains available for compatibility'
-);
-
-select is(
-  (
-    select count(*)::bigint
-    from pg_proc p
-    join pg_namespace n on n.oid = p.pronamespace
-    where n.nspname = 'public'
-      and format('%I(%s)', p.proname, pg_get_function_identity_arguments(p.oid)) = any (array[
-        'qry_review_get_admin_root_queue_items_v2(p_status text, p_page integer, p_page_size integer, p_sort_by text, p_sort_order text)',
-        'qry_review_get_member_root_queue_items_v2(p_status text, p_page integer, p_page_size integer, p_sort_by text, p_sort_order text)',
-        'qry_root_review_reference_progress_v2(p_root_review_id uuid)'
-      ])
-      and p.prosecdef
-      and p.proconfig = array['search_path=pg_catalog, pg_temp']
-      and pg_get_userbyid(p.proowner) = 'postgres'
-      and coalesce(p.proacl::text, '') = '{postgres=X/postgres,authenticated=X/postgres,service_role=X/postgres}'
-      and not has_function_privilege('anon', p.oid, 'EXECUTE')
-      and has_function_privilege('authenticated', p.oid, 'EXECUTE')
-      and has_function_privilege('service_role', p.oid, 'EXECUTE')
-  ),
-  3::bigint,
-  'exact grouped root Review SECURITY DEFINER signatures retain trusted owner, ACL, and search_path posture'
 );
 
 select set_config('request.jwt.claim.role', 'authenticated', true);

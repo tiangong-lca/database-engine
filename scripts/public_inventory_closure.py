@@ -20,8 +20,6 @@ LEDGER = CONTRACT_DIR / "public_object_target_ledger.tsv"
 CONSUMERS = CONTRACT_DIR / "public_object_consumers.json"
 OUT = CONTRACT_DIR / "public_object_inventory.json"
 SHA = CONTRACT_DIR / "public_object_inventory.sha256"
-GENESIS_OUT = CONTRACT_DIR / "public_object_inventory.genesis.json"
-GENESIS_SHA = CONTRACT_DIR / "public_object_inventory.genesis.sha256"
 
 SOURCE = {
     # Workspace/report lineage. These identify the original #338 evidence context.
@@ -664,21 +662,7 @@ def write_or_check(write: bool) -> str:
 
 
 def check_frozen_baseline() -> str:
-    """Verify the current exact-head contract without querying a database.
-
-    The immutable Issue #338 input remains at ``*.genesis.*`` for lineage
-    consumers.  Issue #405 advances the unqualified artifact names to v2.
-    """
-    try:
-        current = json.loads(OUT.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        current = {}
-    if current.get("schemaVersion") == "database.public-object-inventory-closure.v2":
-        import public_inventory_exact_head as exact_head
-
-        result = exact_head.verify()
-        print(json.dumps(result, sort_keys=True))
-        return result["inventorySha256"]
+    """Verify the immutable v1 baseline without comparing it to transition state."""
     try:
         contract = verify_committed_artifacts()
         validate(contract)
@@ -714,17 +698,12 @@ def main() -> int:
         scan_consumers(Path(args.scan_consumers).resolve())
         return 0
     if args.verify_provenance:
-        contract = verify_committed_artifacts(GENESIS_OUT, GENESIS_SHA)
+        contract = verify_committed_artifacts()
         validate_source(
             contract["source"], workspace_repo=Path(args.verify_provenance).resolve(),
         )
         print(json.dumps(contract["source"], sort_keys=True))
         return 0
-    if args.write:
-        raise SystemExit(
-            "Issue #405 retired the unqualified v1 writer; use "
-            "public_inventory_exact_head.py --refresh --db-url <explicit-loopback-url>"
-        )
     if args.check:
         check_frozen_baseline()
     else:

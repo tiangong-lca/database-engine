@@ -21,9 +21,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-03
-lastReviewedCommit: 2cb88b079a8e50f7630378b9f565739c4144df60
-lastReviewedNote: "已针对 Issue #390 target-aware pre-DDL 校验复核：PR 本地 qualification 与持久化 dev 串行部署在 canonical contract 前安装同一固定版本 PostgreSQL AST parser；分支目标和 Hosted mutation 边界保持不变。"
+lastReviewedAt: 2026-08-01
+lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
+lastReviewedNote: "已针对 Issue #346 复核：持久化 dev 显式串行执行 migration 与白名单 PostgREST 配置，production 仍由 Supabase integration 管理。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -89,7 +89,6 @@ related:
 - `supabase/config.toml`：共享基线加 `[remotes.dev]`
 - `.github/workflows/database-validation.yml`：在 PR 上使用全新 disposable 本地栈验证数据库 contract，不修改 Hosted
 - `.github/workflows/supabase-dev.yml`：在 Git `dev` 更新时先做本地验证，再把已提交 migration 推送到持久化 Supabase `dev` 分支并完成配置 readback
-- 两个 workflow 都在 canonical Python contract 前安装同一个精确版本 `pglast==8.4`，确保 PR 与持久化 dev qualification 的 target-aware migration 授权使用一致的 PostgreSQL AST 语义。
 - `supabase/migrations/*.sql`：已提交的 migration 历史
 - `supabase/seed.sql`：共享 seed 数据
 - `supabase/seeds/dev.sql`：可选的持久化 dev 专属 seed 数据

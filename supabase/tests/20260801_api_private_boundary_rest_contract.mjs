@@ -89,14 +89,3 @@ test('service role can execute the bounded api adapter', { skip: !serviceRoleKey
   assert.equal(result.status, 200);
   assert.deepEqual(result.payload, { ok: true, data: [] });
 });
-
-test('result GC worker routines are absent from the PostgREST RPC surface', { skip: !serviceRoleKey }, async () => {
-  const result = await request({
-    key: serviceRoleKey,
-    path: '/rest/v1/rpc/worker_lca_result_gc_preview_v1',
-    method: 'POST',
-    body: { p_limit: 1 },
-  });
-  assert.equal(result.status, 404);
-  assert.equal(result.payload?.code, 'PGRST202');
-});

@@ -21,9 +21,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-03
-lastReviewedCommit: 2cb88b079a8e50f7630378b9f565739c4144df60
-lastReviewedNote: "Reviewed for Issue #390 target-aware pre-DDL validation: both local PR qualification and serialized persistent-dev deployment install the same pinned PostgreSQL AST parser before running the canonical contract; branch targeting and hosted mutation boundaries are unchanged."
+lastReviewedAt: 2026-08-01
+lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
+lastReviewedNote: "Reviewed Issue #346: persistent dev explicitly serializes migration and allowlisted PostgREST config while production remains Supabase-integration owned."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -91,7 +91,6 @@ When review changes an already-applied PR migration, add a later migration that 
 - `supabase/config.toml`: shared baseline plus `[remotes.dev]`
 - `.github/workflows/database-validation.yml`: validates database PRs on a fresh disposable local stack without hosted mutation
 - `.github/workflows/supabase-dev.yml`: validates locally, then serializes and pushes committed migrations plus allowlisted PostgREST configuration to persistent Supabase `dev`, followed by hosted readback
-- Both workflows install the same exact `pglast==8.4` parser before the canonical Python contract so target-aware migration authorization has identical PostgreSQL-AST semantics in PR and persistent-dev qualification.
 - `scripts/apply_postgrest_config.py`: fail-closed persistent-dev PostgREST diff/apply/readback gate
 - `supabase/migrations/*.sql`: committed migration history
 - `supabase/seed.sql`: shared seed data
@@ -134,16 +133,6 @@ Repository configuration expected by `.github/workflows/supabase-dev.yml`:
 - variable `SUPABASE_DEV_PROJECT_ID`
 - secret `SUPABASE_ACCESS_TOKEN`
 - secret `SUPABASE_DEV_DB_PASSWORD`
-
-The Issue #380 hosted consumer qualification runs by manual dispatch or by a
-path-scoped push to canonical `dev` that changes its workflow/trusted runner.
-It additionally uses the same repository variable and access token, but never deploys migrations. It resolves
-current modern API keys through the Management API. If the access token lacks
-key-reveal permission, configure both project-specific repository secrets
-`SUPABASE_DEV_PUBLISHABLE_KEY` and `SUPABASE_DEV_SECRET_KEY`; absence or an
-invalid key is a hard blocker, not a reason to retry legacy disabled keys. The
-workflow refuses every ref except canonical `refs/heads/dev` and explicitly
-rejects production project `qgzvkongdjqiiamzbbts`.
 
 ## PR to Supabase migration path
 

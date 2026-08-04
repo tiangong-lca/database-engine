@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-04
-lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
-lastReviewedNote: "Reviewed for Issue #412: target-neutral internal static SQL SECURITY DEFINER admission is structural and does not use business-specific allowlists."
+lastReviewedAt: 2026-08-01
+lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
+lastReviewedNote: "Reviewed for Issue #355 mandatory destructive qualification: the canonical opt-in gate invokes the dual exact-hash/actor-RLS harness before the rollback/roll-forward harness and propagates either failure."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -44,16 +44,6 @@ One-off or dated data remediation runners live under:
 
 Those runners should keep their own `README.md` with dry-run, apply, and validation examples.
 Local migration outputs and audit JSONL files should be written under `_artifacts/`, which is intentionally ignored by Git.
-
-### `test_issue_398_result_gc_runtime.py`
-
-Runs the destructive result-GC real-login and multi-session qualification only
-against an explicit loopback database URL. It requires
-`--confirm-isolated-destructive-test`, creates unique temporary login roles,
-exercises renew/fail/takeover/finalize and concurrency races, and performs exact
-database/role zero-residue cleanup. Use the fixed unique project ID and ports in
-`docs/agents/lca-result-gc-contract.md`; never point it at a linked or persistent
-database.
 
 ## Script List
 
@@ -309,146 +299,6 @@ or ambiguous activation requires exactly one version-matched freeze/receipt,
 sidecar and schema, the capture and generator scripts, plus both reviewed
 migration phases, and fails before SQL if that closure is incomplete.
 
-### `test_lca_snapshot_family_upgrade.py`
-
-Runs the destructive, local-only Issue #376 migration qualification against an
-explicit disposable loopback Supabase database:
-
-```bash
-python scripts/test_lca_snapshot_family_upgrade.py \
-  --db-url "$ISSUE_376_DB_URL"
-```
-
-The checked contract fixes an ancestor database commit with an exact predecessor
-migration head, the only permitted committed migration delta, a 10,000-row
-network/artifact fixture, and lock/time/WAL budgets. The runner proves OID plus
-full-row/primary-key/content parity, failure atomicity at the
-second `ALTER TABLE`, clean upgrade, direct migration retry, private-state drift
-rejection, and committed rollback/roll-forward. It refuses non-loopback URLs;
-the selected database is reset destructively.
-
-### `test_issue_390_pre_ddl_gate.py`
-
-Runs the offline, non-mutating pre-DDL authorization gate for the LCA
-result/cache/latest/factorization family:
-
-```bash
-python -m pip install --disable-pip-version-check "jsonschema==4.23.0" "pglast==8.4"
-python -m unittest scripts.test_issue_390_pre_ddl_gate
-```
-
-The checked contract binds the exact `dev` base and migration head, seven target
-objects plus their recursive application-object dependency closure, a digest-bound repository catalog plus hosted owner receipt, active
-consumer canonical/candidate tuples, a reproducible non-authorizing runtime
-receipt, advisor baseline, and owner-signoff state.
-While `ddlAuthorized=false`, committed migration history remains append-only. New
-target-neutral static migrations are allowed. A separately tested additive
-service-only `api` facade must match one exact reviewed path/blob/classification
-entry in its first commit and pass fixed-version `pglast` PostgreSQL-AST semantic
-checks. A later commit cannot retroactively authorize it. Opaque or
-dynamic execution, relation-moving DDL, historical authenticated-access removal,
-and browser grants on `private` remain hard denied and cannot be overridden by an
-allowlist. Static exclusions include, but are not limited to, top-level DML,
-CTAS/SELECT, index or exclusion-index builds, validated constraints and
-partitions, column type or storage rewrites, non-metadata-only column additions,
-`SET NOT NULL`, custom types/access methods, trigger/rule state changes, and
-migration identity/owner switches because existing triggers, views, FDWs,
-operators, casts, constraints, or access methods can execute unproven code.
-Moves into exposed `api`/`public` are denied; newly created exposed views must be
-security-invoker, and exposed routines may neither be security-definer nor
-reference internal objects. Reviewed facade signatures use explicitly qualified
-`pg_catalog` types so migration-session type shadowing cannot change identities.
-Created `api.lca_*` and `api.cmd_lca_*` facades
-remain protected from later replacement, privilege, and security-mode changes.
-HEAD, index, and worktree each use their own contract revision. The gate
-never treats one zero-match query as burn-in. The canonical manifest-contract
-module imports this test case, so existing CI runs it without a second workflow.
-
-The target-neutral rule for an internal `SECURITY DEFINER` is structural, not
-an allowlist. It accepts only an explicitly internal-schema `LANGUAGE SQL`
-function whose body parses completely, whose relation dependencies are
-schema-qualified, and whose only function-level path is exactly
-`pg_catalog, pg_temp`. Exposed-schema functions, procedural or dynamic bodies,
-unqualified relations, duplicate or reordered path settings, and paths that
-contain another schema remain hard denied. The rule never inspects an Issue
-number, migration path, function name, Git blob, or classification.
-
-### `issue_390_physical_qualification.py`
-
-Defines the non-authorizing physical-move qualification harness before any
-Issue #390 relation-moving DDL exists:
-
-```bash
-python scripts/issue_390_physical_qualification.py --check
-python scripts/issue_390_physical_qualification.py --print-run-plan
-python -m unittest scripts.test_issue_390_physical_qualification
-```
-
-The default suite keeps the live database case skipped. Exercise the complete
-SQL query and receipt validator against an exact predecessor database with:
-
-```bash
-ISSUE_390_BASELINE_DB_URL='<explicit-loopback-url>' \
-  python -m unittest \
-  scripts.test_issue_390_physical_qualification.Issue390PhysicalQualificationLiveIntegrationTest
-```
-
-The exact v1 plan is bound to `database-engine/dev@a29f26a9` and migration head
-`20260803090000`. It contains no migration, rollback, or populated-fixture
-binding and keeps `ddlAuthorized`, `relationMovingDdlAllowed`,
-`historicalAuthenticatedSelectRemovalAllowed`, and destructive qualification
-execution false. `--qualify` therefore fails closed.
-
-On an explicit loopback database, `--capture-baseline --db-url ... --output
-...` may emit a read-only repeatable-read receipt only as `postgres` or
-`supabase_admin`, after proving superuser, `BYPASSRLS`, or ownership-based full
-row visibility across the four exact ordinary relations and three exact
-functions. Loopback and read-only prove neither database disposability nor
-independent-instance isolation. The requested client endpoint must be
-loopback; a containerized PostgreSQL server can truthfully report its bridge
-interface from `inet_server_addr()`. The database receipt independently binds the
-database name/OID, server address/port, cluster system identifier, and exact
-applied migration set; the Git-derived repository plan is recorded separately.
-The receipt freezes OID, owner, ACL/column ACL,
-RLS/policy, inbound/outbound FK semantics, indexes, triggers, publications,
-row count, sorted canonical SHA-256 PK/full-row digests, routine
-properties/definition hashes, recursive
-`pg_depend`, view/`pg_rewrite`, composite/rowtype, dynamic-SQL, and regclass
-candidates. Capture fails above 100,000 rows per target or after the 120-second
-statement budget; a successor needs a separately reviewed bounded/streaming
-design for larger tables. It stores no row payload and makes no authorization
-claim.
-
-The printed future run plan reserves independent fresh and populated upgrades
-whose database receipts must have distinct cluster system identifiers,
-failure atomicity, lock timeout, WAL/time budgets, retry, rollback, and
-roll-forward receipts and requires distinct `--fresh-db-url` /
-`--populated-db-url` loopback identities plus an external `--receipt-dir`.
-Activating those steps requires a reviewed successor
-contract with exact candidate blobs and independently completed pre-DDL gates;
-v1 cannot be edited into an execution authorization.
-
-### `issue_390_external_git_tree.py`
-
-Builds the non-authorizing Issue #397 consumer ledger directly from eight exact
-external Git commits. It validates each canonical origin, walks every regular
-blob with Git object commands (including the active Next database snapshot),
-records only blob/line hashes and semantic classifications, and fails closed on
-unsupported entries, unresolved active-runtime tokens, or dynamic selectors.
-The Next Edge mirror receipt and exact source tree are checked independently;
-staleness and content parity are separate blockers. Recognized direct-token
-occurrences are not an exhaustive consumer count.
-
-```bash
-python scripts/issue_390_external_git_tree.py --check
-python scripts/issue_390_external_git_tree.py --verify-external /absolute/path/to/lca-workspace
-python -m unittest scripts.test_issue_390_external_git_tree
-```
-
-`--scan-external` rewrites the canonical JSON artifact and SHA sidecar and is
-only for a reviewed evidence refresh. These commands do not authorize DDL or
-contact Supabase Hosted projects.
-
 The canonical contract also runs `public_inventory_closure.py --check` and
 `security_definer_audit.py --check`. The inventory
 gate joins the imported workspace #533 per-object ledger to the live catalog at
@@ -473,43 +323,35 @@ Run Data API proof separately against the matching explicit REST URL/keys.
 
 ### `public_inventory_closure.py`
 
-`public_inventory_closure.py --check` dispatches to the current Issue #405
-offline exact-head verifier. The immutable Issue #338 generator and provenance
-helpers remain available for genesis lineage and exact-SHA consumer evidence:
+Refresh consumer evidence from the exact commits pinned in the checked-in
+consumer manifest without switching those repositories:
 
 ```bash
 python scripts/public_inventory_closure.py --scan-consumers <lca-workspace-root>
 python scripts/public_inventory_closure.py --verify-provenance <lca-workspace-root>
 ```
 
-Verify current committed bytes without a database, or explicitly compare a
-loopback exact-head catalog:
+After a local reset, write or verify the deterministic database contract:
 
 ```bash
+python scripts/public_inventory_closure.py --write
 python scripts/public_inventory_closure.py --check
-python scripts/public_inventory_exact_head.py --check
-python scripts/public_inventory_exact_head.py --check-live --db-url postgresql://...
-python scripts/public_inventory_exact_head.py --compare-catalogs \
-  --db-url postgresql://... --other-db-url postgresql://...
-python -m unittest scripts.test_public_inventory_exact_head scripts.test_public_inventory_closure
+python -m unittest scripts/test_public_inventory_closure.py
 ```
 
-Only an explicit disposable loopback database may regenerate current files:
+`contractReady=false` is expected while the emitted residue still contains
+dynamic-SQL or runtime/owner-confirmation blockers. A missing mapping, invalid
+target, non-exact repository SHA, duplicate key, or live/ledger count drift is
+always a hard failure; an unknown consumer is retained as an explicit blocker
+and is never silently converted to `retire`.
 
-```bash
-python scripts/public_inventory_exact_head.py --refresh --db-url postgresql://...
-```
-
-The v2 artifact binds exact source `c5356d2`, migration head
-`20260803090000`, 397 live identities, partition `9+37+117+230+4`, and the full
-388-residue Contract DROP identity checklist. The checklist is non-executable
-inventory: every entry remains `blocked`, no migration is produced, and
-`contractReady=false` is invariant. Missing, unknown, duplicate, count, schema,
-hash, counterpart, or live-ledger drift is a hard failure.
-
-The prior #338 artifact and hash remain immutable in
-`public_object_inventory.genesis.*`; security lineage continues to reference
-that genesis instead of treating the v2 refresh as a historical rewrite.
+The source block separates the reviewed workspace baseline, its exact
+`database-engine` gitlink, and historical review/source/merge-base lineage from
+`databaseSchemaSha`, the sole migration/catalog replay input. The prior #338
+artifact hash is lineage, not the current artifact hash. `--verify-provenance`
+replays those relationships
+without consulting a moving remote. `--check` first verifies canonical JSON
+bytes and the committed SHA-256, then performs committed-vs-generated comparison.
 
 ### `security_definer_audit.py`
 
@@ -730,22 +572,6 @@ python -m unittest scripts/test_identity_collaboration_expand_static.py
 python scripts/test_identity_collaboration_policy_variants.py
 python scripts/test_identity_collaboration_data_api.py
 python scripts/test_identity_collaboration_concurrency.py
-```
-
-### Issue #390/#395 result API facade runtime
-
-`test_issue_390_result_api_facade_runtime.py` is a loopback-only qualification
-for the eight service-only `api` routines. It freezes the positive DTO values,
-exact anonymous/authenticated/private-profile denials, one eight-request HTTP
-admission race, one eight-backend PostgreSQL race, same-binding replay, and
-post-cleanup zero residue. The Issue #395 extension also runs eight concurrent
-reconciliations of one cancelled Worker job, proves every call contributes
-exactly one hit while preserving all identities, then admits a retry that
-atomically clears the old result/error binding. `canonical-local` runs it
-automatically whenever the Issue #390 facade pgTAP contract is selected.
-
-```bash
-python scripts/test_issue_390_result_api_facade_runtime.py
 ```
 
 The canonical runner resolves one explicit loopback stack once, verifies its

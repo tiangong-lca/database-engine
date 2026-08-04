@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-04
-lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
-lastReviewedNote: "已为 Issue #412 复核：target-neutral 内部静态 SQL SECURITY DEFINER 准入采用结构规则，不使用业务专属 allowlist。"
+lastReviewedAt: 2026-08-01
+lastReviewedCommit: d46daabe68ac3eaccbc889cf9cc35a746fc10d88
+lastReviewedNote: "已为 Issue #355 mandatory destructive qualification 复核：canonical opt-in gate 先调用 dual exact-hash/逐角色 RLS harness，再调用 rollback/roll-forward harness，并传播任一失败。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -44,14 +44,6 @@ related:
 
 这类 runner 应在自己的 `README.md` 中保留 dry-run、apply 和 validate 示例。
 本地迁移输出和审计 JSONL 文件应写入 `_artifacts/`，该目录已被 Git 忽略。
-
-### `test_issue_398_result_gc_runtime.py`
-
-该脚本只对显式 loopback 数据库 URL 运行破坏性的 result-GC 真实登录角色与多会话验证。
-它强制要求 `--confirm-isolated-destructive-test`，创建唯一临时登录角色，覆盖
-renew/fail/takeover/finalize 与并发竞态，并精确清理、回读数据库和角色零残留。
-必须使用 `docs/agents/lca-result-gc-contract.md` 中固定的唯一 project ID 与端口，
-不得指向 linked 或持久化数据库。
 
 ## 脚本列表
 
@@ -295,159 +287,31 @@ Schema、receipt 对 phase 的明确授权，并重新生成 API pre-expand/phys
 未授权、SQL 漂移或匹配不唯一会在执行 SQL 前
 fail-closed，不会产生空绿色结果。
 
-### `test_lca_snapshot_family_upgrade.py`
-
-对一个显式 disposable loopback Supabase 数据库执行 Issue #376 的本地破坏性迁移
-qualification：
-
-```bash
-python scripts/test_lca_snapshot_family_upgrade.py \
-  --db-url "$ISSUE_376_DB_URL"
-```
-
-checked contract 固定 ancestor database commit 及其精确 predecessor migration
-head、唯一允许的 committed migration delta、10,000 行 network/artifact fixture 与
-lock/time/WAL budgets。runner 验证 OID、行数、主键与完整行内容 hash，第二个
-`ALTER TABLE` 的失败原子性、clean upgrade、直接迁移重试、
-private-state drift 拒绝，以及 committed rollback/roll-forward。它拒绝非 loopback
-URL，并会破坏性 reset 所选数据库。
-
-### `test_issue_390_pre_ddl_gate.py`
-
-对 LCA result/cache/latest/factorization family 执行只读、离线的 pre-DDL
-授权门禁：
-
-```bash
-python -m pip install --disable-pip-version-check "jsonschema==4.23.0" "pglast==8.4"
-python -m unittest scripts.test_issue_390_pre_ddl_gate
-```
-
-checked contract 绑定精确 `dev` 基线与 migration head、七个目标对象及其递归应用对象
-依赖闭包、digest-bound repository catalog 与 hosted owner receipt、active consumer canonical/candidate
-tuple、可复算且明确不授权 DDL 的 runtime receipt、advisor baseline 与 owner sign-off
-状态。`ddlAuthorized=false` 时，已提交 migration history 保持 append-only，新增的
-target-neutral static migration 可以继续进入仓库。单独交付并测试的 additive
-service-only `api` facade 必须在 migration 第一次提交的同一 commit 中匹配精确受审的
-path/blob/classification，并通过固定版本 `pglast` 的 PostgreSQL AST 语义校验；后续
-commit 不能追溯授权。opaque/dynamic execution、
-relation-moving DDL、提前撤销历史 authenticated access，以及 browser role 的
-`private` grant 都是不可被 allowlist 覆盖的 hard deny。static 排除项包括但不限于
-顶层 DML、CTAS/SELECT、index 或 exclusion-index build、已验证 constraint 与
-partition、column type/storage rewrite、非纯 metadata 的 add-column、`SET NOT NULL`、
-custom type/access method、trigger/rule 状态变更，以及 migration identity/owner 切换，
-因为既有 trigger、view、FDW、operator、cast、constraint 或 access method 可能执行
-尚未证明安全的代码。任何对象移入 exposed `api`/`public` 都被拒绝；新 exposed view
-必须为 security-invoker，exposed routine 不得为 security-definer 或引用 internal
-对象。受审 facade signature 必须显式使用 `pg_catalog` type，避免 migration session
-中的 type shadow 改变 identity；已创建的
-`api.lca_*` 与 `api.cmd_lca_*` facade 也持续禁止后续 replacement、权限或 security
-mode 弱化。HEAD、index 与 worktree
-分别读取各自版本的合同。单次日志零命中也不构成 burn-in。canonical
-manifest contract 会导入该 test case，因此沿用既有 CI 而不新增第二条 workflow。
-
-内部 `SECURITY DEFINER` 的 target-neutral 准入是结构规则，不是 allowlist。
-它只接受显式位于内部 schema 的 `LANGUAGE SQL` 函数，且函数体必须完整解析、
-relation 依赖必须 schema-qualified、唯一的函数级路径必须精确等于
-`pg_catalog, pg_temp`。exposed-schema 函数、过程式或动态 body、未限定 relation、
-重复或反序的路径设置，以及包含其他 schema 的路径继续 hard deny。规则不读取
-Issue 编号、migration 路径、函数名、Git blob 或 classification。
-
-### `issue_390_physical_qualification.py`
-
-在 Issue #390 尚无 relation-moving DDL 时，先定义不可授权的 physical-move
-qualification harness：
-
-```bash
-python scripts/issue_390_physical_qualification.py --check
-python scripts/issue_390_physical_qualification.py --print-run-plan
-python -m unittest scripts.test_issue_390_physical_qualification
-```
-
-默认 suite 会跳过真实数据库 case。使用以下 opt-in 命令在 exact predecessor 数据库上
-完整执行 SQL query 与 receipt validator：
-
-```bash
-ISSUE_390_BASELINE_DB_URL='<explicit-loopback-url>' \
-  python -m unittest \
-  scripts.test_issue_390_physical_qualification.Issue390PhysicalQualificationLiveIntegrationTest
-```
-
-v1 plan 精确绑定 `database-engine/dev@a29f26a9` 与 migration head
-`20260803090000`，不绑定 migration、rollback 或 populated fixture，并保持
-`ddlAuthorized`、`relationMovingDdlAllowed`、
-`historicalAuthenticatedSelectRemovalAllowed` 与破坏性 qualification execution
-全部为 false，因此 `--qualify` 必须 fail closed。
-
-显式 loopback 数据库可以运行 `--capture-baseline --db-url ... --output ...`，但只允许
-`postgres` 或 `supabase_admin`，且必须证明其通过 superuser、`BYPASSRLS` 或全部对象
-owner 身份获得四个精确普通 relation 的完整行可见性，并验证三个精确 function。
-loopback 与只读都不证明数据库 disposable，也不证明实例相互独立。数据库 receipt
-要求 loopback 的是客户端连接 endpoint；容器内 PostgreSQL 的 `inet_server_addr()`
-可以如实返回 bridge interface。数据库 receipt 独立绑定 database name/OID、server
-address/port、cluster system identifier 与实际应用的
-完整 migration set；Git 推导的 repository plan 另行记录。receipt 覆盖 OID、owner、
-ACL/column ACL、RLS/policy、双向 FK、index、trigger、publication、行数、PK/content
-按主键排序的 canonical SHA-256 PK/完整行 digest、routine property/definition hash，
-以及递归 `pg_depend`、view/`pg_rewrite`、
-composite/rowtype、dynamic-SQL、regclass candidate。它不存储行 payload，也不提出
-授权结论。每个 target 超过 100,000 行或 statement 超过 120 秒时 capture 会失败；
-更大表需要 successor 单独受审的 bounded/streaming 设计。
-
-未来 run plan 预留 cluster system identifier 必须不同的独立 fresh/populated upgrade、failure atomicity、lock timeout、
-WAL/time budget、retry、rollback 与 roll-forward receipt，并要求不同的
-`--fresh-db-url` / `--populated-db-url` loopback 身份及外部 `--receipt-dir`。只有受审 successor
-contract 精确绑定 candidate blobs 且全部 pre-DDL gate 独立完成后，才可实现这些执行
-阶段；v1 不允许直接改成授权合同。
-
-### `issue_390_external_git_tree.py`
-
-直接从八个外部仓库的精确 Git commit 构建 Issue #397 的非授权 consumer ledger。
-脚本校验 canonical origin，通过 Git object 命令遍历每个 regular blob（包括 Next
-运行时使用的数据库快照），只保留 blob/行 hash 与语义分类；unsupported entry、
-active-runtime 未解析 token 和动态 selector 都 fail closed。Next Edge mirror receipt、
-其精确来源树、是否陈旧及内容 parity 分别验证。被规则识别的直接 token 出现次数
-不得表述为穷尽性的 consumer 数量。
-
-```bash
-python scripts/issue_390_external_git_tree.py --check
-python scripts/issue_390_external_git_tree.py --verify-external /absolute/path/to/lca-workspace
-python -m unittest scripts.test_issue_390_external_git_tree
-```
-
-`--scan-external` 会重写 canonical JSON artifact 与 SHA sidecar，只用于受审的证据
-刷新。所有命令都不授权 DDL，也不连接 Supabase Hosted 项目。
-
 ### `public_inventory_closure.py`
 
-`public_inventory_closure.py --check` 现在转发到 Issue #405 的离线 exact-head
-校验器；旧 #338 generator/provenance 命令只保留给 genesis lineage 与 fixed-SHA
-consumer evidence。
+该脚本把 workspace #533 的逐对象 ledger 与 database #337 merge head 的实时
+catalog 合并为稳定合同，覆盖 table、view、materialized view、function/procedure、
+精确 routine identity arguments、ACL/RLS/default privileges，以及
+FK/rewrite/trigger/policy/composite/function-body 依赖。输出还包含 SCC-aware Expand
+顺序、反向 Contract 顺序、固定 consumer commit SHA 的静态证据和显式 residue。
 
 ```bash
 python scripts/public_inventory_closure.py --scan-consumers <lca-workspace-root>
 python scripts/public_inventory_closure.py --verify-provenance <lca-workspace-root>
+python scripts/public_inventory_closure.py --write
 python scripts/public_inventory_closure.py --check
-python scripts/public_inventory_exact_head.py --check
-python scripts/public_inventory_exact_head.py --check-live --db-url postgresql://...
-python scripts/public_inventory_exact_head.py --compare-catalogs \
-  --db-url postgresql://... --other-db-url postgresql://...
-python -m unittest scripts.test_public_inventory_exact_head scripts.test_public_inventory_closure
+python -m unittest scripts/test_public_inventory_closure.py
 ```
 
-只有显式 disposable loopback database 可以刷新当前 artifact：
+只有 consumer SHA 变化时才重新扫描。`contractReady=false` 表示仍有 dynamic SQL
+或 runtime/owner 证据待关闭；缺少 mapping、无效 target、非精确 SHA、重复 key 或
+live/ledger 漂移会直接失败。未知 consumer 始终保留为 blocker，不能据此退休对象。
 
-```bash
-python scripts/public_inventory_exact_head.py --refresh --db-url postgresql://...
-```
-
-v2 绑定 exact source `c5356d2`、migration head `20260803090000`、397 个 live
-identity、`9+37+117+230+4` exactly-once partition，以及完整的 388-residue
-Contract DROP identity checklist。checklist 不是可执行 SQL：所有 identity 均为
-`blocked`，不生成 migration，`contractReady=false` 永远成立。missing、unknown、
-duplicate、count、schema、hash、counterpart 或 live-ledger drift 都会失败关闭。
-
-旧 #338 artifact/hash 继续以 `public_object_inventory.genesis.*` 保持不可变；
-security lineage 仍引用 genesis，不把 v2 刷新解释成历史重写。
+`source` 将 workspace baseline、其精确 `database-engine` gitlink、历史
+review/source/merge-base lineage，与唯一用于 migration/catalog 重放的
+`databaseSchemaSha` 明确分离；旧 #338 artifact hash 仅作为 lineage。
+`--verify-provenance` 不读取移动 remote 即可重放这些关系；`--check` 先验证
+canonical JSON bytes 与 committed SHA-256，再执行 committed-vs-generated 对比。
 
 ### `security_definer_audit.py`
 
@@ -590,20 +454,6 @@ python -m unittest scripts/test_identity_collaboration_expand_static.py
 python scripts/test_identity_collaboration_policy_variants.py
 python scripts/test_identity_collaboration_data_api.py
 python scripts/test_identity_collaboration_concurrency.py
-```
-
-### Issue #390/#395 result API facade runtime
-
-`test_issue_390_result_api_facade_runtime.py` 是仅允许 loopback 的八个 service-only
-`api` routine 验证器。它冻结服务成功 DTO、anon/authenticated/private profile 精确拒绝、
-8 请求 HTTP admission race、8 个独立 PostgreSQL backend race、same-binding replay 与
-清理后的零残留。Issue #395 进一步用 8 个并发请求验证同一 cancelled Worker job
-收敛为 failed：每次调用仅增加一次 hit 且不改变任何身份字段，随后第二阶段 retry
-原子清除旧 result/error 并重新绑定。canonical-local 选中 Issue #390 facade pgTAP
-合同时会自动执行该脚本。
-
-```bash
-python scripts/test_issue_390_result_api_facade_runtime.py
 ```
 
 canonical runner 只解析一次显式 loopback stack：先把 database identity 与所选

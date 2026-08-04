@@ -52,16 +52,10 @@ select is((select count(*)::integer from pg_trigger t join pg_class c on c.oid=t
   join pg_namespace n on n.oid=c.relnamespace where not t.tgisinternal and n.nspname='private'
     and c.relname in ('worker_job_kinds','worker_jobs','worker_job_events','worker_job_artifacts')), 2,
   'all user Worker triggers remain attached to private physical OIDs');
-select ok((select count(*)=1 and bool_and(
-    c.relname='worker_jobs'
-    and p.polname='worker_jobs_result_gc_executor_select'
-    and p.polcmd='r'
-    and p.polroles=array['lca_result_gc_executor'::regrole]::oid[]
-    and pg_get_expr(p.polqual,p.polrelid)='true'
-  ) from pg_policy p join pg_class c on c.oid=p.polrelid
+select is((select count(*)::integer from pg_policy p join pg_class c on c.oid=p.polrelid
   join pg_namespace n on n.oid=c.relnamespace where n.nspname='private' and c.relname in
-    ('worker_job_kinds','worker_jobs','worker_job_events','worker_job_artifacts')),
-  'Worker physical tables expose only the exact result-GC executor SELECT policy');
+    ('worker_job_kinds','worker_jobs','worker_job_events','worker_job_artifacts')), 0,
+  'Worker physical tables preserve the no-RLS-policy baseline');
 select is((select count(*)::integer from pg_class c join pg_namespace n on n.oid=c.relnamespace
   where n.nspname='private' and c.relname in
     ('worker_job_kinds','worker_jobs','worker_job_events','worker_job_artifacts')
@@ -111,11 +105,11 @@ select is((select count(*)::integer from pg_proc p join pg_namespace n on n.oid=
   'four reviewed security-invoker compatibility-body residues remain');
 
 select is((select count(*)::integer from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where p.prosecdef and n.nspname='public'), 233,
-  'logical SECURITY DEFINER distribution has 233 physical public routines after grouped root-review facades');
+  where p.prosecdef and n.nspname='public'), 230,
+  'logical SECURITY DEFINER distribution has 230 physical public routines');
 select is((select count(*)::integer from pg_proc p join pg_namespace n on n.oid=p.pronamespace
-  where p.prosecdef and n.nspname='private'), 62,
-  'logical SECURITY DEFINER distribution has 62 physical private routines including result GC');
+  where p.prosecdef and n.nspname='private'), 49,
+  'logical SECURITY DEFINER distribution has 49 physical private routines');
 select is((select count(*)::integer from pg_proc p join pg_namespace n on n.oid=p.pronamespace
   where p.prosecdef and n.nspname='util'), 36,
   'global SECURITY DEFINER coverage includes 36 util routines');

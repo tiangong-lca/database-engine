@@ -5,12 +5,12 @@ select extensions.plan(16);
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
    where n.nspname='public' and p.prokind='f' and p.prosecdef),
-  233::bigint, 'public SECURITY DEFINER inventory includes the grouped root-review facades and excludes moved Worker canonicals');
+  230::bigint, 'public SECURITY DEFINER inventory excludes the eleven moved Worker canonicals');
 
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
    where n.nspname='public' and p.prosecdef and pg_get_userbyid(p.proowner)='postgres'),
-  217::bigint, '217 public SECURITY DEFINER signatures retain postgres ownership');
+  214::bigint, '214 public SECURITY DEFINER signatures retain postgres ownership');
 
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
@@ -31,7 +31,7 @@ select extensions.is(
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
    where n.nspname='public' and p.prosecdef and has_function_privilege('authenticated',p.oid,'EXECUTE')),
-  143::bigint, 'current authenticated effective EXECUTE count includes the grouped root-review facades');
+  140::bigint, 'current authenticated effective EXECUTE count reflects #354 convergence');
 
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
@@ -41,12 +41,12 @@ select extensions.is(
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
    where n.nspname='public' and p.prosecdef and has_function_privilege('service_role',p.oid,'EXECUTE')),
-  163::bigint, 'public service_role effective EXECUTE count includes grouped root-review facades and excludes private Worker canonicals');
+  160::bigint, 'public service_role effective EXECUTE count excludes the eleven private Worker canonicals');
 
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
    where n.nspname in ('public','api','private','util','archive') and p.prosecdef),
-  331::bigint, 'the governed SECURITY DEFINER inventory includes grouped root-review facades and the result GC executor contract');
+  315::bigint, 'the governed SECURITY DEFINER inventory is conserved across schema moves');
 
 select extensions.is(
   (select count(*)::bigint from pg_proc p join pg_namespace n on n.oid=p.pronamespace
@@ -111,7 +111,7 @@ select extensions.is(
        'worker_read_jobs_by_ids','worker_read_latest_job','worker_record_job_result','worker_retry_job'
      )
    )),
-  174::bigint, 'service_role effective EXECUTE includes grouped root-review facades and is conserved across Worker moves');
+  171::bigint, 'service_role effective EXECUTE is conserved across the eleven public-to-private moves');
 
 select extensions.is(
   (select jsonb_array_length(posture->'forbiddenInternalExecute') from util.security_acl_expand_posture),
