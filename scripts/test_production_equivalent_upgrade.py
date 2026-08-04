@@ -126,25 +126,9 @@ def assert_retry_wal_bytes(actual: int, expected: int) -> None:
         )
 
 
-def assert_base_relations_preserved(
-    before: dict[str, object], after: dict[str, object],
-    relation_moves: dict[str, str] | None = None,
-) -> None:
-    moves = relation_moves or {}
-    if len(set(moves.values())) != len(moves):
-        raise SystemExit("reviewed relation move targets must be unique")
-    normalized_after = dict(after)
-    for source, target in moves.items():
-        if source not in before or target in before:
-            raise SystemExit(f"reviewed relation move is not a base-to-head move: {source}->{target}")
-        if source in normalized_after or target not in normalized_after:
-            raise SystemExit(f"reviewed relation move did not occur exactly: {source}->{target}")
-        normalized_after[source] = normalized_after.pop(target)
-    missing = sorted(set(before) - set(normalized_after))
-    changed = sorted(
-        key for key in set(before) & set(normalized_after)
-        if before[key] != normalized_after[key]
-    )
+def assert_base_relations_preserved(before: dict[str, object], after: dict[str, object]) -> None:
+    missing = sorted(set(before) - set(after))
+    changed = sorted(key for key in set(before) & set(after) if before[key] != after[key])
     if missing or changed:
         raise SystemExit(
             f"successful migration changed base relation oracles: missing={missing}, changed={changed}"
@@ -500,9 +484,7 @@ def main() -> int:
     expected_head_catalog_hash = stable_hash(expected_head_catalog)
     expected_head_data = json_query(db_url, DATA_ORACLE_SQL)
     assert isinstance(data_before, dict) and isinstance(expected_head_data, dict)
-    assert_base_relations_preserved(
-        data_before, expected_head_data, contract.get("relationMoves", {}),
-    )
+    assert_base_relations_preserved(data_before, expected_head_data)
 
     for cleanup_path in rehearsal_cleanup_paths:
         run(["psql", db_url, "-X", "-v", "ON_ERROR_STOP=1", "-f", str(cleanup_path)])
@@ -543,18 +525,13 @@ def main() -> int:
         raise SystemExit("lock-timeout migration changed row/PK/hash oracle")
 
     wal_start = scalar(db_url, "select pg_current_wal_lsn()::text;")
-    compatible_reader = contract.get("compatibleReaderDuringUpgrade", True)
-    read_holder = (
-        start_lock_holder(db_url, "access share", "issue-341-reader-holder")
-        if compatible_reader else None
-    )
+    read_holder = start_lock_holder(db_url, "access share", "issue-341-reader-holder")
     try:
         upgrade_started = time.monotonic()
         run(["supabase", "migration", "up", *target_args])
         upgrade_seconds = time.monotonic() - upgrade_started
     finally:
-        if read_holder is not None:
-            stop_holder(read_holder)
+        stop_holder(read_holder)
     if upgrade_seconds > budgets["upgradeSeconds"]:
         raise SystemExit(f"upgrade budget exceeded: {upgrade_seconds:.3f}s")
     wal_end = scalar(db_url, "select pg_current_wal_lsn()::text;")
@@ -643,7 +620,7 @@ def main() -> int:
         "failureAtomicity": fault_results,
         "lockContention": {
             "exclusiveFailureSeconds": round(lock_seconds, 3),
-            "compatibleReaderHeldDuringUpgrade": compatible_reader,
+            "compatibleReaderHeldDuringUpgrade": True,
         },
         "upgrade": {
             "seconds": round(upgrade_seconds, 3),

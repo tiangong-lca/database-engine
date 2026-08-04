@@ -361,13 +361,6 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
                 # residue details; the two-stack test proves this field live.
                 self.assertEqual(value, self.committed["summary"][field], field)
                 continue
-            if field == "compatibilityEndpointCount":
-                # The reviewed current lineage also contains the two #355
-                # invoker aliases layered after the immutable #356 fixture.
-                self.assertEqual(
-                    transitioned["summary"][field], self.committed["summary"][field], field,
-                )
-                continue
             self.assertEqual(transitioned["summary"][field], value, field)
         self.assertEqual(len(self.fixture["moves"]), 12)
         self.assertEqual(sum(len(row["compatibilityAliases"]) for row in self.fixture["moves"]), 23)
@@ -399,7 +392,7 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
         self.assertEqual(observed["summary"]["globalPrivilegedEndpointCount"], 315)
         self.assertEqual(
             observed["summary"]["compatibilityEndpointCount"],
-            self.committed["summary"]["compatibilityEndpointCount"],
+            self.committed["summary"]["compatibilityEndpointCount"] + 2,
         )
         self.assertEqual(observed["summary"]["privilegedCompatibilityEndpointCount"], 0)
         self.assertTrue(all(row["canonicalObjectKey"].startswith("public.") for row in selected))
@@ -707,14 +700,14 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
         )
         completed = plan["completedTransition"]
         current = plan["currentTransition"]
-        self.assertEqual(completed["sequence"], 2)
+        self.assertEqual(completed["sequence"], 1)
         self.assertEqual(completed["predecessorAuditPath"],
                          self.lineage["source"]["completedTransitions"][-1]["producedAuditV2Path"])
         self.assertEqual(completed["producedAuditV2Sha256"], produced)
         self.assertNotEqual(completed["producedAuditV2Path"],
                             "supabase/tests/contracts/security_definer_audit_v2.json")
         self.assertEqual(current, {
-            "sequence": 3, "batch": "issue-358-contract",
+            "sequence": 2, "batch": "issue-358-contract",
             "databaseSchemaSha": "a" * 40, "predecessorArtifactSha256": produced,
         })
         self.assertEqual(plan["reviewedCodeConstants"]["EXPECTED_CURRENT_TRANSITION"], current)

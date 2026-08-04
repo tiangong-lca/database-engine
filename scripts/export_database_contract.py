@@ -23,22 +23,7 @@ with contract as (
     ) x),
     'relations', (select coalesce(jsonb_agg(x order by x->>'schema', x->>'name'), '[]') from (
       select jsonb_build_object('schema',n.nspname,'name',c.relname,'kind',c.relkind,
-        'rls',c.relrowsecurity,'forceRls',c.relforcerowsecurity,'acl',coalesce(c.relacl::text,'null'),
-        'columnAcl',coalesce((select jsonb_agg(jsonb_build_object(
-          'column',attribute.attname,
-          'grantee',case when acl.grantee=0 then 'PUBLIC' else grantee.rolname end,
-          'privilege',acl.privilege_type,'grantable',acl.is_grantable,
-          'grantor',case when acl.grantor=0 then 'PUBLIC' else grantor.rolname end)
-          order by attribute.attname,
-            case when acl.grantee=0 then 'PUBLIC' else grantee.rolname end,
-            acl.privilege_type,acl.is_grantable,
-            case when acl.grantor=0 then 'PUBLIC' else grantor.rolname end)
-          from pg_attribute attribute
-          cross join lateral aclexplode(attribute.attacl) acl
-          left join pg_roles grantee on grantee.oid=acl.grantee
-          left join pg_roles grantor on grantor.oid=acl.grantor
-          where attribute.attrelid=c.oid and attribute.attnum>0
-            and not attribute.attisdropped),'[]'::jsonb)) x
+        'rls',c.relrowsecurity,'forceRls',c.relforcerowsecurity,'acl',coalesce(c.relacl::text,'null')) x
       from pg_class c join pg_namespace n on n.oid=c.relnamespace
       where n.nspname in ('public','api','private','util','archive') and c.relkind in ('r','p','v','m','S')
     ) q),

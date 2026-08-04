@@ -13,8 +13,6 @@ import sys
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote, unquote, urlsplit
 
-from identity_collaboration_target import apply_target_environment, resolve_target
-
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST = ROOT / "supabase/tests/manifest.json"
 TRANSITION_FIXTURE = ROOT / "supabase/tests/contracts/security_definer_transition_fixture.v1.json"
@@ -114,9 +112,9 @@ def pending_security_definer_transition() -> list[Path]:
 def check_lint() -> None:
     command = supabase_command("db", "lint")
     environment = None
-    if db_url := os.environ.get("DATABASE_URL"):
-        cli_database_url, environment = database_cli_target(db_url)
-        command.extend(["--db-url", cli_database_url])
+    if (db_url := os.environ.get("DATABASE_URL")) and not os.environ.get("SUPABASE_WORKDIR"):
+        target, environment = database_cli_target(db_url)
+        command.extend(["--db-url", target])
     else:
         command.append("--local")
     command.extend(["--level", "warning", "--fail-on", "none"])
@@ -193,10 +191,6 @@ def main() -> int:
     parser.add_argument("--security-definer-transition-migration-sha256")
     parser.add_argument("--security-definer-transition-rollback-sha256")
     parser.add_argument("--security-definer-transition-base")
-    parser.add_argument(
-        "--run-destructive-identity-qualification", action="store_true",
-        help="opt in to Issue #355 rollback/roll-forward and lock-failure DDL",
-    )
     args = parser.parse_args()
     qualification = [
         args.security_definer_transition_workdir,
@@ -234,9 +228,6 @@ def main() -> int:
     ]
     if not files:
         raise SystemExit(f"suite {args.suite} selected no files")
-    identity_qualification = "supabase/tests/20260801_identity_collaboration_expand.sql" in files
-    if args.run_destructive_identity_qualification and not identity_qualification:
-        raise SystemExit("selected suite does not contain the Issue #355 identity contract")
     if args.suite == "worker-control-plane":
         if args.skip_reset or args.skip_data_api:
             raise SystemExit(
@@ -245,23 +236,17 @@ def main() -> int:
         run([sys.executable, "scripts/test_worker_control_plane_physical_upgrade.py"])
         run([sys.executable, "scripts/test_worker_control_plane_physical_rollback.py"])
     if not args.skip_reset:
-        if os.environ.get("DATABASE_URL") and not os.environ.get("SUPABASE_WORKDIR"):
-            raise SystemExit("DATABASE_URL qualification requires --skip-reset or SUPABASE_WORKDIR")
         run(supabase_command("db", "reset", "--local"))
-    target = resolve_target()
-    apply_target_environment(target)
     test_command = supabase_command("test", "db", *files)
-    cli_database_url, test_environment = database_cli_target(target.database_url)
-    test_command.extend(["--db-url", cli_database_url])
+    test_environment = None
+    if (db_url := os.environ.get("DATABASE_URL")) and not os.environ.get("SUPABASE_WORKDIR"):
+        target, test_environment = database_cli_target(db_url)
+        test_command.extend(["--db-url", target])
+    else:
+        test_command.append("--local")
     run(test_command, env=test_environment)
     if not args.skip_data_api:
         run([sys.executable, "scripts/test_worker_control_plane_data_api.py"])
-    if identity_qualification:
-        if not args.skip_data_api:
-            run([sys.executable, "scripts/test_identity_collaboration_data_api.py"])
-        run([sys.executable, "scripts/test_identity_collaboration_concurrency.py"])
-        if args.run_destructive_identity_qualification:
-            run([sys.executable, "scripts/test_identity_collaboration_rollback.py"])
     if not args.skip_lint:
         # CLI defaults to exit zero even when it prints ERROR diagnostics.
         check_lint()

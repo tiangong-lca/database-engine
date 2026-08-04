@@ -59,10 +59,10 @@ BASELINE_CURRENT_TRANSITION = {
     "predecessorArtifactSha256": "8fca15a8728c79a73784199950f182a9465c33098e3c0b6e5edd54836c6669f7",
 }
 EXPECTED_CURRENT_TRANSITION = {
-    "sequence": 2,
-    "batch": "issue-355-identity-collaboration",
-    "databaseSchemaSha": "9e843e67783123f859035e3a720df910e87a644e",
-    "predecessorArtifactSha256": "b1f7ac582b87f78786ea34a855806ffae42cb50ea419bc752f6e00c01da02b11",
+    "sequence": 1,
+    "batch": "issue-356-worker-control-plane",
+    "databaseSchemaSha": "7a609de6e68848a66ad8abfbec5681211302b108",
+    "predecessorArtifactSha256": "53e955127545fee508bed8b67d85d497967c8e7397b79c70e988a015ea0e9359",
 }
 EXPECTED_COMPLETED_TRANSITIONS: tuple[dict[str, Any], ...] = ({
     "sequence": 0,
@@ -80,26 +80,7 @@ EXPECTED_COMPLETED_TRANSITIONS: tuple[dict[str, Any], ...] = ({
         "security_definer_transition_receipt.000-issue-333-lineage-baseline.json"
     ),
     "receiptSha256": "f8931edaa90a8cd2608d38b79e6d5fc24c3c82ff440f4d6a5aee65aeb792ca7d",
-}, {
-    "sequence": 1,
-    "batch": "issue-356-worker-control-plane",
-    "databaseSchemaSha": "7a609de6e68848a66ad8abfbec5681211302b108",
-    "predecessorArtifactSha256": "53e955127545fee508bed8b67d85d497967c8e7397b79c70e988a015ea0e9359",
-    "predecessorAuditPath": (
-        "supabase/tests/contracts/"
-        "security_definer_audit_v2.transition-000-issue-333-lineage-baseline.json"
-    ),
-    "producedAuditV2Sha256": "b1f7ac582b87f78786ea34a855806ffae42cb50ea419bc752f6e00c01da02b11",
-    "producedAuditV2Path": (
-        "supabase/tests/contracts/"
-        "security_definer_audit_v2.transition-001-issue-356-worker-control-plane.json"
-    ),
-    "receiptPath": (
-        "supabase/tests/contracts/"
-        "security_definer_transition_receipt.001-issue-356-worker-control-plane.json"
-    ),
-    "receiptSha256": "31f3028d15985e7403025ab25aed0e33bd67a6b3a0d1f19e7a6e1318eff85ce1",
-})
+},)
 
 CATALOG_QUERY = r"""
 select coalesce(jsonb_agg(jsonb_build_object(
