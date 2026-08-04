@@ -25,7 +25,7 @@ It owns the checked-in database source of truth:
 - the GitHub Actions flow that pushes committed migrations to the persistent Supabase `dev` branch
 - the production Supabase GitHub integration contract that applies Git `main` migrations automatically
 
-The Data API boundary is configuration-as-code: `api`, `public`, and `graphql_public` are exposed, while `private`, `util`, and `archive` remain non-exposed. New stable DTO/RPC contracts belong in `api`; internal runtime relations and routines belong in `private`. A new exposed schema must be deployed and validated before a later configuration deployment exposes it.
+The target Data API boundary is configuration-as-code: `api`, `public`, and `graphql_public` are exposed, while `private`, `util`, and `archive` remain non-exposed. New stable DTO/RPC contracts belong in `api`; internal runtime relations and routines belong in `private`. A new exposed schema must be deployed and validated before a later configuration deployment exposes it.
 
 It does **not** own:
 
