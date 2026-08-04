@@ -36,7 +36,6 @@ ownership:
         include:
           - supabase/config.toml
           - supabase/migrations/**
-          - supabase/operator/**
           - supabase/seed.sql
           - supabase/seeds/**
           - supabase/tests/**
@@ -80,7 +79,6 @@ coverage:
     - supabase/workspace/README.zh-CN.md
     - supabase/config.toml
     - supabase/migrations/**
-    - supabase/operator/**
     - supabase/seed.sql
     - supabase/seeds/**
     - supabase/tests/**
@@ -306,8 +304,6 @@ rules:
     triggers:
       - path: supabase/migrations/**
         kind: db-schema
-      - path: supabase/operator/**
-        kind: operator-rollback
       - path: supabase/seed.sql
         kind: db-seed
       - path: supabase/seeds/**

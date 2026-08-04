@@ -47,7 +47,6 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | --- | --- |
 | `supabase/config.toml` | shared local baseline plus branch-specific remote bindings |
 | `supabase/migrations/**` | authoritative migration history and durable schema changes |
-| `supabase/operator/**` | reviewed, fail-closed operator rollback/readback scripts; never automatic migration history |
 | `supabase/seed.sql` | shared seed data; when no rows are needed, retain an executable no-op statement instead of a comments-only file so hosted Preview seeding has a valid SQL batch |
 | `supabase/seeds/dev.sql` | persistent dev-only seed overlay |
 | `supabase/tests/**` | PGTAP-style database assertions plus narrow offline Node contracts for test-runner control flow |
@@ -70,8 +69,6 @@ This repo is organized around one checked-in Supabase project plus a generated s
 - Realtime publishes explicitly selected physical tables; `api` views are not a Realtime source.
 
 Physical moves happen only after consumers use the `api` or `private` contract and the Contract gate proves zero compatibility callers. Expand views and wrappers must preserve one physical source of truth.
-
-The versioned `schema_boundary_phase.v1` contract keeps that transition explicit. In Expand, the nine core tables remain in `public`, each other inventoried public table must have a non-public target, and reviewed compatibility relations may remain. Contract is a separate approval that enforces exactly the nine tables and no application views, materialized views, functions, or procedures in `public`.
 
 The stable public-boundary inventory lives under
 `supabase/tests/contracts/public_object_*`. It imports the workspace #533

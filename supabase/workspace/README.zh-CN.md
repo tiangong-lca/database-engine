@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a1be848fefc88d68c1073f98c9e3ecf866095399
-lastReviewedNote: "已为 Issues #353/#354 复核：immutable inventory provenance 保持稳定，生成 workspace 刷新覆盖 public/api/private/util/archive。"
+lastReviewedCommit: 20f56228c21e8e677154c3e77fbf0e243dde677d
+lastReviewedNote: "已为 Issues #339/#341、#346、#351 与 #353 复核：保留 probe/rehearsal/rollback 证据；immutable inventory provenance 保持在生成 workspace 路径之外并维持其真相源边界。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -42,8 +42,6 @@ related:
 - `remote_schema.sql`
 - `global/`
 - `schemas/`
-
-默认导出覆盖 `public`、`api`、`private`、`util`、`archive`，因此迁移后的 canonical 对象不会从生成的检查视图中遗漏。
 
 ## 刷新行为
 

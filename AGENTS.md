@@ -22,7 +22,6 @@ checkPaths:
   - docs/agents/**
   - supabase/config.toml
   - supabase/migrations/**
-  - supabase/operator/**
   - supabase/tests/**
   - supabase/seed.sql
   - supabase/seeds/**
@@ -124,7 +123,6 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - root workspace proof belongs later in `lca-workspace`
 - generated workspace helpers are low-risk to inspect with `python scripts/<name>.py --help`
 - public-boundary inventory changes must run `python scripts/public_inventory_closure.py --check`; the checked contract owns immutable workspace/database provenance, exact object mapping, catalog dependencies, ACL/RLS/default-privilege evidence, SCC-aware migration order, exact-SHA consumer evidence, and explicit Contract residue; generation must never derive provenance from a moving remote ref
-- schema-boundary changes must run `python scripts/schema_boundary_phase.py`; Expand requires the nine core public tables plus inventory-backed non-public targets, while only a separately reviewed Contract phase may enforce zero additional public application relations
 
 ## Ownership Boundaries
 

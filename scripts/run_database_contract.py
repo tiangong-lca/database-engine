@@ -121,7 +121,6 @@ def main() -> int:
         # CLI defaults to exit zero even when it prints ERROR diagnostics.
         check_lint()
     run([sys.executable, "scripts/export_database_contract.py", "--check"])
-    run([sys.executable, "scripts/schema_boundary_phase.py"])
     run([sys.executable, "scripts/public_inventory_closure.py", "--check"])
     run([
         "git", "diff", "--exit-code", "--",

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: a1be848fefc88d68c1073f98c9e3ecf866095399
-lastReviewedNote: "Reviewed through Issues #353/#354: retain immutable provenance gates and document five-schema export plus phase, REST, rollback, and upgrade qualification entrypoints."
+lastReviewedCommit: 20f56228c21e8e677154c3e77fbf0e243dde677d
+lastReviewedNote: "Reviewed through Issues #339/#341, #346, #351, and #353: retain probe/rehearsal/rollback guidance and document immutable inventory schema replay, provenance verification, and deterministic committed-artifact gates."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -122,7 +122,7 @@ python scripts/export_remote_schema.py --environment dev
 Notes:
 
 - Default environment: `dev`
-- Default schema list: `public`, `api`, `private`, `util`, `archive`
+- Default schema list: `public`
 - You can override the destination with `--schema-file`
 - `--environment local` without `--db-url` uses Supabase CLI `db dump --local`; an explicit `--db-url` still uses that URL
 
@@ -149,7 +149,6 @@ python scripts/build_schema_workspace.py --environment local
 Behavior:
 
 - Exports the latest remote schema first
-- Includes `public`, `api`, `private`, `util`, and `archive` by default; use `--schemas` only for an intentional narrower inspection
 - Rebuilds `global/` and `schemas/`
 - Preserves `supabase/workspace/README.md`
 - Preserves `supabase/workspace/README.zh-CN.md`
@@ -161,16 +160,6 @@ Warnings:
 - Refresh can overwrite uncommitted Git changes in generated workspace files
 - If you want `--git-changes` to reflect only later hand edits, commit the refreshed `supabase/workspace/schemas` to Git after syncing the remote database and before editing files.
 - Remote `dev` remains the canonical generated-schema target. Commit local reconstruction output only after proving applied migration parity and running targeted hosted catalog checks for the affected contract.
-
-### `schema_boundary_phase.py`
-
-Checks the versioned Expand/Contract boundary contract against the live catalog and committed public-object inventory. Expand requires the nine core public tables and a non-public target for every other inventoried public table; Contract enforces the final exact public allowlist.
-
-```bash
-DATABASE_URL='postgresql://...' python scripts/schema_boundary_phase.py
-```
-
-The checker is read-only and is part of `run_database_contract.py`. Issue #354 also provides `test_schema_boundary_data_api.py` for local PostgREST profile/role proof and `test_schema_boundary_rollback.py` for local operator rollback/roll-forward OID proof.
 
 ### `check_generated_workspace_legacy_tables.py`
 
