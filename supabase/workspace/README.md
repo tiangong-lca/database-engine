@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-02
-lastReviewedCommit: 1a0fc514e41724bd513b4126429c38dff10339c0
-lastReviewedNote: "Reviewed for Issue #369: manifest-owned validation, PR CI, and Issue #357 phase gates do not change generated workspace ownership or refresh semantics."
+lastReviewedAt: 2026-08-01
+lastReviewedCommit: 87159d6331a793685d5a381380665a697bacce37
+lastReviewedNote: "Reviewed for Issues #355/#339 and PR #367 findings: generated workspace remains inspection evidence and separate from the canonical actor-RLS/rollback gate and authoritative layered ACL restore, effective grantability, and snapshot-access contracts."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

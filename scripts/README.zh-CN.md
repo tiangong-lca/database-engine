@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 1a0fc514e41724bd513b4126429c38dff10339c0
+lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
 lastReviewedNote: "已为 Issue #355 mandatory destructive qualification 复核：canonical opt-in gate 先调用 dual exact-hash/逐角色 RLS harness，再调用 rollback/roll-forward harness，并传播任一失败。"
 related:
   - ../AGENTS.md
@@ -261,31 +261,6 @@ python scripts/new_migration.py --name "update policy roles update" --source-pat
 这是上面几个脚本共用的内部模块。
 
 通常不作为日常命令行入口直接使用。
-
-### `run_database_contract.py`
-
-裸跑 `supabase test db` 不是仓库级门禁：递归发现会把 benchmark、fixture、
-Preview、upgrade 与 transition-migration 支持 SQL 混入 pgTAP。使用 manifest
-runner 查看精确清单，不会访问数据库：
-
-```bash
-python scripts/run_database_contract.py --suite canonical-local --validate-manifest-only
-python scripts/run_database_contract.py --suite canonical-local --list
-```
-
-当前 manifest 动态得到 64 个 canonical 顶层 pgTAP，并保留 19 个带分类、
-处置状态、跟踪 Issue 与 replacement 元数据的显式 exclusion。清单证据同时记录
-exact commit、migration head、CLI 版本、manifest/文件清单 hash 与 worktree dirty
-状态，避免把本地 dirty 内容误写成 clean commit 证据。`lca-private-expand`
-使用 `--if-activated` 时，仅在仓库尚未跟踪任何 #357 generator、contract 或
-migration 激活路径时报告未激活。一旦出现任一激活路径，完整的 freeze/receipt、
-sidecar/schema、capture/generator 脚本与两阶段 reviewed migration 都必须各自
-唯一匹配；versioned physical-object、动态 exposure-surface、fingerprint 与 receipt
-语义委托给 #357 官方 freezer 校验。官方 `check-delivery` 必须验证两份 JSON
-Schema、receipt 对 phase 的明确授权，并重新生成 API pre-expand/physical-cut SQL
-逐字节对比；激活后还必须运行 #357 freezer/generator/exposure 专项单测。闭包不完整、
-未授权、SQL 漂移或匹配不唯一会在执行 SQL 前
-fail-closed，不会产生空绿色结果。
 
 ### `public_inventory_closure.py`
 

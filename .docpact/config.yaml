@@ -43,7 +43,6 @@ ownership:
           - .env.supabase.dev.local.example
           - .env.supabase.main.local.example
           - .github/workflows/supabase-dev.yml
-          - .github/workflows/database-validation.yml
       ownerRepo: database-engine
     - id: schema-workspace-and-migration-tooling
       paths:
@@ -91,7 +90,6 @@ coverage:
     - .env.supabase.main.local.example
     - .github/workflows/ai-doc-lint.yml
     - .github/workflows/supabase-dev.yml
-    - .github/workflows/database-validation.yml
   exclude:
     - .git/**
     - .github/scripts/**
@@ -194,7 +192,6 @@ routing:
         - .env.supabase.dev.local.example
         - .env.supabase.main.local.example
         - .github/workflows/supabase-dev.yml
-        - .github/workflows/database-validation.yml
         - docs/agents/supabase-branching.md
         - docs/agents/supabase-branching_CN.md
     preview-drift:
@@ -233,7 +230,6 @@ routing:
         - supabase/seed.sql
         - supabase/seeds/**
         - supabase/tests/**
-        - .github/workflows/database-validation.yml
         - .github/workflows/supabase-dev.yml
     root-integration:
       paths:
@@ -308,8 +304,6 @@ rules:
       - path: supabase/config.toml
         kind: db-config
       - path: .github/workflows/supabase-dev.yml
-        kind: automation
-      - path: .github/workflows/database-validation.yml
         kind: automation
       - path: .env.supabase.dev.local.example
         kind: operator-template

@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 1a0fc514e41724bd513b4126429c38dff10339c0
+lastReviewedCommit: a253f381e25ba514758536268bc6a47f02691f3d
 lastReviewedNote: "Reviewed for Issue #355 mandatory destructive qualification: the canonical opt-in gate invokes the dual exact-hash/actor-RLS harness before the rollback/roll-forward harness and propagates either failure."
 related:
   - ../AGENTS.md
@@ -273,32 +273,6 @@ test assets, keeps Preview/upgrade/fixture/benchmark assets out of the canonical
 pgTAP suite, checks the exact reviewed lint-error baseline, and verifies the
 stable catalog hash and generated-workspace cleanliness.
 
-Bare `supabase test db` is not a repository gate: recursive discovery also
-selects benchmark, fixture, Preview, upgrade, and transition-migration support
-SQL. Inspect the exact manifest-owned selection without touching a database:
-
-```bash
-python scripts/run_database_contract.py --suite canonical-local --validate-manifest-only
-python scripts/run_database_contract.py --suite canonical-local --list
-```
-
-The current derived baseline is 64 selected top-level pgTAP files plus 19
-metadata-bearing exclusions. The list evidence records the exact commit,
-migration head, CLI version, manifest/file-list hashes, and whether the worktree
-was dirty, so local development output cannot masquerade as clean exact-commit
-evidence. `lca-private-expand` additionally requires the
-canonical hashed Issue #357 freeze and delegates its versioned physical-object,
-exposure-surface, fingerprint, and receipt semantics to the official #357
-freezer. The official `check-delivery` contract must validate both versioned
-JSON Schemas, require phase authorization from the receipt, regenerate API
-pre-expand and physical-cut SQL, and reject any byte drift before the focused
-suite runs. The #357 freezer/generator/exposure unit modules are mandatory in
-the activated gate. CI uses `--if-activated`: it skips only when
-no #357 generator, contract, or migration activation path is tracked. Any partial
-or ambiguous activation requires exactly one version-matched freeze/receipt,
-sidecar and schema, the capture and generator scripts, plus both reviewed
-migration phases, and fails before SQL if that closure is incomplete.
-
 The canonical contract also runs `public_inventory_closure.py --check` and
 `security_definer_audit.py --check`. The inventory
 gate joins the imported workspace #533 per-object ledger to the live catalog at
@@ -311,7 +285,6 @@ runtime/owner residue.
 
 ```bash
 python scripts/run_database_contract.py --suite canonical-local
-python scripts/run_database_contract.py --suite lca-private-expand --if-activated
 python scripts/run_database_contract.py --suite worker-control-plane
 ```
 
