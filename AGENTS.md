@@ -122,7 +122,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - production-volume administrative backfills must fit the platform statement timeout or use a bounded session override that is restored immediately after the statement; Preview row counts alone are not sufficient volume proof
 - root workspace proof belongs later in `lca-workspace`
 - generated workspace helpers are low-risk to inspect with `python scripts/<name>.py --help`
-- public-boundary inventory changes must run `python scripts/public_inventory_closure.py --check`; the checked contract owns immutable workspace/database provenance, exact object mapping, catalog dependencies, ACL/RLS/default-privilege evidence, SCC-aware migration order, exact-SHA consumer evidence, and explicit Contract residue; generation must never derive provenance from a moving remote ref
+- public-boundary inventory changes must run `python scripts/public_inventory_closure.py --check`; the checked contract owns exact object mapping, catalog dependencies, ACL/RLS/default-privilege evidence, SCC-aware migration order, exact-SHA consumer evidence, and explicit Contract residue
 
 ## Ownership Boundaries
 

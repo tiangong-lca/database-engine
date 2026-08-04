@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 20f56228c21e8e677154c3e77fbf0e243dde677d
-lastReviewedNote: "Reviewed through Issues #339/#341, #346, #351, and #353: existing probe/rehearsal/rollback evidence is retained; immutable inventory provenance remains outside generated workspace paths and preserves their source-of-truth boundaries."
+lastReviewedCommit: 03566bee31d66dc2264a337595854cbf13faaaf9
+lastReviewedNote: "Reviewed through Issues #339/#341, #346, and #351: opaque-key Worker probes, ACL-aware rehearsal, fresh populated CLI roll-forward, and fail-closed evidence preserve PostgREST rollback semantics and workspace source-of-truth boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

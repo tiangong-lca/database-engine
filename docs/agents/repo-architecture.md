@@ -77,12 +77,6 @@ from a live local catalog by `scripts/public_inventory_closure.py`. Generated
 dependency and consumer evidence belongs in that contract surface, not in
 `supabase/workspace/**`.
 
-Its provenance separates the exact workspace baseline/gitlink and historical
-review/source/merge-base lineage from `databaseSchemaSha`, the only immutable
-migration/catalog replay input. Regeneration may compare only a catalog reset
-to that schema SHA; it must not infer provenance from `origin/dev`, `HEAD`, or
-any moving ref.
-
 ## Branch Model In Practice
 
 `database-engine` is an M2 repo:

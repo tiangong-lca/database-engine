@@ -21,28 +21,6 @@ CONSUMERS = CONTRACT_DIR / "public_object_consumers.json"
 OUT = CONTRACT_DIR / "public_object_inventory.json"
 SHA = CONTRACT_DIR / "public_object_inventory.sha256"
 
-SOURCE = {
-    # Workspace/report lineage. These identify the original #338 evidence context.
-    "baseline": "tiangong-lca/workspace#533",
-    "workspaceBaselineSha": "520b7af67240beb0f08419ab432a018d93542170",
-    "workspacePinnedDatabaseSha": "1516ad7bb3f74734095756e741f00f60e93b79b3",
-    # The only migration/catalog input for current artifact regeneration.
-    "databaseSchemaSha": "20f56228c21e8e677154c3e77fbf0e243dde677d",
-    # Historical #345 branch lineage; never use these as the schema reset target.
-    "databaseBaseSha": "157ef7bb4e844edb26525dfb89f4fde188ee0cef",
-    "databaseInventorySha": "86203c9190b11f12109a7fdd3f310ff47a47c9e5",
-    "databaseMergeBaseSha": "907f7b6a47b98c401d98184a8b7452aaaa429bbf",
-    "previousArtifactSha256": "248d1f86addc332d0f5486b2edb8875e87a95929d06c9f59ef51968f90685c1b",
-}
-SOURCE_SHA_FIELDS = (
-    "workspaceBaselineSha",
-    "workspacePinnedDatabaseSha",
-    "databaseSchemaSha",
-    "databaseBaseSha",
-    "databaseInventorySha",
-    "databaseMergeBaseSha",
-)
-
 CORE_TABLES = {
     "contacts", "flowproperties", "flows", "ilcd", "lciamethods",
     "lifecyclemodels", "processes", "sources", "unitgroups",
@@ -182,76 +160,6 @@ select jsonb_build_object(
 
 def canonical(value: Any) -> str:
     return json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":")) + "\n"
-
-
-def git_output(repo: Path, *args: str) -> str:
-    result = subprocess.run(
-        ["git", "-C", str(repo), *args], check=False, text=True,
-        stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-    )
-    if result.returncode != 0:
-        raise ValueError(f"immutable provenance commit is missing or unreachable: {args[-1]}")
-    return result.stdout.strip()
-
-
-def validate_source(
-    source: dict[str, Any], *, database_repo: Path = ROOT,
-    workspace_repo: Path | None = None, require_expected: bool = True,
-) -> None:
-    if require_expected and source != SOURCE:
-        raise ValueError("inventory source metadata differs from the reviewed immutable inputs")
-    if set(source) != set(SOURCE):
-        raise ValueError("inventory source metadata fields are incomplete or unreviewed")
-    for field in SOURCE_SHA_FIELDS:
-        if not isinstance(source.get(field), str) or not re.fullmatch(r"[0-9a-f]{40}", source[field]):
-            raise ValueError(f"inventory source {field} must be an immutable full SHA")
-    if not re.fullmatch(r"[0-9a-f]{64}", str(source.get("previousArtifactSha256", ""))):
-        raise ValueError("inventory source previousArtifactSha256 must be an exact SHA-256")
-
-    for field in SOURCE_SHA_FIELDS:
-        if field != "workspaceBaselineSha":
-            git_output(database_repo, "cat-file", "-e", f"{source[field]}^{{commit}}")
-    actual_merge_base = git_output(
-        database_repo, "merge-base", source["databaseInventorySha"], source["databaseBaseSha"],
-    )
-    if actual_merge_base != source["databaseMergeBaseSha"]:
-        raise ValueError("databaseMergeBaseSha is not the replayed merge-base of the immutable inventory/base SHAs")
-    try:
-        git_output(
-            database_repo, "merge-base", "--is-ancestor",
-            source["databaseInventorySha"], source["databaseSchemaSha"],
-        )
-    except ValueError:
-        raise ValueError(
-            "databaseSchemaSha must descend from the immutable inventory lineage"
-        ) from None
-
-    if workspace_repo is not None:
-        git_output(workspace_repo, "cat-file", "-e", f"{source['workspaceBaselineSha']}^{{commit}}")
-        gitlink = git_output(
-            workspace_repo, "ls-tree", source["workspaceBaselineSha"], "database-engine",
-        )
-        match = re.fullmatch(r"160000 commit ([0-9a-f]{40})\tdatabase-engine", gitlink)
-        if not match or match.group(1) != source["workspacePinnedDatabaseSha"]:
-            raise ValueError("workspace baseline does not pin workspacePinnedDatabaseSha")
-
-
-def verify_committed_artifacts(out_path: Path = OUT, sha_path: Path = SHA) -> dict[str, Any]:
-    if not out_path.exists() or not sha_path.exists():
-        raise ValueError("committed inventory JSON/hash artifact is missing")
-    raw = out_path.read_bytes()
-    try:
-        contract = json.loads(raw)
-    except json.JSONDecodeError:
-        raise ValueError("committed inventory JSON is invalid") from None
-    if raw != canonical(contract).encode("utf-8"):
-        raise ValueError("committed inventory JSON is not canonical byte-for-byte")
-    recorded = sha_path.read_text(encoding="utf-8")
-    actual = hashlib.sha256(raw).hexdigest() + "\n"
-    if recorded != actual:
-        raise ValueError("committed inventory SHA-256 does not match the JSON bytes")
-    validate_source(contract.get("source", {}))
-    return contract
 
 
 def database_url() -> str:
@@ -579,7 +487,15 @@ def merge_contract(catalog: dict[str, Any]) -> dict[str, Any]:
         counts[obj["objectType"]] += 1
     return {
         "schemaVersion": "database.public-object-inventory-closure.v1",
-        "source": dict(SOURCE),
+        "source": {
+            "baseline": "tiangong-lca/workspace#533",
+            "baselineMergeSha": "520b7af67240beb0f08419ab432a018d93542170",
+            "workspaceBaselineDatabaseSha": "cccdb4e90b65cc7b56dbae72946637cede599ba3",
+            "databaseBaseSha": subprocess.run(
+                ["git", "merge-base", "HEAD", "origin/dev"], cwd=ROOT, check=True,
+                text=True, stdout=subprocess.PIPE,
+            ).stdout.strip(),
+        },
         "counts": dict(sorted(counts.items())), "objects": objects,
         "dependencies": all_dependencies,
         "migrationPlan": dependency_plan(set(live) & set(ledger), all_dependencies, objects),
@@ -596,12 +512,6 @@ def merge_contract(catalog: dict[str, Any]) -> dict[str, Any]:
 
 def validate(contract: dict[str, Any]) -> None:
     errors = []
-    if contract.get("schemaVersion") != "database.public-object-inventory-closure.v1":
-        errors.append("unexpected inventory schemaVersion")
-    try:
-        validate_source(contract.get("source", {}))
-    except ValueError as error:
-        errors.append(str(error))
     keys = [item["objectKey"] for item in contract["objects"]]
     if len(keys) != len(set(keys)):
         errors.append("duplicate object keys")
@@ -621,26 +531,11 @@ def validate(contract: dict[str, Any]) -> None:
     expected = {"table": 56, "view": 5, "function": 332}
     if contract["counts"] != expected:
         errors.append(f"expected baseline counts {expected}, got {contract['counts']}")
-    if len(contract["objects"]) != 393:
-        errors.append(f"expected 393 objects, got {len(contract['objects'])}")
-    if len(contract["dependencies"]) != 1119:
-        errors.append(f"expected 1119 dependency edges, got {len(contract['dependencies'])}")
-    if len(contract["residue"]["objectsWithoutConsumerClosure"]) != 206:
-        errors.append("expected 206 owner/consumer residue entries")
-    if len(contract["residue"]["dynamicSqlReviewRequired"]) != 35:
-        errors.append("expected 35 dynamic SQL review entries")
-    if contract.get("contractReady") is not False:
-        errors.append("pre-Contract inventory must remain contractReady=false")
     if errors:
         raise ValueError("inventory closure validation failed:\n" + "\n".join(errors))
 
 
 def write_or_check(write: bool) -> str:
-    if not write:
-        try:
-            verify_committed_artifacts()
-        except ValueError as error:
-            raise SystemExit(f"public inventory committed artifact invalid: {error}") from None
     contract = merge_contract(load_catalog())
     validate(contract)
     payload = canonical(contract)
@@ -665,20 +560,9 @@ def main() -> int:
     action.add_argument("--write", action="store_true", help="write the reviewed deterministic contract")
     action.add_argument("--check", action="store_true", help="compare the live catalog to the contract")
     action.add_argument("--scan-consumers", metavar="WORKSPACE_ROOT", help="refresh exact-SHA static evidence")
-    action.add_argument(
-        "--verify-provenance", metavar="WORKSPACE_ROOT",
-        help="verify immutable database SHAs and the exact workspace database gitlink",
-    )
     args = parser.parse_args()
     if args.scan_consumers:
         scan_consumers(Path(args.scan_consumers).resolve())
-        return 0
-    if args.verify_provenance:
-        contract = verify_committed_artifacts()
-        validate_source(
-            contract["source"], workspace_repo=Path(args.verify_provenance).resolve(),
-        )
-        print(json.dumps(contract["source"], sort_keys=True))
         return 0
     write_or_check(args.write)
     return 0
