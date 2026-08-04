@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-03"
-lastReviewedCommit: "a29f26a9eb0a6c629ae34e187c6fce4a0c215b1d"
-lastReviewedNote: "Reviewed for Issue #390: the non-authorizing physical qualification harness remains within existing scripts/tests ownership and does not change routing or governance facts."
+lastReviewedAt: "2026-08-04"
+lastReviewedCommit: "269ef181e103bf57a7e15c6e82f5291005f33ded"
+lastReviewedNote: "Reviewed for Issues #412 and #323: the generic static-SQL SECURITY DEFINER gate and notification migration remain within existing scripts, migration, test, and RPC ownership."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

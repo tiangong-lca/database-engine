@@ -55,7 +55,7 @@ class PublicInventoryExactHeadTest(unittest.TestCase):
         with mock.patch.object(exact, "migration_tree_sha256", return_value="0" * 64):
             with self.assertRaisesRegex(ValueError, "migration tree"):
                 exact.validate_source()
-        with mock.patch.object(exact, "psql_json", return_value=["20260803090000"]):
+        with mock.patch.object(exact, "psql_json", return_value=["20260804090000"]):
             with self.assertRaisesRegex(ValueError, "applied migration history"):
                 exact.validate_live_migrations("postgresql://postgres@127.0.0.1/postgres")
 

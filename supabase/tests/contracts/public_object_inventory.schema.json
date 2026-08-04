@@ -21,8 +21,8 @@
       "properties": {
         "issue": {"const": "tiangong-lca/database-engine#405"},
         "databaseSchemaSha": {"pattern": "^[0-9a-f]{40}$"},
-        "migrationHead": {"const": "20260803090000"},
-        "migrationTreeSha256": {"const": "9fb83e143cef7dc8d12d058bbb7d22ecce38877dd3cef116f2bfd700b986bf9c"},
+        "migrationHead": {"const": "20260804090000"},
+        "migrationTreeSha256": {"const": "7dbd4ca3a2af2399566c834e80825b4b292627125ec3a9d42d25f9b3d258c4dc"},
         "predecessorInventorySha256": {"pattern": "^[0-9a-f]{64}$"},
         "partitionSha256": {"pattern": "^[0-9a-f]{64}$"},
         "ledgerSha256": {"pattern": "^[0-9a-f]{64}$"}

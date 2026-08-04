@@ -29,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-03
-lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
-lastReviewedNote: "Reviewed for Issue #405: exact-head public inventory v2 is a read-only contract surface and does not alter schema or generated-workspace ownership."
+lastReviewedAt: 2026-08-04
+lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
+lastReviewedNote: "Reviewed for Issue #323: the static-SQL latest-event notification function remains a migration-owned database boundary and does not change generated-workspace ownership."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -115,7 +115,7 @@ The versioned `schema_boundary_phase.v1` contract keeps that transition explicit
 The stable public-boundary inventory lives under
 `supabase/tests/contracts/public_object_*`. The unqualified inventory is the
 Issue #405 exact-head v2 artifact: 397 public application objects at
-`database-engine@c5356d2` / migration head `20260803090000`, partitioned exactly
+`database-engine@c5356d2` / migration head `20260804090000`, partitioned exactly
 once as nine core + 37 predecessor residue + 117 Issue #357 + 230 Issue #358 +
 four explicit omissions. Its 388-entry identity-only Contract checklist records
 `physicalMoved`, `compatPresent`, `adapterOnly`, and `retired` separately and
@@ -213,7 +213,7 @@ The current migration and test history clusters around these themes:
 1. access control and policy hardening
 2. review workflow command/query RPCs
 3. dataset lifecycle, protected one-shot private owner-draft FP/UG alias rewrites, durable process-atomic Step 3 public-flow identity rewrites, guarded flow/process derivative rebuild coordination with dynamic 1..50 and retained fixed 23+27 closure proofs, and publish/delete flows
-4. notification and membership query boundaries
+4. notification and membership query boundaries, including one latest Root/Reference Review event per existing sender/recipient/dataset notification identity
 5. lifecycle bundle cleanup, embedding compatibility, and measured process/flow plus foundation-dataset Semantic/Hybrid HNSW plan governance
 6. remote schema reconciliation and preview-branch validation
 7. review-submit gate persistence, Process-only Gate enforcement, Root/Reference Review v2 range history and shared exact-reference reviews, `worker_jobs` queue state, final submit-review assertions, and retired legacy job-table archives
