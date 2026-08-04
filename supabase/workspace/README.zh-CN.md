@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-03
-lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
-lastReviewedNote: "已为 Issue #405 复核：exact-head inventory artifact 继续位于生成 workspace 之外，不改变刷新语义。"
+lastReviewedAt: 2026-08-04
+lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
+lastReviewedNote: "已为 Issue #323 复核：静态 SQL 通知 latest-event migration 与合同 artifact 继续位于生成 workspace 之外，不改变刷新语义。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

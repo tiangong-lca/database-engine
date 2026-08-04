@@ -501,7 +501,7 @@ python scripts/public_inventory_exact_head.py --refresh --db-url postgresql://..
 ```
 
 The v2 artifact binds exact source `c5356d2`, migration head
-`20260803090000`, 397 live identities, partition `9+37+117+230+4`, and the full
+`20260804090000`, 397 live identities, partition `9+37+117+230+4`, and the full
 388-residue Contract DROP identity checklist. The checklist is non-executable
 inventory: every entry remains `blocked`, no migration is produced, and
 `contractReady=false` is invariant. Missing, unknown, duplicate, count, schema,
