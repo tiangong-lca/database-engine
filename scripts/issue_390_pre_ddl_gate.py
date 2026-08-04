@@ -536,6 +536,134 @@ def _scalar_strings(value: object) -> Iterator[str]:
             yield from _scalar_strings(child)
 
 
+def _search_path_tokens(value: object) -> list[str] | None:
+    setting = value.get("VariableSetStmt", {}) if isinstance(value, dict) else {}
+    if setting.get("name") != "search_path":
+        return None
+    return [
+        token.strip()
+        for scalar in _scalar_strings(setting.get("args", []))
+        for token in scalar.split(",")
+        if token.strip()
+    ]
+
+
+def _is_trusted_internal_static_sql_definer(statement: dict) -> bool:
+    if len(_function_name(statement)) != 2:
+        return False
+    if _function_name(statement)[0] not in INTERNAL_SCHEMAS:
+        return False
+    languages = [
+        value.get("String", {}).get("sval")
+        for value in _function_option_values(statement, "language")
+    ]
+    securities = [
+        value.get("Boolean", {}).get("boolval")
+        for value in _function_option_values(statement, "security")
+    ]
+    set_values = _function_option_values(statement, "set")
+    search_paths = [_search_path_tokens(value) for value in set_values]
+    return (
+        languages == ["sql"]
+        and securities == [True]
+        and search_paths == [["pg_catalog", "pg_temp"]]
+        and len(_function_body_strings(statement)) == 1
+    )
+
+
+def _static_sql_relation_qualification_violations(
+    value: object,
+    inherited_ctes: frozenset[str] = frozenset(),
+) -> list[str]:
+    """Reject unqualified relations while preserving lexical CTE visibility."""
+
+    violations = []
+    if isinstance(value, list):
+        for child in value:
+            violations.extend(
+                _static_sql_relation_qualification_violations(
+                    child, inherited_ctes
+                )
+            )
+        return violations
+    if not isinstance(value, dict):
+        return violations
+
+    statement_wrapper = next(
+        (
+            node
+            for node_type, node in value.items()
+            if node_type.endswith("Stmt") and isinstance(node, dict)
+        ),
+        None,
+    )
+    if statement_wrapper is not None:
+        with_clause = _direct_with_clause(statement_wrapper)
+        if with_clause.get("recursive"):
+            violations.append(
+                "hard-deny:static-sql-definer-recursive-cte"
+            )
+        visible_ctes = inherited_ctes
+        for item in with_clause.get("ctes", []):
+            cte = item.get("CommonTableExpr", {}) if isinstance(item, dict) else {}
+            violations.extend(
+                _static_sql_relation_qualification_violations(
+                    cte.get("ctequery", {}), visible_ctes
+                )
+            )
+            if isinstance(cte.get("ctename"), str):
+                visible_ctes = visible_ctes | {cte["ctename"]}
+        for key, child in statement_wrapper.items():
+            if key != "withClause":
+                violations.extend(
+                    _static_sql_relation_qualification_violations(
+                        child, visible_ctes
+                    )
+                )
+        return violations
+
+    relation = value.get("RangeVar") if isinstance(value.get("RangeVar"), dict) else None
+    if relation is not None:
+        parts = [
+            part
+            for part in (relation.get("schemaname"), relation.get("relname"))
+            if isinstance(part, str)
+        ]
+        if not (
+            len(parts) == 2
+            or (len(parts) == 1 and parts[0] in inherited_ctes)
+        ):
+            violations.append(
+                "hard-deny:static-sql-definer-unqualified-relation:"
+                + ".".join(parts)
+            )
+        return violations
+
+    if isinstance(value.get("relname"), str):
+        parts = [
+            part
+            for part in (value.get("schemaname"), value.get("relname"))
+            if isinstance(part, str)
+        ]
+        if not (
+            len(parts) == 2
+            or (len(parts) == 1 and parts[0] in inherited_ctes)
+        ):
+            violations.append(
+                "hard-deny:static-sql-definer-unqualified-relation:"
+                + ".".join(parts)
+            )
+        return violations
+
+    for child in value.values():
+        violations.extend(
+            _static_sql_relation_qualification_violations(
+                child, inherited_ctes
+            )
+        )
+    return violations
+
+
 def _contains_scalar(value: object, expected: object) -> bool:
     if value == expected:
         return True
@@ -873,13 +1001,16 @@ def _statement_signals(statement: dict, *, top_level: bool = True) -> list[str]:
         if setting_name == "default_table_access_method":
             signals.append("hard-deny:default-table-access-method-change")
         if setting.get("name") == "search_path":
-            search_path = {
-                token.strip()
-                for value in _scalar_strings(setting.get("args", []))
-                for token in value.split(",")
-                if token.strip()
-            }
-            if not search_path <= {"pg_catalog"}:
+            search_path = _search_path_tokens(
+                {"VariableSetStmt": setting}
+            ) or []
+            if (
+                search_path not in ([], ["pg_catalog"])
+                and not (
+                    root_type == "CreateFunctionStmt"
+                    and _is_trusted_internal_static_sql_definer(root)
+                )
+            ):
                 signals.append("hard-deny:untrusted-search-path")
         if setting_name == "pgrst.db_schemas":
             exposed = [
@@ -1039,6 +1170,12 @@ def _statement_signals(statement: dict, *, top_level: bool = True) -> list[str]:
             signals.extend(errors)
             for nested_statement in nested:
                 signals.extend(_statement_signals(nested_statement, top_level=False))
+                if _is_trusted_internal_static_sql_definer(root):
+                    signals.extend(
+                        _static_sql_relation_qualification_violations(
+                            nested_statement
+                        )
+                    )
                 if len(name) == 2 and name[0] in EXPOSED_SCHEMAS:
                     signals.extend(
                         _api_internal_reference_violations(nested_statement)

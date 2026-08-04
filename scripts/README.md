@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-03
-lastReviewedCommit: c5356d2b0d340f9c5c31a645479be5f3d19a52db
-lastReviewedNote: "Reviewed for Issue #405: exact-head inventory refresh and comparison require explicit loopback URLs, emit no DDL, and cannot authorize Contract."
+lastReviewedAt: 2026-08-04
+lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
+lastReviewedNote: "Reviewed for Issue #412: target-neutral internal static SQL SECURITY DEFINER admission is structural and does not use business-specific allowlists."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -363,6 +363,15 @@ remain protected from later replacement, privilege, and security-mode changes.
 HEAD, index, and worktree each use their own contract revision. The gate
 never treats one zero-match query as burn-in. The canonical manifest-contract
 module imports this test case, so existing CI runs it without a second workflow.
+
+The target-neutral rule for an internal `SECURITY DEFINER` is structural, not
+an allowlist. It accepts only an explicitly internal-schema `LANGUAGE SQL`
+function whose body parses completely, whose relation dependencies are
+schema-qualified, and whose only function-level path is exactly
+`pg_catalog, pg_temp`. Exposed-schema functions, procedural or dynamic bodies,
+unqualified relations, duplicate or reordered path settings, and paths that
+contain another schema remain hard denied. The rule never inspects an Issue
+number, migration path, function name, Git blob, or classification.
 
 ### `issue_390_physical_qualification.py`
 

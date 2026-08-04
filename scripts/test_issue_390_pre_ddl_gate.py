@@ -209,6 +209,7 @@ class Issue390PreDdlGateTest(unittest.TestCase):
             "CREATE VIEW api.unrelated_receipts WITH (security_invoker=true) AS SELECT id FROM public.processes;",
             "CREATE SCHEMA unrelated_owned AUTHORIZATION postgres;",
             "CREATE FUNCTION api.unrelated_constant() RETURNS pg_catalog.int4 LANGUAGE sql SECURITY INVOKER SET search_path='' AS $$ SELECT 1 $$;",
+            "CREATE FUNCTION private.record_internal_event(p_id pg_catalog.uuid) RETURNS pg_catalog.uuid LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$ WITH payload AS (SELECT p_id AS id) INSERT INTO public.internal_event_log(id) SELECT id FROM payload RETURNING id $$;",
         ]
         for sql in allowed:
             self.assertEqual(pre_ddl_sql_signals(sql), [], sql)
@@ -236,6 +237,11 @@ class Issue390PreDdlGateTest(unittest.TestCase):
             'ALTER TABLE public.U&"lca\\005fresults" SET SCHEMA private;',
             "DO $$ BEGIN EXECUTE 'ALTER ' || 'TABLE ' || 'public.' || 'lca_' || 'results SET SCHEMA private'; END $$;",
             "SELECT format('ALTER TABLE %I.%I SET SCHEMA private', 'public', 'lca_results') \\gexec;",
+            "CREATE FUNCTION private.bad_path_order() RETURNS pg_catalog.int4 LANGUAGE sql SECURITY DEFINER SET search_path=pg_temp,pg_catalog AS $$ SELECT 1 $$;",
+            "CREATE FUNCTION private.bad_path_schema() RETURNS pg_catalog.int4 LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,public,pg_temp AS $$ SELECT 1 $$;",
+            "CREATE FUNCTION public.exposed_definer() RETURNS pg_catalog.int4 LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$ SELECT 1 $$;",
+            "CREATE FUNCTION private.opaque_definer() RETURNS pg_catalog.int4 LANGUAGE plpgsql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$ BEGIN RETURN 1; END $$;",
+            "CREATE FUNCTION private.unqualified_definer() RETURNS SETOF pg_catalog.uuid LANGUAGE sql SECURITY DEFINER SET search_path=pg_catalog,pg_temp AS $$ SELECT id FROM internal_event_log $$;",
         ]
         for sql in guarded:
             self.assertNotEqual(pre_ddl_sql_signals(sql), [], sql)
