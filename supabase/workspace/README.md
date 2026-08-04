@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-04
-lastReviewedCommit: e1d467ce3d16ad2d09fed080a4a05e71736ca52e
-lastReviewedNote: "Reviewed for Issue #407 Phase A exact-head governance: generated remote-schema workspace ownership and refresh semantics remain unchanged."
+lastReviewedCommit: 48de240972b61f8ff78cbf4d6640e1e0942b0549
+lastReviewedNote: "Reviewed for Issue #414: snapshot GC audit physical Expand does not change generated remote-schema workspace ownership or refresh semantics."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

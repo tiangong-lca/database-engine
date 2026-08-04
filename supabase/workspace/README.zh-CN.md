@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-04
-lastReviewedCommit: e1d467ce3d16ad2d09fed080a4a05e71736ca52e
-lastReviewedNote: "已为 Issue #407 Phase A 精确头部治理复核：远程 schema workspace 的生成归属与刷新语义保持不变。"
+lastReviewedCommit: 48de240972b61f8ff78cbf4d6640e1e0942b0549
+lastReviewedNote: "已为 Issue #414 复核：snapshot GC audit 物理迁移不改变远程 schema workspace 的生成归属与刷新语义。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

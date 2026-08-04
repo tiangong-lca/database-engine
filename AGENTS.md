@@ -36,8 +36,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-04
-lastReviewedCommit: e1d467ce3d16ad2d09fed080a4a05e71736ca52e
-lastReviewedNote: "Reviewed for Issue #407 Phase A exact-head governance: public inventory and privileged-routine lineage evidence preserve repository ownership, dual-stack qualification, and dev-first integration rules."
+lastReviewedCommit: 48de240972b61f8ff78cbf4d6640e1e0942b0549
+lastReviewedNote: "Reviewed for Issue #414: snapshot GC audit physical Expand preserves database ownership, destructive loopback qualification, and dev-first integration rules."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

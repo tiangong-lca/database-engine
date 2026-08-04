@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-04
-lastReviewedCommit: 06af268bc76b39e6c318e7b8b0d9b8452ed66d3e
-lastReviewedNote: "已为 Issue #407 Phase B 复核：精确头部 inventory 推进到物理迁移 20260804100000；破坏性双实例验证仍不授权 Hosted mutation。"
+lastReviewedCommit: 48de240972b61f8ff78cbf4d6640e1e0942b0549
+lastReviewedNote: "已为 Issue #414 复核：精确头部 inventory 推进到 snapshot GC audit 物理迁移 20260804123000；破坏性隔离栈验证仍不授权 Hosted mutation。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -433,8 +433,9 @@ python -m unittest scripts.test_public_inventory_exact_head scripts.test_public_
 python scripts/public_inventory_exact_head.py --refresh --db-url postgresql://...
 ```
 
-v2 绑定 exact source `06af268`、migration head `20260804100000`、397 个 live
-identity、`9+37+117+230+4` exactly-once partition，以及完整的 388-residue
+v2 绑定 exact source `48de240`、migration head `20260804123000`、397 个 live
+identity（46 tables、15 views、336 functions）、`9+37+117+230+4`
+exactly-once partition，以及完整的 388-residue
 Contract DROP identity checklist。checklist 不是可执行 SQL：所有 identity 均为
 `blocked`，不生成 migration，`contractReady=false` 永远成立。missing、unknown、
 duplicate、count、schema、hash、counterpart 或 live-ledger drift 都会失败关闭。

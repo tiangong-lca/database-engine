@@ -201,8 +201,8 @@ public.lca_release_runs	table	public	lca_release_runs	postgres	true	false	false	
 public.lca_result_cache	table	public	lca_result_cache	postgres	true	false	false	true	415	private	database-engine#357-exact-object-list	pending			issue357	false	false	false	false
 public.lca_results	table	public	lca_results	postgres	true	false	true	true	382	private	database-engine#357-exact-object-list	pending			issue357	false	false	false	false
 public.lca_snapshot_artifacts	view	public	lca_snapshot_artifacts	postgres		false	false	true	948	private	database-engine#357-exact-object-list	pending	security_invoker		issue357	true	true	true	false
-public.lca_snapshot_gc_run_items	table	public	lca_snapshot_gc_run_items	postgres	true	true	true	true	3204	private	database-engine#357-exact-object-list	pending			issue357	false	false	false	false
-public.lca_snapshot_gc_runs	table	public	lca_snapshot_gc_runs	postgres	true	true	true	true	0	private	database-engine#357-exact-object-list	pending			issue357	false	false	false	false
+public.lca_snapshot_gc_run_items	view	public	lca_snapshot_gc_run_items	postgres		false	false	true	3204	private	database-engine#357-exact-object-list	pending	security_invoker		issue357	true	true	true	false
+public.lca_snapshot_gc_runs	view	public	lca_snapshot_gc_runs	postgres		false	false	true	0	private	database-engine#357-exact-object-list	pending	security_invoker		issue357	true	true	true	false
 public.lcia_document_validation_evidence	view	public	lcia_document_validation_evidence	postgres		false	false	true	276535	private	database-engine#357-exact-object-list	pending	security_invoker		issue357	true	true	true	false
 public.lcia_result_current_eligible_manifest()	function	public	lcia_result_current_eligible_manifest	postgres		true	true	true	0	api	database-engine#357-exact-object-list	pending	security_definer	search_path=public, pg_temp	issue357	false	false	false	false
 public.lcia_result_error(p_code text, p_status integer, p_message text)	function	public	lcia_result_error	postgres		true	true	true	0	api	database-engine#357-exact-object-list	pending	security_invoker	search_path=public, pg_temp	issue357	false	false	false	false

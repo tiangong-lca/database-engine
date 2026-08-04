@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-04"
-lastReviewedCommit: "e1d467ce3d16ad2d09fed080a4a05e71736ca52e"
-lastReviewedNote: "Reviewed for Issue #407 Phase A: exact-head public inventory and privileged-routine lineage evidence remain within existing schema, scripts, tests, and documentation ownership."
+lastReviewedCommit: "48de240972b61f8ff78cbf4d6640e1e0942b0549"
+lastReviewedNote: "Reviewed for Issue #414: snapshot GC audit physical Expand, exact-head inventory, runtime qualification, and CI remain within existing database-engine ownership and routing."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

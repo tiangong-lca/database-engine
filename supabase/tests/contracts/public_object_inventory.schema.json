@@ -21,8 +21,8 @@
       "properties": {
         "issue": {"const": "tiangong-lca/database-engine#405"},
         "databaseSchemaSha": {"pattern": "^[0-9a-f]{40}$"},
-        "migrationHead": {"const": "20260804100000"},
-        "migrationTreeSha256": {"const": "c772666e6f45d854f37cf36ff78c8f692c7c79d86c14f7a1ac30865eef4b9a3b"},
+        "migrationHead": {"const": "20260804123000"},
+        "migrationTreeSha256": {"const": "d314f6b047f315aa441eb2bfed2b01bbeb533554dcf8937745da8ccf59464952"},
         "predecessorInventorySha256": {"pattern": "^[0-9a-f]{64}$"},
         "partitionSha256": {"pattern": "^[0-9a-f]{64}$"},
         "ledgerSha256": {"pattern": "^[0-9a-f]{64}$"}
@@ -33,7 +33,7 @@
       "additionalProperties": false,
       "required": ["table", "view", "function"],
       "properties": {
-        "table": {"const": 48}, "view": {"const": 13}, "function": {"const": 336}
+        "table": {"const": 46}, "view": {"const": 15}, "function": {"const": 336}
       }
     },
     "partitionCounts": {
