@@ -99,6 +99,7 @@ jobs:
             --expected-predecessor-container supabase_db_database-engine-407-predecessor \
             --expected-candidate-project-id database-engine \
             --expected-candidate-container supabase_db_database-engine \
+            --expected-candidate-head 20260804123000 \
             --execution-mode ci-hard-bound \
             --api-url http://127.0.0.1:55321 \
             --confirm-isolated-destructive-test

@@ -127,6 +127,10 @@ class Issue414SnapshotGcPhysicalExpandTest(unittest.TestCase):
                 "scripts/test_issue_414_snapshot_gc_audit_runtime.py",
                 source,
             )
+            self.assertIn(
+                "--expected-candidate-head 20260804123000",
+                source,
+            )
 
     def test_reviewed_ast_gate_binds_exact_blob(self) -> None:
         source = MIGRATION.read_text(encoding="utf-8")
