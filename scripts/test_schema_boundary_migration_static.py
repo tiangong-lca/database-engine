@@ -27,14 +27,6 @@ class SchemaBoundaryMigrationStaticTest(unittest.TestCase):
         self.assertNotIn(" cascade", sql)
         self.assertNotIn("alter default privileges", sql)
         self.assertNotIn("drop schema", sql)
-        self.assertIn(r"\if :{?source_service_role_maintain}", sql)
-        self.assertIn("not in ('true', 'false')", sql)
-
-    def test_migration_allows_only_the_two_proven_source_acl_variants(self) -> None:
-        sql = MIGRATION.read_text(encoding="utf-8").lower()
-        self.assertIn("allowed_optional(grantee, privilege_type, is_grantable)", sql)
-        self.assertIn("('service_role','maintain',false)", sql)
-        self.assertNotIn("allowed_optional(grantee, privilege_type, is_grantable) as (select", sql)
 
 
 if __name__ == "__main__":

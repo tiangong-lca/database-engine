@@ -27,12 +27,12 @@ SOURCE = {
     "workspaceBaselineSha": "520b7af67240beb0f08419ab432a018d93542170",
     "workspacePinnedDatabaseSha": "1516ad7bb3f74734095756e741f00f60e93b79b3",
     # The only migration/catalog input for current artifact regeneration.
-    "databaseSchemaSha": "05d1387cc073da8161db782db978a77431ff8b3f",
+    "databaseSchemaSha": "a1be848fefc88d68c1073f98c9e3ecf866095399",
     # Historical #345 branch lineage; never use these as the schema reset target.
     "databaseBaseSha": "157ef7bb4e844edb26525dfb89f4fde188ee0cef",
     "databaseInventorySha": "86203c9190b11f12109a7fdd3f310ff47a47c9e5",
     "databaseMergeBaseSha": "907f7b6a47b98c401d98184a8b7452aaaa429bbf",
-    "previousArtifactSha256": "250d91d0df9edcf2a187b635b35829c4bdba93cfc73d330b9c30320479838adf",
+    "previousArtifactSha256": "d7353b0b3d2dcd3bcc64ffaf41ff2015729142789e0b3a39818acc12ebf35c16",
 }
 SOURCE_SHA_FIELDS = (
     "workspaceBaselineSha",

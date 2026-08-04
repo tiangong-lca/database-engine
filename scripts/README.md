@@ -172,17 +172,6 @@ DATABASE_URL='postgresql://...' python scripts/schema_boundary_phase.py
 
 The checker is read-only and is part of `run_database_contract.py`. Issue #354 also provides `test_schema_boundary_data_api.py` for local PostgREST profile/role proof and `test_schema_boundary_rollback.py` for local operator rollback/roll-forward OID proof.
 
-The owner-only rollback fails closed unless retained pre-deployment ACL evidence is supplied explicitly. Use exactly one of:
-
-```bash
-psql "$DATABASE_URL" -v source_service_role_maintain=false -f supabase/operator/issue_354_restore_schema_boundary.sql
-psql "$DATABASE_URL" -v source_service_role_maintain=true -f supabase/operator/issue_354_restore_schema_boundary.sql
-```
-
-Choose `true` only when the retained source readback proves the explicit `service_role MAINTAIN` grant. Missing or any other value is rejected before canonical views move.
-
-Catalog export also rejects rollback- or blank-replay-contaminated Issue #339/#354 state before writing: the 14 reviewed PostgreSQL-17 replay relations plus the five canonical/compatibility view names must have no `service_role MAINTAIN`; internal helpers and the four reviewed public helper facades must retain their browser-role boundary; and the two lifecycle bundle RPCs must remain denied to anon/authenticated. This guard is intentionally issue-scoped; it does not assert that every unrelated application relation has zero `service_role MAINTAIN`. Byte equality with the reviewed catalog artifact remains a separate gate.
-
 ### `check_generated_workspace_legacy_tables.py`
 
 Checks that generated schema workspace output no longer advertises retired public legacy job tables:
