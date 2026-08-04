@@ -60,16 +60,6 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | `supabase/workspace/global/**` | generated split-out global objects rebuilt on workspace refresh |
 | `supabase/workspace/schemas/**` | generated human-browsable split schema objects rebuilt on workspace refresh |
 
-## Schema Boundary Model
-
-- `public` retains the nine core entity tables and existing compatibility objects during Expand.
-- `api` is the explicit versioned PostgREST DTO/RPC layer. Views use `security_invoker`, routines have fixed search paths, and grants are per object. Its schema and objects are deployed before a later configuration change exposes it.
-- `private` owns internal runtime and control-plane objects and is never an exposed Data API schema.
-- `util` and `archive` retain operations/history responsibilities and are never exposed Data API schemas.
-- Realtime publishes explicitly selected physical tables; `api` views are not a Realtime source.
-
-Physical moves happen only after consumers use the `api` or `private` contract and the Contract gate proves zero compatibility callers. Expand views and wrappers must preserve one physical source of truth.
-
 ## Branch Model In Practice
 
 `database-engine` is an M2 repo:
