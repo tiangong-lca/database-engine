@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-01
-lastReviewedCommit: b32072d5a38509c4a25d866692958f0ced1303cf
-lastReviewedNote: "Reviewed for Issue #346: document the allowlisted persistent-dev PostgREST diff/apply/readback gate and its offline tests."
+lastReviewedAt: 2026-07-31
+lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
+lastReviewedNote: "Reviewed through Issues #323 and #329: document the local Root/Reference Review backup/cutover runner and exact Worker-compatible isolated database/storage qualification adapters without changing schema-workspace behavior."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -46,19 +46,6 @@ Those runners should keep their own `README.md` with dry-run, apply, and validat
 Local migration outputs and audit JSONL files should be written under `_artifacts/`, which is intentionally ignored by Git.
 
 ## Script List
-
-### `apply_postgrest_config.py`
-
-Reconciles only the reviewed PostgREST fields for one exact persistent Supabase branch. `--check` is read-only; `--apply` PATCHes only drifted `db_schema`, `db_extra_search_path`, and `max_rows`, then GET-verifies the result. The target project ref must match exactly one checked-in `[remotes.*].project_id`.
-
-```bash
-SUPABASE_ACCESS_TOKEN='<injected-secret>' \
-python scripts/apply_postgrest_config.py \
-  --project-ref fotofiyqnuyvgtotswie \
-  --check
-```
-
-Run `python -m unittest scripts/test_apply_postgrest_config.py` before changing the gate. Never replace it with unconditional `supabase config push` or print Management API response bodies.
 
 ### `data_migrations/tidas_schema_202606/runner.py`
 

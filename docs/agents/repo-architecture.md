@@ -54,7 +54,7 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | `supabase/tests/preview/**` | exact-ref-bound disposable Hosted Preview mutation fixtures, cleanup, rollback-only fault assertions, and offline transport/lifecycle contracts; test-only and excluded from migrations, seeds, Dev data rehearsal, and production execution |
 | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |
 | `scripts/**` | export, refresh, change-copy, and migration-generation helpers |
-| `.github/workflows/supabase-dev.yml` | serialized automation for pushing committed migrations to persistent remote `dev`, then reconciling and readback-verifying only the reviewed PostgREST fields |
+| `.github/workflows/supabase-dev.yml` | only checked-in GitHub Actions automation for pushing committed migrations to the persistent remote `dev` branch |
 | `supabase/workspace/changes/**` | manual overlay area used when generating migrations from workspace files |
 | `supabase/workspace/remote_schema.sql` | generated full raw dump from the remote database |
 | `supabase/workspace/global/**` | generated split-out global objects rebuilt on workspace refresh |
