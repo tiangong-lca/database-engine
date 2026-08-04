@@ -58,7 +58,7 @@ python scripts/apply_postgrest_config.py \
   --check
 ```
 
-Run `python -m unittest scripts/test_apply_postgrest_config.py` before changing the gate. A failed post-PATCH readback restores and verifies the prior allowlisted snapshot. Never replace the gate with unconditional `supabase config push` or print Management API response bodies.
+Run `python -m unittest scripts/test_apply_postgrest_config.py` before changing the gate. Never replace it with unconditional `supabase config push` or print Management API response bodies.
 
 ### `data_migrations/tidas_schema_202606/runner.py`
 

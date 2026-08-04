@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 833564c7ced2037d07e09d3f5bb800f5b430e469
-lastReviewedNote: "已为 Issue #346 follow-up 复核：PostgREST 配置回滚语义仍不改变生成 workspace 的行为或真相源边界。"
+lastReviewedCommit: b32072d5a38509c4a25d866692958f0ced1303cf
+lastReviewedNote: "已为 Issue #346 复核：持久化 Dev PostgREST 配置 gate 不改变生成 workspace 的行为或真相源边界。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

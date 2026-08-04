@@ -29,29 +29,6 @@ class FakeClient:
             self.remote.update(payload)
 
 
-class PartialApplyClient(FakeClient):
-    def __init__(
-        self,
-        remote: dict[str, object],
-        ignore_rollback: bool = False,
-        raise_after_first: bool = False,
-    ) -> None:
-        super().__init__(remote)
-        self.ignore_rollback = ignore_rollback
-        self.raise_after_first = raise_after_first
-
-    def patch(self, payload: dict[str, object]) -> None:
-        self.patches.append(dict(payload))
-        if len(self.patches) == 1:
-            if "db_schema" in payload:
-                self.remote["db_schema"] = payload["db_schema"]
-            if self.raise_after_first:
-                raise gate.ConfigError("simulated ambiguous PATCH failure")
-            return
-        if not self.ignore_rollback:
-            self.remote.update(payload)
-
-
 class ApplyPostgrestConfigTest(unittest.TestCase):
     desired = {
         "db_schema": "api,public,graphql_public",
@@ -134,57 +111,9 @@ project_id = "abcdefghijklmnopqrst"
         self.assertEqual(client.patches, [])
 
     def test_failed_readback_is_blocking(self) -> None:
-        client = FakeClient(
-            {
-                "db_schema": "public,graphql_public",
-                "db_extra_search_path": "public,extensions",
-                "max_rows": 500,
-            },
-            ignore_patch=True,
-        )
-        with self.assertRaisesRegex(gate.ConfigError, "previous allowlisted config restored"):
+        client = FakeClient({"db_schema": "public"}, ignore_patch=True)
+        with self.assertRaisesRegex(gate.ConfigError, "readback mismatch"):
             gate.reconcile(self.desired, client.get, client.patch, apply=True)
-
-    def test_partial_apply_is_rolled_back_and_verified(self) -> None:
-        previous = {
-            "db_schema": "public,graphql_public",
-            "db_extra_search_path": "public,extensions",
-            "max_rows": 500,
-        }
-        client = PartialApplyClient(previous)
-        with self.assertRaisesRegex(gate.ConfigError, "previous allowlisted config restored"):
-            gate.reconcile(self.desired, client.get, client.patch, apply=True)
-        self.assertEqual(client.remote, previous)
-        self.assertEqual(
-            client.patches,
-            [
-                {"db_schema": "api,public,graphql_public", "max_rows": 1000},
-                {"db_schema": "public,graphql_public"},
-            ],
-        )
-
-    def test_rollback_readback_mismatch_is_blocking(self) -> None:
-        client = PartialApplyClient(
-            {
-                "db_schema": "public,graphql_public",
-                "db_extra_search_path": "public,extensions",
-                "max_rows": 500,
-            },
-            ignore_rollback=True,
-        )
-        with self.assertRaisesRegex(gate.ConfigError, "rollback failed"):
-            gate.reconcile(self.desired, client.get, client.patch, apply=True)
-
-    def test_ambiguous_patch_failure_restores_prior_snapshot(self) -> None:
-        previous = {
-            "db_schema": "public,graphql_public",
-            "db_extra_search_path": "public,extensions",
-            "max_rows": 500,
-        }
-        client = PartialApplyClient(previous, raise_after_first=True)
-        with self.assertRaisesRegex(gate.ConfigError, "previous allowlisted config restored"):
-            gate.reconcile(self.desired, client.get, client.patch, apply=True)
-        self.assertEqual(client.remote, previous)
 
     def test_unreviewed_patch_field_is_rejected(self) -> None:
         client = gate.ManagementClient("abcdefghijklmnopqrst", "not-logged")

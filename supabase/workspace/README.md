@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-01
-lastReviewedCommit: 833564c7ced2037d07e09d3f5bb800f5b430e469
-lastReviewedNote: "Reviewed for Issue #346 follow-up: PostgREST config rollback semantics still do not change generated workspace behavior or source-of-truth boundaries."
+lastReviewedCommit: b32072d5a38509c4a25d866692958f0ced1303cf
+lastReviewedNote: "Reviewed for Issue #346: the persistent Dev PostgREST configuration gate does not change generated workspace behavior or source-of-truth boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

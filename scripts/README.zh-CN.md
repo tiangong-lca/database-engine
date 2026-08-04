@@ -58,7 +58,7 @@ python scripts/apply_postgrest_config.py \
   --check
 ```
 
-修改 gate 前运行 `python -m unittest scripts/test_apply_postgrest_config.py`。PATCH 后回读失败时，脚本会恢复并验证之前的白名单字段快照。不得用无条件 `supabase config push` 替代，也不得打印 Management API response body。
+修改 gate 前运行 `python -m unittest scripts/test_apply_postgrest_config.py`。不得用无条件 `supabase config push` 替代，也不得打印 Management API response body。
 
 ### `data_migrations/tidas_schema_202606/runner.py`
 
