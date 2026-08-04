@@ -47,6 +47,7 @@ jobs:
             scripts.test_database_contract_manifest \
             scripts.test_issue_407_document_validation_evidence_expand \
             scripts.test_issue_407_document_validation_evidence_physical_expand \
+            scripts.test_issue_414_snapshot_gc_audit_physical_expand \
             scripts.test_issue_390_result_api_facade_runtime_unit
           python -m scripts.issue_390_pre_ddl_gate --check
 
@@ -108,6 +109,23 @@ jobs:
           if [[ -d "$RUNNER_TEMP/issue407-predecessor/supabase" ]]; then
             supabase stop --workdir "$RUNNER_TEMP/issue407-predecessor" --no-backup
           fi
+
+      - name: Run Issue 414 snapshot GC physical Expand qualification
+        env:
+          PGPASSWORD: postgres # gitleaks:allow -- disposable loopback Supabase default
+        run: |
+          candidate_system_id="$(psql -X -At --host 127.0.0.1 --port 55322 --username postgres --dbname postgres -c 'select system_identifier from pg_control_system()')"
+          candidate_status="$(supabase status --output json)"
+          export ISSUE414_ANON_KEY="$(python -c 'import json,sys; print(json.load(sys.stdin)["ANON_KEY"])' <<<"$candidate_status")"
+          export ISSUE414_SERVICE_KEY="$(python -c 'import json,sys; print(json.load(sys.stdin)["SECRET_KEY"])' <<<"$candidate_status")"
+          python scripts/test_issue_414_snapshot_gc_audit_runtime.py \
+            --db-url postgresql://postgres@127.0.0.1:55322/postgres \
+            --expected-system-id "$candidate_system_id" \
+            --expected-project-id database-engine \
+            --expected-container supabase_db_database-engine \
+            --execution-mode ci-hard-bound \
+            --api-url http://127.0.0.1:55321 \
+            --confirm-isolated-destructive-test
 
       - name: Verify Issue 357 artifacts, generated phases, unit contracts, and focused suite
         run: >-

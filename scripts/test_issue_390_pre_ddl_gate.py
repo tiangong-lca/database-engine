@@ -17,6 +17,7 @@ from scripts.issue_390_pre_ddl_gate import (
     pre_ddl_migration_violations,
     pre_ddl_sql_signals,
     reviewed_document_evidence_migration_violations,
+    reviewed_snapshot_gc_physical_migration_violations,
 )
 
 
@@ -198,6 +199,7 @@ class Issue390PreDdlGateTest(unittest.TestCase):
                     "additive-result-gc-fk-covering-indexes-reviewed",
                     "additive-document-evidence-private-contract-reviewed",
                     "physical-document-evidence-private-expand-reviewed",
+                    "physical-snapshot-gc-audit-private-expand-reviewed",
                     "reconcile-v1-service-only-replacement-reviewed",
                 },
             )
@@ -1704,6 +1706,95 @@ class Issue390PreDdlGateTest(unittest.TestCase):
             with self.subTest(name=name):
                 self.assertTrue(
                     reviewed_document_evidence_migration_violations(mutated),
+                    f"{name} mutation passed the exact AST gate",
+                )
+
+    def test_issue_414_exact_blob_and_ast_gate_rejects_mutation_classes(self) -> None:
+        path = (
+            "supabase/migrations/"
+            "20260804123000_issue_414_snapshot_gc_audit_physical_expand.sql"
+        )
+        migration_path = ROOT / path
+        sql = migration_path.read_text(encoding="utf-8")
+        git_blob = subprocess.run(
+            ["git", "hash-object", str(migration_path)],
+            cwd=ROOT,
+            check=True,
+            stdout=subprocess.PIPE,
+            text=True,
+        ).stdout.strip()
+        expected_blob = "12a6580738149ebd5f447b3f9182b474c9a0bc72"
+        self.assertEqual(git_blob, expected_blob)
+        self.assertEqual(
+            reviewed_snapshot_gc_physical_migration_violations(
+                path=path, git_blob=expected_blob, sql=sql
+            ),
+            [],
+        )
+        allowlist = self.contract["migrationGate"][
+            "allowedTargetTouchingMigrations"
+        ]
+        self.assertEqual(
+            pre_ddl_migration_violations(
+                path=path,
+                git_blob=expected_blob,
+                sql=sql,
+                allowlist=allowlist,
+            ),
+            [],
+        )
+        for wrong_path, wrong_blob in (
+            (path + ".drift", expected_blob),
+            (path, "0" * 40),
+        ):
+            with self.subTest(path=wrong_path, blob=wrong_blob):
+                self.assertTrue(
+                    reviewed_snapshot_gc_physical_migration_violations(
+                        path=wrong_path, git_blob=wrong_blob, sql=sql
+                    )
+                )
+
+        mutations = {
+            "copy": sql + "\ncopy private.lca_snapshot_gc_runs to stdout;\n",
+            "drop": sql + "\ndrop table private.lca_snapshot_gc_runs;\n",
+            "role": sql + "\ncreate role issue414_forbidden;\n",
+            "extra_routine": sql + (
+                "\ncreate function private.issue414_extra() returns void "
+                "language sql as $$select$$;\n"
+            ),
+            "insert": sql + (
+                "\ninsert into private.lca_snapshot_gc_runs default values;\n"
+            ),
+            "update": sql + (
+                "\nupdate private.lca_snapshot_gc_runs set status = status;\n"
+            ),
+            "dynamic_execute": sql.replace(
+                "execute 'alter table public.lca_snapshot_gc_runs set schema private';",
+                "execute 'drop table public.lca_snapshot_gc_runs';",
+                1,
+            ),
+            "grant_extra_role": sql.replace(
+                "to lca_worker_runtime;",
+                "to lca_worker_runtime, authenticated;",
+                1,
+            ),
+            "view_not_invoker": sql.replace(
+                "with (security_invoker = true)",
+                "with (security_invoker = false)",
+                1,
+            ),
+            "move_order": sql.replace(
+                "execute 'alter table public.lca_snapshot_gc_run_items set schema private';\n    execute 'alter table public.lca_snapshot_gc_runs set schema private';",
+                "execute 'alter table public.lca_snapshot_gc_runs set schema private';\n    execute 'alter table public.lca_snapshot_gc_run_items set schema private';",
+                1,
+            ),
+        }
+        for name, mutated in mutations.items():
+            with self.subTest(name=name):
+                self.assertTrue(
+                    reviewed_snapshot_gc_physical_migration_violations(
+                        path=path, git_blob=expected_blob, sql=mutated
+                    ),
                     f"{name} mutation passed the exact AST gate",
                 )
 

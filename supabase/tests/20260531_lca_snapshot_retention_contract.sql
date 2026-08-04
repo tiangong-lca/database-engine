@@ -40,22 +40,22 @@ select ok(
 );
 
 select ok(
-  to_regclass('public.lca_snapshot_gc_runs') is not null,
-  'snapshot GC run audit table exists'
+  to_regclass('private.lca_snapshot_gc_runs') is not null,
+  'snapshot GC run audit canonical table exists'
 );
 
 select ok(
-  to_regclass('public.lca_snapshot_gc_run_items') is not null,
-  'snapshot GC run item audit table exists'
+  to_regclass('private.lca_snapshot_gc_run_items') is not null,
+  'snapshot GC run item audit canonical table exists'
 );
 
 select ok(
-  (select relrowsecurity from pg_class where oid = 'public.lca_snapshot_gc_runs'::regclass),
+  (select relrowsecurity from pg_class where oid = 'private.lca_snapshot_gc_runs'::regclass),
   'snapshot GC run audit table has RLS enabled'
 );
 
 select ok(
-  (select relrowsecurity from pg_class where oid = 'public.lca_snapshot_gc_run_items'::regclass),
+  (select relrowsecurity from pg_class where oid = 'private.lca_snapshot_gc_run_items'::regclass),
   'snapshot GC run item audit table has RLS enabled'
 );
 

@@ -115,6 +115,11 @@
       "path": "supabase/migrations/20260804100000_issue_407_document_validation_evidence_physical_expand.sql",
       "gitBlob": "534f7ddb13ff52a62e949e8f098859af038c5d4c",
       "classification": "physical-document-evidence-private-expand-reviewed"
+    },
+    {
+      "path": "supabase/migrations/20260804123000_issue_414_snapshot_gc_audit_physical_expand.sql",
+      "gitBlob": "12a6580738149ebd5f447b3f9182b474c9a0bc72",
+      "classification": "physical-snapshot-gc-audit-private-expand-reviewed"
     }
     ],
     "relationMovingDdlAllowed": false,

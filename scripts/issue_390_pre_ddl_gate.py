@@ -82,6 +82,42 @@ DOCUMENT_EVIDENCE_PHYSICAL_CLASSIFICATION = (
     "physical-document-evidence-private-expand-reviewed"
 )
 DOCUMENT_EVIDENCE_PHYSICAL_GIT_BLOB = "534f7ddb13ff52a62e949e8f098859af038c5d4c"
+SNAPSHOT_GC_PHYSICAL_MIGRATION_PATH = (
+    "supabase/migrations/20260804123000_issue_414_snapshot_gc_audit_physical_expand.sql"
+)
+SNAPSHOT_GC_PHYSICAL_CLASSIFICATION = (
+    "physical-snapshot-gc-audit-private-expand-reviewed"
+)
+SNAPSHOT_GC_PHYSICAL_GIT_BLOB = "12a6580738149ebd5f447b3f9182b474c9a0bc72"
+SNAPSHOT_GC_PHYSICAL_STATEMENT_HASHES = (
+    "d7b5cd90d8b335c0624d2ed8b1b9268b43bd61b7a562b39409daa1e5447aaedd",
+    "d45617b322938a6ce4dc9832b21d34973d4562ba8b2a43711701444b8c90b5aa",
+    "d488d15520ad89482b91371dc23d90b49cb236f288de8861dbd4b1f88cebe3b0",
+    "5bae3cb4539071fca97055f2352e05fc2012b2c93abcfefc8c66b0f4bf7cfde3",
+    "e31d97977eb78bd11e53408137d1703d72f9358dcc3d7729211be38740e4f6fb",
+    "4bd4cf6ea84a8646d5e2590d43ea73ef61446b23b3faae823976ba2356b6a071",
+    "a8dfd3d94c2d2f056be061fb2ddd7cdcde0e598b09ad8c88605d73e228dc497a",
+    "e400b2efd3cc3b3c91970c0aa7b2c3029a2862319dcbdfad2c716e106e952ee6",
+    "54654a77f72be59e918e5c2acef429c6e9f620d01666ce600fe5e255647c224d",
+    "5d9f9edbc2801566e6d0b4ca5983e6268d70e101cc505cde2db0b975dabe7a6c",
+    "61a952104095fd6b9a610be0a771e27498fa64e0016ce888cad3de8d2b9b519b",
+    "7db7c9672f2ef4bc9b858b6037df6b5ea938922f06a22a6f8ede88afc1485446",
+    "6875dd7965ec8ee27243a850a4990ff73c4e1a330a77e0b8ecf905ed3ea3144a",
+    "a5fe618ab778a2a8cf99fe2f41f2b1b83af03a6cf97e87ed9a19e6e7e6fed579",
+    "b22cf0fe608240d73544d5ccd4d12ebe5d68409abf6733535e5efe02b2d9d04f",
+    "89349443f1e7389d91399cf5ba5384582bfcac403e0aa3bfa6aa22d8edf1ab75",
+    "2c93d92c2bb8cb47a18f992fbca194feb2fb312836f67580e7b383617cd93084",
+    "6b743226fe1a30c7de2899bb5eec4090036fb34213a9ea1065b4d2f9d3e53d3c",
+    "af61663bd88763b0a147cb38f85a063ccf826ad4a8232327aed16ec73ce8004d",
+    "fa90a9af1bf22ea0a99017a5667ab6dc5479c7b77099ce8c480836b18d17f924",
+    "8a4a54181ba22332cff1117bfde1b4218b4943d84bc6b8459825e5b41375a00c",
+    "cfef1b14ee698fe0b51e127411c64bdf8f8f3604de27b3afea26379746e2cd93",
+    "bfbe5b1e0dca5c245a849e9fd1285c5e762b04769a061b644b01deca758b792b",
+    "0471d918789b3718efc61cba3590c5a2bf73ce141693fb4be7e4851dd7e9b9be",
+    "45d14dd72966377560b7d293faf6dd64c8e7741494c579a900eb2a1097c34c62",
+    "61d101426cf2c96428662df328ee3e5d02e1cd5f82f063b3dbb1457aac8b13a9",
+    "c570ef7e698606f104237a1dfc8055b26142fecf93ce0025e097900e3f3d9c73",
+)
 SAFE_FACADE_BUILTINS = {
     "array_agg",
     "clock_timestamp",
@@ -1628,6 +1664,149 @@ def reviewed_document_evidence_physical_migration_violations(
     return sorted(set(violations))
 
 
+def reviewed_snapshot_gc_physical_migration_violations(
+    *, path: str, git_blob: str, sql: str
+) -> list[str]:
+    """Exact PostgreSQL-AST admission for Issue #414 physical Expand only."""
+    if (
+        path != SNAPSHOT_GC_PHYSICAL_MIGRATION_PATH
+        or git_blob != SNAPSHOT_GC_PHYSICAL_GIT_BLOB
+    ):
+        return ["snapshot-gc-physical:exact-blob-required"]
+
+    statements, errors = _parse_sql(sql)
+    if errors:
+        return errors
+
+    expected_types = (
+        "TransactionStmt", "VariableSetStmt", "VariableSetStmt",
+        "CreateFunctionStmt", "DoStmt", "DoStmt", "DoStmt", "CreateStmt",
+        "DoStmt", "DoStmt", "GrantStmt", "GrantStmt", "DoStmt",
+        "ViewStmt", "ViewStmt",
+        "AlterTableStmt", "AlterTableStmt", "GrantStmt", "GrantStmt",
+        "GrantStmt", "CommentStmt", "CommentStmt", "CommentStmt",
+        "CommentStmt", "DoStmt", "NotifyStmt", "TransactionStmt",
+    )
+    observed_types = tuple(next(iter(statement)) for statement in statements)
+    violations: list[str] = []
+    if observed_types != expected_types:
+        return ["snapshot-gc-physical:exact-statement-sequence-required"]
+
+    observed_hashes = tuple(
+        hashlib.sha256(
+            json.dumps(
+                statement, sort_keys=True, separators=(",", ":")
+            ).encode()
+        ).hexdigest()
+        for statement in statements
+    )
+    if observed_hashes != SNAPSHOT_GC_PHYSICAL_STATEMENT_HASHES:
+        violations.append("snapshot-gc-physical:statement-semantic-drift")
+
+    if (
+        statements[0]["TransactionStmt"].get("kind") != "TRANS_STMT_BEGIN"
+        or statements[-1]["TransactionStmt"].get("kind")
+        != "TRANS_STMT_COMMIT"
+    ):
+        violations.append(
+            "snapshot-gc-physical:exact-transaction-boundary-required"
+        )
+
+    for index, expected_name, expected_value in (
+        (1, "lock_timeout", "5s"),
+        (2, "statement_timeout", "2min"),
+    ):
+        setting = statements[index]["VariableSetStmt"]
+        values = [
+            item.get("A_Const", {}).get("sval", {}).get("sval")
+            for item in setting.get("args", [])
+        ]
+        if (
+            setting.get("kind") != "VAR_SET_VALUE"
+            or setting.get("name") != expected_name
+            or not setting.get("is_local")
+            or values != [expected_value]
+        ):
+            violations.append(
+                f"snapshot-gc-physical:exact-setting-required:{expected_name}"
+            )
+
+    normalized = " ".join(sql.lower().split())
+    lock = normalized.find(
+        "lock table public.lca_snapshot_gc_runs, "
+        "public.lca_snapshot_gc_run_items in access exclusive mode"
+    )
+    snapshot = normalized.find("create temporary table issue_414_before")
+    move_items = normalized.find(
+        "alter table public.lca_snapshot_gc_run_items set schema private"
+    )
+    move_runs = normalized.find(
+        "alter table public.lca_snapshot_gc_runs set schema private"
+    )
+    if (
+        min(lock, snapshot, move_items, move_runs) < 0
+        or not lock < snapshot < move_items < move_runs
+    ):
+        violations.append(
+            "snapshot-gc-physical:lock-snapshot-move-order-required"
+        )
+
+    for relation in ("lca_snapshot_gc_runs", "lca_snapshot_gc_run_items"):
+        if (
+            f"create or replace view public.{relation} "
+            "with (security_invoker = true)" not in normalized
+        ):
+            violations.append(
+                f"snapshot-gc-physical:security-invoker-view-required:{relation}"
+            )
+        for forbidden in (
+            f"drop table public.{relation}",
+            f"drop table private.{relation}",
+            f"create table private.{relation}",
+            f"insert into private.{relation} select",
+            f"copy private.{relation}",
+            f"copy public.{relation}",
+        ):
+            if forbidden in normalized:
+                violations.append("snapshot-gc-physical:copy-or-drop-forbidden")
+
+    forbidden_top_level = {
+        "CallStmt", "CopyStmt", "CreateRoleStmt", "DeleteStmt", "DropStmt",
+        "InsertStmt", "SelectStmt", "TruncateStmt", "UpdateStmt",
+    }
+    if any(statement_type in forbidden_top_level for statement_type in observed_types):
+        violations.append("snapshot-gc-physical:forbidden-top-level-operation")
+
+    created_functions = [
+        _created_function_identity(statement["CreateFunctionStmt"])
+        for statement in statements
+        if "CreateFunctionStmt" in statement
+    ]
+    expected_function = (
+        "pg_temp", "issue_414_relation_fingerprint",
+        ((("pg_catalog", "regclass"), 0),),
+    )
+    if created_functions != [expected_function]:
+        violations.append("snapshot-gc-physical:extra-routine-forbidden")
+
+    for statement in statements:
+        root_type, root = next(iter(statement.items()))
+        if root_type in {"CreateRoleStmt", "AlterRoleStmt", "DropRoleStmt"}:
+            violations.append("snapshot-gc-physical:role-ddl-forbidden")
+        if root_type == "GrantRoleStmt":
+            violations.append("snapshot-gc-physical:role-membership-forbidden")
+        if root_type == "DoStmt":
+            bodies = [
+                item.get("DefElem", {}).get("arg", {}).get("String", {}).get("sval")
+                for item in root.get("args", [])
+                if item.get("DefElem", {}).get("defname") == "as"
+            ]
+            if len(bodies) != 1 or bodies[0] is None:
+                violations.append("snapshot-gc-physical:exact-do-body-required")
+
+    return sorted(set(violations))
+
+
 def pre_ddl_migration_violations(
     *, path: str, git_blob: str, sql: str, allowlist: list[dict[str, str]]
 ) -> list[str]:
@@ -1653,6 +1832,16 @@ def pre_ddl_migration_violations(
         ):
             return ["document-evidence-physical:exact-allowlist-entry-required"]
         return reviewed_document_evidence_physical_migration_violations(
+            path=path, git_blob=git_blob, sql=sql
+        )
+    if path == SNAPSHOT_GC_PHYSICAL_MIGRATION_PATH:
+        if (
+            len(matching) != 1
+            or matching[0].get("classification")
+            != SNAPSHOT_GC_PHYSICAL_CLASSIFICATION
+        ):
+            return ["snapshot-gc-physical:exact-allowlist-entry-required"]
+        return reviewed_snapshot_gc_physical_migration_violations(
             path=path, git_blob=git_blob, sql=sql
         )
     if path == RESULT_GC_FK_INDEX_MIGRATION_PATH:
@@ -1698,6 +1887,7 @@ __all__ = [
     "PGLAST_VERSION",
     "pre_ddl_migration_violations",
     "pre_ddl_sql_signals",
+    "reviewed_snapshot_gc_physical_migration_violations",
 ]
 
 
