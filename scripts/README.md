@@ -389,14 +389,6 @@ opens sequence 1, and emits the exact reviewed-code constants. A migration PR
 must materialize every planned file and validate the hashes; it must not hand-edit
 `completedTransitions` or advance from the mutable `security_definer_audit_v2.json`.
 
-The qualification receipt itself must be a reviewed regular file in the clean
-source HEAD. To avoid the impossible Git hash self-reference that would result
-from embedding that same HEAD in the receipt, `source.commitSha` names the
-reviewed ancestor commit containing the exact migration and rollback bytes. The
-runner replays those immutable Git blobs and proves the base → source → receipt
-HEAD ancestry chain; current fixture and receipt bytes remain independently
-bound by exact SHA-256.
-
 The #356 PR gate must additionally run the real two-stack integration harness;
 there is no successful skip mode:
 
@@ -404,22 +396,16 @@ there is no successful skip mode:
 python scripts/run_database_contract.py --suite canonical-local \
   --security-definer-transition-workdir <clean-stack-a> \
   --security-definer-transition-workdir <clean-stack-b> \
-  --security-definer-transition-source-workdir <clean-source-worktree> \
   --security-definer-transition-migration <issue-356-migration.sql> \
   --security-definer-transition-rollback <issue-356-operator-rollback.sql> \
-  --security-definer-transition-qualification-receipt \
-    supabase/tests/contracts/security_definer_transition_qualification_receipt.issue-356.json \
-  --security-definer-transition-qualification-receipt-sha256 <exact-sha256> \
   --security-definer-transition-migration-sha256 <exact-sha256> \
   --security-definer-transition-rollback-sha256 <exact-sha256> \
-  --security-definer-transition-base 597072ca34a62cdc93df9bf0896a9d361901852c
+  --security-definer-transition-base 1b94c1ce7c132e5481c4a2594d6d9a957d7dc683
 ```
 
 Both workdirs must be independent loopback stacks at the exact base. The gate
 performs baseline audit, migration, live transition audit, operator rollback,
 baseline byte restoration, rollforward, and a second-stack byte/SHA comparison.
-The baseline lineage and v2 audit are immutable sequence-0 artifacts; the gate
-never substitutes the mutable current lineage after a transition is settled.
 Missing inputs, changed SQL bytes, reset failure, or any audit drift fails closed.
 
 ### `test_worker_control_plane_upgrade.py`
@@ -431,25 +417,6 @@ It is local-only and resets the currently selected local Supabase project.
 ```bash
 python scripts/test_worker_control_plane_upgrade.py
 ```
-
-### `test_worker_control_plane_physical_upgrade.py` and rollback
-
-Issue #356's mandatory physical-boundary qualification is selected through:
-
-```bash
-python scripts/run_database_contract.py --suite worker-control-plane
-```
-
-The suite runs both physical harnesses before its focused pgTAP/reset phase.
-The upgrade harness loads one million jobs by default, injects a failed
-transaction, measures lock wait and WAL, preserves OIDs/catalog/data, and
-proves exact retry. The rollback harness first proves a maliciously drifted
-adapter fails preflight without mutation, then proves exact baseline restore
-and roll-forward. Both harnesses poll real PostgREST through baseline and
-Expand phases; together they cover baseline → Expand → rollback → roll-forward.
-`private` remains unexposed, `service_role` retains the compatibility surface,
-and anonymous access fails closed at every phase. Database passwords are passed
-through `PGPASSWORD`, never process arguments or output.
 
 ### `test_worker_control_plane_data_api.py`
 

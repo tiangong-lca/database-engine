@@ -231,11 +231,11 @@ from public, anon, authenticated, service_role, api_internal_executor;
 -- Spell out the compatibility DML contract.  GRANT ALL on PostgreSQL 17 also
 -- includes MAINTAIN, which was never part of the Data API compatibility
 -- surface and must not be acquired accidentally by these views.
-grant select on public.worker_jobs, public.worker_job_artifacts to service_role;
-grant update (phase, progress, diagnostics, heartbeat_at, lease_expires_at, updated_at)
-  on public.worker_jobs to service_role;
-grant insert (job_id, artifact_type, content_type, metadata, visibility)
-  on public.worker_job_artifacts to service_role;
+grant select, insert, update, delete on public.worker_job_kinds,
+  public.worker_jobs, public.worker_job_events, public.worker_job_artifacts
+to service_role;
+grant select on public.worker_job_kinds, public.worker_jobs,
+  public.worker_job_events, public.worker_job_artifacts to api_internal_executor;
 
 comment on view public.worker_job_kinds is
   'Issue #356 Expand compatibility view; private.worker_job_kinds is the single physical source.';
@@ -345,36 +345,36 @@ $rewrite_postflight$;
 
 -- None of the moved core routines may resolve an unqualified caller-controlled
 -- object.  public remains last only for explicitly retained shared helpers;
--- pg_catalog, private, and util are resolved first; explicit pg_temp is last.
+-- pg_catalog, private, and util are resolved first and pg_temp is absent.
 alter function private.worker_cancel_job(uuid, uuid, text)
-  set search_path = pg_catalog, private, util, public, pg_temp;
+  set search_path = pg_catalog, private, util, public;
 alter function private.worker_claim_jobs(text, text, integer, integer)
-  set search_path = pg_catalog, private, util, public, pg_temp;
+  set search_path = pg_catalog, private, util, public;
 alter function private.worker_enqueue_job(
   text, jsonb, text, text, uuid, text, uuid, text, uuid, text, text,
   text, integer, text, timestamp with time zone, text, integer,
   timestamp with time zone, jsonb, uuid, uuid
-) set search_path = pg_catalog, private, util, public, pg_temp;
+) set search_path = pg_catalog, private, util, public;
 alter function private.worker_heartbeat_job(uuid, uuid, text, numeric, jsonb, integer)
-  set search_path = pg_catalog, private, util, public, pg_temp;
+  set search_path = pg_catalog, private, util, public;
 alter function private.worker_job_payload(private.worker_jobs, boolean)
-  set search_path = pg_catalog, private, util, public, pg_temp;
+  set search_path = pg_catalog, private, util, public;
 alter function private.worker_list_jobs(uuid, text, uuid, text[], text, integer, boolean)
-  set search_path = pg_catalog, private, util, public, pg_temp;
+  set search_path = pg_catalog, private, util, public;
 alter function private.worker_list_jobs_by_concurrency_key(text, text, text[], integer, boolean)
-  set search_path = pg_catalog, private, util, public, pg_temp;
+  set search_path = pg_catalog, private, util, public;
 alter function private.worker_read_job(uuid, boolean)
-  set search_path = pg_catalog, private, util, public, pg_temp;
+  set search_path = pg_catalog, private, util, public;
 alter function private.worker_read_jobs_by_ids(uuid[], boolean)
-  set search_path = pg_catalog, private, util, public, pg_temp;
+  set search_path = pg_catalog, private, util, public;
 alter function private.worker_read_latest_job(uuid, text, uuid, text, text, text[], boolean)
-  set search_path = pg_catalog, private, util, public, pg_temp;
+  set search_path = pg_catalog, private, util, public;
 alter function private.worker_record_job_result(
   uuid, uuid, text, jsonb, text, jsonb, jsonb, text, text, jsonb,
   text[], text, boolean
-) set search_path = pg_catalog, private, util, public, pg_temp;
+) set search_path = pg_catalog, private, util, public;
 alter function private.worker_retry_job(uuid, timestamp with time zone, integer, text)
-  set search_path = pg_catalog, private, util, public, pg_temp;
+  set search_path = pg_catalog, private, util, public;
 
 -- Recreate eleven exact SECURITY INVOKER public compatibility signatures and
 -- eleven stable API v1 adapters from the private routines' catalog arguments.
@@ -407,7 +407,7 @@ begin
 
     execute format(
       'create or replace function public.%I(%s) returns jsonb '
-      'language sql security invoker set search_path = pg_catalog, pg_temp '
+      'language sql security invoker set search_path = '''' '
       'as $wrapper$ select private.%I(%s) $wrapper$',
       r.proname, r.arguments, r.proname, v_call_args
     );
@@ -422,7 +422,7 @@ begin
 
     execute format(
       'create or replace function api.%I(%s) returns jsonb '
-      'language sql security invoker set search_path = pg_catalog, pg_temp '
+      'language sql security invoker set search_path = '''' '
       'as $adapter$ select private.%I(%s) $adapter$',
       r.proname || '_v1', r.arguments, r.proname, v_call_args
     );
@@ -447,7 +447,7 @@ create or replace function public.worker_job_payload(
 language sql
 stable
 security invoker
-set search_path = pg_catalog, pg_temp
+set search_path = ''
 as $wrapper$
   select private.worker_job_payload(
     pg_catalog.jsonb_populate_record(
@@ -474,7 +474,7 @@ create or replace function public.lcia_scope_closure_artifact_lineage_eligible(
 language sql
 stable
 security invoker
-set search_path = pg_catalog, pg_temp
+set search_path = ''
 as $compat$
   select public.lcia_scope_closure_artifact_lineage_eligible(
     p_check,
@@ -493,17 +493,16 @@ grant execute on function public.lcia_scope_closure_artifact_lineage_eligible(
   public.lcia_scope_closure_checks, public.worker_job_artifacts, text
 ) to api_internal_executor;
 
--- Replace the legacy GRANT ALL ACL with the reviewed direct-consumer minimum.
--- State it explicitly so retries converge and no internal executor acquires a
--- relation capability merely because it can execute a bounded adapter.
+-- The moved OIDs retain their ACLs.  State the private role matrix explicitly
+-- so a retry converges and browser roles remain unable to resolve the schema.
 revoke all on private.worker_job_kinds, private.worker_jobs,
   private.worker_job_events, private.worker_job_artifacts
-from public, anon, authenticated, service_role, api_internal_executor;
-grant select on private.worker_jobs, private.worker_job_artifacts to service_role;
-grant update (phase, progress, diagnostics, heartbeat_at, lease_expires_at, updated_at)
-  on private.worker_jobs to service_role;
-grant insert (job_id, artifact_type, content_type, metadata, visibility)
-  on private.worker_job_artifacts to service_role;
+from public, anon, authenticated;
+-- The moved relation OIDs already retain their exact service_role ACL,
+-- including any PG-version-specific table privilege bits.  Do not recompute
+-- that ACL with GRANT ALL here.
+grant select on private.worker_job_kinds, private.worker_jobs,
+  private.worker_job_events, private.worker_job_artifacts to api_internal_executor;
 
 revoke all on function private.worker_cancel_job(uuid, uuid, text),
   private.worker_claim_jobs(text, text, integer, integer),
@@ -603,15 +602,6 @@ select jsonb_build_object(
   'migrationVersion', '20260801060304',
   'contractReady', false,
   'reason', 'public compatibility and owner runtime confirmation remain during Expand',
-  'serviceRoleRelationAclContract', 'worker-control-plane.private-minimum.v1',
-  'serviceRoleRelationAclEvidence', jsonb_build_array(
-    'linancn/tiangong-lca-worker#192',
-    'linancn/tiangong-lca-edge-functions#249',
-    'linancn/tiangong-lca-edge-functions#250',
-    'chukeaa/tiangong-lca-release#9',
-    'tiangong-lca/utilities#6',
-    'tiangong-lca/database-engine#358'
-  ),
   'privatePhysicalRelations',
     (select coalesce(jsonb_agg(relname order by relname), '[]'::jsonb)
        from private_physical_relations),
@@ -675,42 +665,11 @@ begin
      or c.relowner is distinct from b.relowner
      or c.relrowsecurity is distinct from b.relrowsecurity
      or c.relforcerowsecurity is distinct from b.relforcerowsecurity
-     or c.relreplident is distinct from b.relreplident;
+     or c.relreplident is distinct from b.relreplident
+     or coalesce(c.relacl::text, '') is distinct from b.acl;
   if v_bad <> 0 then
     raise exception using errcode = '55000',
       message = format('Issue 356 physical relation identity drift: %s', v_bad);
-  end if;
-
-  if not (
-    has_table_privilege('service_role', 'private.worker_jobs', 'SELECT')
-    and has_column_privilege('service_role', 'private.worker_jobs', 'phase', 'UPDATE')
-    and has_column_privilege('service_role', 'private.worker_jobs', 'progress', 'UPDATE')
-    and has_column_privilege('service_role', 'private.worker_jobs', 'diagnostics', 'UPDATE')
-    and has_column_privilege('service_role', 'private.worker_jobs', 'heartbeat_at', 'UPDATE')
-    and has_column_privilege('service_role', 'private.worker_jobs', 'lease_expires_at', 'UPDATE')
-    and has_column_privilege('service_role', 'private.worker_jobs', 'updated_at', 'UPDATE')
-    and not has_column_privilege('service_role', 'private.worker_jobs', 'status', 'UPDATE')
-    and not has_column_privilege('service_role', 'private.worker_jobs', 'lease_token', 'UPDATE')
-    and not has_table_privilege('service_role', 'private.worker_jobs', 'INSERT')
-    and not has_table_privilege('service_role', 'private.worker_jobs', 'DELETE')
-    and has_table_privilege('service_role', 'private.worker_job_artifacts', 'SELECT')
-    and has_column_privilege('service_role', 'private.worker_job_artifacts', 'job_id', 'INSERT')
-    and has_column_privilege('service_role', 'private.worker_job_artifacts', 'artifact_type', 'INSERT')
-    and has_column_privilege('service_role', 'private.worker_job_artifacts', 'content_type', 'INSERT')
-    and has_column_privilege('service_role', 'private.worker_job_artifacts', 'metadata', 'INSERT')
-    and has_column_privilege('service_role', 'private.worker_job_artifacts', 'visibility', 'INSERT')
-    and not has_column_privilege('service_role', 'private.worker_job_artifacts', 'storage_path', 'INSERT')
-    and not has_table_privilege('service_role', 'private.worker_job_artifacts', 'UPDATE')
-    and not has_table_privilege('service_role', 'private.worker_job_artifacts', 'DELETE')
-    and not has_table_privilege('service_role', 'private.worker_job_events', 'SELECT')
-    and not has_table_privilege('service_role', 'private.worker_job_kinds', 'SELECT')
-    and not has_table_privilege('api_internal_executor', 'private.worker_jobs', 'SELECT')
-    and not has_table_privilege('api_internal_executor', 'private.worker_job_artifacts', 'SELECT')
-    and not has_table_privilege('api_internal_executor', 'private.worker_job_events', 'SELECT')
-    and not has_table_privilege('api_internal_executor', 'private.worker_job_kinds', 'SELECT')
-  ) then
-    raise exception using errcode = '42501',
-      message = 'Issue 356 service role minimum relation ACL drift';
   end if;
 
   select count(*) into v_bad

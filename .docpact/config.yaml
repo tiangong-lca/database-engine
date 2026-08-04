@@ -179,11 +179,7 @@ routing:
     worker-jobs:
       paths:
         - supabase/migrations/*worker_jobs*.sql
-        - supabase/migrations/*worker_control_plane*.sql
-        - supabase/operator/*worker_control_plane*.sql
         - supabase/tests/*worker_jobs*.sql
-        - supabase/tests/*worker_control_plane*.sql
-        - scripts/*worker_control_plane*.py
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
     branch-config:

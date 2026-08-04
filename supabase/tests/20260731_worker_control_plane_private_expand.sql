@@ -6,17 +6,17 @@ set local search_path = extensions, public, auth;
 select no_plan();
 
 select is((select count(*)::integer from pg_class c join pg_namespace n on n.oid=c.relnamespace
-  where n.nspname='private' and c.relname in ('worker_jobs','worker_job_events','worker_job_artifacts','worker_job_kinds') and c.relkind='r'), 4,
-  'all four private Worker storage Expand relations are physical tables');
+  where n.nspname='private' and c.relname in ('worker_jobs','worker_job_events','worker_job_artifacts','worker_job_kinds') and c.relkind='v'), 4,
+  'all four private Worker storage Expand relations are views');
 select is((select count(*)::integer from pg_class c join pg_namespace n on n.oid=c.relnamespace
-  where n.nspname='public' and c.relname in ('worker_jobs','worker_job_events','worker_job_artifacts','worker_job_kinds') and c.relkind='v'), 4,
-  'public relations are security-invoker compatibility views during Expand');
+  where n.nspname='public' and c.relname in ('worker_jobs','worker_job_events','worker_job_artifacts','worker_job_kinds') and c.relkind='r'), 4,
+  'public physical relations remain the single source of truth during Expand');
 select ok(to_regprocedure('public.worker_job_payload(public.worker_jobs,boolean)') is not null,
   'public worker_job_payload composite signature does not drift');
-select ok(to_regprocedure('private.worker_job_payload(private.worker_jobs,boolean)') is not null,
-  'private composite implementation is present');
+select ok(to_regprocedure('public.worker_job_payload(private.worker_jobs,boolean)') is null,
+  'no accidental private composite overload replaces the public signature');
 select is(
-  (select replace(indexdef, 'private.worker_jobs', 'public.worker_jobs') from pg_indexes where schemaname='private'
+  (select indexdef from pg_indexes where schemaname='public'
     and indexname='worker_jobs_job_kind_concurrency_created_idx'),
   'CREATE INDEX worker_jobs_job_kind_concurrency_created_idx ON public.worker_jobs USING btree (job_kind, concurrency_key, created_at DESC, id DESC) WHERE (concurrency_key IS NOT NULL)',
   'bounded concurrency lookup has the exact partial composite index'
@@ -42,12 +42,10 @@ select ok(has_column_privilege('service_role','private.worker_jobs','phase','UPD
   and has_column_privilege('service_role','private.worker_jobs','diagnostics','UPDATE')
   and has_column_privilege('service_role','private.worker_jobs','heartbeat_at','UPDATE')
   and has_column_privilege('service_role','private.worker_jobs','lease_expires_at','UPDATE')
-  and has_column_privilege('service_role','private.worker_jobs','updated_at','UPDATE'), 'service role retains runtime heartbeat columns');
+  and has_column_privilege('service_role','private.worker_jobs','updated_at','UPDATE'), 'service role can update only runtime heartbeat columns');
 select ok(not has_column_privilege('service_role','private.worker_jobs','status','UPDATE')
   and not has_column_privilege('service_role','private.worker_jobs','lease_token','UPDATE')
-  and not has_table_privilege('service_role','private.worker_jobs','INSERT')
-  and not has_table_privilege('service_role','private.worker_jobs','DELETE'),
-  'service role cannot bypass job lifecycle fences');
+  and not has_table_privilege('service_role','private.worker_jobs','INSERT,DELETE'), 'service role cannot bypass job lifecycle fences');
 select ok(has_table_privilege('service_role','private.worker_job_artifacts','SELECT'), 'service role can read private artifacts');
 select ok(has_column_privilege('service_role','private.worker_job_artifacts','job_id','INSERT')
   and has_column_privilege('service_role','private.worker_job_artifacts','artifact_type','INSERT')
@@ -56,21 +54,11 @@ select ok(has_column_privilege('service_role','private.worker_job_artifacts','jo
   and has_column_privilege('service_role','private.worker_job_artifacts','visibility','INSERT'), 'service role can insert the bounded artifact columns');
 select ok(not has_column_privilege('service_role','private.worker_job_artifacts','storage_bucket','INSERT')
   and not has_column_privilege('service_role','private.worker_job_artifacts','storage_path','INSERT')
-  and not has_table_privilege('service_role','private.worker_job_artifacts','UPDATE')
-  and not has_table_privilege('service_role','private.worker_job_artifacts','DELETE'),
-  'service role cannot write artifact locators or mutate artifacts');
+  and not has_table_privilege('service_role','private.worker_job_artifacts','UPDATE,DELETE'), 'service role cannot write artifact locators or mutate artifacts');
 select ok(has_function_privilege('service_role','public.lcia_scope_closure_artifact_role(text)','EXECUTE'),
   'service role can execute the artifact check-constraint classifier');
-select ok(not has_table_privilege('service_role','private.worker_job_events','SELECT')
-  and not has_table_privilege('service_role','private.worker_job_events','INSERT')
-  and not has_table_privilege('service_role','private.worker_job_events','UPDATE')
-  and not has_table_privilege('service_role','private.worker_job_events','DELETE'),
-  'event writes remain RPC lifecycle-owned');
-select ok(not has_table_privilege('service_role','private.worker_job_kinds','SELECT')
-  and not has_table_privilege('service_role','private.worker_job_kinds','INSERT')
-  and not has_table_privilege('service_role','private.worker_job_kinds','UPDATE')
-  and not has_table_privilege('service_role','private.worker_job_kinds','DELETE'),
-  'job kinds remain migration-owned');
+select ok(not has_table_privilege('service_role','private.worker_job_events','SELECT,INSERT,UPDATE,DELETE'), 'event writes remain RPC lifecycle-owned');
+select ok(not has_table_privilege('service_role','private.worker_job_kinds','SELECT,INSERT,UPDATE,DELETE'), 'job kinds remain migration-owned');
 select ok(has_table_privilege('service_role','public.worker_job_domain_refs','SELECT'), 'service role retains public domain-ref projection access');
 select ok(not has_table_privilege('authenticated','public.worker_job_domain_refs','SELECT'), 'authenticated remains unable to read domain refs');
 
@@ -131,7 +119,7 @@ select 'lca.snapshot_gc','calculator','maintenance','service','queued',
   'expand:noise:'||g,'lca.snapshot_gc.request.v1','{}',
   clock_timestamp()-g*interval '1 second',clock_timestamp()
 from generate_series(1,2000) g;
-analyze private.worker_jobs;
+analyze public.worker_jobs;
 create function pg_temp.worker_concurrency_plan_uses_contract_index() returns boolean
 language plpgsql as $$
 declare v_plan json;
@@ -189,10 +177,10 @@ reset role;
 
 select ok((select residue->>'contractReady' from private.worker_control_plane_contract_residue) = 'false',
   'Contract exit gate remains fail closed while public compatibility exists');
-select is(jsonb_array_length((select residue->'publicCompatibilityRelations' from private.worker_control_plane_contract_residue)), 4,
-  'Contract gate enumerates four public compatibility relations');
-select is(jsonb_array_length((select residue->'ownerRuntimeConfirmationRequired' from private.worker_control_plane_contract_residue)), 4,
-  'Contract residue names four owner-runtime confirmations');
+select ok((select residue->>'platformOwnerDefaultPrivilegesReady' from private.worker_control_plane_contract_residue) = 'false',
+  'Contract gate exposes unresolved platform-owner default privileges');
+select ok((select residue->'platformOwnerDefaultPrivilegeOwners' from private.worker_control_plane_contract_residue) ? 'supabase_admin',
+  'Contract residue names the platform owner requiring operator action');
 
 select * from finish();
 rollback;

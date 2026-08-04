@@ -94,11 +94,11 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'private',
+    'public',
     'worker_jobs',
     array['job_kind']
   ),
-  'private worker_jobs physical table has a usable job kind support index'
+  'worker_jobs has a usable job kind support index'
 );
 
 select ok(

@@ -228,13 +228,6 @@ def main() -> int:
     ]
     if not files:
         raise SystemExit(f"suite {args.suite} selected no files")
-    if args.suite == "worker-control-plane":
-        if args.skip_reset or args.skip_data_api:
-            raise SystemExit(
-                "worker-control-plane qualification requires reset and all Data API phase probes"
-            )
-        run([sys.executable, "scripts/test_worker_control_plane_physical_upgrade.py"])
-        run([sys.executable, "scripts/test_worker_control_plane_physical_rollback.py"])
     if not args.skip_reset:
         run(supabase_command("db", "reset", "--local"))
     test_command = supabase_command("test", "db", *files)

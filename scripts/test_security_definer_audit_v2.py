@@ -56,10 +56,7 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
             audit.CONTRACT_DIR / "security_definer_transition_fixture.v1.json",
             audit.CONTRACT_DIR / "security_definer_transition_fixture.v1.sha256",
         )
-        audit.validate_transition_fixture(
-            self.fixture,
-            audit.TRANSITION_BASELINE_LINEAGE_SHA.read_text(encoding="utf-8").strip(),
-        )
+        audit.validate_transition_fixture(self.fixture, self.lineage_hash)
         self.catalog = self.synthetic_catalog(self.committed)
 
     def write_test_receipt(self, name: str, value: dict) -> tuple[Path, str, str]:
@@ -190,13 +187,13 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
                 catalog[alias_key] = alias
         return lineage, catalog
 
-    def test_current_transition_covers_public_private_and_util_once(self) -> None:
+    def test_baseline_covers_public_private_and_util_once(self) -> None:
         self.assertEqual(self.committed["summary"]["lineageCount"], 315)
         self.assertEqual(self.committed["summary"]["originalPublicLineageCount"], 241)
         self.assertEqual(self.committed["summary"]["genesisNativeNonPublicLineageCount"], 74)
         self.assertEqual(
             self.committed["summary"]["globalPrivilegedBySchema"],
-            {"api": 0, "archive": 0, "private": 49, "public": 230, "util": 36},
+            {"api": 0, "archive": 0, "private": 38, "public": 241, "util": 36},
         )
         self.assertEqual(self.committed["summary"]["unregisteredPrivilegedEndpointCount"], 0)
 
@@ -356,11 +353,6 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
         )
         expected = self.fixture["expected"]
         for field, value in expected.items():
-            if field == "unsafeSearchPathEndpointCount":
-                # The synthetic catalog intentionally omits live plpgsql-check
-                # residue details; the two-stack test proves this field live.
-                self.assertEqual(value, self.committed["summary"][field], field)
-                continue
             self.assertEqual(transitioned["summary"][field], value, field)
         self.assertEqual(len(self.fixture["moves"]), 12)
         self.assertEqual(sum(len(row["compatibilityAliases"]) for row in self.fixture["moves"]), 23)
@@ -390,10 +382,7 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
             audit.exposed_schemas(),
         )
         self.assertEqual(observed["summary"]["globalPrivilegedEndpointCount"], 315)
-        self.assertEqual(
-            observed["summary"]["compatibilityEndpointCount"],
-            self.committed["summary"]["compatibilityEndpointCount"] + 2,
-        )
+        self.assertEqual(observed["summary"]["compatibilityEndpointCount"], 2)
         self.assertEqual(observed["summary"]["privilegedCompatibilityEndpointCount"], 0)
         self.assertTrue(all(row["canonicalObjectKey"].startswith("public.") for row in selected))
 
@@ -500,10 +489,9 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
             "retirement-predecessor-audit", predecessor,
         )
         completed_transition = dict(predecessor_lineage["source"]["currentTransition"])
-        prior_completed = predecessor_lineage["source"]["completedTransitions"]
         completed = {**completed_transition, "producedAuditV2Sha256": predecessor_sha,
                      "producedAuditV2Path": predecessor_rel,
-                     "predecessorAuditPath": prior_completed[-1]["producedAuditV2Path"]}
+                     "predecessorAuditPath": str(audit.BASELINE_AUDIT.relative_to(audit.ROOT))}
         completed_receipt = {
             "schemaVersion": "database.security-definer-transition-receipt.v1",
             "transition": completed_transition, "producedAuditV2Sha256": predecessor_sha,
@@ -514,11 +502,10 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
             "retirement-completed-transition", completed_receipt,
         )
         completed.update({"receiptPath": completed_rel, "receiptSha256": completed_sha})
-        current = {"sequence": completed_transition["sequence"] + 1,
-                   "batch": "issue-358-retirement", "databaseSchemaSha": "a" * 40,
+        current = {"sequence": 1, "batch": "issue-358-retirement", "databaseSchemaSha": "a" * 40,
                    "predecessorArtifactSha256": predecessor_sha}
         lineage = copy.deepcopy(predecessor_lineage)
-        lineage["source"]["completedTransitions"] = [*prior_completed, completed]
+        lineage["source"]["completedTransitions"] = [completed]
         lineage["source"]["currentTransition"] = current
         retired = next(row for row in lineage["lineages"] if row["lineageKey"] == mapping["lineageKey"])
         endpoints = [canonical_key, alias_key]
@@ -539,9 +526,7 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
         catalog.pop(canonical_key)
         catalog.pop(alias_key)
         try:
-            with mock.patch.object(
-                    audit, "EXPECTED_COMPLETED_TRANSITIONS",
-                    tuple([*prior_completed, completed])), \
+            with mock.patch.object(audit, "EXPECTED_COMPLETED_TRANSITIONS", (completed,)), \
                     mock.patch.object(audit, "EXPECTED_CURRENT_TRANSITION", current):
                 audit.validate_lineage(lineage, self.inventory, self.inventory_hash, self.baseline_hash)
                 observed = audit.build_audit(
@@ -655,8 +640,7 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
         completed = dict(advanced["source"]["currentTransition"])
         completed["producedAuditV2Sha256"] = produced
         completed["producedAuditV2Path"] = str(audit.OUT.relative_to(audit.ROOT))
-        prior_completed = advanced["source"]["completedTransitions"]
-        completed["predecessorAuditPath"] = prior_completed[-1]["producedAuditV2Path"]
+        completed["predecessorAuditPath"] = str(audit.BASELINE_AUDIT.relative_to(audit.ROOT))
         receipt = {
             "schemaVersion": "database.security-definer-transition-receipt.v1",
             "transition": dict(advanced["source"]["currentTransition"]),
@@ -669,17 +653,15 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
         completed["receiptPath"] = str(path.relative_to(audit.ROOT))
         completed["receiptSha256"] = audit.sha256_bytes(path.read_bytes())
         current = {
-            "sequence": completed["sequence"] + 1,
-            "batch": "issue-358-contract",
+            "sequence": 1,
+            "batch": "issue-356-worker-control-plane",
             "databaseSchemaSha": "a" * 40,
             "predecessorArtifactSha256": produced,
         }
-        advanced["source"]["completedTransitions"] = [*prior_completed, completed]
+        advanced["source"]["completedTransitions"] = [completed]
         advanced["source"]["currentTransition"] = current
         try:
-            with mock.patch.object(
-                    audit, "EXPECTED_COMPLETED_TRANSITIONS",
-                    tuple([*prior_completed, completed])), \
+            with mock.patch.object(audit, "EXPECTED_COMPLETED_TRANSITIONS", (completed,)), \
                     mock.patch.object(audit, "EXPECTED_CURRENT_TRANSITION", current):
                 audit.validate_lineage(advanced, self.inventory, self.inventory_hash, self.baseline_hash)
                 schema = json.loads((audit.CONTRACT_DIR / "privileged_routine_lineage.schema.json").read_text())
@@ -695,19 +677,19 @@ class SecurityDefinerAuditV2Test(unittest.TestCase):
                 database_schema_sha="a" * 40,
             )
         plan = audit.transition_advance_plan(
-            self.lineage, produced, batch="issue-358-contract",
+            self.lineage, produced, batch="issue-356-worker-control-plane",
             database_schema_sha="a" * 40,
         )
         completed = plan["completedTransition"]
         current = plan["currentTransition"]
-        self.assertEqual(completed["sequence"], 1)
+        self.assertEqual(completed["sequence"], 0)
         self.assertEqual(completed["predecessorAuditPath"],
-                         self.lineage["source"]["completedTransitions"][-1]["producedAuditV2Path"])
+                         "supabase/tests/contracts/security_definer_audit.json")
         self.assertEqual(completed["producedAuditV2Sha256"], produced)
         self.assertNotEqual(completed["producedAuditV2Path"],
                             "supabase/tests/contracts/security_definer_audit_v2.json")
         self.assertEqual(current, {
-            "sequence": 2, "batch": "issue-358-contract",
+            "sequence": 1, "batch": "issue-356-worker-control-plane",
             "databaseSchemaSha": "a" * 40, "predecessorArtifactSha256": produced,
         })
         self.assertEqual(plan["reviewedCodeConstants"]["EXPECTED_CURRENT_TRANSITION"], current)

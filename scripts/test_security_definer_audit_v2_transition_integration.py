@@ -227,9 +227,9 @@ def validate_stack_root(workdir: Path, expected_base: str) -> dict[str, Any]:
         raise ValueError(f"qualification workdir is not an exact repository root: {workdir}")
     if exact_head(workdir) != expected_base:
         raise ValueError(f"qualification workdir is not at the reviewed base: {workdir}")
-    status = _git_output(
+    status = capture(
         ["git", "status", "--porcelain=v1", "--untracked-files=all"], cwd=workdir,
-    ).decode("utf-8").splitlines()
+    ).splitlines()
     if any(line != f" M {CONFIG_PATH.as_posix()}" for line in status):
         raise ValueError(f"qualification workdir has non-local-config changes: {workdir}")
     committed = tomllib.loads(capture(["git", "show", f"HEAD:{CONFIG_PATH.as_posix()}"], cwd=workdir))
@@ -271,36 +271,6 @@ def validate_source_file(path: str | Path, source_root: Path) -> ReviewedFile:
     return ReviewedFile(relative, raw)
 
 
-def validate_commit_source_file(
-    path: str | Path, source_root: Path, commit_sha: str,
-) -> ReviewedFile:
-    """Read one immutable regular-file blob from an explicitly reviewed commit."""
-    relative = canonical_relative_path(path)
-    if not re.fullmatch(r"[0-9a-f]{40}", commit_sha):
-        raise ValueError("reviewed source commit must be an exact 40-hex commit")
-    record = _git_output(
-        ["git", "ls-tree", "-z", commit_sha, "--", relative], cwd=source_root,
-    )
-    object_id = _git_regular_blob(record, relative, source=f"commit {commit_sha}")
-    raw = _git_output(["git", "cat-file", "blob", object_id], cwd=source_root)
-    return ReviewedFile(relative, raw)
-
-
-def require_ancestor(ancestor: str, descendant: str, *, source_root: Path, label: str) -> None:
-    result = subprocess.run(
-        ["git", "merge-base", "--is-ancestor", ancestor, descendant],
-        cwd=source_root, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-    )
-    if result.returncode != 0:
-        raise ValueError(f"{label} is not an ancestor of the reviewed source history")
-
-
-def reject_external_psql_includes(reviewed: ReviewedFile) -> None:
-    """Require frozen replay inputs to be self-contained SQL bytes."""
-    if re.search(rb"(?m)^\s*\\i(?:r)?(?:\s|$)", reviewed.raw):
-        raise ValueError(f"reviewed SQL contains an external psql include: {reviewed.relative}")
-
-
 def validate_receipt(
     args: argparse.Namespace, source_root: Path,
 ) -> tuple[dict[str, Any], bytes, bytes]:
@@ -314,18 +284,8 @@ def validate_receipt(
         raise ValueError("qualification receipt is not JSON") from exc
     if raw != canonical(receipt):
         raise ValueError("qualification receipt is not canonical byte-for-byte")
-    receipt_source = receipt.get("source", {})
-    source_commit = receipt_source.get("commitSha", "")
-    if not re.fullmatch(r"[0-9a-f]{40}", source_commit):
-        raise ValueError("qualification receipt source commit must be an exact 40-hex commit")
-    require_ancestor(args.expected_base, source_commit, source_root=source_root,
-                     label="reviewed base commit")
-    require_ancestor(source_commit, exact_head(source_root), source_root=source_root,
-                     label="receipt source commit")
-    migration_file = validate_commit_source_file(args.migration, source_root, source_commit)
-    rollback_file = validate_commit_source_file(args.rollback, source_root, source_commit)
-    reject_external_psql_includes(migration_file)
-    reject_external_psql_includes(rollback_file)
+    migration_file = validate_source_file(args.migration, source_root)
+    rollback_file = validate_source_file(args.rollback, source_root)
     if hashlib.sha256(migration_file.raw).hexdigest() != args.expected_migration_sha256:
         raise ValueError("migration bytes differ from reviewed SHA-256")
     if hashlib.sha256(rollback_file.raw).hexdigest() != args.expected_rollback_sha256:
@@ -334,9 +294,7 @@ def validate_receipt(
         audit.CONTRACT_DIR / "security_definer_transition_fixture.v1.json",
         audit.CONTRACT_DIR / "security_definer_transition_fixture.v1.sha256",
     )
-    audit.validate_transition_fixture(
-        fixture, audit.TRANSITION_BASELINE_LINEAGE_SHA.read_text(encoding="utf-8").strip(),
-    )
+    audit.validate_transition_fixture(fixture, audit.LINEAGE_SHA.read_text(encoding="utf-8").strip())
     source = fixture["source"]
     if not PurePosixPath(migration_file.relative).name.startswith(source["migrationVersion"] + "_"):
         raise ValueError("migration path does not match the reviewed migration version")
@@ -345,7 +303,7 @@ def validate_receipt(
         "issue": source["issue"],
         "source": {
             "repository": REPOSITORY,
-            "commitSha": source_commit,
+            "commitSha": exact_head(source_root),
             "fixturePath": "supabase/tests/contracts/security_definer_transition_fixture.v1.json",
             "fixtureSha256": fixture_sha,
         },
@@ -435,40 +393,25 @@ def load_catalog(connection: Connection, *, cwd: Path) -> dict[str, dict[str, An
 def baseline_bytes(connection: Connection, *, cwd: Path) -> bytes:
     inventory, inventory_hash = audit.read_hashed_json(audit.INVENTORY, audit.INVENTORY_SHA)
     baseline, baseline_hash = audit.read_hashed_json(audit.BASELINE_AUDIT, audit.BASELINE_AUDIT_SHA)
-    lineage, lineage_hash = audit.read_hashed_json(
-        audit.TRANSITION_BASELINE_LINEAGE, audit.TRANSITION_BASELINE_LINEAGE_SHA,
-    )
-    audit.validate_lineage(
-        lineage, inventory, inventory_hash, baseline_hash,
-        expected_current_transition=audit.BASELINE_CURRENT_TRANSITION,
-        expected_completed_transitions=(),
-    )
+    lineage, lineage_hash = audit.read_hashed_json(audit.LINEAGE, audit.LINEAGE_SHA)
+    audit.validate_lineage(lineage, inventory, inventory_hash, baseline_hash)
     observed = audit.build_audit(
         lineage, lineage_hash, baseline, load_catalog(connection, cwd=cwd), audit.exposed_schemas(),
     )
-    frozen_raw = audit.read_reviewed_contract_bytes(
-        str(audit.TRANSITION_BASELINE_AUDIT.relative_to(audit.ROOT)),
-    )
-    if audit.sha256_bytes(frozen_raw) != audit.TRANSITION_BASELINE_AUDIT_SHA256:
-        raise ValueError("immutable transition baseline audit bytes differ")
-    frozen = json.loads(frozen_raw)
-    if frozen_raw != audit.canonical(frozen).encode("utf-8") or observed != frozen:
-        raise ValueError("clean stack baseline differs from immutable v2 audit")
+    committed, _ = audit.read_hashed_json(audit.OUT, audit.SHA)
+    if observed != committed:
+        raise ValueError("clean stack baseline differs from committed v2 audit")
     return audit.canonical(observed).encode("utf-8")
 
 
 def transitioned_bytes(connection: Connection, *, cwd: Path) -> bytes:
     baseline, _ = audit.read_hashed_json(audit.BASELINE_AUDIT, audit.BASELINE_AUDIT_SHA)
-    lineage, _ = audit.read_hashed_json(
-        audit.TRANSITION_BASELINE_LINEAGE, audit.TRANSITION_BASELINE_LINEAGE_SHA,
-    )
+    lineage, _ = audit.read_hashed_json(audit.LINEAGE, audit.LINEAGE_SHA)
     fixture, fixture_hash = audit.read_hashed_json(
         audit.CONTRACT_DIR / "security_definer_transition_fixture.v1.json",
         audit.CONTRACT_DIR / "security_definer_transition_fixture.v1.sha256",
     )
-    audit.validate_transition_fixture(
-        fixture, audit.TRANSITION_BASELINE_LINEAGE_SHA.read_text(encoding="utf-8").strip(),
-    )
+    audit.validate_transition_fixture(fixture, audit.LINEAGE_SHA.read_text(encoding="utf-8").strip())
     by_original = {row["originalObjectKey"]: row for row in lineage["lineages"]}
     for move in fixture["moves"]:
         row = by_original[move["originalObjectKey"]]
