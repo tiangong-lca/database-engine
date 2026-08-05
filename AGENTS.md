@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-05
-lastReviewedCommit: f7e0e6fbe3b83cf57bbdae8d3d07ebb683d68a8e
-lastReviewedNote: "Reviewed for Issue #418: the persistent Supabase dev branch was recreated after the rollback; repository ownership, dev-first delivery, migration source-of-truth, and workspace integration rules remain unchanged."
+lastReviewedCommit: 5bb96b2f1fd4126081fdae166482d1d1bec3d5a6
+lastReviewedNote: "Reviewed for Issue #418: refreshing remaining persistent-dev examples does not change repository ownership, dev-first delivery, migration source-of-truth, or workspace integration rules."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

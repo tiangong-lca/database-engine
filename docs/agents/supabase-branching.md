@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-05
-lastReviewedCommit: f7e0e6fbe3b83cf57bbdae8d3d07ebb683d68a8e
-lastReviewedNote: "Reviewed for Issue #418: recreating persistent dev requires updating its project ref and database credential before redeployment; the Git dev to persistent-dev workflow and promotion rules remain unchanged."
+lastReviewedCommit: 5bb96b2f1fd4126081fdae166482d1d1bec3d5a6
+lastReviewedNote: "Reviewed for Issue #418: remaining examples and guarded benchmark commands must use the recreated persistent-dev ref; branch workflow and promotion rules remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

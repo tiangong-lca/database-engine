@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-05
-lastReviewedCommit: f7e0e6fbe3b83cf57bbdae8d3d07ebb683d68a8e
-lastReviewedNote: "Reviewed for Issue #418: replacing the concrete persistent-dev project binding does not change stable path ownership, generated workspace boundaries, or repository shape."
+lastReviewedCommit: 5bb96b2f1fd4126081fdae166482d1d1bec3d5a6
+lastReviewedNote: "Reviewed for Issue #418: refreshing remaining persistent-dev examples does not change stable path ownership, generated workspace boundaries, or repository shape."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

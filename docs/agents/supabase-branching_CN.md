@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-05
-lastReviewedCommit: f7e0e6fbe3b83cf57bbdae8d3d07ebb683d68a8e
-lastReviewedNote: "已为 Issue #418 复核：重建持久 dev 后必须更新 project ref 与数据库凭据再部署；Git dev 到持久 dev 的工作流及 promote 规则不变。"
+lastReviewedCommit: 5bb96b2f1fd4126081fdae166482d1d1bec3d5a6
+lastReviewedNote: "已为 Issue #418 复核：剩余示例与受保护基准命令必须使用重建后的持久 dev ref；分支工作流及 promote 规则不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

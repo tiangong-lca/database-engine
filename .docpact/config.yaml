@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-05"
-lastReviewedCommit: "f7e0e6fbe3b83cf57bbdae8d3d07ebb683d68a8e"
-lastReviewedNote: "Reviewed for Issue #418: recreating the persistent Supabase dev branch changes only its concrete project binding; existing ownership, routing, deployment, and validation rules remain unchanged."
+lastReviewedCommit: "5bb96b2f1fd4126081fdae166482d1d1bec3d5a6"
+lastReviewedNote: "Reviewed for Issue #418: refreshing the remaining persistent-dev examples and guarded benchmark target keeps ownership, routing, deployment, and validation rules unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

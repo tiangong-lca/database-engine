@@ -3,7 +3,7 @@
 
 -- Required operator attestation:
 --   -v benchmark_target=staging
---   -v expected_project_ref=fotofiyqnuyvgtotswie
+--   -v expected_project_ref=submidrhbtknjxfympna
 --   -v explain_output=/absolute/private/path/hybrid-search-explain.log
 -- This profile is read-only. Never point it at production.
 -- The lexical parameters mirror the checked-in Edge route regression for the
@@ -18,7 +18,7 @@
 
 \if :{?expected_project_ref}
 \else
-  \echo 'ERROR: pass -v expected_project_ref=fotofiyqnuyvgtotswie'
+  \echo 'ERROR: pass -v expected_project_ref=submidrhbtknjxfympna'
   \quit 3
 \endif
 
@@ -30,13 +30,13 @@
 
 select
   :'benchmark_target' = 'staging'
-  and :'expected_project_ref' = 'fotofiyqnuyvgtotswie'
+  and :'expected_project_ref' = 'submidrhbtknjxfympna'
   as benchmark_attestation_ok
 \gset
 
 \if :benchmark_attestation_ok
 \else
-  \echo 'ERROR: this profile is pinned to staging ref fotofiyqnuyvgtotswie'
+  \echo 'ERROR: this profile is pinned to staging ref submidrhbtknjxfympna'
   \quit 3
 \endif
 
