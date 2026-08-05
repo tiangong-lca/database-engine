@@ -122,11 +122,6 @@ values
   ('81000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'review-admin', now()),
   ('81000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000', 'review-member', now());
 
--- This fixture predates the review_v2 lifecycle triggers.  Build the historical
--- row as fixture state without exercising those newer command guards; the
--- negative raw-write assertions below still run with triggers and RLS enabled.
-set local session_replication_role = replica;
-
 insert into public.reviews (
   id,
   data_id,
@@ -147,8 +142,6 @@ values (
   now(),
   now()
 );
-
-set local session_replication_role = origin;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '81000000-0000-0000-0000-000000000001', true);

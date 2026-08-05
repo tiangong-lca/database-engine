@@ -22,7 +22,6 @@ checkPaths:
   - docs/agents/**
   - supabase/config.toml
   - supabase/migrations/**
-  - supabase/operator/**
   - supabase/tests/**
   - supabase/seed.sql
   - supabase/seeds/**
@@ -35,14 +34,13 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-04
-lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
-lastReviewedNote: "Reviewed for Issues #412 and #323: the generic static-SQL SECURITY DEFINER rule is business-neutral, and latest-event review notifications remain database-owned."
+lastReviewedAt: 2026-08-02
+lastReviewedCommit: 1ff6d2775bed146379d50dc91eaf43c7915dca0f
+lastReviewedNote: "Reviewed for Issue #323: repository ownership, additive migration discipline, local database proof, dev-branch delivery, and later workspace integration already govern the root-grouped review queue change; no contract rule changes are required."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
   - docs/agents/repo-architecture.md
-  - docs/agents/lca-result-gc-contract.md
   - docs/agents/supabase-branching.md
 ---
 
@@ -112,22 +110,16 @@ Do not start from generated schema workspace files, long migration history, or G
 Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md` and the narrow source docs for the full details.
 
 - local baseline: `supabase start`, `supabase db reset`, `supabase migration list`
-- Data API exposure is explicit and staged: create and validate `api` before a later configuration deployment exposes `api`, `public`, and `graphql_public`; `private`, `util`, and `archive` must remain absent from both exposed schemas and `extra_search_path`
-- persistent `dev` deployment is serialized and must pass the fresh local canonical/freeze-activated database contract before `supabase db push`; deployment then runs `scripts/apply_postgrest_config.py --apply` followed by an independent `--check` readback; the script may PATCH only `db_schema`, `db_extra_search_path`, and `max_rows`, then must GET-readback the same exact project ref; a mismatched readback must restore and verify the prior allowlisted snapshot
 - `supabase/seed.sql` must remain an executable SQL batch even when it seeds no rows; retain a data-neutral no-op rather than comments only
 - hosted mutation E2E assets under `supabase/tests/preview/**` must hard-bind the exact Preview project ref, use disposable actors and UUID namespaces, clean up only their own effects, and never become migrations, seeds, Dev data rehearsals, or production execution paths
 - disposable Hosted actors must use an outer-frozen request/namespace and deterministic role email, be registered before creation, carry exact fixture/request/namespace/role metadata, recover only one exact filtered metadata match, use global logout, and treat hard admin DELETE as incomplete until both GET-by-ID returns 404 and a fresh exact filtered census is empty; the outer wrapper must create the exact empty owner-only non-symlink private temp directory and durably fsync each secret-free inner recovery checkpoint before returning its exact IPC ACK, so an actor ID is durable before sign-in or fixture mutation; cleanup must hold the derivative coordinator lock and remain before external dispatch, any missing or ambiguous global logout must retain the actor and forbid hard DELETE, and temporary credential files must be proven removed independently by the inner and outer processes; offline lifecycle and 39-surface residue contracts prove the local control/readback shape without replacing the later exact-head Hosted run and independent Auth/SQL readback execution
 - migration authoring starts from Git `dev`, not GitHub default-branch UI
-- a non-core relation family with a historical browser-role grant must first use a checked `*_pre_ddl.v1.json` contract: while `ddlAuthorized=false`, committed migration history is append-only on every governed parent edge and target-neutral, proven non-executing static migrations may proceed; direct targets and their recursive application-object dependency closure stay protected; an additive service-only `api` facade needs an exact reviewed blob, explicit `pg_catalog` signature types, and fixed-version PostgreSQL AST semantic proof, while opaque/dynamic or data-rewriting execution, moves into exposed schemas, historical/service access removal, and non-service internal/protected grants remain hard denied until exact static, attributed runtime, and owner evidence authorize physical DDL
 - preview-branch proof belongs to the repo PR
 - persistent `dev` proof belongs after merge into Git `dev`; its single workflow uses `supabase db push --include-all` so a governed `main -> dev` backmerge can install committed migrations whose timestamps precede newer migrations already recorded on `dev`
 - production `main` proof belongs after `dev -> main` promote and should confirm Supabase GitHub integration applied migrations automatically
 - production-volume administrative backfills must fit the platform statement timeout or use a bounded session override that is restored immediately after the statement; Preview row counts alone are not sufficient volume proof
 - root workspace proof belongs later in `lca-workspace`
 - generated workspace helpers are low-risk to inspect with `python scripts/<name>.py --help`
-- public-boundary inventory changes must run offline `python scripts/public_inventory_exact_head.py --check`; Issue #405 binds exact `dev` SHA `c5356d2`, the SHA-256 of every migration blob through head `20260804090000`, the live database's exact applied-version set, the 397-object ledger, the exactly-once 388-residue partition, and a blocked identity-only Contract DROP checklist. Live regeneration and comparison require explicit loopback URLs; these commands never emit DDL and can never set `contractReady=true`. The immutable #338 baseline remains under `public_object_inventory.genesis.*` for historical lineage.
-- schema-boundary changes must run `python scripts/schema_boundary_phase.py`; Expand requires the nine core public tables plus inventory-backed non-public targets, while only a separately reviewed Contract phase may enforce zero additional public application relations
-- SECURITY DEFINER evidence changes must run artifact-only `python scripts/security_definer_audit.py --check` and live `python scripts/security_definer_audit_v2.py --check`; v1 remains the immutable 241-public-routine genesis baseline (`--check-live-baseline` is genesis-only), while v2 preserves each original lineage across `public`, `api`, `private`, `util`, and `archive`, claims every governed SECURITY DEFINER endpoint exactly once as an active canonical, requires compatibility aliases to remain SECURITY INVOKER, and retains receipt-bound births/retirements; both must leave Issue #352 blocked and `contractReady=false`
 
 ## Ownership Boundaries
 
@@ -148,8 +140,6 @@ At a human-readable level, this repo owns:
 - the seven-day scope-closure report, complete-machine-result, and closure-bundle lifecycle; DB-first service-only publication write sets that register every locator before upload, atomically resolve bundle manifest client keys, support full fresh and report-only reused publication without partial ready state, and expose the authoritative clientKey-to-artifactId map; the owner-only, fixed-order, locator-free XLSX/manifest availability projection; actor-opaque strict XLSX/manifest download projection plus a temporary one-argument XLSX compatibility overload; evidence-bounded certificate/build admission; and service-only idempotent GC coordination with non-mutating preview, renewable fenced leases, fresh-process post-tombstone recovery, and retained compact audit hashes/counts
 - `scripts/**` for schema export, workspace refresh, change copying, and migration generation
 - `.github/workflows/supabase-dev.yml`
-- `.github/workflows/database-validation.yml`
-- `.github/workflows/lca-snapshot-hosted-qualification.yml`
 - production Supabase GitHub integration contract for Git `main`
 - `.env.supabase.dev.local.example`
 - `.env.supabase.main.local.example`

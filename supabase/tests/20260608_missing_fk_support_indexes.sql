@@ -49,11 +49,11 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'private',
+    'public',
     'lca_network_snapshots',
     array['lcia_method_id', 'lcia_method_version']
   ),
-  'private lca_network_snapshots physical table has a usable LCIA method support index'
+  'lca_network_snapshots has a usable LCIA method support index'
 );
 
 select ok(
@@ -94,11 +94,11 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'private',
+    'public',
     'worker_jobs',
     array['job_kind']
   ),
-  'private worker_jobs physical table has a usable job kind support index'
+  'worker_jobs has a usable job kind support index'
 );
 
 select ok(

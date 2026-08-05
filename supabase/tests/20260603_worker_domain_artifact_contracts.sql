@@ -17,8 +17,6 @@ as $$
   );
 $$;
 
-grant execute on function pg_temp.has_empty_search_path(text) to service_role;
-
 select plan(40);
 
 select ok(
@@ -115,10 +113,7 @@ select is(
   'network snapshots are documented as a traceability exception'
 );
 
--- Fixture construction runs as the test owner. Production service callers
--- enqueue through worker_enqueue_job and have no direct table INSERT.
-reset role;
-insert into private.worker_jobs (
+insert into public.worker_jobs (
   id,
   job_kind,
   worker_runtime,
@@ -208,7 +203,6 @@ insert into private.worker_jobs (
     '2026-06-03 14:00:00+00',
     '2026-06-03 14:00:00+00'
   );
-set local role service_role;
 
 insert into public.lca_network_snapshots (
   id,

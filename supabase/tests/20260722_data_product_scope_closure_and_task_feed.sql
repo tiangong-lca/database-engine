@@ -85,21 +85,7 @@ select ok(not has_function_privilege('authenticated', 'public.cmd_lcia_scope_clo
 select ok(not has_function_privilege('authenticated', 'public.cmd_lcia_result_build_request_v2_envelope(text,jsonb,text,text,jsonb,text,uuid,text,text,jsonb)', 'execute'), 'authenticated callers cannot call the build-envelope implementation');
 select ok(has_function_privilege('authenticated', 'public.get_task_summary_v2_feed(text,text[],text[],timestamp with time zone,timestamp with time zone,uuid,integer,boolean)', 'execute'), 'authenticated callers can use only the versioned task-feed wrapper');
 
-select ok(
-  position(
-    'insert into private.worker_jobs'
-    in pg_get_functiondef(
-      'public.cmd_lcia_result_build_request_v2_without_expiry(text,jsonb,text,text,jsonb,text,uuid,text,text,jsonb)'::regprocedure
-    )
-  ) > 0
-  and position(
-    'insert into public.worker_jobs'
-    in pg_get_functiondef(
-      'public.cmd_lcia_result_build_request_v2_without_expiry(text,jsonb,text,text,jsonb,text,uuid,text,text,jsonb)'::regprocedure
-    )
-  ) = 0,
-  'build V2 persists the worker job into the private physical table in the certificate-validation transaction'
-);
+select ok(position('insert into public.worker_jobs' in pg_get_functiondef('public.cmd_lcia_result_build_request_v2_without_expiry(text,jsonb,text,text,jsonb,text,uuid,text,text,jsonb)'::regprocedure)) > 0, 'build V2 persists the worker job in the certificate-validation transaction');
 select ok(position('payload_json' in pg_get_functiondef('public.cmd_lcia_result_build_request_v2_without_expiry(text,jsonb,text,text,jsonb,text,uuid,text,text,jsonb)'::regprocedure)) > 0, 'build V2 persists the certificate-bound payload');
 select ok((select position('lcia_result_package_bind_closure_certificate' in pg_get_triggerdef(oid)) > 0 from pg_trigger where tgname='lcia_result_packages_bind_closure_certificate'), 'result package trigger enforces package to certificate causal link');
 select ok(position('p_report_artifact_id' in pg_get_functiondef('public.svc_lcia_scope_closure_finalize_reused_scan(uuid,uuid,uuid,uuid,uuid,jsonb)'::regprocedure)) > 0, 'reused scan finalization requires a new target report artifact');
@@ -143,8 +129,8 @@ select ok(not exists (
     'lcia_scope_closure_checks_snapshot_artifact_fkey'
   )
 ), 'historical closure snapshot UUIDs are soft references rather than unconditional retention fences');
-select ok(exists (select 1 from pg_trigger where tgrelid='private.lca_network_snapshots'::regclass and tgname='lca_network_snapshots_closure_delete_guard' and tgenabled <> 'D'), 'snapshot deletion has a validity-aware certificate guard');
-select ok(exists (select 1 from pg_trigger where tgrelid='private.lca_snapshot_artifacts'::regclass and tgname='lca_snapshot_artifacts_closure_delete_guard' and tgenabled <> 'D'), 'snapshot artifact deletion has a validity-aware certificate guard');
+select ok(exists (select 1 from pg_trigger where tgrelid='public.lca_network_snapshots'::regclass and tgname='lca_network_snapshots_closure_delete_guard' and tgenabled <> 'D'), 'snapshot deletion has a validity-aware certificate guard');
+select ok(exists (select 1 from pg_trigger where tgrelid='public.lca_snapshot_artifacts'::regclass and tgname='lca_snapshot_artifacts_closure_delete_guard' and tgenabled <> 'D'), 'snapshot artifact deletion has a validity-aware certificate guard');
 select ok(exists (select 1 from pg_trigger where tgrelid='public.lcia_scope_closure_checks'::regclass and tgname='lcia_scope_closure_checks_snapshot_refs_immutable' and tgenabled <> 'D'), 'issued closure snapshot UUID references are immutable');
 
 select * from finish();

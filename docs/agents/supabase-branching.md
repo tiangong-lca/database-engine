@@ -17,13 +17,12 @@ checkPaths:
   - AGENTS.md
   - .docpact/config.yaml
   - supabase/config.toml
-  - .github/workflows/database-validation.yml
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-03
-lastReviewedCommit: 2cb88b079a8e50f7630378b9f565739c4144df60
-lastReviewedNote: "Reviewed for Issue #390 target-aware pre-DDL validation: both local PR qualification and serialized persistent-dev deployment install the same pinned PostgreSQL AST parser before running the canonical contract; branch targeting and hosted mutation boundaries are unchanged."
+lastReviewedAt: 2026-07-29
+lastReviewedCommit: 6577b7a48f90ae449cbdd2ef419d92d13c273a0c
+lastReviewedNote: "Reviewed Issue #308 rollout follow-up: the additive publication/GC migration reapplies final guards and RPCs so an existing Preview can advance even when earlier PR migrations were already recorded."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -78,21 +77,14 @@ When review changes an already-applied PR migration, add a later migration that 
 - Treat committed files in `supabase/migrations/` as the schema source of truth for production, `dev`, and preview branches.
 - Keep branch-specific overrides in `[remotes.<branch>]` inside `supabase/config.toml`.
 - Do not create a separate `supabase/` directory per Git branch.
-- Keep `.github/workflows/supabase-dev.yml` as the only GitHub Actions flow that mutates the persistent Supabase `dev` branch. It serializes deployments, first passes the fresh local canonical/freeze-activated contract, then runs `supabase db push`, the repository-owned allowlisted PostgREST config apply, and a separate hosted readback.
+- Keep `.github/workflows/supabase-dev.yml` as the only GitHub Actions flow in this repo that runs `supabase db push` for the persistent Supabase `dev` branch.
 - Do not add a checked-in GitHub Actions production deploy for Git `main`; the production project is migrated by the Supabase GitHub integration bound to this repository.
 - Do not author normal schema changes by editing the remote database first and reconstructing migrations later.
-- Keep Data API schemas configuration-as-code: expose `api`, `public`, and `graphql_public`; never add `private`, `util`, or `archive` to exposed schemas or `extra_search_path`.
-- Supabase's GitHub deployment DAG applies `Configure` before `Migrate`. Therefore, first deploy and verify a new schema and its API objects with the existing exposure configuration; only a later commit/PR may expose that already-hosted schema. Never introduce a schema and expose it in the same deployment.
-- `scripts/apply_postgrest_config.py` is the persistent-dev exception to the generic Supabase integration path. It resolves exactly one `[remotes.*].project_id`, allows only `db_schema`, `db_extra_search_path`, and `max_rows`, PATCHes only drifted fields, and GET-verifies the result. It must not read, patch, or log `jwt_secret` or unrelated service configuration.
-- Do not use an unconditional `supabase config push` in CI. It reconciles the whole local/remote config surface and can overwrite unrelated Auth, Storage, or Realtime drift.
 
 ## Files to maintain
 
 - `supabase/config.toml`: shared baseline plus `[remotes.dev]`
-- `.github/workflows/database-validation.yml`: validates database PRs on a fresh disposable local stack without hosted mutation
-- `.github/workflows/supabase-dev.yml`: validates locally, then serializes and pushes committed migrations plus allowlisted PostgREST configuration to persistent Supabase `dev`, followed by hosted readback
-- Both workflows install the same exact `pglast==8.4` parser before the canonical Python contract so target-aware migration authorization has identical PostgreSQL-AST semantics in PR and persistent-dev qualification.
-- `scripts/apply_postgrest_config.py`: fail-closed persistent-dev PostgREST diff/apply/readback gate
+- `.github/workflows/supabase-dev.yml`: pushes committed migrations to the persistent Supabase `dev` branch on Git `dev`
 - `supabase/migrations/*.sql`: committed migration history
 - `supabase/seed.sql`: shared seed data
 - `supabase/seeds/dev.sql`: optional persistent-dev-only seed data
@@ -135,16 +127,6 @@ Repository configuration expected by `.github/workflows/supabase-dev.yml`:
 - secret `SUPABASE_ACCESS_TOKEN`
 - secret `SUPABASE_DEV_DB_PASSWORD`
 
-The Issue #380 hosted consumer qualification runs by manual dispatch or by a
-path-scoped push to canonical `dev` that changes its workflow/trusted runner.
-It additionally uses the same repository variable and access token, but never deploys migrations. It resolves
-current modern API keys through the Management API. If the access token lacks
-key-reveal permission, configure both project-specific repository secrets
-`SUPABASE_DEV_PUBLISHABLE_KEY` and `SUPABASE_DEV_SECRET_KEY`; absence or an
-invalid key is a hard blocker, not a reason to retry legacy disabled keys. The
-workflow refuses every ref except canonical `refs/heads/dev` and explicitly
-rejects production project `qgzvkongdjqiiamzbbts`.
-
 ## PR to Supabase migration path
 
 Committed migration files do not affect any remote database until one of the
@@ -161,10 +143,8 @@ Normal PR path:
 5. After the PR merges, the resulting push to Git `dev` triggers
    `.github/workflows/supabase-dev.yml`.
 6. The workflow links to `SUPABASE_DEV_PROJECT_ID` and runs `supabase db push --include-all`.
-7. Only after migrations succeed, the workflow runs `scripts/apply_postgrest_config.py --apply` against the same exact ref.
-8. The gate computes only the three allowlisted PostgREST fields, PATCHes drift, and GET-readbacks the result; a mismatch fails the workflow.
-
-The Supabase GitHub integration continues to own production `main`. Management API action history for this repository contains `main` integration runs but no `dev` integration run, so `[remotes.dev]` is a binding contract for the repository workflow, not an independent persistent-dev deployment mechanism.
+7. Pending checked-in migrations are then applied to the persistent Supabase
+   `dev` branch.
 
 An existing Preview branch applies newly added migration files on later PR
 pushes. Editing a migration already recorded in that Preview's migration
@@ -209,40 +189,6 @@ Rules:
 - Never hardcode branch URLs or service keys in SQL, migrations, or dumped baseline files.
 - Treat the values as branch-specific. `main`, persistent `dev`, and any preview branch that needs webhook execution must each have the required secrets.
 - If a branch is recreated or relinked, re-check the Vault entries before testing webhook-driven flows.
-
-## Hosted Data API security operator gate
-
-During the schema-boundary Expand phase, hosted PostgREST must expose exactly
-`api,public,graphql_public` in the reviewed order. Keeping `public` is an explicit compatibility
-decision; `private`, `util`, and `archive` are never exposed. The repository
-config and representative `api` objects are owned by their implementation
-change, while Issue #339 supplies the independent Management API readback and
-negative REST gate in the read-only `scripts/hosted_security_acl.py`. Configuration
-mutation remains exclusively behind `scripts/apply_postgrest_config.py` and its
-allowlisted diff, readback, and rollback gate.
-
-Public search wrappers that require `private` helpers run through the
-non-login, non-BYPASSRLS `api_internal_executor`, which inherits authenticated
-transport prerequisites while retaining its own RLS-bound identity; browser roles
-receive no direct `private` USAGE or EXECUTE. Two lifecycle bundle RPCs remain
-authenticated compatibility contracts. Expand records that fact instead of
-silently breaking callers; Contract removes them after consumer-zero evidence.
-
-Migrations close default privileges owned by `postgres`. Future functions use
-the database-wide `ALTER DEFAULT PRIVILEGES ... REVOKE EXECUTE ON FUNCTIONS`
-form because PostgreSQL's built-in `PUBLIC EXECUTE` is global and cannot be
-subtracted by a per-schema revoke; table and sequence defaults remain scoped to
-the five application schemas. Catalog and hosted gates compute effective
-defaults from built-in, explicit global, and additive per-schema layers, so an
-absent `pg_default_acl` row is not accepted as safe. Duplicate effective ACL
-identities fold grantability with `bool_or`. The operator restore snapshots and
-rebuilds both the global and five additive function layers; its snapshot
-dynamically removes every non-owner ACL grantee instead of assuming a fixed role
-list. Supabase's internal
-`supabase_admin` effective defaults remain independently blocked by #352 until
-a supported platform-owner path closes them and `hostedOperatorReady=true`.
-Never treat a local config value or SQL catalog check alone as hosted Data API
-exposure evidence.
 
 ## Default workflow
 

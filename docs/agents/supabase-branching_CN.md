@@ -17,13 +17,11 @@ checkPaths:
   - AGENTS.md
   - .docpact/config.yaml
   - supabase/config.toml
-  - .github/workflows/database-validation.yml
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-03
-lastReviewedCommit: 2cb88b079a8e50f7630378b9f565739c4144df60
-lastReviewedNote: "已针对 Issue #390 target-aware pre-DDL 校验复核：PR 本地 qualification 与持久化 dev 串行部署在 canonical contract 前安装同一固定版本 PostgreSQL AST parser；分支目标和 Hosted mutation 边界保持不变。"
+lastReviewedAt: 2026-05-18
+lastReviewedCommit: 9b0c7f2d41057d9eecf2fa0adad2a9055ca8ee32
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -76,20 +74,14 @@ related:
 - 把 `supabase/migrations/` 中已提交的文件视为 production、`dev` 和 preview 分支共同遵循的 schema 真相源。
 - 分支差异放在 `supabase/config.toml` 的 `[remotes.<branch>]` 中。
 - 不要为不同 Git 分支复制多套 `supabase/` 目录。
-- 把 `.github/workflows/supabase-dev.yml` 作为本仓唯一会修改持久化 Supabase `dev` 的 GitHub Actions 流程。该流程必须串行部署，先通过全新本地栈的 canonical/freeze-activated contract，再执行 `supabase db push`、仓库自有的 PostgREST 白名单配置 apply 和独立 hosted readback。
+- 把 `.github/workflows/supabase-dev.yml` 作为本仓唯一会对持久化 Supabase `dev` 分支执行 `supabase db push` 的 GitHub Actions 流程。
 - 不要为 Git `main` 增加 checked-in 的 GitHub Actions 生产部署流程；生产项目由绑定到本仓的 Supabase GitHub integration 自动迁移。
 - 不要先手改远端数据库再回头补 migration。
-- Data API schema 必须配置即代码：只暴露 `api`、`public` 和 `graphql_public`；不得把 `private`、`util` 或 `archive` 加入 exposed schemas 或 `extra_search_path`。
-- Supabase GitHub 部署 DAG 会先执行 `Configure`，后执行 `Migrate`。因此必须先用现有暴露配置部署并验证新 schema 及其 API 对象，后续再通过单独的 commit/PR 暴露已存在的 schema；不得在同一次部署中首次创建并暴露 schema。
-- `scripts/apply_postgrest_config.py` 是持久化 dev 的窄例外：必须精确匹配一个 `[remotes.*].project_id`，只允许 `db_schema`、`db_extra_search_path`、`max_rows`，只 PATCH 漂移字段，并在同一 project ref 上 GET readback。不得读取、修改或记录 `jwt_secret` 及其他服务配置。
-- CI 中不得使用无条件 `supabase config push`；它会对齐整个本地/远端配置面，可能覆盖无关的 Auth、Storage 或 Realtime 漂移。
 
 ## 需要维护的文件
 
 - `supabase/config.toml`：共享基线加 `[remotes.dev]`
-- `.github/workflows/database-validation.yml`：在 PR 上使用全新 disposable 本地栈验证数据库 contract，不修改 Hosted
-- `.github/workflows/supabase-dev.yml`：在 Git `dev` 更新时先做本地验证，再把已提交 migration 推送到持久化 Supabase `dev` 分支并完成配置 readback
-- 两个 workflow 都在 canonical Python contract 前安装同一个精确版本 `pglast==8.4`，确保 PR 与持久化 dev qualification 的 target-aware migration 授权使用一致的 PostgreSQL AST 语义。
+- `.github/workflows/supabase-dev.yml`：在 Git `dev` 更新时，把已提交 migration 推送到持久化 Supabase `dev` 分支
 - `supabase/migrations/*.sql`：已提交的 migration 历史
 - `supabase/seed.sql`：共享 seed 数据
 - `supabase/seeds/dev.sql`：可选的持久化 dev 专属 seed 数据
@@ -177,32 +169,6 @@ Git `main` 由 Supabase GitHub integration 处理。运维人员仍可在本地�
 - 不要把 branch URL 或 service key 硬编码进 SQL、migration 或导出的 baseline 文件。
 - 这些值是 branch-specific 的。`main`、持久化 `dev`，以及任何需要执行 webhook 的 preview branch 都要各自提供所需 secret。
 - 如果 branch 被重建或重新关联，测试 webhook 之前要重新核对 Vault entries。
-
-## Hosted Data API 安全运维门
-
-Schema boundary Expand 阶段，hosted PostgREST 必须精确暴露
-`api,public,graphql_public`（受审顺序）。保留 `public` 是明确的兼容阶段；`private`、`util`、
-`archive` 不得暴露。Issue #339 通过 `scripts/hosted_security_acl.py` 独立执行
-Management API readback 和真实 REST negative gate；该脚本保持只读，配置变更仅通过
-`scripts/apply_postgrest_config.py` 的 allowlisted diff/readback/rollback gate。不能用本地 config 或单独 SQL
-catalog 查询替代 hosted exposure 证据。
-
-需要调用 `private` helper 的 public search wrapper 通过 non-login、non-BYPASSRLS
-且继承 authenticated transport prerequisite 的 `api_internal_executor` 执行；browser role 不获得直接 `private`
-USAGE/EXECUTE。两个 lifecycle bundle RPC 仍是 authenticated compatibility
-contract。Expand 明确记录该边界；consumer-zero 证据成立后，Contract 才移除它们。
-
-Migration 负责关闭 `postgres` owner 的 default privileges。future function 必须
-使用 database-wide 的 `ALTER DEFAULT PRIVILEGES ... REVOKE EXECUTE ON FUNCTIONS`，
-因为 PostgreSQL 内建的 `PUBLIC EXECUTE` 是 global default，per-schema revoke 无法
-从中减权；table/sequence default 仍限定在五个 application schema。catalog/hosted
-gate 必须合并计算 built-in、explicit global 与 additive per-schema 三层 effective
-defaults，不能把缺少 `pg_default_acl` 显式行当成安全；重复 ACL identity 的
-grantability 通过 `bool_or` 收敛。operator restore 同时快照并重建 global 与五个
-additive function 层，snapshot 动态移除所有 non-owner ACL grantee，而不是依赖固定角色
-列表。内部 `supabase_admin` 的
-effective residue 继续由 #352 fail-closed 跟踪，直到受支持的 platform-owner 通道
-收口并使 `hostedOperatorReady=true`。
 
 ## 默认工作流
 

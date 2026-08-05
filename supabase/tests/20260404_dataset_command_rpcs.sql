@@ -210,7 +210,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '11000000-0000-0000-0000-000000000001', true);
 
 select is(
-  api.cmd_dataset_save_draft(
+  public.cmd_dataset_save_draft(
     'contacts',
     '31000000-0000-0000-0000-000000000001',
     '01.00.000',
@@ -231,7 +231,7 @@ select is(
     '{"command":"dataset_save_draft"}'::jsonb
   )->>'ok',
   'true',
-  'dataset owner can save a draft dataset through api.cmd_dataset_save_draft'
+  'dataset owner can save a draft dataset through cmd_dataset_save_draft'
 );
 
 select is(

@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-04
-lastReviewedCommit: 269ef181e103bf57a7e15c6e82f5291005f33ded
-lastReviewedNote: "已为 Issue #323 复核：静态 SQL 通知 latest-event migration 与合同 artifact 继续位于生成 workspace 之外，不改变刷新语义。"
+lastReviewedAt: 2026-07-31
+lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
+lastReviewedNote: "已为 Issue #323 与 #329 复核：生成区与稳定人工 overlay 的边界不变；审核 migration、本地切换和 provider 资格验证适配器都不会把生成 workspace 变成真相源。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -43,8 +43,6 @@ related:
 - `global/`
 - `schemas/`
 
-默认导出覆盖 `public`、`api`、`private`、`util`、`archive`，因此迁移后的 canonical 对象不会从生成的检查视图中遗漏。
-
 ## 刷新行为
 
 每次刷新 `supabase/workspace` 时，会执行以下操作：
@@ -62,9 +60,6 @@ related:
 - 这些路径下如果存在尚未提交到 Git 的改动，在刷新时也可能被覆盖或删除。
 - 执行刷新命令前，先检查 `git status`，把需要保留的内容提交或暂存。
 - 这个工作区应该被视为远程数据库的生成视图，而不是手工维护 schema 变更的真相源。
-- 不要把 public 对象去向或 consumer/dependency 证据写进本生成区。稳定、可机器检查的边界合同位于 `supabase/tests/contracts/public_object_*`；当前 v2 由 `scripts/public_inventory_exact_head.py` 校验/重建，#338 genesis lineage 保持不可变。
-- 不要把 SECURITY DEFINER owner/runtime 或 lineage 决定写进本生成区。v1 genesis 总账与 live v2 lineage/audit/transition receipts 位于 `supabase/tests/contracts/`，分别由 `scripts/security_definer_audit.py` 与 `scripts/security_definer_audit_v2.py` 管理。
-- 不要把 pre-DDL consumer-cut 授权证据写进本生成区。稳定的 `*_pre_ddl.v1.json` 合同及精确 external Git-tree evidence artifact 位于 `supabase/tests/contracts/`；它保持已提交 migration history append-only，允许 target-neutral static migration，要求 additive service-only `api` facade 同时通过精确受审 blob 与 PostgreSQL AST 语义校验，并在 static、runtime 与 owner 门禁授权 physical DDL 前对未解析或 opaque/dynamic execution 保持 hard deny。
 
 ## 建议用法
 

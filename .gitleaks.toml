@@ -19,15 +19,7 @@ regexes = [
     '''local-access-key''',
     '''postgresql:\/\/postgres\.[a-z0-9]+:password@xxx\.pooler\.supabase\.com:5432\/postgres''',
     '''postgresql:\/\/postgres:\$\{[A-Z0-9_]+\}@\$\{[A-Z0-9_]+\}''',
-    '''postgres:\/\/postgres\.your-tenant-id:your-super-secret-and-long-postgres-password@localhost''',
-    # Exact non-secret identifiers used by the two-database targeting fixture.
-    '''(?:anon|service|jwt)-[ab]''',
-    # Exact non-secret variable-reference assignments in the Data API harness.
-    '''(?:anon_key|jwt_secret) = os\.environ''',
-    '''(?:anon_key = target\.anon_key|jwt_secret = target\.jwt_secret)''',
-    '''auth_token = authenticated_jwt''',
-    # Exact non-secret keyword-to-variable binding in the Issue #390 runtime harness.
-    '''apikey=service_key'''
+    '''postgres:\/\/postgres\.your-tenant-id:your-super-secret-and-long-postgres-password@localhost'''
 ]
 
 [[rules]]

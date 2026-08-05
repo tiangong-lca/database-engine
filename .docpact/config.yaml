@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-04"
-lastReviewedCommit: "269ef181e103bf57a7e15c6e82f5291005f33ded"
-lastReviewedNote: "Reviewed for Issues #412 and #323: the generic static-SQL SECURITY DEFINER gate and notification migration remain within existing scripts, migration, test, and RPC ownership."
+lastReviewedAt: "2026-08-02"
+lastReviewedCommit: "1ff6d2775bed146379d50dc91eaf43c7915dca0f"
+lastReviewedNote: "Reviewed for Issue #323: the existing migration and SQL-test routing covers the additive Root/Reference Review v2 grouped-queue RPCs and focused regression proof without changing governance rules."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -17,7 +17,6 @@ catalog:
       workflowDocs:
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
-        - docs/agents/lca-result-gc-contract.md
       workspaceIntegrationRequired: true
 
 ownership:
@@ -37,15 +36,12 @@ ownership:
         include:
           - supabase/config.toml
           - supabase/migrations/**
-          - supabase/operator/**
           - supabase/seed.sql
           - supabase/seeds/**
           - supabase/tests/**
           - .env.supabase.dev.local.example
           - .env.supabase.main.local.example
           - .github/workflows/supabase-dev.yml
-          - .github/workflows/lca-snapshot-hosted-qualification.yml
-          - .github/workflows/database-validation.yml
       ownerRepo: database-engine
     - id: schema-workspace-and-migration-tooling
       paths:
@@ -75,7 +71,6 @@ coverage:
     - .docpact/**
     - docs/agents/repo-validation.md
     - docs/agents/repo-architecture.md
-    - docs/agents/lca-result-gc-contract.md
     - docs/agents/supabase-branching.md
     - docs/agents/supabase-branching_CN.md
     - scripts/README.md
@@ -84,7 +79,6 @@ coverage:
     - supabase/workspace/README.zh-CN.md
     - supabase/config.toml
     - supabase/migrations/**
-    - supabase/operator/**
     - supabase/seed.sql
     - supabase/seeds/**
     - supabase/tests/**
@@ -94,8 +88,6 @@ coverage:
     - .env.supabase.main.local.example
     - .github/workflows/ai-doc-lint.yml
     - .github/workflows/supabase-dev.yml
-    - .github/workflows/lca-snapshot-hosted-qualification.yml
-    - .github/workflows/database-validation.yml
   exclude:
     - .git/**
     - .github/scripts/**
@@ -119,70 +111,6 @@ routing:
         - supabase/seed.sql
         - supabase/seeds/**
         - supabase/tests/**
-    lca-result-family:
-      paths:
-        - AGENTS.md
-        - .docpact/config.yaml
-        - supabase/tests/contracts/lca_result_family_pre_ddl.v1.json
-        - supabase/tests/contracts/lca_result_family_external_git_tree.v1.json
-        - supabase/tests/contracts/lca_result_family_external_git_tree.v1.sha256
-        - supabase/tests/contracts/lca_result_family_external_git_tree.v1.schema.json
-        - supabase/workspace/README.md
-        - supabase/workspace/README.zh-CN.md
-        - scripts/test_issue_390_pre_ddl_gate.py
-        - scripts/issue_390_pre_ddl_gate.py
-        - scripts/issue_390_external_git_tree.py
-        - scripts/test_issue_390_external_git_tree.py
-        - scripts/test_issue_390_result_api_facade_runtime.py
-        - scripts/test_issue_390_result_api_facade_runtime_unit.py
-        - scripts/run_database_contract.py
-        - supabase/tests/manifest.json
-        - supabase/tests/contracts/database_catalog.*
-        - scripts/export_database_contract.py
-        - scripts/test_export_database_contract.py
-        - supabase/migrations/*issue_390_result_api_facade*.sql
-        - supabase/tests/*issue_390_result_api_facade*.sql
-        - supabase/migrations/*issue_395_reconcile_cancelled*.sql
-        - supabase/tests/*issue_395_reconcile_cancelled*.sql
-        - supabase/migrations/*issue_398_result_gc*.sql
-        - supabase/tests/*issue_398_result_gc*.sql
-        - scripts/test_issue_398_result_gc_runtime.py
-        - docs/agents/lca-result-gc-contract.md
-        - .github/workflows/database-validation.yml
-        - .github/workflows/supabase-dev.yml
-        - scripts/test_database_contract_manifest.py
-        - docs/agents/repo-validation.md
-        - docs/agents/repo-architecture.md
-        - scripts/README.md
-        - scripts/README.zh-CN.md
-    public-inventory-closure:
-      paths:
-        - scripts/public_inventory_closure.py
-        - scripts/test_public_inventory_closure.py
-        - scripts/public_inventory_exact_head.py
-        - scripts/test_public_inventory_exact_head.py
-        - supabase/tests/20260801_public_inventory_dependency_closure.sql
-        - supabase/tests/contracts/public_object_*
-        - docs/agents/repo-validation.md
-        - docs/agents/repo-architecture.md
-        - scripts/README.md
-    security-definer-audit:
-      paths:
-        - scripts/security_definer_audit.py
-        - scripts/test_security_definer_audit.py
-        - scripts/security_definer_audit_v2.py
-        - scripts/test_security_definer_audit_v2.py
-        - scripts/test_security_definer_audit_v2_postgrest_conformance.py
-        - scripts/test_security_definer_audit_v2_transition_integration.py
-        - scripts/test_security_definer_audit_v2_transition_integration_runner.py
-        - supabase/tests/20260801_security_definer_owner_runtime_audit.sql
-        - supabase/tests/contracts/security_definer_audit.*
-        - supabase/tests/contracts/privileged_routine_lineage.*
-        - supabase/tests/contracts/security_definer_transition_fixture.*
-        - docs/agents/repo-validation.md
-        - docs/agents/repo-architecture.md
-        - scripts/README.md
-        - scripts/README.zh-CN.md
     hybrid-search-performance:
       paths:
         - supabase/migrations/*hybrid_search*.sql
@@ -223,11 +151,7 @@ routing:
     worker-jobs:
       paths:
         - supabase/migrations/*worker_jobs*.sql
-        - supabase/migrations/*worker_control_plane*.sql
-        - supabase/operator/*worker_control_plane*.sql
         - supabase/tests/*worker_jobs*.sql
-        - supabase/tests/*worker_control_plane*.sql
-        - scripts/*worker_control_plane*.py
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
     branch-config:
@@ -236,8 +160,6 @@ routing:
         - .env.supabase.dev.local.example
         - .env.supabase.main.local.example
         - .github/workflows/supabase-dev.yml
-        - .github/workflows/lca-snapshot-hosted-qualification.yml
-        - .github/workflows/database-validation.yml
         - docs/agents/supabase-branching.md
         - docs/agents/supabase-branching_CN.md
     preview-drift:
@@ -276,9 +198,7 @@ routing:
         - supabase/seed.sql
         - supabase/seeds/**
         - supabase/tests/**
-        - .github/workflows/database-validation.yml
         - .github/workflows/supabase-dev.yml
-        - .github/workflows/lca-snapshot-hosted-qualification.yml
     root-integration:
       paths:
         - AGENTS.md
@@ -317,8 +237,6 @@ rules:
         kind: deep-doc
       - path: docs/agents/repo-architecture.md
         kind: deep-doc
-      - path: docs/agents/lca-result-gc-contract.md
-        kind: deep-doc
       - path: docs/agents/supabase-branching.md
         kind: deep-doc
       - path: docs/agents/supabase-branching_CN.md
@@ -331,8 +249,6 @@ rules:
       - path: docs/agents/repo-validation.md
         mode: review_or_update
       - path: docs/agents/repo-architecture.md
-        mode: review_or_update
-      - path: docs/agents/lca-result-gc-contract.md
         mode: review_or_update
     reason: Repo entry guidance, machine-readable routing, and retained source docs must stay aligned.
   - id: database-engine-readme-and-landing-contract
@@ -357,8 +273,6 @@ rules:
         kind: db-config
       - path: .github/workflows/supabase-dev.yml
         kind: automation
-      - path: .github/workflows/database-validation.yml
-        kind: automation
       - path: .env.supabase.dev.local.example
         kind: operator-template
       - path: .env.supabase.main.local.example
@@ -375,36 +289,12 @@ rules:
       - path: docs/agents/supabase-branching_CN.md
         mode: review_or_update
     reason: Branch bindings and persistent dev automation change repo routing, proof, and branch-operation guidance together.
-  - id: database-engine-hosted-consumer-qualification
-    scope: repo
-    repo: database-engine
-    triggers:
-      - path: .github/workflows/lca-snapshot-hosted-qualification.yml
-        kind: hosted-proof-automation
-      - path: supabase/tests/hosted/lca_snapshot_hosted_qualification.py
-        kind: hosted-proof-runner
-      - path: supabase/tests/hosted/test_lca_snapshot_hosted_qualification.py
-        kind: hosted-proof-test
-    requiredDocs:
-      - path: AGENTS.md
-        mode: review_or_update
-      - path: .docpact/config.yaml
-        mode: review_or_update
-      - path: docs/agents/repo-validation.md
-        mode: review_or_update
-      - path: docs/agents/repo-architecture.md
-        mode: review_or_update
-      - path: docs/agents/supabase-branching.md
-        mode: review_or_update
-    reason: The canonical-dev-only secret-bearing hosted proof must keep targeting, credential, cleanup, and source-trust boundaries aligned.
   - id: database-engine-migration-and-seed-contract
     scope: repo
     repo: database-engine
     triggers:
       - path: supabase/migrations/**
         kind: db-schema
-      - path: supabase/operator/**
-        kind: operator-rollback
       - path: supabase/seed.sql
         kind: db-seed
       - path: supabase/seeds/**
@@ -415,8 +305,6 @@ rules:
       - path: docs/agents/repo-validation.md
         mode: review_or_update
       - path: docs/agents/repo-architecture.md
-        mode: review_or_update
-      - path: docs/agents/lca-result-gc-contract.md
         mode: review_or_update
     reason: Schema and seed changes affect authoring routes, source-of-truth boundaries, and minimum proof expectations.
   - id: database-engine-review-submit-gate-contract
@@ -454,8 +342,6 @@ rules:
         mode: review_or_update
       - path: docs/agents/repo-validation.md
         mode: review_or_update
-      - path: docs/agents/lca-result-gc-contract.md
-        mode: review_or_update
     reason: SQL assertions and offline Node test contracts can alter the minimum proof story for future database and Hosted-runner work.
   - id: database-engine-schema-workspace-tooling
     scope: repo
@@ -471,8 +357,6 @@ rules:
       - path: docs/agents/repo-validation.md
         mode: review_or_update
       - path: docs/agents/repo-architecture.md
-        mode: review_or_update
-      - path: docs/agents/lca-result-gc-contract.md
         mode: review_or_update
       - path: scripts/README.md
         mode: review_or_update
