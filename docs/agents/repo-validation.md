@@ -29,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-02
-lastReviewedCommit: 1ff6d2775bed146379d50dc91eaf43c7915dca0f
-lastReviewedNote: "Reviewed for Issue #323: local fresh-stack reset plus the Root/Reference Review v2 and root-grouped queue pgTAP suites remain the minimum proof; hosted Preview and persistent-dev proof stay deferred to deployment."
+lastReviewedAt: 2026-08-05
+lastReviewedCommit: f7e0e6fbe3b83cf57bbdae8d3d07ebb683d68a8e
+lastReviewedNote: "Reviewed for Issue #418: the persistent-dev rebind still requires exact branch identity, migration deployment, and hosted readback proof; the validation matrix itself is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -20,8 +20,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-05-18
-lastReviewedCommit: 9b0c7f2d41057d9eecf2fa0adad2a9055ca8ee32
+lastReviewedAt: 2026-08-05
+lastReviewedCommit: f7e0e6fbe3b83cf57bbdae8d3d07ebb683d68a8e
+lastReviewedNote: "已为 Issue #418 复核：重建持久 dev 后必须更新 project ref 与数据库凭据再部署；Git dev 到持久 dev 的工作流及 promote 规则不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

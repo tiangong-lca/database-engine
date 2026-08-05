@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-02"
-lastReviewedCommit: "1ff6d2775bed146379d50dc91eaf43c7915dca0f"
-lastReviewedNote: "Reviewed for Issue #323: the existing migration and SQL-test routing covers the additive Root/Reference Review v2 grouped-queue RPCs and focused regression proof without changing governance rules."
+lastReviewedAt: "2026-08-05"
+lastReviewedCommit: "f7e0e6fbe3b83cf57bbdae8d3d07ebb683d68a8e"
+lastReviewedNote: "Reviewed for Issue #418: recreating the persistent Supabase dev branch changes only its concrete project binding; existing ownership, routing, deployment, and validation rules remain unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
