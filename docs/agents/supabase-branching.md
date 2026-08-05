@@ -20,9 +20,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-07-29
-lastReviewedCommit: 6577b7a48f90ae449cbdd2ef419d92d13c273a0c
-lastReviewedNote: "Reviewed Issue #308 rollout follow-up: the additive publication/GC migration reapplies final guards and RPCs so an existing Preview can advance even when earlier PR migrations were already recorded."
+lastReviewedAt: 2026-08-05
+lastReviewedCommit: f7e0e6fbe3b83cf57bbdae8d3d07ebb683d68a8e
+lastReviewedNote: "Reviewed for Issue #418: recreating persistent dev requires updating its project ref and database credential before redeployment; the Git dev to persistent-dev workflow and promotion rules remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

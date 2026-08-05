@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-02
-lastReviewedCommit: 1ff6d2775bed146379d50dc91eaf43c7915dca0f
-lastReviewedNote: "Reviewed for Issue #323: the additive root-grouped queue RPCs stay within the existing Root/Reference Review v2 database boundary and do not change the repository shape or cross-repo ownership."
+lastReviewedAt: 2026-08-05
+lastReviewedCommit: f7e0e6fbe3b83cf57bbdae8d3d07ebb683d68a8e
+lastReviewedNote: "Reviewed for Issue #418: replacing the concrete persistent-dev project binding does not change stable path ownership, generated workspace boundaries, or repository shape."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
