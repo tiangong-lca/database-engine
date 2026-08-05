@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-05
-lastReviewedCommit: 5bb96b2f1fd4126081fdae166482d1d1bec3d5a6
-lastReviewedNote: "Reviewed for Issue #418: refreshing remaining persistent-dev examples does not change stable path ownership, generated workspace boundaries, or repository shape."
+lastReviewedCommit: df8253bfb3499b1f8a6d7d84d321bd5b7cc67752
+lastReviewedNote: "Reviewed for Issue #422: document the complete public/api/private/util/archive schema boundary and the generated-workspace refresh rule after cutover."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -40,6 +40,37 @@ related:
 ## Repo Shape
 
 This repo is organized around one checked-in Supabase project plus a generated schema-inspection workspace.
+
+## Schema Boundaries
+
+The application database uses five durable schemas with deliberately different
+responsibilities:
+
+- `public` contains only the nine stable domain entity tables: `processes`,
+  `flows`, `contacts`, `sources`, `unitgroups`, `flowproperties`,
+  `lciamethods`, `lifecyclemodels`, and `ilcd`
+- `api` contains Data API RPCs and API-facing projections
+- `private` contains internal application state and implementation routines
+- `util` contains operational queues, controls, diagnostics, and maintenance helpers
+- `archive` contains retained historical or retired data
+
+PostgREST exposes `public` and `api`. The hosted deployment contract enforces
+the ordered list `public,api,graphql_public`, so a profile-less request remains
+on the core-entity surface. Data API consumers must still select their schema
+explicitly: `public` for entity tables and `api` for RPCs. This avoids relying
+on local CLI normalization, which may place a custom schema before `public`.
+`private`, `util`, and `archive` are not exposed. `authenticated` has only the
+`private.roles` and `private.reviews` reads needed to evaluate the preserved
+public core-table RLS policies; browser roles receive no other internal
+relation, routine, or write capability.
+
+Schema cutovers must preserve object identity and database dependencies with
+`ALTER ... SET SCHEMA`; they must not rebuild tables, triggers, policies,
+constraints, or functions merely to change namespaces. Stored function source
+and fixed search paths must be rewritten in the same migration whenever they
+refer to moved objects. The small set of security-invoker API search facades
+that needs private RLS helpers runs through the constrained
+`api_internal_executor` role, which cannot log in or bypass RLS.
 
 ## Stable Path Map
 
@@ -157,7 +188,7 @@ is dispatched. Selector optimization must preserve the existing per-scope
 backpressure, retry, ordering, and stale-job contracts; it is not permission to
 raise the checked-in policy defaults.
 
-The four public Semantic and Hybrid RPC families share exact-regclass
+The four Data API Semantic and Hybrid RPC families share exact-regclass
 allowlisted private helpers. Those helpers preserve owner/team/public
 visibility (`tg`/`co`/`my`/`te`): `tg`/`co` may be narrowed to an explicit
 team, `my` may be narrowed to an explicit state, and `te` requires one explicit
@@ -175,7 +206,9 @@ or duplicate indexes.
 
 Retained domain tables such as `lca_package_artifacts`, `lca_package_export_items`, `lca_package_request_cache`, `lca_results`, `lca_result_cache`, `lca_latest_all_unit_results`, `lca_network_snapshots`, `dataset_review_submit_requests`, and `dataset_review_submit_gate_runs` are not replacement job tables. They store worker-produced artifacts, caches, projections, reports, or coordinator domain state. Post-cutover rows should be traceable back to `worker_jobs` through the appropriate worker job reference columns, except for explicitly documented exceptions such as snapshot identity rows that are traced through downstream worker-linked records.
 
-Use `public.worker_domain_traceability_cutoffs` and `public.worker_domain_traceability_violations` for DB-side audit checks when validating that new worker-produced domain rows remain traceable.
+Use `private.worker_domain_traceability_cutoffs` and
+`util.worker_domain_traceability_violations` for DB-side audit checks when
+validating that new worker-produced domain rows remain traceable.
 
 ## LCI/LCIA Release Control Plane
 
@@ -216,7 +249,12 @@ Use it like this:
 
 Do not leave durable manual edits only inside generated paths.
 
-Remote `dev` is the canonical refresh target. `--environment local` is a validation and recovery path that uses the Supabase CLI-native local connection; locally reconstructed output must not be represented as hosted truth without matching migration-version and targeted hosted catalog evidence.
+Remote `dev` is the canonical refresh target. After the schema cutover is
+deployed there, refresh all application schemas with
+`--schemas public api private util archive`. `--environment local` is a
+validation and recovery path that uses the Supabase CLI-native local
+connection; locally reconstructed output must not be represented as hosted
+truth without matching migration-version and targeted hosted catalog evidence.
 
 ## Script Responsibilities
 
@@ -236,7 +274,7 @@ This repo owns database truth, but not every runtime consequence:
 - `database-engine` owns authoring-row review/publication lifecycle closure. It classifies references by JSON path and lifecycle role, keeps Lineage read-only, preserves RequiredSupport submit/approve linkage, requires `json_tg.submodels` and ILCD `processInstance` to agree on exact composition versions, and applies transaction-final locks and assertions before submit, approve, or direct-publish writes. A same-id/version Process/LifecycleModel pair participates only when both rows exist. Private and missing composition dependencies use the same non-disclosing error envelope; Worker numeric/source closure semantics remain outside this database role matrix.
 - `database-engine` owns durable LCI/LCIA release facts and final authorization: exact plan/artifact hashes, manager approval/publication, service-only artifact finalization, immutable pinning, and readback; it does not materialize TIDAS/ILCD bytes or place generated datasets in authoring tables
 - `database-engine` owns the protected one-shot owner-draft FP/UG alias execution contract. Authenticated callers may only run the guarded preflight, three ordered live gates, one admission, and read-only status polling; a nonce-bound service executor alone can invoke the private replay-capable whole-plan and per-dimension primitives. The sealed `dataset-alias-plan.v1` request keeps time followed by length-time, one plan hash and operation ID, `target_visibility=owner_draft`, 52 distinct action rows, 59 exchange mutations, 55 immutable alias audits, and atomic admission of all 23-flow plus 27-process derivative children. Preflight and execution independently enforce actor-owned `state_code=0`, unchanged support, embedded identity, canonical exchange hashes, no public/foreign/non-draft parent, exact closure, stable row locks, table-specific allowed paths, and exact factors; indexed `json_ordered` subtrees provide candidates, while legacy `json` is never evidence. A timeout or any primary, audit, or derivative-admission mismatch rolls back every business effect, and the sealed approval permits no redispatch or replay. Production owner-draft data execution is allowed only against a freshly frozen production state with exact human approval; Preview/Dev validate the toolchain rather than replaying that production mutation. Status polling defers the full 50-target causal proof until terminal evidence is available and returns an explicit read-only conflict if the parent ledger changes while evidence is assembled.
-- `database-engine` owns the guarded Step 3 public-flow identity rewrite contract. Preflight seals exact source/public/support guards, compatibility policy/evidence, ordered process templates, five-field rewrite locators, collision rows, derivative baselines, and exact pending/blocker occurrences. Initial and recovery approval artifacts are actor-wide non-reusable across request/text/identity hash domains. Each fresh preflight creates exactly one wrapper invocation and returns one memory-only rotating permit; the database persists only its generation and token hash, every successful process or finalize rotates it atomically, and exact preflight replay returns no permit. The public process/finalize RPCs require this authorization as their third argument. Scope read remains read-only status/resume evidence, while an exact read-only scope lookup resolves a lost preflight response without minting or disclosing a permit. If the wrapper loses its permit or exits after an ambiguous/domain-rejected call, continuation requires a fresh exact human-approved recovery artifact bound to observed scope state and whole-scope proof; recovery supersedes the old invocation and permit and never constitutes automatic retry. Each authenticated process call acquires the scope advisory lock, revalidates the next owner-draft process and every used mapping, reconstructs the desired JSON from live data, changes only `@refObjectId`, `@type`, `@uri`, `@version`, and `common:shortDescription`, records one unique audit, and admits one protected derivative child in the same transaction. An authenticated cancel request is actor/receipt/operation/plan/scope-proof bound and may release active fences only for an untouched `sealed` scope whose ledger, primary audits, derivative references, and mutation permits all prove zero writes; exact replay is read-only, while any post-primary scope is immutable to cancel. A terminal failed/stale derivative exposes the exact current single-target snapshot for a distinct derivative-only plan/freeze/approval; it never replays primary or auto-admits compensation. Finalize may consume only the newest exact approved-compensation request and retains active fences until all desired primaries, zero approved-source residue, unchanged source/public/support and protected occurrences, dynamic causal derivative proofs, and the completed final wrapper invocation/generation proof are current. The CLI/foundry own semantic review, canonical approval artifacts, raw in-memory permit custody, live plan/freeze/approval, and process-schema evidence; this repo never turns a historical oracle into execution authority.
+- `database-engine` owns the guarded Step 3 public-flow identity rewrite contract. Preflight seals exact source/public/support guards, compatibility policy/evidence, ordered process templates, five-field rewrite locators, collision rows, derivative baselines, and exact pending/blocker occurrences. Initial and recovery approval artifacts are actor-wide non-reusable across request/text/identity hash domains. Each fresh preflight creates exactly one wrapper invocation and returns one memory-only rotating permit; the database persists only its generation and token hash, every successful process or finalize rotates it atomically, and exact preflight replay returns no permit. The Data API process/finalize RPCs require this authorization as their third argument. Scope read remains read-only status/resume evidence, while an exact read-only scope lookup resolves a lost preflight response without minting or disclosing a permit. If the wrapper loses its permit or exits after an ambiguous/domain-rejected call, continuation requires a fresh exact human-approved recovery artifact bound to observed scope state and whole-scope proof; recovery supersedes the old invocation and permit and never constitutes automatic retry. Each authenticated process call acquires the scope advisory lock, revalidates the next owner-draft process and every used mapping, reconstructs the desired JSON from live data, changes only `@refObjectId`, `@type`, `@uri`, `@version`, and `common:shortDescription`, records one unique audit, and admits one protected derivative child in the same transaction. An authenticated cancel request is actor/receipt/operation/plan/scope-proof bound and may release active fences only for an untouched `sealed` scope whose ledger, primary audits, derivative references, and mutation permits all prove zero writes; exact replay is read-only, while any post-primary scope is immutable to cancel. A terminal failed/stale derivative exposes the exact current single-target snapshot for a distinct derivative-only plan/freeze/approval; it never replays primary or auto-admits compensation. Finalize may consume only the newest exact approved-compensation request and retains active fences until all desired primaries, zero approved-source residue, unchanged source/public/support and protected occurrences, dynamic causal derivative proofs, and the completed final wrapper invocation/generation proof are current. The CLI/foundry own semantic review, canonical approval artifacts, raw in-memory permit custody, live plan/freeze/approval, and process-schema evidence; this repo never turns a historical oracle into execution authority.
 - `tiangong-lca-worker` owns numeric-stability checks and the calculator report payload semantics
 - `tiangong-lca-next` owns frontend env selection and app-side Supabase clients
 - `tiangong-lca-edge-functions` owns Edge Function runtime orchestration, worker invocation, API response shape, deterministic Markdown generation for the four foundation datasets, and the exact table/column embedding allowlist

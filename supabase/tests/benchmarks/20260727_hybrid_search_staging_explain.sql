@@ -61,10 +61,10 @@ select
   and to_regclass('public.processes_extracted_md_pgroonga') is not null
   and to_regclass('public.flows_extracted_md_pgroonga') is not null
   and to_regprocedure(
-    'public.hybrid_search_processes_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'
+    'api.hybrid_search_processes_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'
   ) is not null
   and to_regprocedure(
-    'public.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'
+    'api.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'
   ) is not null
   and (
     select routine.proconfig @> array[
@@ -314,7 +314,7 @@ with sample as materialized (
 )
 select hybrid_result.*
 from sample
-cross join lateral public.hybrid_search_processes_v2(
+cross join lateral api.hybrid_search_processes_v2(
   sample.query_text,
   sample.query_embedding,
   '{}',
@@ -352,7 +352,7 @@ with sample as materialized (
 )
 select hybrid_result.*
 from sample
-cross join lateral public.hybrid_search_flows_v2(
+cross join lateral api.hybrid_search_flows_v2(
   sample.query_text,
   sample.query_embedding,
   '{"flowType":"Product flow"}',

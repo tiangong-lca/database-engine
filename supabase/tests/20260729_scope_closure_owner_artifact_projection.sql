@@ -5,31 +5,31 @@ set local search_path = extensions, public, auth;
 select no_plan();
 
 select has_function(
-  'public', 'get_lcia_scope_closure_check', array['uuid'],
+  'api', 'get_lcia_scope_closure_check', array['uuid'],
   'owner closure read RPC exists'
 );
 select has_function(
-  'public', 'get_lcia_scope_closure_report_download', array['uuid', 'text'],
+  'api', 'get_lcia_scope_closure_report_download', array['uuid', 'text'],
   'strict role-selecting download RPC exists'
 );
 select has_function(
-  'public', 'get_lcia_scope_closure_report_download', array['uuid'],
+  'api', 'get_lcia_scope_closure_report_download', array['uuid'],
   'temporary selector-less download compatibility overload exists'
 );
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.get_lcia_scope_closure_report_download(uuid)',
+    'api.get_lcia_scope_closure_report_download(uuid)',
     'execute'
   )
   and not has_function_privilege(
     'anon',
-    'public.get_lcia_scope_closure_report_download(uuid)',
+    'api.get_lcia_scope_closure_report_download(uuid)',
     'execute'
   )
   and not has_function_privilege(
     'service_role',
-    'public.get_lcia_scope_closure_report_download(uuid)',
+    'api.get_lcia_scope_closure_report_download(uuid)',
     'execute'
   ),
   'legacy download overload is authenticated-only'
@@ -37,17 +37,17 @@ select ok(
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.get_lcia_scope_closure_report_download(uuid,text)',
+    'api.get_lcia_scope_closure_report_download(uuid,text)',
     'execute'
   )
   and not has_function_privilege(
     'anon',
-    'public.get_lcia_scope_closure_report_download(uuid,text)',
+    'api.get_lcia_scope_closure_report_download(uuid,text)',
     'execute'
   )
   and not has_function_privilege(
     'service_role',
-    'public.get_lcia_scope_closure_report_download(uuid,text)',
+    'api.get_lcia_scope_closure_report_download(uuid,text)',
     'execute'
   ),
   'strict download RPC is authenticated-only'
@@ -55,17 +55,17 @@ select ok(
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.get_lcia_scope_closure_check(uuid)',
+    'api.get_lcia_scope_closure_check(uuid)',
     'execute'
   )
   and not has_function_privilege(
     'anon',
-    'public.get_lcia_scope_closure_check(uuid)',
+    'api.get_lcia_scope_closure_check(uuid)',
     'execute'
   )
   and not has_function_privilege(
     'service_role',
-    'public.get_lcia_scope_closure_check(uuid)',
+    'api.get_lcia_scope_closure_check(uuid)',
     'execute'
   ),
   'owner read projection is authenticated-only'
@@ -95,18 +95,18 @@ insert into auth.users (
     'x', now(), '{}', '{}', now(), now(), false, false
   );
 
-insert into public.users (id, raw_user_meta_data, contact) values
+insert into private.users (id, raw_user_meta_data, contact) values
   ('30810000-0000-4000-8000-000000000001', '{}', null),
   ('30810000-0000-4000-8000-000000000002', '{}', null),
   ('30810000-0000-4000-8000-000000000003', '{}', null);
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values (
   '00000000-0000-0000-0000-000000000000',
   '{"name":"System"}', 0, false
 ) on conflict (id) do nothing;
 
-insert into public.roles (user_id, team_id, role) values
+insert into private.roles (user_id, team_id, role) values
   (
     '30810000-0000-4000-8000-000000000001',
     '00000000-0000-0000-0000-000000000000',
@@ -118,7 +118,7 @@ insert into public.roles (user_id, team_id, role) values
     'data_product_manager'
   );
 
-insert into public.worker_jobs (
+insert into private.worker_jobs (
   id, job_kind, worker_runtime, worker_queue, requester_type, requested_by,
   visibility, payload_schema_version, payload_json, status
 ) values
@@ -159,7 +159,7 @@ insert into public.worker_jobs (
     'lcia.scope_closure_check.request.v1', '{}', 'completed'
   );
 
-insert into public.worker_job_artifacts (
+insert into private.worker_job_artifacts (
   id, job_id, artifact_type, storage_bucket, storage_path, content_type,
   byte_size, checksum_sha256, metadata, created_at
 ) values
@@ -223,7 +223,7 @@ insert into public.worker_job_artifacts (
     108, repeat('2', 64), '{}', now()
   );
 
-update public.worker_job_artifacts
+update private.worker_job_artifacts
 set lifecycle_state = 'deleted',
     gc_cleanup_state = 'complete'
 where id in (
@@ -231,7 +231,7 @@ where id in (
   '30810000-0000-4000-8000-000000000206'
 );
 
-insert into public.lcia_scope_closure_checks (
+insert into private.lcia_scope_closure_checks (
   id, worker_job_id, requested_by, request_idempotency_token, request_key,
   request_fingerprint, requested_scope_hash, policy_fingerprint,
   data_snapshot_token, expected_validator_scanner_fingerprint, status,
@@ -297,7 +297,7 @@ insert into public.lcia_scope_closure_checks (
     'unavailable', null, null, '{}', now()
   );
 
-insert into public.worker_job_artifacts (
+insert into private.worker_job_artifacts (
   id, job_id, artifact_type, storage_bucket, storage_path, content_type,
   byte_size, checksum_sha256, metadata
 ) values
@@ -327,7 +327,7 @@ select set_config(
 
 select is(
   jsonb_array_length(
-    public.get_lcia_scope_closure_check(
+    api.get_lcia_scope_closure_check(
       '30810000-0000-4000-8000-000000000302'
     ) #> '{data,artifacts}'
   ),
@@ -338,7 +338,7 @@ select is(
   (
     select string_agg(item->>'artifactRole', ',' order by ordinal)
     from jsonb_array_elements(
-      public.get_lcia_scope_closure_check(
+      api.get_lcia_scope_closure_check(
         '30810000-0000-4000-8000-000000000302'
       ) #> '{data,artifacts}'
     ) with ordinality as artifact(item, ordinal)
@@ -359,7 +359,7 @@ select ok(
         ('30810000-0000-4000-8000-000000000306'::uuid)
     ) as closure_check(id)
     cross join lateral jsonb_array_elements(
-      public.get_lcia_scope_closure_check(closure_check.id)
+      api.get_lcia_scope_closure_check(closure_check.id)
       #> '{data,artifacts}'
     ) as artifact(item)
     where artifact.item ?| array[
@@ -386,7 +386,7 @@ select ok(
         ('30810000-0000-4000-8000-000000000306'::uuid)
     ) as closure_check(id)
     cross join lateral jsonb_array_elements(
-      public.get_lcia_scope_closure_check(closure_check.id)
+      api.get_lcia_scope_closure_check(closure_check.id)
       #> '{data,artifacts}'
     ) as artifact(item)
     where (
@@ -410,7 +410,7 @@ select is(
   (
     select string_agg(item->>'artifactState', ',' order by ordinal)
     from jsonb_array_elements(
-      public.get_lcia_scope_closure_check(
+      api.get_lcia_scope_closure_check(
         '30810000-0000-4000-8000-000000000301'
       ) #> '{data,artifacts}'
     ) with ordinality as artifact(item, ordinal)
@@ -422,7 +422,7 @@ select is(
   (
     select string_agg(item->>'artifactState', ',' order by ordinal)
     from jsonb_array_elements(
-      public.get_lcia_scope_closure_check(
+      api.get_lcia_scope_closure_check(
         '30810000-0000-4000-8000-000000000302'
       ) #> '{data,artifacts}'
     ) with ordinality as artifact(item, ordinal)
@@ -434,7 +434,7 @@ select is(
   (
     select string_agg(item->>'artifactState', ',' order by ordinal)
     from jsonb_array_elements(
-      public.get_lcia_scope_closure_check(
+      api.get_lcia_scope_closure_check(
         '30810000-0000-4000-8000-000000000303'
       ) #> '{data,artifacts}'
     ) with ordinality as artifact(item, ordinal)
@@ -446,7 +446,7 @@ select is(
   (
     select string_agg(item->>'artifactState', ',' order by ordinal)
     from jsonb_array_elements(
-      public.get_lcia_scope_closure_check(
+      api.get_lcia_scope_closure_check(
         '30810000-0000-4000-8000-000000000304'
       ) #> '{data,artifacts}'
     ) with ordinality as artifact(item, ordinal)
@@ -458,7 +458,7 @@ select is(
   (
     select string_agg(item->>'artifactState', ',' order by ordinal)
     from jsonb_array_elements(
-      public.get_lcia_scope_closure_check(
+      api.get_lcia_scope_closure_check(
         '30810000-0000-4000-8000-000000000305'
       ) #> '{data,artifacts}'
     ) with ordinality as artifact(item, ordinal)
@@ -470,7 +470,7 @@ select is(
   (
     select string_agg(item->>'artifactState', ',' order by ordinal)
     from jsonb_array_elements(
-      public.get_lcia_scope_closure_check(
+      api.get_lcia_scope_closure_check(
         '30810000-0000-4000-8000-000000000306'
       ) #> '{data,artifacts}'
     ) with ordinality as artifact(item, ordinal)
@@ -479,7 +479,7 @@ select is(
   'terminal missing evidence projects failed for both public roles'
 );
 select is(
-  public.get_lcia_scope_closure_check(
+  api.get_lcia_scope_closure_check(
     '30810000-0000-4000-8000-000000000302'
   ) #>> '{data,artifacts,0,filename}',
   'scope-closure-30810000-0000-4000-8000-000000000302.xlsx',
@@ -487,11 +487,11 @@ select is(
 );
 select is(
   (
-    public.get_lcia_scope_closure_check(
+    api.get_lcia_scope_closure_check(
       '30810000-0000-4000-8000-000000000302'
     ) #>> '{data,artifacts,1,format}'
   ) || ':' || (
-    public.get_lcia_scope_closure_check(
+    api.get_lcia_scope_closure_check(
       '30810000-0000-4000-8000-000000000302'
     ) #>> '{data,artifacts,1,mediaType}'
   ),
@@ -499,14 +499,14 @@ select is(
   'manifest summary uses the exact public format/media pair'
 );
 select is(
-  public.get_lcia_scope_closure_check(
+  api.get_lcia_scope_closure_check(
     '30810000-0000-4000-8000-000000000302'
   ) #>> '{data,artifacts,0,size}',
   '101',
   'ready summary publishes the linked artifact size'
 );
 select is(
-  public.get_lcia_scope_closure_check(
+  api.get_lcia_scope_closure_check(
     '30810000-0000-4000-8000-000000000302'
   ) #>> '{data,artifacts,1,checksumSha256}',
   repeat('b', 64),
@@ -514,7 +514,7 @@ select is(
 );
 select ok(
   (
-    public.get_lcia_scope_closure_check(
+    api.get_lcia_scope_closure_check(
       '30810000-0000-4000-8000-000000000302'
     ) #> '{data,artifacts,0,artifactExpiresAt}'
   ) is not null,
@@ -522,12 +522,12 @@ select ok(
 );
 select ok(
   (
-    public.get_lcia_scope_closure_check(
+    api.get_lcia_scope_closure_check(
       '30810000-0000-4000-8000-000000000306'
     ) #> '{data,artifacts,0,size}'
   ) = 'null'::jsonb
   and (
-    public.get_lcia_scope_closure_check(
+    api.get_lcia_scope_closure_check(
       '30810000-0000-4000-8000-000000000306'
     ) #> '{data,artifacts,1,checksumSha256}'
   ) = 'null'::jsonb,
@@ -535,7 +535,7 @@ select ok(
 );
 
 reset role;
-update public.lcia_scope_closure_checks
+update private.lcia_scope_closure_checks
 set report_artifact_id = '30810000-0000-4000-8000-000000000209'
 where id = '30810000-0000-4000-8000-000000000302';
 set local role authenticated;
@@ -546,22 +546,22 @@ select set_config(
   true
 );
 select ok(
-  public.get_lcia_scope_closure_check(
+  api.get_lcia_scope_closure_check(
     '30810000-0000-4000-8000-000000000302'
   ) #>> '{data,artifacts,0,artifactState}' = 'failed'
-  and public.get_lcia_scope_closure_check(
+  and api.get_lcia_scope_closure_check(
     '30810000-0000-4000-8000-000000000302'
   ) #> '{data,artifacts,0,size}' = 'null'::jsonb
-  and public.get_lcia_scope_closure_check(
+  and api.get_lcia_scope_closure_check(
     '30810000-0000-4000-8000-000000000302'
   ) #> '{data,artifacts,0,checksumSha256}' = 'null'::jsonb
-  and public.get_lcia_scope_closure_check(
+  and api.get_lcia_scope_closure_check(
     '30810000-0000-4000-8000-000000000302'
   ) #> '{data,artifacts,0,artifactExpiresAt}' = 'null'::jsonb,
   'wrong-job XLSX summary fails without leaking integrity or expiry metadata'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000302',
     'closure_report_xlsx'
   ) ->> 'code',
@@ -570,7 +570,7 @@ select is(
 );
 
 reset role;
-update public.lcia_scope_closure_checks
+update private.lcia_scope_closure_checks
 set report_artifact_id = '30810000-0000-4000-8000-000000000201',
     complete_machine_result_artifact_id =
       '30810000-0000-4000-8000-000000000210',
@@ -584,22 +584,22 @@ select set_config(
   true
 );
 select ok(
-  public.get_lcia_scope_closure_check(
+  api.get_lcia_scope_closure_check(
     '30810000-0000-4000-8000-000000000302'
   ) #>> '{data,artifacts,1,artifactState}' = 'failed'
-  and public.get_lcia_scope_closure_check(
+  and api.get_lcia_scope_closure_check(
     '30810000-0000-4000-8000-000000000302'
   ) #> '{data,artifacts,1,size}' = 'null'::jsonb
-  and public.get_lcia_scope_closure_check(
+  and api.get_lcia_scope_closure_check(
     '30810000-0000-4000-8000-000000000302'
   ) #> '{data,artifacts,1,checksumSha256}' = 'null'::jsonb
-  and public.get_lcia_scope_closure_check(
+  and api.get_lcia_scope_closure_check(
     '30810000-0000-4000-8000-000000000302'
   ) #> '{data,artifacts,1,artifactExpiresAt}' = 'null'::jsonb,
   'non-source-job manifest summary fails without leaking metadata'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000302',
     'closure_issue_manifest'
   ) ->> 'code',
@@ -608,7 +608,7 @@ select is(
 );
 
 reset role;
-update public.lcia_scope_closure_checks
+update private.lcia_scope_closure_checks
 set reused_from_check_id = '30810000-0000-4000-8000-000000000306'
 where id = '30810000-0000-4000-8000-000000000302';
 set local role authenticated;
@@ -619,14 +619,14 @@ select set_config(
   true
 );
 select is(
-  public.get_lcia_scope_closure_check(
+  api.get_lcia_scope_closure_check(
     '30810000-0000-4000-8000-000000000302'
   ) #>> '{data,artifacts,1,artifactState}',
   'ready',
   'manifest from the exact reused source job is owner-summary ready'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000302',
     'closure_issue_manifest'
   ) #>> '{data,artifactState}',
@@ -635,7 +635,7 @@ select is(
 );
 
 reset role;
-update public.lcia_scope_closure_checks
+update private.lcia_scope_closure_checks
 set complete_machine_result_artifact_id =
       '30810000-0000-4000-8000-000000000202',
     reused_from_check_id = null
@@ -649,17 +649,17 @@ select set_config(
 );
 
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000302'
   ),
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000302',
     'closure_report_xlsx'
   ),
   'legacy Edge call shape is exactly equivalent to the XLSX selector'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000302',
     'closure_issue_manifest'
   ) #>> '{data,artifactRole}',
@@ -667,7 +667,7 @@ select is(
   'strict manifest selector remains available'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000302',
     'closure_bundle'
   ) ->> 'code',
@@ -675,24 +675,24 @@ select is(
   'strict download RPC still rejects non-public selectors'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000303'
   ),
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000303',
     'closure_report_xlsx'
   ),
   'legacy overload preserves owner XLSX expiry semantics'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000303'
   ) ->> 'code',
   'closure_report_expired',
   'owner expired legacy download remains HTTP-410 shaped'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000304',
     'closure_report_xlsx'
   ) ->> 'code',
@@ -700,7 +700,7 @@ select is(
   'deleted download remains unavailable'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000305',
     'closure_report_xlsx'
   ) ->> 'code',
@@ -708,7 +708,7 @@ select is(
   'invalid linked media remains unavailable'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000306',
     'closure_report_xlsx'
   ) ->> 'code',
@@ -722,31 +722,31 @@ select set_config(
   true
 );
 select is(
-  public.get_lcia_scope_closure_check(
+  api.get_lcia_scope_closure_check(
     '30810000-0000-4000-8000-000000000302'
   ) ->> 'code',
   'closure_check_not_found',
   'cross-owner ready check read remains opaque'
 );
 select is(
-  public.get_lcia_scope_closure_check(
+  api.get_lcia_scope_closure_check(
     '30810000-0000-4000-8000-000000000303'
   ) ->> 'code',
   'closure_check_not_found',
   'cross-owner expired check read remains opaque'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000302'
   ),
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000302',
     'closure_report_xlsx'
   ),
   'legacy and strict XLSX calls share cross-owner opacity'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000302',
     'closure_issue_manifest'
   ) ->> 'code',
@@ -760,14 +760,14 @@ select set_config(
   true
 );
 select is(
-  public.get_lcia_scope_closure_check(
+  api.get_lcia_scope_closure_check(
     '30810000-0000-4000-8000-000000000302'
   ) ->> 'code',
   'closure_check_not_found',
   'ordinary authenticated member cannot distinguish an owner check'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000302'
   ) ->> 'code',
   'closure_check_not_found',
@@ -776,14 +776,14 @@ select is(
 
 select set_config('request.jwt.claim.sub', '', true);
 select is(
-  public.get_lcia_scope_closure_check(
+  api.get_lcia_scope_closure_check(
     '30810000-0000-4000-8000-000000000302'
   ) ->> 'code',
   'auth_required',
   'authenticated grant without an actor claim fails closed'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30810000-0000-4000-8000-000000000302'
   ) ->> 'code',
   'auth_required',

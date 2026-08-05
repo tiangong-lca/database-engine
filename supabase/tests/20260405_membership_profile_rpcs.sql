@@ -174,7 +174,7 @@ values
     false
   );
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values
   ('71000000-0000-0000-0000-000000000001', '{"email":"team-owner@example.com","display_name":"Team Owner"}'::jsonb, null),
   ('71000000-0000-0000-0000-000000000002', '{"email":"team-admin@example.com","display_name":"Team Admin"}'::jsonb, null),
@@ -187,12 +187,12 @@ values
   ('71000000-0000-0000-0000-000000000009', '{"email":"new-user@example.com","display_name":"New User"}'::jsonb, null),
   ('71000000-0000-0000-0000-000000000010', '{"email":"review-candidate@example.com","display_name":"Review Candidate"}'::jsonb, null);
 
-insert into public.teams (id, json, rank, is_public, modified_at)
+insert into private.teams (id, json, rank, is_public, modified_at)
 values
   ('72000000-0000-0000-0000-000000000001', '{"title":[{"@xml:lang":"en","#text":"Primary Team"}]}'::jsonb, 1, false, now()),
   ('72000000-0000-0000-0000-000000000002', '{"title":[{"@xml:lang":"en","#text":"Secondary Team"}]}'::jsonb, 5, true, now());
 
-insert into public.roles (user_id, team_id, role, modified_at)
+insert into private.roles (user_id, team_id, role, modified_at)
 values
   ('71000000-0000-0000-0000-000000000001', '72000000-0000-0000-0000-000000000001', 'owner', now()),
   ('71000000-0000-0000-0000-000000000002', '72000000-0000-0000-0000-000000000001', 'admin', now()),
@@ -202,7 +202,7 @@ values
   ('71000000-0000-0000-0000-000000000007', '00000000-0000-0000-0000-000000000000', 'review-admin', now()),
   ('71000000-0000-0000-0000-000000000008', '00000000-0000-0000-0000-000000000000', 'review-member', now());
 
-insert into public.reviews (
+insert into private.reviews (
   id,
   data_id,
   data_version,
@@ -234,7 +234,7 @@ values
     now()
   );
 
-insert into public.comments (
+insert into private.comments (
   review_id,
   reviewer_id,
   json,
@@ -264,7 +264,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '71000000-0000-0000-0000-000000000009', true);
 
 select is(
-  public.cmd_team_create(
+  api.cmd_team_create(
     '72000000-0000-0000-0000-000000000009',
     '{"title":[{"@xml:lang":"en","#text":"Created Team"}]}'::jsonb,
     0,
@@ -276,7 +276,7 @@ select is(
 );
 
 select is(
-  (select role from public.roles where user_id = '71000000-0000-0000-0000-000000000009' and team_id = '72000000-0000-0000-0000-000000000009'),
+  (select role from private.roles where user_id = '71000000-0000-0000-0000-000000000009' and team_id = '72000000-0000-0000-0000-000000000009'),
   'owner',
   'team create command initializes the owner role in the same transaction'
 );
@@ -286,7 +286,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '71000000-0000-0000-0000-000000000001', true);
 
 select is(
-  public.cmd_team_change_member_role(
+  api.cmd_team_change_member_role(
     '72000000-0000-0000-0000-000000000001',
     '71000000-0000-0000-0000-000000000004',
     'is_invited',
@@ -298,7 +298,7 @@ select is(
 );
 
 select is(
-  public.cmd_team_change_member_role(
+  api.cmd_team_change_member_role(
     '72000000-0000-0000-0000-000000000001',
     '71000000-0000-0000-0000-000000000003',
     'admin',
@@ -317,7 +317,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '71000000-0000-0000-0000-000000000004', true);
 
 select is(
-  public.cmd_team_accept_invitation(
+  api.cmd_team_accept_invitation(
     '72000000-0000-0000-0000-000000000001',
     '{"command":"team_accept"}'::jsonb
   )->>'ok',
@@ -326,7 +326,7 @@ select is(
 );
 
 select is(
-  (select role from public.roles where user_id = '71000000-0000-0000-0000-000000000004' and team_id = '72000000-0000-0000-0000-000000000001'),
+  (select role from private.roles where user_id = '71000000-0000-0000-0000-000000000004' and team_id = '72000000-0000-0000-0000-000000000001'),
   'member',
   'accept invitation upgrades the invited actor to member'
 );
@@ -336,7 +336,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '71000000-0000-0000-0000-000000000003', true);
 
 select is(
-  public.cmd_team_accept_invitation(
+  api.cmd_team_accept_invitation(
     '72000000-0000-0000-0000-000000000001',
     '{"command":"team_accept"}'::jsonb
   )->>'code',
@@ -349,7 +349,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '71000000-0000-0000-0000-000000000001', true);
 
 select is(
-  public.cmd_team_reinvite_member(
+  api.cmd_team_reinvite_member(
     '72000000-0000-0000-0000-000000000001',
     '71000000-0000-0000-0000-000000000004',
     '{"command":"team_reinvite"}'::jsonb
@@ -363,7 +363,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '71000000-0000-0000-0000-000000000006', true);
 
 select is(
-  public.cmd_system_change_member_role(
+  api.cmd_system_change_member_role(
     '71000000-0000-0000-0000-000000000009',
     'member',
     'set',
@@ -374,7 +374,7 @@ select is(
 );
 
 select is(
-  public.cmd_system_change_member_role(
+  api.cmd_system_change_member_role(
     '71000000-0000-0000-0000-000000000009',
     'admin',
     'set',
@@ -389,7 +389,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '71000000-0000-0000-0000-000000000005', true);
 
 select is(
-  public.cmd_system_change_member_role(
+  api.cmd_system_change_member_role(
     '71000000-0000-0000-0000-000000000009',
     'admin',
     'set',
@@ -404,7 +404,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '71000000-0000-0000-0000-000000000007', true);
 
 select is(
-  public.cmd_review_change_member_role(
+  api.cmd_review_change_member_role(
     '71000000-0000-0000-0000-000000000010',
     'review-member',
     'set',
@@ -415,7 +415,7 @@ select is(
 );
 
 select is(
-  public.cmd_review_change_member_role(
+  api.cmd_review_change_member_role(
     '71000000-0000-0000-0000-000000000010',
     'review-admin',
     'set',
@@ -430,7 +430,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '71000000-0000-0000-0000-000000000001', true);
 
 select is(
-  public.cmd_team_update_profile(
+  api.cmd_team_update_profile(
     '72000000-0000-0000-0000-000000000001',
     '{"title":[{"@xml:lang":"en","#text":"Primary Team Updated"}]}'::jsonb,
     true,
@@ -441,13 +441,13 @@ select is(
 );
 
 select is(
-  (select rank::text from public.teams where id = '72000000-0000-0000-0000-000000000001'),
+  (select rank::text from private.teams where id = '72000000-0000-0000-0000-000000000001'),
   '1',
   'team profile updates do not mutate rank'
 );
 
 select is(
-  public.cmd_team_set_rank(
+  api.cmd_team_set_rank(
     '72000000-0000-0000-0000-000000000001',
     9,
     '{"command":"team_set_rank"}'::jsonb
@@ -457,7 +457,7 @@ select is(
 );
 
 select is(
-  (select json #>> '{title,0,#text}' from public.teams where id = '72000000-0000-0000-0000-000000000001'),
+  (select json #>> '{title,0,#text}' from private.teams where id = '72000000-0000-0000-0000-000000000001'),
   'Primary Team Updated',
   'team rank updates do not overwrite the team profile json'
 );
@@ -467,7 +467,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '71000000-0000-0000-0000-000000000008', true);
 
 select is(
-  public.cmd_user_update_contact(
+  api.cmd_user_update_contact(
     '71000000-0000-0000-0000-000000000008',
     '{"email":"review-member@example.com"}'::jsonb,
     '{"command":"user_update_contact"}'::jsonb
@@ -481,7 +481,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '71000000-0000-0000-0000-000000000001', true);
 
 select is(
-  public.cmd_user_update_contact(
+  api.cmd_user_update_contact(
     '71000000-0000-0000-0000-000000000008',
     '{"email":"blocked@example.com"}'::jsonb,
     '{"command":"user_update_contact"}'::jsonb
@@ -495,7 +495,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '71000000-0000-0000-0000-000000000001', true);
 
 select is(
-  (select count(*)::text from public.qry_team_get_member_list('72000000-0000-0000-0000-000000000001', 1, 20, 'created_at', 'desc')),
+  (select count(*)::text from api.qry_team_get_member_list('72000000-0000-0000-0000-000000000001', 1, 20, 'created_at', 'desc')),
   '4',
   'team member list query returns the full team membership view from one RPC'
 );
@@ -505,7 +505,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '71000000-0000-0000-0000-000000000003', true);
 
 select is(
-  (select count(*)::text from public.qry_team_get_member_list('72000000-0000-0000-0000-000000000001', 1, 20, 'created_at', 'desc')),
+  (select count(*)::text from api.qry_team_get_member_list('72000000-0000-0000-0000-000000000001', 1, 20, 'created_at', 'desc')),
   '0',
   'team member list query is hidden from non-manager team members'
 );
@@ -515,7 +515,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '71000000-0000-0000-0000-000000000005', true);
 
 select is(
-  (select count(*)::text from public.qry_system_get_member_list(1, 20, 'created_at', 'desc')),
+  (select count(*)::text from api.qry_system_get_member_list(1, 20, 'created_at', 'desc')),
   '3',
   'system member list query returns the system scope membership rows'
 );
@@ -525,7 +525,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '71000000-0000-0000-0000-000000000007', true);
 
 select is(
-  (select count(*)::text from public.qry_review_get_member_list(1, 20, 'created_at', 'desc', 'review-admin')),
+  (select count(*)::text from api.qry_review_get_member_list(1, 20, 'created_at', 'desc', 'review-admin')),
   '2',
   'review member list query can filter by review role'
 );
@@ -533,7 +533,7 @@ select is(
 select is(
   (
     select format('%s/%s', pending_count, reviewed_count)
-    from public.qry_review_get_member_workload(1, 20, 'created_at', 'desc', 'review-member')
+    from api.qry_review_get_member_workload(1, 20, 'created_at', 'desc', 'review-member')
     where user_id = '71000000-0000-0000-0000-000000000008'
   ),
   '1/1',

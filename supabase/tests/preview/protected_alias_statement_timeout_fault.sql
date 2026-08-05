@@ -231,8 +231,8 @@ select
   function_meta.provolatile
 from pg_catalog.pg_proc as function_meta
 where function_meta.oid in (
-  'public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure,
-  'public.cmd_dataset_alias_execution_execute(uuid,text)'::regprocedure
+  'private.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure,
+  'private.cmd_dataset_alias_execution_execute(uuid,text)'::regprocedure
 );
 
 select ok(
@@ -250,16 +250,16 @@ select ok(
       ]::text[]
     from pg_catalog.pg_proc as function_meta
     where function_meta.oid =
-      'public.cmd_dataset_alias_execution_execute(uuid,text)'::regprocedure
+      'private.cmd_dataset_alias_execution_execute(uuid,text)'::regprocedure
   )
   and has_function_privilege(
     'service_role',
-    'public.cmd_dataset_alias_execution_execute(uuid,text)',
+    'private.cmd_dataset_alias_execution_execute(uuid,text)',
     'execute'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.cmd_dataset_alias_execution_execute(uuid,text)',
+    'private.cmd_dataset_alias_execution_execute(uuid,text)',
     'execute'
   ),
   'baseline captures both functions and the released 60-second service-only executor contract'
@@ -277,7 +277,7 @@ begin
       where id = 'e2620000-0000-4000-8000-000000000002'
     ) or exists (
       select 1
-      from public.command_audit_log
+      from private.command_audit_log
       where command = 'protected_alias_statement_timeout_fault_sentinel'
     ) then
     raise exception using
@@ -404,7 +404,7 @@ insert into util.dataset_alias_execution_requests (
 -- two-second sleep.  A real executor statement_timeout must cancel the call;
 -- its subtransaction then removes both this sentinel and the executor's prior
 -- status='running' update.
-create or replace function public.cmd_dataset_alias_plan_guarded(
+create or replace function private.cmd_dataset_alias_plan_guarded(
   p_plan jsonb
 ) returns jsonb
 language plpgsql
@@ -412,7 +412,7 @@ security definer
 set search_path = ''
 as $fault_primitive$
 begin
-  insert into public.command_audit_log (
+  insert into private.command_audit_log (
     command,
     actor_user_id,
     target_table,
@@ -442,7 +442,7 @@ begin
 end
 $fault_primitive$;
 
-alter function public.cmd_dataset_alias_execution_execute(uuid, text)
+alter function private.cmd_dataset_alias_execution_execute(uuid, text)
   set statement_timeout = '250ms';
 
 create or replace function pg_temp.capture_protected_timeout()
@@ -452,7 +452,7 @@ set search_path = ''
 as $capture$
 begin
   begin
-    perform public.cmd_dataset_alias_execution_execute(
+    perform private.cmd_dataset_alias_execution_execute(
       'e2620000-0000-4000-8000-000000000002',
       repeat('e', 64)
     );
@@ -562,7 +562,7 @@ select ok(
 select is(
   (
     select count(*)::integer
-    from public.command_audit_log as audit
+    from private.command_audit_log as audit
     where audit.command = 'protected_alias_statement_timeout_fault_sentinel'
   ),
   0,
@@ -608,12 +608,12 @@ select ok(
   )
   and has_function_privilege(
     'service_role',
-    'public.cmd_dataset_alias_execution_execute(uuid,text)',
+    'private.cmd_dataset_alias_execution_execute(uuid,text)',
     'execute'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.cmd_dataset_alias_execution_execute(uuid,text)',
+    'private.cmd_dataset_alias_execution_execute(uuid,text)',
     'execute'
   ),
   'temporary fault injection preserves exact ACLs and the service-only executor boundary'

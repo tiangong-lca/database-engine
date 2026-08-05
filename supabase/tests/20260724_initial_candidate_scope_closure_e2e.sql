@@ -63,9 +63,9 @@ insert into auth.users (
   false,
   false
 );
-insert into public.users(id, raw_user_meta_data, contact)
+insert into private.users(id, raw_user_meta_data, contact)
 values ('c7240000-0000-4000-8000-000000000001', '{}', null);
-insert into public.teams(id, json, rank, is_public)
+insert into private.teams(id, json, rank, is_public)
 values (
   '00000000-0000-0000-0000-000000000000',
   '{"name":"System"}',
@@ -73,7 +73,7 @@ values (
   false
 )
 on conflict (id) do nothing;
-insert into public.roles(user_id, team_id, role)
+insert into private.roles(user_id, team_id, role)
 values (
   'c7240000-0000-4000-8000-000000000001',
   '00000000-0000-0000-0000-000000000000',
@@ -149,7 +149,7 @@ select is(
 select ok(
   not exists (
     select 1
-    from public.lca_release_publications
+    from private.lca_release_publications
     where is_current = true and status = 'current'
   ),
   'fixture has no current formal release'
@@ -170,7 +170,7 @@ create temporary table candidate_closure_responses(
 insert into candidate_closure_responses values
 (
   'candidate-subset-a',
-  public.cmd_lcia_scope_closure_check_request_v2(
+  api.cmd_lcia_scope_closure_check_request_v2(
     '{
       "coverageMode":"subset",
       "processes":[{
@@ -188,7 +188,7 @@ insert into candidate_closure_responses values
 ),
 (
   'candidate-subset-b',
-  public.cmd_lcia_scope_closure_check_request_v2(
+  api.cmd_lcia_scope_closure_check_request_v2(
     '{
       "coverageMode":"subset",
       "processes":[{
@@ -220,7 +220,7 @@ reset role;
 select is(
   (
     select count(distinct data_snapshot_token)
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where request_idempotency_token in ('candidate-subset-a', 'candidate-subset-b')
   ),
   1::bigint,
@@ -229,7 +229,7 @@ select is(
 select is(
   (
     select count(distinct scan_execution_id)
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where request_idempotency_token in ('candidate-subset-a', 'candidate-subset-b')
   ),
   1::bigint,
@@ -238,7 +238,7 @@ select is(
 select is(
   (
     select requested_scope_manifest->'processes'->0->>'version'
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where request_idempotency_token = 'candidate-subset-a'
   ),
   '01.00.000',
@@ -247,7 +247,7 @@ select is(
 select is(
   (
     select requested_scope_manifest->'lciaMethods'->0->>'id'
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where request_idempotency_token = 'candidate-subset-a'
   ),
   '503699e0-eca9-4089-8bf8-e0f49c93e578',
@@ -256,8 +256,8 @@ select is(
 select is(
   (
     select snapshot.root_manifest->'candidateData'->>'sourceKind'
-    from public.lcia_scope_closure_checks closure_check
-    join public.lcia_scope_closure_data_snapshots snapshot
+    from private.lcia_scope_closure_checks closure_check
+    join private.lcia_scope_closure_data_snapshots snapshot
       using (data_snapshot_token)
     where closure_check.request_idempotency_token = 'candidate-subset-a'
   ),
@@ -268,8 +268,8 @@ select is(
   (
     select snapshot.root_manifest
       ->'currentPublicRelease'->>'releaseRunId'
-    from public.lcia_scope_closure_checks closure_check
-    join public.lcia_scope_closure_data_snapshots snapshot
+    from private.lcia_scope_closure_checks closure_check
+    join private.lcia_scope_closure_data_snapshots snapshot
       using (data_snapshot_token)
     where closure_check.request_idempotency_token = 'candidate-subset-a'
   ),
@@ -279,8 +279,8 @@ select is(
 select is(
   (
     select count(*)
-    from public.lcia_scope_closure_checks closure_check
-    join public.lcia_scope_closure_data_snapshots snapshot
+    from private.lcia_scope_closure_checks closure_check
+    join private.lcia_scope_closure_data_snapshots snapshot
       using (data_snapshot_token)
     cross join lateral jsonb_array_elements(
       snapshot.root_manifest->'datasets'
@@ -298,8 +298,8 @@ select is(
 select is(
   (
     select count(*)
-    from public.lcia_scope_closure_checks closure_check
-    join public.lcia_scope_closure_data_snapshots snapshot
+    from private.lcia_scope_closure_checks closure_check
+    join private.lcia_scope_closure_data_snapshots snapshot
       using (data_snapshot_token)
     cross join lateral jsonb_array_elements(
       snapshot.root_manifest->'datasets'
@@ -325,7 +325,7 @@ select set_config(
 insert into candidate_closure_responses values
 (
   'candidate-global',
-  public.cmd_lcia_scope_closure_check_request_v2(
+  api.cmd_lcia_scope_closure_check_request_v2(
     '{
       "coverageMode":"global_eligible",
       "processes":[],
@@ -348,7 +348,7 @@ select is(
   'zero-release global eligible preflight is accepted'
 );
 select is(
-  public.get_lcia_scope_closure_check(
+  api.get_lcia_scope_closure_check(
     (
       select (result->'data'->>'closureCheckId')::uuid
       from candidate_closure_responses
@@ -359,7 +359,7 @@ select is(
   'queued zero-release checks project unknown scan completeness'
 );
 select is(
-  public.get_lcia_scope_closure_check(
+  api.get_lcia_scope_closure_check(
     (
       select (result->'data'->>'closureCheckId')::uuid
       from candidate_closure_responses
@@ -375,7 +375,7 @@ reset role;
 select is(
   (
     select requested_scope_manifest->'processes'->0->>'version'
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where request_idempotency_token = 'candidate-global'
   ),
   '02.00.000',
@@ -391,7 +391,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_lcia_scope_closure_check_request_v2(
+  api.cmd_lcia_scope_closure_check_request_v2(
     '{
       "coverageMode":"subset",
       "processes":[{
@@ -410,7 +410,7 @@ select is(
   'non-eligible exact process identities remain rejected'
 );
 select is(
-  public.cmd_lcia_scope_closure_check_request_v2(
+  api.cmd_lcia_scope_closure_check_request_v2(
     '{
       "coverageMode":"subset",
       "processes":[{

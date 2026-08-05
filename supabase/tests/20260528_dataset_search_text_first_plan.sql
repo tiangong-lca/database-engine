@@ -6,7 +6,7 @@ set local search_path = extensions, public;
 select plan(16);
 
 select ok(
-  strpos(pg_get_functiondef('public.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'private.search_flows_latest_impl') > 0,
+  strpos(pg_get_functiondef('api.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'private.search_flows_latest_impl') > 0,
   'flow public latest search delegates scanning to the private helper'
 );
 
@@ -27,7 +27,7 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'private.search_processes_latest_impl') > 0,
+  strpos(pg_get_functiondef('api.search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'private.search_processes_latest_impl') > 0,
   'process public latest search delegates scanning to the private helper'
 );
 
@@ -48,7 +48,7 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'private.search_lifecyclemodels_latest_impl') > 0,
+  strpos(pg_get_functiondef('api.search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'private.search_lifecyclemodels_latest_impl') > 0,
   'lifecyclemodel public latest search delegates scanning to the private helper'
 );
 
@@ -84,7 +84,7 @@ select ok(
 );
 
 select ok(
-  not (select prosecdef from pg_proc where oid = 'public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure),
+  not (select prosecdef from pg_proc where oid = 'api._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure),
   'generic regclass search helper remains security invoker'
 );
 

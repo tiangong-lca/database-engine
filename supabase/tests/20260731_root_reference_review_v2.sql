@@ -44,7 +44,7 @@ values
     now(), now(), false, false
   );
 
-insert into public.users (id, raw_user_meta_data)
+insert into private.users (id, raw_user_meta_data)
 values
   (
     '19000000-0000-0000-0000-000000000001',
@@ -59,7 +59,7 @@ values
     '{"email":"review-admin@example.com","display_name":"Review Admin"}'
   );
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values
   (
     '29000000-0000-0000-0000-000000000001',
@@ -75,7 +75,7 @@ values
   )
 on conflict (id) do nothing;
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values
   (
     '19000000-0000-0000-0000-000000000001',
@@ -121,7 +121,7 @@ select set_config(
 );
 
 create temporary table review_v2_result as
-select public.cmd_review_submit_v2(
+select api.cmd_review_submit_v2(
   'contacts',
   '39000000-0000-0000-0000-000000000001',
   '01.00.000',
@@ -136,15 +136,15 @@ select is((select result #>> '{data,reviewKind}' from review_v2_result),
 select is((select state_code from public.contacts
   where id = '39000000-0000-0000-0000-000000000001'), 20,
   'submitted root becomes read-only state 20');
-select is((select count(*)::integer from public.reviews
+select is((select count(*)::integer from private.reviews
   where review_kind = 'root'), 1, 'one Root Review is created');
 select is((select jsonb_array_length(scope_history->'snapshots')
-  from public.reviews where review_kind = 'root'), 1,
+  from private.reviews where review_kind = 'root'), 1,
   'Root Review receives its initial immutable scope snapshot');
 select is((select cardinality(current_reference_review_ids)
-  from public.reviews where review_kind = 'root'), 0,
+  from private.reviews where review_kind = 'root'), 0,
   'a Contact with no references has an empty child review list');
-select matches((select submitted_revision_checksum from public.reviews
+select matches((select submitted_revision_checksum from private.reviews
   where review_kind = 'root'), '^[a-f0-9]{64}$',
   'submitted checksum matches the Gate checksum format');
 
@@ -154,8 +154,8 @@ select set_config(
   true
 );
 select ok((
-  public.cmd_review_assign_reviewers(
-    (select id from public.reviews where review_kind = 'root'),
+  api.cmd_review_assign_reviewers(
+    (select id from private.reviews where review_kind = 'root'),
     '["19000000-0000-0000-0000-000000000002"]'::jsonb,
     now() + interval '7 days',
     '{}'::jsonb
@@ -168,14 +168,14 @@ select set_config(
   true
 );
 select ok((
-  public.cmd_simple_review_submit_decision(
-    (select id from public.reviews where review_kind = 'root'),
+  api.cmd_simple_review_submit_decision(
+    (select id from private.reviews where review_kind = 'root'),
     'approve',
     null,
     '{}'::jsonb
   )->>'ok'
 )::boolean, 'Reviewer approval requires no opinion payload');
-select is((select state_code from public.comments limit 1), 1,
+select is((select state_code from private.comments limit 1), 1,
   'Reviewer approval is stored as comment state 1');
 
 select set_config(
@@ -184,15 +184,15 @@ select set_config(
   true
 );
 select ok((
-  public.cmd_review_finalize_approve(
-    (select id from public.reviews where review_kind = 'root'),
+  api.cmd_review_finalize_approve(
+    (select id from private.reviews where review_kind = 'root'),
     '{}'::jsonb
   )->>'ok'
 )::boolean, 'Review Admin can finalize the completed Root Review');
 select is((select state_code from public.contacts
   where id = '39000000-0000-0000-0000-000000000001'), 100,
   'final approval moves the exact dataset to Open Data state 100');
-select is((select state_code from public.comments limit 1), 2,
+select is((select state_code from private.comments limit 1), 2,
   'final approval archives Reviewer comments as state 2');
 
 select throws_ok(
@@ -225,7 +225,7 @@ select set_config(
   true
 );
 
-select public.cmd_review_submit_v2(
+select api.cmd_review_submit_v2(
   'contacts',
   '39000000-0000-0000-0000-000000000002',
   '01.00.000',
@@ -241,7 +241,7 @@ select set_config(
 
 select private.review_notify_event_v1(
   'root_entered_review',
-  (select id from public.reviews
+  (select id from private.reviews
     where review_kind = 'root'
       and data_id = '39000000-0000-0000-0000-000000000002'),
   '19000000-0000-0000-0000-000000000001',
@@ -249,7 +249,7 @@ select private.review_notify_event_v1(
   'contacts',
   '39000000-0000-0000-0000-000000000002',
   '01.00.000',
-  (select id from public.reviews
+  (select id from private.reviews
     where review_kind = 'root'
       and data_id = '39000000-0000-0000-0000-000000000002'),
   1,
@@ -258,7 +258,7 @@ select private.review_notify_event_v1(
 
 create temporary table review_v2_notification_before_reject as
 select id
-from public.notifications
+from private.notifications
 where recipient_user_id = '19000000-0000-0000-0000-000000000001'
   and sender_user_id = '19000000-0000-0000-0000-000000000003'
   and type = 'review_event'
@@ -267,8 +267,8 @@ where recipient_user_id = '19000000-0000-0000-0000-000000000001'
   and dataset_version = '01.00.000';
 
 select ok((
-  public.cmd_review_finalize_reject(
-    (select id from public.reviews
+  api.cmd_review_finalize_reject(
+    (select id from private.reviews
       where review_kind = 'root'
         and data_id = '39000000-0000-0000-0000-000000000002'),
     'notification identity regression',
@@ -285,14 +285,14 @@ select is((
 
 select is((
   select state_code
-  from public.reviews
+  from private.reviews
   where review_kind = 'root'
     and data_id = '39000000-0000-0000-0000-000000000002'
 ), -1, 'successful rejection keeps the review transition in the same transaction');
 
 select is((
   select count(*)::integer
-  from public.notifications
+  from private.notifications
   where recipient_user_id = '19000000-0000-0000-0000-000000000001'
     and sender_user_id = '19000000-0000-0000-0000-000000000003'
     and type = 'review_event'
@@ -303,7 +303,7 @@ select is((
 
 select is((
   select id
-  from public.notifications
+  from private.notifications
   where recipient_user_id = '19000000-0000-0000-0000-000000000001'
     and sender_user_id = '19000000-0000-0000-0000-000000000003'
     and type = 'review_event'
@@ -315,7 +315,7 @@ select is((
 
 select is((
   select json->>'event_type'
-  from public.notifications
+  from private.notifications
   where recipient_user_id = '19000000-0000-0000-0000-000000000001'
     and sender_user_id = '19000000-0000-0000-0000-000000000003'
     and type = 'review_event'
@@ -326,7 +326,7 @@ select is((
 
 select is((
   select json->>'reason_code'
-  from public.notifications
+  from private.notifications
   where recipient_user_id = '19000000-0000-0000-0000-000000000001'
     and sender_user_id = '19000000-0000-0000-0000-000000000003'
     and type = 'review_event'
@@ -337,7 +337,7 @@ select is((
 
 select private.review_notify_event_v1(
   'root_rejected',
-  (select id from public.reviews
+  (select id from private.reviews
     where review_kind = 'root'
       and data_id = '39000000-0000-0000-0000-000000000002'),
   '19000000-0000-0000-0000-000000000001',
@@ -345,7 +345,7 @@ select private.review_notify_event_v1(
   'contacts',
   '39000000-0000-0000-0000-000000000002',
   '01.00.000',
-  (select id from public.reviews
+  (select id from private.reviews
     where review_kind = 'root'
       and data_id = '39000000-0000-0000-0000-000000000002'),
   1,
@@ -354,7 +354,7 @@ select private.review_notify_event_v1(
 
 select is((
   select count(*)::integer
-  from public.notifications
+  from private.notifications
   where recipient_user_id = '19000000-0000-0000-0000-000000000001'
     and sender_user_id = '19000000-0000-0000-0000-000000000003'
     and type = 'review_event'

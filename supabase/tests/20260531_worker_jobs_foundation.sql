@@ -5,38 +5,38 @@ set local search_path = extensions, public, auth;
 
 select plan(46);
 
-select ok(to_regclass('public.worker_job_kinds') is not null, 'worker job kind registry exists');
-select ok(to_regclass('public.worker_jobs') is not null, 'worker_jobs table exists');
-select ok(to_regclass('public.worker_job_events') is not null, 'worker job events table exists');
-select ok(to_regclass('public.worker_job_artifacts') is not null, 'worker job artifacts table exists');
+select ok(to_regclass('private.worker_job_kinds') is not null, 'worker job kind registry exists');
+select ok(to_regclass('private.worker_jobs') is not null, 'worker_jobs table exists');
+select ok(to_regclass('private.worker_job_events') is not null, 'worker job events table exists');
+select ok(to_regclass('private.worker_job_artifacts') is not null, 'worker job artifacts table exists');
 
 select ok(
-  (select relrowsecurity from pg_class where oid = 'public.worker_jobs'::regclass),
+  (select relrowsecurity from pg_class where oid = 'private.worker_jobs'::regclass),
   'worker_jobs has RLS enabled'
 );
 
 select ok(
-  (select relrowsecurity from pg_class where oid = 'public.worker_job_events'::regclass),
+  (select relrowsecurity from pg_class where oid = 'private.worker_job_events'::regclass),
   'worker_job_events has RLS enabled'
 );
 
 select ok(
-  (select relrowsecurity from pg_class where oid = 'public.worker_job_artifacts'::regclass),
+  (select relrowsecurity from pg_class where oid = 'private.worker_job_artifacts'::regclass),
   'worker_job_artifacts has RLS enabled'
 );
 
 select ok(
-  not has_table_privilege('authenticated', 'public.worker_jobs', 'INSERT'),
+  not has_table_privilege('authenticated', 'private.worker_jobs', 'INSERT'),
   'authenticated cannot directly insert worker_jobs'
 );
 
 select ok(
-  not has_table_privilege('authenticated', 'public.worker_jobs', 'SELECT'),
+  not has_table_privilege('authenticated', 'private.worker_jobs', 'SELECT'),
   'authenticated cannot directly select worker_jobs'
 );
 
 select cmp_ok(
-  (select count(*) from public.worker_job_kinds),
+  (select count(*) from private.worker_job_kinds),
   '>=',
   13::bigint,
   'initial worker job kinds are registered'
@@ -45,7 +45,7 @@ select cmp_ok(
 select ok(
   exists (
     select 1
-    from public.worker_job_kinds
+    from private.worker_job_kinds
     where job_kind = 'national_carbon.process_flow_graph_cache_build'
       and worker_runtime = 'calculator'
       and worker_queue = 'maintenance'
@@ -67,7 +67,7 @@ select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 select ok(
   not has_function_privilege(
     'authenticated',
-    'public.worker_enqueue_job(text,jsonb,text,text,uuid,text,uuid,text,uuid,text,text,text,integer,text,timestamp with time zone,text,integer,timestamp with time zone,jsonb,uuid,uuid)',
+    'private.worker_enqueue_job(text,jsonb,text,text,uuid,text,uuid,text,uuid,text,text,text,integer,text,timestamp with time zone,text,integer,timestamp with time zone,jsonb,uuid,uuid)',
     'EXECUTE'
   ),
   'authenticated users cannot call worker_enqueue_job directly'
@@ -76,7 +76,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'authenticated',
-    'public.worker_claim_jobs(text,text,integer,integer)',
+    'private.worker_claim_jobs(text,text,integer,integer)',
     'EXECUTE'
   ),
   'authenticated users cannot call worker_claim_jobs directly'
@@ -102,7 +102,7 @@ select set_config('request.jwt.claim.role', 'service_role', true);
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
 select is(
-  public.worker_enqueue_job(
+  private.worker_enqueue_job(
     p_job_kind => 'not.a.real.kind',
     p_requested_by => '96000000-0000-4000-8000-000000000001'
   )->>'code',
@@ -111,7 +111,7 @@ select is(
 );
 
 select is(
-  public.worker_enqueue_job(
+  private.worker_enqueue_job(
     p_job_kind => 'review_submit.gate'
   )->>'code',
   'WORKER_JOB_REQUESTED_BY_REQUIRED',
@@ -131,7 +131,7 @@ select
   'gate_primary',
   (result->'data'->>'id')::uuid
 from (
-  select public.worker_enqueue_job(
+  select private.worker_enqueue_job(
     p_job_kind => 'review_submit.gate',
     p_payload_json => '{"datasetRevision":{"table":"processes","id":"96000000-0000-4000-8000-000000000101","version":"01.00.000"}}'::jsonb,
     p_requested_by => '96000000-0000-4000-8000-000000000001',
@@ -146,7 +146,7 @@ from (
 select is(
   (
     select status
-    from public.worker_jobs
+    from private.worker_jobs
     where id = (select job_id from worker_job_test_ids where label = 'gate_primary')
   ),
   'queued',
@@ -154,7 +154,7 @@ select is(
 );
 
 select is(
-  public.worker_enqueue_job(
+  private.worker_enqueue_job(
     p_job_kind => 'review_submit.gate',
     p_payload_json => '{"datasetRevision":{"table":"processes","id":"96000000-0000-4000-8000-000000000101","version":"01.00.000"}}'::jsonb,
     p_requested_by => '96000000-0000-4000-8000-000000000001',
@@ -169,7 +169,7 @@ select is(
 );
 
 select is(
-  public.worker_enqueue_job(
+  private.worker_enqueue_job(
     p_job_kind => 'review_submit.gate',
     p_payload_json => '{}'::jsonb,
     p_requested_by => '96000000-0000-4000-8000-000000000001',
@@ -185,7 +185,7 @@ select
   'national_carbon_graph_cache',
   (result->'data'->>'id')::uuid
 from (
-  select public.worker_enqueue_job(
+  select private.worker_enqueue_job(
     p_job_kind => 'national_carbon.process_flow_graph_cache_build',
     p_payload_json => '{"environment":"test","execute":true}'::jsonb,
     p_requested_by => '96000000-0000-4000-8000-000000000001',
@@ -199,7 +199,7 @@ from (
 select is(
   (
     select job_kind || ':' || worker_queue || ':' || visibility || ':' || max_attempts::text || ':' || payload_schema_version
-    from public.worker_jobs
+    from private.worker_jobs
     where id = (select job_id from worker_job_test_ids where label = 'national_carbon_graph_cache')
   ),
   'national_carbon.process_flow_graph_cache_build:maintenance:operator:1:national_carbon.process_flow_graph_cache_build.request.v1',
@@ -211,7 +211,7 @@ select
   'operator_gc',
   (result->'data'->>'id')::uuid
 from (
-  select public.worker_enqueue_job(
+  select private.worker_enqueue_job(
     p_job_kind => 'lca.snapshot_gc',
     p_payload_json => '{"execute":false,"environment":"test"}'::jsonb,
     p_requester_type => 'system',
@@ -225,7 +225,7 @@ select
   'nested_null_payload',
   (result->'data'->>'id')::uuid
 from (
-  select public.worker_enqueue_job(
+  select private.worker_enqueue_job(
     p_job_kind => 'lca.build_snapshot',
     p_payload_json => '{
       "scope_manifest": {
@@ -254,7 +254,7 @@ from (
   ) as result
 ) as enqueue;
 
-update public.worker_jobs
+update private.worker_jobs
 set payload_ref = '{"nested":{"is":null}}'::jsonb,
     result_json = '{"nested":{"is":null}}'::jsonb,
     result_ref = '{"nested":{"is":null}}'::jsonb,
@@ -264,13 +264,13 @@ where id = (select job_id from worker_job_test_ids where label = 'nested_null_pa
 
 select is(
   (
-    select public.worker_job_payload(j, true)->'payload'
-    from public.worker_jobs as j
+    select private.worker_job_payload(j, true)->'payload'
+    from private.worker_jobs as j
     where id = (select job_id from worker_job_test_ids where label = 'nested_null_payload')
   ),
   (
     select payload_json
-    from public.worker_jobs
+    from private.worker_jobs
     where id = (select job_id from worker_job_test_ids where label = 'nested_null_payload')
   ),
   'internal projection preserves the exact payload including frozen nested null guards'
@@ -279,12 +279,12 @@ select is(
 select is(
   (
     select
-      public.worker_job_payload(j, true) #> '{payloadRef,nested,is}' = 'null'::jsonb
-      and public.worker_job_payload(j, true) #> '{result,nested,is}' = 'null'::jsonb
-      and public.worker_job_payload(j, true) #> '{resultRef,nested,is}' = 'null'::jsonb
-      and public.worker_job_payload(j, true) #> '{diagnostics,nested,is}' = 'null'::jsonb
-      and public.worker_job_payload(j, true) #> '{errorDetails,nested,is}' = 'null'::jsonb
-    from public.worker_jobs as j
+      private.worker_job_payload(j, true) #> '{payloadRef,nested,is}' = 'null'::jsonb
+      and private.worker_job_payload(j, true) #> '{result,nested,is}' = 'null'::jsonb
+      and private.worker_job_payload(j, true) #> '{resultRef,nested,is}' = 'null'::jsonb
+      and private.worker_job_payload(j, true) #> '{diagnostics,nested,is}' = 'null'::jsonb
+      and private.worker_job_payload(j, true) #> '{errorDetails,nested,is}' = 'null'::jsonb
+    from private.worker_jobs as j
     where id = (select job_id from worker_job_test_ids where label = 'nested_null_payload')
   ),
   true,
@@ -293,8 +293,8 @@ select is(
 
 select is(
   (
-    select public.worker_job_payload(j, true) ? 'teamId'
-    from public.worker_jobs as j
+    select private.worker_job_payload(j, true) ? 'teamId'
+    from private.worker_jobs as j
     where id = (select job_id from worker_job_test_ids where label = 'nested_null_payload')
   ),
   false,
@@ -302,7 +302,7 @@ select is(
 );
 
 select is(
-  public.worker_claim_jobs(
+  private.worker_claim_jobs(
     p_worker_queue => 'solver',
     p_worker_id => 'worker-null-preservation',
     p_limit => 1,
@@ -310,7 +310,7 @@ select is(
   )->'data'->0->'payload',
   (
     select payload_json
-    from public.worker_jobs
+    from private.worker_jobs
     where id = (select job_id from worker_job_test_ids where label = 'nested_null_payload')
   ),
   'claim preserves the exact payload including frozen nested null guards'
@@ -318,7 +318,7 @@ select is(
 
 select is(
   jsonb_array_length(
-    public.worker_list_jobs(
+    private.worker_list_jobs(
       p_requested_by => '96000000-0000-4000-8000-000000000001',
       p_visibility => 'user'
     )->'data'
@@ -333,7 +333,7 @@ select
   (claimed->>'id')::uuid,
   (claimed->>'leaseToken')::uuid
 from jsonb_array_elements(
-  public.worker_claim_jobs(
+  private.worker_claim_jobs(
     p_worker_queue => 'review_submit_gate',
     p_worker_id => 'worker-a',
     p_limit => 1,
@@ -350,7 +350,7 @@ select is(
 select is(
   (
     select status || ':' || attempt_count::text
-    from public.worker_jobs
+    from private.worker_jobs
     where id = (select job_id from worker_job_test_ids where label = 'gate_primary')
   ),
   'running:1',
@@ -358,13 +358,13 @@ select is(
 );
 
 select is(
-  jsonb_array_length(public.worker_claim_jobs('review_submit_gate', 'worker-b', 1, 300)->'data')::text,
+  jsonb_array_length(private.worker_claim_jobs('review_submit_gate', 'worker-b', 1, 300)->'data')::text,
   '0',
   'running job with active lease is not claimed twice'
 );
 
 select is(
-  public.worker_heartbeat_job(
+  private.worker_heartbeat_job(
     p_job_id => (select job_id from worker_job_test_ids where label = 'gate_primary'),
     p_lease_token => '00000000-0000-0000-0000-000000000000',
     p_phase => 'checking',
@@ -375,7 +375,7 @@ select is(
 );
 
 select is(
-  public.worker_heartbeat_job(
+  private.worker_heartbeat_job(
     p_job_id => (select job_id from worker_job_test_ids where label = 'gate_primary'),
     p_lease_token => (select lease_token from worker_job_test_ids where label = 'claimed_gate'),
     p_phase => 'checking',
@@ -389,7 +389,7 @@ select is(
 select is(
   (
     select progress::text
-    from public.worker_jobs
+    from private.worker_jobs
     where id = (select job_id from worker_job_test_ids where label = 'gate_primary')
   ),
   '0.4',
@@ -397,7 +397,7 @@ select is(
 );
 
 select is(
-  public.worker_record_job_result(
+  private.worker_record_job_result(
     p_job_id => (select job_id from worker_job_test_ids where label = 'gate_primary'),
     p_lease_token => '00000000-0000-0000-0000-000000000000',
     p_status => 'completed'
@@ -407,7 +407,7 @@ select is(
 );
 
 select is(
-  public.worker_record_job_result(
+  private.worker_record_job_result(
     p_job_id => (select job_id from worker_job_test_ids where label = 'gate_primary'),
     p_lease_token => (select lease_token from worker_job_test_ids where label = 'claimed_gate'),
     p_status => 'blocked'
@@ -417,7 +417,7 @@ select is(
 );
 
 select is(
-  public.worker_record_job_result(
+  private.worker_record_job_result(
     p_job_id => (select job_id from worker_job_test_ids where label = 'gate_primary'),
     p_lease_token => (select lease_token from worker_job_test_ids where label = 'claimed_gate'),
     p_status => 'completed',
@@ -428,7 +428,7 @@ select is(
 );
 
 select is(
-  public.worker_cancel_job(
+  private.worker_cancel_job(
     p_job_id => (select job_id from worker_job_test_ids where label = 'gate_primary'),
     p_reason => 'should not cancel terminal'
   )->>'code',
@@ -439,7 +439,7 @@ select is(
 select cmp_ok(
   (
     select count(*)
-    from public.worker_job_events
+    from private.worker_job_events
     where job_id = (select job_id from worker_job_test_ids where label = 'gate_primary')
   ),
   '>=',
@@ -452,7 +452,7 @@ select
   'reclaim_gate',
   (result->'data'->>'id')::uuid
 from (
-  select public.worker_enqueue_job(
+  select private.worker_enqueue_job(
     p_job_kind => 'review_submit.gate',
     p_payload_json => '{}'::jsonb,
     p_requested_by => '96000000-0000-4000-8000-000000000001',
@@ -464,7 +464,7 @@ from (
 update worker_job_test_ids
 set lease_token = (claimed->>'leaseToken')::uuid
 from jsonb_array_elements(
-  public.worker_claim_jobs('review_submit_gate', 'worker-a', 1, 300)->'data'
+  private.worker_claim_jobs('review_submit_gate', 'worker-a', 1, 300)->'data'
 ) as claimed
 where label = 'reclaim_gate'
   and job_id = (claimed->>'id')::uuid;
@@ -472,21 +472,21 @@ where label = 'reclaim_gate'
 select is(
   (
     select attempt_count::text
-    from public.worker_jobs
+    from private.worker_jobs
     where id = (select job_id from worker_job_test_ids where label = 'reclaim_gate')
   ),
   '1',
   'first claim increments reclaim fixture attempt count'
 );
 
-update public.worker_jobs
+update private.worker_jobs
 set lease_expires_at = now() - interval '1 second'
 where id = (select job_id from worker_job_test_ids where label = 'reclaim_gate');
 
 update worker_job_test_ids
 set lease_token = (claimed->>'leaseToken')::uuid
 from jsonb_array_elements(
-  public.worker_claim_jobs('review_submit_gate', 'worker-b', 1, 300)->'data'
+  private.worker_claim_jobs('review_submit_gate', 'worker-b', 1, 300)->'data'
 ) as claimed
 where label = 'reclaim_gate'
   and job_id = (claimed->>'id')::uuid;
@@ -494,7 +494,7 @@ where label = 'reclaim_gate'
 select is(
   (
     select leased_by || ':' || attempt_count::text
-    from public.worker_jobs
+    from private.worker_jobs
     where id = (select job_id from worker_job_test_ids where label = 'reclaim_gate')
   ),
   'worker-b:2',
@@ -502,7 +502,7 @@ select is(
 );
 
 select is(
-  public.worker_record_job_result(
+  private.worker_record_job_result(
     p_job_id => (select job_id from worker_job_test_ids where label = 'reclaim_gate'),
     p_lease_token => '00000000-0000-0000-0000-000000000000',
     p_status => 'completed'
@@ -511,12 +511,12 @@ select is(
   'old or unknown lease token cannot record after reclaim'
 );
 
-update public.worker_jobs
+update private.worker_jobs
 set lease_expires_at = now() - interval '1 second'
 where id = (select job_id from worker_job_test_ids where label = 'reclaim_gate');
 
 select is(
-  jsonb_array_length(public.worker_claim_jobs('review_submit_gate', 'worker-c', 1, 300)->'data')::text,
+  jsonb_array_length(private.worker_claim_jobs('review_submit_gate', 'worker-c', 1, 300)->'data')::text,
   '0',
   'expired running job at max attempts is not reclaimed again'
 );
@@ -524,7 +524,7 @@ select is(
 select is(
   (
     select status || ':' || error_code
-    from public.worker_jobs
+    from private.worker_jobs
     where id = (select job_id from worker_job_test_ids where label = 'reclaim_gate')
   ),
   'failed:lease_expired_max_attempts',
@@ -537,7 +537,7 @@ select
   (claimed->>'id')::uuid,
   (claimed->>'leaseToken')::uuid
 from (
-  select public.worker_enqueue_job(
+  select private.worker_enqueue_job(
     p_job_kind => 'review_submit.gate',
     p_payload_json => '{}'::jsonb,
     p_requested_by => '96000000-0000-4000-8000-000000000001',
@@ -545,11 +545,11 @@ from (
   )
 ) as enqueue(result),
 jsonb_array_elements(
-  public.worker_claim_jobs('review_submit_gate', 'worker-d', 1, 300)->'data'
+  private.worker_claim_jobs('review_submit_gate', 'worker-d', 1, 300)->'data'
 ) as claimed;
 
 select is(
-  public.worker_record_job_result(
+  private.worker_record_job_result(
     p_job_id => (select job_id from worker_job_test_ids where label = 'blocked_gate'),
     p_lease_token => (select lease_token from worker_job_test_ids where label = 'blocked_gate'),
     p_status => 'blocked',
@@ -563,7 +563,7 @@ select is(
 );
 
 select is(
-  public.worker_retry_job(
+  private.worker_retry_job(
     p_job_id => (select job_id from worker_job_test_ids where label = 'blocked_gate'),
     p_reason => 'retry after user fix'
   )->'data'->>'status',
@@ -572,7 +572,7 @@ select is(
 );
 
 select is(
-  public.worker_cancel_job(
+  private.worker_cancel_job(
     p_job_id => (select job_id from worker_job_test_ids where label = 'blocked_gate'),
     p_cancelled_by => '96000000-0000-4000-8000-000000000001',
     p_reason => 'user cancelled'
@@ -582,7 +582,7 @@ select is(
 );
 
 select is(
-  public.worker_read_job(
+  private.worker_read_job(
     p_job_id => (select job_id from worker_job_test_ids where label = 'gate_primary'),
     p_include_internal => false
   )->'data' ? 'payload',
@@ -591,7 +591,7 @@ select is(
 );
 
 select is(
-  public.worker_read_job(
+  private.worker_read_job(
     p_job_id => (select job_id from worker_job_test_ids where label = 'gate_primary'),
     p_include_internal => true
   )->'data' ? 'payload',

@@ -7,7 +7,7 @@ select no_plan();
 select is(
   (
     select certificate_status
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where id = '30830000-0000-4000-8000-000000000301'
   ),
   'stale',
@@ -16,7 +16,7 @@ select is(
 select is(
   (
     select complete_machine_result_artifact_id
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where id = '30830000-0000-4000-8000-000000000301'
   ),
   '30830000-0000-4000-8000-000000000202'::uuid,
@@ -25,7 +25,7 @@ select is(
 select ok(
   (
     select valid_until < now()
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where id = '30830000-0000-4000-8000-000000000301'
   ),
   'historical stale certificate retains its elapsed evidence deadline'
@@ -33,7 +33,7 @@ select ok(
 select is(
   (
     select certificate_status || ':' || reason
-    from public.lcia_scope_closure_certificate_events
+    from private.lcia_scope_closure_certificate_events
     where closure_check_id = '30830000-0000-4000-8000-000000000301'
     order by created_at desc, id desc
     limit 1
@@ -44,7 +44,7 @@ select is(
 select is(
   (
     select string_agg(lifecycle_state, ',' order by id)
-    from public.worker_job_artifacts
+    from private.worker_job_artifacts
     where job_id = '30830000-0000-4000-8000-000000000101'
   ),
   'expired,expired,expired',
@@ -52,7 +52,7 @@ select is(
 );
 select throws_ok(
   $$
-    update public.lcia_scope_closure_checks
+    update private.lcia_scope_closure_checks
     set certificate_status = 'valid'
     where id = '30830000-0000-4000-8000-000000000301'
   $$,
@@ -62,7 +62,7 @@ select throws_ok(
 );
 select throws_ok(
   $$
-    insert into public.worker_jobs (
+    insert into private.worker_jobs (
       id, job_kind, worker_runtime, worker_queue, requester_type, requested_by,
       visibility, payload_schema_version, payload_json, status
     ) values (

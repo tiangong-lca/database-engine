@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-05
-lastReviewedCommit: 5bb96b2f1fd4126081fdae166482d1d1bec3d5a6
-lastReviewedNote: "Reviewed for Issue #418: remaining examples and guarded benchmark commands must use the recreated persistent-dev ref; branch workflow and promotion rules remain unchanged."
+lastReviewedCommit: df8253b4f81d3e05524602f996025b54e9c35dd3
+lastReviewedNote: "Reviewed for Issue #422: schema-boundary cutovers require profile-aware Preview/dev/production verification; branch workflow and promotion rules remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -143,8 +143,12 @@ Normal PR path:
 5. After the PR merges, the resulting push to Git `dev` triggers
    `.github/workflows/supabase-dev.yml`.
 6. The workflow links to `SUPABASE_DEV_PROJECT_ID` and runs `supabase db push --include-all`.
-7. Pending checked-in migrations are then applied to the persistent Supabase
-   `dev` branch.
+7. The workflow runs `supabase config push` against the same exact project,
+   enforces `public,api,graphql_public` and `public,api,extensions` as ordered
+   PostgREST configuration, then reads those lists back through the Supabase
+   Management API.
+8. Pending checked-in migrations and project configuration are then both
+   applied to the persistent Supabase `dev` branch.
 
 An existing Preview branch applies newly added migration files on later PR
 pushes. Editing a migration already recorded in that Preview's migration
@@ -165,8 +169,21 @@ Promote path:
    `supabase/` directory from Git `main`.
 3. Pending checked-in migrations are applied automatically to the production
    project.
-4. Operators validate production migration state and application behavior after
+4. If `supabase/config.toml` changed, an operator runs
+   `supabase config push --project-ref <production-project-ref> --yes` after the
+   migration is present, then verifies the PostgREST configuration through the
+   Management API.
+5. Operators validate production migration state and application behavior after
    the promote merge.
+
+For a schema-boundary cutover, validation on Preview and persistent `dev` must
+cover profile-less core entity access through the hosted default `public`
+profile, explicit `public` entity access, explicit `api` RPC access, rejection
+of `private`, and absence of the former `public` RPC route. Data API consumers
+must select `public` for entity tables and `api` for RPCs rather than relying on
+local CLI schema ordering. A short maintenance window may be used for the
+production migration, but all consumer changes must already be validated
+against persistent `dev` before the `dev -> main` promote.
 
 This repository currently has no checked-in `workflow_dispatch` production
 deploy for Supabase. That is intentional: Git `main` is handled by the Supabase
@@ -212,6 +229,9 @@ Rules:
 
 - Pushes to Git `dev` trigger `.github/workflows/supabase-dev.yml`.
 - That workflow links to the persistent Supabase `dev` branch and runs `supabase db push --include-all` so governed backmerges can apply every committed migration missing from remote history, including older-timestamped entries.
+- The same workflow then runs `supabase config push`, enforces the hosted
+  PostgREST order with `public` first, and fails unless Management API readback
+  and REST profile probes match the checked-in contract.
 - Do not add a second automation path that pushes the same target.
 
 ### Production `main` deployment
@@ -219,6 +239,9 @@ Rules:
 - Pushes to Git `main` are handled by the production project's Supabase GitHub integration.
 - The integration watches repository `tiangong-lca/database-engine` with relative path `supabase`.
 - Checked-in pending migrations are applied automatically to the production project when `main` advances.
+- Project configuration is not assumed to follow the migration automatically;
+  when `supabase/config.toml` changes, push it explicitly to the production
+  project and verify the hosted PostgREST settings.
 - Do not treat the missing checked-in GitHub Actions workflow for `main` as a manual-deploy requirement.
 - Use local `supabase db push` only as an explicit fallback or recovery path, and record that action.
 

@@ -6,21 +6,21 @@ set local search_path = extensions, public, auth;
 select plan(19);
 
 select has_function(
-  'public',
+  'private',
   'lca_read_job_projection',
   array['uuid', 'uuid', 'uuid', 'boolean'],
   'lca_read_job_projection service function exists'
 );
 
 select has_function(
-  'public',
+  'private',
   'lca_read_result_projection',
   array['uuid', 'uuid', 'text', 'boolean'],
   'lca_read_result_projection service function exists'
 );
 
 select has_function(
-  'public',
+  'private',
   'lca_read_latest_single_solve_result',
   array['uuid', 'uuid', 'integer'],
   'lca_read_latest_single_solve_result service function exists'
@@ -34,7 +34,7 @@ select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 select ok(
   not has_function_privilege(
     'authenticated',
-    'public.lca_read_result_projection(uuid,uuid,text,boolean)',
+    'private.lca_read_result_projection(uuid,uuid,text,boolean)',
     'EXECUTE'
   ),
   'authenticated users cannot execute internal LCA result projection'
@@ -46,7 +46,7 @@ select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claim.role', 'service_role', true);
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
-insert into public.lca_network_snapshots (
+insert into private.lca_network_snapshots (
   id,
   scope,
   process_filter,
@@ -78,7 +78,7 @@ select
   'solve_one_worker',
   (result->'data'->>'id')::uuid
 from (
-  select public.worker_enqueue_job(
+  select private.worker_enqueue_job(
     p_job_kind => 'lca.solve_one',
     p_payload_json => jsonb_build_object(
       'type', 'solve_one',
@@ -100,7 +100,7 @@ from (
   ) as result
 ) as enqueue;
 
-select public.worker_record_job_result(
+select private.worker_record_job_result(
   p_job_id => (select job_id from lca_projection_test_ids where label = 'solve_one_worker'),
   p_lease_token => null::uuid,
   p_status => 'completed',
@@ -113,7 +113,7 @@ select public.worker_record_job_result(
   )
 );
 
-insert into public.lca_results (
+insert into private.lca_results (
   id,
   job_id,
   worker_job_id,
@@ -137,7 +137,7 @@ insert into public.lca_results (
   'hdf5:v1'
 );
 
-insert into public.lca_result_cache (
+insert into private.lca_result_cache (
   id,
   scope,
   snapshot_id,
@@ -172,7 +172,7 @@ insert into public.lca_result_cache (
 );
 
 select is(
-  public.lca_read_job_projection(
+  private.lca_read_job_projection(
     p_requested_by => '98110000-0000-4000-8000-000000000001',
     p_legacy_job_id => '98110000-0000-4000-8000-000000000011',
     p_include_internal => false
@@ -182,7 +182,7 @@ select is(
 );
 
 select is(
-  public.lca_read_job_projection(
+  private.lca_read_job_projection(
     p_requested_by => '98110000-0000-4000-8000-000000000001',
     p_worker_job_id => (select job_id from lca_projection_test_ids where label = 'solve_one_worker'),
     p_include_internal => false
@@ -192,7 +192,7 @@ select is(
 );
 
 select is(
-  public.lca_read_result_projection(
+  private.lca_read_result_projection(
     p_requested_by => '98110000-0000-4000-8000-000000000001',
     p_result_id => '98110000-0000-4000-8000-000000000012',
     p_required_artifact_format => 'hdf5:v1'
@@ -202,7 +202,7 @@ select is(
 );
 
 select is(
-  public.lca_read_result_projection(
+  private.lca_read_result_projection(
     p_requested_by => '98110000-0000-4000-8000-000000000002',
     p_result_id => '98110000-0000-4000-8000-000000000012',
     p_required_artifact_format => 'hdf5:v1'
@@ -212,7 +212,7 @@ select is(
 );
 
 select is(
-  public.lca_read_result_projection(
+  private.lca_read_result_projection(
     p_requested_by => '98110000-0000-4000-8000-000000000001',
     p_result_id => '98110000-0000-4000-8000-000000000012',
     p_required_artifact_format => 'contribution-path:v1'
@@ -222,7 +222,7 @@ select is(
 );
 
 select is(
-  public.lca_read_latest_single_solve_result(
+  private.lca_read_latest_single_solve_result(
     p_requested_by => '98110000-0000-4000-8000-000000000001',
     p_snapshot_id => '98110000-0000-4000-8000-000000000010',
     p_process_index => 1
@@ -232,7 +232,7 @@ select is(
 );
 
 select is(
-  public.lca_read_latest_single_solve_result(
+  private.lca_read_latest_single_solve_result(
     p_requested_by => '98110000-0000-4000-8000-000000000001',
     p_snapshot_id => '98110000-0000-4000-8000-000000000010',
     p_process_index => 1
@@ -242,7 +242,7 @@ select is(
 );
 
 select is(
-  public.lca_read_latest_single_solve_result(
+  private.lca_read_latest_single_solve_result(
     p_requested_by => '98110000-0000-4000-8000-000000000001',
     p_snapshot_id => '98110000-0000-4000-8000-000000000010',
     p_process_index => 2
@@ -252,7 +252,7 @@ select is(
 );
 
 select is(
-  public.lca_read_latest_single_solve_result(
+  private.lca_read_latest_single_solve_result(
     p_requested_by => '98110000-0000-4000-8000-000000000002',
     p_snapshot_id => '98110000-0000-4000-8000-000000000010',
     p_process_index => 1
@@ -262,7 +262,7 @@ select is(
 );
 
 select is(
-  public.lca_read_latest_single_solve_result(
+  private.lca_read_latest_single_solve_result(
     p_requested_by => '98110000-0000-4000-8000-000000000001',
     p_snapshot_id => '98110000-0000-4000-8000-000000000010',
     p_process_index => -1
@@ -276,7 +276,7 @@ select set_config('request.jwt.claims', '', true);
 select set_config('request.headers', '', true);
 
 select is(
-  public.lca_read_job_projection(
+  private.lca_read_job_projection(
     p_requested_by => '98110000-0000-4000-8000-000000000001',
     p_legacy_job_id => '98110000-0000-4000-8000-000000000011',
     p_include_internal => false
@@ -286,7 +286,7 @@ select is(
 );
 
 select is(
-  public.lca_read_result_projection(
+  private.lca_read_result_projection(
     p_requested_by => '98110000-0000-4000-8000-000000000001',
     p_result_id => '98110000-0000-4000-8000-000000000012',
     p_required_artifact_format => 'hdf5:v1'
@@ -296,7 +296,7 @@ select is(
 );
 
 select is(
-  public.lca_read_latest_single_solve_result(
+  private.lca_read_latest_single_solve_result(
     p_requested_by => '98110000-0000-4000-8000-000000000001',
     p_snapshot_id => '98110000-0000-4000-8000-000000000010',
     p_process_index => 1
@@ -324,7 +324,7 @@ select ok(
 select ok(
   not exists (
     select 1
-    from public.worker_legacy_table_retirement_blockers
+    from util.worker_legacy_table_retirement_blockers
     where legacy_table = 'public.lca_jobs'
       and blocker_type in ('foreign_key', 'dependent_view', 'policy')
       and is_drop_restrict_blocker

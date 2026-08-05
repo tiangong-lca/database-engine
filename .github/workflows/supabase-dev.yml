@@ -7,7 +7,7 @@ on:
 
 jobs:
   deploy-supabase-dev:
-    name: Deploy Supabase Migrations to Dev
+    name: Deploy Supabase Dev
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -29,3 +29,98 @@ jobs:
 
       - name: Push migrations to Supabase dev branch
         run: supabase db push --include-all
+
+      - name: Push project config to Supabase dev branch
+        run: supabase config push --project-ref "$SUPABASE_PROJECT_ID" --yes
+
+      - name: Enforce and verify PostgREST schema boundary
+        shell: bash
+        run: |
+          curl \
+            --fail-with-body \
+            --retry 5 \
+            --retry-all-errors \
+            --silent \
+            --show-error \
+            --request PATCH \
+            --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+            --header "Content-Type: application/json" \
+            --data '{"db_schema":"public,api,graphql_public","db_extra_search_path":"public,api,extensions"}' \
+            --output /dev/null \
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_ID/postgrest"
+
+          postgrest_config="$(
+            curl \
+              --fail-with-body \
+              --retry 5 \
+              --retry-all-errors \
+              --silent \
+              --show-error \
+              --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_ID/postgrest"
+          )"
+
+          jq -e '
+            def csv_list:
+              split(",")
+              | map(gsub("^\\s+|\\s+$"; ""));
+
+            (.db_schema | csv_list) == ["public", "api", "graphql_public"]
+            and
+            (.db_extra_search_path | csv_list) == ["public", "api", "extensions"]
+          ' <<<"$postgrest_config" >/dev/null
+
+      - name: Verify hosted Data API profiles
+        shell: bash
+        run: |
+          api_keys="$(
+            supabase projects api-keys \
+              --project-ref "$SUPABASE_PROJECT_ID" \
+              --output json
+          )"
+          anon_key="$(jq -er '.[] | select(.name == "anon") | .api_key' <<<"$api_keys")"
+          service_role_key="$(jq -er '.[] | select(.name == "service_role") | .api_key' <<<"$api_keys")"
+          rest_url="https://$SUPABASE_PROJECT_ID.supabase.co/rest/v1"
+
+          probe() {
+            local expected="$1"
+            shift
+            local actual=""
+
+            for _ in {1..12}; do
+              actual="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$@")"
+              if [[ "$actual" == "$expected" ]]; then
+                return 0
+              fi
+              sleep 5
+            done
+
+            echo "expected HTTP $expected, received $actual" >&2
+            return 1
+          }
+
+          probe 200 \
+            --header "apikey: $anon_key" \
+            --header "Authorization: Bearer $anon_key" \
+            "$rest_url/flows?select=id&limit=1"
+          probe 200 \
+            --request POST \
+            --header "apikey: $service_role_key" \
+            --header "Authorization: Bearer $service_role_key" \
+            --header "Content-Profile: api" \
+            --header "Content-Type: application/json" \
+            --data '{}' \
+            "$rest_url/rpc/get_current_lca_release"
+          probe 406 \
+            --header "apikey: $anon_key" \
+            --header "Authorization: Bearer $anon_key" \
+            --header "Accept-Profile: private" \
+            "$rest_url/flows?select=id&limit=1"
+          probe 404 \
+            --request POST \
+            --header "apikey: $service_role_key" \
+            --header "Authorization: Bearer $service_role_key" \
+            --header "Content-Profile: public" \
+            --header "Content-Type: application/json" \
+            --data '{}' \
+            "$rest_url/rpc/get_current_lca_release"

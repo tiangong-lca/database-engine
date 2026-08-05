@@ -86,7 +86,7 @@ values
     false
   );
 
-insert into public.users (id, raw_user_meta_data)
+insert into private.users (id, raw_user_meta_data)
 values
   (
     '91000000-0000-0000-0000-000000000001',
@@ -101,7 +101,7 @@ values
     '{"email":"invitee@example.com","display_name":"Invitee User"}'::jsonb
   );
 
-insert into public.teams (id, json, rank, is_public, modified_at)
+insert into private.teams (id, json, rank, is_public, modified_at)
 values (
   '92000000-0000-0000-0000-000000000001',
   '{"title":[{"@xml:lang":"en","#text":"Notification Team"}]}'::jsonb,
@@ -110,7 +110,7 @@ values (
   now()
 );
 
-insert into public.roles (user_id, team_id, role, modified_at)
+insert into private.roles (user_id, team_id, role, modified_at)
 values (
   '91000000-0000-0000-0000-000000000003',
   '92000000-0000-0000-0000-000000000001',
@@ -222,7 +222,7 @@ values (
   true
 );
 
-insert into public.reviews (
+insert into private.reviews (
   id,
   data_id,
   data_version,
@@ -289,7 +289,7 @@ values
     now() - interval '10 days'
   );
 
-insert into public.notifications (
+insert into private.notifications (
   id,
   recipient_user_id,
   sender_user_id,
@@ -355,7 +355,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '91000000-0000-0000-0000-000000000003', true);
 
 select is(
-  (select count(*)::text from public.qry_notification_get_my_team_items(3)),
+  (select count(*)::text from api.qry_notification_get_my_team_items(3)),
   '1',
   'team notification query returns the current user invitation rows'
 );
@@ -366,7 +366,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '91000000-0000-0000-0000-000000000003', true);
 
 select is(
-  public.qry_notification_get_my_team_count(3, now() - interval '2 days')::text,
+  api.qry_notification_get_my_team_count(3, now() - interval '2 days')::text,
   '1',
   'team notification count honors the last-view cutoff'
 );
@@ -377,7 +377,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '91000000-0000-0000-0000-000000000001', true);
 
 select is(
-  (select count(*)::text from public.qry_notification_get_my_data_items(1, 10, 3)),
+  (select count(*)::text from api.qry_notification_get_my_data_items(1, 10, 3)),
   '1',
   'data notification query filters review rows by actor and time window'
 );
@@ -388,7 +388,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '91000000-0000-0000-0000-000000000001', true);
 
 select is(
-  public.qry_notification_get_my_data_count(7, now() - interval '2 days')::text,
+  api.qry_notification_get_my_data_count(7, now() - interval '2 days')::text,
   '1',
   'data notification count uses last-view cutoff'
 );
@@ -399,7 +399,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '91000000-0000-0000-0000-000000000001', true);
 
 select is(
-  (select total_count::text from public.qry_notification_get_my_issue_items(1, 10, 7) limit 1),
+  (select total_count::text from api.qry_notification_get_my_issue_items(1, 10, 7) limit 1),
   '2',
   'issue notification query returns filtered total counts for the recipient'
 );
@@ -410,7 +410,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '91000000-0000-0000-0000-000000000001', true);
 
 select is(
-  public.qry_notification_get_my_issue_count(30, now() - interval '2 days')::text,
+  api.qry_notification_get_my_issue_count(30, now() - interval '2 days')::text,
   '1',
   'issue notification count uses last-view cutoff'
 );
@@ -422,7 +422,7 @@ select set_config('request.jwt.claim.sub', '91000000-0000-0000-0000-000000000001
 
 select is(
   (
-    public.cmd_notification_send_validation_issue(
+    api.cmd_notification_send_validation_issue(
       '91000000-0000-0000-0000-000000000002',
       'source data set',
       '94000000-0000-0000-0000-000000000011',
@@ -445,7 +445,7 @@ select ok(
       json -> 'tabNames' = '["processInformation","modellingAndValidation"]'::jsonb and
       json ->> 'senderName' = 'Sender User' and
       json ->> 'link' = 'https://example.com/issues/1'
-    from public.notifications
+    from private.notifications
     where recipient_user_id = '91000000-0000-0000-0000-000000000002'
       and sender_user_id = '91000000-0000-0000-0000-000000000001'
       and dataset_id = '94000000-0000-0000-0000-000000000011'
@@ -460,7 +460,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '91000000-0000-0000-0000-000000000002', true);
 
 select is(
-  public.qry_notification_get_my_issue_count(30, null::timestamptz)::text,
+  api.qry_notification_get_my_issue_count(30, null::timestamptz)::text,
   '1',
   'recipient-only issue notification query exposes the command-created notification to the recipient'
 );
@@ -473,7 +473,7 @@ select set_config('request.jwt.claim.sub', '91000000-0000-0000-0000-000000000001
 do $$
 begin
   begin
-    insert into public.notifications (
+    insert into private.notifications (
       recipient_user_id,
       sender_user_id,
       type,
@@ -501,7 +501,7 @@ $$;
 select is(
   (
     select count(*)::text
-    from public.notifications
+    from private.notifications
     where dataset_id = '94000000-0000-0000-0000-000000000099'
   ),
   '0',
@@ -510,7 +510,7 @@ select is(
 
 select is(
   (
-    public.cmd_notification_send_validation_issue(
+    api.cmd_notification_send_validation_issue(
       '91000000-0000-0000-0000-000000000003',
       'source data set',
       '94000000-0000-0000-0000-000000000011',
@@ -528,7 +528,7 @@ select is(
 
 select is(
   (
-    public.cmd_notification_send_validation_issue(
+    api.cmd_notification_send_validation_issue(
       '91000000-0000-0000-0000-000000000001',
       'source data set',
       '94000000-0000-0000-0000-000000000011',
@@ -551,7 +551,7 @@ select set_config('request.jwt.claim.sub', '91000000-0000-0000-0000-000000000003
 
 select is(
   (
-    public.cmd_notification_send_validation_issue(
+    api.cmd_notification_send_validation_issue(
       '91000000-0000-0000-0000-000000000002',
       'source data set',
       '94000000-0000-0000-0000-000000000011',

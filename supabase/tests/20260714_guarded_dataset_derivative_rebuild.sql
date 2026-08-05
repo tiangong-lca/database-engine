@@ -19,19 +19,19 @@ select ok(
 );
 select ok(
   to_regprocedure(
-    'public.cmd_dataset_derivative_rebuild_snapshot(text,uuid,text)'
+    'api.cmd_dataset_derivative_rebuild_snapshot(text,uuid,text)'
   ) is not null,
   'action-scoped snapshot RPC exists'
 );
 select ok(
   to_regprocedure(
-    'public.cmd_dataset_derivative_rebuild_plan_guarded(jsonb)'
+    'api.cmd_dataset_derivative_rebuild_plan_guarded(jsonb)'
   ) is not null,
   'guarded admission RPC exists'
 );
 select ok(
   to_regprocedure(
-    'public.cmd_dataset_derivative_rebuild_read(uuid)'
+    'api.cmd_dataset_derivative_rebuild_read(uuid)'
   ) is not null,
   'owner status read RPC exists'
 );
@@ -45,7 +45,7 @@ select ok(
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.cmd_dataset_derivative_rebuild_snapshot(text,uuid,text)',
+    'api.cmd_dataset_derivative_rebuild_snapshot(text,uuid,text)',
     'execute'
   ),
   'authenticated can call snapshot RPC'
@@ -53,7 +53,7 @@ select ok(
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.cmd_dataset_derivative_rebuild_plan_guarded(jsonb)',
+    'api.cmd_dataset_derivative_rebuild_plan_guarded(jsonb)',
     'execute'
   ),
   'authenticated can call guarded admission RPC'
@@ -61,7 +61,7 @@ select ok(
 select ok(
   has_function_privilege(
     'authenticated',
-    'public.cmd_dataset_derivative_rebuild_read(uuid)',
+    'api.cmd_dataset_derivative_rebuild_read(uuid)',
     'execute'
   ),
   'authenticated can call owner status read RPC'
@@ -69,7 +69,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'anon',
-    'public.cmd_dataset_derivative_rebuild_snapshot(text,uuid,text)',
+    'api.cmd_dataset_derivative_rebuild_snapshot(text,uuid,text)',
     'execute'
   ),
   'anon cannot call snapshot RPC'
@@ -77,7 +77,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'anon',
-    'public.cmd_dataset_derivative_rebuild_plan_guarded(jsonb)',
+    'api.cmd_dataset_derivative_rebuild_plan_guarded(jsonb)',
     'execute'
   ),
   'anon cannot call guarded admission RPC'
@@ -85,7 +85,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'anon',
-    'public.cmd_dataset_derivative_rebuild_read(uuid)',
+    'api.cmd_dataset_derivative_rebuild_read(uuid)',
     'execute'
   ),
   'anon cannot call owner status read RPC'
@@ -93,7 +93,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'service_role',
-    'public.cmd_dataset_derivative_rebuild_plan_guarded(jsonb)',
+    'api.cmd_dataset_derivative_rebuild_plan_guarded(jsonb)',
     'execute'
   ),
   'service_role cannot call owner guarded admission RPC'
@@ -117,7 +117,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'authenticated',
-    'public.processes_derivative_rebuild_embedding_input(public.processes)',
+    'private.processes_derivative_rebuild_embedding_input(public.processes)',
     'execute'
   ),
   'authenticated cannot read private staged Markdown through the worker helper'
@@ -136,7 +136,7 @@ select is(
     from pg_proc as proc
     join pg_namespace as namespace
       on namespace.oid = proc.pronamespace
-    where namespace.nspname = 'public'
+    where namespace.nspname = 'api'
       and proc.proname in (
         'cmd_dataset_derivative_rebuild_snapshot',
         'cmd_dataset_derivative_rebuild_plan_guarded',
@@ -153,7 +153,7 @@ select is(
     from pg_proc as proc
     join pg_namespace as namespace
       on namespace.oid = proc.pronamespace
-    where namespace.nspname = 'public'
+    where namespace.nspname = 'api'
       and proc.proname in (
         'cmd_dataset_derivative_rebuild_snapshot',
         'cmd_dataset_derivative_rebuild_plan_guarded',
@@ -220,7 +220,7 @@ select ok(
   exists (
     select 1
     from pg_indexes
-    where schemaname = 'public'
+    where schemaname = 'private'
       and indexname = 'command_audit_log_derivative_rebuild_plan_uidx'
   ),
   'plan summary audit replay is unique'
@@ -229,7 +229,7 @@ select ok(
   exists (
     select 1
     from pg_indexes
-    where schemaname = 'public'
+    where schemaname = 'private'
       and indexname = 'command_audit_log_derivative_rebuild_action_uidx'
   ),
   'action audit replay is unique'
@@ -300,7 +300,7 @@ delete from pgmq.q_embedding_jobs;
 delete from util.pending_embedding_jobs;
 delete from net.http_request_queue;
 delete from net._http_response where id < 0;
-delete from public.command_audit_log
+delete from private.command_audit_log
 where command = 'cmd_dataset_derivative_rebuild_plan_guarded';
 
 select set_config(
@@ -311,7 +311,7 @@ select set_config(
 set local role authenticated;
 
 create temporary table derivative_snapshot_one as
-select public.cmd_dataset_derivative_rebuild_snapshot(
+select api.cmd_dataset_derivative_rebuild_snapshot(
   'processes',
   '11111111-1111-4111-8111-111111111111',
   '00.00.001'
@@ -336,13 +336,13 @@ select ok(
 
 set local role authenticated;
 create temporary table derivative_foreign_snapshot as
-select public.cmd_dataset_derivative_rebuild_snapshot(
+select api.cmd_dataset_derivative_rebuild_snapshot(
   'processes',
   '33333333-3333-4333-8333-333333333333',
   '00.00.001'
 ) as result;
 create temporary table derivative_public_snapshot as
-select public.cmd_dataset_derivative_rebuild_snapshot(
+select api.cmd_dataset_derivative_rebuild_snapshot(
   'processes',
   '44444444-4444-4444-8444-444444444444',
   '00.00.001'
@@ -383,7 +383,7 @@ grant select on derivative_plan_one to authenticated;
 
 set local role authenticated;
 create temporary table derivative_invalid_result as
-select public.cmd_dataset_derivative_rebuild_plan_guarded(
+select api.cmd_dataset_derivative_rebuild_plan_guarded(
   (select plan || jsonb_build_object('unexpected', true) from derivative_plan_one)
 ) as result;
 reset role;
@@ -401,7 +401,7 @@ select is(
 select is(
   (
     select count(*)::integer
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_derivative_rebuild_plan_guarded'
   ),
   0,
@@ -475,7 +475,7 @@ select is(
 
 set local role authenticated;
 create temporary table derivative_submit_one as
-select public.cmd_dataset_derivative_rebuild_plan_guarded(
+select api.cmd_dataset_derivative_rebuild_plan_guarded(
   (select plan from derivative_plan_one)
 ) as result;
 reset role;
@@ -508,7 +508,7 @@ select is(
 select is(
   (
     select count(*)::integer
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_derivative_rebuild_plan_guarded'
   ),
   2,
@@ -571,7 +571,7 @@ select is(
 
 set local role authenticated;
 create temporary table derivative_replay_one as
-select public.cmd_dataset_derivative_rebuild_plan_guarded(
+select api.cmd_dataset_derivative_rebuild_plan_guarded(
   (select plan from derivative_plan_one)
 ) as result;
 reset role;
@@ -593,7 +593,7 @@ select is(
 select is(
   (
     select count(*)::integer
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_derivative_rebuild_plan_guarded'
   ),
   2,
@@ -934,7 +934,7 @@ select ok(
 select is(
   (
     select count(*)::integer
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_derivative_rebuild_terminal'
       and payload->>'request_id' = (
         select result->>'request_id'
@@ -1011,7 +1011,7 @@ select is(
 
 set local role authenticated;
 create temporary table derivative_read_one as
-select public.cmd_dataset_derivative_rebuild_read(
+select api.cmd_dataset_derivative_rebuild_read(
   (select (result->>'request_id')::uuid from derivative_submit_one)
 ) as result;
 reset role;
@@ -1038,7 +1038,7 @@ select set_config(
   true
 );
 create temporary table derivative_foreign_read as
-select public.cmd_dataset_derivative_rebuild_read(
+select api.cmd_dataset_derivative_rebuild_read(
   (select (result->>'request_id')::uuid from derivative_submit_one)
 ) as result;
 reset role;
@@ -1056,7 +1056,7 @@ select set_config(
 );
 set local role authenticated;
 create temporary table derivative_completed_replay as
-select public.cmd_dataset_derivative_rebuild_plan_guarded(
+select api.cmd_dataset_derivative_rebuild_plan_guarded(
   (select plan from derivative_plan_one)
 ) as result;
 reset role;
@@ -1084,7 +1084,7 @@ select is(
 select is(
   (
     select count(*)::integer
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_derivative_rebuild_plan_guarded'
   ),
   2,
@@ -1093,7 +1093,7 @@ select is(
 
 set local role authenticated;
 create temporary table derivative_snapshot_two as
-select public.cmd_dataset_derivative_rebuild_snapshot(
+select api.cmd_dataset_derivative_rebuild_snapshot(
   'processes',
   '22222222-2222-4222-8222-222222222222',
   '00.00.001'
@@ -1123,7 +1123,7 @@ grant select on derivative_plan_two to authenticated;
 
 set local role authenticated;
 create temporary table derivative_submit_two as
-select public.cmd_dataset_derivative_rebuild_plan_guarded(
+select api.cmd_dataset_derivative_rebuild_plan_guarded(
   (select plan from derivative_plan_two)
 ) as result;
 reset role;
@@ -1285,7 +1285,7 @@ select is(
 select is(
   (
     select count(*)::integer
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_derivative_rebuild_terminal'
       and payload->>'request_id' = (
         select result->>'request_id'
@@ -1585,7 +1585,7 @@ select lives_ok(
 
 set local role authenticated;
 create temporary table derivative_retry_snapshot_two as
-select public.cmd_dataset_derivative_rebuild_snapshot(
+select api.cmd_dataset_derivative_rebuild_snapshot(
   'processes',
   '22222222-2222-4222-8222-222222222222',
   '00.00.001'
@@ -1615,7 +1615,7 @@ grant select on derivative_retry_plan_two to authenticated;
 
 set local role authenticated;
 create temporary table derivative_retry_submit_two as
-select public.cmd_dataset_derivative_rebuild_plan_guarded(
+select api.cmd_dataset_derivative_rebuild_plan_guarded(
   (select plan from derivative_retry_plan_two)
 ) as result;
 reset role;
@@ -1651,7 +1651,7 @@ select is(
 
 set local role authenticated;
 create temporary table derivative_read_two as
-select public.cmd_dataset_derivative_rebuild_read(
+select api.cmd_dataset_derivative_rebuild_read(
   (select (result->>'request_id')::uuid from derivative_submit_two)
 ) as result;
 reset role;

@@ -14,7 +14,7 @@ alter table public.unitgroups disable trigger user;
 alter table public.flowproperties disable trigger user;
 
 select ok(
-  strpos(pg_get_functiondef('public.search_dataset_json_uuid_mentions(uuid,text[],text,text,uuid,integer,integer)'::regprocedure), 'private.search_dataset_json_uuid_mentions_impl') > 0,
+  strpos(pg_get_functiondef('api.search_dataset_json_uuid_mentions(uuid,text[],text,text,uuid,integer,integer)'::regprocedure), 'private.search_dataset_json_uuid_mentions_impl') > 0,
   'public JSON UUID mention wrapper delegates to private helper'
 );
 
@@ -24,12 +24,17 @@ select ok(
 );
 
 select ok(
-  not (select prosecdef from pg_proc where oid = 'public.search_dataset_json_uuid_mentions(uuid,text[],text,text,uuid,integer,integer)'::regprocedure),
-  'public JSON UUID mention wrapper remains security invoker'
+  (select prosecdef from pg_proc where oid = 'api.search_dataset_json_uuid_mentions(uuid,text[],text,text,uuid,integer,integer)'::regprocedure)
+    and (
+      select pg_get_userbyid(proowner) = 'api_internal_executor'
+      from pg_proc
+      where oid = 'api.search_dataset_json_uuid_mentions(uuid,text[],text,text,uuid,integer,integer)'::regprocedure
+    ),
+  'API JSON UUID mention wrapper uses the constrained private-helper executor'
 );
 
 select ok(
-  strpos(pg_get_function_result('public.search_dataset_json_uuid_mentions(uuid,text[],text,text,uuid,integer,integer)'::regprocedure), 'total_count') = 0,
+  strpos(pg_get_function_result('api.search_dataset_json_uuid_mentions(uuid,text[],text,text,uuid,integer,integer)'::regprocedure), 'total_count') = 0,
   'JSON UUID mention RPC does not expose total_count'
 );
 
@@ -41,8 +46,8 @@ select ok(
 select ok(
   strpos(pg_get_functiondef('private.search_dataset_json_uuid_mentions_impl(uuid,text[],text,text,uuid,integer,integer)'::regprocedure), 'statement_timeout') > 0
     and strpos(pg_get_functiondef('private.search_dataset_json_uuid_mentions_impl(uuid,text[],text,text,uuid,integer,integer)'::regprocedure), '20s') > 0
-    and strpos(pg_get_functiondef('public.search_dataset_json_uuid_mentions(uuid,text[],text,text,uuid,integer,integer)'::regprocedure), 'statement_timeout') > 0
-    and strpos(pg_get_functiondef('public.search_dataset_json_uuid_mentions(uuid,text[],text,text,uuid,integer,integer)'::regprocedure), '20s') > 0,
+    and strpos(pg_get_functiondef('api.search_dataset_json_uuid_mentions(uuid,text[],text,text,uuid,integer,integer)'::regprocedure), 'statement_timeout') > 0
+    and strpos(pg_get_functiondef('api.search_dataset_json_uuid_mentions(uuid,text[],text,text,uuid,integer,integer)'::regprocedure), '20s') > 0,
   'JSON UUID mention RPC has bounded 20s statement timeout'
 );
 
@@ -93,16 +98,16 @@ values
     false
   );
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values
   ('a1380000-0000-0000-0000-000000000001', '{"email":"json-uuid-owner@example.com"}'::jsonb, null),
   ('b1380000-0000-0000-0000-000000000001', '{"email":"json-uuid-outsider@example.com"}'::jsonb, null);
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values
   ('c1380000-0000-0000-0000-000000000001', '{"name":"JSON UUID Mention Team"}'::jsonb, 1, false);
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values
   ('a1380000-0000-0000-0000-000000000001', 'c1380000-0000-0000-0000-000000000001', 'owner');
 
@@ -278,7 +283,7 @@ select set_config('request.jwt.claim.sub', 'a1380000-0000-0000-0000-000000000001
 select is(
   (
     select source_version::text
-    from public.search_dataset_json_uuid_mentions(
+    from api.search_dataset_json_uuid_mentions(
       'd1380000-0000-0000-0000-000000000001',
       array['flow'],
       'tg',
@@ -296,7 +301,7 @@ select is(
 select is(
   (
     select source_name
-    from public.search_dataset_json_uuid_mentions(
+    from api.search_dataset_json_uuid_mentions(
       'd1380000-0000-0000-0000-000000000001',
       array['flow'],
       'tg',
@@ -314,7 +319,7 @@ select is(
 select set_eq(
   $$
     select source_entity_kind
-    from public.search_dataset_json_uuid_mentions(
+    from api.search_dataset_json_uuid_mentions(
       'd1380000-0000-0000-0000-000000000001',
       array['process'],
       'tg',
@@ -331,7 +336,7 @@ select set_eq(
 select is(
   (
     select count(*)
-    from public.search_dataset_json_uuid_mentions(
+    from api.search_dataset_json_uuid_mentions(
       'd1380000-0000-0000-0000-000000000001',
       array['flow','process','lifecyclemodel','source','contact','unitgroup','flowproperty'],
       'tg',
@@ -348,7 +353,7 @@ select is(
 select is(
   (
     select count(*)
-    from public.search_dataset_json_uuid_mentions(
+    from api.search_dataset_json_uuid_mentions(
       'd1380000-0000-0000-0000-000000000001',
       array['flow','process','lifecyclemodel','source','contact','unitgroup','flowproperty'],
       'tg',
@@ -365,7 +370,7 @@ select is(
 select is(
   (
     select matched_by
-    from public.search_dataset_json_uuid_mentions(
+    from api.search_dataset_json_uuid_mentions(
       'd1380000-0000-0000-0000-000000000001',
       array['source'],
       'tg',
@@ -383,7 +388,7 @@ select is(
 select is(
   (
     select source_id::text
-    from public.search_dataset_json_uuid_mentions(
+    from api.search_dataset_json_uuid_mentions(
       'd1380000-0000-0000-0000-000000000002',
       array['process'],
       'my',
@@ -400,7 +405,7 @@ select is(
 select is(
   (
     select count(*)
-    from public.search_dataset_json_uuid_mentions(
+    from api.search_dataset_json_uuid_mentions(
       'd1380000-0000-0000-0000-000000000002',
       array['process'],
       'my',
@@ -418,7 +423,7 @@ select is(
 select is(
   (
     select source_id::text
-    from public.search_dataset_json_uuid_mentions(
+    from api.search_dataset_json_uuid_mentions(
       'd1380000-0000-0000-0000-000000000003',
       array['process'],
       'te',
@@ -437,7 +442,7 @@ select set_config('request.jwt.claim.sub', 'b1380000-0000-0000-0000-000000000001
 select is(
   (
     select count(*)
-    from public.search_dataset_json_uuid_mentions(
+    from api.search_dataset_json_uuid_mentions(
       'd1380000-0000-0000-0000-000000000003',
       array['process'],
       'te',
@@ -454,7 +459,7 @@ select is(
 select is(
   (
     select count(*)
-    from public.search_dataset_json_uuid_mentions(
+    from api.search_dataset_json_uuid_mentions(
       'd1380000-0000-0000-0000-000000000001',
       array['unsupported-kind'],
       'tg',

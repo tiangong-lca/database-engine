@@ -5,67 +5,67 @@ set local search_path = extensions, public, auth;
 select no_plan();
 
 select has_table(
-  'public', 'lcia_scope_closure_artifact_write_sets',
+  'private', 'lcia_scope_closure_artifact_write_sets',
   'DB-first publication write-set registry exists'
 );
 select has_table(
-  'public', 'lcia_scope_closure_artifact_write_set_items',
+  'private', 'lcia_scope_closure_artifact_write_set_items',
   'DB-first publication registers every possible uploaded object'
 );
 select has_function(
-  'public', 'svc_lcia_scope_closure_artifact_write_set_create',
+  'private', 'svc_lcia_scope_closure_artifact_write_set_create',
   array['uuid', 'text', 'jsonb', 'integer', 'uuid'],
   'service write-set create RPC exists'
 );
 select has_function(
-  'public', 'svc_lcia_scope_closure_artifact_write_set_inspect',
+  'private', 'svc_lcia_scope_closure_artifact_write_set_inspect',
   array['uuid'],
   'service write-set inspect RPC exists'
 );
 select has_function(
-  'public', 'svc_lcia_scope_closure_artifact_write_set_finalize',
+  'private', 'svc_lcia_scope_closure_artifact_write_set_finalize',
   array['uuid', 'uuid'],
   'service write-set finalize RPC exists'
 );
 select has_function(
-  'public', 'svc_lcia_scope_closure_artifact_write_set_fail',
+  'private', 'svc_lcia_scope_closure_artifact_write_set_fail',
   array['uuid', 'uuid', 'text'],
   'service write-set failure RPC exists'
 );
 select has_function(
-  'public', 'svc_lcia_scope_closure_artifact_write_set_reconcile',
+  'private', 'svc_lcia_scope_closure_artifact_write_set_reconcile',
   array['integer', 'integer'],
   'service stale-write-set reconcile RPC exists'
 );
 select has_function(
-  'public', 'svc_lcia_scope_closure_artifact_write_set_reconcile_complete',
+  'private', 'svc_lcia_scope_closure_artifact_write_set_reconcile_complete',
   array['uuid', 'uuid'],
   'service stale-write-set reconcile completion RPC exists'
 );
 select has_function(
-  'public', 'svc_lcia_scope_closure_artifact_gc_preview',
+  'private', 'svc_lcia_scope_closure_artifact_gc_preview',
   array['integer'],
   'service non-mutating GC preview RPC exists'
 );
 select has_function(
-  'public', 'svc_lcia_scope_closure_artifact_gc_renew',
+  'private', 'svc_lcia_scope_closure_artifact_gc_renew',
   array['uuid', 'integer'],
   'service fenced GC renewal RPC exists'
 );
 select ok(
   has_function_privilege(
     'service_role',
-    'public.svc_lcia_scope_closure_artifact_write_set_create(uuid,text,jsonb,integer,uuid)',
+    'private.svc_lcia_scope_closure_artifact_write_set_create(uuid,text,jsonb,integer,uuid)',
     'execute'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.svc_lcia_scope_closure_artifact_write_set_create(uuid,text,jsonb,integer,uuid)',
+    'private.svc_lcia_scope_closure_artifact_write_set_create(uuid,text,jsonb,integer,uuid)',
     'execute'
   )
   and not has_function_privilege(
     'anon',
-    'public.svc_lcia_scope_closure_artifact_write_set_create(uuid,text,jsonb,integer,uuid)',
+    'private.svc_lcia_scope_closure_artifact_write_set_create(uuid,text,jsonb,integer,uuid)',
     'execute'
   ),
   'publication staging mutation is service-only'
@@ -73,17 +73,17 @@ select ok(
 select ok(
   has_function_privilege(
     'service_role',
-    'public.svc_lcia_scope_closure_artifact_gc_preview(integer)',
+    'private.svc_lcia_scope_closure_artifact_gc_preview(integer)',
     'execute'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.svc_lcia_scope_closure_artifact_gc_preview(integer)',
+    'private.svc_lcia_scope_closure_artifact_gc_preview(integer)',
     'execute'
   )
   and not has_function_privilege(
     'anon',
-    'public.svc_lcia_scope_closure_artifact_gc_preview(integer)',
+    'private.svc_lcia_scope_closure_artifact_gc_preview(integer)',
     'execute'
   ),
   'GC preview is service-only'
@@ -99,10 +99,10 @@ insert into auth.users (
   'authenticated', 'authenticated', 'issue-308-staging-owner@example.com',
   'x', now(), '{}', '{}', now(), now(), false, false
 );
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values ('30820000-0000-4000-8000-000000000001', '{}', null);
 
-insert into public.worker_jobs (
+insert into private.worker_jobs (
   id, job_kind, worker_runtime, worker_queue, requester_type, requested_by,
   visibility, payload_schema_version, payload_json, status
 ) values
@@ -119,7 +119,7 @@ insert into public.worker_jobs (
     'lcia.scope_closure_check.request.v1', '{}', 'running'
   );
 
-insert into public.lcia_scope_closure_checks (
+insert into private.lcia_scope_closure_checks (
   id, worker_job_id, requested_by, request_idempotency_token, request_key,
   request_fingerprint, requested_scope_hash, policy_fingerprint,
   data_snapshot_token, expected_validator_scanner_fingerprint, status,
@@ -197,7 +197,7 @@ insert into issue_308_write_set_inputs values (jsonb_build_array(
 
 create temporary table issue_308_crash_write_set (value jsonb);
 insert into issue_308_crash_write_set
-select public.svc_lcia_scope_closure_artifact_write_set_create(
+select private.svc_lcia_scope_closure_artifact_write_set_create(
   '30820000-0000-4000-8000-000000000201',
   'crash-after-two-uploads',
   items,
@@ -228,7 +228,7 @@ select is(
 select is(
   (
     select count(*)
-    from public.lcia_scope_closure_artifact_write_set_items
+    from private.lcia_scope_closure_artifact_write_set_items
     where write_set_id = (
       select (value #>> '{data,writeSetId}')::uuid
       from issue_308_crash_write_set
@@ -240,10 +240,10 @@ select is(
 select is(
   (
     select count(*)
-    from public.worker_job_artifacts
+    from private.worker_job_artifacts
     where id in (
       select id
-      from public.lcia_scope_closure_artifact_write_set_items
+      from private.lcia_scope_closure_artifact_write_set_items
       where write_set_id = (
         select (value #>> '{data,writeSetId}')::uuid
         from issue_308_crash_write_set
@@ -254,7 +254,7 @@ select is(
   'crashed staging leaves no partial ready artifact write-set'
 );
 
-update public.lcia_scope_closure_artifact_write_sets
+update private.lcia_scope_closure_artifact_write_sets
 set created_at = now() - interval '2 seconds',
     staging_expires_at = now() - interval '1 second'
 where id = (
@@ -263,7 +263,7 @@ where id = (
 );
 create temporary table issue_308_reconcile_claim (value jsonb);
 insert into issue_308_reconcile_claim
-select public.svc_lcia_scope_closure_artifact_write_set_reconcile(1, 30);
+select private.svc_lcia_scope_closure_artifact_write_set_reconcile(1, 30);
 select is(
   (
     select value #>> '{data,writeSets,0,status}'
@@ -303,7 +303,7 @@ select ok(
       and write_set.reconcile_expires_at =
         (claim.value #>> '{data,writeSets,0,reconcileLeaseExpiresAt}')::timestamptz
     from issue_308_reconcile_claim claim
-    join public.lcia_scope_closure_artifact_write_sets write_set
+    join private.lcia_scope_closure_artifact_write_sets write_set
       on write_set.id =
         (claim.value #>> '{data,writeSets,0,writeSetId}')::uuid
   ),
@@ -318,7 +318,7 @@ select is(
   'fresh reconciler receives every pre-registered locator after uploader loss'
 );
 select is(
-  public.svc_lcia_scope_closure_artifact_write_set_reconcile_complete(
+  private.svc_lcia_scope_closure_artifact_write_set_reconcile_complete(
     (
       select (value #>> '{data,writeSets,0,writeSetId}')::uuid
       from issue_308_reconcile_claim
@@ -334,7 +334,7 @@ select is(
 
 create temporary table issue_308_ready_write_set (value jsonb);
 insert into issue_308_ready_write_set
-select public.svc_lcia_scope_closure_artifact_write_set_create(
+select private.svc_lcia_scope_closure_artifact_write_set_create(
   '30820000-0000-4000-8000-000000000202',
   'finalize-all',
   replace(items::text, 'staging/crash/', 'staging/ready/')::jsonb,
@@ -342,7 +342,7 @@ select public.svc_lcia_scope_closure_artifact_write_set_create(
 )
 from issue_308_write_set_inputs;
 select is(
-  public.svc_lcia_scope_closure_artifact_write_set_finalize(
+  private.svc_lcia_scope_closure_artifact_write_set_finalize(
     (
       select (value #>> '{data,writeSetId}')::uuid
       from issue_308_ready_write_set
@@ -354,7 +354,7 @@ select is(
 );
 create temporary table issue_308_finalize_result (value jsonb);
 insert into issue_308_finalize_result
-select public.svc_lcia_scope_closure_artifact_write_set_finalize(
+select private.svc_lcia_scope_closure_artifact_write_set_finalize(
   (
     select (value #>> '{data,writeSetId}')::uuid
     from issue_308_ready_write_set
@@ -372,10 +372,10 @@ select is(
 select is(
   (
     select count(*)
-    from public.worker_job_artifacts
+    from private.worker_job_artifacts
     where id in (
       select id
-      from public.lcia_scope_closure_artifact_write_set_items
+      from private.lcia_scope_closure_artifact_write_set_items
       where write_set_id = (
         select (value #>> '{data,writeSetId}')::uuid
         from issue_308_ready_write_set
@@ -390,7 +390,7 @@ select ok(
     select report_artifact_id is not null
       and complete_machine_result_artifact_id is not null
       and closure_bundle_artifact_id is not null
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where id = '30820000-0000-4000-8000-000000000202'
   ),
   'atomic finalize binds report, manifest, and bundle in the same transaction'
@@ -398,8 +398,8 @@ select ok(
 select is(
   (
     select artifact.metadata->>'completeMachineResultArtifactId'
-    from public.worker_job_artifacts artifact
-    join public.lcia_scope_closure_checks closure_check
+    from private.worker_job_artifacts artifact
+    join private.lcia_scope_closure_checks closure_check
       on closure_check.closure_bundle_artifact_id = artifact.id
     where closure_check.id = '30820000-0000-4000-8000-000000000202'
   ),
@@ -412,8 +412,8 @@ select is(
 select is(
   (
     select artifact.metadata ? 'completeMachineResultClientKey'
-    from public.worker_job_artifacts artifact
-    join public.lcia_scope_closure_checks closure_check
+    from private.worker_job_artifacts artifact
+    join private.lcia_scope_closure_checks closure_check
       on closure_check.closure_bundle_artifact_id = artifact.id
     where closure_check.id = '30820000-0000-4000-8000-000000000202'
   ),
@@ -421,7 +421,7 @@ select is(
   'final closure bundle metadata does not retain the staging client key'
 );
 
-insert into public.worker_jobs (
+insert into private.worker_jobs (
   id, job_kind, worker_runtime, worker_queue, requester_type, requested_by,
   visibility, payload_schema_version, payload_json, status
 ) values (
@@ -430,11 +430,11 @@ insert into public.worker_jobs (
   '30820000-0000-4000-8000-000000000001', 'operator',
   'lcia.scope_closure_check.request.v1', '{}', 'running'
 );
-update public.lcia_scope_closure_checks
+update private.lcia_scope_closure_checks
 set status = 'passed',
     scan_completeness = 'complete'
 where id = '30820000-0000-4000-8000-000000000202';
-insert into public.lcia_scope_closure_checks (
+insert into private.lcia_scope_closure_checks (
   id, worker_job_id, requested_by, request_idempotency_token, request_key,
   request_fingerprint, requested_scope_hash, policy_fingerprint,
   data_snapshot_token, expected_validator_scanner_fingerprint, status,
@@ -450,7 +450,7 @@ insert into public.lcia_scope_closure_checks (
 
 create temporary table issue_308_reused_write_set (value jsonb);
 insert into issue_308_reused_write_set
-select public.svc_lcia_scope_closure_artifact_write_set_create(
+select private.svc_lcia_scope_closure_artifact_write_set_create(
   '30820000-0000-4000-8000-000000000203',
   'finalize-reused-report-only',
   jsonb_build_array(
@@ -489,15 +489,15 @@ select ok(
         source.complete_machine_result_artifact_id
       and target.closure_bundle_artifact_id =
         source.closure_bundle_artifact_id
-    from public.lcia_scope_closure_checks target
-    join public.lcia_scope_closure_checks source
+    from private.lcia_scope_closure_checks target
+    join private.lcia_scope_closure_checks source
       on source.id = '30820000-0000-4000-8000-000000000202'
     where target.id = '30820000-0000-4000-8000-000000000203'
   ),
   'reused create atomically freezes the source manifest and bundle lineage'
 );
 select is(
-  public.svc_lcia_scope_closure_artifact_write_set_finalize(
+  private.svc_lcia_scope_closure_artifact_write_set_finalize(
     (
       select (value #>> '{data,writeSetId}')::uuid
       from issue_308_reused_write_set
@@ -518,15 +518,15 @@ select ok(
         source.complete_machine_result_artifact_id
       and target.closure_bundle_artifact_id =
         source.closure_bundle_artifact_id
-    from public.lcia_scope_closure_checks target
-    join public.lcia_scope_closure_checks source
+    from private.lcia_scope_closure_checks target
+    join private.lcia_scope_closure_checks source
       on source.id = '30820000-0000-4000-8000-000000000202'
     where target.id = '30820000-0000-4000-8000-000000000203'
   ),
   'reused finalize updates only the current report and preserves source evidence'
 );
 
-insert into public.worker_job_artifacts (
+insert into private.worker_job_artifacts (
   id, job_id, artifact_type, storage_bucket, storage_path, content_type,
   byte_size, checksum_sha256, metadata, created_at
 ) values (
@@ -546,11 +546,11 @@ select
   gc_claim_expires_at,
   gc_failure_count,
   gc_last_error
-from public.worker_job_artifacts
+from private.worker_job_artifacts
 where id = '30820000-0000-4000-8000-000000000301';
 create temporary table issue_308_gc_preview (value jsonb);
 insert into issue_308_gc_preview
-select public.svc_lcia_scope_closure_artifact_gc_preview(1);
+select private.svc_lcia_scope_closure_artifact_gc_preview(1);
 select is(
   (
     select row_to_json(before_row)::jsonb
@@ -567,7 +567,7 @@ select is(
         gc_claim_expires_at,
         gc_failure_count,
         gc_last_error
-      from public.worker_job_artifacts
+      from private.worker_job_artifacts
       where id = '30820000-0000-4000-8000-000000000301'
     ) after_row
   ),
@@ -576,7 +576,7 @@ select is(
 
 create temporary table issue_308_gc_claim (value jsonb);
 insert into issue_308_gc_claim
-select public.svc_lcia_scope_closure_artifact_gc_claim(1, 2);
+select private.svc_lcia_scope_closure_artifact_gc_claim(1, 2);
 select is(
   (select value #>> '{data,items,0,artifactId}' from issue_308_gc_preview),
   (select value #>> '{data,items,0,artifactId}' from issue_308_gc_claim),
@@ -584,7 +584,7 @@ select is(
 );
 select is(
   jsonb_array_length(
-    public.svc_lcia_scope_closure_artifact_gc_claim(1, 2)
+    private.svc_lcia_scope_closure_artifact_gc_claim(1, 2)
       #> '{data,items}'
   ),
   0,
@@ -596,13 +596,13 @@ create temporary table issue_308_gc_renewals (
   value jsonb
 );
 insert into issue_308_gc_renewals
-select 1, public.svc_lcia_scope_closure_artifact_gc_renew(
+select 1, private.svc_lcia_scope_closure_artifact_gc_renew(
   (select (value #>> '{data,claimToken}')::uuid from issue_308_gc_claim),
   3
 );
 select pg_sleep(0.05);
 insert into issue_308_gc_renewals
-select 2, public.svc_lcia_scope_closure_artifact_gc_renew(
+select 2, private.svc_lcia_scope_closure_artifact_gc_renew(
   (select (value #>> '{data,claimToken}')::uuid from issue_308_gc_claim),
   4
 );
@@ -618,26 +618,26 @@ select ok(
 );
 select is(
   jsonb_array_length(
-    public.svc_lcia_scope_closure_artifact_gc_claim(1, 2)
+    private.svc_lcia_scope_closure_artifact_gc_claim(1, 2)
       #> '{data,items}'
   ),
   0,
   'renewed lease continues to exclude a second claimant'
 );
 
-update public.worker_job_artifacts
+update private.worker_job_artifacts
 set gc_claim_expires_at = now() - interval '1 second'
 where id = '30820000-0000-4000-8000-000000000301';
 create temporary table issue_308_gc_handoff (value jsonb);
 insert into issue_308_gc_handoff
-select public.svc_lcia_scope_closure_artifact_gc_claim(1, 2);
+select private.svc_lcia_scope_closure_artifact_gc_claim(1, 2);
 select isnt(
   (select value #>> '{data,claimToken}' from issue_308_gc_handoff),
   (select value #>> '{data,claimToken}' from issue_308_gc_claim),
   'expired lease hands the artifact to a fresh fenced token'
 );
 select is(
-  public.svc_lcia_scope_closure_artifact_gc_renew(
+  private.svc_lcia_scope_closure_artifact_gc_renew(
     (select (value #>> '{data,claimToken}')::uuid from issue_308_gc_claim),
     3
   ) ->> 'code',
@@ -645,7 +645,7 @@ select is(
   'old token cannot renew after expiry handoff'
 );
 select is(
-  public.svc_lcia_scope_closure_artifact_gc_complete(
+  private.svc_lcia_scope_closure_artifact_gc_complete(
     '30820000-0000-4000-8000-000000000301',
     (select (value #>> '{data,claimToken}')::uuid from issue_308_gc_claim),
     false,

@@ -131,7 +131,7 @@ begin
   end if;
 
   select count(*)::integer into artifact_count
-  from public.command_audit_log as audit
+  from private.command_audit_log as audit
   where audit.command = 'preview_e2e_protected_alias_fixture'
     and audit.actor_user_id = config.actor_user_id
     and audit.target_table = 'preview_e2e_protected_alias'
@@ -144,7 +144,7 @@ begin
 
   if artifact_count = 1 and exists (
     select 1
-    from public.command_audit_log as audit
+    from private.command_audit_log as audit
     where audit.command = 'preview_e2e_protected_alias_fixture'
       and audit.actor_user_id = config.actor_user_id
       and audit.target_table = 'preview_e2e_protected_alias'
@@ -215,7 +215,7 @@ select
   target.value->>'table',
   (target.value->>'id')::uuid,
   target.value->>'version'
-from public.command_audit_log as audit
+from private.command_audit_log as audit
 cross join pg_temp.preview_alias_cleanup_config as config
 cross join lateral jsonb_array_elements(audit.payload->'target_keys') as target(value)
 where audit.command = 'preview_e2e_protected_alias_fixture'
@@ -370,7 +370,7 @@ using pg_temp.preview_alias_cleanup_config as config
 where preflight.id = config.request_id
   and preflight.actor_user_id = config.actor_user_id;
 
-delete from public.command_audit_log as audit
+delete from private.command_audit_log as audit
 using pg_temp.preview_alias_cleanup_config as config
 where audit.actor_user_id = config.actor_user_id
   and (
@@ -486,11 +486,11 @@ begin
     or exists (select 1 from net._http_response where id in (
       select id from pg_temp.preview_alias_cleanup_http_ids
     ))
-    or exists (select 1 from public.command_audit_log
+    or exists (select 1 from private.command_audit_log
       where actor_user_id = config.actor_user_id
         and command = 'preview_e2e_protected_alias_fixture'
         and target_id = config.request_id)
-    or exists (select 1 from public.command_audit_log as audit
+    or exists (select 1 from private.command_audit_log as audit
       where audit.actor_user_id = config.actor_user_id
         and audit.command in (
           'cmd_dataset_alias_batch_guarded',

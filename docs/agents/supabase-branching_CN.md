@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-05
-lastReviewedCommit: 5bb96b2f1fd4126081fdae166482d1d1bec3d5a6
-lastReviewedNote: "已为 Issue #418 复核：剩余示例与受保护基准命令必须使用重建后的持久 dev ref；分支工作流及 promote 规则不变。"
+lastReviewedCommit: df8253b4f81d3e05524602f996025b54e9c35dd3
+lastReviewedNote: "已为 Issue #422 复核：schema 边界切换需验证 Preview、持久 dev 和生产的 profile 行为；分支工作流及 promote 规则不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -136,7 +136,10 @@ related:
 4. preview branch 只用于 PR 级别验证；它不是持久化 Supabase `dev` 分支。
 5. PR 合并后，对 Git `dev` 的 push 会触发 `.github/workflows/supabase-dev.yml`。
 6. 该 workflow 会连接 `SUPABASE_DEV_PROJECT_ID` 并执行 `supabase db push --include-all`。
-7. 尚未应用的已提交 migrations 随后才会应用到持久化 Supabase `dev` 分支。
+7. 同一 workflow 随后对同一个项目执行 `supabase config push`，强制 PostgREST
+   使用有序的 `public,api,graphql_public` 与 `public,api,extensions`，并通过
+   Supabase Management API 回读这两个列表。
+8. 已提交的 migrations 与项目配置由此共同应用到持久化 Supabase `dev` 分支。
 
 `--include-all` 表示所有尚未出现在远端 migration history 中的已提交 migration
 都可以被应用。受治理的 `main -> dev` 回合并可能带入时间戳早于 `dev` 已记录新
@@ -148,7 +151,17 @@ Promote 路径：
 1. `dev -> main` promote PR 合并到 Git `main`。
 2. 生产项目的 Supabase GitHub integration 会读取 Git `main` 中已提交的 `supabase/` 目录。
 3. 尚未应用的已提交 migrations 会自动应用到生产项目。
-4. 运维人员在 promote merge 后验证生产 migration 状态和应用行为。
+4. 如果 `supabase/config.toml` 有变化，运维人员应在 migration 已应用后执行
+   `supabase config push --project-ref <production-project-ref> --yes`，并通过
+   Management API 校验 PostgREST 配置。
+5. 运维人员在 promote merge 后验证生产 migration 状态和应用行为。
+
+对于 schema 边界的一次性切换，Preview 与持久化 `dev` 验证必须覆盖：无 profile
+时通过托管端默认 `public` 访问核心实体、显式 `public` 实体访问、显式 `api` RPC、
+拒绝 `private`，以及旧 `public` RPC 路由不存在。Data API 消费者必须为实体选择
+`public`、为 RPC 选择 `api`，不能依赖本地 CLI 的 schema 排序。生产迁移可以使用
+短时维护窗口，但所有消费者修改必须先在持久化 `dev` 完成验证，再执行
+`dev -> main` promote。
 
 本仓目前没有 checked-in 的 `workflow_dispatch` 生产 Supabase 部署流程。这是有意设计：
 Git `main` 由 Supabase GitHub integration 处理。运维人员仍可在本地执行
@@ -192,6 +205,8 @@ Git `main` 由 Supabase GitHub integration 处理。运维人员仍可在本地�
 
 - 对 Git `dev` 的 push 会触发 `.github/workflows/supabase-dev.yml`。
 - 该 workflow 会连接持久化 Supabase `dev` 分支并执行 `supabase db push --include-all`，从而让受治理的回合并可以应用远端 history 中缺失的全部已提交 migration，包括时间戳更早的条目。
+- 同一 workflow 随后执行 `supabase config push`，强制托管 PostgREST 以 `public`
+  为首，并在 Management API 回读或 REST profile 探测不符合合同时直接失败。
 - 不要再增加第二条会对同一目标执行 push 的自动化链路。
 
 ### 生产 `main` 部署
@@ -199,6 +214,8 @@ Git `main` 由 Supabase GitHub integration 处理。运维人员仍可在本地�
 - 对 Git `main` 的 push 由生产项目的 Supabase GitHub integration 处理。
 - 该 integration 监听 repository `tiangong-lca/database-engine`，relative path 为 `supabase`。
 - 当 `main` 前进时，已提交且尚未应用的 migrations 会自动应用到生产项目。
+- 不假定项目配置会随 migration 自动同步；`supabase/config.toml` 变化时，必须
+  显式推送到生产项目并验证托管 PostgREST 设置。
 - 不要把缺少 checked-in 的 `main` GitHub Actions workflow 理解为需要手动部署。
 - 本地 `supabase db push` 仅作为明确的兜底或恢复路径使用，并需要记录该动作。
 

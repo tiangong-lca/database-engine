@@ -2472,7 +2472,7 @@ ${contextSqlGate(context.config)}
         and operation_id = ${sqlLiteral(manifest.operation_id)})
     or exists (select 1 from util.dataset_flow_identity_wrapper_invocations
       where actor_user_id = ${sqlLiteral(context.owner.userId)}::uuid)
-    or exists (select 1 from public.command_audit_log
+    or exists (select 1 from private.command_audit_log
       where actor_user_id = ${sqlLiteral(context.owner.userId)}::uuid
         and command = 'cmd_dataset_flow_identity_scope_preflight_guarded'
         and payload->>'operation_id' = ${sqlLiteral(manifest.operation_id)})
@@ -2530,7 +2530,7 @@ ${contextSqlGate(context.config)}
   if to_regprocedure('private.preview_flow_identity_post_primary_fault_v1()') is not null
     or exists (select 1 from pg_trigger
       where tgname = 'preview_flow_identity_post_primary_fault_v1'
-        and tgrelid = 'public.command_audit_log'::regclass
+        and tgrelid = 'private.command_audit_log'::regclass
         and not tgisinternal) then
     raise exception 'FAULT_HOOK_ALREADY_EXISTS';
   end if;
@@ -2560,7 +2560,7 @@ $fault$;
 revoke all on function private.preview_flow_identity_post_primary_fault_v1()
   from public, anon, authenticated, service_role;
 create trigger preview_flow_identity_post_primary_fault_v1
-before update on public.command_audit_log
+before update on private.command_audit_log
 for each row execute function private.preview_flow_identity_post_primary_fault_v1();
 select tap from (values
   ('TAP version 13'), ('1..1'),
@@ -2591,7 +2591,7 @@ ${contextSqlGate(context.config)}
         where id = ${sqlLiteral(scopeId)}::uuid) is distinct from 'sealed'
     or exists (select 1 from util.dataset_flow_identity_mutation_permits
       where scope_id = ${sqlLiteral(scopeId)}::uuid)
-    or exists (select 1 from public.command_audit_log
+    or exists (select 1 from private.command_audit_log
       where actor_user_id = ${sqlLiteral(context.owner.userId)}::uuid
         and command = 'cmd_dataset_flow_identity_process_rewrite_guarded'
         and payload->>'scope_id' = ${sqlLiteral(scopeId)})
@@ -2629,7 +2629,7 @@ ${contextSqlGate(context.config)}
         from pg_trigger as fault_trigger
         where fault_trigger.tgname =
             'preview_flow_identity_post_primary_fault_v1'
-          and fault_trigger.tgrelid = 'public.command_audit_log'::regclass
+          and fault_trigger.tgrelid = 'private.command_audit_log'::regclass
           and not fault_trigger.tgisinternal
           and fault_trigger.tgenabled = 'O'
           and fault_trigger.tgfoid = to_regprocedure(
@@ -2649,7 +2649,7 @@ ${contextSqlGate(context.config)}
   end if;
 end $gate$;
 drop trigger preview_flow_identity_post_primary_fault_v1
-  on public.command_audit_log;
+  on private.command_audit_log;
 drop function private.preview_flow_identity_post_primary_fault_v1();
 select tap from (values
   ('TAP version 13'), ('1..1'),
@@ -2689,7 +2689,7 @@ ${contextSqlGate(context.config)}
           and audit_id is null and derivative_batch_id is null) <> 1
     or exists (select 1 from util.dataset_flow_identity_mutation_permits
       where scope_id = ${sqlLiteral(scopeId)}::uuid)
-    or (select count(*) from public.command_audit_log
+    or (select count(*) from private.command_audit_log
         where actor_user_id = ${sqlLiteral(context.owner.userId)}::uuid
           and command = 'cmd_dataset_flow_identity_process_rewrite_guarded'
           and payload->>'scope_id' = ${sqlLiteral(scopeId)}) <> 1
@@ -2820,7 +2820,7 @@ ${contextSqlGate(context.config)}
           and derivative_batch_id is not null) <> 2
     or exists (select 1 from util.dataset_flow_identity_mutation_permits
         where scope_id = ${sqlLiteral(scopeId)}::uuid)
-    or (select count(*) from public.command_audit_log
+    or (select count(*) from private.command_audit_log
         where actor_user_id = ${sqlLiteral(context.owner.userId)}::uuid
           and command = 'cmd_dataset_flow_identity_process_rewrite_guarded'
           and payload->>'scope_id' = ${sqlLiteral(scopeId)}) <> 2

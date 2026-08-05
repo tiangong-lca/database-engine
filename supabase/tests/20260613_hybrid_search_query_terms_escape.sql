@@ -72,7 +72,7 @@ select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_
 select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodels_json_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodel_extract_md_trigger_insert');
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values
   ('a6130000-0000-0000-0000-000000000001', '{"email":"query-terms-owner@example.com"}'::jsonb, null),
   ('b6130000-0000-0000-0000-000000000001', '{"email":"query-terms-outsider@example.com"}'::jsonb, null);
@@ -175,7 +175,7 @@ with chemical(term) as (
 select is(
   (
     select id::text
-    from public.search_flows_latest(
+    from api.search_flows_latest(
       '(111479-05-1) OR (Propanoic acid, 2-[4-[(6-chloro-2-quinoxalinyl)oxy]phenoxy]-, 2-[[(1-methylethylidene)amino]oxy]ethyl ester, (2R)-)',
       '{}'::jsonb,
       '{}'::jsonb,
@@ -202,7 +202,7 @@ chemical(term) as (
 select is(
   (
     select id::text
-    from public.hybrid_search_flows_v2(
+    from api.hybrid_search_flows_v2(
       '(111479-05-1) OR (Propanoic acid, 2-[4-[(6-chloro-2-quinoxalinyl)oxy]phenoxy]-, 2-[[(1-methylethylidene)amino]oxy]ethyl ester, (2R)-)',
       (select value from latest_zero_embedding),
       '{}',
@@ -225,7 +225,7 @@ select is(
 select is(
   (
     select id::text
-    from public.search_processes_latest(
+    from api.search_processes_latest(
       'ignored-invalid-query (alternating current) OR (AC power)',
       '{}'::jsonb,
       '{}'::jsonb,
@@ -247,7 +247,7 @@ select is(
 select is(
   (
     select id::text
-    from public.search_processes_latest(
+    from api.search_processes_latest(
       'alternating current',
       '{}'::jsonb,
       '{}'::jsonb,
@@ -268,7 +268,7 @@ select is(
 select is(
   (
     select id::text
-    from public.search_lifecyclemodels_latest(
+    from api.search_lifecyclemodels_latest(
       'ignored-invalid-query (硅酸盐水泥)',
       '{}'::jsonb,
       '{}'::jsonb,
@@ -292,7 +292,7 @@ with chemical(term) as (
 select is(
   (
     select id::text
-    from public.search_flows_latest(
+    from api.search_flows_latest(
       (select term from chemical),
       '{}'::jsonb,
       '{}'::jsonb,
@@ -312,7 +312,7 @@ select is(
 select is(
   (
     select id::text
-    from public.search_lifecyclemodels_latest(
+    from api.search_lifecyclemodels_latest(
       'legacy fallback term',
       '{}'::jsonb,
       '{}'::jsonb,
@@ -332,7 +332,7 @@ select is(
 select is(
   (
     select id::text
-    from public.search_flows_latest(
+    from api.search_flows_latest(
       'ignored',
       '{}'::jsonb,
       '{}'::jsonb,
@@ -353,7 +353,7 @@ select is(
 select is(
   (
     select count(*)
-    from public.search_flows_latest(
+    from api.search_flows_latest(
       'ignored',
       '{}'::jsonb,
       '{}'::jsonb,
@@ -389,7 +389,7 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'query_terms') > 0,
+  strpos(pg_get_functiondef('api.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'query_terms') > 0,
   'flow hybrid signature exposes query_terms as the trailing optional argument'
 );
 

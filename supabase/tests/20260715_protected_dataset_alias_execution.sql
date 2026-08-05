@@ -487,7 +487,7 @@ $$;
 -- exhaustive alias and derivative primitive suites.  The replacements create
 -- the exact audit closure and terminal derivative proof expected by the
 -- protected orchestration while rollback restores the production bodies.
-create or replace function public.cmd_dataset_alias_plan_guarded(
+create or replace function private.cmd_dataset_alias_plan_guarded(
   p_plan jsonb
 ) returns jsonb
 language plpgsql
@@ -499,7 +499,7 @@ declare
   v_plan_request_sha256 text :=
     util.dataset_alias_execution_sha256(p_plan::text);
 begin
-  insert into public.command_audit_log (
+  insert into private.command_audit_log (
     command,
     actor_user_id,
     target_table,
@@ -521,7 +521,7 @@ begin
     )
   from generate_series(1, 54) as ordinal;
 
-  insert into public.command_audit_log (
+  insert into private.command_audit_log (
     command,
     actor_user_id,
     target_table,
@@ -715,7 +715,7 @@ from (values
 
 set local session_replication_role = origin;
 
-delete from public.command_audit_log
+delete from private.command_audit_log
 where actor_user_id = pg_temp.protected_actor_id();
 delete from util.dataset_derivative_rebuild_requests
 where actor_user_id = pg_temp.protected_actor_id();
@@ -758,37 +758,37 @@ select plan(44);
 select ok(
   not has_function_privilege(
     'anon',
-    'public.cmd_dataset_alias_execution_preflight_guarded(jsonb)',
+    'api.cmd_dataset_alias_execution_preflight_guarded(jsonb)',
     'execute'
   )
   and has_function_privilege(
     'authenticated',
-    'public.cmd_dataset_alias_execution_preflight_guarded(jsonb)',
+    'api.cmd_dataset_alias_execution_preflight_guarded(jsonb)',
     'execute'
   )
   and has_function_privilege(
     'authenticated',
-    'public.cmd_dataset_alias_execution_gate_guarded(uuid,text,text)',
+    'api.cmd_dataset_alias_execution_gate_guarded(uuid,text,text)',
     'execute'
   )
   and has_function_privilege(
     'authenticated',
-    'public.cmd_dataset_alias_execution_admit_guarded(jsonb)',
+    'api.cmd_dataset_alias_execution_admit_guarded(jsonb)',
     'execute'
   )
   and has_function_privilege(
     'authenticated',
-    'public.cmd_dataset_alias_execution_read(uuid)',
+    'api.cmd_dataset_alias_execution_read(uuid)',
     'execute'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.cmd_dataset_alias_execution_execute(uuid,text)',
+    'private.cmd_dataset_alias_execution_execute(uuid,text)',
     'execute'
   )
   and has_function_privilege(
     'service_role',
-    'public.cmd_dataset_alias_execution_execute(uuid,text)',
+    'private.cmd_dataset_alias_execution_execute(uuid,text)',
     'execute'
   ),
   'protected API grants expose only actor preflight/gate/admit/read and service executor'
@@ -797,12 +797,12 @@ select ok(
 select ok(
   not has_function_privilege(
     'authenticated',
-    'public.cmd_dataset_alias_plan_guarded(jsonb)',
+    'private.cmd_dataset_alias_plan_guarded(jsonb)',
     'execute'
   )
   and not has_function_privilege(
     'service_role',
-    'public.cmd_dataset_alias_plan_guarded(jsonb)',
+    'private.cmd_dataset_alias_plan_guarded(jsonb)',
     'execute'
   ),
   'legacy replay-capable alias RPC remains unavailable to authenticated and service roles'
@@ -831,7 +831,7 @@ select is(
 
 insert into protected_results values (
   'preflight',
-  public.cmd_dataset_alias_execution_preflight_guarded(
+  api.cmd_dataset_alias_execution_preflight_guarded(
     pg_temp.protected_preflight_request(
       'a2000000-0000-0000-0000-000000000001'
     )
@@ -881,7 +881,7 @@ select ok(
 );
 
 select is(
-  (select count(*)::text from public.command_audit_log)
+  (select count(*)::text from private.command_audit_log)
   || ':' ||
   (select count(*)::text from util.dataset_derivative_rebuild_requests),
   '0:0',
@@ -905,7 +905,7 @@ select ok(
 );
 
 select is(
-  public.cmd_dataset_alias_execution_preflight_guarded(
+  api.cmd_dataset_alias_execution_preflight_guarded(
     pg_temp.protected_preflight_request(
       'a2000000-0000-0000-0000-000000000010'
     ) || jsonb_build_object('gate_expectations', '{}'::jsonb)
@@ -915,7 +915,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_execution_preflight_guarded(
+  api.cmd_dataset_alias_execution_preflight_guarded(
     jsonb_set(
       jsonb_set(
         pg_temp.protected_preflight_request(
@@ -933,7 +933,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_execution_preflight_guarded(
+  api.cmd_dataset_alias_execution_preflight_guarded(
     jsonb_set(
       pg_temp.protected_preflight_request(
         'a2000000-0000-0000-0000-000000000012'
@@ -948,7 +948,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_execution_preflight_guarded(
+  api.cmd_dataset_alias_execution_preflight_guarded(
     jsonb_set(
       pg_temp.protected_preflight_request(
         'a2000000-0000-0000-0000-000000000013'
@@ -962,7 +962,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_execution_preflight_guarded(
+  api.cmd_dataset_alias_execution_preflight_guarded(
     jsonb_set(
       pg_temp.protected_preflight_request(
         'a2000000-0000-0000-0000-000000000014'
@@ -976,7 +976,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_execution_preflight_guarded(
+  api.cmd_dataset_alias_execution_preflight_guarded(
     jsonb_set(
       pg_temp.protected_preflight_request(
         'a2000000-0000-0000-0000-000000000015'
@@ -990,7 +990,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_execution_preflight_guarded(
+  api.cmd_dataset_alias_execution_preflight_guarded(
     jsonb_set(
       pg_temp.protected_preflight_request(
         'a2000000-0000-0000-0000-000000000016'
@@ -1004,7 +1004,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_execution_preflight_guarded(
+  api.cmd_dataset_alias_execution_preflight_guarded(
     jsonb_set(
       pg_temp.protected_preflight_request(
         'a2000000-0000-0000-0000-000000000017'
@@ -1018,7 +1018,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_execution_preflight_guarded(
+  api.cmd_dataset_alias_execution_preflight_guarded(
     pg_temp.protected_preflight_request(
       'a2000000-0000-0000-0000-000000000018'
     )
@@ -1028,7 +1028,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_execution_gate_guarded(
+  api.cmd_dataset_alias_execution_gate_guarded(
     'a2000000-0000-0000-0000-000000000001',
     (select result->>'preflight_token'
      from protected_results where name = 'preflight'),
@@ -1041,7 +1041,7 @@ select is(
 insert into protected_results
 select
   gate_name,
-  public.cmd_dataset_alias_execution_gate_guarded(
+  api.cmd_dataset_alias_execution_gate_guarded(
     'a2000000-0000-0000-0000-000000000001',
     (select result->>'preflight_token'
      from protected_results where name = 'preflight'),
@@ -1099,7 +1099,7 @@ select ok(
 
 insert into protected_results values (
   'server_expectation_tamper_preflight',
-  public.cmd_dataset_alias_execution_preflight_guarded(
+  api.cmd_dataset_alias_execution_preflight_guarded(
     pg_temp.protected_preflight_request(
       'a2000000-0000-0000-0000-000000000019',
       '2026-07-15T12:00:01Z'
@@ -1116,7 +1116,7 @@ set gate_expectations = jsonb_set(
 where id = 'a2000000-0000-0000-0000-000000000019';
 
 select ok(
-  public.cmd_dataset_alias_execution_gate_guarded(
+  api.cmd_dataset_alias_execution_gate_guarded(
     'a2000000-0000-0000-0000-000000000019',
     (select result->>'preflight_token'
      from protected_results where name = 'server_expectation_tamper_preflight'),
@@ -1132,7 +1132,7 @@ select ok(
 
 insert into protected_results values (
   'expired_preflight',
-  public.cmd_dataset_alias_execution_preflight_guarded(
+  api.cmd_dataset_alias_execution_preflight_guarded(
     pg_temp.protected_preflight_request(
       'a2000000-0000-0000-0000-000000000020',
       '2026-07-15T12:00:02Z'
@@ -1147,7 +1147,7 @@ set
 where id = 'a2000000-0000-0000-0000-000000000020';
 
 select is(
-  public.cmd_dataset_alias_execution_gate_guarded(
+  api.cmd_dataset_alias_execution_gate_guarded(
     'a2000000-0000-0000-0000-000000000020',
     (select result->>'preflight_token'
      from protected_results where name = 'expired_preflight'),
@@ -1159,7 +1159,7 @@ select is(
 
 insert into protected_results values (
   'admission',
-  public.cmd_dataset_alias_execution_admit_guarded(jsonb_build_object(
+  api.cmd_dataset_alias_execution_admit_guarded(jsonb_build_object(
     'schema_version', 'dataset-alias-execution-admit.v1',
     'request_id', 'a2000000-0000-0000-0000-000000000001',
     'preflight_token', (
@@ -1215,7 +1215,7 @@ select is(
 );
 
 select ok(
-  public.cmd_dataset_alias_execution_read(
+  api.cmd_dataset_alias_execution_read(
     'a2000000-0000-0000-0000-000000000001'
   ) @> '{
     "ok": true,
@@ -1239,7 +1239,7 @@ select ok(
 );
 
 select is(
-  public.cmd_dataset_alias_execution_admit_guarded(
+  api.cmd_dataset_alias_execution_admit_guarded(
     jsonb_build_object(
       'schema_version', 'dataset-alias-execution-admit.v1',
       'request_id', 'a2000000-0000-0000-0000-000000000001',
@@ -1259,7 +1259,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_execution_execute(
+  private.cmd_dataset_alias_execution_execute(
     'a2000000-0000-0000-0000-000000000001',
     repeat('0', 64)
   )->>'code',
@@ -1279,7 +1279,7 @@ select set_config(
 insert into protected_results
 select
   'executor',
-  public.cmd_dataset_alias_execution_execute(
+  private.cmd_dataset_alias_execution_execute(
     'a2000000-0000-0000-0000-000000000001',
     convert_from(queued.body, 'UTF8')::jsonb->>'p_nonce'
   )
@@ -1312,7 +1312,7 @@ select is(
     select status || ':' ||
       (alias_result->'primary_closure'->>'live_closure_proof') || ':' ||
       (select count(*)::text
-       from public.command_audit_log
+       from private.command_audit_log
        where actor_user_id = pg_temp.protected_actor_id())
     from util.dataset_alias_execution_requests
     where id = 'a2000000-0000-0000-0000-000000000001'
@@ -1329,7 +1329,7 @@ set
 where id = 'a2000000-0000-0000-0000-000000000001';
 
 select ok(
-  public.cmd_dataset_alias_execution_read(
+  api.cmd_dataset_alias_execution_read(
     'a2000000-0000-0000-0000-000000000001'
   ) @> '{"ok":true,"status":"passed","execution_status":"completed","primary_readback":{"row_count":52,"exchange_count":59,"alias_audit_count":55,"live_closure_proof":true},"derivative_readback":{"status":"completed","target_count":50,"causal_terminal_proof":true}}'::jsonb,
   'stored completion independently reads back live primary and derivative closure'
@@ -1349,7 +1349,7 @@ select ok(
     pg_temp.protected_actor_id(),
     pg_temp.protected_plan()
   )->>'live_closure_proof')::boolean, false)
-  and public.cmd_dataset_alias_execution_read(
+  and api.cmd_dataset_alias_execution_read(
     'a2000000-0000-0000-0000-000000000001'
   ) @> '{"status":"failed","execution_status":"completed","primary_readback":{"live_closure_proof":false}}'::jsonb,
   'one desired action drift makes both helper and stored-completion read fail closed'
@@ -1373,7 +1373,7 @@ select ok(
     pg_temp.protected_actor_id(),
     pg_temp.protected_plan()
   )->>'live_closure_proof')::boolean, false)
-  and public.cmd_dataset_alias_execution_read(
+  and api.cmd_dataset_alias_execution_read(
     'a2000000-0000-0000-0000-000000000001'
   ) @> '{"status":"failed","execution_status":"completed","primary_readback":{"live_closure_proof":false}}'::jsonb,
   'one of six unchanged support occurrences drifting also fails closed'
@@ -1387,7 +1387,7 @@ where id = pg_temp.protected_entity_id('source_unitgroups', 2)
 set local session_replication_role = origin;
 
 select is(
-  public.cmd_dataset_alias_execution_read(
+  api.cmd_dataset_alias_execution_read(
     'a2000000-0000-0000-0000-000000000001'
   )->>'status',
   'passed',
@@ -1395,7 +1395,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_alias_execution_execute(
+  private.cmd_dataset_alias_execution_execute(
     'a2000000-0000-0000-0000-000000000001',
     (
       select convert_from(queued.body, 'UTF8')::jsonb->>'p_nonce'
@@ -1568,7 +1568,7 @@ end;
 $$;
 
 create temporary table transition_readback_result as
-select public.cmd_dataset_alias_execution_read(
+select api.cmd_dataset_alias_execution_read(
     'a2000000-0000-0000-0000-000000000002'
   ) as result;
 
@@ -1610,7 +1610,7 @@ set
 where id = 'a2000000-0000-0000-0000-000000000002';
 
 create temporary table zero_child_failed_readback_result as
-select public.cmd_dataset_alias_execution_read(
+select api.cmd_dataset_alias_execution_read(
     'a2000000-0000-0000-0000-000000000002'
   ) as result;
 
@@ -1657,7 +1657,7 @@ set
 where id = 'a2000000-0000-0000-0000-000000000002';
 
 create temporary table zero_child_indeterminate_readback_result as
-select public.cmd_dataset_alias_execution_read(
+select api.cmd_dataset_alias_execution_read(
     'a2000000-0000-0000-0000-000000000002'
   ) as result;
 
@@ -1746,7 +1746,7 @@ end;
 $$;
 
 create temporary table post_proof_transition_readback_result as
-select public.cmd_dataset_alias_execution_read(
+select api.cmd_dataset_alias_execution_read(
     'a2000000-0000-0000-0000-000000000001'
   ) as result;
 

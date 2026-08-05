@@ -8,7 +8,7 @@ select plan(19);
 select is(
   (
     select worker_queue
-    from public.worker_job_kinds
+    from private.worker_job_kinds
     where job_kind = 'review_submit.submit'
   ),
   'review_submit',
@@ -16,20 +16,20 @@ select is(
 );
 
 select has_function(
-  'public',
+  'private',
   'worker_read_latest_job',
   array['uuid', 'text', 'uuid', 'text', 'text', 'text[]', 'boolean'],
   'worker_read_latest_job service projection exists'
 );
 
 select has_view(
-  'public',
+  'api',
   'worker_job_domain_refs',
   'worker job domain reference projection exists'
 );
 
 select has_view(
-  'public',
+  'util',
   'worker_legacy_lifecycle_audit',
   'legacy lifecycle audit projection exists'
 );
@@ -50,7 +50,7 @@ missing as (
   select expected.*
   from expected
   left join information_schema.columns as columns
-    on columns.table_schema = 'public'
+    on columns.table_schema = 'private'
    and columns.table_name = expected.table_name
    and columns.column_name = expected.column_name
   where columns.column_name is null
@@ -84,8 +84,8 @@ actual as (
   join pg_namespace as ref_ns on ref_ns.oid = ref.relnamespace
   join pg_attribute as att on att.attrelid = rel.oid and att.attnum = any(con.conkey)
   where con.contype = 'f'
-    and rel_ns.nspname = 'public'
-    and ref_ns.nspname = 'public'
+    and rel_ns.nspname = 'private'
+    and ref_ns.nspname = 'private'
     and ref.relname = 'worker_jobs'
 ),
 missing as (
@@ -110,14 +110,14 @@ select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 select ok(
   not has_function_privilege(
     'authenticated',
-    'public.worker_read_latest_job(uuid,text,uuid,text,text,text[],boolean)',
+    'private.worker_read_latest_job(uuid,text,uuid,text,text,text[],boolean)',
     'EXECUTE'
   ),
   'authenticated users cannot execute worker_read_latest_job directly'
 );
 
 select ok(
-  not has_table_privilege('authenticated', 'public.worker_job_domain_refs', 'SELECT'),
+  not has_table_privilege('authenticated', 'api.worker_job_domain_refs', 'SELECT'),
   'authenticated users cannot read internal worker domain refs'
 );
 
@@ -139,7 +139,7 @@ select
   'submit_root',
   (result->'data'->>'id')::uuid
 from (
-  select public.worker_enqueue_job(
+  select private.worker_enqueue_job(
     p_job_kind => 'review_submit.submit',
     p_payload_json => jsonb_build_object(
       'datasetRevision',
@@ -177,7 +177,7 @@ from (
 select is(
   (
     select job_kind || ':' || worker_queue || ':' || status
-    from public.worker_jobs
+    from private.worker_jobs
     where id = (select job_id from worker_canonical_test_ids where label = 'submit_root')
   ),
   'review_submit.submit:review_submit:queued',
@@ -185,7 +185,7 @@ select is(
 );
 
 select is(
-  public.worker_read_latest_job(
+  private.worker_read_latest_job(
     p_requested_by => '97000000-0000-4000-8000-000000000001',
     p_subject_type => 'processes',
     p_subject_id => '97000000-0000-4000-8000-000000000101',
@@ -197,7 +197,7 @@ select is(
 );
 
 select is(
-  public.worker_read_latest_job(
+  private.worker_read_latest_job(
     p_requested_by => '97000000-0000-4000-8000-000000000001',
     p_subject_type => 'processes',
     p_subject_id => '97000000-0000-4000-8000-000000000102',
@@ -212,7 +212,7 @@ select is(
   (
     select claimed->>'id'
     from jsonb_array_elements(
-      public.worker_claim_jobs(
+      private.worker_claim_jobs(
         p_worker_queue => 'review_submit',
         p_worker_id => 'worker-submit-test',
         p_limit => 1,
@@ -225,7 +225,7 @@ select is(
   'review_submit queue is claimable by worker_claim_jobs'
 );
 
-insert into public.dataset_review_submit_requests (
+insert into private.dataset_review_submit_requests (
   dataset_table,
   dataset_id,
   dataset_version,
@@ -248,7 +248,7 @@ insert into public.dataset_review_submit_requests (
 select is(
   (
     select submit_worker_job_id::text
-    from public.dataset_review_submit_requests
+    from private.dataset_review_submit_requests
     where dataset_id = '97000000-0000-4000-8000-000000000101'
       and dataset_version = '01.00.000'
     limit 1
@@ -260,7 +260,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.worker_job_domain_refs
+    from api.worker_job_domain_refs
     where worker_job_id = (select job_id from worker_canonical_test_ids where label = 'submit_root')
       and domain_source = 'dataset_review_submit_requests'
       and domain_role = 'review_submit_coordinator'
@@ -272,7 +272,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.worker_legacy_lifecycle_audit
+    from util.worker_legacy_lifecycle_audit
     where legacy_source in (
       'lca_jobs',
       'lca_package_jobs',
@@ -285,8 +285,8 @@ select is(
 
 select is(
   (
-    select public.cmd_dataset_review_submit_job_payload(j)->>'submitWorkerJobId'
-    from public.dataset_review_submit_requests as j
+    select private.cmd_dataset_review_submit_job_payload(j)->>'submitWorkerJobId'
+    from private.dataset_review_submit_requests as j
     where j.submit_worker_job_id = (select job_id from worker_canonical_test_ids where label = 'submit_root')
     limit 1
   ),
@@ -296,8 +296,8 @@ select is(
 
 select is(
   (
-    select public.cmd_dataset_review_submit_job_payload(j)->'submitWorkerJob'->>'id'
-    from public.dataset_review_submit_requests as j
+    select private.cmd_dataset_review_submit_job_payload(j)->'submitWorkerJob'->>'id'
+    from private.dataset_review_submit_requests as j
     where j.submit_worker_job_id = (select job_id from worker_canonical_test_ids where label = 'submit_root')
     limit 1
   ),
@@ -305,7 +305,7 @@ select is(
   'review-submit job payload includes the root worker job projection'
 );
 
-update public.dataset_review_submit_requests
+update private.dataset_review_submit_requests
   set status = 'submitted',
       result = jsonb_build_object('reviewStateCode', 20)
 where submit_worker_job_id = (select job_id from worker_canonical_test_ids where label = 'submit_root');
@@ -313,7 +313,7 @@ where submit_worker_job_id = (select job_id from worker_canonical_test_ids where
 select is(
   (
     select status || ':' || phase || ':' || coalesce(progress::text, '')
-    from public.worker_jobs
+    from private.worker_jobs
     where id = (select job_id from worker_canonical_test_ids where label = 'submit_root')
   ),
   'completed:submitted:1',
@@ -321,23 +321,23 @@ select is(
 );
 
 select ok(
-  col_description('public.dataset_review_submit_requests'::regclass, (
+  col_description('private.dataset_review_submit_requests'::regclass, (
     select attnum
     from pg_attribute
-    where attrelid = 'public.dataset_review_submit_requests'::regclass
+    where attrelid = 'private.dataset_review_submit_requests'::regclass
       and attname = 'submit_worker_job_id'
   )) is not null
-  and col_description('public.lca_results'::regclass, (
+  and col_description('private.lca_results'::regclass, (
     select attnum
     from pg_attribute
-    where attrelid = 'public.lca_results'::regclass
+    where attrelid = 'private.lca_results'::regclass
       and attname = 'worker_job_id'
   )) is not null
-  and obj_description('public.dataset_review_submit_requests'::regclass, 'pg_class')
+  and obj_description('private.dataset_review_submit_requests'::regclass, 'pg_class')
     like '%replaces dataset_review_submit_jobs%'
-  and obj_description('public.dataset_review_submit_requests'::regclass, 'pg_class')
+  and obj_description('private.dataset_review_submit_requests'::regclass, 'pg_class')
     like '%coordinator%'
-  and obj_description('public.worker_job_domain_refs'::regclass, 'pg_class') is not null,
+  and obj_description('api.worker_job_domain_refs'::regclass, 'pg_class') is not null,
   'canonical worker job references and review-submit coordinator retirement contract are documented with comments'
 );
 

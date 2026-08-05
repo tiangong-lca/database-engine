@@ -25,17 +25,17 @@ select plan(26);
 select ok(to_regnamespace('private') is not null, 'private schema exists for non-exposed search helpers');
 
 select ok(
-  strpos(pg_get_functiondef('public.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'private.search_flows_latest_impl') > 0,
+  strpos(pg_get_functiondef('api.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'private.search_flows_latest_impl') > 0,
   'flow public search wrapper delegates to private helper'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'private.search_processes_latest_impl') > 0,
+  strpos(pg_get_functiondef('api.search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'private.search_processes_latest_impl') > 0,
   'process public search wrapper delegates to private helper'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'private.search_lifecyclemodels_latest_impl') > 0,
+  strpos(pg_get_functiondef('api.search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'private.search_lifecyclemodels_latest_impl') > 0,
   'lifecyclemodel public search wrapper delegates to private helper'
 );
 
@@ -55,12 +55,17 @@ select ok(
 );
 
 select ok(
-  not (select prosecdef from pg_proc where oid = 'public.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure),
-  'public search wrapper remains security invoker'
+  (select prosecdef from pg_proc where oid = 'api.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure)
+    and (
+      select pg_get_userbyid(proowner) = 'api_internal_executor'
+      from pg_proc
+      where oid = 'api.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure
+    ),
+  'API search wrapper uses the constrained private-helper executor'
 );
 
 select ok(
-  not (select prosecdef from pg_proc where oid = 'public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure),
+  not (select prosecdef from pg_proc where oid = 'api._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure),
   'generic regclass helper remains security invoker'
 );
 
@@ -70,8 +75,8 @@ select ok(
 );
 
 select ok(
-  has_function_privilege('authenticated', 'private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])', 'EXECUTE'),
-  'authenticated can execute the hardcoded flow search helper through the wrapper path'
+  not has_function_privilege('authenticated', 'private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])', 'EXECUTE'),
+  'authenticated cannot execute the hardcoded flow search helper directly'
 );
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -123,16 +128,16 @@ values
     false
   );
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values
   ('a1000000-0000-0000-0000-000000000103', '{"email":"dataset-search-rls-owner@example.com"}'::jsonb, null),
   ('b2000000-0000-0000-0000-000000000103', '{"email":"dataset-search-rls-outsider@example.com"}'::jsonb, null);
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values
   ('c3000000-0000-0000-0000-000000000103', '{"name":"Dataset Search RLS Team"}'::jsonb, 1, false);
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values
   ('a1000000-0000-0000-0000-000000000103', 'c3000000-0000-0000-0000-000000000103', 'owner');
 
@@ -174,27 +179,27 @@ set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', 'a1000000-0000-0000-0000-000000000103', true);
 
-select is((select id::text from public.search_flows_latest('rls-public-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '') limit 1), 'f1000000-0000-0000-0000-000000000103', 'flow tg search returns public data');
-select is((select id::text from public.search_processes_latest('rls-public-process-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '', null, null, 'all') limit 1), 'e1000000-0000-0000-0000-000000000103', 'process tg search returns public data');
-select is((select id::text from public.search_lifecyclemodels_latest('rls-public-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '') limit 1), 'd1000000-0000-0000-0000-000000000103', 'lifecyclemodel tg search returns public data');
+select is((select id::text from api.search_flows_latest('rls-public-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '') limit 1), 'f1000000-0000-0000-0000-000000000103', 'flow tg search returns public data');
+select is((select id::text from api.search_processes_latest('rls-public-process-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '', null, null, 'all') limit 1), 'e1000000-0000-0000-0000-000000000103', 'process tg search returns public data');
+select is((select id::text from api.search_lifecyclemodels_latest('rls-public-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '') limit 1), 'd1000000-0000-0000-0000-000000000103', 'lifecyclemodel tg search returns public data');
 
-select is((select id::text from public.search_flows_latest('rls-owner-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', 'b2000000-0000-0000-0000-000000000103') limit 1), 'f2000000-0000-0000-0000-000000000103', 'flow my search uses auth.uid instead of spoofable this_user_id');
-select is((select id::text from public.search_processes_latest('rls-owner-process-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', 'b2000000-0000-0000-0000-000000000103', null, null, 'all') limit 1), 'e2000000-0000-0000-0000-000000000103', 'process my search uses auth.uid instead of spoofable this_user_id');
-select is((select id::text from public.search_lifecyclemodels_latest('rls-owner-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', 'b2000000-0000-0000-0000-000000000103') limit 1), 'd2000000-0000-0000-0000-000000000103', 'lifecyclemodel my search uses auth.uid instead of spoofable this_user_id');
+select is((select id::text from api.search_flows_latest('rls-owner-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', 'b2000000-0000-0000-0000-000000000103') limit 1), 'f2000000-0000-0000-0000-000000000103', 'flow my search uses auth.uid instead of spoofable this_user_id');
+select is((select id::text from api.search_processes_latest('rls-owner-process-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', 'b2000000-0000-0000-0000-000000000103', null, null, 'all') limit 1), 'e2000000-0000-0000-0000-000000000103', 'process my search uses auth.uid instead of spoofable this_user_id');
+select is((select id::text from api.search_lifecyclemodels_latest('rls-owner-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', 'b2000000-0000-0000-0000-000000000103') limit 1), 'd2000000-0000-0000-0000-000000000103', 'lifecyclemodel my search uses auth.uid instead of spoofable this_user_id');
 
-select is((select count(*) from public.search_flows_latest('rls-outsider-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', 'b2000000-0000-0000-0000-000000000103')), 0::bigint, 'flow my search cannot spoof another user');
-select is((select count(*) from public.search_processes_latest('rls-outsider-process-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', 'b2000000-0000-0000-0000-000000000103', null, null, 'all')), 0::bigint, 'process my search cannot spoof another user');
-select is((select count(*) from public.search_lifecyclemodels_latest('rls-outsider-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', 'b2000000-0000-0000-0000-000000000103')), 0::bigint, 'lifecyclemodel my search cannot spoof another user');
+select is((select count(*) from api.search_flows_latest('rls-outsider-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', 'b2000000-0000-0000-0000-000000000103')), 0::bigint, 'flow my search cannot spoof another user');
+select is((select count(*) from api.search_processes_latest('rls-outsider-process-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', 'b2000000-0000-0000-0000-000000000103', null, null, 'all')), 0::bigint, 'process my search cannot spoof another user');
+select is((select count(*) from api.search_lifecyclemodels_latest('rls-outsider-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', 'b2000000-0000-0000-0000-000000000103')), 0::bigint, 'lifecyclemodel my search cannot spoof another user');
 
-select is((select id::text from public.search_flows_latest('rls-team-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'te', '', 'c3000000-0000-0000-0000-000000000103') limit 1), 'f3000000-0000-0000-0000-000000000103', 'flow te search returns team data for a team member');
-select is((select id::text from public.search_processes_latest('rls-team-process-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'te', '', 'c3000000-0000-0000-0000-000000000103', null, 'all') limit 1), 'e3000000-0000-0000-0000-000000000103', 'process te search returns team data for a team member');
-select is((select id::text from public.search_lifecyclemodels_latest('rls-team-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'te', '', 'c3000000-0000-0000-0000-000000000103') limit 1), 'd3000000-0000-0000-0000-000000000103', 'lifecyclemodel te search returns team data for a team member');
+select is((select id::text from api.search_flows_latest('rls-team-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'te', '', 'c3000000-0000-0000-0000-000000000103') limit 1), 'f3000000-0000-0000-0000-000000000103', 'flow te search returns team data for a team member');
+select is((select id::text from api.search_processes_latest('rls-team-process-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'te', '', 'c3000000-0000-0000-0000-000000000103', null, 'all') limit 1), 'e3000000-0000-0000-0000-000000000103', 'process te search returns team data for a team member');
+select is((select id::text from api.search_lifecyclemodels_latest('rls-team-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'te', '', 'c3000000-0000-0000-0000-000000000103') limit 1), 'd3000000-0000-0000-0000-000000000103', 'lifecyclemodel te search returns team data for a team member');
 
 select set_config('request.jwt.claim.sub', 'b2000000-0000-0000-0000-000000000103', true);
 
-select is((select count(*) from public.search_flows_latest('rls-team-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'te', '', 'c3000000-0000-0000-0000-000000000103')), 0::bigint, 'flow te search rejects a non-member');
-select is((select count(*) from public.search_processes_latest('rls-team-process-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'te', '', 'c3000000-0000-0000-0000-000000000103', null, 'all')), 0::bigint, 'process te search rejects a non-member');
-select is((select count(*) from public.search_lifecyclemodels_latest('rls-team-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'te', '', 'c3000000-0000-0000-0000-000000000103')), 0::bigint, 'lifecyclemodel te search rejects a non-member');
+select is((select count(*) from api.search_flows_latest('rls-team-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'te', '', 'c3000000-0000-0000-0000-000000000103')), 0::bigint, 'flow te search rejects a non-member');
+select is((select count(*) from api.search_processes_latest('rls-team-process-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'te', '', 'c3000000-0000-0000-0000-000000000103', null, 'all')), 0::bigint, 'process te search rejects a non-member');
+select is((select count(*) from api.search_lifecyclemodels_latest('rls-team-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'te', '', 'c3000000-0000-0000-0000-000000000103')), 0::bigint, 'lifecyclemodel te search rejects a non-member');
 
 select * from finish();
 

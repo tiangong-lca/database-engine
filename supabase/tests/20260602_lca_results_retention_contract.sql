@@ -6,14 +6,14 @@ set local search_path = extensions, public, auth;
 select plan(14);
 
 select has_column(
-  'public',
+  'private',
   'lca_results',
   'expires_at',
   'lca_results exposes a result retention deadline'
 );
 
 select col_type_is(
-  'public',
+  'private',
   'lca_results',
   'expires_at',
   'timestamp with time zone',
@@ -21,28 +21,28 @@ select col_type_is(
 );
 
 select col_not_null(
-  'public',
+  'private',
   'lca_results',
   'expires_at',
   'lca_results.expires_at is required'
 );
 
 select col_has_default(
-  'public',
+  'private',
   'lca_results',
   'expires_at',
   'lca_results.expires_at has a default retention deadline'
 );
 
 select has_column(
-  'public',
+  'private',
   'lca_results',
   'is_pinned',
   'lca_results exposes a result GC pin flag'
 );
 
 select col_type_is(
-  'public',
+  'private',
   'lca_results',
   'is_pinned',
   'boolean',
@@ -50,21 +50,21 @@ select col_type_is(
 );
 
 select col_not_null(
-  'public',
+  'private',
   'lca_results',
   'is_pinned',
   'lca_results.is_pinned is required'
 );
 
 select col_has_default(
-  'public',
+  'private',
   'lca_results',
   'is_pinned',
   'lca_results.is_pinned has a default value'
 );
 
 select ok(
-  to_regclass('public.lca_results_expires_at_idx') is not null,
+  to_regclass('private.lca_results_expires_at_idx') is not null,
   'lca_results has an expires_at retention index'
 );
 
@@ -73,7 +73,7 @@ select ok(
     select 1
     from pg_index i
     join pg_class c on c.oid = i.indexrelid
-    where c.oid = 'public.lca_results_expires_at_idx'::regclass
+    where c.oid = 'private.lca_results_expires_at_idx'::regclass
       and pg_get_indexdef(i.indexrelid) like '%expires_at%'
       and pg_get_indexdef(i.indexrelid) like '%created_at%'
       and pg_get_expr(i.indpred, i.indrelid) like '%is_pinned%'
@@ -83,11 +83,11 @@ select ok(
 );
 
 select ok(
-  to_regclass('public.lca_results_created_desc_idx') is not null,
+  to_regclass('private.lca_results_created_desc_idx') is not null,
   'lca_results has a created_at desc index for recent result lookups'
 );
 
-insert into public.lca_network_snapshots (
+insert into private.lca_network_snapshots (
   id,
   scope,
   process_filter,
@@ -107,7 +107,7 @@ insert into public.lca_network_snapshots (
   now()
 );
 
-insert into public.worker_jobs (
+insert into private.worker_jobs (
   id,
   job_kind,
   worker_runtime,
@@ -145,7 +145,7 @@ insert into public.worker_jobs (
   now()
 );
 
-insert into public.lca_results (
+insert into private.lca_results (
   id,
   job_id,
   worker_job_id,
@@ -170,7 +170,7 @@ insert into public.lca_results (
 select is(
   (
     select is_pinned::text
-    from public.lca_results
+    from private.lca_results
     where id = '91620000-0000-4000-8000-000000000003'
   ),
   'false',
@@ -180,7 +180,7 @@ select is(
 select ok(
   (
     select expires_at > created_at
-    from public.lca_results
+    from private.lca_results
     where id = '91620000-0000-4000-8000-000000000003'
   ),
   'new lca_results rows default to a future retention deadline'
@@ -189,7 +189,7 @@ select ok(
 select ok(
   (
     select expires_at <= created_at + interval '31 days'
-    from public.lca_results
+    from private.lca_results
     where id = '91620000-0000-4000-8000-000000000003'
   ),
   'default lca_results retention deadline is approximately 30 days'

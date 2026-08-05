@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-31
-lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
-lastReviewedNote: "Reviewed through Issues #323 and #329: generated and stable-overlay boundaries remain unchanged; review migrations, local cutover, and provider qualification adapters do not make generated workspace paths authoritative."
+lastReviewedAt: 2026-08-05
+lastReviewedCommit: df8253b4f81d3e05524602f996025b54e9c35dd3
+lastReviewedNote: "Reviewed for Issue #422: refresh now explicitly captures the public/api/private/util/archive contract after deployment; generated and stable-overlay boundaries remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -78,14 +78,19 @@ Each refresh performs these operations inside `supabase/workspace`:
 
 ## Refresh Command
 
+After the schema-boundary migration is deployed to `dev`, refresh every
+repository-owned application schema explicitly:
+
 ```bash
-python scripts/build_schema_workspace.py --environment dev
+python scripts/build_schema_workspace.py --environment dev \
+  --schemas public api private util archive
 ```
 
 Remote `dev` remains canonical. When direct remote export is unavailable, an exact local migration-state reconstruction uses the CLI-native local connection:
 
 ```bash
-python scripts/build_schema_workspace.py --environment local
+python scripts/build_schema_workspace.py --environment local \
+  --schemas public api private util archive
 ```
 
 Commit that local output only after the applied migration versions match the intended hosted target and targeted hosted catalog checks show no relevant drift.

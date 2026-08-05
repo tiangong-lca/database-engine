@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-31
-lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
-lastReviewedNote: "已为 Issue #323 与 #329 复核：生成区与稳定人工 overlay 的边界不变；审核 migration、本地切换和 provider 资格验证适配器都不会把生成 workspace 变成真相源。"
+lastReviewedAt: 2026-08-05
+lastReviewedCommit: df8253b4f81d3e05524602f996025b54e9c35dd3
+lastReviewedNote: "已为 Issue #422 复核：迁移部署后需显式导出 public/api/private/util/archive；生成区与稳定人工 overlay 的边界不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -78,14 +78,18 @@ related:
 
 ## 刷新命令
 
+schema 边界迁移部署到 `dev` 后，应显式刷新仓库拥有的全部应用 schema：
+
 ```bash
-python scripts/build_schema_workspace.py --environment dev
+python scripts/build_schema_workspace.py --environment dev \
+  --schemas public api private util archive
 ```
 
 远程 `dev` 仍是权威目标。无法直接导出远程 schema 时，可通过 CLI 原生 local 连接按本地已应用 migration 精确重建：
 
 ```bash
-python scripts/build_schema_workspace.py --environment local
+python scripts/build_schema_workspace.py --environment local \
+  --schemas public api private util archive
 ```
 
 只有在已应用 migration 版本与目标托管环境一致，且本次合同的托管 catalog 定向检查未发现相关漂移时，才能提交该本地产物。

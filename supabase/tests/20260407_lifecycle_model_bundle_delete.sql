@@ -82,7 +82,7 @@ values (
 );
 
 select is(
-  public.delete_lifecycle_model_bundle(
+  private.delete_lifecycle_model_bundle(
     '95000000-0000-0000-0000-000000000001',
     '01.00.000'
   )::text,

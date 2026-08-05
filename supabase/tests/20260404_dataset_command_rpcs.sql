@@ -113,14 +113,14 @@ values
     false
   );
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values
   ('21000000-0000-0000-0000-000000000001', '{"name":"Team A"}'::jsonb, 1, false),
   ('21000000-0000-0000-0000-000000000002', '{"name":"Team B"}'::jsonb, 2, false),
   ('21000000-0000-0000-0000-000000000003', '{"name":"Team C"}'::jsonb, 3, false),
   ('00000000-0000-0000-0000-000000000000', '{"name":"System Team"}'::jsonb, 0, false);
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values
   ('11000000-0000-0000-0000-000000000001', '21000000-0000-0000-0000-000000000001', 'owner'),
   ('11000000-0000-0000-0000-000000000001', '21000000-0000-0000-0000-000000000002', 'member'),
@@ -210,7 +210,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '11000000-0000-0000-0000-000000000001', true);
 
 select is(
-  public.cmd_dataset_save_draft(
+  api.cmd_dataset_save_draft(
     'contacts',
     '31000000-0000-0000-0000-000000000001',
     '01.00.000',
@@ -259,7 +259,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '11000000-0000-0000-0000-000000000003', true);
 
 select is(
-  public.cmd_dataset_save_draft(
+  api.cmd_dataset_save_draft(
     'contacts',
     '31000000-0000-0000-0000-000000000001',
     '01.00.000',
@@ -278,7 +278,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '11000000-0000-0000-0000-000000000001', true);
 
 select is(
-  public.cmd_dataset_save_draft(
+  api.cmd_dataset_save_draft(
     p_table => 'processes',
     p_id => '31000000-0000-0000-0000-000000000003',
     p_version => '01.00.000',
@@ -334,7 +334,7 @@ select is(
 );
 
 with replay as materialized (
-  select public.cmd_dataset_save_draft(
+  select api.cmd_dataset_save_draft(
     p_table => 'processes',
     p_id => '31000000-0000-0000-0000-000000000003',
     p_version => '01.00.000',
@@ -364,7 +364,7 @@ select ok(
 );
 
 select is(
-  public.cmd_dataset_save_draft(
+  api.cmd_dataset_save_draft(
     'sources',
     '31000000-0000-0000-0000-000000000002',
     '01.00.000',
@@ -386,7 +386,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_assign_team(
+  api.cmd_dataset_assign_team(
     'contacts',
     '31000000-0000-0000-0000-000000000001',
     '01.00.000',
@@ -407,7 +407,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_publish(
+  api.cmd_dataset_publish(
     'contacts',
     '31000000-0000-0000-0000-000000000001',
     '01.00.000',
@@ -418,7 +418,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_publish(
+  api.cmd_dataset_publish(
     'sources',
     '31000000-0000-0000-0000-000000000002',
     '01.00.000',
@@ -432,7 +432,7 @@ reset role;
 
 select is(
   (select count(*)::text
-   from public.command_audit_log
+   from private.command_audit_log
    where command in (
      'cmd_dataset_save_draft',
      'cmd_dataset_assign_team',

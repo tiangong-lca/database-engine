@@ -31,13 +31,13 @@ set local role anon;
 select ok(
   (
     select count(*) = 1
-    from public.cmd_review_extract_refs(
+    from api.cmd_review_extract_refs(
       '{"processDataSet":{"exchanges":{"exchange":{"referenceToFlowDataSet":{"@type":"flow data set","@refObjectId":"32800000-0000-0000-0000-000000000040","@version":"01.00.000"}}}}}'::jsonb
     )
   )
   and not pg_catalog.has_function_privilege(
     current_user,
-    'public.cmd_review_reference_roles(text,text,jsonb)',
+    'private.cmd_review_reference_roles(text,text,jsonb)',
     'EXECUTE'
   ),
   'anon can call the input-only extractor without direct helper access'
@@ -48,13 +48,13 @@ set local role authenticated;
 select ok(
   (
     select count(*) = 1
-    from public.cmd_review_extract_refs(
+    from api.cmd_review_extract_refs(
       '{"processDataSet":{"exchanges":{"exchange":{"referenceToFlowDataSet":{"@type":"flow data set","@refObjectId":"32800000-0000-0000-0000-000000000041","@version":"01.00.000"}}}}}'::jsonb
     )
   )
   and not pg_catalog.has_function_privilege(
     current_user,
-    'public.cmd_review_reference_roles(text,text,jsonb)',
+    'private.cmd_review_reference_roles(text,text,jsonb)',
     'EXECUTE'
   ),
   'authenticated can call the input-only extractor without direct helper access'
@@ -65,13 +65,13 @@ set local role service_role;
 select ok(
   (
     select count(*) = 1
-    from public.cmd_review_extract_refs(
+    from api.cmd_review_extract_refs(
       '{"processDataSet":{"exchanges":{"exchange":{"referenceToFlowDataSet":{"@type":"flow data set","@refObjectId":"32800000-0000-0000-0000-000000000042","@version":"01.00.000"}}}}}'::jsonb
     )
   )
   and not pg_catalog.has_function_privilege(
     current_user,
-    'public.cmd_review_reference_roles(text,text,jsonb)',
+    'private.cmd_review_reference_roles(text,text,jsonb)',
     'EXECUTE'
   ),
   'service_role can call the input-only extractor without direct helper access'
@@ -165,7 +165,7 @@ values
     false
   );
 
-insert into public.users (id, raw_user_meta_data)
+insert into private.users (id, raw_user_meta_data)
 values
   (
     '12800000-0000-0000-0000-000000000001',
@@ -180,7 +180,7 @@ values
     '{"email":"closure-admin@example.com","display_name":"Closure Admin"}'::jsonb
   );
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values
   (
     '22800000-0000-0000-0000-000000000001',
@@ -195,7 +195,7 @@ values
     false
   );
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values
   (
     '12800000-0000-0000-0000-000000000001',
@@ -690,7 +690,7 @@ values
     '[]'::jsonb
   );
 
-insert into public.reviews (
+insert into private.reviews (
   id,
   data_id,
   data_version,
@@ -988,7 +988,7 @@ values
     '[]'::jsonb
   );
 
-insert into public.reviews (
+insert into private.reviews (
   id,
   data_id,
   data_version,
@@ -1032,7 +1032,7 @@ values
     }'::jsonb
   );
 
-insert into public.comments (
+insert into private.comments (
   review_id,
   reviewer_id,
   json,
@@ -1186,7 +1186,7 @@ select is(
     )
     select count(*)::text
     from shapes
-    cross join lateral public.cmd_review_reference_roles(
+    cross join lateral private.cmd_review_reference_roles(
       'processes',
       shapes.label,
       shapes.document
@@ -1220,7 +1220,7 @@ select is(
     )
     select count(*)::text
     from shapes
-    cross join lateral public.cmd_review_reference_roles(
+    cross join lateral private.cmd_review_reference_roles(
       'processes',
       shapes.label,
       shapes.document
@@ -1254,7 +1254,7 @@ select is(
     )
     select count(*)::text
     from shapes
-    cross join lateral public.cmd_review_reference_roles(
+    cross join lateral private.cmd_review_reference_roles(
       'lifecyclemodels',
       shapes.label,
       shapes.document
@@ -1269,14 +1269,14 @@ select is(
   (
     with roles as (
       select lifecycle_role
-      from public.cmd_review_reference_roles(
+      from private.cmd_review_reference_roles(
         'lifecyclemodels',
         'object',
         '{"lifeCycleModelDataSet":{"lifeCycleModelInformation":{"dataSetInformation":{"referenceToResultingProcess":{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000025","@version":"01.00.000"}}}}}'::jsonb
       )
       union all
       select lifecycle_role
-      from public.cmd_review_reference_roles(
+      from private.cmd_review_reference_roles(
         'lifecyclemodels',
         'array',
         '{"lifeCycleModelDataSet":{"lifeCycleModelInformation":{"dataSetInformation":{"referenceToResultingProcess":[{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000026","@version":"01.00.000"}]}}}}'::jsonb
@@ -1311,7 +1311,7 @@ select is(
     )
     select count(*)::text
     from shapes
-    cross join lateral public.cmd_review_reference_roles(
+    cross join lateral private.cmd_review_reference_roles(
       'comments',
       shapes.label,
       shapes.document
@@ -1325,7 +1325,7 @@ select is(
 select is(
   (
     select lifecycle_role
-    from public.cmd_review_reference_roles(
+    from private.cmd_review_reference_roles(
       'processes',
       'unknown',
       '{"processDataSet":{"unknownList":[{"referenceToFlowDataSet":[{"@type":"flow data set","@refObjectId":"32800000-0000-0000-0000-000000000033","@version":"01.00.000"}]}]}}'::jsonb
@@ -1339,14 +1339,14 @@ select is(
   (
     with roles as (
       select lifecycle_role
-      from public.cmd_review_reference_roles(
+      from private.cmd_review_reference_roles(
         'processes',
         'object',
         '{"processDataSet":{"administrativeInformation":{"publicationAndOwnership":{"common:referenceToPrecedingDataSetVersion":{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000034","@version":"00.01.000"}}}}}'::jsonb
       )
       union all
       select lifecycle_role
-      from public.cmd_review_reference_roles(
+      from private.cmd_review_reference_roles(
         'processes',
         'array',
         '{"processDataSet":{"administrativeInformation":{"publicationAndOwnership":{"common:referenceToPrecedingDataSetVersion":[{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000035","@version":"00.01.000"}]}}}}'::jsonb
@@ -1362,14 +1362,14 @@ select is(
   (
     with roles as (
       select lifecycle_role
-      from public.cmd_review_reference_roles(
+      from private.cmd_review_reference_roles(
         'flows',
         'object',
         '{"flowDataSet":{"administrativeInformation":{"publicationAndOwnership":{"common:referenceToPrecedingDataSetVersion":{"@type":"flow data set","@refObjectId":"32800000-0000-0000-0000-000000000034","@version":"00.01.000"}}}}}'::jsonb
       )
       union all
       select lifecycle_role
-      from public.cmd_review_reference_roles(
+      from private.cmd_review_reference_roles(
         'flows',
         'array',
         '{"flowDataSet":{"administrativeInformation":{"publicationAndOwnership":{"common:referenceToPrecedingDataSetVersion":[{"@type":"flow data set","@refObjectId":"32800000-0000-0000-0000-000000000035","@version":"00.01.000"}]}}}}'::jsonb
@@ -1384,7 +1384,7 @@ select is(
 select is(
   (
     select lifecycle_role
-    from public.cmd_review_reference_roles(
+    from private.cmd_review_reference_roles(
       'processes',
       'wrong-path',
       '{"processDataSet":{"processInformation":{"dataSetInformation":{"common:referenceToPrecedingDataSetVersion":{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000036","@version":"00.01.000"}}}}}'::jsonb
@@ -1398,14 +1398,14 @@ select is(
   (
     with roles as (
       select lifecycle_role
-      from public.cmd_review_reference_roles(
+      from private.cmd_review_reference_roles(
         'processes',
         'object-without-type',
         '{"processDataSet":{"processInformation":{"technology":{"referenceToIncludedProcesses":{"@refObjectId":"33800000-0000-0000-0000-000000000037","@version":"01.00.000"}}}}}'::jsonb
       )
       union all
       select lifecycle_role
-      from public.cmd_review_reference_roles(
+      from private.cmd_review_reference_roles(
         'processes',
         'array',
         '{"processDataSet":{"processInformation":{"technology":{"referenceToIncludedProcesses":[{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000038","@version":"01.00.000"}]}}}}'::jsonb
@@ -1420,7 +1420,7 @@ select is(
 select is(
   (
     select lifecycle_role
-    from public.cmd_review_reference_roles(
+    from private.cmd_review_reference_roles(
       'processes',
       'bad-uuid',
       '{"processDataSet":{"processInformation":{"technology":{"referenceToIncludedProcesses":{"@type":"process data set","@refObjectId":"not-a-uuid","@version":"01.00.000"}}}}}'::jsonb
@@ -1433,7 +1433,7 @@ select is(
 select is(
   (
     select lifecycle_role
-    from public.cmd_review_reference_roles(
+    from private.cmd_review_reference_roles(
       'processes',
       'bad-version',
       '{"processDataSet":{"processInformation":{"technology":{"referenceToIncludedProcesses":{"@type":"process data set","@refObjectId":"33800000-0000-0000-0000-000000000039","@version":""}}}}}'::jsonb
@@ -1452,7 +1452,7 @@ select set_config(
 insert into path_role_results (label, result)
 values (
   'publish_included_process',
-  public.cmd_dataset_publish(
+  api.cmd_dataset_publish(
     'processes',
     '33800000-0000-0000-0000-000000000020',
     '01.00.000',
@@ -1492,7 +1492,7 @@ select pg_temp.is_deeply(
     ),
     'auditCount', (
       select count(*)
-      from public.command_audit_log
+      from private.command_audit_log
       where target_id = '33800000-0000-0000-0000-000000000020'
     )
   ),
@@ -1503,7 +1503,7 @@ select pg_temp.is_deeply(
 insert into path_role_results (label, result)
 values (
   'submit_lineage_and_support',
-  public.cmd_review_submit_without_gate(
+  api.cmd_review_submit_without_gate(
     'processes',
     '33800000-0000-0000-0000-000000000002',
     '01.00.000',
@@ -1571,7 +1571,7 @@ select is(
 insert into path_role_results (label, result)
 values (
   'submit_unknown_path',
-  public.cmd_review_submit_without_gate(
+  api.cmd_review_submit_without_gate(
     'processes',
     '33800000-0000-0000-0000-000000000003',
     '01.00.000',
@@ -1600,12 +1600,12 @@ select pg_temp.is_deeply(
   jsonb_build_object(
     'reviewCount', (
       select count(*)
-      from public.reviews
+      from private.reviews
       where data_id = '33800000-0000-0000-0000-000000000003'
     ),
     'auditCount', (
       select count(*)
-      from public.command_audit_log
+      from private.command_audit_log
       where target_id = '33800000-0000-0000-0000-000000000003'
     )
   ),
@@ -1617,7 +1617,7 @@ insert into path_role_results (label, result)
 values
   (
     'submit_bad_composition_version',
-    public.cmd_review_submit_without_gate(
+    api.cmd_review_submit_without_gate(
       'processes',
       '33800000-0000-0000-0000-000000000017',
       '01.00.000',
@@ -1626,7 +1626,7 @@ values
   ),
   (
     'submit_private_paired_model',
-    public.cmd_review_submit_without_gate(
+    api.cmd_review_submit_without_gate(
       'processes',
       '33800000-0000-0000-0000-000000000018',
       '01.00.000',
@@ -1650,12 +1650,12 @@ select pg_temp.is_deeply(
     ),
     'reviewCount', (
       select count(*)
-      from public.reviews
+      from private.reviews
       where data_id = '33800000-0000-0000-0000-000000000017'
     ),
     'auditCount', (
       select count(*)
-      from public.command_audit_log
+      from private.command_audit_log
       where target_id = '33800000-0000-0000-0000-000000000017'
     )
   ),
@@ -1685,12 +1685,12 @@ select pg_temp.is_deeply(
     ),
     'reviewCount', (
       select count(*)
-      from public.reviews
+      from private.reviews
       where data_id = '33800000-0000-0000-0000-000000000018'
     ),
     'auditCount', (
       select count(*)
-      from public.command_audit_log
+      from private.command_audit_log
       where target_id = '33800000-0000-0000-0000-000000000018'
     )
   ),
@@ -1702,7 +1702,7 @@ insert into path_role_results (label, result)
 values
   (
     'submit_mismatched_composition',
-    public.cmd_review_submit_without_gate(
+    api.cmd_review_submit_without_gate(
       'lifecyclemodels',
       '34800000-0000-0000-0000-000000000012',
       '01.00.000',
@@ -1711,7 +1711,7 @@ values
   ),
   (
     'submit_foreign_composition',
-    public.cmd_review_submit_without_gate(
+    api.cmd_review_submit_without_gate(
       'lifecyclemodels',
       '34800000-0000-0000-0000-000000000001',
       '01.00.000',
@@ -1720,7 +1720,7 @@ values
   ),
   (
     'submit_missing_composition',
-    public.cmd_review_submit_without_gate(
+    api.cmd_review_submit_without_gate(
       'lifecyclemodels',
       '34800000-0000-0000-0000-000000000002',
       '01.00.000',
@@ -1756,12 +1756,12 @@ select pg_temp.is_deeply(
     ),
     'reviewCount', (
       select count(*)
-      from public.reviews
+      from private.reviews
       where data_id = '34800000-0000-0000-0000-000000000012'
     ),
     'auditCount', (
       select count(*)
-      from public.command_audit_log
+      from private.command_audit_log
       where target_id = '34800000-0000-0000-0000-000000000012'
     )
   ),
@@ -1837,7 +1837,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.reviews
+    from private.reviews
     where data_id in (
       '34800000-0000-0000-0000-000000000001',
       '34800000-0000-0000-0000-000000000002'
@@ -1850,7 +1850,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_review_submit'
       and target_id in (
         '34800000-0000-0000-0000-000000000001',
@@ -1917,17 +1917,17 @@ values (
     ),
     'review', (
       select to_jsonb(review)
-      from public.reviews as review
+      from private.reviews as review
       where id = '53800000-0000-0000-0000-000000000019'
     ),
     'comments', coalesce((
       select jsonb_agg(to_jsonb(comment) order by comment.created_at)
-      from public.comments as comment
+      from private.comments as comment
       where review_id = '53800000-0000-0000-0000-000000000019'
     ), '[]'::jsonb),
     'audits', coalesce((
       select jsonb_agg(to_jsonb(audit) order by audit.id)
-      from public.command_audit_log as audit
+      from private.command_audit_log as audit
       where target_id in (
         '33800000-0000-0000-0000-000000000019',
         '53800000-0000-0000-0000-000000000019'
@@ -1939,7 +1939,7 @@ values (
 insert into path_role_results (label, result)
 values (
   'approve_private_paired_model',
-  public.cmd_review_approve(
+  api.cmd_review_approve(
     'processes',
     '53800000-0000-0000-0000-000000000019',
     '{"test":"path-role-characterization"}'::jsonb
@@ -1968,17 +1968,17 @@ select pg_temp.is_deeply(
     ),
     'review', (
       select to_jsonb(review)
-      from public.reviews as review
+      from private.reviews as review
       where id = '53800000-0000-0000-0000-000000000019'
     ),
     'comments', coalesce((
       select jsonb_agg(to_jsonb(comment) order by comment.created_at)
-      from public.comments as comment
+      from private.comments as comment
       where review_id = '53800000-0000-0000-0000-000000000019'
     ), '[]'::jsonb),
     'audits', coalesce((
       select jsonb_agg(to_jsonb(audit) order by audit.id)
-      from public.command_audit_log as audit
+      from private.command_audit_log as audit
       where target_id in (
         '33800000-0000-0000-0000-000000000019',
         '53800000-0000-0000-0000-000000000019'
@@ -1996,7 +1996,7 @@ select pg_temp.is_deeply(
 insert into path_role_results (label, result)
 values (
   'approve_lineage_and_support',
-  public.cmd_review_approve(
+  api.cmd_review_approve(
     'processes',
     '53800000-0000-0000-0000-000000000001',
     '{"test":"path-role-characterization"}'::jsonb
@@ -2043,7 +2043,7 @@ values (
     ),
     'review', (
       select to_jsonb(review)
-      from public.reviews as review
+      from private.reviews as review
       where id = '53800000-0000-0000-0000-000000000011'
     )
   )
@@ -2057,7 +2057,7 @@ values (
       to_jsonb(comment)
       order by comment.review_id, comment.reviewer_id, comment.created_at
     )
-    from public.comments as comment
+    from private.comments as comment
     where review_id = '53800000-0000-0000-0000-000000000011'
   ), '[]'::jsonb)
 );
@@ -2067,7 +2067,7 @@ values (
   'approve_audits_before',
   coalesce((
     select jsonb_agg(to_jsonb(audit) order by audit.id)
-    from public.command_audit_log as audit
+    from private.command_audit_log as audit
     where target_id in (
       '34800000-0000-0000-0000-000000000011',
       '53800000-0000-0000-0000-000000000011'
@@ -2078,7 +2078,7 @@ values (
 insert into path_role_results (label, result)
 values (
   'approve_foreign_composition',
-  public.cmd_review_approve(
+  api.cmd_review_approve(
     'lifecyclemodels',
     '53800000-0000-0000-0000-000000000011',
     '{"test":"path-role-characterization"}'::jsonb
@@ -2107,7 +2107,7 @@ select pg_temp.is_deeply(
     ),
     'review', (
       select to_jsonb(review)
-      from public.reviews as review
+      from private.reviews as review
       where id = '53800000-0000-0000-0000-000000000011'
     )
   ),
@@ -2125,7 +2125,7 @@ select pg_temp.is_deeply(
       to_jsonb(comment)
       order by comment.review_id, comment.reviewer_id, comment.created_at
     )
-    from public.comments as comment
+    from private.comments as comment
     where review_id = '53800000-0000-0000-0000-000000000011'
   ), '[]'::jsonb),
   (
@@ -2139,7 +2139,7 @@ select pg_temp.is_deeply(
 select pg_temp.is_deeply(
   coalesce((
     select jsonb_agg(to_jsonb(audit) order by audit.id)
-    from public.command_audit_log as audit
+    from private.command_audit_log as audit
     where target_id in (
       '34800000-0000-0000-0000-000000000011',
       '53800000-0000-0000-0000-000000000011'
@@ -2173,7 +2173,7 @@ select set_config(
 insert into path_role_results (label, result)
 values (
   'publish_paired_process',
-  public.cmd_dataset_publish(
+  api.cmd_dataset_publish(
     'processes',
     '33800000-0000-0000-0000-000000000007',
     '01.00.000',
@@ -2212,7 +2212,7 @@ select is(
 insert into path_role_results (label, result)
 values (
   'publish_foreign_composition',
-  public.cmd_dataset_publish(
+  api.cmd_dataset_publish(
     'lifecyclemodels',
     '34800000-0000-0000-0000-000000000001',
     '01.00.000',

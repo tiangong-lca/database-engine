@@ -20,8 +20,8 @@ $$;
 select plan(1);
 
 select ok(
-  pg_temp.has_empty_search_path('public.update_modified_at()'),
-  'public.update_modified_at() pins an empty search_path'
+  pg_temp.has_empty_search_path('private.update_modified_at()'),
+  'private.update_modified_at() pins an empty search_path'
 );
 
 select * from finish();

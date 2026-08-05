@@ -448,7 +448,7 @@ counts(ordinal, name, residue_count, description) as (
     ), 'pg_net response rows'),
     (28, 'fixture_manifest_audits', (
       select count(*)
-      from public.command_audit_log as audit
+      from private.command_audit_log as audit
       cross join params
       where audit.command = 'preview_e2e_flow_identity_fixture'
         and audit.target_table = 'preview_e2e_flow_identity'
@@ -459,7 +459,7 @@ counts(ordinal, name, residue_count, description) as (
     ), 'fixture manifest audit rows'),
     (29, 'scenario_command_audits', (
       select count(*)
-      from public.command_audit_log as audit
+      from private.command_audit_log as audit
       cross join params
       where not (
         audit.command is not distinct from
@@ -517,7 +517,7 @@ counts(ordinal, name, residue_count, description) as (
     (36, 'fault_trigger', (
       select count(*) from pg_trigger
       where tgname = 'preview_flow_identity_post_primary_fault_v1'
-        and tgrelid = 'public.command_audit_log'::regclass
+        and tgrelid = 'private.command_audit_log'::regclass
         and not tgisinternal
     ), 'fixture fault triggers'),
     (37, 'fault_function', (

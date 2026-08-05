@@ -159,12 +159,12 @@ values
     false
   );
 
-insert into public.teams (id, json, rank, is_public, modified_at)
+insert into private.teams (id, json, rank, is_public, modified_at)
 values
   ('82000000-0000-0000-0000-000000000001', '{"title":[{"@xml:lang":"en","#text":"Invite Team"}]}'::jsonb, 1, false, now()),
   ('82000000-0000-0000-0000-000000000002', '{"title":[{"@xml:lang":"en","#text":"Other Team"}]}'::jsonb, 2, false, now());
 
-insert into public.roles (user_id, team_id, role, modified_at)
+insert into private.roles (user_id, team_id, role, modified_at)
 values
   ('81000000-0000-0000-0000-000000000001', '82000000-0000-0000-0000-000000000001', 'owner', now()),
   ('81000000-0000-0000-0000-000000000002', '82000000-0000-0000-0000-000000000001', 'admin', now()),
@@ -180,7 +180,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '81000000-0000-0000-0000-000000000001', true);
 
 select is(
-  public.qry_team_find_invitable_user_by_email(
+  api.qry_team_find_invitable_user_by_email(
     '82000000-0000-0000-0000-000000000001',
     'fresh-invitee@example.com'
   ) #>> '{data,id}',
@@ -189,7 +189,7 @@ select is(
 );
 
 select is(
-  public.qry_team_find_invitable_user_by_email(
+  api.qry_team_find_invitable_user_by_email(
     '82000000-0000-0000-0000-000000000001',
     '  FRESH-INVITEE@EXAMPLE.COM  '
   )->>'ok',
@@ -202,7 +202,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '81000000-0000-0000-0000-000000000002', true);
 
 select is(
-  public.qry_team_find_invitable_user_by_email(
+  api.qry_team_find_invitable_user_by_email(
     '82000000-0000-0000-0000-000000000001',
     'fresh-invitee@example.com'
   )->>'ok',
@@ -215,7 +215,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '81000000-0000-0000-0000-000000000003', true);
 
 select is(
-  public.qry_team_find_invitable_user_by_email(
+  api.qry_team_find_invitable_user_by_email(
     '82000000-0000-0000-0000-000000000001',
     'fresh-invitee@example.com'
   )->>'code',
@@ -224,7 +224,7 @@ select is(
 );
 
 select is(
-  public.qry_team_find_invitable_user_by_email(
+  api.qry_team_find_invitable_user_by_email(
     '82000000-0000-0000-0000-000000000001',
     'missing@example.com'
   )->>'code',
@@ -237,7 +237,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '81000000-0000-0000-0000-000000000001', true);
 
 select is(
-  public.qry_team_find_invitable_user_by_email(
+  api.qry_team_find_invitable_user_by_email(
     '82000000-0000-0000-0000-000000000001',
     'missing@example.com'
   )->>'code',
@@ -246,7 +246,7 @@ select is(
 );
 
 select is(
-  public.qry_team_find_invitable_user_by_email(
+  api.qry_team_find_invitable_user_by_email(
     '82000000-0000-0000-0000-000000000001',
     'other-member@example.com'
   )->>'code',
@@ -255,7 +255,7 @@ select is(
 );
 
 select is(
-  public.qry_team_find_invitable_user_by_email(
+  api.qry_team_find_invitable_user_by_email(
     '82000000-0000-0000-0000-000000000001',
     'other-invited@example.com'
   )->>'code',
@@ -264,7 +264,7 @@ select is(
 );
 
 select is(
-  public.qry_team_find_invitable_user_by_email(
+  api.qry_team_find_invitable_user_by_email(
     '82000000-0000-0000-0000-000000000001',
     'other-rejected@example.com'
   )->>'ok',
@@ -273,7 +273,7 @@ select is(
 );
 
 select is(
-  public.qry_team_find_invitable_user_by_email(
+  api.qry_team_find_invitable_user_by_email(
     '82000000-0000-0000-0000-000000000001',
     'same-invited@example.com'
   )->>'code',
@@ -282,7 +282,7 @@ select is(
 );
 
 select is(
-  public.qry_team_find_invitable_user_by_email(
+  api.qry_team_find_invitable_user_by_email(
     '82000000-0000-0000-0000-000000000001',
     'same-rejected@example.com'
   )->>'code',
@@ -291,7 +291,7 @@ select is(
 );
 
 select is(
-  public.qry_team_find_invitable_user_by_email(
+  api.qry_team_find_invitable_user_by_email(
     '82000000-0000-0000-0000-000000000001',
     '  '
   )->>'code',

@@ -6,7 +6,7 @@ set local search_path = extensions, public, auth;
 select plan(27);
 
 select is(
-  public.cmd_review_get_dataset_name(
+  api.cmd_review_get_dataset_name(
     'contacts',
     '{"json":{"contactDataSet":{"contactInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"en","#text":"Contact name"}]}}}}}'::jsonb
   ),
@@ -14,7 +14,7 @@ select is(
   'Contact review snapshots normalize common:shortName as baseName'
 );
 select is(
-  public.cmd_review_get_dataset_name(
+  api.cmd_review_get_dataset_name(
     'sources',
     '{"json":{"sourceDataSet":{"sourceInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"en","#text":"Source name"}]}}}}}'::jsonb
   ),
@@ -22,7 +22,7 @@ select is(
   'Source review snapshots normalize common:shortName as baseName'
 );
 select is(
-  public.cmd_review_get_dataset_name(
+  api.cmd_review_get_dataset_name(
     'unitgroups',
     '{"json":{"unitGroupDataSet":{"unitGroupInformation":{"dataSetInformation":{"common:name":[{"@xml:lang":"en","#text":"Unit group name"}]}}}}}'::jsonb
   ),
@@ -30,7 +30,7 @@ select is(
   'Unit Group review snapshots normalize common:name as baseName'
 );
 select is(
-  public.cmd_review_get_dataset_name(
+  api.cmd_review_get_dataset_name(
     'flowproperties',
     '{"json":{"flowPropertyDataSet":{"flowPropertiesInformation":{"dataSetInformation":{"common:name":[{"@xml:lang":"en","#text":"Flow property name"}]}}}}}'::jsonb
   ),
@@ -73,21 +73,21 @@ values
     '{"display_name":"Queue Admin"}', now(), now(), false, false
   );
 
-insert into public.users (id, raw_user_meta_data)
+insert into private.users (id, raw_user_meta_data)
 values
   ('48200000-0000-4000-8000-000000000001', '{"display_name":"Queue Owner"}'),
   ('48200000-0000-4000-8000-000000000002', '{"display_name":"Reviewer A"}'),
   ('48200000-0000-4000-8000-000000000003', '{"display_name":"Reviewer B"}'),
   ('48200000-0000-4000-8000-000000000004', '{"display_name":"Queue Admin"}');
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values (
   '00000000-0000-0000-0000-000000000000',
   '{"name":"System Team"}', 0, false
 )
 on conflict (id) do nothing;
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values
   (
     '48200000-0000-4000-8000-000000000002',
@@ -107,7 +107,7 @@ values
 
 -- One unassigned shared Reference Review and two independently assigned
 -- Reference Reviews provide mixed-status and access-isolation fixtures.
-insert into public.reviews (
+insert into private.reviews (
   id, data_id, data_version, state_code, reviewer_id, json,
   review_kind, target_table, submitted_revision_checksum, target_owner_id,
   created_at, modified_at
@@ -137,7 +137,7 @@ values
     '48200000-0000-4000-8000-000000000001', now(), now()
   );
 
-insert into public.comments (review_id, reviewer_id, json, state_code)
+insert into private.comments (review_id, reviewer_id, json, state_code)
 values
   (
     '48200000-0000-4000-8000-000000000102',
@@ -200,7 +200,7 @@ with root_items as (
         order by reference_review.id
       )
       from pg_catalog.unnest(fixture.reference_ids) as related(reference_review_id)
-      join public.reviews as reference_review
+      join private.reviews as reference_review
         on reference_review.id = related.reference_review_id
     ), '[]'::jsonb) as items
   from grouped_root_fixture as fixture
@@ -217,7 +217,7 @@ root_histories as (
           'version_no', 1,
           'scope_basis', 'submitted',
           'root_revision_checksum', repeat('a', 64),
-          'scope_checksum', public.review_scope_checksum_v1(root_item.items),
+          'scope_checksum', private.review_scope_checksum_v1(root_item.items),
           'created_by', '48200000-0000-4000-8000-000000000001',
           'created_at', pg_catalog.to_jsonb(now()),
           'items', root_item.items
@@ -226,7 +226,7 @@ root_histories as (
     ) as scope_history
   from root_items as root_item
 )
-insert into public.reviews (
+insert into private.reviews (
   id, data_id, data_version, state_code, reviewer_id, json,
   review_kind, target_table, submitted_revision_checksum, target_owner_id,
   scope_schema_version, scope_history, created_at, modified_at
@@ -260,21 +260,21 @@ select
 from root_histories as root_history;
 
 select has_function(
-  'public', 'qry_review_get_admin_root_queue_items_v2',
+  'api', 'qry_review_get_admin_root_queue_items_v2',
   array['text', 'integer', 'integer', 'text', 'text'],
   'grouped Review Admin queue function exists'
 );
 select has_function(
-  'public', 'qry_review_get_member_root_queue_items_v2',
+  'api', 'qry_review_get_member_root_queue_items_v2',
   array['text', 'integer', 'integer', 'text', 'text'],
   'grouped Review Member queue function exists'
 );
 select has_function(
-  'public', 'qry_root_review_reference_progress_v2', array['uuid'],
+  'api', 'qry_root_review_reference_progress_v2', array['uuid'],
   'versioned root child query function exists'
 );
 select has_function(
-  'public', 'qry_root_review_reference_progress', array['uuid'],
+  'api', 'qry_root_review_reference_progress', array['uuid'],
   'legacy root child query remains available for compatibility'
 );
 
@@ -289,7 +289,7 @@ set local role authenticated;
 select is(
   (
     select pg_catalog.count(*)::integer
-    from public.qry_review_get_admin_root_queue_items_v2(
+    from api.qry_review_get_admin_root_queue_items_v2(
       'unassigned', 1, 10, 'modified_at', 'desc'
     )
   ),
@@ -299,7 +299,7 @@ select is(
 select is(
   (
     select pg_catalog.count(*)::integer
-    from public.qry_review_get_admin_root_queue_items_v2(
+    from api.qry_review_get_admin_root_queue_items_v2(
       'unassigned', 1, 10, 'modified_at', 'desc'
     )
     where review_kind = 'root'
@@ -310,7 +310,7 @@ select is(
 select is(
   (
     select root_matches_status
-    from public.qry_review_get_admin_root_queue_items_v2(
+    from api.qry_review_get_admin_root_queue_items_v2(
       'unassigned', 1, 10, 'modified_at', 'desc'
     )
     where id = '48200000-0000-4000-8000-000000000111'
@@ -321,7 +321,7 @@ select is(
 select is(
   (
     select root_matches_status
-    from public.qry_review_get_admin_root_queue_items_v2(
+    from api.qry_review_get_admin_root_queue_items_v2(
       'unassigned', 1, 10, 'modified_at', 'desc'
     )
     where id = '48200000-0000-4000-8000-000000000112'
@@ -332,7 +332,7 @@ select is(
 select is(
   (
     select pg_catalog.max(total_count)::integer
-    from public.qry_review_get_admin_root_queue_items_v2(
+    from api.qry_review_get_admin_root_queue_items_v2(
       'unassigned', 1, 10, 'modified_at', 'desc'
     )
   ),
@@ -342,7 +342,7 @@ select is(
 select is(
   (
     select pg_catalog.count(*)::integer
-    from public.qry_review_get_admin_root_queue_items_v2(
+    from api.qry_review_get_admin_root_queue_items_v2(
       'unassigned', 1, 1, 'modified_at', 'desc'
     )
   ),
@@ -352,7 +352,7 @@ select is(
 select is(
   (
     select pg_catalog.max(total_count)::integer
-    from public.qry_review_get_admin_root_queue_items_v2(
+    from api.qry_review_get_admin_root_queue_items_v2(
       'unassigned', 1, 1, 'modified_at', 'desc'
     )
   ),
@@ -362,7 +362,7 @@ select is(
 select is(
   (
     select pg_catalog.count(*)::integer
-    from public.qry_root_review_reference_progress_v2(
+    from api.qry_root_review_reference_progress_v2(
       '48200000-0000-4000-8000-000000000111'
     )
   ),
@@ -372,7 +372,7 @@ select is(
 select ok(
   pg_catalog.strpos(
     pg_catalog.pg_get_function_result(
-      'public.qry_root_review_reference_progress_v2(uuid)'::regprocedure
+      'api.qry_root_review_reference_progress_v2(uuid)'::regprocedure
     ),
     'relation_paths'
   ) = 0,
@@ -381,7 +381,7 @@ select ok(
 select is(
   (
     select child_a.reference_review_id
-    from public.qry_root_review_reference_progress_v2(
+    from api.qry_root_review_reference_progress_v2(
       '48200000-0000-4000-8000-000000000111'
     ) as child_a
     where child_a.reference_review_id =
@@ -389,7 +389,7 @@ select is(
   ),
   (
     select child_b.reference_review_id
-    from public.qry_root_review_reference_progress_v2(
+    from api.qry_root_review_reference_progress_v2(
       '48200000-0000-4000-8000-000000000112'
     ) as child_b
     where child_b.reference_review_id =
@@ -409,7 +409,7 @@ set local role authenticated;
 select is(
   (
     select pg_catalog.count(*)::integer
-    from public.qry_review_get_member_root_queue_items_v2(
+    from api.qry_review_get_member_root_queue_items_v2(
       'pending', 1, 10, 'modified_at', 'desc'
     )
   ),
@@ -419,7 +419,7 @@ select is(
 select ok(
   not exists (
     select 1
-    from public.qry_review_get_member_root_queue_items_v2(
+    from api.qry_review_get_member_root_queue_items_v2(
       'pending', 1, 10, 'modified_at', 'desc'
     )
     where root_matches_status or root_can_read
@@ -429,7 +429,7 @@ select ok(
 select is(
   (
     select pg_catalog.max(total_count)::integer
-    from public.qry_review_get_member_root_queue_items_v2(
+    from api.qry_review_get_member_root_queue_items_v2(
       'pending', 1, 1, 'modified_at', 'desc'
     )
   ),
@@ -439,7 +439,7 @@ select is(
 select is(
   (
     select pg_catalog.count(*)::integer
-    from public.qry_root_review_reference_progress_v2(
+    from api.qry_root_review_reference_progress_v2(
       '48200000-0000-4000-8000-000000000111'
     )
   ),
@@ -449,7 +449,7 @@ select is(
 select is(
   (
     select reference_review_id
-    from public.qry_root_review_reference_progress_v2(
+    from api.qry_root_review_reference_progress_v2(
       '48200000-0000-4000-8000-000000000111'
     )
   ),
@@ -459,7 +459,7 @@ select is(
 select is(
   (
     select actor_comment_state_code
-    from public.qry_root_review_reference_progress_v2(
+    from api.qry_root_review_reference_progress_v2(
       '48200000-0000-4000-8000-000000000111'
     )
   ),
@@ -471,7 +471,7 @@ reset role;
 select set_config('request.jwt.claim.sub', '', true);
 set local role authenticated;
 select throws_ok(
-  $$select * from public.qry_root_review_reference_progress_v2(
+  $$select * from api.qry_root_review_reference_progress_v2(
     '48200000-0000-4000-8000-000000000111'
   )$$,
   '42501',
@@ -483,7 +483,7 @@ reset role;
 select ok(
   not has_function_privilege(
     'anon',
-    'public.qry_review_get_admin_root_queue_items_v2(text,integer,integer,text,text)',
+    'api.qry_review_get_admin_root_queue_items_v2(text,integer,integer,text,text)',
     'EXECUTE'
   ),
   'anonymous callers cannot execute the grouped Admin queue'
@@ -491,7 +491,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'anon',
-    'public.qry_review_get_member_root_queue_items_v2(text,integer,integer,text,text)',
+    'api.qry_review_get_member_root_queue_items_v2(text,integer,integer,text,text)',
     'EXECUTE'
   ),
   'anonymous callers cannot execute the grouped Member queue'

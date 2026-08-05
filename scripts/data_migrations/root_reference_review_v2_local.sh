@@ -48,10 +48,10 @@ case "$command_name" in
     encrypt_file "$temp_dir/full-database.dump" "$backup_dir/full-database.dump.enc"
 
     pg_dump --format=custom --no-owner --no-privileges \
-      --table=public.reviews \
-      --table=public.comments \
-      --table=public.notifications \
-      --table=public.command_audit_log \
+      --table=private.reviews \
+      --table=private.comments \
+      --table=private.notifications \
+      --table=private.command_audit_log \
       "$DATABASE_URL" \
       --file "$temp_dir/review-tables.dump"
     encrypt_file "$temp_dir/review-tables.dump" "$backup_dir/review-tables.dump.enc"
@@ -93,7 +93,7 @@ case "$command_name" in
          review_row.reviewer_id,
          review_row.created_at,
          review_row.modified_at
-       from public.reviews as review_row
+       from private.reviews as review_row
        where review_row.review_kind is null
        order by review_row.created_at, review_row.id" \
       > "$backup_dir/legacy-review-migration-manifest.csv"
@@ -126,7 +126,7 @@ case "$command_name" in
         new_root_review_id="${new_root_review_id#\"}"
         psql "$DATABASE_URL" --no-psqlrc --set ON_ERROR_STOP=1 \
           --command "set request.jwt.claim.role = 'service_role';
-            select public.cmd_review_migrate_legacy_v2(
+            select private.cmd_review_migrate_legacy_v2(
               '${legacy_review_id}'::uuid,
               '${new_root_review_id}'::uuid,
               jsonb_build_object('source', 'local_legacy_migration')

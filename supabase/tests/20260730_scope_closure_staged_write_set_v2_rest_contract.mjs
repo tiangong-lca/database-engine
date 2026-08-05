@@ -167,13 +167,13 @@ begin
   if exists (
     select 1 from auth.users where id = '${OWNER_ID}'::uuid
     union all
-    select 1 from public.worker_jobs
+    select 1 from private.worker_jobs
     where id in (
       '${exact.workerJobId}'::uuid,
       '${CONCURRENT.workerJobId}'::uuid
     )
     union all
-    select 1 from public.lcia_scope_closure_checks
+    select 1 from private.lcia_scope_closure_checks
     where id in (
       '${exact.closureCheckId}'::uuid,
       '${CONCURRENT.closureCheckId}'::uuid
@@ -203,10 +203,10 @@ insert into auth.users (
   false,
   false
 );
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values ('${OWNER_ID}', '{}', null);
 
-insert into public.worker_jobs (
+insert into private.worker_jobs (
   id, job_kind, worker_runtime, worker_queue, requester_type, requested_by,
   visibility, payload_schema_version, payload_json, status, leased_by,
   lease_token, lease_expires_at, heartbeat_at
@@ -244,7 +244,7 @@ insert into public.worker_jobs (
     now()
   );
 
-insert into public.lcia_scope_closure_checks (
+insert into private.lcia_scope_closure_checks (
   id, worker_job_id, requested_by, request_idempotency_token, request_key,
   request_fingerprint, requested_scope_hash, policy_fingerprint,
   data_snapshot_token, expected_validator_scanner_fingerprint, status,
@@ -284,7 +284,7 @@ insert into public.lcia_scope_closure_checks (
 function cleanupSql(exact) {
   return `
 set session_replication_role = replica;
-update public.lcia_scope_closure_checks
+update private.lcia_scope_closure_checks
 set report_artifact_id = null,
     complete_machine_result_artifact_id = null,
     closure_bundle_artifact_id = null,
@@ -293,41 +293,41 @@ where id in (
   '${exact.closureCheckId}'::uuid,
   '${CONCURRENT.closureCheckId}'::uuid
 );
-delete from public.worker_job_artifacts
+delete from private.worker_job_artifacts
 where job_id in (
   '${exact.workerJobId}'::uuid,
   '${CONCURRENT.workerJobId}'::uuid
 );
-delete from public.lcia_scope_closure_artifact_write_set_batches batch
-using public.lcia_scope_closure_artifact_write_sets write_set
+delete from private.lcia_scope_closure_artifact_write_set_batches batch
+using private.lcia_scope_closure_artifact_write_sets write_set
 where batch.write_set_id = write_set.id
   and write_set.closure_check_id in (
     '${exact.closureCheckId}'::uuid,
     '${CONCURRENT.closureCheckId}'::uuid
   );
-delete from public.lcia_scope_closure_artifact_write_set_items item
-using public.lcia_scope_closure_artifact_write_sets write_set
+delete from private.lcia_scope_closure_artifact_write_set_items item
+using private.lcia_scope_closure_artifact_write_sets write_set
 where item.write_set_id = write_set.id
   and write_set.closure_check_id in (
     '${exact.closureCheckId}'::uuid,
     '${CONCURRENT.closureCheckId}'::uuid
   );
-delete from public.lcia_scope_closure_artifact_write_sets
+delete from private.lcia_scope_closure_artifact_write_sets
 where closure_check_id in (
   '${exact.closureCheckId}'::uuid,
   '${CONCURRENT.closureCheckId}'::uuid
 );
-delete from public.lcia_scope_closure_checks
+delete from private.lcia_scope_closure_checks
 where id in (
   '${exact.closureCheckId}'::uuid,
   '${CONCURRENT.closureCheckId}'::uuid
 );
-delete from public.worker_jobs
+delete from private.worker_jobs
 where id in (
   '${exact.workerJobId}'::uuid,
   '${CONCURRENT.workerJobId}'::uuid
 );
-delete from public.users where id = '${OWNER_ID}'::uuid;
+delete from private.users where id = '${OWNER_ID}'::uuid;
 delete from auth.users where id = '${OWNER_ID}'::uuid;
 set session_replication_role = origin;
 `;
@@ -338,7 +338,7 @@ function directStatusSql(exact) {
 with service_context as (
   select set_config('request.jwt.claim.role', 'service_role', true)
 )
-select public.svc_lcia_scope_closure_artifact_write_set_status_v2(
+select private.svc_lcia_scope_closure_artifact_write_set_status_v2(
   '${exact.closureCheckId}'::uuid,
   '${exact.workerJobId}'::uuid,
   '${exact.workerLeaseToken}'::uuid,
@@ -704,7 +704,7 @@ async function main() {
     evidence.concurrentReadyRowsBeforeFinalize = Number(
       runSql(
         environment.databaseUrl,
-        `select count(*) from public.worker_job_artifacts
+        `select count(*) from private.worker_job_artifacts
          where job_id = '${CONCURRENT.workerJobId}'::uuid;`,
       ),
     );

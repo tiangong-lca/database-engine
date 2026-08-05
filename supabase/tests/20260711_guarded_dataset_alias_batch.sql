@@ -571,7 +571,7 @@ language sql
 security definer
 set search_path = ''
 as $$
-  select public.cmd_dataset_alias_batch_guarded(p_batch);
+  select private.cmd_dataset_alias_batch_guarded(p_batch);
 $$;
 
 -- The legacy full-plan function is also internal after the protected
@@ -584,7 +584,7 @@ language sql
 security definer
 set search_path = ''
 as $$
-  select public.cmd_dataset_alias_plan_guarded(p_plan);
+  select private.cmd_dataset_alias_plan_guarded(p_plan);
 $$;
 
 create temporary table alias_derivative_webhook_calls (
@@ -736,32 +736,32 @@ alter table public.processes
 select ok(
   not has_function_privilege(
     'authenticated',
-    'public.cmd_dataset_alias_batch_guarded(jsonb)',
+    'private.cmd_dataset_alias_batch_guarded(jsonb)',
     'execute'
   )
   and not has_function_privilege(
     'anon',
-    'public.cmd_dataset_alias_batch_guarded(jsonb)',
+    'private.cmd_dataset_alias_batch_guarded(jsonb)',
     'execute'
   )
   and not has_function_privilege(
     'service_role',
-    'public.cmd_dataset_alias_batch_guarded(jsonb)',
+    'private.cmd_dataset_alias_batch_guarded(jsonb)',
     'execute'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.cmd_dataset_alias_plan_guarded(jsonb)',
+    'private.cmd_dataset_alias_plan_guarded(jsonb)',
     'execute'
   )
   and not has_function_privilege(
     'anon',
-    'public.cmd_dataset_alias_plan_guarded(jsonb)',
+    'private.cmd_dataset_alias_plan_guarded(jsonb)',
     'execute'
   )
   and not has_function_privilege(
     'service_role',
-    'public.cmd_dataset_alias_plan_guarded(jsonb)',
+    'private.cmd_dataset_alias_plan_guarded(jsonb)',
     'execute'
   ),
   'legacy batch and replay-capable full-plan alias RPCs are both internal after protected cutover'
@@ -769,22 +769,22 @@ select ok(
 
 select ok(
   strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
     'security definer'
   ) > 0
   and strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
     'set search_path to '''''
   ) > 0
   and strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
     'set lock_timeout to ''5s'''
   ) > 0
   and (
     select pg_catalog.pg_get_userbyid(function_meta.proowner)
     from pg_catalog.pg_proc as function_meta
     where function_meta.oid =
-      'public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure
+      'private.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure
   ) = 'postgres'
   and not exists (
     select 1
@@ -793,7 +793,7 @@ select ok(
       coalesce(function_meta.proconfig, array[]::text[])
     ) as function_config(value)
     where function_meta.oid =
-      'public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure
+      'private.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure
       and function_config.value like 'statement_timeout=%'
   ),
   'guarded alias batch hardens its definer path and lock wait without a separate statement budget'
@@ -801,22 +801,22 @@ select ok(
 
 select ok(
   strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
     'security definer'
   ) > 0
   and strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
     'set search_path to '''''
   ) > 0
   and strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
     'set lock_timeout to ''5s'''
   ) > 0
   and (
     select pg_catalog.pg_get_userbyid(function_meta.proowner)
     from pg_catalog.pg_proc as function_meta
     where function_meta.oid =
-      'public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure
+      'private.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure
   ) = 'postgres'
   and (
     select count(*)
@@ -825,7 +825,7 @@ select ok(
       coalesce(function_meta.proconfig, array[]::text[])
     ) as function_config(value)
     where function_meta.oid =
-      'public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure
+      'private.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure
       and function_config.value = 'statement_timeout=45s'
   ) = 1
   and not exists (
@@ -835,7 +835,7 @@ select ok(
       coalesce(function_meta.proconfig, array[]::text[])
     ) as function_config(value)
     where function_meta.oid =
-      'public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure
+      'private.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure
       and function_config.value like 'statement_timeout=%'
       and function_config.value <> 'statement_timeout=45s'
   ),
@@ -844,47 +844,47 @@ select ok(
 
 select ok(
   strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
     'and t.user_id = $3'
   ) > 0
   and strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
     'for update of t'
   ) > 0
   and strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
     'and t.state_code = 0'
   ) > 0
   and strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
     'and target_fp.user_id = v_actor'
   ) > 0
   and strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
     'where support_ug.user_id = v_actor'
   ) > 0
   and strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
     'order by support_ug.id, support_ug.version'
   ) > 0
   and strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure)),
     'lock table public.flowproperties, public.flows, public.processes'
   ) > 0,
   'guarded alias batch uses stable closure locks and owner-scoped row locks'
 );
 
 select ok(
-  to_regclass('public.command_audit_log_guarded_alias_batch_row_replay_idx') is not null
-  and to_regclass('public.command_audit_log_guarded_alias_batch_summary_replay_idx') is not null
-  and to_regclass('public.command_audit_log_guarded_alias_plan_summary_replay_idx') is not null
+  to_regclass('private.command_audit_log_guarded_alias_batch_row_replay_idx') is not null
+  and to_regclass('private.command_audit_log_guarded_alias_batch_summary_replay_idx') is not null
+  and to_regclass('private.command_audit_log_guarded_alias_plan_summary_replay_idx') is not null
   and (
     select bool_and(index_meta.indisvalid and index_meta.indisready)
     from pg_catalog.pg_index as index_meta
     where index_meta.indexrelid in (
-      'public.command_audit_log_guarded_alias_batch_row_replay_idx'::regclass,
-      'public.command_audit_log_guarded_alias_batch_summary_replay_idx'::regclass,
-      'public.command_audit_log_guarded_alias_plan_summary_replay_idx'::regclass
+      'private.command_audit_log_guarded_alias_batch_row_replay_idx'::regclass,
+      'private.command_audit_log_guarded_alias_batch_summary_replay_idx'::regclass,
+      'private.command_audit_log_guarded_alias_plan_summary_replay_idx'::regclass
     )
   ),
   'guarded alias batch and plan replay indexes are valid and ready'
@@ -961,7 +961,7 @@ select ok(
 from (
   select lower(
     pg_get_functiondef(
-      'public.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure
+      'private.cmd_dataset_alias_batch_guarded(jsonb)'::regprocedure
     )
   ) as body
 ) as optimized;
@@ -1138,7 +1138,7 @@ select lives_ok(
 
 reset role;
 
-alter table public.command_audit_log
+alter table private.command_audit_log
   add constraint command_audit_log_test_force_alias_batch_row_failure
   check (
     not (
@@ -1219,26 +1219,26 @@ select is(
 
 select ok(
   strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
     'into v_support_owned'
   ) > 0
   and strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
     'into v_owned_action_count'
   ) > 0
   and strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
     'into v_support_owned'
   ) < strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
-    'v_time_result := public.cmd_dataset_alias_batch_guarded'
+    lower(pg_get_functiondef('private.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    'v_time_result := private.cmd_dataset_alias_batch_guarded'
   )
   and strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    lower(pg_get_functiondef('private.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
     'into v_owned_action_count'
   ) < strpos(
-    lower(pg_get_functiondef('public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
-    'v_time_result := public.cmd_dataset_alias_batch_guarded'
+    lower(pg_get_functiondef('private.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure)),
+    'v_time_result := private.cmd_dataset_alias_batch_guarded'
   ),
   'support and action ownership preflights precede the internal global-lock executor'
 );
@@ -2116,7 +2116,7 @@ where id = pg_temp.alias_entity_id('time', 'process', 1)
 select is(
   (
     select count(*)::text
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_alias_batch_guarded'
   ),
   '0',
@@ -2382,7 +2382,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.command_audit_log
+    from private.command_audit_log
     where (
       command = 'cmd_dataset_alias_batch_guarded'
       and payload->>'batch_id' in (
@@ -2508,13 +2508,13 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_alias_batch_guarded'
       and payload->>'operation_id' = 'maintenance-alias-plan-success'
   )
   || ':' || (
     select count(*)::text
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_alias_plan_guarded'
       and payload->>'operation_id' = 'maintenance-alias-plan-success'
   ),
@@ -2525,7 +2525,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_alias_plan_guarded'
       and target_table is null
       and payload->>'record_type' = 'plan_summary'
@@ -2587,13 +2587,13 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_alias_batch_guarded'
       and payload->>'operation_id' = 'maintenance-alias-plan-success'
   )
   || ':' || (
     select count(*)::text
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_alias_plan_guarded'
       and payload->>'operation_id' = 'maintenance-alias-plan-success'
   ),
@@ -2667,7 +2667,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_alias_batch_guarded'
       and payload->>'batch_id' = 'time-success'
   ),
@@ -2679,7 +2679,7 @@ select is(
   (
     select count(*) filter (where target_table is null)::text
       || ':' || count(*) filter (where target_table is not null)::text
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_alias_batch_guarded'
       and payload->>'batch_id' = 'time-success'
       and payload->>'hash_algorithm' = 'postgres-jsonb-text-sha256'
@@ -2697,7 +2697,7 @@ set json_ordered = pg_temp.alias_process_payload('time', 1, false)::json,
 where id = pg_temp.alias_entity_id('time', 'process', 1)
   and version = '01.00.000';
 
-delete from public.command_audit_log
+delete from private.command_audit_log
 where command = 'cmd_dataset_alias_batch_guarded'
   and payload->>'batch_id' = 'time-success'
   and payload->>'action_id' = 'process-01';
@@ -2723,7 +2723,7 @@ release savepoint alias_mixed_partial_state;
 
 savepoint alias_missing_row_audit;
 
-delete from public.command_audit_log
+delete from private.command_audit_log
 where command = 'cmd_dataset_alias_batch_guarded'
   and payload->>'batch_id' = 'time-success'
   and payload->>'action_id' = 'process-01';
@@ -2749,7 +2749,7 @@ release savepoint alias_missing_row_audit;
 
 savepoint alias_tampered_row_audit;
 
-update public.command_audit_log
+update private.command_audit_log
 set payload = jsonb_set(
   payload,
   '{desired_json_ordered_sha256}',
@@ -2781,7 +2781,7 @@ release savepoint alias_tampered_row_audit;
 
 savepoint alias_missing_summary_audit;
 
-delete from public.command_audit_log
+delete from private.command_audit_log
 where command = 'cmd_dataset_alias_batch_guarded'
   and payload->>'batch_id' = 'time-success'
   and target_table is null;
@@ -2839,7 +2839,7 @@ reset role;
 select is(
   (
     select count(*)::text
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_alias_batch_guarded'
       and payload->>'batch_id' = 'time-success'
   ),
@@ -2866,7 +2866,7 @@ reset role;
 select is(
   (
     select count(*)::text
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_alias_batch_guarded'
       and payload->>'batch_id' = 'length-time-success'
   ),
@@ -2909,7 +2909,7 @@ reset role;
 select is(
   (
     select count(*)::text
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_alias_batch_guarded'
       and payload->>'batch_id' = 'length-time-success'
   ),
@@ -2920,7 +2920,7 @@ select is(
 select ok(
   (
     select bool_and(jsonb_typeof(payload->'committed_modified_at') = 'string')
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_alias_batch_guarded'
       and target_table is not null
   ),
@@ -2930,7 +2930,7 @@ select ok(
 select is(
   (
     select count(*)::text
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_alias_batch_guarded'
       and target_table is null
       and payload ?& array[
@@ -2952,7 +2952,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_alias_batch_guarded'
       and target_table is not null
       and payload->>'mutation_sha256' ~ '^[a-f0-9]{64}$'
