@@ -39,19 +39,19 @@ select ok(
 
 select ok(
   strpos(pg_get_functiondef('private.hybrid_search_flows_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'private.semantic_flow_candidates') > 0
-    and strpos(pg_get_functiondef('private.hybrid_search_flows_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.semantic_search_flows_v1') = 0,
+    and strpos(pg_get_functiondef('private.hybrid_search_flows_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'api.semantic_search_flows_v1') = 0,
   'flow hybrid search uses lightweight private semantic candidates'
 );
 
 select ok(
   strpos(pg_get_functiondef('private.hybrid_search_processes_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'private.semantic_process_candidates') > 0
-    and strpos(pg_get_functiondef('private.hybrid_search_processes_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.semantic_search_processes_v1') = 0,
+    and strpos(pg_get_functiondef('private.hybrid_search_processes_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'api.semantic_search_processes_v1') = 0,
   'process hybrid search uses lightweight private semantic candidates'
 );
 
 select ok(
   strpos(pg_get_functiondef('private.hybrid_search_lifecyclemodels_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'private.semantic_lifecyclemodel_candidates') > 0
-    and strpos(pg_get_functiondef('private.hybrid_search_lifecyclemodels_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.semantic_search_lifecyclemodels_v1') = 0,
+    and strpos(pg_get_functiondef('private.hybrid_search_lifecyclemodels_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'api.semantic_search_lifecyclemodels_v1') = 0,
   'lifecyclemodel hybrid search uses lightweight private semantic candidates'
 );
 
@@ -118,16 +118,16 @@ values
     false
   );
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values
   ('a1000000-0000-0000-0000-000000000111', '{"email":"semantic-candidate-owner@example.com"}'::jsonb, null),
   ('b2000000-0000-0000-0000-000000000111', '{"email":"semantic-candidate-outsider@example.com"}'::jsonb, null);
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values
   ('c3000000-0000-0000-0000-000000000111', '{"name":"Semantic Candidate Team"}'::jsonb, 1, false);
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values
   ('a1000000-0000-0000-0000-000000000111', 'c3000000-0000-0000-0000-000000000111', 'owner');
 
@@ -183,9 +183,15 @@ from (
   select 'd3000000-0000-0000-0000-000000000111'::uuid, '01.00.000'::character(9), '{"search":"semantic-outsider-lifecycle"}'::jsonb, '{"search":"semantic-outsider-lifecycle"}'::json, 'b2000000-0000-0000-0000-000000000111'::uuid, 0, null::uuid, 'semantic-outsider-lifecycle'::text, test_vector.value, true, now(), now() from test_vector
 ) rows;
 
+reset role;
 set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', 'a1000000-0000-0000-0000-000000000111', true);
+
+-- Private candidate helpers are not executable by authenticated callers after
+-- the schema cutover. Exercise their visibility semantics through the internal
+-- service role while preserving the caller JWT.
+set local role service_role;
 
 with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
@@ -223,11 +229,14 @@ select is(
   'process team semantic candidates only include actor team rows'
 );
 
+reset role;
+set local role authenticated;
+
 with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_processes_v2('no-text-match-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'my', 10, 1) limit 1),
+  (select id::text from api.hybrid_search_processes_v2('no-text-match-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'my', 10, 1) limit 1),
   'e1000000-0000-0000-0000-000000000111',
   'process hybrid search can return a semantic-only my candidate'
 );
@@ -236,7 +245,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_processes_v2('semantic-outsider-process', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'my', 10, 1) limit 1),
+  (select id::text from api.hybrid_search_processes_v2('semantic-outsider-process', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'my', 10, 1) limit 1),
   'e1000000-0000-0000-0000-000000000111',
   'process hybrid my search does not leak outsider semantic candidates even when text query names outsider row'
 );

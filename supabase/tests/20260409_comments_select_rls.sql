@@ -99,13 +99,13 @@ values
     false
   );
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values
   ('14000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'review-member'),
   ('14000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'review-member'),
   ('14000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000', 'review-admin');
 
-insert into public.reviews (
+insert into private.reviews (
   id,
   data_id,
   data_version,
@@ -125,7 +125,7 @@ values (
   }'::jsonb
 );
 
-insert into public.comments (
+insert into private.comments (
   review_id,
   reviewer_id,
   json,
@@ -144,7 +144,7 @@ select set_config('request.jwt.claim.sub', '14000000-0000-0000-0000-000000000001
 select is(
   (
     select count(*)::text
-    from public.comments
+    from private.comments
     where review_id = '54000000-0000-0000-0000-000000000001'
   ),
   '1',
@@ -159,7 +159,7 @@ select set_config('request.jwt.claim.sub', '14000000-0000-0000-0000-000000000002
 select is(
   (
     select count(*)::text
-    from public.comments
+    from private.comments
     where review_id = '54000000-0000-0000-0000-000000000001'
   ),
   '1',
@@ -174,7 +174,7 @@ select set_config('request.jwt.claim.sub', '14000000-0000-0000-0000-000000000003
 select is(
   (
     select count(*)::text
-    from public.comments
+    from private.comments
     where review_id = '54000000-0000-0000-0000-000000000001'
   ),
   '0',
@@ -189,7 +189,7 @@ select set_config('request.jwt.claim.sub', '14000000-0000-0000-0000-000000000004
 select is(
   (
     select count(*)::text
-    from public.comments
+    from private.comments
     where review_id = '54000000-0000-0000-0000-000000000001'
   ),
   '1',
@@ -204,7 +204,7 @@ select set_config('request.jwt.claim.sub', '14000000-0000-0000-0000-000000000005
 select is(
   (
     select count(*)::text
-    from public.comments
+    from private.comments
     where review_id = '54000000-0000-0000-0000-000000000001'
   ),
   '0',

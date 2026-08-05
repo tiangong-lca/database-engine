@@ -40,32 +40,32 @@ select ok(
 );
 
 select ok(
-  to_regclass('public.lca_snapshot_gc_runs') is not null,
+  to_regclass('private.lca_snapshot_gc_runs') is not null,
   'snapshot GC run audit table exists'
 );
 
 select ok(
-  to_regclass('public.lca_snapshot_gc_run_items') is not null,
+  to_regclass('private.lca_snapshot_gc_run_items') is not null,
   'snapshot GC run item audit table exists'
 );
 
 select ok(
-  (select relrowsecurity from pg_class where oid = 'public.lca_snapshot_gc_runs'::regclass),
+  (select relrowsecurity from pg_class where oid = 'private.lca_snapshot_gc_runs'::regclass),
   'snapshot GC run audit table has RLS enabled'
 );
 
 select ok(
-  (select relrowsecurity from pg_class where oid = 'public.lca_snapshot_gc_run_items'::regclass),
+  (select relrowsecurity from pg_class where oid = 'private.lca_snapshot_gc_run_items'::regclass),
   'snapshot GC run item audit table has RLS enabled'
 );
 
 select ok(
-  has_table_privilege('service_role', 'public.lca_snapshot_gc_runs', 'INSERT'),
+  has_table_privilege('service_role', 'private.lca_snapshot_gc_runs', 'INSERT'),
   'service_role can insert snapshot GC run audit rows'
 );
 
 select ok(
-  has_table_privilege('service_role', 'public.lca_snapshot_gc_run_items', 'INSERT'),
+  has_table_privilege('service_role', 'private.lca_snapshot_gc_run_items', 'INSERT'),
   'service_role can insert snapshot GC run item audit rows'
 );
 
@@ -73,7 +73,7 @@ insert into storage.buckets (id, name, public)
 values ('lca_results', 'lca_results', false)
 on conflict (id) do nothing;
 
-insert into public.lca_network_snapshots (
+insert into private.lca_network_snapshots (
   id,
   process_filter,
   source_hash,
@@ -128,7 +128,7 @@ insert into public.lca_network_snapshots (
     '2026-01-20 00:00:00+00'
   );
 
-insert into public.lca_active_snapshots (
+insert into private.lca_active_snapshots (
   scope,
   snapshot_id,
   source_hash,
@@ -140,7 +140,7 @@ insert into public.lca_active_snapshots (
   '2025-12-02 00:00:00+00'
 );
 
-insert into public.worker_jobs (
+insert into private.worker_jobs (
   id,
   job_kind,
   worker_runtime,
@@ -176,7 +176,7 @@ insert into public.worker_jobs (
   '2025-12-01 00:00:00+00'
 );
 
-insert into public.lca_results (
+insert into private.lca_results (
   id,
   job_id,
   worker_job_id,
@@ -198,7 +198,7 @@ insert into public.lca_results (
   '2025-12-01 00:00:00+00'
 );
 
-insert into public.lca_result_cache (
+insert into private.lca_result_cache (
   id,
   scope,
   snapshot_id,
@@ -224,7 +224,7 @@ insert into public.lca_result_cache (
   '2025-12-01 00:00:00+00'
 );
 
-insert into public.lca_latest_all_unit_results (
+insert into private.lca_latest_all_unit_results (
   id,
   snapshot_id,
   job_id,
@@ -254,7 +254,7 @@ insert into public.lca_latest_all_unit_results (
   '2025-12-01 00:00:00+00'
 );
 
-insert into public.lca_factorization_registry (
+insert into private.lca_factorization_registry (
   id,
   scope,
   snapshot_id,
@@ -276,7 +276,7 @@ insert into public.lca_factorization_registry (
   '2025-12-01 00:00:00+00'
 );
 
-insert into public.lca_snapshot_artifacts (
+insert into private.lca_snapshot_artifacts (
   id,
   snapshot_id,
   artifact_url,

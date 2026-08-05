@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-05"
-lastReviewedCommit: "5bb96b2f1fd4126081fdae166482d1d1bec3d5a6"
-lastReviewedNote: "Reviewed for Issue #418: refreshing the remaining persistent-dev examples and guarded benchmark target keeps ownership, routing, deployment, and validation rules unchanged."
+lastReviewedCommit: "df8253b4f81d3e05524602f996025b54e9c35dd3"
+lastReviewedNote: "Reviewed for Issue #422: schema-boundary migration, validation, and generated-workspace paths are now routed together; repository ownership and integration rules remain unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -99,6 +99,17 @@ freshness:
 
 routing:
   intents:
+    schema-boundary:
+      paths:
+        - supabase/config.toml
+        - supabase/migrations/*schema*.sql
+        - supabase/tests/*schema*.sql
+        - docs/agents/repo-architecture.md
+        - docs/agents/repo-validation.md
+        - scripts/README.md
+        - scripts/README.zh-CN.md
+        - supabase/workspace/README.md
+        - supabase/workspace/README.zh-CN.md
     local-docpact-gate:
       paths:
         - .githooks/pre-push

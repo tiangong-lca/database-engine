@@ -71,7 +71,7 @@ values
     false
   );
 
-insert into public.users (id, raw_user_meta_data)
+insert into private.users (id, raw_user_meta_data)
 values
   (
     '15000000-0000-0000-0000-000000000001',
@@ -82,11 +82,11 @@ values
     '{"email":"review-submit-job-outsider@example.com"}'::jsonb
   );
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values
   ('25000000-0000-0000-0000-000000000001', '{"title":"Review Submit Job Team"}'::jsonb, 1, false);
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values
   ('15000000-0000-0000-0000-000000000001', '25000000-0000-0000-0000-000000000001', 'owner');
 
@@ -151,7 +151,7 @@ create temporary table review_submit_job_ids (
 grant all on review_submit_job_ids to public;
 
 select is(
-  public.cmd_dataset_review_submit_job_enqueue(
+  api.cmd_dataset_review_submit_job_enqueue(
     p_table => 'processes',
     p_id => '35000000-0000-0000-0000-000000000001',
     p_version => '01.00.000',
@@ -171,7 +171,7 @@ select
   (result->'data'->>'reviewSubmitJobId')::uuid,
   (result->'data'->>'gateWorkerJobId')::uuid
 from (
-  select public.cmd_dataset_review_submit_job_enqueue(
+  select api.cmd_dataset_review_submit_job_enqueue(
     p_table => 'processes',
     p_id => '35000000-0000-0000-0000-000000000001',
     p_version => '01.00.000',
@@ -182,11 +182,11 @@ from (
 
 select is(
   (
-    public.cmd_dataset_review_submit_job_read(
+    api.cmd_dataset_review_submit_job_read(
       (select job_id from review_submit_job_ids where label = 'passed_process')
     )->'data'->>'status'
   ) || ':' || (
-    public.cmd_dataset_review_submit_job_read(
+    api.cmd_dataset_review_submit_job_read(
       (select job_id from review_submit_job_ids where label = 'passed_process')
     )->'data' ? 'gateWorkerJobId'
   )::text,
@@ -206,7 +206,7 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 
 select is(
   (
-    public.cmd_dataset_review_submit_job_enqueue(
+    api.cmd_dataset_review_submit_job_enqueue(
       p_table => 'processes',
       p_id => '35000000-0000-0000-0000-000000000001',
       p_version => '01.00.000',
@@ -219,7 +219,7 @@ select is(
 
 select is(
   (
-    public.cmd_dataset_review_submit_job_read_latest(
+    api.cmd_dataset_review_submit_job_read_latest(
       p_table => 'processes',
       p_id => '35000000-0000-0000-0000-000000000001',
       p_version => '01.00.000',
@@ -236,7 +236,7 @@ select set_config('request.jwt.claim.sub', '15000000-0000-0000-0000-000000000002
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
 select is(
-  public.cmd_dataset_review_submit_job_read(
+  api.cmd_dataset_review_submit_job_read(
     (select job_id from review_submit_job_ids where label = 'passed_process')
   )->>'code',
   'DATASET_OWNER_REQUIRED',
@@ -246,7 +246,7 @@ select is(
 select ok(
   not has_function_privilege(
     'authenticated',
-    'public.cmd_dataset_review_submit_job_claim(integer,integer)',
+    'private.cmd_dataset_review_submit_job_claim(integer,integer)',
     'EXECUTE'
   ),
   'authenticated users cannot execute review-submit job claim'
@@ -259,7 +259,7 @@ select set_config('request.jwt.claim.role', 'service_role', true);
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
 select is(
-  public.cmd_dataset_review_submit_job_claim(1)->'data'->0->>'reviewSubmitJobId',
+  private.cmd_dataset_review_submit_job_claim(1)->'data'->0->>'reviewSubmitJobId',
   (select job_id::text from review_submit_job_ids where label = 'passed_process'),
   'service role can claim a waiting review-submit job'
 );
@@ -267,7 +267,7 @@ select is(
 select is(
   (
     select status || ':' || attempt_count::text
-    from public.dataset_review_submit_requests
+    from private.dataset_review_submit_requests
     where id = (select job_id from review_submit_job_ids where label = 'passed_process')
   ),
   'submitting:1',
@@ -275,7 +275,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_review_submit_job_record_result(
+  private.cmd_dataset_review_submit_job_record_result(
     p_job_id => (select job_id from review_submit_job_ids where label = 'passed_process'),
     p_status => 'waiting_gate',
     p_audit => '{"command":"review_submit_job_record_waiting"}'::jsonb
@@ -285,20 +285,20 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_review_submit_job_read(
+  api.cmd_dataset_review_submit_job_read(
     (select job_id from review_submit_job_ids where label = 'passed_process')
   )->'data'->>'status',
   'waiting_gate',
   'service role can read review-submit job state'
 );
 
-select public.worker_claim_jobs('review_submit_gate', 'review-submit-job-test-worker', 1, 300);
+select private.worker_claim_jobs('review_submit_gate', 'review-submit-job-test-worker', 1, 300);
 
-select public.worker_record_job_result(
+select private.worker_record_job_result(
   p_job_id => (select gate_worker_job_id from review_submit_job_ids where label = 'passed_process'),
   p_lease_token => (
     select lease_token
-    from public.worker_jobs
+    from private.worker_jobs
     where id = (select gate_worker_job_id from review_submit_job_ids where label = 'passed_process')
   ),
   p_status => 'completed',
@@ -317,7 +317,7 @@ select public.worker_record_job_result(
 );
 
 select is(
-  public.cmd_review_submit_from_job(
+  private.cmd_review_submit_from_job(
     p_job_id => (select job_id from review_submit_job_ids where label = 'passed_process'),
     p_audit => '{"command":"review_submit_from_job"}'::jsonb
   )->'data'->>'status',
@@ -328,7 +328,7 @@ select is(
 select is(
   (
     select status
-    from public.dataset_review_submit_requests
+    from private.dataset_review_submit_requests
     where id = (select job_id from review_submit_job_ids where label = 'passed_process')
   ),
   'submitted',
@@ -349,7 +349,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_review_submit_from_job'
       and actor_user_id = '15000000-0000-0000-0000-000000000001'
       and target_id = '35000000-0000-0000-0000-000000000001'
@@ -359,7 +359,7 @@ select is(
 );
 
 select is(
-  public.cmd_review_submit_from_job(
+  private.cmd_review_submit_from_job(
     p_job_id => (select job_id from review_submit_job_ids where label = 'passed_process')
   )->'data'->>'status',
   'submitted',
@@ -378,7 +378,7 @@ select
   (result->'data'->>'reviewSubmitJobId')::uuid,
   (result->'data'->>'gateWorkerJobId')::uuid
 from (
-  select public.cmd_dataset_review_submit_job_enqueue(
+  select api.cmd_dataset_review_submit_job_enqueue(
     p_table => 'processes',
     p_id => '35000000-0000-0000-0000-000000000002',
     p_version => '01.00.000',
@@ -397,13 +397,13 @@ select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claim.role', 'service_role', true);
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
-select public.worker_claim_jobs('review_submit_gate', 'review-submit-job-test-worker', 1, 300);
+select private.worker_claim_jobs('review_submit_gate', 'review-submit-job-test-worker', 1, 300);
 
-select public.worker_record_job_result(
+select private.worker_record_job_result(
   p_job_id => (select gate_worker_job_id from review_submit_job_ids where label = 'stale_process'),
   p_lease_token => (
     select lease_token
-    from public.worker_jobs
+    from private.worker_jobs
     where id = (select gate_worker_job_id from review_submit_job_ids where label = 'stale_process')
   ),
   p_status => 'completed',
@@ -422,7 +422,7 @@ select public.worker_record_job_result(
 );
 
 select is(
-  public.cmd_review_submit_from_job(
+  private.cmd_review_submit_from_job(
     p_job_id => (select job_id from review_submit_job_ids where label = 'stale_process')
   )->>'code',
   'REVIEW_SUBMIT_JOB_STALE',
@@ -432,7 +432,7 @@ select is(
 select is(
   (
     select status
-    from public.dataset_review_submit_requests
+    from private.dataset_review_submit_requests
     where id = (select job_id from review_submit_job_ids where label = 'stale_process')
   ),
   'stale',
@@ -451,7 +451,7 @@ select
   (result->'data'->>'reviewSubmitJobId')::uuid,
   (result->'data'->>'gateWorkerJobId')::uuid
 from (
-  select public.cmd_dataset_review_submit_job_enqueue(
+  select api.cmd_dataset_review_submit_job_enqueue(
     p_table => 'processes',
     p_id => '35000000-0000-0000-0000-000000000003',
     p_version => '01.00.000',
@@ -465,13 +465,13 @@ select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claim.role', 'service_role', true);
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
-select public.worker_claim_jobs('review_submit_gate', 'review-submit-job-test-worker', 1, 300);
+select private.worker_claim_jobs('review_submit_gate', 'review-submit-job-test-worker', 1, 300);
 
-select public.worker_record_job_result(
+select private.worker_record_job_result(
   p_job_id => (select gate_worker_job_id from review_submit_job_ids where label = 'blocked_process'),
   p_lease_token => (
     select lease_token
-    from public.worker_jobs
+    from private.worker_jobs
     where id = (select gate_worker_job_id from review_submit_job_ids where label = 'blocked_process')
   ),
   p_status => 'blocked',
@@ -493,7 +493,7 @@ select public.worker_record_job_result(
 );
 
 select is(
-  public.cmd_review_submit_from_job(
+  private.cmd_review_submit_from_job(
     p_job_id => (select job_id from review_submit_job_ids where label = 'blocked_process')
   )->>'code',
   'REVIEW_SUBMIT_GATE_BLOCKED',
@@ -503,7 +503,7 @@ select is(
 select is(
   (
     select status
-    from public.dataset_review_submit_requests
+    from private.dataset_review_submit_requests
     where id = (select job_id from review_submit_job_ids where label = 'blocked_process')
   ),
   'blocked',
@@ -513,7 +513,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.reviews
+    from private.reviews
     where data_id = '35000000-0000-0000-0000-000000000003'
       and data_version = '01.00.000'
   ),

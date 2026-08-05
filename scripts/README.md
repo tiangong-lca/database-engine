@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-31
-lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
-lastReviewedNote: "Reviewed through Issues #323 and #329: document the local Root/Reference Review backup/cutover runner and exact Worker-compatible isolated database/storage qualification adapters without changing schema-workspace behavior."
+lastReviewedAt: 2026-08-05
+lastReviewedCommit: df8253bfb3499b1f8a6d7d84d321bd5b7cc67752
+lastReviewedNote: "Reviewed for Issue #422: document the populated full-schema cutover upgrade proof."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -46,6 +46,21 @@ Those runners should keep their own `README.md` with dry-run, apply, and validat
 Local migration outputs and audit JSONL files should be written under `_artifacts/`, which is intentionally ignored by Git.
 
 ## Script List
+
+### `test_full_schema_cutover_upgrade.sh`
+
+Rebuilds the local database to the migration immediately before the full
+Schema cutover, adds a representative business row, snapshots relation and
+routine identities plus trigger, RLS-policy, constraint, and exact row-count
+state, applies the cutover, and verifies complete preservation.
+
+Usage:
+
+```bash
+scripts/test_full_schema_cutover_upgrade.sh
+```
+
+This script is local-only and resets the local Supabase database.
 
 ### `data_migrations/tidas_schema_202606/runner.py`
 

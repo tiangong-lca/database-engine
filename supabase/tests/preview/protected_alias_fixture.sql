@@ -91,8 +91,8 @@ begin
     raise exception 'invalid protected alias Preview fixture parameters';
   end if;
 
-  if to_regprocedure('public.cmd_dataset_alias_execution_preflight_guarded(jsonb)') is null
-    or to_regprocedure('public.cmd_dataset_alias_plan_guarded(jsonb)') is null
+  if to_regprocedure('api.cmd_dataset_alias_execution_preflight_guarded(jsonb)') is null
+    or to_regprocedure('private.cmd_dataset_alias_plan_guarded(jsonb)') is null
     or to_regprocedure('util.admit_dataset_derivative_rebuild_batch(uuid,uuid,text,text,text,jsonb)') is null
     or to_regprocedure('util.dataset_derivative_rebuild_snapshot(text,uuid,text)') is null then
     raise exception 'protected alias production toolchain is incomplete';
@@ -150,12 +150,12 @@ begin
     raise exception 'fixture actor UUID/email is not an exact auth.users identity';
   end if;
 
-  if not has_table_privilege('service_role', 'public.command_audit_log', 'SELECT') then
+  if not has_table_privilege('service_role', 'private.command_audit_log', 'SELECT') then
     raise exception 'service_role cannot read the sealed fixture artifact';
   end if;
 
   if exists (
-    select 1 from public.command_audit_log as audit
+    select 1 from private.command_audit_log as audit
     where audit.command = 'preview_e2e_protected_alias_fixture'
       and audit.actor_user_id = config.actor_user_id
       and audit.target_table = 'preview_e2e_protected_alias'
@@ -947,13 +947,13 @@ returns jsonb language sql stable as $$
     )),
     'toolchain_evidence_sha256', util.dataset_alias_execution_artifact_sha256(jsonb_build_object(
       'alias_plan_guarded', util.dataset_alias_execution_sha256(pg_get_functiondef(
-        'public.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure
+        'private.cmd_dataset_alias_plan_guarded(jsonb)'::regprocedure
       )),
       'derivative_batch', util.dataset_alias_execution_sha256(pg_get_functiondef(
         'util.admit_dataset_derivative_rebuild_batch(uuid,uuid,text,text,text,jsonb)'::regprocedure
       )),
       'protected_preflight', util.dataset_alias_execution_sha256(pg_get_functiondef(
-        'public.cmd_dataset_alias_execution_preflight_guarded(jsonb)'::regprocedure
+        'api.cmd_dataset_alias_execution_preflight_guarded(jsonb)'::regprocedure
       ))
     ))
   )
@@ -1188,7 +1188,7 @@ begin
 end;
 $fixture_assertions$;
 
-insert into public.command_audit_log (
+insert into private.command_audit_log (
   command,
   actor_user_id,
   target_table,

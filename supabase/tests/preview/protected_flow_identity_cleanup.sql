@@ -124,7 +124,7 @@ begin
   end if;
 
   select count(*)::integer into manifest_count
-  from public.command_audit_log as audit
+  from private.command_audit_log as audit
   where audit.command = 'preview_e2e_flow_identity_fixture'
     and audit.actor_user_id = config.actor_user_id
     and audit.target_table = 'preview_e2e_flow_identity'
@@ -137,7 +137,7 @@ begin
 
   if manifest_count = 1 and exists (
     select 1
-    from public.command_audit_log as audit
+    from private.command_audit_log as audit
     where audit.command = 'preview_e2e_flow_identity_fixture'
       and audit.actor_user_id = config.actor_user_id
       and audit.target_table = 'preview_e2e_flow_identity'
@@ -371,7 +371,7 @@ begin
     )
   ) or exists (
     select 1
-    from public.command_audit_log as audit
+    from private.command_audit_log as audit
     where audit.command = 'cmd_dataset_derivative_rebuild_terminal'
       and audit.payload->>'request_id' in (
         select id::text from pg_temp.preview_flow_identity_cleanup_derivatives
@@ -504,7 +504,7 @@ begin
   if exists (
     select 1 from pg_trigger
     where tgname = 'preview_flow_identity_post_primary_fault_v1'
-      and tgrelid = 'public.command_audit_log'::regclass
+      and tgrelid = 'private.command_audit_log'::regclass
       and not tgisinternal
   ) then
     if to_regprocedure(
@@ -514,7 +514,7 @@ begin
       from pg_trigger as fault_trigger
       where fault_trigger.tgname =
           'preview_flow_identity_post_primary_fault_v1'
-        and fault_trigger.tgrelid = 'public.command_audit_log'::regclass
+        and fault_trigger.tgrelid = 'private.command_audit_log'::regclass
         and not fault_trigger.tgisinternal
         and fault_trigger.tgfoid is distinct from to_regprocedure(
           'private.preview_flow_identity_post_primary_fault_v1()'
@@ -535,7 +535,7 @@ begin
       raise exception 'cleanup refuses a foreign same-named fault hook';
     end if;
     drop trigger preview_flow_identity_post_primary_fault_v1
-      on public.command_audit_log;
+      on private.command_audit_log;
     drop function private.preview_flow_identity_post_primary_fault_v1();
   elsif to_regprocedure(
     'private.preview_flow_identity_post_primary_fault_v1()'
@@ -788,7 +788,7 @@ alter table util.dataset_flow_identity_capture_process_intents
 alter table util.dataset_flow_identity_capture_receipts
   enable trigger dataset_flow_identity_capture_receipts_immutable;
 
-delete from public.command_audit_log as audit
+delete from private.command_audit_log as audit
 using pg_temp.preview_flow_identity_cleanup_config as config
 where audit.actor_user_id = config.actor_user_id
   and (
@@ -1007,7 +1007,7 @@ begin
           and failure.message->>'id' = target.id::text
           and btrim(failure.message->>'version') = target.version
       ))
-    or exists (select 1 from public.command_audit_log as audit
+    or exists (select 1 from private.command_audit_log as audit
       where audit.actor_user_id = config.actor_user_id and (
         (audit.command = 'preview_e2e_flow_identity_fixture'
           and audit.target_id = config.request_id)
@@ -1039,7 +1039,7 @@ begin
       where name in ('project_url', 'project_secret_key'))
     or exists (select 1 from pg_trigger
       where tgname = 'preview_flow_identity_post_primary_fault_v1'
-        and tgrelid = 'public.command_audit_log'::regclass
+        and tgrelid = 'private.command_audit_log'::regclass
         and not tgisinternal)
     or to_regprocedure(
       'private.preview_flow_identity_post_primary_fault_v1()'

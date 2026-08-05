@@ -58,7 +58,7 @@ values (
   false
 );
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values (
   '96000000-0000-0000-0000-000000000001',
   '{"email":"dataset-extraction-owner@example.com"}'::jsonb,
@@ -73,7 +73,7 @@ create temporary table dataset_create_results (
 ) on commit drop;
 
 insert into dataset_create_results (result)
-select public.cmd_dataset_create(
+select api.cmd_dataset_create(
   'flows',
   '97000000-0000-0000-0000-000000000001',
   '{
@@ -204,7 +204,7 @@ create temporary table claimed_dataset_extraction_jobs (
 ) on commit drop;
 
 insert into claimed_dataset_extraction_jobs (result)
-select public.cmd_dataset_extraction_claim(10, 300, 5);
+select api.cmd_dataset_extraction_claim(10, 300, 5);
 
 select is(
   (select result->>'ok' from claimed_dataset_extraction_jobs),
@@ -232,7 +232,7 @@ select ok(
 
 select is(
   (
-    select public.cmd_dataset_extraction_ack(
+    select api.cmd_dataset_extraction_ack(
       array_agg((job->>'msg_id')::bigint order by (job->>'msg_id')::bigint)
     )->>'ok'
     from claimed_dataset_extraction_jobs,
@@ -256,7 +256,7 @@ select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 select set_config('request.headers', '{"apikey":"wrong-service-key"}', true);
 
 select is(
-  public.cmd_dataset_extraction_claim(1, 300, 5)->>'code',
+  api.cmd_dataset_extraction_claim(1, 300, 5)->>'code',
   'SERVICE_ROLE_REQUIRED',
   'dataset extraction RPCs reject non-service request context'
 );
@@ -266,7 +266,7 @@ select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 select set_config('request.headers', '{}', true);
 
 select is(
-  public.cmd_dataset_extraction_ack(array[]::bigint[])->>'ok',
+  api.cmd_dataset_extraction_ack(array[]::bigint[])->>'ok',
   'true',
   'dataset extraction RPCs accept service_role in request.jwt.claims'
 );
@@ -275,7 +275,7 @@ select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 select set_config('request.headers', '{"apikey":"test-dataset-extraction-service-key"}', true);
 
 select is(
-  public.cmd_dataset_extraction_claim(1, 300, 5)->>'ok',
+  api.cmd_dataset_extraction_claim(1, 300, 5)->>'ok',
   'true',
   'dataset extraction RPCs accept project_secret_key apikey headers'
 );
@@ -283,13 +283,13 @@ select is(
 select set_config('request.headers', '{"authorization":"Bearer test-dataset-extraction-service-key"}', true);
 
 select is(
-  public.cmd_dataset_extraction_ack(array[]::bigint[])->>'ok',
+  api.cmd_dataset_extraction_ack(array[]::bigint[])->>'ok',
   'true',
   'dataset extraction RPCs accept project_secret_key authorization headers'
 );
 
 select is(
-  public.cmd_dataset_extraction_record_failure(
+  api.cmd_dataset_extraction_record_failure(
     999001,
     1,
     'service auth smoke',
@@ -327,7 +327,7 @@ select set_config('request.jwt.claim.role', 'service_role', true);
 
 do $$
 begin
-  perform public.cmd_dataset_extraction_claim(10, 300, 5);
+  perform api.cmd_dataset_extraction_claim(10, 300, 5);
 end
 $$;
 

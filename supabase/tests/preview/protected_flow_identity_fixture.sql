@@ -470,14 +470,14 @@ begin
   end if;
 
   foreach function_signature in array array[
-    'public.cmd_dataset_flow_identity_capture_attest_guarded(jsonb)',
-    'public.cmd_dataset_flow_identity_scope_preflight_guarded(jsonb)',
-    'public.cmd_dataset_flow_identity_process_rewrite_guarded(uuid,jsonb,jsonb)',
-    'public.cmd_dataset_flow_identity_scope_read(uuid)',
-    'public.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb,jsonb)',
-    'public.cmd_dataset_flow_identity_scope_recover_guarded(uuid,jsonb)',
-    'public.cmd_dataset_flow_identity_scope_lookup(jsonb)',
-    'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'
+    'api.cmd_dataset_flow_identity_capture_attest_guarded(jsonb)',
+    'api.cmd_dataset_flow_identity_scope_preflight_guarded(jsonb)',
+    'api.cmd_dataset_flow_identity_process_rewrite_guarded(uuid,jsonb,jsonb)',
+    'api.cmd_dataset_flow_identity_scope_read(uuid)',
+    'api.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb,jsonb)',
+    'api.cmd_dataset_flow_identity_scope_recover_guarded(uuid,jsonb)',
+    'api.cmd_dataset_flow_identity_scope_lookup(jsonb)',
+    'api.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'
   ] loop
     if to_regprocedure(function_signature) is null
       or has_function_privilege('anon', function_signature, 'EXECUTE')
@@ -526,7 +526,7 @@ begin
   end if;
 
   if exists (
-    select 1 from public.command_audit_log as audit
+    select 1 from private.command_audit_log as audit
     where audit.command = 'preview_e2e_flow_identity_fixture'
       and audit.actor_user_id = config.actor_user_id
       and audit.target_table = 'preview_e2e_flow_identity'
@@ -706,7 +706,7 @@ begin
 end
 $fixture_assertions$;
 
-insert into public.command_audit_log (
+insert into private.command_audit_log (
   command, actor_user_id, target_table, target_id, target_version, payload
 )
 select

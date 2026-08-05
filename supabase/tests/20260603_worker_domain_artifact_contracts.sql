@@ -25,13 +25,13 @@ select ok(
 );
 
 select has_view(
-  'public',
+  'private',
   'worker_domain_traceability_cutoffs',
   'worker domain traceability cutoff contract view exists'
 );
 
 select has_view(
-  'public',
+  'util',
   'worker_domain_traceability_violations',
   'worker domain traceability violation audit view exists'
 );
@@ -46,12 +46,12 @@ select ok(
 );
 
 select ok(
-  has_table_privilege('service_role', 'public.worker_domain_traceability_cutoffs', 'SELECT'),
+  has_table_privilege('service_role', 'private.worker_domain_traceability_cutoffs', 'SELECT'),
   'service_role can read worker domain traceability cutoffs'
 );
 
 select ok(
-  has_table_privilege('service_role', 'public.worker_domain_traceability_violations', 'SELECT'),
+  has_table_privilege('service_role', 'util.worker_domain_traceability_violations', 'SELECT'),
   'service_role can read worker domain traceability violations'
 );
 
@@ -70,12 +70,20 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 
 select ok(
-  not has_table_privilege('authenticated', 'public.worker_domain_traceability_cutoffs', 'SELECT'),
+  not has_table_privilege(
+    'authenticated',
+    (select c.oid from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'private' and c.relname = 'worker_domain_traceability_cutoffs'),
+    'SELECT'
+  ),
   'authenticated users cannot read worker domain traceability cutoffs'
 );
 
 select ok(
-  not has_table_privilege('authenticated', 'public.worker_domain_traceability_violations', 'SELECT'),
+  not has_table_privilege(
+    'authenticated',
+    (select c.oid from pg_class c join pg_namespace n on n.oid = c.relnamespace where n.nspname = 'util' and c.relname = 'worker_domain_traceability_violations'),
+    'SELECT'
+  ),
   'authenticated users cannot read worker domain traceability violations'
 );
 
@@ -86,8 +94,8 @@ select set_config('request.jwt.claim.role', 'service_role', true);
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
 select ok(
-  obj_description('public.lca_package_artifacts'::regclass, 'pg_class') like '%domain artifact%'
-  and obj_description('public.lca_package_artifacts'::regclass, 'pg_class') like '%not a task lifecycle/job table%',
+  obj_description('private.lca_package_artifacts'::regclass, 'pg_class') like '%domain artifact%'
+  and obj_description('private.lca_package_artifacts'::regclass, 'pg_class') like '%not a task lifecycle/job table%',
   'package artifact table comment distinguishes domain artifacts from job lifecycle'
 );
 
@@ -98,7 +106,7 @@ select ok(
 );
 
 select is(
-  (select count(*)::integer from public.worker_domain_traceability_cutoffs),
+  (select count(*)::integer from private.worker_domain_traceability_cutoffs),
   10,
   'traceability cutoff contract covers all worker-produced domain tables and documented exceptions'
 );
@@ -106,14 +114,14 @@ select is(
 select is(
   (
     select traceability_required
-    from public.worker_domain_traceability_cutoffs
+    from private.worker_domain_traceability_cutoffs
     where domain_source = 'lca_network_snapshots'
   ),
   false,
   'network snapshots are documented as a traceability exception'
 );
 
-insert into public.worker_jobs (
+insert into private.worker_jobs (
   id,
   job_kind,
   worker_runtime,
@@ -204,7 +212,7 @@ insert into public.worker_jobs (
     '2026-06-03 14:00:00+00'
   );
 
-insert into public.lca_network_snapshots (
+insert into private.lca_network_snapshots (
   id,
   scope,
   process_filter,
@@ -224,7 +232,7 @@ insert into public.lca_network_snapshots (
   '2026-06-03 14:00:00+00'
 );
 
-insert into public.lca_results (
+insert into private.lca_results (
   id,
   job_id,
   worker_job_id,
@@ -264,7 +272,7 @@ insert into public.lca_results (
     '2026-06-03 14:00:00+00'
   );
 
-insert into public.lca_result_cache (
+insert into private.lca_result_cache (
   id,
   scope,
   snapshot_id,
@@ -294,7 +302,7 @@ insert into public.lca_result_cache (
   '2026-06-03 14:00:00+00'
 );
 
-insert into public.lca_latest_all_unit_results (
+insert into private.lca_latest_all_unit_results (
   id,
   snapshot_id,
   job_id,
@@ -324,7 +332,7 @@ insert into public.lca_latest_all_unit_results (
   '2026-06-03 14:00:00+00'
 );
 
-insert into public.lca_factorization_registry (
+insert into private.lca_factorization_registry (
   id,
   scope,
   snapshot_id,
@@ -352,7 +360,7 @@ insert into public.lca_factorization_registry (
   '2026-06-03 14:00:00+00'
 );
 
-insert into public.lca_package_artifacts (
+insert into private.lca_package_artifacts (
   id,
   job_id,
   worker_job_id,
@@ -455,7 +463,7 @@ insert into public.lca_package_artifacts (
     '2026-05-01 00:00:00+00'
   );
 
-insert into public.lca_package_export_items (
+insert into private.lca_package_export_items (
   id,
   job_id,
   worker_job_id,
@@ -492,7 +500,7 @@ insert into public.lca_package_export_items (
     '2026-05-01 00:00:00+00'
   );
 
-insert into public.lca_package_request_cache (
+insert into private.lca_package_request_cache (
   id,
   requested_by,
   operation,
@@ -538,7 +546,7 @@ insert into public.lca_package_request_cache (
     '2026-05-01 00:00:00+00'
   );
 
-insert into public.dataset_review_submit_requests (
+insert into private.dataset_review_submit_requests (
   id,
   dataset_table,
   dataset_id,
@@ -568,7 +576,7 @@ insert into public.dataset_review_submit_requests (
   '2026-06-03 14:00:00+00'
 );
 
-insert into public.dataset_review_submit_gate_runs (
+insert into private.dataset_review_submit_gate_runs (
   id,
   dataset_table,
   dataset_id,
@@ -601,7 +609,7 @@ insert into public.dataset_review_submit_gate_runs (
 select is(
   (
     select count(*)::integer
-    from public.worker_domain_traceability_violations
+    from util.worker_domain_traceability_violations
     where domain_id in (
       '98200000-0000-4000-8000-000000000102',
       '98200000-0000-4000-8000-000000000103',
@@ -620,7 +628,7 @@ select is(
 
 select ok(
   exists (
-    select 1 from public.worker_domain_traceability_violations
+    select 1 from util.worker_domain_traceability_violations
     where domain_source = 'lca_results'
       and domain_id = '98200000-0000-4000-8000-000000000102'
       and violation_code = 'missing_worker_job_id'
@@ -630,7 +638,7 @@ select ok(
 
 select ok(
   exists (
-    select 1 from public.worker_domain_traceability_violations
+    select 1 from util.worker_domain_traceability_violations
     where domain_source = 'lca_result_cache'
       and domain_id = '98200000-0000-4000-8000-000000000103'
       and violation_code = 'missing_worker_job_id'
@@ -640,7 +648,7 @@ select ok(
 
 select ok(
   exists (
-    select 1 from public.worker_domain_traceability_violations
+    select 1 from util.worker_domain_traceability_violations
     where domain_source = 'lca_latest_all_unit_results'
       and domain_id = '98200000-0000-4000-8000-000000000104'
       and violation_code = 'missing_worker_job_id'
@@ -650,7 +658,7 @@ select ok(
 
 select ok(
   exists (
-    select 1 from public.worker_domain_traceability_violations
+    select 1 from util.worker_domain_traceability_violations
     where domain_source = 'lca_factorization_registry'
       and domain_id = '98200000-0000-4000-8000-000000000105'
       and violation_code = 'missing_prepared_worker_job_id'
@@ -660,7 +668,7 @@ select ok(
 
 select ok(
   exists (
-    select 1 from public.worker_domain_traceability_violations
+    select 1 from util.worker_domain_traceability_violations
     where domain_source = 'lca_package_artifacts'
       and domain_id = '98200000-0000-4000-8000-000000000301'
       and violation_code = 'missing_worker_job_id'
@@ -670,7 +678,7 @@ select ok(
 
 select ok(
   exists (
-    select 1 from public.worker_domain_traceability_violations
+    select 1 from util.worker_domain_traceability_violations
     where domain_source = 'lca_package_export_items'
       and domain_id = '98200000-0000-4000-8000-000000000401'
       and violation_code = 'missing_worker_job_id'
@@ -680,7 +688,7 @@ select ok(
 
 select ok(
   exists (
-    select 1 from public.worker_domain_traceability_violations
+    select 1 from util.worker_domain_traceability_violations
     where domain_source = 'lca_package_request_cache'
       and domain_id = '98200000-0000-4000-8000-000000000403'
       and violation_code = 'missing_worker_job_id'
@@ -690,7 +698,7 @@ select ok(
 
 select ok(
   exists (
-    select 1 from public.worker_domain_traceability_violations
+    select 1 from util.worker_domain_traceability_violations
     where domain_source = 'dataset_review_submit_requests'
       and domain_id = '98200000-0000-4000-8000-000000000601'
       and violation_code = 'missing_gate_worker_job_id'
@@ -700,7 +708,7 @@ select ok(
 
 select ok(
   exists (
-    select 1 from public.worker_domain_traceability_violations
+    select 1 from util.worker_domain_traceability_violations
     where domain_source = 'dataset_review_submit_gate_runs'
       and domain_id = '98200000-0000-4000-8000-000000000603'
       and violation_code = 'missing_worker_job_id'
@@ -711,7 +719,7 @@ select ok(
 select is(
   (
     select count(*)::integer
-    from public.worker_domain_traceability_violations
+    from util.worker_domain_traceability_violations
     where domain_id = '98200000-0000-4000-8000-000000000303'
   ),
   0,
@@ -721,7 +729,7 @@ select is(
 select is(
   (
     select count(*)::integer
-    from public.worker_domain_traceability_violations
+    from util.worker_domain_traceability_violations
     where domain_id = '98200000-0000-4000-8000-000000000302'
   ),
   0,
@@ -771,7 +779,7 @@ select is(
 select is(
   (
     select status
-    from public.lca_package_artifacts
+    from private.lca_package_artifacts
     where id = '98200000-0000-4000-8000-000000000304'
   ),
   'ready',
@@ -781,7 +789,7 @@ select is(
 select is(
   (
     select count(*)::integer
-    from public.lca_package_request_cache
+    from private.lca_package_request_cache
     where id = '98200000-0000-4000-8000-000000000404'
   ),
   1,
@@ -791,7 +799,7 @@ select is(
 select is(
   (
     select count(*)::integer
-    from public.lca_package_export_items
+    from private.lca_package_export_items
     where id = '98200000-0000-4000-8000-000000000402'
   ),
   1,
@@ -842,7 +850,7 @@ select ok(
   (
     select status = 'deleted'
       and metadata->>'retentionAction' = 'package_metadata_retention_gc'
-    from public.lca_package_artifacts
+    from private.lca_package_artifacts
     where id = '98200000-0000-4000-8000-000000000304'
   ),
   'retention apply marks eligible artifacts deleted and records GC metadata'
@@ -851,7 +859,7 @@ select ok(
 select is(
   (
     select count(*)::integer
-    from public.lca_package_request_cache
+    from private.lca_package_request_cache
     where id = '98200000-0000-4000-8000-000000000404'
   ),
   0,
@@ -861,7 +869,7 @@ select is(
 select is(
   (
     select count(*)::integer
-    from public.lca_package_export_items
+    from private.lca_package_export_items
     where id = '98200000-0000-4000-8000-000000000402'
   ),
   0,
@@ -871,7 +879,7 @@ select is(
 select is(
   (
     select status
-    from public.lca_package_artifacts
+    from private.lca_package_artifacts
     where id = '98200000-0000-4000-8000-000000000305'
   ),
   'ready',

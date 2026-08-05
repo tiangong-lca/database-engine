@@ -270,42 +270,42 @@ select hasnt_function(
   'the former two-argument finalize surface is no longer public'
 );
 select function_privs_are(
-  'public', 'cmd_dataset_flow_identity_capture_attest_guarded',
+  'api', 'cmd_dataset_flow_identity_capture_attest_guarded',
   array['jsonb'], 'authenticated', array['EXECUTE'],
   'capture attestation is executable only through the authenticated role'
 );
 select function_privs_are(
-  'public', 'cmd_dataset_flow_identity_scope_preflight_guarded',
+  'api', 'cmd_dataset_flow_identity_scope_preflight_guarded',
   array['jsonb'], 'authenticated', array['EXECUTE'],
   'v2 preflight is executable through the authenticated role'
 );
 select function_privs_are(
-  'public', 'cmd_dataset_flow_identity_process_rewrite_guarded',
+  'api', 'cmd_dataset_flow_identity_process_rewrite_guarded',
   array['uuid', 'jsonb', 'jsonb'], 'authenticated', array['EXECUTE'],
   'v2 process rewrite is executable through the authenticated role'
 );
 select function_privs_are(
-  'public', 'cmd_dataset_flow_identity_scope_read',
+  'api', 'cmd_dataset_flow_identity_scope_read',
   array['uuid'], 'authenticated', array['EXECUTE'],
   'v2 scope read is executable through the authenticated role'
 );
 select function_privs_are(
-  'public', 'cmd_dataset_flow_identity_scope_finalize_guarded',
+  'api', 'cmd_dataset_flow_identity_scope_finalize_guarded',
   array['uuid', 'jsonb', 'jsonb'], 'authenticated', array['EXECUTE'],
   'v2 finalize is executable through the authenticated role'
 );
 select function_privs_are(
-  'public', 'cmd_dataset_flow_identity_scope_recover_guarded',
+  'api', 'cmd_dataset_flow_identity_scope_recover_guarded',
   array['uuid', 'jsonb'], 'authenticated', array['EXECUTE'],
   'fresh scope recovery is executable through the authenticated role'
 );
 select function_privs_are(
-  'public', 'cmd_dataset_flow_identity_scope_lookup',
+  'api', 'cmd_dataset_flow_identity_scope_lookup',
   array['jsonb'], 'authenticated', array['EXECUTE'],
   'lost-response scope lookup is executable through the authenticated role'
 );
 select function_privs_are(
-  'public', 'cmd_dataset_flow_identity_scope_cancel_guarded',
+  'api', 'cmd_dataset_flow_identity_scope_cancel_guarded',
   array['uuid', 'jsonb'], 'authenticated', array['EXECUTE'],
   'v2 zero-write cancel is executable through the authenticated role'
 );
@@ -313,14 +313,14 @@ select is(
   (
     select count(*)::integer
     from unnest(array[
-      'public.cmd_dataset_flow_identity_capture_attest_guarded(jsonb)'::regprocedure,
-      'public.cmd_dataset_flow_identity_scope_preflight_guarded(jsonb)'::regprocedure,
-      'public.cmd_dataset_flow_identity_process_rewrite_guarded(uuid,jsonb,jsonb)'::regprocedure,
-      'public.cmd_dataset_flow_identity_scope_read(uuid)'::regprocedure,
-      'public.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb,jsonb)'::regprocedure,
-      'public.cmd_dataset_flow_identity_scope_recover_guarded(uuid,jsonb)'::regprocedure,
-      'public.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure,
-      'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
+      'api.cmd_dataset_flow_identity_capture_attest_guarded(jsonb)'::regprocedure,
+      'api.cmd_dataset_flow_identity_scope_preflight_guarded(jsonb)'::regprocedure,
+      'api.cmd_dataset_flow_identity_process_rewrite_guarded(uuid,jsonb,jsonb)'::regprocedure,
+      'api.cmd_dataset_flow_identity_scope_read(uuid)'::regprocedure,
+      'api.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb,jsonb)'::regprocedure,
+      'api.cmd_dataset_flow_identity_scope_recover_guarded(uuid,jsonb)'::regprocedure,
+      'api.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure,
+      'api.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
     ]) as function_oid(oid)
     where has_function_privilege('anon', function_oid.oid, 'EXECUTE')
        or has_function_privilege('service_role', function_oid.oid, 'EXECUTE')
@@ -336,14 +336,14 @@ select ok(
     )
     from pg_proc as function
     where function.oid = any(array[
-      'public.cmd_dataset_flow_identity_capture_attest_guarded(jsonb)'::regprocedure,
-      'public.cmd_dataset_flow_identity_scope_preflight_guarded(jsonb)'::regprocedure,
-      'public.cmd_dataset_flow_identity_process_rewrite_guarded(uuid,jsonb,jsonb)'::regprocedure,
-      'public.cmd_dataset_flow_identity_scope_read(uuid)'::regprocedure,
-      'public.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb,jsonb)'::regprocedure,
-      'public.cmd_dataset_flow_identity_scope_recover_guarded(uuid,jsonb)'::regprocedure,
-      'public.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure,
-      'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
+      'api.cmd_dataset_flow_identity_capture_attest_guarded(jsonb)'::regprocedure,
+      'api.cmd_dataset_flow_identity_scope_preflight_guarded(jsonb)'::regprocedure,
+      'api.cmd_dataset_flow_identity_process_rewrite_guarded(uuid,jsonb,jsonb)'::regprocedure,
+      'api.cmd_dataset_flow_identity_scope_read(uuid)'::regprocedure,
+      'api.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb,jsonb)'::regprocedure,
+      'api.cmd_dataset_flow_identity_scope_recover_guarded(uuid,jsonb)'::regprocedure,
+      'api.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure,
+      'api.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
     ]::oid[])
   ),
   'every public v2 RPC is security definer with an empty search_path'
@@ -430,30 +430,30 @@ select ok(
   (select provolatile = 's'
    from pg_proc
    where oid =
-     'public.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure)
+     'api.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure)
   and pg_get_functiondef(
-    'public.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure
+    'api.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure
   ) not ilike '%insert into%'
   and pg_get_functiondef(
-    'public.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure
+    'api.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure
   ) not ilike '%update %'
   and pg_get_functiondef(
-    'public.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure
+    'api.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure
   ) ilike '%''execution_permit'', null%',
   'scope lookup is STABLE, write-free, and always returns a null permit'
 );
 select ok(
   pg_get_functiondef(
-    'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
+    'api.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
   ) like '%v_scope.status <> ''sealed''%'
   and pg_get_functiondef(
-    'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
+    'api.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
   ) like '%v_completed_count <> 0%'
   and pg_get_functiondef(
-    'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
+    'api.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
   ) like '%v_scope.status = ''cancelled''%'
   and pg_get_functiondef(
-    'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
+    'api.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure
   ) like '%v_audit_count <> 1%',
   'v2 cancel is sealed-zero-write-only and exact replay verifies one audit'
 );
@@ -639,7 +639,7 @@ begin
   select coalesce(
     jsonb_agg(to_jsonb(audit) order by audit.id), '[]'::jsonb
   ) into v_rows
-  from public.command_audit_log as audit
+  from private.command_audit_log as audit
   where audit.command like 'cmd_dataset_flow_identity_%';
   return v_state || jsonb_build_object('command_audit_log', v_rows);
 end;
@@ -656,7 +656,7 @@ set local role anon;
 select ok(
   not has_function_privilege(
     current_user,
-    'public.cmd_dataset_flow_identity_capture_attest_guarded(jsonb)'::regprocedure,
+    'api.cmd_dataset_flow_identity_capture_attest_guarded(jsonb)'::regprocedure,
     'EXECUTE'
   ),
   'anon cannot execute capture attestation'
@@ -664,7 +664,7 @@ select ok(
 select ok(
   not has_function_privilege(
     current_user,
-    'public.cmd_dataset_flow_identity_scope_preflight_guarded(jsonb)'::regprocedure,
+    'api.cmd_dataset_flow_identity_scope_preflight_guarded(jsonb)'::regprocedure,
     'EXECUTE'
   ),
   'anon cannot execute scope preflight'
@@ -672,7 +672,7 @@ select ok(
 select ok(
   not has_function_privilege(
     current_user,
-    'public.cmd_dataset_flow_identity_process_rewrite_guarded(uuid,jsonb,jsonb)'::regprocedure,
+    'api.cmd_dataset_flow_identity_process_rewrite_guarded(uuid,jsonb,jsonb)'::regprocedure,
     'EXECUTE'
   ),
   'anon cannot execute a process rewrite'
@@ -680,7 +680,7 @@ select ok(
 select ok(
   not has_function_privilege(
     current_user,
-    'public.cmd_dataset_flow_identity_scope_read(uuid)'::regprocedure,
+    'api.cmd_dataset_flow_identity_scope_read(uuid)'::regprocedure,
     'EXECUTE'
   ),
   'anon cannot read a scope'
@@ -688,7 +688,7 @@ select ok(
 select ok(
   not has_function_privilege(
     current_user,
-    'public.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb,jsonb)'::regprocedure,
+    'api.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb,jsonb)'::regprocedure,
     'EXECUTE'
   ),
   'anon cannot finalize a scope'
@@ -696,7 +696,7 @@ select ok(
 select ok(
   not has_function_privilege(
     current_user,
-    'public.cmd_dataset_flow_identity_scope_recover_guarded(uuid,jsonb)'::regprocedure,
+    'api.cmd_dataset_flow_identity_scope_recover_guarded(uuid,jsonb)'::regprocedure,
     'EXECUTE'
   ),
   'anon cannot recover a scope'
@@ -704,7 +704,7 @@ select ok(
 select ok(
   not has_function_privilege(
     current_user,
-    'public.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure,
+    'api.cmd_dataset_flow_identity_scope_lookup(jsonb)'::regprocedure,
     'EXECUTE'
   ),
   'anon cannot look up a scope'
@@ -712,7 +712,7 @@ select ok(
 select ok(
   not has_function_privilege(
     current_user,
-    'public.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure,
+    'api.cmd_dataset_flow_identity_scope_cancel_guarded(uuid,jsonb)'::regprocedure,
     'EXECUTE'
   ),
   'anon cannot cancel a scope'

@@ -71,7 +71,7 @@ values
     false
   );
 
-insert into public.users (id, raw_user_meta_data)
+insert into private.users (id, raw_user_meta_data)
 values
   (
     '13000000-0000-0000-0000-000000000001',
@@ -82,11 +82,11 @@ values
     '{"email":"gate-outsider@example.com"}'::jsonb
   );
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values
   ('23000000-0000-0000-0000-000000000001', '{"title":"Gate Team"}'::jsonb, 1, false);
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values
   ('13000000-0000-0000-0000-000000000001', '23000000-0000-0000-0000-000000000001', 'owner');
 
@@ -139,7 +139,7 @@ create temporary table review_submit_gate_ids (
 grant all on review_submit_gate_ids to public;
 
 select is(
-  public.cmd_dataset_review_submit_gate(
+  api.cmd_dataset_review_submit_gate(
     p_table => 'processes',
     p_id => '33000000-0000-0000-0000-000000000001',
     p_version => '01.00.000',
@@ -156,7 +156,7 @@ insert into review_submit_gate_ids (label, gate_run_id)
 select
   'passed_process',
   (
-    public.cmd_dataset_review_submit_gate(
+    api.cmd_dataset_review_submit_gate(
       p_table => 'processes',
       p_id => '33000000-0000-0000-0000-000000000001',
       p_version => '01.00.000',
@@ -168,7 +168,7 @@ select
 
 select is(
   (
-    public.cmd_dataset_review_submit_gate(
+    api.cmd_dataset_review_submit_gate(
       p_table => 'processes',
       p_id => '33000000-0000-0000-0000-000000000001',
       p_version => '01.00.000',
@@ -183,7 +183,7 @@ select is(
 
 select ok(
   (
-    public.cmd_dataset_review_submit_gate(
+    api.cmd_dataset_review_submit_gate(
       p_table => 'processes',
       p_id => '33000000-0000-0000-0000-000000000001',
       p_version => '01.00.000',
@@ -197,7 +197,7 @@ select ok(
 
 select is(
   (
-    public.cmd_dataset_review_submit_gate(
+    api.cmd_dataset_review_submit_gate(
       p_table => 'processes',
       p_id => '33000000-0000-0000-0000-000000000001',
       p_version => '01.00.000',
@@ -211,7 +211,7 @@ select is(
 
 select is(
   (
-    public.cmd_dataset_review_submit_gate(
+    api.cmd_dataset_review_submit_gate(
       p_table => 'processes',
       p_id => '33000000-0000-0000-0000-000000000001',
       p_version => '01.00.000',
@@ -230,7 +230,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '13000000-0000-0000-0000-000000000002', true);
 
 select is(
-  public.cmd_dataset_review_submit_gate(
+  api.cmd_dataset_review_submit_gate(
     p_table => 'processes',
     p_id => '33000000-0000-0000-0000-000000000001',
     p_version => '01.00.000',
@@ -245,7 +245,7 @@ reset role;
 set local role service_role;
 
 select is(
-  public.cmd_dataset_review_submit_gate_record_result(
+  private.cmd_dataset_review_submit_gate_record_result(
     p_gate_run_id => (select gate_run_id from review_submit_gate_ids where label = 'passed_process'),
     p_status => 'passed',
     p_calculator_report => '{"reportId":"passed-report","generatedAt":"2026-05-25T00:00:00Z"}'::jsonb,
@@ -258,8 +258,8 @@ select is(
 select is(
   (
     select worker_job.status
-    from public.dataset_review_submit_gate_runs as gate_run
-    join public.worker_jobs as worker_job
+    from private.dataset_review_submit_gate_runs as gate_run
+    join private.worker_jobs as worker_job
       on worker_job.id = gate_run.worker_job_id
     where gate_run.id = (select gate_run_id from review_submit_gate_ids where label = 'passed_process')
   ),
@@ -273,7 +273,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '13000000-0000-0000-0000-000000000001', true);
 
 select is(
-  public.cmd_review_submit(
+  api.cmd_review_submit(
     'processes',
     '33000000-0000-0000-0000-000000000001',
     '01.00.000',
@@ -284,7 +284,7 @@ select is(
 );
 
 select is(
-  public.cmd_review_submit(
+  api.cmd_review_submit(
     p_table => 'processes',
     p_id => '33000000-0000-0000-0000-000000000001',
     p_version => '01.00.000',
@@ -299,7 +299,7 @@ select is(
 );
 
 select is(
-  public.cmd_review_submit(
+  api.cmd_review_submit(
     p_table => 'processes',
     p_id => '33000000-0000-0000-0000-000000000001',
     p_version => '01.00.000',
@@ -314,7 +314,7 @@ select is(
 );
 
 select is(
-  public.cmd_review_submit(
+  api.cmd_review_submit(
     p_table => 'processes',
     p_id => '33000000-0000-0000-0000-000000000001',
     p_version => '01.00.000',
@@ -344,7 +344,7 @@ reset role;
 select ok(
   exists (
     select 1
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_review_submit'
       and target_id = '33000000-0000-0000-0000-000000000001'
       and payload->>'review_submit_gate_run_id' = (
@@ -363,7 +363,7 @@ insert into review_submit_gate_ids (label, gate_run_id)
 select
   'blocked_process',
   (
-    public.cmd_dataset_review_submit_gate(
+    api.cmd_dataset_review_submit_gate(
       p_table => 'processes',
       p_id => '33000000-0000-0000-0000-000000000002',
       p_version => '01.00.000',
@@ -377,7 +377,7 @@ reset role;
 set local role service_role;
 
 select is(
-  public.cmd_dataset_review_submit_gate_record_result(
+  private.cmd_dataset_review_submit_gate_record_result(
     p_gate_run_id => (select gate_run_id from review_submit_gate_ids where label = 'blocked_process'),
     p_status => 'blocked',
     p_calculator_report => '{"reportId":"blocked-report","generatedAt":"2026-05-25T00:00:00Z"}'::jsonb,
@@ -393,7 +393,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '13000000-0000-0000-0000-000000000001', true);
 
 select is(
-  public.cmd_review_submit(
+  api.cmd_review_submit(
     p_table => 'processes',
     p_id => '33000000-0000-0000-0000-000000000002',
     p_version => '01.00.000',
@@ -409,7 +409,7 @@ select is(
 
 select is(
   (
-    public.cmd_review_submit(
+    api.cmd_review_submit(
       p_table => 'processes',
       p_id => '33000000-0000-0000-0000-000000000002',
       p_version => '01.00.000',
@@ -427,7 +427,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.reviews
+    from private.reviews
     where data_id = '33000000-0000-0000-0000-000000000002'
       and data_version = '01.00.000'
   ),
@@ -437,7 +437,7 @@ select is(
 
 select is(
   (
-    public.cmd_dataset_review_submit_gate(
+    api.cmd_dataset_review_submit_gate(
       p_table => 'processes',
       p_id => '33000000-0000-0000-0000-000000000002',
       p_version => '01.00.000',
@@ -455,7 +455,7 @@ reset role;
 select is(
   (
     select count(*)::text
-    from public.dataset_review_submit_gate_runs
+    from private.dataset_review_submit_gate_runs
     where status in ('queued', 'running')
       and worker_job_id is null
   ),

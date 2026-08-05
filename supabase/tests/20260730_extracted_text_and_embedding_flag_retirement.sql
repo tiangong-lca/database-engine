@@ -214,7 +214,7 @@ select is(
     select count(*)::integer
     from pg_proc as routine
     join pg_namespace as routine_schema on routine_schema.oid = routine.pronamespace
-    where routine_schema.nspname = 'public'
+    where routine_schema.nspname = 'api'
       and routine.proname like 'hybrid_search_%_v2'
       and routine.prosrc like '%private.hybrid_search_%'
       and routine.prosrc not like '%0.0::double precision%'

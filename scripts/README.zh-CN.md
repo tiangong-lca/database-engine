@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-31
-lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
-lastReviewedNote: "已为 Issue #323 与 #329 复核：记录本地 Root/Reference Review 备份/切换 runner，以及与 Worker 精确兼容的隔离数据库和存储资格验证入口，不改变 schema workspace 行为。"
+lastReviewedAt: 2026-08-05
+lastReviewedCommit: df8253bfb3499b1f8a6d7d84d321bd5b7cc67752
+lastReviewedNote: "已为 Issue #422 复核：记录全量 Schema 切换的存量升级验证入口。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -46,6 +46,20 @@ related:
 本地迁移输出和审计 JSONL 文件应写入 `_artifacts/`，该目录已被 Git 忽略。
 
 ## 脚本列表
+
+### `test_full_schema_cutover_upgrade.sh`
+
+把本地数据库重建到全量 Schema 切换前的最后一个 migration，写入一条代表性业务数据，
+快照关系与函数身份、触发器、RLS 策略、约束及精确行数，再应用切换 migration，
+验证所有对象和数据均被完整保留。
+
+用法：
+
+```bash
+scripts/test_full_schema_cutover_upgrade.sh
+```
+
+此脚本仅用于本地验证，并会重置本地 Supabase 数据库。
 
 ### `data_migrations/tidas_schema_202606/runner.py`
 

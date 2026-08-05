@@ -71,7 +71,7 @@ values
     false
   );
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values
   ('a1000000-0000-0000-0000-000000000001', '{"email":"create-version-owner@example.com"}'::jsonb, null),
   ('a1000000-0000-0000-0000-000000000002', '{"email":"create-version-other@example.com"}'::jsonb, null);
@@ -200,7 +200,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', 'a1000000-0000-0000-0000-000000000001', true);
 
 select is(
-  public.cmd_dataset_create_version(
+  api.cmd_dataset_create_version(
     'processes',
     'a2000000-0000-0000-0000-000000000001',
     '01.01.000',
@@ -278,7 +278,7 @@ reset role;
 select is(
   (
     select target_version
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_create_version'
       and target_id = 'a2000000-0000-0000-0000-000000000001'
     order by created_at desc
@@ -291,7 +291,7 @@ select is(
 set local role authenticated;
 
 select is(
-  public.cmd_dataset_create_version(
+  api.cmd_dataset_create_version(
     'contacts',
     'a3000000-0000-0000-0000-000000000001',
     '01.99.999',
@@ -325,7 +325,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_create_version(
+  api.cmd_dataset_create_version(
     'sources',
     'a4000000-0000-0000-0000-000000000001',
     '01.00.000',
@@ -339,7 +339,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_create_version(
+  api.cmd_dataset_create_version(
     'sources',
     'a4000000-0000-0000-0000-000000000001',
     null,
@@ -353,7 +353,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_create_version(
+  api.cmd_dataset_create_version(
     'contacts',
     'a3000000-0000-0000-0000-000000000001',
     '01.99.999',
@@ -367,7 +367,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_create_version(
+  api.cmd_dataset_create_version(
     'lifecyclemodels',
     'a6000000-0000-0000-0000-000000000001',
     '01.00.000',
@@ -381,7 +381,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_create_version(
+  api.cmd_dataset_create_version(
     'unknown',
     'a7000000-0000-0000-0000-000000000001',
     null,
@@ -395,7 +395,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_create_version(
+  api.cmd_dataset_create_version(
     'contacts',
     'a3000000-0000-0000-0000-000000000001',
     '02.00.000',
@@ -408,8 +408,11 @@ select is(
   'jsonOrdered is required'
 );
 
+reset role;
+set local role service_role;
+
 select is(
-  public.save_lifecycle_model_bundle(
+  private.save_lifecycle_model_bundle(
     '{
       "mode": "create",
       "modelId": "a8000000-0000-0000-0000-000000000001",
@@ -470,6 +473,8 @@ select is(
   '01.00.001',
   'save_lifecycle_model_bundle allocates the next lifecycle model version when requested'
 );
+
+set local role authenticated;
 
 select is(
   (

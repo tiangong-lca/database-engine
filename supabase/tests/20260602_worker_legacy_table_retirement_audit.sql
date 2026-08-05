@@ -6,13 +6,13 @@ set local search_path = extensions, public, auth;
 select plan(21);
 
 select has_view(
-  'public',
+  'util',
   'worker_legacy_table_retirement_blockers',
   'legacy table retirement blocker audit view exists'
 );
 
 select has_table(
-  'public',
+  'private',
   'dataset_review_submit_requests',
   'review-submit request coordinator replacement table exists'
 );
@@ -20,7 +20,7 @@ select has_table(
 select ok(
   not has_table_privilege(
     'authenticated',
-    'public.worker_legacy_table_retirement_blockers',
+    'util.worker_legacy_table_retirement_blockers',
     'SELECT'
   ),
   'authenticated users cannot read legacy table retirement blockers'
@@ -35,7 +35,7 @@ select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 select ok(
   has_table_privilege(
     'service_role',
-    'public.worker_legacy_table_retirement_blockers',
+    'util.worker_legacy_table_retirement_blockers',
     'SELECT'
   ),
   'service_role can read legacy table retirement blockers'
@@ -44,7 +44,7 @@ select ok(
 select cmp_ok(
   (
     select count(*)
-    from public.worker_legacy_table_retirement_blockers
+    from util.worker_legacy_table_retirement_blockers
     where legacy_table = 'public.lca_jobs'
       and blocker_type = 'foreign_key'
       and is_drop_restrict_blocker
@@ -57,7 +57,7 @@ select cmp_ok(
 select cmp_ok(
   (
     select count(*)
-    from public.worker_legacy_table_retirement_blockers
+    from util.worker_legacy_table_retirement_blockers
     where legacy_table = 'public.lca_package_jobs'
       and blocker_type = 'foreign_key'
       and is_drop_restrict_blocker
@@ -70,10 +70,10 @@ select cmp_ok(
 select cmp_ok(
   (
     select count(*)
-    from public.worker_legacy_table_retirement_blockers
+    from util.worker_legacy_table_retirement_blockers
     where legacy_table = 'public.dataset_review_submit_jobs'
       and blocker_type = 'function_signature'
-      and blocker_identity like 'public.cmd_dataset_review_submit_job_payload(%'
+      and blocker_identity like 'private.cmd_dataset_review_submit_job_payload(%'
       and is_drop_restrict_blocker
   ),
   '=',
@@ -84,7 +84,7 @@ select cmp_ok(
 select cmp_ok(
   (
     select count(*)
-    from public.worker_legacy_table_retirement_blockers
+    from util.worker_legacy_table_retirement_blockers
     where blocker_type = 'dependent_view'
       and is_drop_restrict_blocker
       and legacy_table in (
@@ -101,7 +101,7 @@ select cmp_ok(
 select cmp_ok(
   (
     select count(*)
-    from public.worker_legacy_table_retirement_blockers
+    from util.worker_legacy_table_retirement_blockers
     where blocker_type = 'policy'
       and is_drop_restrict_blocker
       and legacy_table in (
@@ -118,7 +118,7 @@ select cmp_ok(
 select cmp_ok(
   (
     select count(*)
-    from public.worker_legacy_table_retirement_blockers
+    from util.worker_legacy_table_retirement_blockers
     where is_drop_restrict_blocker
       and legacy_table in (
         'public.lca_jobs',
@@ -134,7 +134,7 @@ select cmp_ok(
 select cmp_ok(
   (
     select count(*)
-    from public.worker_legacy_table_retirement_blockers
+    from util.worker_legacy_table_retirement_blockers
     where legacy_table = 'public.dataset_review_submit_jobs'
       and blocker_type = 'function_source_reference'
   ),
@@ -146,7 +146,7 @@ select cmp_ok(
 select cmp_ok(
   (
     select count(*)
-    from public.worker_legacy_table_retirement_blockers
+    from util.worker_legacy_table_retirement_blockers
     where legacy_table = 'public.lca_package_jobs'
       and blocker_type = 'function_source_reference'
   ),
@@ -158,7 +158,7 @@ select cmp_ok(
 select ok(
   not exists (
     select 1
-    from public.worker_legacy_table_retirement_blockers
+    from util.worker_legacy_table_retirement_blockers
     where legacy_table = 'public.lca_jobs'
       and details ? 'dependentColumns'
   ),
@@ -168,7 +168,7 @@ select ok(
 select is(
   (
     select count(*)::text
-    from public.worker_legacy_table_retirement_blockers
+    from util.worker_legacy_table_retirement_blockers
     where legacy_table not in (
       'public.lca_jobs',
       'public.lca_package_jobs',

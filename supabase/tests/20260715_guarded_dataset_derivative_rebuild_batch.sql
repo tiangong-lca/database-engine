@@ -31,7 +31,7 @@ select ok(
 );
 select ok(
   to_regprocedure(
-    'public.flows_derivative_rebuild_embedding_input(public.flows)'
+    'private.flows_derivative_rebuild_embedding_input(public.flows)'
   ) is not null,
   'private flow accepted-Markdown embedding input exists'
 );
@@ -192,7 +192,7 @@ select vault.create_secret(
   'project_url',
   'pgTAP guarded derivative unreachable endpoint'
 );
-delete from public.command_audit_log
+delete from private.command_audit_log
 where command in (
   'cmd_dataset_derivative_rebuild_plan_guarded',
   'cmd_dataset_derivative_rebuild_terminal'
@@ -205,7 +205,7 @@ select set_config(
 );
 set local role authenticated;
 create temporary table derivative_flow_snapshot as
-select public.cmd_dataset_derivative_rebuild_snapshot(
+select api.cmd_dataset_derivative_rebuild_snapshot(
   'flows',
   '81000000-0000-4000-8000-000000000001',
   '00.00.001'
@@ -343,7 +343,7 @@ select is(
 select is(
   (
     select count(*)::integer
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_dataset_derivative_rebuild_plan_guarded'
   ),
   0,
@@ -486,7 +486,7 @@ select is(
 
 delete from util.dataset_derivative_rebuild_requests
 where batch_id = '90000000-0000-4000-8000-000000000004';
-delete from public.command_audit_log
+delete from private.command_audit_log
 where payload->>'batch_id' = '90000000-0000-4000-8000-000000000004';
 delete from net.http_request_queue;
 
@@ -535,7 +535,7 @@ select ok(
 select is(
   (
     select count(*)::integer
-    from public.command_audit_log
+    from private.command_audit_log
     where payload->>'batch_id' = '90000000-0000-4000-8000-000000000050'
       and command = 'cmd_dataset_derivative_rebuild_plan_guarded'
   ),

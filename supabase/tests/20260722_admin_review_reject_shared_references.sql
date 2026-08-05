@@ -60,13 +60,13 @@ values (
   false
 );
 
-insert into public.users (id, raw_user_meta_data)
+insert into private.users (id, raw_user_meta_data)
 values (
   '28100000-0000-0000-0000-000000000001',
   '{"email":"issue-281-review-admin@example.com","display_name":"Issue 281 Review Admin"}'::jsonb
 );
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values (
   '28100000-0000-0000-0000-000000000001',
   '00000000-0000-0000-0000-000000000000',
@@ -192,7 +192,7 @@ values
     '[{"key":0,"id":"28130000-0000-0000-0000-000000000004"}]'::jsonb
   );
 
-insert into public.reviews (
+insert into private.reviews (
   id,
   data_id,
   data_version,
@@ -256,7 +256,7 @@ set local role authenticated;
 insert into reject_results (review_id, result)
 values (
   '28130000-0000-0000-0000-000000000001',
-  public.cmd_review_reject(
+  api.cmd_review_reject(
     'processes',
     '28130000-0000-0000-0000-000000000001',
     'reject first shared review',
@@ -270,7 +270,7 @@ select is((select state_code from public.processes where id = '28110000-0000-000
 select is((select state_code from public.flows where id = '28120000-0000-0000-0000-000000000001' and version = '01.00.000'), 20, 'a non-root reference stays under review while another pending review is active');
 select is((select state_code from public.flows where id = '28120000-0000-0000-0000-000000000002' and version = '01.00.000'), 20, 'a non-root reference stays under review while another assigned review is active');
 select is((select state_code from public.flows where id = '28120000-0000-0000-0000-000000000003' and version = '01.00.000'), 0, 'a completed historical review does not keep a non-root reference under review');
-select is((select state_code from public.reviews where id = '28130000-0000-0000-0000-000000000001'), -1, 'the rejected review row is marked rejected');
+select is((select state_code from private.reviews where id = '28130000-0000-0000-0000-000000000001'), -1, 'the rejected review row is marked rejected');
 
 select ok(
   (select result->'data'->'retained_datasets' from reject_results where review_id = '28130000-0000-0000-0000-000000000001') @>
@@ -294,7 +294,7 @@ set local role authenticated;
 insert into reject_results (review_id, result)
 values (
   '28130000-0000-0000-0000-000000000002',
-  public.cmd_review_reject(
+  api.cmd_review_reject(
     'processes',
     '28130000-0000-0000-0000-000000000002',
     'reject last pending occupant',
@@ -311,7 +311,7 @@ set local role authenticated;
 insert into reject_results (review_id, result)
 values (
   '28130000-0000-0000-0000-000000000003',
-  public.cmd_review_reject(
+  api.cmd_review_reject(
     'processes',
     '28130000-0000-0000-0000-000000000003',
     'reject last assigned occupant',
@@ -340,7 +340,7 @@ set local role authenticated;
 insert into reject_results (review_id, result)
 values (
   '28130000-0000-0000-0000-000000000004',
-  public.cmd_review_reject(
+  api.cmd_review_reject(
     'processes',
     '28130000-0000-0000-0000-000000000004',
     'reject review with unverifiable references',
@@ -375,7 +375,7 @@ select ok(
 select is(
   (
     select jsonb_array_length(payload->'unverifiable_datasets')
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_review_reject'
       and target_id = '28130000-0000-0000-0000-000000000004'
     order by created_at desc
@@ -388,7 +388,7 @@ select is(
 select is(
   (
     select payload->'active_review_state_codes'
-    from public.command_audit_log
+    from private.command_audit_log
     where command = 'cmd_review_reject'
       and target_id = '28130000-0000-0000-0000-000000000004'
     order by created_at desc

@@ -38,7 +38,7 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'exact_query_id') > 0,
+  strpos(pg_get_functiondef('api._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'exact_query_id') > 0,
   'generic simple latest search has an exact UUID fast path'
 );
 
@@ -96,16 +96,16 @@ values
     false
   );
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values
   ('a1320000-0000-0000-0000-000000000001', '{"email":"uuid-fast-owner@example.com"}'::jsonb, null),
   ('b1320000-0000-0000-0000-000000000001', '{"email":"uuid-fast-outsider@example.com"}'::jsonb, null);
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values
   ('c1320000-0000-0000-0000-000000000001', '{"name":"UUID Fast Path Team"}'::jsonb, 1, false);
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values
   ('a1320000-0000-0000-0000-000000000001', 'c1320000-0000-0000-0000-000000000001', 'owner');
 
@@ -173,43 +173,43 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', 'a1320000-0000-0000-0000-000000000001', true);
 
 select is(
-  (select version::text from public.search_flows_latest('  F1320000-0000-0000-0000-000000000001  ', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '') where id = 'f1320000-0000-0000-0000-000000000001'),
+  (select version::text from api.search_flows_latest('  F1320000-0000-0000-0000-000000000001  ', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '') where id = 'f1320000-0000-0000-0000-000000000001'),
   '01.00.002',
   'flow UUID exact search trims input, accepts uppercase, and returns the latest visible version'
 );
 
 select is(
-  (select (rank::text || ':' || total_count::text) from public.search_flows_latest('f1320000-0000-0000-0000-000000000001', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '') limit 1),
+  (select (rank::text || ':' || total_count::text) from api.search_flows_latest('f1320000-0000-0000-0000-000000000001', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '') limit 1),
   '1:1',
   'flow UUID exact search returns bounded rank and total_count'
 );
 
 select is(
-  (select count(*) from public.search_flows_latest('f1320000-0000-0000-0000', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '')),
+  (select count(*) from api.search_flows_latest('f1320000-0000-0000-0000', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '')),
   0::bigint,
   'flow UUID fragments do not use exact id search and are not in extracted_md'
 );
 
 select is(
-  (select id::text from public.search_flows_latest('uuid-fast-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '') limit 1),
+  (select id::text from api.search_flows_latest('uuid-fast-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '') limit 1),
   'f1320000-0000-0000-0000-000000000001',
   'flow non-UUID text search still works'
 );
 
 select is(
-  (select id::text from public.search_flows_latest('f1320000-0000-0000-0000-000000000002', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', 'b1320000-0000-0000-0000-000000000001') limit 1),
+  (select id::text from api.search_flows_latest('f1320000-0000-0000-0000-000000000002', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', 'b1320000-0000-0000-0000-000000000001') limit 1),
   'f1320000-0000-0000-0000-000000000002',
   'flow UUID my search uses auth.uid instead of spoofable this_user_id'
 );
 
 select is(
-  (select count(*) from public.search_flows_latest('f1320000-0000-0000-0000-000000000003', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', 'b1320000-0000-0000-0000-000000000001')),
+  (select count(*) from api.search_flows_latest('f1320000-0000-0000-0000-000000000003', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', 'b1320000-0000-0000-0000-000000000001')),
   0::bigint,
   'flow UUID my search cannot read another user row'
 );
 
 select is(
-  (select id::text from public.search_flows_latest('f1320000-0000-0000-0000-000000000004', '{}'::jsonb, '{}'::jsonb, 10, 1, 'te', '', 'c1320000-0000-0000-0000-000000000001') limit 1),
+  (select id::text from api.search_flows_latest('f1320000-0000-0000-0000-000000000004', '{}'::jsonb, '{}'::jsonb, 10, 1, 'te', '', 'c1320000-0000-0000-0000-000000000001') limit 1),
   'f1320000-0000-0000-0000-000000000004',
   'flow UUID te search returns team data for a member'
 );
@@ -217,7 +217,7 @@ select is(
 select set_config('request.jwt.claim.sub', 'b1320000-0000-0000-0000-000000000001', true);
 
 select is(
-  (select count(*) from public.search_flows_latest('f1320000-0000-0000-0000-000000000004', '{}'::jsonb, '{}'::jsonb, 10, 1, 'te', '', 'c1320000-0000-0000-0000-000000000001')),
+  (select count(*) from api.search_flows_latest('f1320000-0000-0000-0000-000000000004', '{}'::jsonb, '{}'::jsonb, 10, 1, 'te', '', 'c1320000-0000-0000-0000-000000000001')),
   0::bigint,
   'flow UUID te search rejects a non-member'
 );
@@ -225,37 +225,37 @@ select is(
 select set_config('request.jwt.claim.sub', 'a1320000-0000-0000-0000-000000000001', true);
 
 select is(
-  (select id::text from public.search_processes_latest('e1320000-0000-0000-0000-000000000001', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '', null, null, 'all') limit 1),
+  (select id::text from api.search_processes_latest('e1320000-0000-0000-0000-000000000001', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '', null, null, 'all') limit 1),
   'e1320000-0000-0000-0000-000000000001',
   'process UUID exact search returns public data'
 );
 
 select is(
-  (select count(*) from public.search_processes_latest('e1320000-0000-0000-0000-000000000001', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '', null, null, 'LCI result')),
+  (select count(*) from api.search_processes_latest('e1320000-0000-0000-0000-000000000001', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '', null, null, 'LCI result')),
   0::bigint,
   'process UUID exact search keeps type_of_data_set_filter semantics'
 );
 
 select is(
-  (select id::text from public.search_lifecyclemodels_latest('d1320000-0000-0000-0000-000000000001', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '') limit 1),
+  (select id::text from api.search_lifecyclemodels_latest('d1320000-0000-0000-0000-000000000001', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '') limit 1),
   'd1320000-0000-0000-0000-000000000001',
   'lifecyclemodel UUID exact search returns public data'
 );
 
 select is(
-  (select version::text from public.pgroonga_search_contacts_latest('c1320000-0000-0000-0000-000000000101', '{}'::jsonb, 10, 1, 'tg', '') where id = 'c1320000-0000-0000-0000-000000000101'),
+  (select version::text from api.pgroonga_search_contacts_latest('c1320000-0000-0000-0000-000000000101', '{}'::jsonb, 10, 1, 'tg', '') where id = 'c1320000-0000-0000-0000-000000000101'),
   '01.00.002',
   'generic simple UUID exact search returns the latest visible contact version'
 );
 
 select is(
-  (select count(*) from public.pgroonga_search_contacts_latest('c1320000-0000-0000-0000-000000000101', '{}'::jsonb, 10, 2, 'tg', '')),
+  (select count(*) from api.pgroonga_search_contacts_latest('c1320000-0000-0000-0000-000000000101', '{}'::jsonb, 10, 2, 'tg', '')),
   0::bigint,
   'generic simple UUID exact search keeps pagination semantics'
 );
 
 select is(
-  (select id::text from public.pgroonga_search_contacts_latest('uuid-fast-contact-token', '{}'::jsonb, 10, 1, 'tg', '') limit 1),
+  (select id::text from api.pgroonga_search_contacts_latest('uuid-fast-contact-token', '{}'::jsonb, 10, 1, 'tg', '') limit 1),
   'c1320000-0000-0000-0000-000000000101',
   'generic simple non-UUID text search still works'
 );

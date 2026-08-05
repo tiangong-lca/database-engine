@@ -60,13 +60,13 @@ select is(
   (
     select count(*)::integer
     from (values
-      ('public.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
-      ('public.hybrid_search_processes_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
-      ('public.hybrid_search_lifecyclemodels_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
-      ('public.hybrid_search_contacts_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
-      ('public.hybrid_search_flowproperties_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
-      ('public.hybrid_search_sources_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
-      ('public.hybrid_search_unitgroups_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)')
+      ('api.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
+      ('api.hybrid_search_processes_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
+      ('api.hybrid_search_lifecyclemodels_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
+      ('api.hybrid_search_contacts_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
+      ('api.hybrid_search_flowproperties_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
+      ('api.hybrid_search_sources_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
+      ('api.hybrid_search_unitgroups_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)')
     ) expected(signature)
     where to_regprocedure(expected.signature) is not null
   ),
@@ -78,13 +78,13 @@ select is(
   (
     select count(*)::integer
     from (values
-      ('public.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
-      ('public.hybrid_search_processes_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
-      ('public.hybrid_search_lifecyclemodels_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
-      ('public.hybrid_search_contacts_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
-      ('public.hybrid_search_flowproperties_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
-      ('public.hybrid_search_sources_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
-      ('public.hybrid_search_unitgroups_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)')
+      ('api.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
+      ('api.hybrid_search_processes_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
+      ('api.hybrid_search_lifecyclemodels_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
+      ('api.hybrid_search_contacts_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
+      ('api.hybrid_search_flowproperties_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
+      ('api.hybrid_search_sources_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
+      ('api.hybrid_search_unitgroups_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)')
     ) expected(signature)
     join pg_proc routine on routine.oid = to_regprocedure(expected.signature)
     where 'lexical_weight' = any(routine.proargnames)
@@ -146,7 +146,7 @@ select is(
 select ok(
   strpos(
     pg_get_functiondef(
-      'public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure
+      'api._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure
     ),
     'd.extracted_md &@~'
   ) > 0,
@@ -156,7 +156,7 @@ select ok(
 select is(
   strpos(
     pg_get_functiondef(
-      'public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure
+      'api._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure
     ),
     'd.extracted_text &@~'
   ),
@@ -190,7 +190,7 @@ select is(
     select count(*)::integer
     from pg_proc routine
     join pg_namespace namespace on namespace.oid = routine.pronamespace
-    where namespace.nspname = 'public'
+    where namespace.nspname = 'api'
       and routine.proname like 'hybrid_search_%_v2'
       and strpos(routine.prosrc, '0.0::double precision') = 0
       and strpos(routine.prosrc, 'private.hybrid_search_') > 0
@@ -208,13 +208,13 @@ select is(
       ('service_role')
     ) expected(role_name)
     cross join (values
-      ('public.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
-      ('public.hybrid_search_processes_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
-      ('public.hybrid_search_lifecyclemodels_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
-      ('public.hybrid_search_contacts_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
-      ('public.hybrid_search_flowproperties_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
-      ('public.hybrid_search_sources_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
-      ('public.hybrid_search_unitgroups_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)')
+      ('api.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
+      ('api.hybrid_search_processes_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
+      ('api.hybrid_search_lifecyclemodels_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
+      ('api.hybrid_search_contacts_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
+      ('api.hybrid_search_flowproperties_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
+      ('api.hybrid_search_sources_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'),
+      ('api.hybrid_search_unitgroups_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)')
     ) function_signature(signature)
     where has_function_privilege(
       expected.role_name,
@@ -232,7 +232,7 @@ select is(
     from pg_proc routine
     join pg_namespace namespace on namespace.oid = routine.pronamespace
     join pg_description description on description.objoid = routine.oid
-    where namespace.nspname = 'public'
+    where namespace.nspname = 'api'
       and routine.proname like 'hybrid_search_%_v2'
       and description.description like 'Hybrid Search v2: extracted_md lexical candidates%'
   ),
@@ -242,7 +242,7 @@ select is(
 
 select ok(
   to_regprocedure(
-    'public.search_processes_latest_v2(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'
+    'api.search_processes_latest_v2(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'
   ) is not null,
   'indexed process latest-search v2 exists'
 );
@@ -263,7 +263,7 @@ select ok(
   'strict owner-draft search constrains both candidate and latest rows'
 );
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values (
   'a7290000-0000-0000-0000-000000000001',
   '{"email":"lexical-v2-owner@example.com"}'::jsonb,
@@ -316,7 +316,7 @@ values
 select is(
   (
     select array_agg(id::text order by id)
-    from public.search_processes_latest_v2(
+    from api.search_processes_latest_v2(
       'strict-owner-draft-token',
       '{}'::jsonb,
       '{}'::jsonb,
@@ -338,7 +338,7 @@ select is(
 select is(
   (
     select count(*)::integer
-    from public.search_processes_latest_v2(
+    from api.search_processes_latest_v2(
       'strict-owner-draft-token',
       '{}'::jsonb,
       '{}'::jsonb,

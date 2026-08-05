@@ -14,10 +14,10 @@ insert into auth.users (
   'authenticated', 'authenticated', 'issue-308-upgrade-owner@example.com',
   'x', now(), '{}', '{}', now(), now(), false, false
 );
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values ('30830000-0000-4000-8000-000000000001', '{}', null);
 
-insert into public.worker_jobs (
+insert into private.worker_jobs (
   id, job_kind, worker_runtime, worker_queue, requester_type, requested_by,
   visibility, payload_schema_version, payload_json, status, created_at
 ) values (
@@ -28,7 +28,7 @@ insert into public.worker_jobs (
   now() - interval '8 days'
 );
 
-insert into public.worker_job_artifacts (
+insert into private.worker_job_artifacts (
   id, job_id, artifact_type, storage_bucket, storage_path, content_type,
   byte_size, checksum_sha256, metadata, created_at
 ) values
@@ -56,7 +56,7 @@ insert into public.worker_job_artifacts (
     now() - interval '8 days'
   );
 
-insert into public.lcia_scope_closure_checks (
+insert into private.lcia_scope_closure_checks (
   id, worker_job_id, requested_by, request_idempotency_token, request_key,
   request_fingerprint, requested_scope_hash, effective_scope_hash,
   policy_fingerprint, data_snapshot_token,
@@ -91,7 +91,7 @@ insert into public.lcia_scope_closure_checks (
 select is(
   (
     select certificate_status
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where id = '30830000-0000-4000-8000-000000000301'
   ),
   'valid',
@@ -100,7 +100,7 @@ select is(
 select is(
   (
     select count(*)
-    from public.worker_job_artifacts
+    from private.worker_job_artifacts
     where job_id = '30830000-0000-4000-8000-000000000101'
   ),
   3::bigint,
