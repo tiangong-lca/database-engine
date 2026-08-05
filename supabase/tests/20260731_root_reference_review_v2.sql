@@ -3,7 +3,15 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(14);
+select plan(23);
+
+select is((
+  select count(*)::integer
+  from pg_catalog.pg_indexes
+  where schemaname = 'public'
+    and tablename = 'notifications'
+    and indexname = 'notifications_review_event_recipient_uidx'
+), 0, 'latest-event notifications do not retain the superseded per-event unique index');
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password,
@@ -195,6 +203,165 @@ select throws_ok(
   'APPROVED_DATASET_IMMUTABLE',
   'published dataset business fields are immutable'
 );
+
+insert into public.contacts (
+  id, version, json, json_ordered, user_id, state_code, team_id,
+  rule_verification
+)
+values (
+  '39000000-0000-0000-0000-000000000002',
+  '01.00.000',
+  '{"contactDataSet":{"contactInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"en","#text":"Rejected Contact"}]}}}}',
+  '{"contactDataSet":{"contactInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"en","#text":"Rejected Contact"}]}}}}',
+  '19000000-0000-0000-0000-000000000001',
+  0,
+  '29000000-0000-0000-0000-000000000001',
+  true
+);
+
+select set_config(
+  'request.jwt.claim.sub',
+  '19000000-0000-0000-0000-000000000001',
+  true
+);
+
+select public.cmd_review_submit_v2(
+  'contacts',
+  '39000000-0000-0000-0000-000000000002',
+  '01.00.000',
+  null,
+  '{}'::jsonb
+);
+
+select set_config(
+  'request.jwt.claim.sub',
+  '19000000-0000-0000-0000-000000000003',
+  true
+);
+
+select private.review_notify_event_v1(
+  'root_entered_review',
+  (select id from public.reviews
+    where review_kind = 'root'
+      and data_id = '39000000-0000-0000-0000-000000000002'),
+  '19000000-0000-0000-0000-000000000001',
+  '19000000-0000-0000-0000-000000000003',
+  'contacts',
+  '39000000-0000-0000-0000-000000000002',
+  '01.00.000',
+  (select id from public.reviews
+    where review_kind = 'root'
+      and data_id = '39000000-0000-0000-0000-000000000002'),
+  1,
+  null
+);
+
+create temporary table review_v2_notification_before_reject as
+select id
+from public.notifications
+where recipient_user_id = '19000000-0000-0000-0000-000000000001'
+  and sender_user_id = '19000000-0000-0000-0000-000000000003'
+  and type = 'review_event'
+  and dataset_type = 'contacts'
+  and dataset_id = '39000000-0000-0000-0000-000000000002'
+  and dataset_version = '01.00.000';
+
+select ok((
+  public.cmd_review_finalize_reject(
+    (select id from public.reviews
+      where review_kind = 'root'
+        and data_id = '39000000-0000-0000-0000-000000000002'),
+    'notification identity regression',
+    '{}'::jsonb
+  )->>'ok'
+)::boolean, 'Review Admin rejection succeeds after an earlier review event');
+
+select is((
+  select state_code
+  from public.contacts
+  where id = '39000000-0000-0000-0000-000000000002'
+    and version = '01.00.000'
+), 0, 'successful rejection atomically restores the dataset to editable state 0');
+
+select is((
+  select state_code
+  from public.reviews
+  where review_kind = 'root'
+    and data_id = '39000000-0000-0000-0000-000000000002'
+), -1, 'successful rejection keeps the review transition in the same transaction');
+
+select is((
+  select count(*)::integer
+  from public.notifications
+  where recipient_user_id = '19000000-0000-0000-0000-000000000001'
+    and sender_user_id = '19000000-0000-0000-0000-000000000003'
+    and type = 'review_event'
+    and dataset_type = 'contacts'
+    and dataset_id = '39000000-0000-0000-0000-000000000002'
+    and dataset_version = '01.00.000'
+), 1, 'review lifecycle notifications retain one latest-event row per existing identity');
+
+select is((
+  select id
+  from public.notifications
+  where recipient_user_id = '19000000-0000-0000-0000-000000000001'
+    and sender_user_id = '19000000-0000-0000-0000-000000000003'
+    and type = 'review_event'
+    and dataset_type = 'contacts'
+    and dataset_id = '39000000-0000-0000-0000-000000000002'
+    and dataset_version = '01.00.000'
+), (select id from review_v2_notification_before_reject),
+  'review lifecycle notification updates preserve the existing row identity');
+
+select is((
+  select json->>'event_type'
+  from public.notifications
+  where recipient_user_id = '19000000-0000-0000-0000-000000000001'
+    and sender_user_id = '19000000-0000-0000-0000-000000000003'
+    and type = 'review_event'
+    and dataset_type = 'contacts'
+    and dataset_id = '39000000-0000-0000-0000-000000000002'
+    and dataset_version = '01.00.000'
+), 'root_rejected', 'latest-event notification exposes the rejection event');
+
+select is((
+  select json->>'reason_code'
+  from public.notifications
+  where recipient_user_id = '19000000-0000-0000-0000-000000000001'
+    and sender_user_id = '19000000-0000-0000-0000-000000000003'
+    and type = 'review_event'
+    and dataset_type = 'contacts'
+    and dataset_id = '39000000-0000-0000-0000-000000000002'
+    and dataset_version = '01.00.000'
+), 'ADMIN_REJECTED', 'latest-event notification retains the rejection reason code');
+
+select private.review_notify_event_v1(
+  'root_rejected',
+  (select id from public.reviews
+    where review_kind = 'root'
+      and data_id = '39000000-0000-0000-0000-000000000002'),
+  '19000000-0000-0000-0000-000000000001',
+  '19000000-0000-0000-0000-000000000003',
+  'contacts',
+  '39000000-0000-0000-0000-000000000002',
+  '01.00.000',
+  (select id from public.reviews
+    where review_kind = 'root'
+      and data_id = '39000000-0000-0000-0000-000000000002'),
+  1,
+  'ADMIN_REJECTED'
+);
+
+select is((
+  select count(*)::integer
+  from public.notifications
+  where recipient_user_id = '19000000-0000-0000-0000-000000000001'
+    and sender_user_id = '19000000-0000-0000-0000-000000000003'
+    and type = 'review_event'
+    and dataset_type = 'contacts'
+    and dataset_id = '39000000-0000-0000-0000-000000000002'
+    and dataset_version = '01.00.000'
+), 1, 'replaying the latest review event remains idempotent');
 
 select * from finish();
 rollback;
