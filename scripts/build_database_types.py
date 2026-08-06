@@ -42,7 +42,7 @@ def main() -> int:
         stdout=subprocess.PIPE,
         text=True,
     )
-    OUTPUT.write_text(result.stdout, encoding="utf-8")
+    OUTPUT.write_text(result.stdout.rstrip() + "\n", encoding="utf-8")
     print(f"Wrote {OUTPUT}")
     return 0
 
