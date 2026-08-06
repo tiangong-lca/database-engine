@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-07
-lastReviewedCommit: 25c7ca11d18b6af3907b95973c254faf05c50e7a
+lastReviewedCommit: 8b956d03165792b1b0890318bea021a18f7284b7
 lastReviewedNote: "已为 Issue #422 Edge 消费者收口复核：升级验证纳入 Data Product façade，并同步生成 public/api 类型。"
 related:
   - ../AGENTS.md

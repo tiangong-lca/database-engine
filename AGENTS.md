@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-07
-lastReviewedCommit: 25c7ca11d18b6af3907b95973c254faf05c50e7a
-lastReviewedNote: "Reviewed for Issue #422 Edge consumer closure: Data Product/TIDAS facades, exact API privileges, upgrade proof, and generated Data API types remain one governed contract."
+lastReviewedCommit: 8b956d03165792b1b0890318bea021a18f7284b7
+lastReviewedNote: "Reviewed for Issue #422 Edge consumer closure: Data Product/TIDAS facades, the lifecycle review-admin predicate, exact API privileges, upgrade proof, and generated types remain one governed contract."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

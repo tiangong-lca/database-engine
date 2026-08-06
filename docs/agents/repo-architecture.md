@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-07
-lastReviewedCommit: 25c7ca11d18b6af3907b95973c254faf05c50e7a
-lastReviewedNote: "Reviewed for Issue #422 Edge consumer closure: Data Product and enriched TIDAS facades preserve the public/private boundary and explicit API contract."
+lastReviewedCommit: 8b956d03165792b1b0890318bea021a18f7284b7
+lastReviewedNote: "Reviewed for Issue #422 Edge consumer closure: Data Product/TIDAS facades and the lifecycle review-admin predicate preserve the public/private boundary."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -75,6 +75,8 @@ metadata through bounded `api.svc_data_product_*` projections rather than
 reading private relations. TIDAS package reads and import admission likewise
 remain service-only capability contracts; their DTO and terminal error codes
 are part of the consumer-facing façade and must be regression-tested.
+LifecycleModel bundle authorization uses a service-only boolean review-admin
+predicate, preserving service orchestration without returning membership rows.
 
 Schema cutovers must preserve object identity and database dependencies with
 `ALTER ... SET SCHEMA`; they must not rebuild tables, triggers, policies,
