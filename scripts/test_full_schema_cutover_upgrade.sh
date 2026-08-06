@@ -8,6 +8,7 @@ contract_migrations=(
   "$repo_root/supabase/migrations/20260806161000_lca_package_capability_facades.sql"
 )
 drift_cleanup_migration="$repo_root/supabase/migrations/20260806230500_remove_recreated_public_routines.sql"
+consumer_facade_migration="$repo_root/supabase/migrations/20260807103000_data_product_consumer_facades.sql"
 database_url="$(
   supabase status --output env \
     | sed -n 's/^DB_URL="\([^"]*\)"$/\1/p'
@@ -330,6 +331,7 @@ $verify_persistent_dev_drift_fixture$;
 SQL
 
 psql "$database_url" -v ON_ERROR_STOP=1 -f "$drift_cleanup_migration"
+psql "$database_url" -v ON_ERROR_STOP=1 -f "$consumer_facade_migration"
 
 psql "$database_url" -v ON_ERROR_STOP=1 <<'SQL'
 do $verify_contract_closure_upgrade$
@@ -349,6 +351,12 @@ begin
 
   if to_regclass('private.lca_package_import_prepare_idempotency_uk') is null then
     raise exception 'package import idempotency index is missing after upgrade';
+  end if;
+
+  if pg_catalog.to_regprocedure('api.svc_data_product_publication_list(integer)') is null
+     or pg_catalog.to_regprocedure('api.svc_data_product_worker_metadata(uuid[])') is null
+     or pg_catalog.to_regprocedure('api.svc_data_product_current_public_package()') is null then
+    raise exception 'a data-product consumer facade is missing after upgrade';
   end if;
 
   if exists (

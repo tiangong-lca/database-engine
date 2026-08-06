@@ -2217,6 +2217,15 @@ export type Database = {
         Args: { proc: Database["public"]["Tables"]["sources"]["Row"] }
         Returns: string
       }
+      svc_data_product_current_public_package: { Args: never; Returns: Json }
+      svc_data_product_publication_list: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
+      svc_data_product_worker_metadata: {
+        Args: { p_worker_job_ids: string[] }
+        Returns: Json
+      }
       svc_dataset_review_submit_job_claim: {
         Args: { p_qty?: number; p_stale_submitting_seconds?: number }
         Returns: Json
