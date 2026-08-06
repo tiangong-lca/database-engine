@@ -21,7 +21,7 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-06
-lastReviewedCommit: 40b5fb812e3517a4f24135bdf3205d1e989c3525
+lastReviewedCommit: 0b615b0fa753eb1ccbfaf5ce4a08938258d97ad7
 lastReviewedNote: "Reviewed for Issue #422 contract closure: Supabase GitHub Integration is the sole Dev deployer and repository CI performs only local plus hosted read-only verification."
 related:
   - ../../AGENTS.md

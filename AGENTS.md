@@ -35,7 +35,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-06
-lastReviewedCommit: 40b5fb812e3517a4f24135bdf3205d1e989c3525
+lastReviewedCommit: 0b615b0fa753eb1ccbfaf5ce4a08938258d97ad7
 lastReviewedNote: "Reviewed for Issue #422 contract closure: capability facades, exact API privileges, native Supabase deployment, read-only hosted verification, and generated Data API types now form one governed contract."
 related:
   - .docpact/config.yaml

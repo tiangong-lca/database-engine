@@ -21,7 +21,7 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-06
-lastReviewedCommit: 40b5fb812e3517a4f24135bdf3205d1e989c3525
+lastReviewedCommit: 0b615b0fa753eb1ccbfaf5ce4a08938258d97ad7
 lastReviewedNote: "已为 Issue #422 合同收口复核：Supabase GitHub Integration 是唯一 Dev 部署方，仓库 CI 仅执行本地与托管只读验证。"
 related:
   - ../../AGENTS.md

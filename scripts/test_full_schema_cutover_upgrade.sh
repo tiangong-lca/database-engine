@@ -7,6 +7,7 @@ contract_migrations=(
   "$repo_root/supabase/migrations/20260806160000_api_contract_closure.sql"
   "$repo_root/supabase/migrations/20260806161000_lca_package_capability_facades.sql"
 )
+drift_cleanup_migration="$repo_root/supabase/migrations/20260806230500_remove_recreated_public_routines.sql"
 database_url="$(
   supabase status --output env \
     | sed -n 's/^DB_URL="\([^"]*\)"$/\1/p'
@@ -249,6 +250,88 @@ for contract_migration in "${contract_migrations[@]}"; do
 done
 
 psql "$database_url" -v ON_ERROR_STOP=1 <<'SQL'
+create function public.policy_roles_delete(uuid, uuid, text)
+returns boolean language sql stable security definer
+set search_path = public
+as 'select false';
+
+create function public.policy_roles_insert(uuid, uuid, text)
+returns boolean language sql stable security definer
+set search_path = public
+as 'select false';
+
+create function public.policy_roles_select(uuid, text)
+returns boolean language sql stable security definer
+set search_path = public
+as 'select false';
+
+create function public.policy_roles_update(uuid, uuid, text)
+returns boolean language sql stable security definer
+set search_path = public
+as 'select false';
+
+create function public.update_modified_at()
+returns trigger language plpgsql
+set search_path = ''
+as $function$
+begin
+  new.modified_at = pg_catalog.now();
+  return new;
+end
+$function$;
+
+grant execute on function public.policy_roles_delete(uuid, uuid, text)
+  to public, anon, authenticated, service_role;
+grant execute on function public.policy_roles_insert(uuid, uuid, text)
+  to public, anon, authenticated, service_role;
+grant execute on function public.policy_roles_select(uuid, text)
+  to public, anon, authenticated, service_role;
+grant execute on function public.policy_roles_update(uuid, uuid, text)
+  to public, anon, authenticated, service_role;
+grant execute on function public.update_modified_at()
+  to public, anon, authenticated, service_role;
+
+do $verify_persistent_dev_drift_fixture$
+declare
+  fixture_count bigint;
+begin
+  select count(*)
+  into fixture_count
+  from pg_catalog.pg_proc as routine
+  join pg_catalog.pg_namespace as namespace
+    on namespace.oid = routine.pronamespace
+  where namespace.nspname = 'public';
+
+  if fixture_count <> 5 then
+    raise exception 'expected five recreated public routines, found %', fixture_count;
+  end if;
+
+  if exists (
+    select 1
+    from pg_catalog.pg_proc as routine
+    join pg_catalog.pg_namespace as namespace
+      on namespace.oid = routine.pronamespace
+    cross join lateral (values
+      ('anon'::name),
+      ('authenticated'::name),
+      ('service_role'::name)
+    ) as expected_role(role_name)
+    where namespace.nspname = 'public'
+      and not pg_catalog.has_function_privilege(
+        expected_role.role_name,
+        routine.oid,
+        'EXECUTE'
+      )
+  ) then
+    raise exception 'persistent Dev drift fixture is missing an external EXECUTE grant';
+  end if;
+end
+$verify_persistent_dev_drift_fixture$;
+SQL
+
+psql "$database_url" -v ON_ERROR_STOP=1 -f "$drift_cleanup_migration"
+
+psql "$database_url" -v ON_ERROR_STOP=1 <<'SQL'
 do $verify_contract_closure_upgrade$
 begin
   if not exists (
@@ -266,6 +349,23 @@ begin
 
   if to_regclass('private.lca_package_import_prepare_idempotency_uk') is null then
     raise exception 'package import idempotency index is missing after upgrade';
+  end if;
+
+  if exists (
+    select 1
+    from pg_catalog.pg_proc as routine
+    join pg_catalog.pg_namespace as namespace on namespace.oid = routine.pronamespace
+    where namespace.nspname = 'public'
+  ) then
+    raise exception 'a recreated public routine remains after drift cleanup';
+  end if;
+
+  if pg_catalog.to_regprocedure('api.policy_roles_delete(uuid,uuid,text)') is null
+     or pg_catalog.to_regprocedure('api.policy_roles_insert(uuid,uuid,text)') is null
+     or pg_catalog.to_regprocedure('api.policy_roles_select(uuid,text)') is null
+     or pg_catalog.to_regprocedure('api.policy_roles_update(uuid,uuid,text)') is null
+     or pg_catalog.to_regprocedure('private.update_modified_at()') is null then
+    raise exception 'a canonical routine was lost during public drift cleanup';
   end if;
 
   if exists (
