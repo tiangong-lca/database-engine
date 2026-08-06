@@ -355,8 +355,9 @@ begin
 
   if pg_catalog.to_regprocedure('api.svc_data_product_publication_list(integer)') is null
      or pg_catalog.to_regprocedure('api.svc_data_product_worker_metadata(uuid[])') is null
-     or pg_catalog.to_regprocedure('api.svc_data_product_current_public_package()') is null then
-    raise exception 'a data-product consumer facade is missing after upgrade';
+     or pg_catalog.to_regprocedure('api.svc_data_product_current_public_package()') is null
+     or pg_catalog.to_regprocedure('api.svc_membership_is_review_admin(uuid)') is null then
+    raise exception 'an Edge consumer facade is missing after upgrade';
   end if;
 
   if exists (

@@ -2341,6 +2341,10 @@ export type Database = {
         }
         Returns: Json
       }
+      svc_membership_is_review_admin: {
+        Args: { p_user_id: string }
+        Returns: Json
+      }
       svc_review_submit_from_job: {
         Args: { p_audit?: Json; p_job_id: string }
         Returns: Json

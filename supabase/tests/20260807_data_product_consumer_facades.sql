@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, api, private, auth;
 
-select plan(20);
+select plan(22);
 
 select is(
   (
@@ -12,6 +12,7 @@ select is(
     join pg_namespace as namespace on namespace.oid = routine.pronamespace
     where namespace.nspname = 'api'
       and routine.proname = any(array[
+        'svc_membership_is_review_admin',
         'svc_data_product_publication_list',
         'svc_data_product_worker_metadata',
         'svc_data_product_current_public_package'
@@ -19,8 +20,22 @@ select is(
       and routine.prosecdef
       and routine.proconfig = array['search_path=""']::text[]
   ),
-  3::bigint,
-  'all data-product consumer facades use fixed-path SECURITY DEFINER'
+  4::bigint,
+  'all remaining Edge consumer facades use fixed-path SECURITY DEFINER'
+);
+
+select ok(
+  has_function_privilege(
+    'service_role',
+    'api.svc_membership_is_review_admin(uuid)',
+    'EXECUTE'
+  )
+    and not has_function_privilege(
+      'authenticated',
+      'api.svc_membership_is_review_admin(uuid)',
+      'EXECUTE'
+    ),
+  'review-admin predicate is service-only'
 );
 
 select ok(
@@ -101,6 +116,14 @@ insert into auth.users (
     '{"provider":"email","providers":["email"]}',
     '{"email":"issue-422-member@example.com","display_name":"Issue 422 Member"}',
     now(), now(), false, false
+  ),
+  (
+    '00000000-0000-0000-0000-000000000000',
+    '42270000-0000-4000-8000-000000000003',
+    'authenticated', 'authenticated', 'issue-422-review-admin@example.com', 'test', now(),
+    '{"provider":"email","providers":["email"]}',
+    '{"email":"issue-422-review-admin@example.com","display_name":"Issue 422 Review Admin"}',
+    now(), now(), false, false
   );
 
 insert into private.users (id, raw_user_meta_data) values
@@ -111,6 +134,10 @@ insert into private.users (id, raw_user_meta_data) values
   (
     '42270000-0000-4000-8000-000000000002',
     '{"email":"issue-422-member@example.com","display_name":"Issue 422 Member"}'
+  ),
+  (
+    '42270000-0000-4000-8000-000000000003',
+    '{"email":"issue-422-review-admin@example.com","display_name":"Issue 422 Review Admin"}'
   );
 
 insert into private.roles (user_id, team_id, role) values
@@ -118,6 +145,11 @@ insert into private.roles (user_id, team_id, role) values
     '42270000-0000-4000-8000-000000000001',
     '00000000-0000-0000-0000-000000000000',
     'data_product_manager'
+  ),
+  (
+    '42270000-0000-4000-8000-000000000003',
+    '00000000-0000-0000-0000-000000000000',
+    'review-admin'
   );
 
 insert into private.worker_jobs (
@@ -251,6 +283,14 @@ set local role service_role;
 select set_config('request.jwt.claim.role', 'service_role', true);
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 select set_config('request.jwt.claim.sub', '', true);
+
+select is(
+  api.svc_membership_is_review_admin(
+    '42270000-0000-4000-8000-000000000003'
+  ) -> 'data',
+  'true'::jsonb,
+  'review-admin predicate recognizes the requested service-side user'
+);
 
 select is(
   api.svc_data_product_worker_metadata(

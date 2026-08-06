@@ -7,6 +7,26 @@ create index if not exists lcia_result_publications_list_idx
     created_at desc
   );
 
+create or replace function api.svc_membership_is_review_admin(
+  p_user_id uuid
+)
+returns jsonb
+language sql
+stable
+security definer
+set search_path = ''
+as $function$
+  select jsonb_build_object(
+    'ok', true,
+    'data', exists (
+      select 1
+      from private.roles as membership
+      where membership.user_id = p_user_id
+        and membership.role = 'review-admin'
+    )
+  )
+$function$;
+
 create or replace function api.svc_data_product_publication_list(
   p_limit integer default 50
 )
@@ -407,17 +427,27 @@ revoke execute on function api.svc_data_product_publication_list(integer)
   from public, anon, service_role;
 grant execute on function api.svc_data_product_publication_list(integer) to authenticated;
 
+revoke execute on function api.svc_membership_is_review_admin(uuid)
+  from public, anon, authenticated;
 revoke execute on function api.svc_data_product_worker_metadata(uuid[])
   from public, anon, authenticated;
 revoke execute on function api.svc_data_product_current_public_package()
   from public, anon, authenticated;
 grant execute on function api.svc_data_product_worker_metadata(uuid[]) to service_role;
 grant execute on function api.svc_data_product_current_public_package() to service_role;
+grant execute on function api.svc_membership_is_review_admin(uuid) to service_role;
 
 insert into private.api_capability_grants (
   routine_identity, capability_id, allow_anon, allow_authenticated, allow_service_role
 )
 values
+  (
+    'api.svc_membership_is_review_admin(uuid)',
+    'EDGE-LIFECYCLE-BUNDLE-01',
+    false,
+    false,
+    true
+  ),
   (
     'api.svc_data_product_publication_list(integer)',
     'EDGE-DATA-PRODUCT-01',
