@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "public"."svc_lcia_scope_closure_artifact_write_set_reconcile"("p_limit" integer, "p_lease_seconds" integer) IS 'Service-only fenced stale-publication claim. Returns cleanup_pending write-set projections from a post-update statement so status, reconcileToken, and reconcileLeaseExpiresAt exactly match persisted claim state.';

@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."get_lcia_scope_closure_check"("p_closure_check_id" "uuid") IS 'Returns the owner-scoped V1 closure-check DTO with a fixed-order, locator-free XLSX and issue-manifest availability summary.';

@@ -24,8 +24,10 @@ ALTER TABLE ONLY "public"."contacts"
 
 ALTER TABLE "public"."contacts" ENABLE ROW LEVEL SECURITY;
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."contacts" TO "anon";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."contacts" TO "anon";
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."contacts" TO "authenticated";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."contacts" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."contacts" TO "service_role";
+
+GRANT SELECT ON TABLE "public"."contacts" TO "api_internal_executor";

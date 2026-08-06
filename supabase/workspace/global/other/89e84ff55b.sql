@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."lcia_scope_closure_normalize_request"("p_requested_scope" "jsonb") IS 'Normalizes closure roots against the current formal release when present, otherwise against exact eligible candidate-public-state documents.';

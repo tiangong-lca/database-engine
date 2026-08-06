@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "public"."cmd_dataset_alias_plan_guarded"("p_plan" "jsonb") IS 'Internal owner-draft alias transaction used by the protected one-shot executor and rollback-only preflight. Direct authenticated/service-role API execution is revoked because this legacy function supports idempotent replay.';

@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."review_canonical_json_text_v1"("p_value" "jsonb") IS 'Canonical JSON writer for review revision fingerprints. Object keys use UTF-8/C byte order, arrays retain order, and separators are compact, matching app_dataset_submit_review Gate hashing.';

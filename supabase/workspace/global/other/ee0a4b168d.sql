@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "public"."cmd_dataset_flow_identity_scope_cancel_guarded"("p_scope_id" "uuid", "p_request" "jsonb") IS 'Actor-only v2 Step 3 abandon path. Exact replay is read-only; a fresh cancel releases active fences only for an untouched sealed scope whose ledger, audit, derivative, and mutation-permit proof all show zero primary writes.';

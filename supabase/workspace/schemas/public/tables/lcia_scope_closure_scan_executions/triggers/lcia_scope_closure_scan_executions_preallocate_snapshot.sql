@@ -1,1 +1,0 @@
-CREATE OR REPLACE TRIGGER "lcia_scope_closure_scan_executions_preallocate_snapshot" BEFORE INSERT OR UPDATE OF "numerical_snapshot_id" ON "public"."lcia_scope_closure_scan_executions" FOR EACH ROW EXECUTE FUNCTION "public"."lcia_scope_closure_preallocate_numerical_snapshot"();

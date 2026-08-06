@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."svc_lcia_scope_closure_artifact_gc_preview"("p_limit" integer) IS 'Service-only, strictly non-mutating ordered preview of immediately claimable scope-closure GC candidates.';

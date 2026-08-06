@@ -11,3 +11,5 @@ GRANT USAGE ON SCHEMA "public" TO "anon";
 GRANT USAGE ON SCHEMA "public" TO "authenticated";
 
 GRANT USAGE ON SCHEMA "public" TO "service_role";
+
+GRANT USAGE ON SCHEMA "public" TO "api_internal_executor";

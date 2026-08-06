@@ -29,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-05
-lastReviewedCommit: df8253bfb3499b1f8a6d7d84d321bd5b7cc67752
-lastReviewedNote: "Reviewed for Issue #422: add the complete schema-cutover proof covering blank rebuild, populated upgrade, catalog identity, ACL/RLS, and Data API routing."
+lastReviewedAt: 2026-08-06
+lastReviewedCommit: 40b5fb812e3517a4f24135bdf3205d1e989c3525
+lastReviewedNote: "Reviewed for Issue #422 contract closure: add facade, ACL, generated-type drift, native deployment, hosted catalog, and PostgREST boundary proof."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -56,37 +56,17 @@ supabase db reset
 supabase migration list
 ```
 
-The checked-in canonical entry point is:
-
-```bash
-python scripts/run_database_contract.py --suite canonical-local
-```
-
-It classifies every test asset, excludes benchmark/fixture/Preview/upgrade
-harnesses from pgTAP, fails on unexpected lint errors even when the Supabase CLI
-would exit zero, and checks catalog plus generated-workspace drift. Worker
-control-plane changes additionally run `--suite worker-control-plane`,
-`python scripts/test_worker_control_plane_upgrade.py`, and—after a clean reset—
-`python scripts/test_worker_control_plane_data_api.py` to prove the final
-PostgREST cache exposes the service RPCs while anonymous calls fail closed.
-
-The canonical green suite currently runs 56 top-level files. Nineteen stale
-top-level files are visible, reasoned exclusions—not passes—and are tracked for
-repair or explicit retirement in
-`tiangong-lca/database-engine#336`. A green canonical result must not be
-reported as those 19 files passing.
-
-Every workflow that invokes the canonical runner must check out full Git
-history (`fetch-depth: 0`). The immutable public-inventory provenance gate
-verifies its recorded source commit with Git; a shallow checkout is an invalid
-validation environment and must fail before any hosted deployment job starts.
+There is no checked-in monolithic database-contract runner. Run the relevant
+pgTAP files explicitly after a clean reset, and run the change-specific shell
+or Node upgrade/transport harnesses named in the proof matrix. Workflows that
+need Git provenance still check out full history (`fetch-depth: 0`).
 
 ## Proof Matrix
 
 | Change type | Minimum local proof | Stronger proof when risk is higher | Notes |
 | --- | --- | --- | --- |
 | `supabase/migrations/**` | `supabase db reset` succeeds | run the relevant SQL assertions under `supabase/tests/**`; inspect affected workspace objects if the migration was authored from workspace files | Record which migration and which SQL test files were exercised. |
-| full application Schema cutover | `supabase db reset --no-seed`; `supabase test db supabase/tests/20260805_full_schema_cutover.sql`; `scripts/test_full_schema_cutover_upgrade.sh` | restart local Supabase after config changes; prove explicit `public` core-table REST access, explicit `api` RPC access, rejection of `private`, and absence of the old `public` RPC route; on hosted Preview/persistent `dev`, also prove profile-less core access resolves to `public` after exact ordered Management API readback; repeat the populated upgrade against a production-shaped disposable copy before hosted deployment | Require the exact nine-table public allowlist, zero public routines/views/sequences, complete target placement, OID and exact-row preservation, trigger/policy/constraint parity, denial of internal Data API exposure, the exact authenticated `private.roles`/`private.reviews` read-only exception required by core-table RLS, and a real authenticated traversal through the constrained private-helper facade. Local Supabase may normalize custom schemas ahead of `public`, so local profile-less behavior is not hosted default-profile proof. Do not add compatibility views, duplicate tables, or dual-write paths. |
+| full application Schema cutover | `supabase db reset --no-seed`; run all four `20260805`/`20260806` contract pgTAP files; `scripts/test_full_schema_cutover_upgrade.sh` | restart local Supabase after config changes; prove explicit `public` core-table REST access, explicit `api` RPC access, rejection of `private`, and absence of the old `public` RPC route; on hosted Preview/persistent `dev`, also prove profile-less core access resolves to `public` after exact ordered Management API readback; repeat the populated upgrade against a production-shaped disposable copy before hosted deployment | Require the exact nine-table public allowlist, zero public routines/views/sequences, complete target placement, OID and exact-row preservation, trigger/policy/constraint parity, denial of internal Data API exposure, exact equality between external API grants and `private.api_capability_grants`, the exact authenticated `private.roles`/`private.reviews` read-only exception required by core-table RLS, and real traversal through each constrained façade family. Local Supabase may normalize custom schemas ahead of `public`, so local profile-less behavior is not hosted default-profile proof. Do not add compatibility views, duplicate tables, or dual-write paths. |
 | Root/Reference Review v2 schema, commands, queue projections, or legacy migration | `supabase db reset`; `supabase test db --local supabase/tests/20260731_root_reference_review_v2.sql` | rehearse `root_reference_review_v2_local.sh backup`, restore verification, second-local-copy verification, dry-run, one-row apply, and reconciliation against a disposable production-shaped copy before any hosted cutover | Process alone keeps the numeric Gate. Prove the seven-table state and immutability transitions, exact checksum reuse, append-only scope history, owner-only notifications, advisory Reviewer outcomes, Admin final decisions, and preservation of legacy `review_id`/`reviews` projections. Never use the backup runner against production until its local restore markers represent real checks. |
 | process/flow hybrid-search query shape, HNSW settings, or vector indexes | `supabase db reset`; run `supabase/tests/20260727_hybrid_search_staging_plan_governance.sql`, `supabase/tests/20260528_semantic_hybrid_candidate_helpers.sql`, and `supabase/tests/20260528_hybrid_semantic_candidate_limit_hotfix.sql` | after the migration reaches persistent `dev`, run the exact read-only `supabase/tests/benchmarks/20260727_hybrid_search_staging_explain.sql` profile against ref `submidrhbtknjxfympna`; compare process, broad-flow, Product-flow, and full-RPC timings/buffers with Issue #292; rerun performance and security advisors | Use the benchmark's checked-in Edge route lexical parameter profile with its redacted real staging vectors; never synthesize lexical terms from the first Markdown tokens because shared headings create an artificial near-whole-table match. Do not use a seed-only Preview as production-cardinality proof, expose raw text/UUID/vector values, or run production `EXPLAIN ANALYZE`. Empty JSON filters must fold away under a custom plan, filtered HNSW must retain strict-order iterative scans, and semantic candidate growth remains one 10x bound with a 200-row floor. |
 | Contact, FlowProperty, Source, or UnitGroup Semantic/Hybrid pipeline, RPC, or HNSW index | `supabase db reset`; run `supabase/tests/20260727_foundation_dataset_semantic_hybrid_search.sql`, `supabase/tests/20260514_embedding_derivative_trigger_scope.sql`, `supabase/tests/20260727_hybrid_search_staging_plan_governance.sql`, `supabase/tests/20260528_semantic_hybrid_candidate_helpers.sql`, and `supabase/tests/20260528_hybrid_semantic_candidate_limit_hotfix.sql` | on the exact Preview branch, run bounded cursor backfill pages and drain both extraction and embedding queues; prove zero terminal failures and full eligible-row derivative counts; smoke `tg`/`co` explicit-team scope, `my` explicit-state scope, `te` explicit-readable-team plus state scope, and missing/foreign-team fail-closed behavior; after merge to persistent `dev`, capture redacted real-parameter `EXPLAIN (ANALYZE, BUFFERS)` for Semantic and Hybrid queries across all four datasets, compare timings/buffers, then rerun performance and security advisors | Never do a synchronous whole-table migration rewrite. Backfill is service-only, capped at 500 rows, idempotent, and uses compact queue payloads. A blank-version row is ineligible because it has no stable worker identity: count it as a data-quality exception and never guess a version or enqueue it. Helpers require exact table/RPC allowlists, `tg`/`co`/`my`/`te` visibility, PGroonga escaping, custom plans, and strict-order HNSW scans; derivative writes must not change authored `modified_at`. Team Data requires an explicit team readable by the authenticated actor. A small table may correctly choose a sequential scan. Do not run production `EXPLAIN ANALYZE` or retain raw vectors, search text, IDs, or private row values in evidence. |
@@ -108,8 +88,8 @@ validation environment and must fail before any hosted deployment job starts.
 | Flow identity actor-fence trigger boundary | `supabase db reset`; run `supabase/tests/20260731_flow_identity_derivative_fence.sql`, both `20260716_guarded_dataset_flow_identity_mapping*.sql` suites, and the two guarded derivative rebuild suites | also run the nearby JSON/webhook regression and local security/performance advisors | Prove a separately held owner advisory lock does not block updates limited to `extracted_md`, `embedding_ft`, or `embedding_ft_at`; every other current or future Flow-column change plus every INSERT/DELETE remains fail-closed behind the existing v2 fence. |
 | `supabase/tests/**` only | run the relevant SQL assertion files against a reset local DB | add a nearby migration or policy smoke check if the new assertions expose a gap | This repo stores PGTAP-style SQL assertions, not a single canonical runner wrapper. |
 | `supabase/seed.sql` or `supabase/seeds/dev.sql` | `supabase db reset` succeeds with expected seed behavior | rerun targeted SQL assertions that depend on the seeded rows; for shared-seed changes, confirm the hosted Preview seed stage completes | Keep shared seed and dev-only seed expectations separate. A shared seed with no data must still contain an executable no-op statement; a comments-only batch is not deployment-safe. |
-| `supabase/config.toml` | `supabase start` and `supabase db reset` still work locally | verify the changed branch-binding or auth assumption against `docs/agents/supabase-branching.md`; for exposed-schema changes, prove the persistent `dev` workflow pushes config and reads back exact ordered hosted PostgREST schema/search-path lists | Config changes affect preview, persistent dev, and local behavior together; local CLI order is not hosted default-profile proof, and production config changes require an explicit operator push, order enforcement, and readback after promotion. |
-| `.github/workflows/supabase-dev.yml` | inspect YAML changes and confirm referenced secrets and vars still exist in docs; parse the workflow as YAML | verify the intended deploy path in a PR note because the real push occurs only on Git `dev`; for `main -> dev` reconciliation, prove an older-timestamped committed migration is installed with `--include-all` without reapplying recorded history; for config changes, require `supabase config push`, ordered Management API readback, profile-less `public` core access, explicit `api` RPC success, `private` rejection, and old `public` RPC absence against the same project ref | Local dry-run for GitHub-hosted execution is limited; document the expected remote proof. |
+| `supabase/config.toml` | `supabase start` and `supabase db reset` still work locally | verify the changed branch-binding or auth assumption against `docs/agents/supabase-branching.md`; for exposed-schema changes, prove the Supabase GitHub integration applies the configuration or record the explicit operator gate, then read back exact ordered hosted PostgREST schema/search-path lists | Config changes affect preview, persistent dev, and local behavior together; local CLI order is not hosted default-profile proof. |
+| `.github/workflows/supabase-dev.yml` | inspect and parse YAML; regenerate `supabase/workspace/database.types.ts` from the full local migration state; assert the workflow contains no `db push`, `config push`, Management API mutation, or database-password dependency | prove the workflow rejects generated type drift, waits for the exact native migration head, and performs only Management API GET plus read-only Data API probes: profile-less `public`, explicit `api`, rejected `private`, and retired `public` RPC | Supabase GitHub integration is the sole persistent-Dev deployer; the workflow verifies rather than races it. |
 | `scripts/**` | run the touched script with `--help` when possible, or execute the narrowest safe non-destructive path | if a script changes generated workspace behavior, refresh the workspace in a safe environment and inspect git diff | Avoid remote-destructive script runs unless the task explicitly requires them. |
 | `supabase/workspace/**` | prove whether the touched file is generated or stable | if stable manual overlay files changed, explain how they feed migration generation | Generated files alone are not sufficient evidence of a durable schema change. |
 | repo docs only | `scripts/docpact lint --root . --files "<csv>" --mode enforce` | `scripts/docpact validate-config --root . --strict` when `.docpact/config.yaml` changes | Refresh review metadata even when prose stays unchanged. |
@@ -221,7 +201,7 @@ The canonical refresh target remains remote `dev`. For an exact local migration-
 python scripts/build_schema_workspace.py --environment local
 ```
 
-Do not commit a local reconstruction unless its applied migration versions match the intended hosted target and targeted hosted catalog checks rule out relevant schema drift. Record both proofs in the PR.
+For a schema-changing PR, an exact-local reconstruction may be committed as a review snapshot after a blank migration rebuild, targeted contract tests, and a second deterministic regeneration show no drift. Record those proofs in the PR. After merge, require exact-head native Dev deployment, hosted catalog checks, and a remote-Dev refresh comparison; commit any resulting drift as a follow-up.
 
 ## Preview, Persistent Dev, and Root Integration
 

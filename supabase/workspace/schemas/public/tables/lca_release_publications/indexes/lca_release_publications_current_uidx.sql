@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX "lca_release_publications_current_uidx" ON "public"."lca_release_publications" USING "btree" ("publication_series_key", "publication_channel", "visibility_scope") WHERE ("is_current" = true);

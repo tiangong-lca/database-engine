@@ -1,1 +1,0 @@
-CREATE OR REPLACE TRIGGER "lcia_result_packages_touch_task_projection" AFTER INSERT ON "public"."lcia_result_packages" FOR EACH ROW EXECUTE FUNCTION "public"."lcia_result_package_touch_task_projection"();

@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX "command_audit_log_guarded_alias_plan_summary_replay_idx" ON "public"."command_audit_log" USING "btree" ("actor_user_id", (("payload" ->> 'plan_request_sha256'::"text"))) WHERE (("command" = 'cmd_dataset_alias_plan_guarded'::"text") AND ("target_table" IS NULL));

@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-05
-lastReviewedCommit: df8253bfb3499b1f8a6d7d84d321bd5b7cc67752
-lastReviewedNote: "已为 Issue #422 复核：记录全量 Schema 切换的存量升级验证入口。"
+lastReviewedAt: 2026-08-06
+lastReviewedCommit: 40b5fb812e3517a4f24135bdf3205d1e989c3525
+lastReviewedNote: "已为 Issue #422 合同收口复核：记录能力合同验证及可重复生成的 public/api TypeScript 合同。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -50,8 +50,9 @@ related:
 ### `test_full_schema_cutover_upgrade.sh`
 
 把本地数据库重建到全量 Schema 切换前的最后一个 migration，写入一条代表性业务数据，
-快照关系与函数身份、触发器、RLS 策略、约束及精确行数，再应用切换 migration，
-验证所有对象和数据均被完整保留。
+快照关系与函数身份、触发器、RLS 策略、约束及精确行数，再应用切换与契约收口
+migration，验证对象和数据完整保留、能力清单与幂等索引已安装，并确认 API 函数
+不再向 PostgreSQL `PUBLIC` 角色开放执行权限。
 
 用法：
 
@@ -60,6 +61,16 @@ scripts/test_full_schema_cutover_upgrade.sh
 ```
 
 此脚本仅用于本地验证，并会重置本地 Supabase 数据库。
+
+### `test_supabase_dev_workflow_contract.py`
+
+当持久化 Dev 验证 workflow 重新引入数据库密码、`db push`、`config push` 或
+Management API 写操作时立即失败；同时要求托管 readback head 与最新已提交
+migration 一致。
+
+```bash
+python scripts/test_supabase_dev_workflow_contract.py
+```
 
 ### `data_migrations/tidas_schema_202606/runner.py`
 
@@ -146,6 +157,7 @@ python scripts/build_schema_workspace.py --environment local
 行为：
 
 - 先导出最新远程 schema
+- 规范化生成 SQL 视图的行尾空白，保证审查 diff 可重复
 - 重建 `global/` 和 `schemas/`
 - 保留 `supabase/workspace/README.md`
 - 保留 `supabase/workspace/README.zh-CN.md`
@@ -156,7 +168,17 @@ python scripts/build_schema_workspace.py --environment local
 - `remote_schema.sql`、`global/` 和 `schemas/` 中的手工修改都不稳定
 - 刷新时可能覆盖这些生成文件里尚未提交到 Git 的改动
 - 如果你希望 `--git-changes` 只反映后续手工修改，应在同步远程数据库并刷新 workspace 之后，先把新的 `supabase/workspace/schemas` 提交到 Git，再开始编辑
-- 远程 `dev` 仍是生成 schema 的权威目标。只有在已应用 migration 与托管目标一致，并对本次合同完成托管 catalog 定向检查后，才能提交本地重建产物。
+- 远程 `dev` 仍是生成 schema 的权威目标。Schema 变更 PR 可以提交 exact-local 审查快照，但必须先通过空库 migration 重建、定向合同测试，并再次生成证明无漂移。合并后，原生 Dev 部署必须到达准确 head、托管 catalog 检查必须通过，还要将 remote-Dev 刷新结果与审查快照比较；若有漂移，以后续提交收口。
+
+### `build_database_types.py`
+
+生成纳入版本控制的 TypeScript 数据合同，仅覆盖 Data API 暴露的 `public` 与 `api` 两个 schema。
+
+```bash
+python scripts/build_database_types.py --environment local
+```
+
+只有在刻意以已链接的 Supabase 项目为来源时才使用 `--environment linked`。CI 会从本地完整 migration 状态重新生成，并在 `supabase/workspace/database.types.ts` 漂移时失败。
 
 ### `check_generated_workspace_legacy_tables.py`
 

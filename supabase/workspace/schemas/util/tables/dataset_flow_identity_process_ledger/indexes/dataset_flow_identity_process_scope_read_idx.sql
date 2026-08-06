@@ -1,0 +1,1 @@
+CREATE INDEX "dataset_flow_identity_process_scope_read_idx" ON "util"."dataset_flow_identity_process_ledger" USING "btree" ("scope_id", "ordinal") INCLUDE ("process_id", "process_version", "status", "rewrite_count", "audit_id", "derivative_batch_id", "completed_at");

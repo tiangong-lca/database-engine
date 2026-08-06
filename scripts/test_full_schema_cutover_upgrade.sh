@@ -2,7 +2,11 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-migration="$repo_root/supabase/migrations/20260805130000_full_schema_cutover.sql"
+cutover_migration="$repo_root/supabase/migrations/20260805130000_full_schema_cutover.sql"
+contract_migrations=(
+  "$repo_root/supabase/migrations/20260806160000_api_contract_closure.sql"
+  "$repo_root/supabase/migrations/20260806161000_lca_package_capability_facades.sql"
+)
 database_url="$(
   supabase status --output env \
     | sed -n 's/^DB_URL="\([^"]*\)"$/\1/p'
@@ -105,7 +109,7 @@ where constraint_record.connamespace in (
 );
 SQL
 
-psql "$database_url" -v ON_ERROR_STOP=1 -f "$migration"
+psql "$database_url" -v ON_ERROR_STOP=1 -f "$cutover_migration"
 
 psql "$database_url" -v ON_ERROR_STOP=1 <<'SQL'
 do $verify$
@@ -238,4 +242,51 @@ select
   (select count(*) from archive.issue_422_trigger_snapshot) as preserved_triggers,
   (select count(*) from archive.issue_422_policy_snapshot) as preserved_policies,
   (select count(*) from archive.issue_422_constraint_snapshot) as preserved_constraints;
+SQL
+
+for contract_migration in "${contract_migrations[@]}"; do
+  psql "$database_url" -v ON_ERROR_STOP=1 -f "$contract_migration"
+done
+
+psql "$database_url" -v ON_ERROR_STOP=1 <<'SQL'
+do $verify_contract_closure_upgrade$
+begin
+  if not exists (
+    select 1
+    from private.identity_center_processed_events
+    where event_id = 'issue-422-populated-upgrade'
+      and event_type = 'schema-cutover-test'
+  ) then
+    raise exception 'representative business row was lost during contract-closure upgrade';
+  end if;
+
+  if to_regclass('private.api_capability_grants') is null then
+    raise exception 'API capability manifest is missing after upgrade';
+  end if;
+
+  if to_regclass('private.lca_package_import_prepare_idempotency_uk') is null then
+    raise exception 'package import idempotency index is missing after upgrade';
+  end if;
+
+  if exists (
+    select 1
+    from pg_catalog.pg_proc as routine
+    join pg_catalog.pg_namespace as namespace on namespace.oid = routine.pronamespace
+    cross join lateral pg_catalog.aclexplode(
+      coalesce(routine.proacl, pg_catalog.acldefault('f', routine.proowner))
+    ) as acl
+    where namespace.nspname = 'api'
+      and acl.grantee = 0
+      and acl.privilege_type = 'EXECUTE'
+  ) then
+    raise exception 'an API routine remains executable by PUBLIC after upgrade';
+  end if;
+end
+$verify_contract_closure_upgrade$;
+
+drop table if exists archive.issue_422_constraint_snapshot;
+drop table if exists archive.issue_422_policy_snapshot;
+drop table if exists archive.issue_422_relation_snapshot;
+drop table if exists archive.issue_422_routine_snapshot;
+drop table if exists archive.issue_422_trigger_snapshot;
 SQL

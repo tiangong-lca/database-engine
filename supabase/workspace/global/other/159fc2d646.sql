@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."dataset_alias_jsonb_array_v1"("p_value" "jsonb") IS 'Normalizes singleton-object or array dataset reference collections into an immutable JSONB array for guarded alias candidate indexes and exact rechecks. EXECUTE is limited to postgres-owned definer code and the trusted service_role table writer.';

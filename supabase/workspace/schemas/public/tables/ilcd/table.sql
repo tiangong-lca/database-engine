@@ -15,8 +15,10 @@ ALTER TABLE ONLY "public"."ilcd"
 
 ALTER TABLE "public"."ilcd" ENABLE ROW LEVEL SECURITY;
 
-GRANT ALL ON TABLE "public"."ilcd" TO "anon";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."ilcd" TO "anon";
 
-GRANT ALL ON TABLE "public"."ilcd" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."ilcd" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."ilcd" TO "service_role";
+
+GRANT SELECT ON TABLE "public"."ilcd" TO "api_internal_executor";

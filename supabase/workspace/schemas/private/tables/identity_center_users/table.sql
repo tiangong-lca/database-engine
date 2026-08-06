@@ -1,0 +1,26 @@
+CREATE TABLE IF NOT EXISTS "private"."identity_center_users" (
+    "keycloak_sub" "text" NOT NULL,
+    "user_id" "uuid",
+    "status" character varying(32) DEFAULT 'active'::character varying NOT NULL,
+    "desired_role" character varying(64),
+    "metadata" "jsonb" DEFAULT '{}'::"jsonb",
+    "created_at" timestamp with time zone DEFAULT "now"(),
+    "modified_at" timestamp with time zone
+);
+
+ALTER TABLE "private"."identity_center_users" OWNER TO "postgres";
+
+ALTER TABLE ONLY "private"."identity_center_users"
+    ADD CONSTRAINT "identity_center_users_pkey" PRIMARY KEY ("keycloak_sub");
+
+ALTER TABLE ONLY "private"."identity_center_users"
+    ADD CONSTRAINT "identity_center_users_user_id_key" UNIQUE ("user_id");
+
+ALTER TABLE ONLY "private"."identity_center_users"
+    ADD CONSTRAINT "identity_center_users_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id");
+
+ALTER TABLE "private"."identity_center_users" ENABLE ROW LEVEL SECURITY;
+
+GRANT ALL ON TABLE "private"."identity_center_users" TO "service_role";
+
+GRANT SELECT ON TABLE "private"."identity_center_users" TO "api_internal_executor";

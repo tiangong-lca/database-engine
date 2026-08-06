@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "public"."cmd_dataset_derivative_rebuild_read"("p_request_id" "uuid") IS 'Owner-only, mutation-free readback for one durable derivative rebuild request. Pending drain/fence state is explicit and cannot be presented as completion.';

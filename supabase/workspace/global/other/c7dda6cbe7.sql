@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "util"."purge_cron_job_run_details"("p_retention_window" interval) IS 'Deletes completed pg_cron run details older than the retention window; open rows and status=running rows are protected.';

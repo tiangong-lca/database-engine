@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "public"."svc_lcia_scope_closure_artifact_gc_renew"("p_claim_token" "uuid", "p_lease_seconds" integer) IS 'Service-only fenced heartbeat that extends only a current unexpired GC claim token.';

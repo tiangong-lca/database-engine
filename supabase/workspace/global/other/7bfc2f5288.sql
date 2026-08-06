@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."qry_review_get_admin_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") IS 'Server-paginated Review Admin queue with one row per Root Review; a matching current Reference Review includes its Root.';

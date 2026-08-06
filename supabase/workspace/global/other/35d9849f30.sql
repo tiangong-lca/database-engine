@@ -1,0 +1,1 @@
+COMMENT ON TRIGGER "dataset_flow_identity_flow_active_fence" ON "public"."flows" IS 'Fail-closed Step 3 actor fence for Flow updates that change any identity-guard-relevant or future non-derivative column; extracted_md, embedding_ft, and embedding_ft_at updates bypass the owner-wide fence.';

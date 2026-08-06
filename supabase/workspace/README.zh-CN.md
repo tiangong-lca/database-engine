@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-05
-lastReviewedCommit: df8253b4f81d3e05524602f996025b54e9c35dd3
-lastReviewedNote: "已为 Issue #422 复核：迁移部署后需显式导出 public/api/private/util/archive；生成区与稳定人工 overlay 的边界不变。"
+lastReviewedAt: 2026-08-06
+lastReviewedCommit: 40b5fb812e3517a4f24135bdf3205d1e989c3525
+lastReviewedNote: "已为 Issue #422 合同收口复核：schema 浏览产物与 public/api TypeScript Data API 合同均有明确的生成及漂移规则。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -43,11 +43,14 @@ related:
 - `global/`
 - `schemas/`
 
+`database.types.ts` 由 `python scripts/build_database_types.py` 单独生成，只覆盖实际暴露的 `public` 与 `api` schema。
+
 ## 刷新行为
 
 每次刷新 `supabase/workspace` 时，会执行以下操作：
 
 - `remote_schema.sql` 会被最新导出的 dump 覆盖。
+- 生成 SQL 的行尾空白会被规范化，使重复刷新产生稳定的审查 diff。
 - `global/` 会被删除并按最新 dump 重新生成。
 - `schemas/` 会被删除并按最新 dump 重新生成。
 - `README.md` 会被保留。
@@ -92,7 +95,13 @@ python scripts/build_schema_workspace.py --environment local \
   --schemas public api private util archive
 ```
 
-只有在已应用 migration 版本与目标托管环境一致，且本次合同的托管 catalog 定向检查未发现相关漂移时，才能提交该本地产物。
+Schema 变更 PR 可以把该 exact-local 结果作为审查快照提交，但必须先通过空库 migration 重建、定向合同测试，并再次生成证明无漂移；此时它还不代表托管来源。合并后必须确认原生 Dev 部署到达准确 migration head、托管 catalog 检查通过，并把 remote-Dev 刷新结果与本快照比较；若有漂移，以后续提交收口。
+
+随后应从同一个本地完整 migration 状态生成纳入版本控制的 Data API 类型合同：
+
+```bash
+python scripts/build_database_types.py --environment local
+```
 
 如果目标分支已经应用 `worker_jobs` cutover 和旧 job 表退休 migration，刷新后应确认生成内容不再展示已退休的 legacy job 表：
 

@@ -1,1 +1,0 @@
-CREATE OR REPLACE TRIGGER "worker_job_artifacts_scope_closure_lifecycle" BEFORE INSERT OR UPDATE ON "public"."worker_job_artifacts" FOR EACH ROW EXECUTE FUNCTION "public"."lcia_scope_closure_artifact_lifecycle_guard"();

@@ -68,8 +68,8 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  201::bigint,
-  'all reviewed API functions moved to api'
+  235::bigint,
+  'api contains the cutover functions plus the reviewed contract-closure facades'
 );
 
 select is(
@@ -136,7 +136,7 @@ select is(
       'util'::regnamespace
     )
   ),
-  444::bigint,
+  446::bigint,
   'all application constraints remain present'
 );
 
@@ -204,7 +204,7 @@ select is(
       and routine.prosecdef
       and owner_role.rolname = 'api_internal_executor'
   ),
-  16::bigint,
+  20::bigint,
   'private RLS helper facades use the constrained executor'
 );
 

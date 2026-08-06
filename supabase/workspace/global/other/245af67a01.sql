@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."dataset_flow_identity_scope_read_core_v1"("p_scope_id" "uuid") IS 'Actor-only, read-only Step 3 resume/status proof. It exposes the exact ordered process ledger and live pending/blocker closure; failed/stale derivatives include exact derivative-only compensation targets, but this function never retries a mutation or admits/dispatches compensation.';

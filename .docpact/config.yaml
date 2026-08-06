@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-05"
-lastReviewedCommit: "df8253b4f81d3e05524602f996025b54e9c35dd3"
-lastReviewedNote: "Reviewed for Issue #422: schema-boundary migration, validation, and generated-workspace paths are now routed together; repository ownership and integration rules remain unchanged."
+lastReviewedAt: "2026-08-06"
+lastReviewedCommit: "40b5fb812e3517a4f24135bdf3205d1e989c3525"
+lastReviewedNote: "Reviewed for Issue #422 contract closure: native Supabase deployment, read-only hosted verification, capability facades, and generated Data API types are governed together."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -299,7 +299,7 @@ rules:
         mode: review_or_update
       - path: docs/agents/supabase-branching_CN.md
         mode: review_or_update
-    reason: Branch bindings and persistent dev automation change repo routing, proof, and branch-operation guidance together.
+    reason: Branch bindings, native-integration deployment, and read-only persistent Dev verification change repo routing, proof, and branch-operation guidance together.
   - id: database-engine-migration-and-seed-contract
     scope: repo
     repo: database-engine

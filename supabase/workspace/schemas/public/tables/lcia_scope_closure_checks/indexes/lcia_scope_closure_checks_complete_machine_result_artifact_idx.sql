@@ -1,1 +1,0 @@
-CREATE INDEX "lcia_scope_closure_checks_complete_machine_result_artifact_idx" ON "public"."lcia_scope_closure_checks" USING "btree" ("complete_machine_result_artifact_id") WHERE ("complete_machine_result_artifact_id" IS NOT NULL);
