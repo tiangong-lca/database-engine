@@ -20,9 +20,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-05
-lastReviewedCommit: df8253b4f81d3e05524602f996025b54e9c35dd3
-lastReviewedNote: "已为 Issue #422 复核：schema 边界切换需验证 Preview、持久 dev 和生产的 profile 行为；分支工作流及 promote 规则不变。"
+lastReviewedAt: 2026-08-06
+lastReviewedCommit: 40b5fb812e3517a4f24135bdf3205d1e989c3525
+lastReviewedNote: "已为 Issue #422 合同收口复核：Supabase GitHub Integration 是唯一 Dev 部署方，仓库 CI 仅执行本地与托管只读验证。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -58,7 +58,7 @@ related:
 ## 分支契约
 
 - Git `main` -> 生产基线，由 Supabase GitHub integration 自动迁移
-- Git `dev` -> 持久化 Supabase `dev` 分支，由 `.github/workflows/supabase-dev.yml` 迁移
+- Git `dev` -> 持久化 Supabase `dev` 分支，由 Supabase GitHub integration 迁移，并由 `.github/workflows/supabase-dev.yml` 只读验证
 - PR / feature 分支 -> 由 Supabase GitHub integration 自动创建的 preview branch
 
 规则：
@@ -75,14 +75,14 @@ related:
 - 把 `supabase/migrations/` 中已提交的文件视为 production、`dev` 和 preview 分支共同遵循的 schema 真相源。
 - 分支差异放在 `supabase/config.toml` 的 `[remotes.<branch>]` 中。
 - 不要为不同 Git 分支复制多套 `supabase/` 目录。
-- 把 `.github/workflows/supabase-dev.yml` 作为本仓唯一会对持久化 Supabase `dev` 分支执行 `supabase db push` 的 GitHub Actions 流程。
+- 把 Supabase GitHub integration 作为持久化 `dev` 的唯一 migration 部署者；`.github/workflows/supabase-dev.yml` 不得修改托管 schema 或配置。
 - 不要为 Git `main` 增加 checked-in 的 GitHub Actions 生产部署流程；生产项目由绑定到本仓的 Supabase GitHub integration 自动迁移。
 - 不要先手改远端数据库再回头补 migration。
 
 ## 需要维护的文件
 
 - `supabase/config.toml`：共享基线加 `[remotes.dev]`
-- `.github/workflows/supabase-dev.yml`：在 Git `dev` 更新时，把已提交 migration 推送到持久化 Supabase `dev` 分支
+- `.github/workflows/supabase-dev.yml`：重建本地 migration，并只读验证持久化 `dev` 已到达准确的原生部署 head
 - `supabase/migrations/*.sql`：已提交的 migration 历史
 - `supabase/seed.sql`：共享 seed 数据
 - `supabase/seeds/dev.sql`：可选的持久化 dev 专属 seed 数据
@@ -122,7 +122,6 @@ related:
 
 - variable `SUPABASE_DEV_PROJECT_ID`
 - secret `SUPABASE_ACCESS_TOKEN`
-- secret `SUPABASE_DEV_DB_PASSWORD`
 
 ## PR 到 Supabase migration 路径
 
@@ -134,12 +133,10 @@ related:
 2. PR 目标分支是 Git `dev`。
 3. Supabase GitHub integration 根据已提交的 `supabase/` 目录创建或更新该 PR 的 preview branch。
 4. preview branch 只用于 PR 级别验证；它不是持久化 Supabase `dev` 分支。
-5. PR 合并后，对 Git `dev` 的 push 会触发 `.github/workflows/supabase-dev.yml`。
-6. 该 workflow 会连接 `SUPABASE_DEV_PROJECT_ID` 并执行 `supabase db push --include-all`。
-7. 同一 workflow 随后对同一个项目执行 `supabase config push`，强制 PostgREST
-   使用有序的 `public,api,graphql_public` 与 `public,api,extensions`，并通过
-   Supabase Management API 回读这两个列表。
-8. 已提交的 migrations 与项目配置由此共同应用到持久化 Supabase `dev` 分支。
+5. PR 合并后，Supabase GitHub integration 会把 Git `dev` 应用到持久化 Supabase `dev` 分支。
+6. 同一次 Git push 会触发 `.github/workflows/supabase-dev.yml`，先完成本地空库重建，再等待 service-only readback 报告准确的 migration head。
+7. workflow 通过 Management API 回读 `public,api,graphql_public` 与
+   `public,api,extensions`，并验证托管 Data API 边界；它不会修改托管数据库或配置。
 
 `--include-all` 表示所有尚未出现在远端 migration history 中的已提交 migration
 都可以被应用。受治理的 `main -> dev` 回合并可能带入时间戳早于 `dev` 已记录新
@@ -203,11 +200,12 @@ Git `main` 由 Supabase GitHub integration 处理。运维人员仍可在本地�
 
 ### 持久化 `dev` 分支部署
 
-- 对 Git `dev` 的 push 会触发 `.github/workflows/supabase-dev.yml`。
-- 该 workflow 会连接持久化 Supabase `dev` 分支并执行 `supabase db push --include-all`，从而让受治理的回合并可以应用远端 history 中缺失的全部已提交 migration，包括时间戳更早的条目。
-- 同一 workflow 随后执行 `supabase config push`，强制托管 PostgREST 以 `public`
-  为首，并在 Management API 回读或 REST profile 探测不符合合同时直接失败。
-- 不要再增加第二条会对同一目标执行 push 的自动化链路。
+- 对 Git `dev` 的 push 由 Supabase GitHub integration 部署。
+- 同一次 push 会触发 `.github/workflows/supabase-dev.yml`；它在本地重建完整
+  migration history，等待托管项目到达准确的原生 migration head，并在
+  Management API 回读或 REST profile 探测不符合合同时失败。
+- 该 workflow 不使用数据库密码，也不修改托管状态。不要再增加与 integration
+  竞争同一目标的部署链路。
 
 ### 生产 `main` 部署
 

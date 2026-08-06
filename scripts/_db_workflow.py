@@ -143,6 +143,15 @@ def reset_workspace_generated_content(workspace_root: Path) -> None:
         remove_dir_safe(workspace_root / name)
 
 
+def normalize_generated_sql(path: Path) -> None:
+    """Keep generated review snapshots deterministic and diff-check clean."""
+    text = path.read_text(encoding="utf-8")
+    normalized = "\n".join(
+        re.sub(r"^ +\t", "\t", line).rstrip(" \t") for line in text.splitlines()
+    ) + "\n"
+    path.write_text(normalized, encoding="utf-8")
+
+
 def export_remote_schema(
     environment: str,
     db_url: str | None = None,
@@ -177,6 +186,7 @@ def export_remote_schema(
         raise
 
     temp_schema_path.replace(schema_path)
+    normalize_generated_sql(schema_path)
 
     return schema_path
 

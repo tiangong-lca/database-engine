@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-05
-lastReviewedCommit: df8253b4f81d3e05524602f996025b54e9c35dd3
-lastReviewedNote: "Reviewed for Issue #422: the public/api/private/util/archive boundary is now an explicit database contract; repository ownership, dev-first delivery, migration source-of-truth, and workspace integration rules remain unchanged."
+lastReviewedAt: 2026-08-06
+lastReviewedCommit: 40b5fb812e3517a4f24135bdf3205d1e989c3525
+lastReviewedNote: "Reviewed for Issue #422 contract closure: capability facades, exact API privileges, native Supabase deployment, read-only hosted verification, and generated Data API types now form one governed contract."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -117,7 +117,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - disposable Hosted actors must use an outer-frozen request/namespace and deterministic role email, be registered before creation, carry exact fixture/request/namespace/role metadata, recover only one exact filtered metadata match, use global logout, and treat hard admin DELETE as incomplete until both GET-by-ID returns 404 and a fresh exact filtered census is empty; the outer wrapper must create the exact empty owner-only non-symlink private temp directory and durably fsync each secret-free inner recovery checkpoint before returning its exact IPC ACK, so an actor ID is durable before sign-in or fixture mutation; cleanup must hold the derivative coordinator lock and remain before external dispatch, any missing or ambiguous global logout must retain the actor and forbid hard DELETE, and temporary credential files must be proven removed independently by the inner and outer processes; offline lifecycle and 39-surface residue contracts prove the local control/readback shape without replacing the later exact-head Hosted run and independent Auth/SQL readback execution
 - migration authoring starts from Git `dev`, not GitHub default-branch UI
 - preview-branch proof belongs to the repo PR
-- persistent `dev` proof belongs after merge into Git `dev`; its single workflow uses `supabase db push --include-all`, then `supabase config push`, enforces and reads back the exact ordered hosted PostgREST schema/search-path lists through the Management API, and probes the default `public`, explicit `api`, rejected `private`, and retired `public` RPC routes
+- persistent `dev` deployment belongs to the Supabase GitHub integration bound to Git `dev`; the checked-in workflow is a read-only verifier that waits for the exact migration head, reads back the ordered hosted PostgREST schema/search-path lists, and probes the default `public`, explicit `api`, rejected `private`, and retired `public` RPC routes without a database password or a second `db push`
 - production `main` proof belongs after `dev -> main` promote and should confirm Supabase GitHub integration applied migrations automatically; when `supabase/config.toml` changes, the operator must also push and verify that configuration against the production project
 - production-volume administrative backfills must fit the platform statement timeout or use a bounded session override that is restored immediately after the statement; Preview row counts alone are not sufficient volume proof
 - root workspace proof belongs later in `lca-workspace`
@@ -185,7 +185,7 @@ Use the role table in this file as the update map.
 ## Hard Boundaries
 
 - do not treat `supabase/workspace/remote_schema.sql`, `global/**`, or `schemas/**` as stable edit locations
-- do not create a second workflow that pushes to the persistent Supabase `dev` branch without updating the repo contract docs in the same change
+- do not create any checked-in workflow that competes with the Supabase GitHub integration for persistent-`dev` deployment
 - do not move frontend `.env` or app-side client logic into this repo
 - do not treat a merged PR here as delivery-complete when the workspace still needs a submodule bump
 

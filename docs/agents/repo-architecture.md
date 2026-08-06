@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-05
-lastReviewedCommit: df8253bfb3499b1f8a6d7d84d321bd5b7cc67752
-lastReviewedNote: "Reviewed for Issue #422: document the complete public/api/private/util/archive schema boundary and the generated-workspace refresh rule after cutover."
+lastReviewedAt: 2026-08-06
+lastReviewedCommit: 40b5fb812e3517a4f24135bdf3205d1e989c3525
+lastReviewedNote: "Reviewed for Issue #422 contract closure: document capability facades, the exposed API type snapshot, and the complete generated-workspace boundary."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -64,6 +64,12 @@ on local CLI normalization, which may place a custom schema before `public`.
 public core-table RLS policies; browser roles receive no other internal
 relation, routine, or write capability.
 
+Every external `EXECUTE` grant on an `api` routine is an exact-signature entry
+in `private.api_capability_grants`. That table records the owning capability ID
+and admitted caller roles; migrations first remove inherited grants and then
+rebuild the external ACL from this closed manifest. New or overloaded RPCs are
+therefore denied until their exact signature is deliberately classified.
+
 Schema cutovers must preserve object identity and database dependencies with
 `ALTER ... SET SCHEMA`; they must not rebuild tables, triggers, policies,
 constraints, or functions merely to change namespaces. Stored function source
@@ -85,11 +91,12 @@ that needs private RLS helpers runs through the constrained
 | `supabase/tests/preview/**` | exact-ref-bound disposable Hosted Preview mutation fixtures, cleanup, rollback-only fault assertions, and offline transport/lifecycle contracts; test-only and excluded from migrations, seeds, Dev data rehearsal, and production execution |
 | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |
 | `scripts/**` | export, refresh, change-copy, and migration-generation helpers |
-| `.github/workflows/supabase-dev.yml` | only checked-in GitHub Actions automation for pushing committed migrations to the persistent remote `dev` branch |
+| `.github/workflows/supabase-dev.yml` | read-only local-contract and persistent-Dev verification after the Supabase GitHub integration deploys Git `dev` |
 | `supabase/workspace/changes/**` | manual overlay area used when generating migrations from workspace files |
 | `supabase/workspace/remote_schema.sql` | generated full raw dump from the remote database |
 | `supabase/workspace/global/**` | generated split-out global objects rebuilt on workspace refresh |
 | `supabase/workspace/schemas/**` | generated human-browsable split schema objects rebuilt on workspace refresh |
+| `supabase/workspace/database.types.ts` | generated TypeScript contract for the exposed `public` and `api` Data API schemas; CI rejects drift from the full local migration state |
 
 ## Branch Model In Practice
 
@@ -98,7 +105,7 @@ that needs private RLS helpers runs through the constrained
 - Git `dev` is the daily integration trunk
 - Git `main` is the promoted release line
 - PR branches map to Supabase preview branches
-- `.github/workflows/supabase-dev.yml` pushes every committed migration missing from remote history to the persistent remote `dev` branch on Git `dev`, including an older-timestamped migration introduced by a governed `main -> dev` backmerge
+- the Supabase GitHub integration is the sole migration deployer for Git `dev`; `.github/workflows/supabase-dev.yml` rebuilds the local contract and waits for/readbacks the exact native deployment without issuing `db push`, `config push`, or Management API mutations
 - the production Supabase project is migrated automatically by the Supabase GitHub integration when Git `main` advances
 
 This means branch behavior is part of the repo architecture, not just delivery process.
