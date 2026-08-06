@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-06
-lastReviewedCommit: 0b615b0fa753eb1ccbfaf5ce4a08938258d97ad7
-lastReviewedNote: "Reviewed for Issue #422 contract closure: document capability facades, the exposed API type snapshot, and the complete generated-workspace boundary."
+lastReviewedAt: 2026-08-07
+lastReviewedCommit: 25c7ca11d18b6af3907b95973c254faf05c50e7a
+lastReviewedNote: "Reviewed for Issue #422 Edge consumer closure: Data Product and enriched TIDAS facades preserve the public/private boundary and explicit API contract."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -69,6 +69,12 @@ in `private.api_capability_grants`. That table records the owning capability ID
 and admitted caller roles; migrations first remove inherited grants and then
 rebuild the external ACL from this closed manifest. New or overloaded RPCs are
 therefore denied until their exact signature is deliberately classified.
+
+Edge consumers must obtain Data Product publication, package, and worker
+metadata through bounded `api.svc_data_product_*` projections rather than
+reading private relations. TIDAS package reads and import admission likewise
+remain service-only capability contracts; their DTO and terminal error codes
+are part of the consumer-facing façade and must be regression-tested.
 
 Schema cutovers must preserve object identity and database dependencies with
 `ALTER ... SET SCHEMA`; they must not rebuild tables, triggers, policies,

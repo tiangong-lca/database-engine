@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-06
-lastReviewedCommit: 0b615b0fa753eb1ccbfaf5ce4a08938258d97ad7
-lastReviewedNote: "已为 Issue #422 合同收口复核：schema 浏览产物与 public/api TypeScript Data API 合同均有明确的生成及漂移规则。"
+lastReviewedAt: 2026-08-07
+lastReviewedCommit: 25c7ca11d18b6af3907b95973c254faf05c50e7a
+lastReviewedNote: "已为 Issue #422 Edge 消费者收口复核：生成类型包含 Data Product 与增强后的 TIDAS API façade 合同。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -43,7 +43,7 @@ related:
 - `global/`
 - `schemas/`
 
-`database.types.ts` 由 `python scripts/build_database_types.py` 单独生成，只覆盖实际暴露的 `public` 与 `api` schema。
+`database.types.ts` 由 `python scripts/build_database_types.py` 单独生成，只覆盖实际暴露的 `public` 与 `api` schema，并包含 Edge 使用的 service/authenticated 消费者 façade。
 
 ## 刷新行为
 

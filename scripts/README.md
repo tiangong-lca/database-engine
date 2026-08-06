@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-06
-lastReviewedCommit: 0b615b0fa753eb1ccbfaf5ce4a08938258d97ad7
-lastReviewedNote: "Reviewed for Issue #422 contract closure: document capability validation and deterministic public/api TypeScript contract generation."
+lastReviewedAt: 2026-08-07
+lastReviewedCommit: 25c7ca11d18b6af3907b95973c254faf05c50e7a
+lastReviewedNote: "Reviewed for Issue #422 Edge consumer closure: include Data Product facade installation in populated upgrade validation and generated public/api types."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -54,7 +54,8 @@ Schema cutover, adds a representative business row, snapshots relation and
 routine identities plus trigger, RLS-policy, constraint, and exact row-count
 state, applies the cutover and contract-closure migrations, and verifies
 complete preservation, capability-manifest installation, idempotency-index
-creation, and removal of PostgreSQL `PUBLIC` execution from the API surface.
+creation, Data Product consumer-facade installation, and removal of PostgreSQL
+`PUBLIC` execution from the API surface.
 
 Usage:
 

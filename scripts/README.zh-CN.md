@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-06
-lastReviewedCommit: 0b615b0fa753eb1ccbfaf5ce4a08938258d97ad7
-lastReviewedNote: "已为 Issue #422 合同收口复核：记录能力合同验证及可重复生成的 public/api TypeScript 合同。"
+lastReviewedAt: 2026-08-07
+lastReviewedCommit: 25c7ca11d18b6af3907b95973c254faf05c50e7a
+lastReviewedNote: "已为 Issue #422 Edge 消费者收口复核：升级验证纳入 Data Product façade，并同步生成 public/api 类型。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -51,8 +51,8 @@ related:
 
 把本地数据库重建到全量 Schema 切换前的最后一个 migration，写入一条代表性业务数据，
 快照关系与函数身份、触发器、RLS 策略、约束及精确行数，再应用切换与契约收口
-migration，验证对象和数据完整保留、能力清单与幂等索引已安装，并确认 API 函数
-不再向 PostgreSQL `PUBLIC` 角色开放执行权限。
+migration，验证对象和数据完整保留、能力清单、幂等索引及 Data Product 消费者 façade
+已安装，并确认 API 函数不再向 PostgreSQL `PUBLIC` 角色开放执行权限。
 
 用法：
 
