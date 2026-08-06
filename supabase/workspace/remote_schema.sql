@@ -55238,65 +55238,6 @@ COMMENT ON VIEW "api"."worker_job_domain_refs" IS 'Service-role projection from 
 
 
 
-CREATE TABLE IF NOT EXISTS "archive"."issue_422_constraint_snapshot" (
-    "oid" "oid",
-    "conrelid" "oid",
-    "confrelid" "oid",
-    "contype" "char",
-    "convalidated" boolean
-);
-
-
-ALTER TABLE "archive"."issue_422_constraint_snapshot" OWNER TO "postgres";
-
-
-CREATE TABLE IF NOT EXISTS "archive"."issue_422_policy_snapshot" (
-    "oid" "oid",
-    "polrelid" "oid",
-    "polname" "name",
-    "polcmd" "char",
-    "polpermissive" boolean,
-    "polroles" "oid"[],
-    "polqual" "pg_node_tree" COLLATE "pg_catalog"."C",
-    "polwithcheck" "pg_node_tree" COLLATE "pg_catalog"."C"
-);
-
-
-ALTER TABLE "archive"."issue_422_policy_snapshot" OWNER TO "postgres";
-
-
-CREATE TABLE IF NOT EXISTS "archive"."issue_422_relation_snapshot" (
-    "object_oid" "oid",
-    "object_name" "name",
-    "object_kind" "char",
-    "target_schema" "name" COLLATE "pg_catalog"."default",
-    "exact_rows" bigint
-);
-
-
-ALTER TABLE "archive"."issue_422_relation_snapshot" OWNER TO "postgres";
-
-
-CREATE TABLE IF NOT EXISTS "archive"."issue_422_routine_snapshot" (
-    "object_oid" "oid",
-    "object_name" "name"
-);
-
-
-ALTER TABLE "archive"."issue_422_routine_snapshot" OWNER TO "postgres";
-
-
-CREATE TABLE IF NOT EXISTS "archive"."issue_422_trigger_snapshot" (
-    "oid" "oid",
-    "tgrelid" "oid",
-    "tgfoid" "oid",
-    "tgenabled" "char"
-);
-
-
-ALTER TABLE "archive"."issue_422_trigger_snapshot" OWNER TO "postgres";
-
-
 CREATE TABLE IF NOT EXISTS "archive"."worker_legacy_job_table_rows" (
     "archive_id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "archived_at" timestamp with time zone DEFAULT "now"() NOT NULL,

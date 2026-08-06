@@ -283,4 +283,10 @@ begin
   end if;
 end
 $verify_contract_closure_upgrade$;
+
+drop table if exists archive.issue_422_constraint_snapshot;
+drop table if exists archive.issue_422_policy_snapshot;
+drop table if exists archive.issue_422_relation_snapshot;
+drop table if exists archive.issue_422_routine_snapshot;
+drop table if exists archive.issue_422_trigger_snapshot;
 SQL
