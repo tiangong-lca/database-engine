@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."lcia_scope_closure_lcia_method_identity"("p_locator_id" "uuid", "p_version" "text", "p_document" "jsonb") IS 'Maps the reviewed LCIA artifact locator to the canonical method identity used by the closure Worker.';

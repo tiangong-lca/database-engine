@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "util"."is_service_request"() IS 'Returns true for service-role Data API requests, including legacy JWT claim GUCs, request.jwt.claims, and branch-local project_secret_key headers.';

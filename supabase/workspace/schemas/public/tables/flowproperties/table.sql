@@ -24,8 +24,10 @@ ALTER TABLE ONLY "public"."flowproperties"
 
 ALTER TABLE "public"."flowproperties" ENABLE ROW LEVEL SECURITY;
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."flowproperties" TO "anon";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."flowproperties" TO "anon";
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."flowproperties" TO "authenticated";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."flowproperties" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."flowproperties" TO "service_role";
+
+GRANT SELECT ON TABLE "public"."flowproperties" TO "api_internal_executor";

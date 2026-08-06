@@ -16,8 +16,10 @@ ALTER TABLE ONLY "public"."lciamethods"
 
 ALTER TABLE "public"."lciamethods" ENABLE ROW LEVEL SECURITY;
 
-GRANT ALL ON TABLE "public"."lciamethods" TO "anon";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."lciamethods" TO "anon";
 
-GRANT ALL ON TABLE "public"."lciamethods" TO "authenticated";
+GRANT SELECT,INSERT,REFERENCES,DELETE,TRIGGER,TRUNCATE,UPDATE ON TABLE "public"."lciamethods" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."lciamethods" TO "service_role";
+
+GRANT SELECT ON TABLE "public"."lciamethods" TO "api_internal_executor";

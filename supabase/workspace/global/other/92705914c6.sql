@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "public"."cmd_dataset_alias_execution_execute"("p_request_id" "uuid", "p_nonce" "text") IS 'Service-only, nonce-bound, non-replayable executor. It commits either the exact 52 alias rows/59 exchanges/55 alias audits plus all 50 derivative child requests in one transaction, or none of those business effects.';

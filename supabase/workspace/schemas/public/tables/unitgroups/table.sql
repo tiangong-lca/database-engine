@@ -24,8 +24,10 @@ ALTER TABLE ONLY "public"."unitgroups"
 
 ALTER TABLE "public"."unitgroups" ENABLE ROW LEVEL SECURITY;
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."unitgroups" TO "anon";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."unitgroups" TO "anon";
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."unitgroups" TO "authenticated";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."unitgroups" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."unitgroups" TO "service_role";
+
+GRANT SELECT ON TABLE "public"."unitgroups" TO "api_internal_executor";

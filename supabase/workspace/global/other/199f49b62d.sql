@@ -1,1 +1,0 @@
-COMMENT ON COLUMN "public"."lcia_scope_closure_checks"."snapshot_id" IS 'Immutable certificate snapshot UUID. It is a soft audit reference after the certificate is stale or revoked and retention deletes the snapshot.';

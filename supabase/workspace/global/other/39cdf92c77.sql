@@ -1,1 +1,0 @@
-COMMENT ON COLUMN "public"."lca_package_artifacts"."status" IS 'Domain artifact metadata status. deleted means the metadata row has been GC-marked after object cleanup or operator-approved retention handling.';

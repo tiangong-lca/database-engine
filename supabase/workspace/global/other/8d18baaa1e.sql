@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "public"."cmd_dataset_derivative_rebuild_plan_guarded"("p_plan" "jsonb") IS 'Exactly-once admission for one immutable current-owner state_code=0 process derivative rebuild. It creates the audit/fence atomically, quarantines visible old work, and returns queued admission only; completion is asynchronous.';

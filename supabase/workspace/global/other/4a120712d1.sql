@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "util"."process_dataset_extraction_jobs"("batch_size" integer, "visibility_timeout_seconds" integer, "max_read_count" integer, "timeout_milliseconds" integer) IS 'Invokes the Edge dataset extraction worker that claims and acknowledges compact dataset extraction jobs.';

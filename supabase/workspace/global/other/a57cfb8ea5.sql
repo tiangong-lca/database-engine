@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."cmd_dataset_alias_batch_guarded"("p_batch" "jsonb") IS 'Internal owner-draft dimension executor used only by the guarded full-plan RPC. Direct API execution is revoked so time and length_time cannot commit independently; the executor retains exact actor, state, closure, hash, audit, and replay checks for its dimension.';

@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "util"."dataset_alias_execution_server_context"() IS 'Derives protected-execution environment and project identity from the branch-local Vault project_url. Only the production project ref qgzvkongdjqiiamzbbts is classified as production.';

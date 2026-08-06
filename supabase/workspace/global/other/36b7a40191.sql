@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "public"."cmd_dataset_flow_identity_capture_attest_guarded"("p_request" "jsonb") IS 'Authenticated Step 3 v2 read-only capture attestation. It accepts typed semantic intent plus opaque artifact evidence, computes every live/before/desired/category/row hash in PostgreSQL, and persists an immutable relation-shaped receipt without mutating LCA datasets.';
