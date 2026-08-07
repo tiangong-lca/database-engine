@@ -68,8 +68,8 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  235::bigint,
-  'api contains the cutover functions plus the reviewed contract-closure facades'
+  239::bigint,
+  'api contains the cutover functions plus all reviewed consumer facades'
 );
 
 select is(

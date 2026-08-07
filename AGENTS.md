@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-06
-lastReviewedCommit: 0b615b0fa753eb1ccbfaf5ce4a08938258d97ad7
-lastReviewedNote: "Reviewed for Issue #422 contract closure: capability facades, exact API privileges, native Supabase deployment, read-only hosted verification, and generated Data API types now form one governed contract."
+lastReviewedAt: 2026-08-07
+lastReviewedCommit: 8b956d03165792b1b0890318bea021a18f7284b7
+lastReviewedNote: "Reviewed for Issue #422 Edge consumer closure: Data Product/TIDAS facades, the lifecycle review-admin predicate, exact API privileges, upgrade proof, and generated types remain one governed contract."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

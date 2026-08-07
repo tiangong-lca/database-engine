@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-06"
-lastReviewedCommit: "0b615b0fa753eb1ccbfaf5ce4a08938258d97ad7"
-lastReviewedNote: "Reviewed for Issue #422 contract closure: native Supabase deployment, read-only hosted verification, capability facades, and generated Data API types are governed together."
+lastReviewedAt: "2026-08-07"
+lastReviewedCommit: "8b956d03165792b1b0890318bea021a18f7284b7"
+lastReviewedNote: "Reviewed for Issue #422 Edge consumer closure: Data Product/TIDAS facades, the lifecycle review-admin predicate, exact ACLs, upgrade proof, and generated types remain governed together."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
