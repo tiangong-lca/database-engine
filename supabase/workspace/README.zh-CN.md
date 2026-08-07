@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-07
-lastReviewedCommit: 0a97cc761f8127ca379ab7d4df4395dab255707a
+lastReviewedCommit: c6d3e24ba8fbe0eb99b56a9aff9180c964dd9ca8
 lastReviewedNote: "已为 Issue #422 运行时 ACL 修复复核：无需调整生成 workspace 流程或稳定 overlay 合同。"
 related:
   - ../../AGENTS.md

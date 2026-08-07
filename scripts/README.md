@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-07
-lastReviewedCommit: 0a97cc761f8127ca379ab7d4df4395dab255707a
+lastReviewedCommit: c6d3e24ba8fbe0eb99b56a9aff9180c964dd9ca8
 lastReviewedNote: "Reviewed for Issue #422 ACL runtime repair: populated upgrade validation now covers exact authenticated RLS-helper and Edge release facade grants."
 related:
   - ../AGENTS.md

@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-07
-lastReviewedCommit: 0a97cc761f8127ca379ab7d4df4395dab255707a
+lastReviewedCommit: c6d3e24ba8fbe0eb99b56a9aff9180c964dd9ca8
 lastReviewedNote: "已为 Issue #422 运行时 ACL 修复复核：有数据升级验证现覆盖 authenticated RLS helper 与 Edge release façade 的精确授权。"
 related:
   - ../AGENTS.md

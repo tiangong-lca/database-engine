@@ -66,3 +66,5 @@ GRANT ALL ON FUNCTION "api"."get_current_lca_release_process"("p_process_uuid" "
 GRANT ALL ON FUNCTION "api"."get_current_lca_release_process"("p_process_uuid" "uuid", "p_process_version" "text") TO "anon";
 
 GRANT ALL ON FUNCTION "api"."get_current_lca_release_process"("p_process_uuid" "uuid", "p_process_version" "text") TO "authenticated";
+
+GRANT ALL ON FUNCTION "api"."get_current_lca_release_process"("p_process_uuid" "uuid", "p_process_version" "text") TO "service_role";

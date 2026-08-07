@@ -60498,6 +60498,7 @@ GRANT ALL ON FUNCTION "api"."_search_simple_dataset_latest"("p_table" "regclass"
 
 REVOKE ALL ON FUNCTION "api"."assert_lca_release_manager"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."assert_lca_release_manager"() TO "api_internal_executor";
+GRANT ALL ON FUNCTION "api"."assert_lca_release_manager"() TO "authenticated";
 
 
 
@@ -61070,6 +61071,7 @@ REVOKE ALL ON FUNCTION "api"."get_current_lca_release"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."get_current_lca_release"() TO "api_internal_executor";
 GRANT ALL ON FUNCTION "api"."get_current_lca_release"() TO "anon";
 GRANT ALL ON FUNCTION "api"."get_current_lca_release"() TO "authenticated";
+GRANT ALL ON FUNCTION "api"."get_current_lca_release"() TO "service_role";
 
 
 
@@ -61077,6 +61079,7 @@ REVOKE ALL ON FUNCTION "api"."get_current_lca_release_process"("p_process_uuid" 
 GRANT ALL ON FUNCTION "api"."get_current_lca_release_process"("p_process_uuid" "uuid", "p_process_version" "text") TO "api_internal_executor";
 GRANT ALL ON FUNCTION "api"."get_current_lca_release_process"("p_process_uuid" "uuid", "p_process_version" "text") TO "anon";
 GRANT ALL ON FUNCTION "api"."get_current_lca_release_process"("p_process_uuid" "uuid", "p_process_version" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "api"."get_current_lca_release_process"("p_process_uuid" "uuid", "p_process_version" "text") TO "service_role";
 
 
 
@@ -61132,12 +61135,14 @@ GRANT ALL ON FUNCTION "api"."get_latest_unitgroup_versions"("page_size" bigint, 
 REVOKE ALL ON FUNCTION "api"."get_lca_release_artifact_download"("p_artifact_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."get_lca_release_artifact_download"("p_artifact_id" "uuid") TO "api_internal_executor";
 GRANT ALL ON FUNCTION "api"."get_lca_release_artifact_download"("p_artifact_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "api"."get_lca_release_artifact_download"("p_artifact_id" "uuid") TO "service_role";
 
 
 
 REVOKE ALL ON FUNCTION "api"."get_lca_release_run"("p_release_run_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."get_lca_release_run"("p_release_run_id" "uuid") TO "api_internal_executor";
 GRANT ALL ON FUNCTION "api"."get_lca_release_run"("p_release_run_id" "uuid") TO "authenticated";
+GRANT ALL ON FUNCTION "api"."get_lca_release_run"("p_release_run_id" "uuid") TO "service_role";
 
 
 
@@ -61376,6 +61381,7 @@ GRANT ALL ON FUNCTION "api"."policy_is_team_public"("_team_id" "uuid") TO "api_i
 
 REVOKE ALL ON FUNCTION "api"."policy_review_can_read"("p_review_id" "uuid", "p_actor" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."policy_review_can_read"("p_review_id" "uuid", "p_actor" "uuid") TO "api_internal_executor";
+GRANT ALL ON FUNCTION "api"."policy_review_can_read"("p_review_id" "uuid", "p_actor" "uuid") TO "authenticated";
 
 
 
@@ -61391,6 +61397,7 @@ GRANT ALL ON FUNCTION "api"."policy_roles_insert"("_user_id" "uuid", "_team_id" 
 
 REVOKE ALL ON FUNCTION "api"."policy_roles_select"("_team_id" "uuid", "_role" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."policy_roles_select"("_team_id" "uuid", "_role" "text") TO "api_internal_executor";
+GRANT ALL ON FUNCTION "api"."policy_roles_select"("_team_id" "uuid", "_role" "text") TO "authenticated";
 
 
 
