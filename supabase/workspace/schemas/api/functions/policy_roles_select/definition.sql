@@ -29,3 +29,5 @@ ALTER FUNCTION "api"."policy_roles_select"("_team_id" "uuid", "_role" "text") OW
 REVOKE ALL ON FUNCTION "api"."policy_roles_select"("_team_id" "uuid", "_role" "text") FROM PUBLIC;
 
 GRANT ALL ON FUNCTION "api"."policy_roles_select"("_team_id" "uuid", "_role" "text") TO "api_internal_executor";
+
+GRANT ALL ON FUNCTION "api"."policy_roles_select"("_team_id" "uuid", "_role" "text") TO "authenticated";

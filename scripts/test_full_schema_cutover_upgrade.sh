@@ -9,6 +9,7 @@ contract_migrations=(
 )
 drift_cleanup_migration="$repo_root/supabase/migrations/20260806230500_remove_recreated_public_routines.sql"
 consumer_facade_migration="$repo_root/supabase/migrations/20260807103000_data_product_consumer_facades.sql"
+acl_runtime_repair_migration="$repo_root/supabase/migrations/20260807233000_issue_422_acl_runtime_repair.sql"
 database_url="$(
   supabase status --output env \
     | sed -n 's/^DB_URL="\([^"]*\)"$/\1/p'
@@ -332,6 +333,7 @@ SQL
 
 psql "$database_url" -v ON_ERROR_STOP=1 -f "$drift_cleanup_migration"
 psql "$database_url" -v ON_ERROR_STOP=1 -f "$consumer_facade_migration"
+psql "$database_url" -v ON_ERROR_STOP=1 -f "$acl_runtime_repair_migration"
 
 psql "$database_url" -v ON_ERROR_STOP=1 <<'SQL'
 do $verify_contract_closure_upgrade$
@@ -375,6 +377,42 @@ begin
      or pg_catalog.to_regprocedure('api.policy_roles_update(uuid,uuid,text)') is null
      or pg_catalog.to_regprocedure('private.update_modified_at()') is null then
     raise exception 'a canonical routine was lost during public drift cleanup';
+  end if;
+
+  if not pg_catalog.has_function_privilege(
+       'authenticated', 'api.policy_roles_select(uuid,text)', 'EXECUTE'
+     )
+     or not pg_catalog.has_function_privilege(
+       'authenticated', 'api.policy_review_can_read(uuid,uuid)', 'EXECUTE'
+     )
+     or pg_catalog.has_function_privilege(
+       'anon', 'api.policy_roles_select(uuid,text)', 'EXECUTE'
+     )
+     or pg_catalog.has_function_privilege(
+       'service_role', 'api.policy_review_can_read(uuid,uuid)', 'EXECUTE'
+     ) then
+    raise exception 'authenticated RLS helper ACLs drifted after populated upgrade';
+  end if;
+
+  if not pg_catalog.has_function_privilege(
+       'authenticated', 'api.assert_lca_release_manager()', 'EXECUTE'
+     )
+     or pg_catalog.has_function_privilege(
+       'service_role', 'api.assert_lca_release_manager()', 'EXECUTE'
+     )
+     or not pg_catalog.has_function_privilege(
+       'service_role', 'api.get_current_lca_release()', 'EXECUTE'
+     )
+     or not pg_catalog.has_function_privilege(
+       'service_role', 'api.get_current_lca_release_process(uuid,text)', 'EXECUTE'
+     )
+     or not pg_catalog.has_function_privilege(
+       'service_role', 'api.get_lca_release_artifact_download(uuid)', 'EXECUTE'
+     )
+     or not pg_catalog.has_function_privilege(
+       'service_role', 'api.get_lca_release_run(uuid)', 'EXECUTE'
+     ) then
+    raise exception 'Edge release ACLs drifted after populated upgrade';
   end if;
 
   if exists (

@@ -31,3 +31,5 @@ ALTER FUNCTION "api"."policy_review_can_read"("p_review_id" "uuid", "p_actor" "u
 REVOKE ALL ON FUNCTION "api"."policy_review_can_read"("p_review_id" "uuid", "p_actor" "uuid") FROM PUBLIC;
 
 GRANT ALL ON FUNCTION "api"."policy_review_can_read"("p_review_id" "uuid", "p_actor" "uuid") TO "api_internal_executor";
+
+GRANT ALL ON FUNCTION "api"."policy_review_can_read"("p_review_id" "uuid", "p_actor" "uuid") TO "authenticated";

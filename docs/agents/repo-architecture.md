@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-07
-lastReviewedCommit: 8b956d03165792b1b0890318bea021a18f7284b7
-lastReviewedNote: "Reviewed for Issue #422 Edge consumer closure: Data Product/TIDAS facades and the lifecycle review-admin predicate preserve the public/private boundary."
+lastReviewedCommit: c6d3e24ba8fbe0eb99b56a9aff9180c964dd9ca8
+lastReviewedNote: "Reviewed for Issue #422 ACL runtime repair: manifest-first grants preserve the existing public/api/private boundary and require no architecture change."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

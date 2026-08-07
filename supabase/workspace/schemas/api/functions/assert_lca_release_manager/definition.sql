@@ -31,3 +31,5 @@ ALTER FUNCTION "api"."assert_lca_release_manager"() OWNER TO "postgres";
 REVOKE ALL ON FUNCTION "api"."assert_lca_release_manager"() FROM PUBLIC;
 
 GRANT ALL ON FUNCTION "api"."assert_lca_release_manager"() TO "api_internal_executor";
+
+GRANT ALL ON FUNCTION "api"."assert_lca_release_manager"() TO "authenticated";

@@ -28,3 +28,5 @@ GRANT ALL ON FUNCTION "api"."get_current_lca_release"() TO "api_internal_executo
 GRANT ALL ON FUNCTION "api"."get_current_lca_release"() TO "anon";
 
 GRANT ALL ON FUNCTION "api"."get_current_lca_release"() TO "authenticated";
+
+GRANT ALL ON FUNCTION "api"."get_current_lca_release"() TO "service_role";

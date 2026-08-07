@@ -48,3 +48,5 @@ REVOKE ALL ON FUNCTION "api"."get_lca_release_artifact_download"("p_artifact_id"
 GRANT ALL ON FUNCTION "api"."get_lca_release_artifact_download"("p_artifact_id" "uuid") TO "api_internal_executor";
 
 GRANT ALL ON FUNCTION "api"."get_lca_release_artifact_download"("p_artifact_id" "uuid") TO "authenticated";
+
+GRANT ALL ON FUNCTION "api"."get_lca_release_artifact_download"("p_artifact_id" "uuid") TO "service_role";

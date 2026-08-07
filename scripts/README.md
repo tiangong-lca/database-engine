@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-07
-lastReviewedCommit: 8b956d03165792b1b0890318bea021a18f7284b7
-lastReviewedNote: "Reviewed for Issue #422 Edge consumer closure: include Data Product facade installation in populated upgrade validation and generated public/api types."
+lastReviewedCommit: c6d3e24ba8fbe0eb99b56a9aff9180c964dd9ca8
+lastReviewedNote: "Reviewed for Issue #422 ACL runtime repair: populated upgrade validation now covers exact authenticated RLS-helper and Edge release facade grants."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -55,7 +55,9 @@ routine identities plus trigger, RLS-policy, constraint, and exact row-count
 state, applies the cutover and contract-closure migrations, and verifies
 complete preservation, capability-manifest installation, idempotency-index
 creation, Data Product consumer-facade installation, and removal of PostgreSQL
-`PUBLIC` execution from the API surface.
+`PUBLIC` execution from the API surface. It also applies the Issue #422 runtime
+ACL repair and verifies the exact authenticated RLS-helper and Edge release
+façade grants after a populated upgrade.
 
 Usage:
 

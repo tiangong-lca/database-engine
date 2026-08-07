@@ -102,3 +102,5 @@ REVOKE ALL ON FUNCTION "api"."get_lca_release_run"("p_release_run_id" "uuid") FR
 GRANT ALL ON FUNCTION "api"."get_lca_release_run"("p_release_run_id" "uuid") TO "api_internal_executor";
 
 GRANT ALL ON FUNCTION "api"."get_lca_release_run"("p_release_run_id" "uuid") TO "authenticated";
+
+GRANT ALL ON FUNCTION "api"."get_lca_release_run"("p_release_run_id" "uuid") TO "service_role";
