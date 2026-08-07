@@ -142,8 +142,9 @@ Normal PR path:
 5. After the PR merges, the Supabase GitHub integration applies Git `dev` to
    the persistent Supabase `dev` branch.
 6. The same push triggers `.github/workflows/supabase-dev.yml`, which performs
-   a blank local rebuild and waits until a service-only readback reports the
-   exact expected migration head.
+   a blank local rebuild, derives the expected head from the checked-out
+   migration directory, and waits until a service-only readback reports that
+   exact migration head. The workflow never carries a manually pinned head.
 7. The workflow reads `public,api,graphql_public` and
    `public,api,extensions` through the Management API and probes the hosted
    Data API boundary. It performs no hosted mutation.

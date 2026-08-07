@@ -65,11 +65,30 @@ scripts/test_full_schema_cutover_upgrade.sh
 
 This script is local-only and resets the local Supabase database.
 
+### `resolve_migration_head.py`
+
+Prints the latest valid migration version from the checked-out
+`supabase/migrations` directory. It rejects an empty directory, malformed SQL
+migration names, and duplicate 14-digit versions so hosted verification cannot
+silently select an ambiguous head.
+
+```bash
+python scripts/resolve_migration_head.py
+```
+
+Run its regression suite with:
+
+```bash
+python scripts/test_resolve_migration_head.py
+```
+
 ### `test_supabase_dev_workflow_contract.py`
 
 Fails closed if the persistent-Dev verification workflow regains database
-password usage, `db push`, `config push`, or a Management API mutation. It also
-requires the hosted readback head to match the latest checked-in migration.
+password usage, `db push`, `config push`, a Management API mutation, or a
+manually pinned migration head. It requires the hosted job to derive the
+expected head with `resolve_migration_head.py` from its own checkout and pass
+that step output to the exact-head readback.
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py

@@ -11,17 +11,27 @@ begin
   select * into v_artifact from private.lca_package_artifacts
   where id = p_source_artifact_id and job_id = p_job_id
   for update;
+
   if v_artifact.id is null or v_artifact.metadata ->> 'requested_by' <> p_requested_by::text then
     return jsonb_build_object('ok', false, 'code', 'PACKAGE_JOB_NOT_FOUND', 'status', 404);
   end if;
-  if v_artifact.artifact_kind <> 'import_source' or v_artifact.status in ('failed', 'deleted')
-     or (v_artifact.expires_at is not null and v_artifact.expires_at <= now()) then
+  if v_artifact.artifact_kind <> 'import_source' then
+    return jsonb_build_object('ok', false, 'code', 'INVALID_IMPORT_SOURCE', 'status', 400);
+  end if;
+  if v_artifact.status = 'deleted' then
+    return jsonb_build_object('ok', false, 'code', 'PACKAGE_ARTIFACT_DELETED', 'status', 410);
+  end if;
+  if v_artifact.expires_at is not null and v_artifact.expires_at <= now() then
+    return jsonb_build_object('ok', false, 'code', 'PACKAGE_ARTIFACT_EXPIRED', 'status', 410);
+  end if;
+  if v_artifact.status = 'failed' then
     return jsonb_build_object('ok', false, 'code', 'IMPORT_SOURCE_NOT_USABLE', 'status', 409);
   end if;
   if p_artifact_byte_size is null or p_artifact_byte_size < 0
      or nullif(btrim(coalesce(p_artifact_sha256, '')), '') is null then
     return jsonb_build_object('ok', false, 'code', 'INVALID_IMPORT_ARTIFACT', 'status', 400);
   end if;
+
   if v_artifact.worker_job_id is not null then
     select * into v_worker from private.worker_jobs
     where id = v_artifact.worker_job_id
@@ -48,7 +58,9 @@ begin
     p_request_hash => p_artifact_sha256, p_queue_key => p_source_artifact_id::text,
     p_visibility => 'user'
   );
-  if coalesce((v_enqueue ->> 'ok')::boolean, false) is false then return v_enqueue; end if;
+  if coalesce((v_enqueue ->> 'ok')::boolean, false) is false then
+    return v_enqueue;
+  end if;
   v_worker_id := (v_enqueue #>> '{data,id}')::uuid;
 
   update private.lca_package_artifacts set

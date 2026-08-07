@@ -6,6 +6,8 @@ from __future__ import annotations
 import re
 from pathlib import Path
 
+from resolve_migration_head import resolve_migration_head
+
 
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "supabase-dev.yml"
@@ -25,19 +27,29 @@ def main() -> int:
     }
     failures = [label for label, token in forbidden.items() if token in lowered]
 
-    migration_versions = sorted(path.name.split("_", 1)[0] for path in MIGRATIONS.glob("*.sql"))
-    expected_head = migration_versions[-1]
-    match = re.search(r'EXPECTED_MIGRATION_HEAD:\s*["\']?(\d{14})', text)
-    if match is None or match.group(1) != expected_head:
-        failures.append(
-            f"expected migration head must equal latest migration {expected_head}"
-        )
+    expected_head = resolve_migration_head(MIGRATIONS)
+    if re.search(r'EXPECTED_MIGRATION_HEAD:\s*["\']?\d{14}', text):
+        failures.append("migration head must not be pinned manually")
+
+    hosted_workflow = text.split("  hosted-read-only:", 1)[-1]
+    hosted_required = (
+        "uses: actions/checkout@v6",
+        "id: migration_head",
+        "python scripts/resolve_migration_head.py",
+        "EXPECTED_MIGRATION_HEAD: ${{ steps.migration_head.outputs.head }}",
+    )
+    failures.extend(
+        f"hosted verification missing {token}"
+        for token in hosted_required
+        if token not in hosted_workflow
+    )
 
     required = (
         "pull_request:",
         "supabase-dev-verification-${{ github.ref }}",
         "cancel-in-progress: true",
         "github.event_name == 'push' && github.ref == 'refs/heads/dev'",
+        "python scripts/test_resolve_migration_head.py",
         "python scripts/test_supabase_dev_workflow_contract.py",
         "python scripts/build_schema_workspace.py --environment local",
         "git diff --exit-code -- supabase/workspace",
