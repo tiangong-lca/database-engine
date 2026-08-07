@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-07
-lastReviewedCommit: 8b956d03165792b1b0890318bea021a18f7284b7
-lastReviewedNote: "已为 Issue #422 Edge 消费者收口复核：升级验证纳入 Data Product façade，并同步生成 public/api 类型。"
+lastReviewedCommit: 0a97cc761f8127ca379ab7d4df4395dab255707a
+lastReviewedNote: "已为 Issue #422 运行时 ACL 修复复核：有数据升级验证现覆盖 authenticated RLS helper 与 Edge release façade 的精确授权。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -52,7 +52,9 @@ related:
 把本地数据库重建到全量 Schema 切换前的最后一个 migration，写入一条代表性业务数据，
 快照关系与函数身份、触发器、RLS 策略、约束及精确行数，再应用切换与契约收口
 migration，验证对象和数据完整保留、能力清单、幂等索引及 Data Product 消费者 façade
-已安装，并确认 API 函数不再向 PostgreSQL `PUBLIC` 角色开放执行权限。
+已安装，并确认 API 函数不再向 PostgreSQL `PUBLIC` 角色开放执行权限。脚本还会应用
+Issue #422 运行时 ACL 修复，并在有数据升级后校验 authenticated RLS helper 与 Edge
+release façade 的精确授权。
 
 用法：
 

@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-07
-lastReviewedCommit: 8b956d03165792b1b0890318bea021a18f7284b7
-lastReviewedNote: "Reviewed for Issue #422 Edge consumer closure: add Data Product/TIDAS and lifecycle authorization facade behavior, ACL, upgrade, and generated-type proof."
+lastReviewedCommit: 0a97cc761f8127ca379ab7d4df4395dab255707a
+lastReviewedNote: "Reviewed for Issue #422 ACL runtime repair: the existing schema-cutover, exact-ACL, release-control-plane, and targeted pgTAP proof layers remain sufficient."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

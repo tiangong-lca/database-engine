@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-07
-lastReviewedCommit: 096c44d36e35579de5d59f6a0d983fbff86bcef9
-lastReviewedNote: "已为 Issue #422 Edge 消费者收口复核：生成类型包含 Data Product 与增强后的 TIDAS API façade 合同。"
+lastReviewedCommit: 0a97cc761f8127ca379ab7d4df4395dab255707a
+lastReviewedNote: "已为 Issue #422 运行时 ACL 修复复核：无需调整生成 workspace 流程或稳定 overlay 合同。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

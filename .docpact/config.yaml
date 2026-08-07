@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-07"
-lastReviewedCommit: "096c44d36e35579de5d59f6a0d983fbff86bcef9"
-lastReviewedNote: "Reviewed for Issue #422 Edge consumer closure: Data Product/TIDAS facades, the lifecycle review-admin predicate, exact ACLs, upgrade proof, and generated types remain governed together."
+lastReviewedCommit: "0a97cc761f8127ca379ab7d4df4395dab255707a"
+lastReviewedNote: "Reviewed for Issue #422 ACL runtime repair: existing migration/test ownership and exact capability-grant governance cover the authenticated RLS helpers and Edge release facades without new rules."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

@@ -291,6 +291,14 @@ as $$
   )
 $$;
 
+-- The schema cutover closes postgres-owned function EXECUTE by default. These
+-- helpers are transaction-local test fixtures, so grant only the two roles
+-- that evaluate their payloads below.
+grant execute on function pg_temp.release_publish_plan() to authenticated;
+grant execute on function pg_temp.report_ref(text) to service_role;
+grant execute on function pg_temp.release_manifest() to service_role;
+grant execute on function pg_temp.uploaded_artifacts() to service_role;
+
 set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
@@ -640,11 +648,17 @@ select is(
   'release_process_not_found',
   'process projection has an explicit legacy or out-of-scope empty state'
 );
+
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select set_config('request.jwt.claim.sub', '', true);
+
 select ok(
   (api.get_lca_release_artifact_download(
     (select id from release_test_receipts where label = 'download_artifact')
   )->'data'->>'public')::boolean,
-  'published artifact is eligible for Edge signed download'
+  'published artifact is eligible for Edge service-mediated signed download'
 );
 
 set local role authenticated;

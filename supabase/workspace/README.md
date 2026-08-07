@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-07
-lastReviewedCommit: 096c44d36e35579de5d59f6a0d983fbff86bcef9
-lastReviewedNote: "Reviewed for Issue #422 Edge consumer closure: generated types include the Data Product and enriched TIDAS API facade contracts."
+lastReviewedCommit: 0a97cc761f8127ca379ab7d4df4395dab255707a
+lastReviewedNote: "Reviewed for Issue #422 ACL runtime repair: no generated-workspace workflow or stable-overlay contract change is required."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
