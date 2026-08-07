@@ -134,7 +134,7 @@ related:
 3. Supabase GitHub integration 根据已提交的 `supabase/` 目录创建或更新该 PR 的 preview branch。
 4. preview branch 只用于 PR 级别验证；它不是持久化 Supabase `dev` 分支。
 5. PR 合并后，Supabase GitHub integration 会把 Git `dev` 应用到持久化 Supabase `dev` 分支。
-6. 同一次 Git push 会触发 `.github/workflows/supabase-dev.yml`，先完成本地空库重建，再等待 service-only readback 报告准确的 migration head。
+6. 同一次 Git push 会触发 `.github/workflows/supabase-dev.yml`，先完成本地空库重建，并从当前 checkout 的 migration 目录推导期望 head，再等待 service-only readback 报告该准确 head；workflow 中不再手工固定 migration head。
 7. workflow 通过 Management API 回读 `public,api,graphql_public` 与
    `public,api,extensions`，并验证托管 Data API 边界；它不会修改托管数据库或配置。
 

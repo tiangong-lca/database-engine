@@ -49,9 +49,33 @@ begin
     'jobId', v_effective_job_id,
     'workerJobId', coalesce(v_job.id, v_cache.worker_job_id),
     'status', coalesce(v_job.status, v_cache.status),
-    'operation', v_cache.operation,
-    'requestKey', v_cache.request_key,
+    'operation', coalesce(
+      v_cache.operation,
+      case v_job.job_kind
+        when 'tidas.export_package' then 'export_package'
+        when 'tidas.import_package' then 'import_package'
+      end
+    ),
+    'scope', v_job.payload_json ->> 'scope',
+    'rootCount', coalesce(jsonb_array_length(v_job.payload_json -> 'roots'), 0),
+    'requestKey', coalesce(v_cache.request_key, v_job.request_hash),
+    'payload', v_job.payload_json,
+    'diagnostics', v_job.diagnostics,
+    'startedAt', v_job.started_at,
+    'finishedAt', v_job.finished_at,
     'artifacts', v_artifacts,
+    'requestCache', case when v_cache.id is null then null else jsonb_strip_nulls(jsonb_build_object(
+      'id', v_cache.id,
+      'status', v_cache.status,
+      'error_code', v_cache.error_code,
+      'error_message', v_cache.error_message,
+      'hit_count', v_cache.hit_count,
+      'last_accessed_at', v_cache.last_accessed_at,
+      'created_at', v_cache.created_at,
+      'updated_at', v_cache.updated_at,
+      'export_artifact_id', v_cache.export_artifact_id,
+      'report_artifact_id', v_cache.report_artifact_id
+    )) end,
     'createdAt', coalesce(v_job.created_at, v_cache.created_at),
     'updatedAt', coalesce(v_job.updated_at, v_cache.updated_at)
   )));

@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-07"
-lastReviewedCommit: "8b956d03165792b1b0890318bea021a18f7284b7"
+lastReviewedCommit: "096c44d36e35579de5d59f6a0d983fbff86bcef9"
 lastReviewedNote: "Reviewed for Issue #422 Edge consumer closure: Data Product/TIDAS facades, the lifecycle review-admin predicate, exact ACLs, upgrade proof, and generated types remain governed together."
 
 # Keep deterministic governance facts here.

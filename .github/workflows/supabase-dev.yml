@@ -32,7 +32,9 @@ jobs:
           version: 2.98.0
 
       - name: Verify workflow remains read-only
-        run: python scripts/test_supabase_dev_workflow_contract.py
+        run: |
+          python scripts/test_resolve_migration_head.py
+          python scripts/test_supabase_dev_workflow_contract.py
 
       - name: Rebuild migration history
         run: supabase start && supabase db reset --no-seed
@@ -65,13 +67,24 @@ jobs:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
       SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_DEV_PROJECT_ID }}
-      EXPECTED_MIGRATION_HEAD: "20260806230500"
 
     steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v2
         with:
           version: 2.98.0
+
+      - name: Resolve expected migration head
+        id: migration_head
+        shell: bash
+        run: |
+          head="$(python scripts/resolve_migration_head.py)"
+          printf 'head=%s\n' "$head" >> "$GITHUB_OUTPUT"
 
       - name: Read API credentials
         shell: bash
@@ -86,6 +99,8 @@ jobs:
 
       - name: Wait for exact native migration head
         shell: bash
+        env:
+          EXPECTED_MIGRATION_HEAD: ${{ steps.migration_head.outputs.head }}
         run: |
           rest_url="https://$SUPABASE_PROJECT_ID.supabase.co/rest/v1"
           for _ in {1..60}; do

@@ -21431,6 +21431,218 @@ $$;
 ALTER FUNCTION "api"."sources_embedding_ft_input"("proc" "public"."sources") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "api"."svc_data_product_current_public_package"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  v_publication private.lcia_result_publications%rowtype;
+  v_package private.lcia_result_packages%rowtype;
+begin
+  select publication.*
+  into v_publication
+  from private.lcia_result_publications as publication
+  where publication.publication_series_key = 'global'
+    and publication.publication_channel = 'public'
+    and publication.visibility_scope = 'public'
+    and publication.is_current = true
+    and publication.status = 'current'
+  order by publication.published_at desc nulls last, publication.created_at desc,
+    publication.id
+  limit 1;
+
+  if v_publication.id is null then
+    return jsonb_build_object('ok', true, 'data', null);
+  end if;
+
+  select package.*
+  into v_package
+  from private.lcia_result_packages as package
+  where package.id = v_publication.package_id
+    and package.status = 'preview_ready';
+
+  if v_package.id is null then
+    return jsonb_build_object('ok', true, 'data', null);
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'data', jsonb_build_object(
+      'publication', jsonb_strip_nulls(jsonb_build_object(
+        'id', v_publication.id,
+        'package_id', v_publication.package_id,
+        'publication_series_key', v_publication.publication_series_key,
+        'publication_channel', v_publication.publication_channel,
+        'visibility_scope', v_publication.visibility_scope,
+        'is_current', v_publication.is_current,
+        'status', v_publication.status,
+        'display_default_impact_category', v_publication.display_default_impact_category,
+        'published_at', v_publication.published_at,
+        'created_at', v_publication.created_at
+      )),
+      'package', jsonb_strip_nulls(jsonb_build_object(
+        'id', v_package.id,
+        'package_version', v_package.package_version,
+        'eligible_input_count', v_package.eligible_input_count,
+        'included_input_count', v_package.included_input_count,
+        'input_manifest', v_package.input_manifest,
+        'snapshot_id', v_package.snapshot_id,
+        'result_id', v_package.result_id,
+        'result_artifact_ref', v_package.result_artifact_ref,
+        'query_artifact_ref', v_package.query_artifact_ref,
+        'artifact_manifest', v_package.artifact_manifest,
+        'available_impact_categories', v_package.available_impact_categories,
+        'default_impact_category', v_package.default_impact_category,
+        'status', v_package.status
+      ))
+    )
+  );
+end
+$$;
+
+
+ALTER FUNCTION "api"."svc_data_product_current_public_package"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "api"."svc_data_product_publication_list"("p_limit" integer DEFAULT 50) RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  v_actor uuid := auth.uid();
+  v_limit integer := least(greatest(coalesce(p_limit, 50), 1), 200);
+  v_rows jsonb;
+begin
+  if v_actor is null then
+    return jsonb_build_object('ok', false, 'code', 'AUTH_REQUIRED', 'status', 401);
+  end if;
+
+  if not exists (
+    select 1
+    from private.roles as role_row
+    where role_row.user_id = v_actor
+      and role_row.team_id = '00000000-0000-0000-0000-000000000000'::uuid
+      and role_row.role = 'data_product_manager'
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'DATA_PRODUCT_MANAGER_REQUIRED',
+      'status', 403
+    );
+  end if;
+
+  select coalesce(
+    jsonb_agg(
+      candidate.payload
+      order by candidate.is_current desc, candidate.published_at desc nulls last,
+        candidate.created_at desc, candidate.publication_id
+    ),
+    '[]'::jsonb
+  )
+  into v_rows
+  from (
+    select
+      publication.id as publication_id,
+      publication.is_current,
+      publication.published_at,
+      publication.created_at,
+      jsonb_strip_nulls(jsonb_build_object(
+        'publicationId', publication.id,
+        'packageId', publication.package_id,
+        'packageName', coalesce(
+          worker.payload_json ->> 'name',
+          worker.payload_json ->> 'packageName',
+          worker.payload_json ->> 'package_name'
+        ),
+        'packageVersion', package.package_version,
+        'status', publication.status,
+        'isCurrent', publication.is_current,
+        'publicationSeriesKey', publication.publication_series_key,
+        'publicationChannel', publication.publication_channel,
+        'visibilityScope', publication.visibility_scope,
+        'displayDefaultImpactCategory', publication.display_default_impact_category,
+        'publishedAt', publication.published_at,
+        'unpublishedAt', publication.unpublished_at,
+        'reason', publication.reason,
+        'eligibleInputCount', package.eligible_input_count,
+        'includedInputCount', package.included_input_count,
+        'packageStatus', package.status
+      )) as payload
+    from private.lcia_result_publications as publication
+    left join private.lcia_result_packages as package on package.id = publication.package_id
+    left join private.worker_jobs as worker on worker.id = package.build_worker_job_id
+    order by publication.is_current desc, publication.published_at desc nulls last,
+      publication.created_at desc, publication.id
+    limit v_limit
+  ) as candidate;
+
+  return jsonb_build_object('ok', true, 'data', v_rows);
+end
+$$;
+
+
+ALTER FUNCTION "api"."svc_data_product_publication_list"("p_limit" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "api"."svc_data_product_worker_metadata"("p_worker_job_ids" "uuid"[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  v_ids uuid[] := coalesce(p_worker_job_ids, '{}'::uuid[]);
+  v_worker_rows jsonb;
+  v_package_rows jsonb;
+begin
+  if cardinality(v_ids) > 200 then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'WORKER_JOB_LIMIT_EXCEEDED',
+      'status', 400
+    );
+  end if;
+
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object('id', worker.id, 'payload_json', worker.payload_json)
+      order by array_position(v_ids, worker.id)
+    ),
+    '[]'::jsonb
+  )
+  into v_worker_rows
+  from private.worker_jobs as worker
+  where worker.id = any(v_ids)
+    and worker.job_kind = 'lcia_result.package_build';
+
+  select coalesce(
+    jsonb_agg(
+      jsonb_build_object(
+        'build_worker_job_id', package.build_worker_job_id,
+        'id', package.id,
+        'package_version', package.package_version,
+        'status', package.status,
+        'eligible_input_count', package.eligible_input_count,
+        'included_input_count', package.included_input_count
+      )
+      order by array_position(v_ids, package.build_worker_job_id)
+    ),
+    '[]'::jsonb
+  )
+  into v_package_rows
+  from private.lcia_result_packages as package
+  where package.build_worker_job_id = any(v_ids);
+
+  return jsonb_build_object(
+    'ok', true,
+    'worker_rows', v_worker_rows,
+    'package_rows', v_package_rows
+  );
+end
+$$;
+
+
+ALTER FUNCTION "api"."svc_data_product_worker_metadata"("p_worker_job_ids" "uuid"[]) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "api"."svc_dataset_review_submit_job_claim"("p_qty" integer DEFAULT 10, "p_stale_submitting_seconds" integer DEFAULT 300) RETURNS "jsonb"
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -22100,6 +22312,25 @@ $$;
 ALTER FUNCTION "api"."svc_lca_snapshot_candidates"("p_scope" "text", "p_snapshot_id" "uuid", "p_process_filter_contains" "jsonb", "p_limit" integer) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "api"."svc_membership_is_review_admin"("p_user_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select jsonb_build_object(
+    'ok', true,
+    'data', exists (
+      select 1
+      from private.roles as membership
+      where membership.user_id = p_user_id
+        and membership.role = 'review-admin'
+    )
+  )
+$$;
+
+
+ALTER FUNCTION "api"."svc_membership_is_review_admin"("p_user_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "api"."svc_review_submit_from_job"("p_job_id" "uuid", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -22356,17 +22587,27 @@ begin
   select * into v_artifact from private.lca_package_artifacts
   where id = p_source_artifact_id and job_id = p_job_id
   for update;
+
   if v_artifact.id is null or v_artifact.metadata ->> 'requested_by' <> p_requested_by::text then
     return jsonb_build_object('ok', false, 'code', 'PACKAGE_JOB_NOT_FOUND', 'status', 404);
   end if;
-  if v_artifact.artifact_kind <> 'import_source' or v_artifact.status in ('failed', 'deleted')
-     or (v_artifact.expires_at is not null and v_artifact.expires_at <= now()) then
+  if v_artifact.artifact_kind <> 'import_source' then
+    return jsonb_build_object('ok', false, 'code', 'INVALID_IMPORT_SOURCE', 'status', 400);
+  end if;
+  if v_artifact.status = 'deleted' then
+    return jsonb_build_object('ok', false, 'code', 'PACKAGE_ARTIFACT_DELETED', 'status', 410);
+  end if;
+  if v_artifact.expires_at is not null and v_artifact.expires_at <= now() then
+    return jsonb_build_object('ok', false, 'code', 'PACKAGE_ARTIFACT_EXPIRED', 'status', 410);
+  end if;
+  if v_artifact.status = 'failed' then
     return jsonb_build_object('ok', false, 'code', 'IMPORT_SOURCE_NOT_USABLE', 'status', 409);
   end if;
   if p_artifact_byte_size is null or p_artifact_byte_size < 0
      or nullif(btrim(coalesce(p_artifact_sha256, '')), '') is null then
     return jsonb_build_object('ok', false, 'code', 'INVALID_IMPORT_ARTIFACT', 'status', 400);
   end if;
+
   if v_artifact.worker_job_id is not null then
     select * into v_worker from private.worker_jobs
     where id = v_artifact.worker_job_id
@@ -22393,7 +22634,9 @@ begin
     p_request_hash => p_artifact_sha256, p_queue_key => p_source_artifact_id::text,
     p_visibility => 'user'
   );
-  if coalesce((v_enqueue ->> 'ok')::boolean, false) is false then return v_enqueue; end if;
+  if coalesce((v_enqueue ->> 'ok')::boolean, false) is false then
+    return v_enqueue;
+  end if;
   v_worker_id := (v_enqueue #>> '{data,id}')::uuid;
 
   update private.lca_package_artifacts set
@@ -22522,9 +22765,33 @@ begin
     'jobId', v_effective_job_id,
     'workerJobId', coalesce(v_job.id, v_cache.worker_job_id),
     'status', coalesce(v_job.status, v_cache.status),
-    'operation', v_cache.operation,
-    'requestKey', v_cache.request_key,
+    'operation', coalesce(
+      v_cache.operation,
+      case v_job.job_kind
+        when 'tidas.export_package' then 'export_package'
+        when 'tidas.import_package' then 'import_package'
+      end
+    ),
+    'scope', v_job.payload_json ->> 'scope',
+    'rootCount', coalesce(jsonb_array_length(v_job.payload_json -> 'roots'), 0),
+    'requestKey', coalesce(v_cache.request_key, v_job.request_hash),
+    'payload', v_job.payload_json,
+    'diagnostics', v_job.diagnostics,
+    'startedAt', v_job.started_at,
+    'finishedAt', v_job.finished_at,
     'artifacts', v_artifacts,
+    'requestCache', case when v_cache.id is null then null else jsonb_strip_nulls(jsonb_build_object(
+      'id', v_cache.id,
+      'status', v_cache.status,
+      'error_code', v_cache.error_code,
+      'error_message', v_cache.error_message,
+      'hit_count', v_cache.hit_count,
+      'last_accessed_at', v_cache.last_accessed_at,
+      'created_at', v_cache.created_at,
+      'updated_at', v_cache.updated_at,
+      'export_artifact_id', v_cache.export_artifact_id,
+      'report_artifact_id', v_cache.report_artifact_id
+    )) end,
     'createdAt', coalesce(v_job.created_at, v_cache.created_at),
     'updatedAt', coalesce(v_job.updated_at, v_cache.updated_at)
   )));
@@ -58140,6 +58407,10 @@ CREATE UNIQUE INDEX "lcia_result_publications_current_uidx" ON "private"."lcia_r
 
 
 
+CREATE INDEX "lcia_result_publications_list_idx" ON "private"."lcia_result_publications" USING "btree" ("is_current" DESC, "published_at" DESC NULLS LAST, "created_at" DESC);
+
+
+
 CREATE INDEX "lcia_result_publications_package_idx" ON "private"."lcia_result_publications" USING "btree" ("package_id", "created_at" DESC);
 
 
@@ -61422,6 +61693,21 @@ GRANT ALL ON FUNCTION "api"."sources_embedding_ft_input"("proc" "public"."source
 
 
 
+REVOKE ALL ON FUNCTION "api"."svc_data_product_current_public_package"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."svc_data_product_current_public_package"() TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "api"."svc_data_product_publication_list"("p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."svc_data_product_publication_list"("p_limit" integer) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "api"."svc_data_product_worker_metadata"("p_worker_job_ids" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."svc_data_product_worker_metadata"("p_worker_job_ids" "uuid"[]) TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "api"."svc_dataset_review_submit_job_claim"("p_qty" integer, "p_stale_submitting_seconds" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."svc_dataset_review_submit_job_claim"("p_qty" integer, "p_stale_submitting_seconds" integer) TO "service_role";
 
@@ -61494,6 +61780,11 @@ GRANT ALL ON FUNCTION "api"."svc_lca_snapshot_build_enqueue"("p_scope" "text", "
 
 REVOKE ALL ON FUNCTION "api"."svc_lca_snapshot_candidates"("p_scope" "text", "p_snapshot_id" "uuid", "p_process_filter_contains" "jsonb", "p_limit" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."svc_lca_snapshot_candidates"("p_scope" "text", "p_snapshot_id" "uuid", "p_process_filter_contains" "jsonb", "p_limit" integer) TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "api"."svc_membership_is_review_admin"("p_user_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."svc_membership_is_review_admin"("p_user_id" "uuid") TO "service_role";
 
 
 

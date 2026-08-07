@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-07
-lastReviewedCommit: 8b956d03165792b1b0890318bea021a18f7284b7
+lastReviewedCommit: 096c44d36e35579de5d59f6a0d983fbff86bcef9
 lastReviewedNote: "Reviewed for Issue #422 Edge consumer closure: generated types include the Data Product and enriched TIDAS API facade contracts."
 related:
   - ../../AGENTS.md

@@ -62,11 +62,28 @@ scripts/test_full_schema_cutover_upgrade.sh
 
 此脚本仅用于本地验证，并会重置本地 Supabase 数据库。
 
+### `resolve_migration_head.py`
+
+从当前 checkout 的 `supabase/migrations` 目录输出最新的有效 migration 版本。
+如果目录为空、SQL migration 文件名不合法，或存在重复的 14 位版本号，脚本会
+fail closed，避免托管验证静默选择含糊的 head。
+
+```bash
+python scripts/resolve_migration_head.py
+```
+
+运行对应回归测试：
+
+```bash
+python scripts/test_resolve_migration_head.py
+```
+
 ### `test_supabase_dev_workflow_contract.py`
 
 当持久化 Dev 验证 workflow 重新引入数据库密码、`db push`、`config push` 或
-Management API 写操作时立即失败；同时要求托管 readback head 与最新已提交
-migration 一致。
+Management API 写操作，或者重新手工固定 migration head 时立即失败；同时要求
+Hosted job 从自己的 checkout 调用 `resolve_migration_head.py`，并把该 step output
+传给 exact-head readback。
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py
