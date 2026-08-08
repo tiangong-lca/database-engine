@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 6ffdc9abd6bbf939fbb2fdae9a82aa839b0d9912
-lastReviewedNote: "Reviewed for Issue #422: persistent Dev delivery runs the database migration and verification here, then deploys and validates Functions through the Edge repository."
+lastReviewedCommit: 91a0817bb19882643089de2a63a3d1aad372847d
+lastReviewedNote: "Reviewed for Issue #435: Auth profile synchronization follows the existing migration, SQL-test, generated-workspace, and dev-to-main delivery contract."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

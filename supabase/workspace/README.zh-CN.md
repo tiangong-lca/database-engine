@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 8a821145d804b44d0958fb64f7f89a7812bdf825
-lastReviewedNote: "已为 Issue #422 数据库专用 Dev 部署复核：生成 workspace 行为不变，托管来源改由 GitHub Actions db-push 路径确认。"
+lastReviewedCommit: 91a0817bb19882643089de2a63a3d1aad372847d
+lastReviewedNote: "已为 Issue #435 复核：Auth profile 的 exact-local schema 快照连续生成结果一致，workspace 行为不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
