@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 8be75648495ddc6a582ce63b5723bcbc75c03119
-lastReviewedNote: "Updated for Issue #422: persistent Dev migration ownership returns to the database-only GitHub Actions db-push path without changing schema ownership."
+lastReviewedCommit: 1d1d153edb92aa01dd5fb7717441b16bedc4a96b
+lastReviewedNote: "Updated for Issue #422: persistent Dev keeps database-only migration ownership and requires Edge-owned recovery while native Git dev synchronization remains bound."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -114,6 +114,7 @@ that needs private RLS helpers runs through the constrained
 - Git `main` is the promoted release line
 - PR branches map to Supabase preview branches
 - `.github/workflows/supabase-dev.yml` is the sole migration deployer for Git `dev`; it gates the remote job on the local contract, issues exactly one `db push --include-all`, and verifies the exact hosted result without Functions deployment, config push, or Management API mutations
+- while the Supabase native Git `dev` binding remains, it is treated as a separate Functions writer rather than a database migration owner; after each database deployment, the exact reviewed Edge SHA is redeployed and read back through the Edge-owned release gate in `docs/agents/supabase-branching.md`
 - the production Supabase project is migrated automatically by the Supabase GitHub integration when Git `main` advances
 
 This means branch behavior is part of the repo architecture, not just delivery process.

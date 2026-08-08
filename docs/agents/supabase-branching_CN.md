@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 8be75648495ddc6a582ce63b5723bcbc75c03119
-lastReviewedNote: "已为 Issue #422 更新：增加 Supabase Preview 与原生分支流程的确定性 Edge Function 验证规则。"
+lastReviewedCommit: 1d1d153edb92aa01dd5fb7717441b16bedc4a96b
+lastReviewedNote: "已为 Issue #422 更新：当 Git dev 原生同步仍然绑定时，增加准确 Edge SHA 的强制恢复与回读 Gate。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -76,7 +76,8 @@ related:
 - 分支差异放在 `supabase/config.toml` 的 `[remotes.<branch>]` 中。
 - 不要为不同 Git 分支复制多套 `supabase/` 目录。
 - 把 `.github/workflows/supabase-dev.yml` 作为持久化 `dev` 的唯一 migration 部署者；它可以执行 `supabase link` 和准确一次 `supabase db push --include-all`，但不得部署/删除 Edge Functions 或推送项目配置。
-- 在该 workflow 进入 `dev` 前关闭 Git `dev` 的 Supabase 原生部署绑定；同一个持久化分支不能同时存在两个部署者。
+- 优先在该 workflow 进入 `dev` 前关闭 Git `dev` 的 Supabase 原生部署绑定。
+- 如果当前无法解除该绑定，应把原生 integration 视为独立的 Functions 写入者；每次 Git `dev` 数据库部署后都必须完成准确 Edge SHA 的恢复与回读 Gate，而 checked-in 数据库 workflow 仍然只负责数据库。
 - 不要为 Git `main` 增加 checked-in 的 GitHub Actions 生产部署流程；生产项目由绑定到本仓的 Supabase GitHub integration 自动迁移。
 - 不要先手改远端数据库再回头补 migration。
 
@@ -86,6 +87,32 @@ related:
 - `tiangong-lca-edge-functions` 仍是 Edge Function 运行时代码的真相源与部署者；本仓不得新增或部署 Edge Function 源码。
 - 要判断 database-native 流程是否修改了持久化 Dev Functions，应在流程运行前后，对同一组 Edge 仓所拥有的 function slug 与托管内容哈希进行排序并计算确定性清单摘要，然后比较两次结果。
 - 摘要不变表示受管 Function 内容得到保留；如果摘要、受管函数清单、`verify_jwt` 设置或 active 状态发生变化，则视为所有权边界失败并继续调查。
+- 内容哈希摘要只用于检测原生流程运行前后的漂移，不是可复现构建标识；即使源码相同，一次干净的重新打包部署也可能产生不同的托管内容哈希。因此恢复证明应依赖准确源码 SHA、完整受管清单、源码路径/状态/鉴权回读以及行为探测，而不是要求重部署后的摘要等于旧摘要。
+
+### Git `dev` 原生同步仍绑定时的强制 Edge 恢复 Gate
+
+在确认原生绑定已经解除且不会同步 Functions 之前，以下流程是当前持久化 Dev 的发布 Gate：
+
+1. 等待 `.github/workflows/supabase-dev.yml` 成功结束。数据库部署尚未达到准确 migration head、托管边界检查尚未通过时，不得提前执行 Edge 恢复。
+2. 选择准备部署到持久化 Dev 的准确、已评审 `tiangong-lca-edge-functions` commit，并从该 checkout 使用 Edge 仓正式部署入口：
+
+   ```bash
+   npm run deploy:dev -- <完整受管 function slug 清单>
+   ```
+
+   必须传入该准确 Edge commit 所拥有的完整 active 清单，只排除 Edge 仓自身明确标记为 retired 或 disabled 的函数。不能只重新部署怀疑被覆盖的函数，因为下一次原生 integration 可能改动另一组函数。
+3. 回读托管 Functions；除非每个预期受管 slug 都存在、状态为 `ACTIVE`、使用 Edge 所定义的 `verify_jwt` 设置，并且不存在生产项目或其他外部来源路径残留，否则 Gate 失败。同时确认不属于 Edge 受管清单的远端 legacy functions 没有被修改。
+4. 从同一个 Edge checkout 把探测目标显式绑定到持久化 Dev Functions URL 后执行；如果凭据或运行成本要求缩小范围，则使用有记录的代表性子集：
+
+   ```bash
+   EDGE_BASE_URL="https://<dev-project-ref>.supabase.co/functions/v1"
+   npm run probe:auth -- --base-url "$EDGE_BASE_URL"
+   ```
+
+   这样可确保验证的是函数侧鉴权与非法 payload 行为，而不仅是 Management API 元数据，同时避免含义不明确的 `REMOTE_ENDPOINT` 误探测生产环境。
+5. 把恢复后的新摘要记录为下一次原生流程漂移检测的 baseline，并在交付 Issue 或 PR 中记录 database merge SHA、数据库 workflow run、准确 Edge SHA、部署清单以及回读/探测结果。
+
+该恢复步骤不会把 Edge Function 所有权转移给 `database-engine`，也不得加入 `.github/workflows/supabase-dev.yml`。只有在原生绑定已经解除，或独立证明其不会写入 Functions 后，才能移除此 Gate；移除时必须在同一个变更中更新本文档。
 
 ## 需要维护的文件
 
@@ -142,11 +169,12 @@ related:
 2. PR 目标分支是 Git `dev`。
 3. Supabase GitHub integration 根据已提交的 `supabase/` 目录创建或更新该 PR 的 preview branch。
 4. preview branch 只用于 PR 级别验证；它不是持久化 Supabase `dev` 分支。
-5. PR 合并前，确认 Git `dev` 已不再绑定 Supabase 原生部署。
+5. PR 合并前，确认 Git `dev` 是否仍绑定 Supabase 原生部署；如果仍然绑定，安排强制 Edge 恢复 Gate。
 6. 合并后，`.github/workflows/supabase-dev.yml` 先完成本地空库重建；本地合同通过后，绑定配置的持久化 Dev 项目并执行 `supabase db push --include-all`。
 7. workflow 从当前 checkout 的 migration 目录推导期望 head，再等待 service-only readback 报告该准确 head；workflow 中不手工固定 migration head。
 8. workflow 通过 Management API 回读 `public,api,graphql_public` 与
    `public,api,extensions`，并验证托管 Data API 边界；`db push` 后的这些检查均为只读。
+9. 如果 Git `dev` 原生绑定仍然存在，则部署准确、已评审 Edge SHA 的完整受管 Function 清单，并在回读 Gate 完成后才宣布持久化 Dev 部署完成。
 
 `--include-all` 表示所有尚未出现在远端 migration history 中的已提交 migration
 都可以被应用。受治理的 `main -> dev` 回合并可能带入时间戳早于 `dev` 已记录新
@@ -217,7 +245,7 @@ Git `main` 由 Supabase GitHub integration 处理。运维人员仍可在本地�
   回读或 REST profile 探测不符合合同时失败。
 - workflow 只负责数据库 migration，不得执行 `supabase functions deploy`、
   `supabase functions delete` 或 `supabase config push`。
-- Git `dev` 不得继续绑定 Supabase 原生部署，否则会与该 workflow 竞争，并可能同步 Edge Functions。
+- 优先解除 Git `dev` 的 Supabase 原生部署绑定。如果绑定仍然存在，则必须重新部署准确、已评审 Edge SHA 的完整受管清单并通过上述强制回读 Gate，持久化 Dev 部署才算完成。
 
 ### 生产 `main` 部署
 

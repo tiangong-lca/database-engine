@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 8be75648495ddc6a582ce63b5723bcbc75c03119
-lastReviewedNote: "Updated for Issue #422: added deterministic Edge Function verification for Supabase Preview and native branch runs."
+lastReviewedCommit: 1d1d153edb92aa01dd5fb7717441b16bedc4a96b
+lastReviewedNote: "Updated for Issue #422: documented the mandatory exact-Edge-SHA recovery and readback gate while native Git dev synchronization remains bound."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -78,7 +78,8 @@ When review changes an already-applied PR migration, add a later migration that 
 - Keep branch-specific overrides in `[remotes.<branch>]` inside `supabase/config.toml`.
 - Do not create a separate `supabase/` directory per Git branch.
 - Keep `.github/workflows/supabase-dev.yml` as the sole persistent-`dev` migration deployer. It may run `supabase link` and exactly one `supabase db push --include-all`, but must not deploy/delete Edge Functions or push project configuration.
-- Disable the Supabase native deployment binding for Git `dev` before this workflow reaches `dev`; two deployers must never target the same persistent branch.
+- Prefer disabling the Supabase native deployment binding for Git `dev` before this workflow reaches `dev`.
+- While that binding cannot be detached, treat the native integration as an independent Functions writer and complete the exact-Edge-SHA recovery and readback gate after every Git `dev` database deployment. The checked-in database workflow remains database-only.
 - Do not add a checked-in GitHub Actions production deploy for Git `main`; the production project is migrated by the Supabase GitHub integration bound to this repository.
 - Do not author normal schema changes by editing the remote database first and reconstructing migrations later.
 
@@ -88,6 +89,32 @@ When review changes an already-applied PR migration, add a later migration that 
 - `tiangong-lca-edge-functions` remains the source of truth and deployer for Edge Function runtime code. This repository must not add or deploy Edge Function sources.
 - To determine whether a database-native run changed the persistent Dev Functions, capture the same sorted inventory of Edge-repo-owned function slugs and their hosted content hashes immediately before and after the run, then compare the deterministic inventory digest.
 - An unchanged digest means the owned Function content was preserved. Treat a changed digest, owned-function inventory, `verify_jwt` setting, or active state as an ownership-boundary failure that requires investigation.
+- A content-hash digest is a drift detector for the before/after native run, not a reproducible build identifier: a clean redeploy may rebundle identical source to different hosted content hashes. Prove recovery through the exact source SHA, complete managed inventory, source-path/status/auth readback, and behavior probes rather than requiring the post-redeploy digest to equal an older digest.
+
+### Mandatory Edge recovery gate while native Git `dev` sync remains bound
+
+This is the current persistent-Dev release gate until the native binding is actually detached and verified not to synchronize Functions:
+
+1. Wait for `.github/workflows/supabase-dev.yml` to finish successfully. Do not run Edge recovery against a database deployment that has not reached its exact migration head and hosted boundary checks.
+2. Select the exact reviewed `tiangong-lca-edge-functions` commit intended for persistent Dev. From that checkout, use the repository's formal deploy entrypoint:
+
+   ```bash
+   npm run deploy:dev -- <complete-managed-function-slug-list>
+   ```
+
+   Pass the complete active inventory owned by that exact Edge commit, excluding only functions that the Edge repository itself marks retired or disabled. Do not redeploy only the functions suspected of being overwritten; the native integration may change a different subset on a later run.
+3. Read back the hosted Functions and fail the gate unless every expected owned slug exists, is `ACTIVE`, has the Edge-owned `verify_jwt` setting, and contains no production-project or other foreign source-path residue. Confirm that remote-only legacy functions outside the Edge-owned inventory were not changed.
+4. From the same Edge checkout, bind the probe explicitly to the persistent Dev Functions URL and run it (or use a documented representative subset when credentials or runtime cost require it):
+
+   ```bash
+   EDGE_BASE_URL="https://<dev-project-ref>.supabase.co/functions/v1"
+   npm run probe:auth -- --base-url "$EDGE_BASE_URL"
+   ```
+
+   This proves function-side auth and invalid-payload behavior, not only Management API metadata, and prevents an ambiguous `REMOTE_ENDPOINT` from probing production.
+5. Capture the new post-recovery digest as the baseline for detecting the next native-run drift. Record the database merge SHA, database workflow run, exact Edge SHA, deployed inventory, and readback/probe result in the delivery Issue or PR.
+
+The recovery step does not transfer Edge Function ownership to `database-engine`, and it must not be added to `.github/workflows/supabase-dev.yml`. Retire this gate only after the native binding is detached or independently proven not to write Functions, then update this guide in the same change.
 
 ## Files to maintain
 
@@ -148,8 +175,8 @@ Normal PR path:
    the checked-in `supabase/` directory.
 4. The preview branch is PR-scoped proof only; it is not the persistent
    Supabase `dev` branch.
-5. Before the PR merges, confirm that Supabase native deployment is no longer
-   bound to Git `dev`.
+5. Before the PR merges, confirm whether Supabase native deployment is still
+   bound to Git `dev`; if it is, schedule the mandatory Edge recovery gate.
 6. After merge, `.github/workflows/supabase-dev.yml` performs a blank local
    rebuild, links the configured persistent Dev project, and runs
    `supabase db push --include-all` after the local contract passes.
@@ -159,6 +186,9 @@ Normal PR path:
 8. The workflow reads `public,api,graphql_public` and
    `public,api,extensions` through the Management API and probes the hosted
    Data API boundary. After `db push`, these checks are read-only.
+9. If the native Git `dev` binding remains, deploy the exact reviewed Edge
+   SHA's complete managed Function inventory and finish the readback gate before
+   declaring the persistent-Dev deployment complete.
 
 An existing Preview branch applies newly added migration files on later PR
 pushes. Editing a migration already recorded in that Preview's migration
@@ -246,8 +276,10 @@ Rules:
   the checked-in contract.
 - The workflow owns database migrations only. It must not run `supabase
   functions deploy`, `supabase functions delete`, or `supabase config push`.
-- Supabase native deployment must not remain bound to Git `dev`, because it
-  would race this workflow and may synchronize Edge Functions.
+- Prefer detaching Supabase native deployment from Git `dev`. While the binding
+  remains, the persistent-Dev deployment is incomplete until the exact reviewed
+  Edge SHA's complete managed inventory has been redeployed and the mandatory
+  readback gate above passes.
 
 ### Production `main` deployment
 

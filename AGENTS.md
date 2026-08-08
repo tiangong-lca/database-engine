@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 8be75648495ddc6a582ce63b5723bcbc75c03119
-lastReviewedNote: "Updated for Issue #422: persistent Dev migrations are again deployed by the database-only GitHub Actions db-push path; Supabase native deployment must not compete for Git dev."
+lastReviewedCommit: 1d1d153edb92aa01dd5fb7717441b16bedc4a96b
+lastReviewedNote: "Updated for Issue #422: when the native Git dev binding cannot be detached, every database deploy is followed by the exact Edge recovery and readback gate owned by the branching guide."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -118,6 +118,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - migration authoring starts from Git `dev`, not GitHub default-branch UI
 - preview-branch proof belongs to the repo PR
 - persistent `dev` migration deployment belongs to `.github/workflows/supabase-dev.yml`; after the local contract passes, it links the configured Dev project, runs exactly one `supabase db push --include-all`, derives the expected head from the checkout, reads back the ordered hosted PostgREST schema/search-path lists, and probes the default `public`, explicit `api`, rejected `private`, and retired `public` RPC routes; it must never deploy or delete Edge Functions or push project configuration
+- if the Supabase native Git `dev` binding cannot be detached, a successful database workflow is not the end of the persistent-Dev deployment: after it succeeds, deploy the exact reviewed Edge SHA's complete managed Function inventory through the Edge repo's `npm run deploy:dev -- ...` entrypoint and complete the readback gate defined in `docs/agents/supabase-branching.md`
 - production `main` proof belongs after `dev -> main` promote and should confirm Supabase GitHub integration applied migrations automatically; when `supabase/config.toml` changes, the operator must also push and verify that configuration against the production project
 - production-volume administrative backfills must fit the platform statement timeout or use a bounded session override that is restored immediately after the statement; Preview row counts alone are not sufficient volume proof
 - root workspace proof belongs later in `lca-workspace`
@@ -185,7 +186,7 @@ Use the role table in this file as the update map.
 ## Hard Boundaries
 
 - do not treat `supabase/workspace/remote_schema.sql`, `global/**`, or `schemas/**` as stable edit locations
-- do not leave Supabase native deployment bound to Git `dev` while the checked-in persistent-Dev migration workflow is active; one target must have one deployer
+- prefer one deployer per target by detaching Supabase native deployment from Git `dev`; while the platform binding remains, never accept the database workflow alone as deployment completion, and always run the documented exact Edge redeploy and readback gate afterward
 - do not move frontend `.env` or app-side client logic into this repo
 - do not treat a merged PR here as delivery-complete when the workspace still needs a submodule bump
 
