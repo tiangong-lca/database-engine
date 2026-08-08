@@ -36,7 +36,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-08
 lastReviewedCommit: 1d1d153edb92aa01dd5fb7717441b16bedc4a96b
-lastReviewedNote: "Updated for Issue #422: when the native Git dev binding cannot be detached, every database deploy is followed by the exact Edge recovery and readback gate owned by the branching guide."
+lastReviewedNote: "Reviewed for Issue #422: persistent Dev delivery runs the database migration and verification here, then deploys and validates Functions through the Edge repository."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -113,12 +113,11 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - schema boundary: `public` contains only `processes`, `flows`, `contacts`, `sources`, `unitgroups`, `flowproperties`, `lciamethods`, `lifecyclemodels`, and `ilcd`; client RPCs live in the exposed `api` schema, internal state and service helpers live in `private`, operational tooling lives in `util`, and retired rollback evidence lives in `archive`
 - PostgREST exposes `public` and `api`; entity access keeps `public` as the default profile, while RPC callers must select the `api` profile explicitly
 - `supabase/seed.sql` must remain an executable SQL batch even when it seeds no rows; retain a data-neutral no-op rather than comments only
-- hosted mutation E2E assets under `supabase/tests/preview/**` must hard-bind the exact Preview project ref, use disposable actors and UUID namespaces, clean up only their own effects, and never become migrations, seeds, Dev data rehearsals, or production execution paths
-- disposable Hosted actors must use an outer-frozen request/namespace and deterministic role email, be registered before creation, carry exact fixture/request/namespace/role metadata, recover only one exact filtered metadata match, use global logout, and treat hard admin DELETE as incomplete until both GET-by-ID returns 404 and a fresh exact filtered census is empty; the outer wrapper must create the exact empty owner-only non-symlink private temp directory and durably fsync each secret-free inner recovery checkpoint before returning its exact IPC ACK, so an actor ID is durable before sign-in or fixture mutation; cleanup must hold the derivative coordinator lock and remain before external dispatch, any missing or ambiguous global logout must retain the actor and forbid hard DELETE, and temporary credential files must be proven removed independently by the inner and outer processes; offline lifecycle and 39-surface residue contracts prove the local control/readback shape without replacing the later exact-head Hosted run and independent Auth/SQL readback execution
+- hosted mutation E2E assets under `supabase/tests/preview/**` are exact-Preview, disposable test paths; their complete actor, credential, recovery, and cleanup proof requirements live in `docs/agents/repo-validation.md`
 - migration authoring starts from Git `dev`, not GitHub default-branch UI
 - preview-branch proof belongs to the repo PR
 - persistent `dev` migration deployment belongs to `.github/workflows/supabase-dev.yml`; after the local contract passes, it links the configured Dev project, runs exactly one `supabase db push --include-all`, derives the expected head from the checkout, reads back the ordered hosted PostgREST schema/search-path lists, and probes the default `public`, explicit `api`, rejected `private`, and retired `public` RPC routes; it must never deploy or delete Edge Functions or push project configuration
-- if the Supabase native Git `dev` binding cannot be detached, a successful database workflow is not the end of the persistent-Dev deployment: after it succeeds, deploy the exact reviewed Edge SHA's complete managed Function inventory through the Edge repo's `npm run deploy:dev -- ...` entrypoint and complete the readback gate defined in `docs/agents/supabase-branching.md`
+- after the persistent `dev` database workflow succeeds, deploy and validate the intended Dev Functions through `tiangong-lca-edge-functions`; this repo does not own the Function source, function selection, or deploy command
 - production `main` proof belongs after `dev -> main` promote and should confirm Supabase GitHub integration applied migrations automatically; when `supabase/config.toml` changes, the operator must also push and verify that configuration against the production project
 - production-volume administrative backfills must fit the platform statement timeout or use a bounded session override that is restored immediately after the statement; Preview row counts alone are not sufficient volume proof
 - root workspace proof belongs later in `lca-workspace`
@@ -135,12 +134,7 @@ At a human-readable level, this repo owns:
 - `supabase/seed.sql`
 - `supabase/seeds/**`
 - `supabase/tests/**`
-- database-side review-submit gate state and final submit-review assertion RPCs
-- the protected owner-draft FP/UG alias execution surface: authenticated preflight, ordered live-gate, admission, and readback RPCs plus one nonce-bound service executor; the replay-capable whole-plan and per-dimension primitives are internal, and time plus length-time plus all 50 derivative child admissions must commit or roll back together before asynchronous derivative completion is assessed
-- the authenticated guarded derivative-rebuild surface: one flow/process owner-draft snapshot, the compatible single-process v1 queued admission, and one owner-only child status read; the private flow/process coordinator, 1..50 batch admission, exact 23-flow + 27-process aggregate proof, queue access, proposals, permits, and active target fences are never authenticated APIs
-- the authenticated guarded Step 3 flow-identity surface: one immutable actor-owned scope seal, one scope-serialized owner-draft process rewrite at a time, read-only resume/status and exact lost-preflight-response lookup, terminal finalization, and one actor-bound cancel that may release a scope only while it is still sealed with zero primary/audit/derivative/permit evidence; actor-wide approval hashes cannot be reused across request/text/identity domains, and each fresh preflight or exact human-approved recovery creates one wrapper invocation with a rotating memory-only permit whose raw token is never persisted; exact replay and every read return no permit, recovery supersedes the prior active permit, and the `api` process/finalize RPCs require the permit as a third argument; each process transaction may replace only the five sealed flow-reference identity fields, must preserve exchange rows/order/amounts/direction/comments/uncertainty/internal IDs and exact pending/blocker occurrences, and must atomically bind one protected derivative child while every source/public/support row remains read-only; a terminal derivative failure exposes an exact derivative-only compensation target but never replays primary, and compensation requires a distinct plan/freeze/approval before finalization can consume its causal proof
-- `tiangong-lca-worker` `worker_jobs` queue schema/RPCs, legacy lifecycle cutover cleanup, and review-submit coordinator links to worker job results
-- the seven-day scope-closure report, complete-machine-result, and closure-bundle lifecycle; DB-first service-only publication write sets that register every locator before upload, atomically resolve bundle manifest client keys, support full fresh and report-only reused publication without partial ready state, and expose the authoritative clientKey-to-artifactId map; the owner-only, fixed-order, locator-free XLSX/manifest availability projection; actor-opaque strict XLSX/manifest download projection plus a temporary one-argument XLSX compatibility overload; evidence-bounded certificate/build admission; and service-only idempotent GC coordination with non-mutating preview, renewable fenced leases, fresh-process post-tombstone recovery, and retained compact audit hashes/counts
+- database-side API façades, policies, ACL/capability manifests, protected mutation boundaries, review/publication state, worker queue/domain state, and release/scope-closure durable contracts
 - `scripts/**` for schema export, workspace refresh, change copying, and migration generation
 - `.github/workflows/supabase-dev.yml`
 - production Supabase GitHub integration contract for Git `main`
@@ -186,7 +180,7 @@ Use the role table in this file as the update map.
 ## Hard Boundaries
 
 - do not treat `supabase/workspace/remote_schema.sql`, `global/**`, or `schemas/**` as stable edit locations
-- prefer one deployer per target by detaching Supabase native deployment from Git `dev`; while the platform binding remains, never accept the database workflow alone as deployment completion, and always run the documented exact Edge redeploy and readback gate afterward
+- do not deploy Edge Functions from this repo; persistent-Dev Function deployment and runtime validation must use the Edge repository's current procedure
 - do not move frontend `.env` or app-side client logic into this repo
 - do not treat a merged PR here as delivery-complete when the workspace still needs a submodule bump
 
