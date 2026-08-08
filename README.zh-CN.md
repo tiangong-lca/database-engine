@@ -17,8 +17,9 @@ checkPaths:
   - AGENTS.md
   - .docpact/config.yaml
   - docs/agents/**
-lastReviewedAt: 2026-04-23
-lastReviewedCommit: 4495c2c5771c03789c0ec26de5852f6a33001fec
+lastReviewedAt: 2026-08-08
+lastReviewedCommit: 1d1d153edb92aa01dd5fb7717441b16bedc4a96b
+lastReviewedNote: "已为 Issue #422 复核：README 只保留当前仓库目的、边界、分支模型和入口。"
 related:
   - AGENTS.md
   - .docpact/config.yaml
@@ -55,14 +56,6 @@ related:
 - `tiangong-lca-next`：前端环境文件与应用集成
 - `tiangong-lca-edge-functions`：Edge Function 运行时代码
 
-## LCI/LCIA Release 控制面
-
-数据库只保存持久化的 Release Run、精确绑定源 Process 的 dataset version 索引、
-artifact、审批、publication 与 readback 事实。生成后的 canonical TIDAS 数据集和 ZIP 字节保存在
-不可变对象存储中，不写入可编辑的 Process 或 LifecycleModel authoring 表。用户命令
-必须使用真实用户 session，并由数据库按当前 `data_product_manager` 角色最终授权；
-内部 service callback 只能 finalize 已验证的 artifact ref，不能审批、发布或撤回发布。
-
 ## 分支模型
 
 - GitHub 默认分支：`main`
@@ -78,7 +71,7 @@ artifact、审批、publication 与 readback 事实。生成后的 canonical TID
 4. 将 migrations、seeds、tests 和 config 变更一起提交。
 5. 向 `dev` 发起 PR。
 6. 验证 PR 对应创建的 Supabase 预览分支。
-7. 合并后，验证持久化的 `dev` 分支。
+7. 合并后，验证持久化 `dev` 数据库，再通过 `tiangong-lca-edge-functions` 部署并验证目标 Dev Functions。
 8. 准备发布时，将 `dev` 提升到 `main`，随后验证生产 Supabase 自动迁移。
 
 ## 运维环境文件
@@ -91,28 +84,6 @@ artifact、审批、publication 与 readback 事实。生成后的 canonical TID
 可将它们复制为 `.env.supabase.dev.local` 或 `.env.supabase.main.local`，用于本地私有凭据配置。
 这些真实的 `.local` 文件会被 Git 忽略，因为其中可能包含远程数据库密码。
 前端运行时环境文件应保留在 `tiangong-lca-next` 中。
-
-## Embedding 队列运维
-
-大批量导入可以通过 `util.embedding_queue_policy` 延后 embedding 队列 fan-out。
-
-最短运维顺序：
-
-1. 将目标 policy 设为 `deferred`，例如 `public / flows / embedding_ft / embedding_ft`。
-2. 执行大批量导入。
-3. 在 `util.pending_embedding_jobs` 中确认待处理 embedding 工作。
-4. 使用 `select util.enqueue_pending_embeddings(<limit>, 'public', 'flows', 'embedding_ft', 'embedding_ft');` 小批量回填入队。
-5. 当队列安全 drain 后，将 policy 恢复为 `normal`。
-
-仅在不应继续入队回填时使用 `paused` 作为止血手段。超过重试策略的 job 会记录到 `util.embedding_job_failures`。
-
-## 受保护的 process derivative 重建
-
-`cmd_dataset_derivative_rebuild_snapshot`、`cmd_dataset_derivative_rebuild_plan_guarded` 和 `cmd_dataset_derivative_rebuild_read` 是 V1 唯一完整的 authenticated 接口。它们一次只接受当前账号一个 `state_code=0` process，并且只重建 `extracted_md` 与 `embedding_ft`。
-
-Admission 是异步的，只表示 `queued`，不表示已经完成。请求活跃期间，私有 coordinator 会冻结 primary 写入，同时隔离 PGMQ 中待处理的任务和已转入 `pg_net` 的 embedding batch；对可能已在运行的 hosted Edge 调用，fence 至少保留 420 秒。若一个已领取的 HTTP batch 同时包含目标行和无关行，该 worker batch 会整体取消；无关行的 PGMQ 消息不会被删除，并会在 visibility timeout 后重试，但可能被延迟。Markdown 先作为私有暂存输入供向量生成；新鲜度会在写入前验证，直到 Markdown 与向量都就绪后才通过同一条数据库 UPDATE 原子公开，失败时保留原来的 Markdown/向量组合。Admission 会短暂获取 `processes` 的 `SHARE ROW EXCLUSIVE` 锁来串行化 fence 之前的写入，锁等待上限为 5 秒。等待中的请求会公平轮转，单个请求级异常不会回滚同批其他请求。
-
-运维或 CLI 必须通过 owner read RPC 区分 pending、completed 和已经完成 drain 的 failure。Admission 与 terminal 结果都会追加关联审计记录；客户端不应直接写 queue、调用 worker helper 或调用私有 coordinator。
 
 ## 文档
 

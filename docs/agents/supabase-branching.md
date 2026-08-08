@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 8be75648495ddc6a582ce63b5723bcbc75c03119
-lastReviewedNote: "Updated for Issue #422: added deterministic Edge Function verification for Supabase Preview and native branch runs."
+lastReviewedCommit: 1d1d153edb92aa01dd5fb7717441b16bedc4a96b
+lastReviewedNote: "Reviewed for Issue #422: persistent Dev deploys the database here, then deploys and validates Functions through the Edge repository."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -78,16 +78,15 @@ When review changes an already-applied PR migration, add a later migration that 
 - Keep branch-specific overrides in `[remotes.<branch>]` inside `supabase/config.toml`.
 - Do not create a separate `supabase/` directory per Git branch.
 - Keep `.github/workflows/supabase-dev.yml` as the sole persistent-`dev` migration deployer. It may run `supabase link` and exactly one `supabase db push --include-all`, but must not deploy/delete Edge Functions or push project configuration.
-- Disable the Supabase native deployment binding for Git `dev` before this workflow reaches `dev`; two deployers must never target the same persistent branch.
+- After the database workflow succeeds, deploy and validate the intended persistent-Dev Functions through `tiangong-lca-edge-functions`. Function source, function selection, deployment commands, and runtime validation remain owned by that repository.
 - Do not add a checked-in GitHub Actions production deploy for Git `main`; the production project is migrated by the Supabase GitHub integration bound to this repository.
 - Do not author normal schema changes by editing the remote database first and reconstructing migrations later.
 
-### Edge Function ownership verification
+### Edge Function deployment
 
-- A successful `Supabase Preview` check proves that the native branch workflow ran; it does not by itself prove that deployed Edge Function content changed.
-- `tiangong-lca-edge-functions` remains the source of truth and deployer for Edge Function runtime code. This repository must not add or deploy Edge Function sources.
-- To determine whether a database-native run changed the persistent Dev Functions, capture the same sorted inventory of Edge-repo-owned function slugs and their hosted content hashes immediately before and after the run, then compare the deterministic inventory digest.
-- An unchanged digest means the owned Function content was preserved. Treat a changed digest, owned-function inventory, `verify_jwt` setting, or active state as an ownership-boundary failure that requires investigation.
+- This repository contains no `supabase/functions/` runtime source and does not deploy Functions.
+- After the persistent-Dev database workflow succeeds, deploy the intended Dev Functions from `tiangong-lca-edge-functions` and run that repository's current validation procedure.
+- Keep the function list, deployment command, authentication settings, and runtime probes in the Edge repository instead of duplicating them here.
 
 ## Files to maintain
 
@@ -148,17 +147,17 @@ Normal PR path:
    the checked-in `supabase/` directory.
 4. The preview branch is PR-scoped proof only; it is not the persistent
    Supabase `dev` branch.
-5. Before the PR merges, confirm that Supabase native deployment is no longer
-   bound to Git `dev`.
-6. After merge, `.github/workflows/supabase-dev.yml` performs a blank local
+5. After merge, `.github/workflows/supabase-dev.yml` performs a blank local
    rebuild, links the configured persistent Dev project, and runs
    `supabase db push --include-all` after the local contract passes.
-7. The workflow derives the expected head from the checked-out migration
+6. The workflow derives the expected head from the checked-out migration
    directory and waits until a service-only readback reports that exact head;
    it never carries a manually pinned head.
-8. The workflow reads `public,api,graphql_public` and
+7. The workflow reads `public,api,graphql_public` and
    `public,api,extensions` through the Management API and probes the hosted
    Data API boundary. After `db push`, these checks are read-only.
+8. After the database workflow succeeds, deploy and validate the intended Dev
+   Functions through `tiangong-lca-edge-functions`.
 
 An existing Preview branch applies newly added migration files on later PR
 pushes. Editing a migration already recorded in that Preview's migration
@@ -230,7 +229,8 @@ Rules:
 7. Commit migrations, seeds, tests, and config together.
 8. Open the PR into Git `dev`.
 9. Let Supabase create or update the preview branch for that PR.
-10. After merge, validate the persistent remote `dev` branch.
+10. After merge, validate the persistent remote `dev` database, then deploy and
+    validate the intended Dev Functions through `tiangong-lca-edge-functions`.
 11. Promote `dev` to `main` when ready to release.
 12. Validate that the production Supabase project was migrated automatically by
     the Supabase GitHub integration.
@@ -246,8 +246,9 @@ Rules:
   the checked-in contract.
 - The workflow owns database migrations only. It must not run `supabase
   functions deploy`, `supabase functions delete`, or `supabase config push`.
-- Supabase native deployment must not remain bound to Git `dev`, because it
-  would race this workflow and may synchronize Edge Functions.
+- After the database workflow succeeds, use the Edge repository's current Dev
+  deployment and validation procedure. Do not reproduce its function inventory
+  or deployment flags in this repository.
 
 ### Production `main` deployment
 
