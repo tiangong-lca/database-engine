@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 6ffdc9abd6bbf939fbb2fdae9a82aa839b0d9912
-lastReviewedNote: "Reviewed for Issue #422: persistent Dev keeps database migration deployment here and Function deployment in the Edge repository."
+lastReviewedCommit: 277ba6efddb966dd2e3562bf93b0d373c90f2756
+lastReviewedNote: "Updated for Issue #435: auth.users is the identity authority and private.users is its internal application-profile mirror."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -85,6 +85,23 @@ and fixed search paths must be rewritten in the same migration whenever they
 refer to moved objects. The small set of security-invoker API search facades
 that needs private RLS helpers runs through the constrained
 `api_internal_executor` role, which cannot log in or bypass RLS.
+
+## Auth Identity And Profile Boundary
+
+`auth.users` is the authoritative registry for Supabase Auth identities.
+`private.users` is an internal application-profile mirror keyed by the same
+user ID; it carries mirrored `raw_user_meta_data` plus application-owned fields
+such as `contact`. API lookups for registered users must therefore drive from
+`auth.users` and may left-join `private.users` for optional profile data. They
+must not treat a missing profile mirror as proof that the Auth identity is
+absent.
+
+A governed, deferred constraint trigger on `auth.users` mirrors inserts and
+metadata updates into `private.users` and removes the profile after an Auth
+identity is deleted. Forward migrations must also reconcile historical Auth
+rows while preserving application-owned profile fields. The trigger helper is
+`SECURITY DEFINER`, uses an empty fixed `search_path`, and is not directly
+executable by application roles.
 
 ## Stable Path Map
 

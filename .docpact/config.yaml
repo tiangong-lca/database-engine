@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-08"
-lastReviewedCommit: "6ffdc9abd6bbf939fbb2fdae9a82aa839b0d9912"
-lastReviewedNote: "Reviewed for Issue #422: persistent Dev deploys and verifies database migrations here, then deploys and validates Functions through the Edge repository."
+lastReviewedCommit: "277ba6efddb966dd2e3562bf93b0d373c90f2756"
+lastReviewedNote: "Reviewed for Issue #435: Auth identity/profile synchronization follows the existing migration, SQL-test, and generated-workspace governance routes; no rule change is required."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
