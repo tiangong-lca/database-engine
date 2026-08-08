@@ -28,7 +28,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 8be75648495ddc6a582ce63b5723bcbc75c03119
+lastReviewedCommit: 1d1d153edb92aa01dd5fb7717441b16bedc4a96b
 lastReviewedNote: "Updated for Issue #422: persistent Dev migration ownership returns to the database-only GitHub Actions db-push path without changing schema ownership."
 related:
   - ../../AGENTS.md
