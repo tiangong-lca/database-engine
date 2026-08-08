@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 88cf87cabc902d694080cb84a07e582aa15de0d7
+lastReviewedCommit: 8a821145d804b44d0958fb64f7f89a7812bdf825
 lastReviewedNote: "Reviewed for Issue #422 database-only Dev deployment: generated-workspace behavior is unchanged; hosted provenance now follows the GitHub Actions db-push path."
 related:
   - ../../AGENTS.md

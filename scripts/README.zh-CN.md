@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 88cf87cabc902d694080cb84a07e582aa15de0d7
+lastReviewedCommit: 8a821145d804b44d0958fb64f7f89a7812bdf825
 lastReviewedNote: "已为 Issue #422 更新：workflow 契约 helper 现强制唯一数据库专用 Dev db push，并拒绝 Functions/config 部署。"
 related:
   - ../AGENTS.md

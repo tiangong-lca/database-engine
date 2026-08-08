@@ -35,7 +35,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 0ae372244bfffc680f12d1917718c10435a3b6d0
+lastReviewedCommit: 8a821145d804b44d0958fb64f7f89a7812bdf825
 lastReviewedNote: "Updated for Issue #422: persistent Dev migrations are again deployed by the database-only GitHub Actions db-push path; Supabase native deployment must not compete for Git dev."
 related:
   - .docpact/config.yaml
