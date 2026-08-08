@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 78134bdf89ee4a727e8b49cd0af47fb06cac10a9
-lastReviewedNote: "Updated for Issue #422: persistent Dev migration deployment is owned by the database-only GitHub Actions db-push path; native Git dev deployment must be disabled."
+lastReviewedCommit: 8be75648495ddc6a582ce63b5723bcbc75c03119
+lastReviewedNote: "Updated for Issue #422: added deterministic Edge Function verification for Supabase Preview and native branch runs."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -81,6 +81,13 @@ When review changes an already-applied PR migration, add a later migration that 
 - Disable the Supabase native deployment binding for Git `dev` before this workflow reaches `dev`; two deployers must never target the same persistent branch.
 - Do not add a checked-in GitHub Actions production deploy for Git `main`; the production project is migrated by the Supabase GitHub integration bound to this repository.
 - Do not author normal schema changes by editing the remote database first and reconstructing migrations later.
+
+### Edge Function ownership verification
+
+- A successful `Supabase Preview` check proves that the native branch workflow ran; it does not by itself prove that deployed Edge Function content changed.
+- `tiangong-lca-edge-functions` remains the source of truth and deployer for Edge Function runtime code. This repository must not add or deploy Edge Function sources.
+- To determine whether a database-native run changed the persistent Dev Functions, capture the same sorted inventory of Edge-repo-owned function slugs and their hosted content hashes immediately before and after the run, then compare the deterministic inventory digest.
+- An unchanged digest means the owned Function content was preserved. Treat a changed digest, owned-function inventory, `verify_jwt` setting, or active state as an ownership-boundary failure that requires investigation.
 
 ## Files to maintain
 
