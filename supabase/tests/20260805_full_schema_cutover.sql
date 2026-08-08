@@ -112,7 +112,7 @@ select is(
     from pg_trigger trigger_record
     where not trigger_record.tgisinternal
   ),
-  106::bigint,
+  107::bigint,
   'all application triggers remain present'
 );
 
