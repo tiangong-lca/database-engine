@@ -9,6 +9,8 @@ project_id = "database-engine"
 # - Pull requests / feature branches -> ephemeral preview branches inheriting the shared baseline
 # Keep branch-specific overrides under [remotes.<branch>] instead of duplicating the `supabase/`
 # directory per Git branch.
+# Edge Function source and deployment remain in `tiangong-lca-edge-functions`; this project
+# intentionally contains no `supabase/functions/` runtime source.
 
 [api]
 enabled = true

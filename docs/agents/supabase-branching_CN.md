@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 78134bdf89ee4a727e8b49cd0af47fb06cac10a9
-lastReviewedNote: "已为 Issue #422 更新：持久化 Dev migration 恢复由数据库专用 GitHub Actions db-push 路径负责，必须关闭 Git dev 的原生部署绑定。"
+lastReviewedCommit: 8be75648495ddc6a582ce63b5723bcbc75c03119
+lastReviewedNote: "已为 Issue #422 更新：增加 Supabase Preview 与原生分支流程的确定性 Edge Function 验证规则。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -79,6 +79,13 @@ related:
 - 在该 workflow 进入 `dev` 前关闭 Git `dev` 的 Supabase 原生部署绑定；同一个持久化分支不能同时存在两个部署者。
 - 不要为 Git `main` 增加 checked-in 的 GitHub Actions 生产部署流程；生产项目由绑定到本仓的 Supabase GitHub integration 自动迁移。
 - 不要先手改远端数据库再回头补 migration。
+
+### Edge Function 所有权验证
+
+- `Supabase Preview` 检查成功只表示原生分支流程已经运行，不能单独证明已部署的 Edge Function 内容发生了变化。
+- `tiangong-lca-edge-functions` 仍是 Edge Function 运行时代码的真相源与部署者；本仓不得新增或部署 Edge Function 源码。
+- 要判断 database-native 流程是否修改了持久化 Dev Functions，应在流程运行前后，对同一组 Edge 仓所拥有的 function slug 与托管内容哈希进行排序并计算确定性清单摘要，然后比较两次结果。
+- 摘要不变表示受管 Function 内容得到保留；如果摘要、受管函数清单、`verify_jwt` 设置或 active 状态发生变化，则视为所有权边界失败并继续调查。
 
 ## 需要维护的文件
 
