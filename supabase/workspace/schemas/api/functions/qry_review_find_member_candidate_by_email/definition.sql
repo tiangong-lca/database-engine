@@ -9,11 +9,14 @@ begin
   if v_actor is null then
     raise exception using errcode = '42501', message = 'AUTH_REQUIRED';
   end if;
+
   if v_email = '' or length(v_email) > 320 then
     raise exception using errcode = '22023', message = 'INVALID_EMAIL';
   end if;
+
   if not exists (
-    select 1 from private.roles
+    select 1
+    from private.roles
     where user_id = v_actor
       and team_id = '00000000-0000-0000-0000-000000000000'::uuid
       and role = 'review-admin'
@@ -23,20 +26,33 @@ begin
 
   return query
   select
-    profile.id,
-    coalesce(nullif(btrim(auth_user.email), ''), nullif(btrim(profile.raw_user_meta_data ->> 'email'), '')),
+    auth_user.id,
+    coalesce(
+      nullif(btrim(auth_user.email), ''),
+      nullif(btrim(auth_user.raw_user_meta_data ->> 'email'), ''),
+      nullif(btrim(profile.raw_user_meta_data ->> 'email'), '')
+    ),
     coalesce(
       nullif(btrim(profile.raw_user_meta_data ->> 'display_name'), ''),
       nullif(btrim(profile.raw_user_meta_data ->> 'name'), ''),
-      nullif(btrim(auth_user.email), '')
+      nullif(btrim(auth_user.raw_user_meta_data ->> 'display_name'), ''),
+      nullif(btrim(auth_user.raw_user_meta_data ->> 'name'), ''),
+      nullif(btrim(auth_user.email), ''),
+      nullif(btrim(auth_user.raw_user_meta_data ->> 'email'), ''),
+      nullif(btrim(profile.raw_user_meta_data ->> 'email'), '')
     ),
     profile.contact
-  from private.users as profile
-  left join auth.users as auth_user on auth_user.id = profile.id
-  where lower(btrim(coalesce(auth_user.email, profile.raw_user_meta_data ->> 'email', ''))) = v_email
-  order by auth_user.created_at desc nulls last, profile.id
+  from auth.users as auth_user
+  left join private.users as profile on profile.id = auth_user.id
+  where lower(coalesce(
+    nullif(btrim(auth_user.email), ''),
+    nullif(btrim(auth_user.raw_user_meta_data ->> 'email'), ''),
+    nullif(btrim(profile.raw_user_meta_data ->> 'email'), ''),
+    ''
+  )) = v_email
+  order by auth_user.created_at desc nulls last, auth_user.id
   limit 1;
-end
+end;
 $$;
 
 ALTER FUNCTION "api"."qry_review_find_member_candidate_by_email"("p_email" "text") OWNER TO "postgres";
