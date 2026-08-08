@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 88cf87cabc902d694080cb84a07e582aa15de0d7
+lastReviewedCommit: 0ae372244bfffc680f12d1917718c10435a3b6d0
 lastReviewedNote: "Updated for Issue #422: workflow proof now requires one database-only db push followed by exact-head and hosted-boundary verification, with no Functions or config deployment."
 related:
   - ../../AGENTS.md
