@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-08"
-lastReviewedCommit: "8a821145d804b44d0958fb64f7f89a7812bdf825"
-lastReviewedNote: "Updated for Issue #422: persistent Dev uses the database-only db-push workflow again, with native Git dev deployment excluded from ownership."
+lastReviewedCommit: "1d1d153edb92aa01dd5fb7717441b16bedc4a96b"
+lastReviewedNote: "Reviewed for Issue #422: persistent Dev deploys and verifies database migrations here, then deploys and validates Functions through the Edge repository."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 8be75648495ddc6a582ce63b5723bcbc75c03119
-lastReviewedNote: "已为 Issue #422 更新：增加 Supabase Preview 与原生分支流程的确定性 Edge Function 验证规则。"
+lastReviewedCommit: 1d1d153edb92aa01dd5fb7717441b16bedc4a96b
+lastReviewedNote: "已为 Issue #422 复核：持久化 Dev 先在本仓部署数据库，再通过 Edge 仓部署并验证 Functions。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -76,16 +76,15 @@ related:
 - 分支差异放在 `supabase/config.toml` 的 `[remotes.<branch>]` 中。
 - 不要为不同 Git 分支复制多套 `supabase/` 目录。
 - 把 `.github/workflows/supabase-dev.yml` 作为持久化 `dev` 的唯一 migration 部署者；它可以执行 `supabase link` 和准确一次 `supabase db push --include-all`，但不得部署/删除 Edge Functions 或推送项目配置。
-- 在该 workflow 进入 `dev` 前关闭 Git `dev` 的 Supabase 原生部署绑定；同一个持久化分支不能同时存在两个部署者。
+- 数据库 workflow 成功后，通过 `tiangong-lca-edge-functions` 部署并验证持久化 Dev 所需的 Functions。Function 源码、函数选择、部署命令和运行时验证仍由 Edge 仓负责。
 - 不要为 Git `main` 增加 checked-in 的 GitHub Actions 生产部署流程；生产项目由绑定到本仓的 Supabase GitHub integration 自动迁移。
 - 不要先手改远端数据库再回头补 migration。
 
-### Edge Function 所有权验证
+### Edge Function 部署
 
-- `Supabase Preview` 检查成功只表示原生分支流程已经运行，不能单独证明已部署的 Edge Function 内容发生了变化。
-- `tiangong-lca-edge-functions` 仍是 Edge Function 运行时代码的真相源与部署者；本仓不得新增或部署 Edge Function 源码。
-- 要判断 database-native 流程是否修改了持久化 Dev Functions，应在流程运行前后，对同一组 Edge 仓所拥有的 function slug 与托管内容哈希进行排序并计算确定性清单摘要，然后比较两次结果。
-- 摘要不变表示受管 Function 内容得到保留；如果摘要、受管函数清单、`verify_jwt` 设置或 active 状态发生变化，则视为所有权边界失败并继续调查。
+- 本仓不包含 `supabase/functions/` 运行时源码，也不部署 Functions。
+- 持久化 Dev 数据库 workflow 成功后，从 `tiangong-lca-edge-functions` 部署目标 Dev Functions，并执行该仓当前的验证流程。
+- 函数清单、部署命令、鉴权设置和运行时探测统一保留在 Edge 仓，不在本文重复维护。
 
 ## 需要维护的文件
 
@@ -142,11 +141,11 @@ related:
 2. PR 目标分支是 Git `dev`。
 3. Supabase GitHub integration 根据已提交的 `supabase/` 目录创建或更新该 PR 的 preview branch。
 4. preview branch 只用于 PR 级别验证；它不是持久化 Supabase `dev` 分支。
-5. PR 合并前，确认 Git `dev` 已不再绑定 Supabase 原生部署。
-6. 合并后，`.github/workflows/supabase-dev.yml` 先完成本地空库重建；本地合同通过后，绑定配置的持久化 Dev 项目并执行 `supabase db push --include-all`。
-7. workflow 从当前 checkout 的 migration 目录推导期望 head，再等待 service-only readback 报告该准确 head；workflow 中不手工固定 migration head。
-8. workflow 通过 Management API 回读 `public,api,graphql_public` 与
+5. 合并后，`.github/workflows/supabase-dev.yml` 先完成本地空库重建；本地合同通过后，绑定配置的持久化 Dev 项目并执行 `supabase db push --include-all`。
+6. workflow 从当前 checkout 的 migration 目录推导期望 head，再等待 service-only readback 报告该准确 head；workflow 中不手工固定 migration head。
+7. workflow 通过 Management API 回读 `public,api,graphql_public` 与
    `public,api,extensions`，并验证托管 Data API 边界；`db push` 后的这些检查均为只读。
+8. 数据库 workflow 成功后，通过 `tiangong-lca-edge-functions` 部署并验证目标 Dev Functions。
 
 `--include-all` 表示所有尚未出现在远端 migration history 中的已提交 migration
 都可以被应用。受治理的 `main -> dev` 回合并可能带入时间戳早于 `dev` 已记录新
@@ -204,7 +203,7 @@ Git `main` 由 Supabase GitHub integration 处理。运维人员仍可在本地�
 7. 把 migration、seed、测试和 config 一起提交。
 8. 向 Git `dev` 发起 PR。
 9. 让 Supabase 为该 PR 自动创建或更新 preview branch。
-10. 合并后，在持久化远端 `dev` 分支验证结果。
+10. 合并后，验证持久化远端 `dev` 数据库，再通过 `tiangong-lca-edge-functions` 部署并验证目标 Dev Functions。
 11. 准备发布时，再把 `dev` 晋升到 `main`。
 12. 验证生产 Supabase 项目已经由 Supabase GitHub integration 自动完成迁移。
 
@@ -217,7 +216,7 @@ Git `main` 由 Supabase GitHub integration 处理。运维人员仍可在本地�
   回读或 REST profile 探测不符合合同时失败。
 - workflow 只负责数据库 migration，不得执行 `supabase functions deploy`、
   `supabase functions delete` 或 `supabase config push`。
-- Git `dev` 不得继续绑定 Supabase 原生部署，否则会与该 workflow 竞争，并可能同步 Edge Functions。
+- 数据库 workflow 成功后，使用 Edge 仓当前的 Dev 部署与验证流程；不要在本仓复制其函数清单或部署参数。
 
 ### 生产 `main` 部署
 
