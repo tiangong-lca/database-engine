@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 78134bdf89ee4a727e8b49cd0af47fb06cac10a9
+lastReviewedCommit: 8a821145d804b44d0958fb64f7f89a7812bdf825
 lastReviewedNote: "Updated for Issue #422: the workflow contract helper now enforces one database-only persistent Dev db push and rejects Functions/config deployment."
 related:
   - ../AGENTS.md

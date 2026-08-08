@@ -28,7 +28,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 1d1d153edb92aa01dd5fb7717441b16bedc4a96b
+lastReviewedCommit: 6ffdc9abd6bbf939fbb2fdae9a82aa839b0d9912
 lastReviewedNote: "Reviewed for Issue #422: persistent Dev keeps database migration deployment here and Function deployment in the Edge repository."
 related:
   - ../../AGENTS.md

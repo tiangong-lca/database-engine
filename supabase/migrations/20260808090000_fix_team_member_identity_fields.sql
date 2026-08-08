@@ -1,10 +1,26 @@
-CREATE OR REPLACE FUNCTION "api"."qry_system_get_member_list"("p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10, "p_sort_by" "text" DEFAULT 'created_at'::"text", "p_sort_order" "text" DEFAULT 'desc'::"text") RETURNS TABLE("user_id" "uuid", "team_id" "uuid", "role" "text", "email" "text", "display_name" "text", "created_at" timestamp with time zone, "modified_at" timestamp with time zone, "total_count" bigint)
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
-    AS $_$
+create or replace function api.qry_team_get_member_list(
+  p_team_id uuid,
+  p_page integer default 1,
+  p_page_size integer default 10,
+  p_sort_by text default 'created_at'::text,
+  p_sort_order text default 'desc'::text
+)
+returns table(
+  user_id uuid,
+  team_id uuid,
+  role text,
+  email text,
+  display_name text,
+  created_at timestamptz,
+  modified_at timestamptz,
+  total_count bigint
+)
+language plpgsql
+security definer
+set search_path to 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
+as $function$
 declare
   v_actor uuid := auth.uid();
-  v_team_id uuid := '00000000-0000-0000-0000-000000000000'::uuid;
   v_limit integer := greatest(1, least(coalesce(p_page_size, 10), 100));
   v_offset integer := (greatest(coalesce(p_page, 1), 1) - 1) * v_limit;
   v_order_by text := api.cmd_membership_resolve_member_order_by(p_sort_by, false);
@@ -14,7 +30,7 @@ begin
     return;
   end if;
 
-  if not api.cmd_membership_is_system_manager(v_actor) then
+  if not api.cmd_membership_is_team_manager(v_actor, p_team_id) then
     return;
   end if;
 
@@ -45,7 +61,6 @@ begin
         left join auth.users as auth_user
           on auth_user.id = membership.user_id
         where membership.team_id = $1
-          and membership.role in ('owner', 'admin', 'member')
       )
       select
         m.user_id,
@@ -64,14 +79,6 @@ begin
     v_order_by,
     v_order_dir
   )
-  using v_team_id, v_limit, v_offset;
+  using p_team_id, v_limit, v_offset;
 end;
-$_$;
-
-ALTER FUNCTION "api"."qry_system_get_member_list"("p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") OWNER TO "postgres";
-
-REVOKE ALL ON FUNCTION "api"."qry_system_get_member_list"("p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") FROM PUBLIC;
-
-GRANT ALL ON FUNCTION "api"."qry_system_get_member_list"("p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") TO "api_internal_executor";
-
-GRANT ALL ON FUNCTION "api"."qry_system_get_member_list"("p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") TO "authenticated";
+$function$;

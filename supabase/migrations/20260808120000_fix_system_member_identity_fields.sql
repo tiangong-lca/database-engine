@@ -1,7 +1,23 @@
-CREATE OR REPLACE FUNCTION "api"."qry_system_get_member_list"("p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10, "p_sort_by" "text" DEFAULT 'created_at'::"text", "p_sort_order" "text" DEFAULT 'desc'::"text") RETURNS TABLE("user_id" "uuid", "team_id" "uuid", "role" "text", "email" "text", "display_name" "text", "created_at" timestamp with time zone, "modified_at" timestamp with time zone, "total_count" bigint)
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
-    AS $_$
+create or replace function api.qry_system_get_member_list(
+  p_page integer default 1,
+  p_page_size integer default 10,
+  p_sort_by text default 'created_at'::text,
+  p_sort_order text default 'desc'::text
+)
+returns table(
+  user_id uuid,
+  team_id uuid,
+  role text,
+  email text,
+  display_name text,
+  created_at timestamptz,
+  modified_at timestamptz,
+  total_count bigint
+)
+language plpgsql
+security definer
+set search_path to 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
+as $function$
 declare
   v_actor uuid := auth.uid();
   v_team_id uuid := '00000000-0000-0000-0000-000000000000'::uuid;
@@ -66,12 +82,4 @@ begin
   )
   using v_team_id, v_limit, v_offset;
 end;
-$_$;
-
-ALTER FUNCTION "api"."qry_system_get_member_list"("p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") OWNER TO "postgres";
-
-REVOKE ALL ON FUNCTION "api"."qry_system_get_member_list"("p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") FROM PUBLIC;
-
-GRANT ALL ON FUNCTION "api"."qry_system_get_member_list"("p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") TO "api_internal_executor";
-
-GRANT ALL ON FUNCTION "api"."qry_system_get_member_list"("p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") TO "authenticated";
+$function$;

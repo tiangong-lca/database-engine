@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 78134bdf89ee4a727e8b49cd0af47fb06cac10a9
+lastReviewedCommit: 8a821145d804b44d0958fb64f7f89a7812bdf825
 lastReviewedNote: "已为 Issue #422 数据库专用 Dev 部署复核：生成 workspace 行为不变，托管来源改由 GitHub Actions db-push 路径确认。"
 related:
   - ../../AGENTS.md
