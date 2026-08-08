@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-07
-lastReviewedCommit: c6d3e24ba8fbe0eb99b56a9aff9180c964dd9ca8
-lastReviewedNote: "已为 Issue #422 运行时 ACL 修复复核：有数据升级验证现覆盖 authenticated RLS helper 与 Edge release façade 的精确授权。"
+lastReviewedAt: 2026-08-08
+lastReviewedCommit: 78134bdf89ee4a727e8b49cd0af47fb06cac10a9
+lastReviewedNote: "已为 Issue #422 更新：workflow 契约 helper 现强制唯一数据库专用 Dev db push，并拒绝 Functions/config 部署。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -82,10 +82,10 @@ python scripts/test_resolve_migration_head.py
 
 ### `test_supabase_dev_workflow_contract.py`
 
-当持久化 Dev 验证 workflow 重新引入数据库密码、`db push`、`config push` 或
-Management API 写操作，或者重新手工固定 migration head 时立即失败；同时要求
-Hosted job 从自己的 checkout 调用 `resolve_migration_head.py`，并把该 step output
-传给 exact-head readback。
+除非持久化 Dev workflow 在绑定目标项目后准确执行一次
+`supabase db push --include-all`，否则立即失败。该契约同时拒绝 Functions
+deploy/delete、`config push`、Management API 写操作和手工固定 migration head，
+并要求 Hosted job 使用同一 checkout 完成 exact-head readback。
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py
@@ -187,7 +187,7 @@ python scripts/build_schema_workspace.py --environment local
 - `remote_schema.sql`、`global/` 和 `schemas/` 中的手工修改都不稳定
 - 刷新时可能覆盖这些生成文件里尚未提交到 Git 的改动
 - 如果你希望 `--git-changes` 只反映后续手工修改，应在同步远程数据库并刷新 workspace 之后，先把新的 `supabase/workspace/schemas` 提交到 Git，再开始编辑
-- 远程 `dev` 仍是生成 schema 的权威目标。Schema 变更 PR 可以提交 exact-local 审查快照，但必须先通过空库 migration 重建、定向合同测试，并再次生成证明无漂移。合并后，原生 Dev 部署必须到达准确 head、托管 catalog 检查必须通过，还要将 remote-Dev 刷新结果与审查快照比较；若有漂移，以后续提交收口。
+- 远程 `dev` 仍是生成 schema 的权威目标。Schema 变更 PR 可以提交 exact-local 审查快照，但必须先通过空库 migration 重建、定向合同测试，并再次生成证明无漂移。合并后，数据库专用 Dev 部署必须到达准确 head、托管 catalog 检查必须通过，还要将 remote-Dev 刷新结果与审查快照比较；若有漂移，以后续提交收口。
 
 ### `build_database_types.py`
 

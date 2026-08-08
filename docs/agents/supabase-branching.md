@@ -20,9 +20,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-06
-lastReviewedCommit: 0b615b0fa753eb1ccbfaf5ce4a08938258d97ad7
-lastReviewedNote: "Reviewed for Issue #422 contract closure: Supabase GitHub Integration is the sole Dev deployer and repository CI performs only local plus hosted read-only verification."
+lastReviewedAt: 2026-08-08
+lastReviewedCommit: 78134bdf89ee4a727e8b49cd0af47fb06cac10a9
+lastReviewedNote: "Updated for Issue #422: persistent Dev migration deployment is owned by the database-only GitHub Actions db-push path; native Git dev deployment must be disabled."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -58,7 +58,7 @@ Those stay in consumer repositories such as `tiangong-lca-next` and `tiangong-lc
 ## Branch contract
 
 - Git `main` -> production baseline migrated automatically by the Supabase GitHub integration
-- Git `dev` -> persistent Supabase `dev` branch migrated by the Supabase GitHub integration and read-only verified by `.github/workflows/supabase-dev.yml`
+- Git `dev` -> persistent Supabase `dev` branch migrated and verified by `.github/workflows/supabase-dev.yml`
 - PR / feature branches -> preview branches created by the Supabase GitHub integration
 
 Rules:
@@ -77,14 +77,15 @@ When review changes an already-applied PR migration, add a later migration that 
 - Treat committed files in `supabase/migrations/` as the schema source of truth for production, `dev`, and preview branches.
 - Keep branch-specific overrides in `[remotes.<branch>]` inside `supabase/config.toml`.
 - Do not create a separate `supabase/` directory per Git branch.
-- Keep the Supabase GitHub integration as the sole persistent-`dev` migration deployer. `.github/workflows/supabase-dev.yml` must remain read-only with respect to hosted schema and configuration.
+- Keep `.github/workflows/supabase-dev.yml` as the sole persistent-`dev` migration deployer. It may run `supabase link` and exactly one `supabase db push --include-all`, but must not deploy/delete Edge Functions or push project configuration.
+- Disable the Supabase native deployment binding for Git `dev` before this workflow reaches `dev`; two deployers must never target the same persistent branch.
 - Do not add a checked-in GitHub Actions production deploy for Git `main`; the production project is migrated by the Supabase GitHub integration bound to this repository.
 - Do not author normal schema changes by editing the remote database first and reconstructing migrations later.
 
 ## Files to maintain
 
 - `supabase/config.toml`: shared baseline plus `[remotes.dev]`
-- `.github/workflows/supabase-dev.yml`: rebuilds local migrations and verifies the exact native persistent-`dev` deployment
+- `.github/workflows/supabase-dev.yml`: rebuilds the local contract, deploys committed migrations to persistent `dev`, and verifies the exact hosted result
 - `supabase/migrations/*.sql`: committed migration history
 - `supabase/seed.sql`: shared seed data
 - `supabase/seeds/dev.sql`: optional persistent-dev-only seed data
@@ -125,6 +126,7 @@ Repository configuration expected by `.github/workflows/supabase-dev.yml`:
 
 - variable `SUPABASE_DEV_PROJECT_ID`
 - secret `SUPABASE_ACCESS_TOKEN`
+- secret `SUPABASE_DEV_DB_PASSWORD`
 
 ## PR to Supabase migration path
 
@@ -139,15 +141,17 @@ Normal PR path:
    the checked-in `supabase/` directory.
 4. The preview branch is PR-scoped proof only; it is not the persistent
    Supabase `dev` branch.
-5. After the PR merges, the Supabase GitHub integration applies Git `dev` to
-   the persistent Supabase `dev` branch.
-6. The same push triggers `.github/workflows/supabase-dev.yml`, which performs
-   a blank local rebuild, derives the expected head from the checked-out
-   migration directory, and waits until a service-only readback reports that
-   exact migration head. The workflow never carries a manually pinned head.
-7. The workflow reads `public,api,graphql_public` and
+5. Before the PR merges, confirm that Supabase native deployment is no longer
+   bound to Git `dev`.
+6. After merge, `.github/workflows/supabase-dev.yml` performs a blank local
+   rebuild, links the configured persistent Dev project, and runs
+   `supabase db push --include-all` after the local contract passes.
+7. The workflow derives the expected head from the checked-out migration
+   directory and waits until a service-only readback reports that exact head;
+   it never carries a manually pinned head.
+8. The workflow reads `public,api,graphql_public` and
    `public,api,extensions` through the Management API and probes the hosted
-   Data API boundary. It performs no hosted mutation.
+   Data API boundary. After `db push`, these checks are read-only.
 
 An existing Preview branch applies newly added migration files on later PR
 pushes. Editing a migration already recorded in that Preview's migration
@@ -187,8 +191,8 @@ against persistent `dev` before the `dev -> main` promote.
 This repository currently has no checked-in `workflow_dispatch` production
 deploy for Supabase. That is intentional: Git `main` is handled by the Supabase
 GitHub integration. An operator can still run `supabase link` and
-`supabase db push` locally as an explicit fallback or recovery path, but that
-manual action must be recorded in validation or incident notes.
+`supabase db push --include-all` locally as an explicit fallback or recovery
+path, but that manual action must be recorded in validation or incident notes.
 
 ## Vault secret contract
 
@@ -226,13 +230,17 @@ Rules:
 
 ### Persistent `dev` branch deployment
 
-- Pushes to Git `dev` are deployed by the Supabase GitHub integration.
-- The same push triggers `.github/workflows/supabase-dev.yml`; it rebuilds the
-  migration history locally, waits for the exact native migration head, and
-  fails unless Management API readback and REST profile probes match the
-  checked-in contract.
-- The workflow has no database password and performs no hosted mutation. Do
-  not add a competing deployment path for the same target.
+- Pushes to Git `dev` are deployed by `.github/workflows/supabase-dev.yml`.
+- The workflow first rebuilds and verifies the complete migration history
+  locally. The hosted job depends on that success, links the configured Dev
+  project, and runs exactly one `supabase db push --include-all`.
+- It then derives the expected head from its checkout and fails unless the
+  exact-head readback, Management API readback, and REST profile probes match
+  the checked-in contract.
+- The workflow owns database migrations only. It must not run `supabase
+  functions deploy`, `supabase functions delete`, or `supabase config push`.
+- Supabase native deployment must not remain bound to Git `dev`, because it
+  would race this workflow and may synchronize Edge Functions.
 
 ### Production `main` deployment
 

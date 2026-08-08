@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-07
-lastReviewedCommit: c6d3e24ba8fbe0eb99b56a9aff9180c964dd9ca8
-lastReviewedNote: "已为 Issue #422 运行时 ACL 修复复核：无需调整生成 workspace 流程或稳定 overlay 合同。"
+lastReviewedAt: 2026-08-08
+lastReviewedCommit: 78134bdf89ee4a727e8b49cd0af47fb06cac10a9
+lastReviewedNote: "已为 Issue #422 数据库专用 Dev 部署复核：生成 workspace 行为不变，托管来源改由 GitHub Actions db-push 路径确认。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -95,7 +95,7 @@ python scripts/build_schema_workspace.py --environment local \
   --schemas public api private util archive
 ```
 
-Schema 变更 PR 可以把该 exact-local 结果作为审查快照提交，但必须先通过空库 migration 重建、定向合同测试，并再次生成证明无漂移；此时它还不代表托管来源。合并后必须确认原生 Dev 部署到达准确 migration head、托管 catalog 检查通过，并把 remote-Dev 刷新结果与本快照比较；若有漂移，以后续提交收口。
+Schema 变更 PR 可以把该 exact-local 结果作为审查快照提交，但必须先通过空库 migration 重建、定向合同测试，并再次生成证明无漂移；此时它还不代表托管来源。合并后必须确认数据库专用 Dev 部署到达准确 migration head、托管 catalog 检查通过，并把 remote-Dev 刷新结果与本快照比较；若有漂移，以后续提交收口。
 
 随后应从同一个本地完整 migration 状态生成纳入版本控制的 Data API 类型合同：
 

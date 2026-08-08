@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-07
-lastReviewedCommit: c6d3e24ba8fbe0eb99b56a9aff9180c964dd9ca8
-lastReviewedNote: "Reviewed for Issue #422 ACL runtime repair: manifest-first grants preserve the existing public/api/private boundary and require no architecture change."
+lastReviewedAt: 2026-08-08
+lastReviewedCommit: 78134bdf89ee4a727e8b49cd0af47fb06cac10a9
+lastReviewedNote: "Updated for Issue #422: persistent Dev migration ownership returns to the database-only GitHub Actions db-push path without changing schema ownership."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -99,7 +99,7 @@ that needs private RLS helpers runs through the constrained
 | `supabase/tests/preview/**` | exact-ref-bound disposable Hosted Preview mutation fixtures, cleanup, rollback-only fault assertions, and offline transport/lifecycle contracts; test-only and excluded from migrations, seeds, Dev data rehearsal, and production execution |
 | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |
 | `scripts/**` | export, refresh, change-copy, migration-generation, and workflow-contract helpers; `resolve_migration_head.py` is the single parser used to derive the current checkout's exact migration head for persistent-Dev verification |
-| `.github/workflows/supabase-dev.yml` | read-only local-contract and persistent-Dev verification after the Supabase GitHub integration deploys Git `dev` |
+| `.github/workflows/supabase-dev.yml` | local-contract rebuild, database-only persistent-Dev migration deployment with `db push --include-all`, and exact hosted verification |
 | `supabase/workspace/changes/**` | manual overlay area used when generating migrations from workspace files |
 | `supabase/workspace/remote_schema.sql` | generated full raw dump from the remote database |
 | `supabase/workspace/global/**` | generated split-out global objects rebuilt on workspace refresh |
@@ -113,7 +113,7 @@ that needs private RLS helpers runs through the constrained
 - Git `dev` is the daily integration trunk
 - Git `main` is the promoted release line
 - PR branches map to Supabase preview branches
-- the Supabase GitHub integration is the sole migration deployer for Git `dev`; `.github/workflows/supabase-dev.yml` rebuilds the local contract and waits for/readbacks the exact native deployment without issuing `db push`, `config push`, or Management API mutations
+- `.github/workflows/supabase-dev.yml` is the sole migration deployer for Git `dev`; it gates the remote job on the local contract, issues exactly one `db push --include-all`, and verifies the exact hosted result without Functions deployment, config push, or Management API mutations
 - the production Supabase project is migrated automatically by the Supabase GitHub integration when Git `main` advances
 
 This means branch behavior is part of the repo architecture, not just delivery process.

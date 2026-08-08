@@ -29,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-07
-lastReviewedCommit: c6d3e24ba8fbe0eb99b56a9aff9180c964dd9ca8
-lastReviewedNote: "Reviewed for Issue #422 ACL runtime repair: the existing schema-cutover, exact-ACL, release-control-plane, and targeted pgTAP proof layers remain sufficient."
+lastReviewedAt: 2026-08-08
+lastReviewedCommit: 78134bdf89ee4a727e8b49cd0af47fb06cac10a9
+lastReviewedNote: "Updated for Issue #422: workflow proof now requires one database-only db push followed by exact-head and hosted-boundary verification, with no Functions or config deployment."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -89,7 +89,7 @@ need Git provenance still check out full history (`fetch-depth: 0`).
 | `supabase/tests/**` only | run the relevant SQL assertion files against a reset local DB | add a nearby migration or policy smoke check if the new assertions expose a gap | This repo stores PGTAP-style SQL assertions, not a single canonical runner wrapper. |
 | `supabase/seed.sql` or `supabase/seeds/dev.sql` | `supabase db reset` succeeds with expected seed behavior | rerun targeted SQL assertions that depend on the seeded rows; for shared-seed changes, confirm the hosted Preview seed stage completes | Keep shared seed and dev-only seed expectations separate. A shared seed with no data must still contain an executable no-op statement; a comments-only batch is not deployment-safe. |
 | `supabase/config.toml` | `supabase start` and `supabase db reset` still work locally | verify the changed branch-binding or auth assumption against `docs/agents/supabase-branching.md`; for exposed-schema changes, prove the Supabase GitHub integration applies the configuration or record the explicit operator gate, then read back exact ordered hosted PostgREST schema/search-path lists | Config changes affect preview, persistent dev, and local behavior together; local CLI order is not hosted default-profile proof. |
-| `.github/workflows/supabase-dev.yml` | inspect and parse YAML; run `python scripts/test_resolve_migration_head.py` and `python scripts/test_supabase_dev_workflow_contract.py`; regenerate `supabase/workspace/database.types.ts` from the full local migration state; assert the workflow contains no pinned migration head, `db push`, `config push`, Management API mutation, or database-password dependency | prove the workflow rejects generated type drift, derives the expected head from the checked-out migration directory, waits for that exact native migration head, and performs only Management API GET plus read-only Data API probes: profile-less `public`, explicit `api`, rejected `private`, and retired `public` RPC | Supabase GitHub integration is the sole persistent-Dev deployer; the workflow verifies rather than races it. |
+| `.github/workflows/supabase-dev.yml` | inspect and parse YAML; run `python scripts/test_resolve_migration_head.py` and `python scripts/test_supabase_dev_workflow_contract.py`; regenerate `supabase/workspace/database.types.ts` from the full local migration state; assert the hosted job links the configured Dev project, runs exactly one `supabase db push --include-all`, contains no pinned migration head, Functions deploy/delete, `config push`, or Management API mutation | prove local contract success gates the remote deploy, generated type drift is rejected, the expected head is derived from the checkout, and post-deploy verification performs only Management API GET plus read-only Data API probes: profile-less `public`, explicit `api`, rejected `private`, and retired `public` RPC | GitHub Actions is the sole persistent-Dev migration deployer. Disable the native Git `dev` deployment binding before merge so it cannot race this workflow or touch Edge Functions. |
 | `scripts/**` | run the touched script with `--help` when possible, or execute the narrowest safe non-destructive path | if a script changes generated workspace behavior, refresh the workspace in a safe environment and inspect git diff | Avoid remote-destructive script runs unless the task explicitly requires them. |
 | `supabase/workspace/**` | prove whether the touched file is generated or stable | if stable manual overlay files changed, explain how they feed migration generation | Generated files alone are not sufficient evidence of a durable schema change. |
 | repo docs only | `scripts/docpact lint --root . --files "<csv>" --mode enforce` | `scripts/docpact validate-config --root . --strict` when `.docpact/config.yaml` changes | Refresh review metadata even when prose stays unchanged. |
@@ -201,7 +201,7 @@ The canonical refresh target remains remote `dev`. For an exact local migration-
 python scripts/build_schema_workspace.py --environment local
 ```
 
-For a schema-changing PR, an exact-local reconstruction may be committed as a review snapshot after a blank migration rebuild, targeted contract tests, and a second deterministic regeneration show no drift. Record those proofs in the PR. After merge, require exact-head native Dev deployment, hosted catalog checks, and a remote-Dev refresh comparison; commit any resulting drift as a follow-up.
+For a schema-changing PR, an exact-local reconstruction may be committed as a review snapshot after a blank migration rebuild, targeted contract tests, and a second deterministic regeneration show no drift. Record those proofs in the PR. After merge, require the database-only Dev deployment to reach the exact head, hosted catalog checks, and a remote-Dev refresh comparison; commit any resulting drift as a follow-up.
 
 ## Preview, Persistent Dev, and Root Integration
 

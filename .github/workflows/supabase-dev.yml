@@ -1,4 +1,4 @@
-name: Verify Supabase Dev
+name: Deploy and Verify Supabase Dev
 
 on:
   push:
@@ -10,7 +10,7 @@ on:
   workflow_dispatch:
 
 concurrency:
-  group: supabase-dev-verification-${{ github.ref }}
+  group: supabase-dev-deployment-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
@@ -31,7 +31,7 @@ jobs:
         with:
           version: 2.98.0
 
-      - name: Verify workflow remains read-only
+      - name: Verify deployment workflow contract
         run: |
           python scripts/test_resolve_migration_head.py
           python scripts/test_supabase_dev_workflow_contract.py
@@ -59,13 +59,15 @@ jobs:
         if: always()
         run: supabase stop --no-backup
 
-  hosted-read-only:
-    name: Verify native Dev deployment
+  deploy-and-verify:
+    name: Deploy and verify persistent Dev
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: local-contract
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+      SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DEV_DB_PASSWORD }}
       SUPABASE_PROJECT_ID: ${{ vars.SUPABASE_DEV_PROJECT_ID }}
 
     steps:
@@ -78,6 +80,12 @@ jobs:
         uses: supabase/setup-cli@v2
         with:
           version: 2.98.0
+
+      - name: Link Supabase Dev branch
+        run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
+
+      - name: Push migrations to Supabase Dev branch
+        run: supabase db push --include-all
 
       - name: Resolve expected migration head
         id: migration_head
@@ -97,7 +105,7 @@ jobs:
           echo "ANON_KEY=$anon_key" >> "$GITHUB_ENV"
           echo "SERVICE_ROLE_KEY=$service_role_key" >> "$GITHUB_ENV"
 
-      - name: Wait for exact native migration head
+      - name: Verify exact deployed migration head
         shell: bash
         env:
           EXPECTED_MIGRATION_HEAD: ${{ steps.migration_head.outputs.head }}
@@ -122,7 +130,7 @@ jobs:
             fi
             sleep 10
           done
-          echo "native Supabase deployment did not reach the expected schema contract" >&2
+          echo "database migration deployment did not reach the expected schema contract" >&2
           exit 1
 
       - name: Verify hosted PostgREST boundary
