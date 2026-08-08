@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 8be75648495ddc6a582ce63b5723bcbc75c03119
-lastReviewedNote: "Updated for Issue #422: workflow proof now requires one database-only db push followed by exact-head and hosted-boundary verification, with no Functions or config deployment."
+lastReviewedCommit: 1d1d153edb92aa01dd5fb7717441b16bedc4a96b
+lastReviewedNote: "Updated for Issue #422: persistent-Dev proof now includes the Edge-owned redeploy/readback gate while native Git synchronization can still replace Functions."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -89,7 +89,7 @@ need Git provenance still check out full history (`fetch-depth: 0`).
 | `supabase/tests/**` only | run the relevant SQL assertion files against a reset local DB | add a nearby migration or policy smoke check if the new assertions expose a gap | This repo stores PGTAP-style SQL assertions, not a single canonical runner wrapper. |
 | `supabase/seed.sql` or `supabase/seeds/dev.sql` | `supabase db reset` succeeds with expected seed behavior | rerun targeted SQL assertions that depend on the seeded rows; for shared-seed changes, confirm the hosted Preview seed stage completes | Keep shared seed and dev-only seed expectations separate. A shared seed with no data must still contain an executable no-op statement; a comments-only batch is not deployment-safe. |
 | `supabase/config.toml` | `supabase start` and `supabase db reset` still work locally | verify the changed branch-binding or auth assumption against `docs/agents/supabase-branching.md`; for exposed-schema changes, prove the Supabase GitHub integration applies the configuration or record the explicit operator gate, then read back exact ordered hosted PostgREST schema/search-path lists | Config changes affect preview, persistent dev, and local behavior together; local CLI order is not hosted default-profile proof. |
-| `.github/workflows/supabase-dev.yml` | inspect and parse YAML; run `python scripts/test_resolve_migration_head.py` and `python scripts/test_supabase_dev_workflow_contract.py`; regenerate `supabase/workspace/database.types.ts` from the full local migration state; assert the hosted job links the configured Dev project, runs exactly one `supabase db push --include-all`, contains no pinned migration head, Functions deploy/delete, `config push`, or Management API mutation | prove local contract success gates the remote deploy, generated type drift is rejected, the expected head is derived from the checkout, and post-deploy verification performs only Management API GET plus read-only Data API probes: profile-less `public`, explicit `api`, rejected `private`, and retired `public` RPC | GitHub Actions is the sole persistent-Dev migration deployer. Disable the native Git `dev` deployment binding before merge so it cannot race this workflow or touch Edge Functions. |
+| `.github/workflows/supabase-dev.yml` | inspect and parse YAML; run `python scripts/test_resolve_migration_head.py` and `python scripts/test_supabase_dev_workflow_contract.py`; regenerate `supabase/workspace/database.types.ts` from the full local migration state; assert the hosted job links the configured Dev project, runs exactly one `supabase db push --include-all`, contains no pinned migration head, Functions deploy/delete, `config push`, or Management API mutation | prove local contract success gates the remote deploy, generated type drift is rejected, the expected head is derived from the checkout, and post-deploy verification performs only Management API GET plus read-only Data API probes: profile-less `public`, explicit `api`, rejected `private`, and retired `public` RPC; while native Git synchronization can still replace Functions, also complete the Edge-owned post-database gate in `docs/agents/supabase-branching.md` | GitHub Actions is the sole persistent-Dev migration deployer, but its success alone is not operational completion while native Git synchronization can still replace Functions. The database workflow must remain database-only; the Edge repository owns the required redeploy command and Function proof. |
 | `scripts/**` | run the touched script with `--help` when possible, or execute the narrowest safe non-destructive path | if a script changes generated workspace behavior, refresh the workspace in a safe environment and inspect git diff | Avoid remote-destructive script runs unless the task explicitly requires them. |
 | `supabase/workspace/**` | prove whether the touched file is generated or stable | if stable manual overlay files changed, explain how they feed migration generation | Generated files alone are not sufficient evidence of a durable schema change. |
 | repo docs only | `scripts/docpact lint --root . --files "<csv>" --mode enforce` | `scripts/docpact validate-config --root . --strict` when `.docpact/config.yaml` changes | Refresh review metadata even when prose stays unchanged. |
@@ -208,7 +208,7 @@ For a schema-changing PR, an exact-local reconstruction may be committed as a re
 For branch-oriented changes:
 
 - preview-branch proof usually happens on the repo PR
-- persistent remote `dev` proof happens after merge into Git `dev`
+- persistent remote `dev` proof happens after merge into Git `dev`; while native Git synchronization can still replace Functions, it includes both the database workflow proof and the Edge-owned post-database redeploy/readback gate
 - production `main` proof happens after `dev -> main` promote and should confirm the Supabase GitHub integration applied migrations automatically
 - root workspace proof happens later in `lca-workspace`
 
