@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-07"
-lastReviewedCommit: "c6d3e24ba8fbe0eb99b56a9aff9180c964dd9ca8"
-lastReviewedNote: "Reviewed for Issue #422 ACL runtime repair: existing migration/test ownership and exact capability-grant governance cover the authenticated RLS helpers and Edge release facades without new rules."
+lastReviewedAt: "2026-08-08"
+lastReviewedCommit: "78134bdf89ee4a727e8b49cd0af47fb06cac10a9"
+lastReviewedNote: "Updated for Issue #422: persistent Dev uses the database-only db-push workflow again, with native Git dev deployment excluded from ownership."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -299,7 +299,7 @@ rules:
         mode: review_or_update
       - path: docs/agents/supabase-branching_CN.md
         mode: review_or_update
-    reason: Branch bindings, native-integration deployment, and read-only persistent Dev verification change repo routing, proof, and branch-operation guidance together.
+    reason: Branch bindings, database-only persistent Dev deployment, and hosted verification change repo routing, proof, and branch-operation guidance together.
   - id: database-engine-migration-and-seed-contract
     scope: repo
     repo: database-engine

@@ -20,9 +20,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-06
-lastReviewedCommit: 0b615b0fa753eb1ccbfaf5ce4a08938258d97ad7
-lastReviewedNote: "已为 Issue #422 合同收口复核：Supabase GitHub Integration 是唯一 Dev 部署方，仓库 CI 仅执行本地与托管只读验证。"
+lastReviewedAt: 2026-08-08
+lastReviewedCommit: 78134bdf89ee4a727e8b49cd0af47fb06cac10a9
+lastReviewedNote: "已为 Issue #422 更新：持久化 Dev migration 恢复由数据库专用 GitHub Actions db-push 路径负责，必须关闭 Git dev 的原生部署绑定。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -58,7 +58,7 @@ related:
 ## 分支契约
 
 - Git `main` -> 生产基线，由 Supabase GitHub integration 自动迁移
-- Git `dev` -> 持久化 Supabase `dev` 分支，由 Supabase GitHub integration 迁移，并由 `.github/workflows/supabase-dev.yml` 只读验证
+- Git `dev` -> 持久化 Supabase `dev` 分支，由 `.github/workflows/supabase-dev.yml` 迁移并验证
 - PR / feature 分支 -> 由 Supabase GitHub integration 自动创建的 preview branch
 
 规则：
@@ -75,14 +75,15 @@ related:
 - 把 `supabase/migrations/` 中已提交的文件视为 production、`dev` 和 preview 分支共同遵循的 schema 真相源。
 - 分支差异放在 `supabase/config.toml` 的 `[remotes.<branch>]` 中。
 - 不要为不同 Git 分支复制多套 `supabase/` 目录。
-- 把 Supabase GitHub integration 作为持久化 `dev` 的唯一 migration 部署者；`.github/workflows/supabase-dev.yml` 不得修改托管 schema 或配置。
+- 把 `.github/workflows/supabase-dev.yml` 作为持久化 `dev` 的唯一 migration 部署者；它可以执行 `supabase link` 和准确一次 `supabase db push --include-all`，但不得部署/删除 Edge Functions 或推送项目配置。
+- 在该 workflow 进入 `dev` 前关闭 Git `dev` 的 Supabase 原生部署绑定；同一个持久化分支不能同时存在两个部署者。
 - 不要为 Git `main` 增加 checked-in 的 GitHub Actions 生产部署流程；生产项目由绑定到本仓的 Supabase GitHub integration 自动迁移。
 - 不要先手改远端数据库再回头补 migration。
 
 ## 需要维护的文件
 
 - `supabase/config.toml`：共享基线加 `[remotes.dev]`
-- `.github/workflows/supabase-dev.yml`：重建本地 migration，并只读验证持久化 `dev` 已到达准确的原生部署 head
+- `.github/workflows/supabase-dev.yml`：重建本地合同、把已提交 migration 部署到持久化 `dev`，并验证准确的托管结果
 - `supabase/migrations/*.sql`：已提交的 migration 历史
 - `supabase/seed.sql`：共享 seed 数据
 - `supabase/seeds/dev.sql`：可选的持久化 dev 专属 seed 数据
@@ -122,6 +123,7 @@ related:
 
 - variable `SUPABASE_DEV_PROJECT_ID`
 - secret `SUPABASE_ACCESS_TOKEN`
+- secret `SUPABASE_DEV_DB_PASSWORD`
 
 ## PR 到 Supabase migration 路径
 
@@ -133,10 +135,11 @@ related:
 2. PR 目标分支是 Git `dev`。
 3. Supabase GitHub integration 根据已提交的 `supabase/` 目录创建或更新该 PR 的 preview branch。
 4. preview branch 只用于 PR 级别验证；它不是持久化 Supabase `dev` 分支。
-5. PR 合并后，Supabase GitHub integration 会把 Git `dev` 应用到持久化 Supabase `dev` 分支。
-6. 同一次 Git push 会触发 `.github/workflows/supabase-dev.yml`，先完成本地空库重建，并从当前 checkout 的 migration 目录推导期望 head，再等待 service-only readback 报告该准确 head；workflow 中不再手工固定 migration head。
-7. workflow 通过 Management API 回读 `public,api,graphql_public` 与
-   `public,api,extensions`，并验证托管 Data API 边界；它不会修改托管数据库或配置。
+5. PR 合并前，确认 Git `dev` 已不再绑定 Supabase 原生部署。
+6. 合并后，`.github/workflows/supabase-dev.yml` 先完成本地空库重建；本地合同通过后，绑定配置的持久化 Dev 项目并执行 `supabase db push --include-all`。
+7. workflow 从当前 checkout 的 migration 目录推导期望 head，再等待 service-only readback 报告该准确 head；workflow 中不手工固定 migration head。
+8. workflow 通过 Management API 回读 `public,api,graphql_public` 与
+   `public,api,extensions`，并验证托管 Data API 边界；`db push` 后的这些检查均为只读。
 
 `--include-all` 表示所有尚未出现在远端 migration history 中的已提交 migration
 都可以被应用。受治理的 `main -> dev` 回合并可能带入时间戳早于 `dev` 已记录新
@@ -162,7 +165,7 @@ Promote 路径：
 
 本仓目前没有 checked-in 的 `workflow_dispatch` 生产 Supabase 部署流程。这是有意设计：
 Git `main` 由 Supabase GitHub integration 处理。运维人员仍可在本地执行
-`supabase link` 和 `supabase db push`，但这只能作为明确的兜底或恢复路径，
+`supabase link` 和 `supabase db push --include-all`，但这只能作为明确的兜底或恢复路径，
 并且必须在验证记录或事故记录中说明。
 
 ## Vault secret 契约
@@ -200,12 +203,14 @@ Git `main` 由 Supabase GitHub integration 处理。运维人员仍可在本地�
 
 ### 持久化 `dev` 分支部署
 
-- 对 Git `dev` 的 push 由 Supabase GitHub integration 部署。
-- 同一次 push 会触发 `.github/workflows/supabase-dev.yml`；它在本地重建完整
-  migration history，等待托管项目到达准确的原生 migration head，并在
-  Management API 回读或 REST profile 探测不符合合同时失败。
-- 该 workflow 不使用数据库密码，也不修改托管状态。不要再增加与 integration
-  竞争同一目标的部署链路。
+- 对 Git `dev` 的 push 由 `.github/workflows/supabase-dev.yml` 部署。
+- workflow 先在本地重建并验证完整 migration history；Hosted job 依赖该结果，
+  随后绑定配置的 Dev 项目，并准确执行一次 `supabase db push --include-all`。
+- 部署后从当前 checkout 推导期望 head，并在 exact-head readback、Management API
+  回读或 REST profile 探测不符合合同时失败。
+- workflow 只负责数据库 migration，不得执行 `supabase functions deploy`、
+  `supabase functions delete` 或 `supabase config push`。
+- Git `dev` 不得继续绑定 Supabase 原生部署，否则会与该 workflow 竞争，并可能同步 Edge Functions。
 
 ### 生产 `main` 部署
 

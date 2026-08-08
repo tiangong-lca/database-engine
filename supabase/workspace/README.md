@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-07
-lastReviewedCommit: c6d3e24ba8fbe0eb99b56a9aff9180c964dd9ca8
-lastReviewedNote: "Reviewed for Issue #422 ACL runtime repair: no generated-workspace workflow or stable-overlay contract change is required."
+lastReviewedAt: 2026-08-08
+lastReviewedCommit: 78134bdf89ee4a727e8b49cd0af47fb06cac10a9
+lastReviewedNote: "Reviewed for Issue #422 database-only Dev deployment: generated-workspace behavior is unchanged; hosted provenance now follows the GitHub Actions db-push path."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -96,7 +96,7 @@ python scripts/build_schema_workspace.py --environment local \
   --schemas public api private util archive
 ```
 
-For a schema-changing PR, this exact-local output may be committed as a review snapshot after a blank migration rebuild, targeted contract tests, and a second deterministic regeneration show no drift. It is not yet hosted provenance. After merge, require the native Dev deployment to reach the exact migration head, pass the hosted catalog checks, and compare a remote-Dev refresh with this snapshot; commit any resulting drift as a follow-up.
+For a schema-changing PR, this exact-local output may be committed as a review snapshot after a blank migration rebuild, targeted contract tests, and a second deterministic regeneration show no drift. It is not yet hosted provenance. After merge, require the database-only Dev deployment to reach the exact migration head, pass the hosted catalog checks, and compare a remote-Dev refresh with this snapshot; commit any resulting drift as a follow-up.
 
 Regenerate the checked-in Data API type contract from that same exact local migration state:
 

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail closed if persistent-Dev verification becomes a second deployer."""
+"""Fail closed if persistent-Dev deployment exceeds the database boundary."""
 
 from __future__ import annotations
 
@@ -19,10 +19,8 @@ def main() -> int:
     lowered = text.lower()
 
     forbidden = {
-        "database password": "supabase_db_password",
-        "manual project link": "supabase link",
-        "second migration deployer": "supabase db push",
-        "second config deployer": "supabase config push",
+        "Edge Functions command": "supabase functions",
+        "project configuration deploy": "supabase config push",
         "Management API mutation": "--request patch",
     }
     failures = [label for label, token in forbidden.items() if token in lowered]
@@ -31,9 +29,13 @@ def main() -> int:
     if re.search(r'EXPECTED_MIGRATION_HEAD:\s*["\']?\d{14}', text):
         failures.append("migration head must not be pinned manually")
 
-    hosted_workflow = text.split("  hosted-read-only:", 1)[-1]
+    hosted_workflow = text.split("  deploy-and-verify:", 1)[-1]
     hosted_required = (
         "uses: actions/checkout@v6",
+        "needs: local-contract",
+        "SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DEV_DB_PASSWORD }}",
+        'supabase link --project-ref "$SUPABASE_PROJECT_ID"',
+        "supabase db push --include-all",
         "id: migration_head",
         "python scripts/resolve_migration_head.py",
         "EXPECTED_MIGRATION_HEAD: ${{ steps.migration_head.outputs.head }}",
@@ -44,9 +46,20 @@ def main() -> int:
         if token not in hosted_workflow
     )
 
+    if lowered.count("supabase db push --include-all") != 1:
+        failures.append("workflow must contain exactly one database-only db push")
+
+    deployment_order = (
+        hosted_workflow.find('supabase link --project-ref "$SUPABASE_PROJECT_ID"'),
+        hosted_workflow.find("supabase db push --include-all"),
+        hosted_workflow.find("id: migration_head"),
+    )
+    if -1 not in deployment_order and deployment_order != tuple(sorted(deployment_order)):
+        failures.append("link, migration push, and exact-head verification are out of order")
+
     required = (
         "pull_request:",
-        "supabase-dev-verification-${{ github.ref }}",
+        "supabase-dev-deployment-${{ github.ref }}",
         "cancel-in-progress: true",
         "github.event_name == 'push' && github.ref == 'refs/heads/dev'",
         "python scripts/test_resolve_migration_head.py",
@@ -72,7 +85,7 @@ def main() -> int:
         return 1
 
     print(
-        "PASS: Supabase Dev workflow is read-only and waits for exact head "
+        "PASS: Supabase Dev workflow deploys migrations only and verifies exact head "
         f"{expected_head}"
     )
     return 0

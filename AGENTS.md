@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-07
-lastReviewedCommit: c6d3e24ba8fbe0eb99b56a9aff9180c964dd9ca8
-lastReviewedNote: "Reviewed for Issue #422 ACL runtime repair: the existing repo ownership, dev-first delivery, least-privilege API manifest, and local-to-hosted proof boundaries remain unchanged."
+lastReviewedAt: 2026-08-08
+lastReviewedCommit: 78134bdf89ee4a727e8b49cd0af47fb06cac10a9
+lastReviewedNote: "Updated for Issue #422: persistent Dev migrations are again deployed by the database-only GitHub Actions db-push path; Supabase native deployment must not compete for Git dev."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -117,7 +117,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - disposable Hosted actors must use an outer-frozen request/namespace and deterministic role email, be registered before creation, carry exact fixture/request/namespace/role metadata, recover only one exact filtered metadata match, use global logout, and treat hard admin DELETE as incomplete until both GET-by-ID returns 404 and a fresh exact filtered census is empty; the outer wrapper must create the exact empty owner-only non-symlink private temp directory and durably fsync each secret-free inner recovery checkpoint before returning its exact IPC ACK, so an actor ID is durable before sign-in or fixture mutation; cleanup must hold the derivative coordinator lock and remain before external dispatch, any missing or ambiguous global logout must retain the actor and forbid hard DELETE, and temporary credential files must be proven removed independently by the inner and outer processes; offline lifecycle and 39-surface residue contracts prove the local control/readback shape without replacing the later exact-head Hosted run and independent Auth/SQL readback execution
 - migration authoring starts from Git `dev`, not GitHub default-branch UI
 - preview-branch proof belongs to the repo PR
-- persistent `dev` deployment belongs to the Supabase GitHub integration bound to Git `dev`; the checked-in workflow derives the expected head from the current checkout's migration directory, then acts as a read-only verifier that waits for that exact migration head, reads back the ordered hosted PostgREST schema/search-path lists, and probes the default `public`, explicit `api`, rejected `private`, and retired `public` RPC routes without a database password or a second `db push`
+- persistent `dev` migration deployment belongs to `.github/workflows/supabase-dev.yml`; after the local contract passes, it links the configured Dev project, runs exactly one `supabase db push --include-all`, derives the expected head from the checkout, reads back the ordered hosted PostgREST schema/search-path lists, and probes the default `public`, explicit `api`, rejected `private`, and retired `public` RPC routes; it must never deploy or delete Edge Functions or push project configuration
 - production `main` proof belongs after `dev -> main` promote and should confirm Supabase GitHub integration applied migrations automatically; when `supabase/config.toml` changes, the operator must also push and verify that configuration against the production project
 - production-volume administrative backfills must fit the platform statement timeout or use a bounded session override that is restored immediately after the statement; Preview row counts alone are not sufficient volume proof
 - root workspace proof belongs later in `lca-workspace`
@@ -185,7 +185,7 @@ Use the role table in this file as the update map.
 ## Hard Boundaries
 
 - do not treat `supabase/workspace/remote_schema.sql`, `global/**`, or `schemas/**` as stable edit locations
-- do not create any checked-in workflow that competes with the Supabase GitHub integration for persistent-`dev` deployment
+- do not leave Supabase native deployment bound to Git `dev` while the checked-in persistent-Dev migration workflow is active; one target must have one deployer
 - do not move frontend `.env` or app-side client logic into this repo
 - do not treat a merged PR here as delivery-complete when the workspace still needs a submodule bump
 

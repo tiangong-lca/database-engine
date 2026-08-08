@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-07
-lastReviewedCommit: c6d3e24ba8fbe0eb99b56a9aff9180c964dd9ca8
-lastReviewedNote: "Reviewed for Issue #422 ACL runtime repair: populated upgrade validation now covers exact authenticated RLS-helper and Edge release facade grants."
+lastReviewedAt: 2026-08-08
+lastReviewedCommit: 78134bdf89ee4a727e8b49cd0af47fb06cac10a9
+lastReviewedNote: "Updated for Issue #422: the workflow contract helper now enforces one database-only persistent Dev db push and rejects Functions/config deployment."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -86,11 +86,11 @@ python scripts/test_resolve_migration_head.py
 
 ### `test_supabase_dev_workflow_contract.py`
 
-Fails closed if the persistent-Dev verification workflow regains database
-password usage, `db push`, `config push`, a Management API mutation, or a
-manually pinned migration head. It requires the hosted job to derive the
-expected head with `resolve_migration_head.py` from its own checkout and pass
-that step output to the exact-head readback.
+Fails closed unless the persistent-Dev workflow performs exactly one database
+deployment with `supabase db push --include-all` after linking the configured
+project. It rejects Functions deploy/delete, `config push`, Management API
+mutation, and a manually pinned migration head, then requires exact-head
+readback from the same checkout.
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py
@@ -196,7 +196,7 @@ Warnings:
 - Manual edits inside `remote_schema.sql`, `global/`, and `schemas/` are not stable
 - Refresh can overwrite uncommitted Git changes in generated workspace files
 - If you want `--git-changes` to reflect only later hand edits, commit the refreshed `supabase/workspace/schemas` to Git after syncing the remote database and before editing files.
-- Remote `dev` remains the canonical generated-schema target. A schema-changing PR may commit an exact-local review snapshot after a blank migration rebuild, targeted contract tests, and a second deterministic regeneration show no drift. After merge, the native Dev deployment must reach the exact head, hosted catalog checks must pass, and a remote-Dev refresh must be compared with the review snapshot; commit any resulting drift as a follow-up.
+- Remote `dev` remains the canonical generated-schema target. A schema-changing PR may commit an exact-local review snapshot after a blank migration rebuild, targeted contract tests, and a second deterministic regeneration show no drift. After merge, the database-only Dev deployment must reach the exact head, hosted catalog checks must pass, and a remote-Dev refresh must be compared with the review snapshot; commit any resulting drift as a follow-up.
 
 ### `build_database_types.py`
 
