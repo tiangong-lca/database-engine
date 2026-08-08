@@ -20673,21 +20673,29 @@ begin
     $sql$
       with members as (
         select
-          r.user_id,
-          r.team_id,
-          r.role::text as role,
-          coalesce(u.raw_user_meta_data->>'email', '') as email,
+          membership.user_id,
+          membership.team_id,
+          membership.role::text as role,
           coalesce(
-            nullif(u.raw_user_meta_data->>'display_name', ''),
-            u.raw_user_meta_data->>'email',
+            nullif(btrim(auth_user.email), ''),
+            nullif(btrim(profile.raw_user_meta_data ->> 'email'), ''),
+            ''
+          ) as email,
+          coalesce(
+            nullif(btrim(profile.raw_user_meta_data ->> 'display_name'), ''),
+            nullif(btrim(profile.raw_user_meta_data ->> 'name'), ''),
+            nullif(btrim(auth_user.email), ''),
+            nullif(btrim(profile.raw_user_meta_data ->> 'email'), ''),
             '-'
           ) as display_name,
-          r.created_at,
-          r.modified_at
-        from private.roles as r
-        left join private.users as u
-          on u.id = r.user_id
-        where r.team_id = $1
+          membership.created_at,
+          membership.modified_at
+        from private.roles as membership
+        left join private.users as profile
+          on profile.id = membership.user_id
+        left join auth.users as auth_user
+          on auth_user.id = membership.user_id
+        where membership.team_id = $1
       )
       select
         m.user_id,
