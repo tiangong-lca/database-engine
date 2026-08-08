@@ -31,7 +31,7 @@ def main() -> int:
 
     hosted_workflow = text.split("  deploy-and-verify:", 1)[-1]
     hosted_required = (
-        "uses: actions/checkout@v6",
+        "uses: actions/checkout@v7",
         "needs: local-contract",
         "SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DEV_DB_PASSWORD }}",
         'supabase link --project-ref "$SUPABASE_PROJECT_ID"',
