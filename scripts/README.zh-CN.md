@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-08
-lastReviewedCommit: 8a821145d804b44d0958fb64f7f89a7812bdf825
-lastReviewedNote: "已为 Issue #422 更新：workflow 契约 helper 现强制唯一数据库专用 Dev db push，并拒绝 Functions/config 部署。"
+lastReviewedCommit: 91a0817bb19882643089de2a63a3d1aad372847d
+lastReviewedNote: "已为 Issue #435 复核：现有 exact-local schema workspace 与数据库类型刷新命令仍然适用，脚本行为不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

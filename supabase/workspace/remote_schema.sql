@@ -19460,11 +19460,14 @@ begin
   if v_actor is null then
     raise exception using errcode = '42501', message = 'AUTH_REQUIRED';
   end if;
+
   if v_email = '' or length(v_email) > 320 then
     raise exception using errcode = '22023', message = 'INVALID_EMAIL';
   end if;
+
   if not exists (
-    select 1 from private.roles
+    select 1
+    from private.roles
     where user_id = v_actor
       and team_id = '00000000-0000-0000-0000-000000000000'::uuid
       and role = 'review-admin'
@@ -19474,20 +19477,33 @@ begin
 
   return query
   select
-    profile.id,
-    coalesce(nullif(btrim(auth_user.email), ''), nullif(btrim(profile.raw_user_meta_data ->> 'email'), '')),
+    auth_user.id,
+    coalesce(
+      nullif(btrim(auth_user.email), ''),
+      nullif(btrim(auth_user.raw_user_meta_data ->> 'email'), ''),
+      nullif(btrim(profile.raw_user_meta_data ->> 'email'), '')
+    ),
     coalesce(
       nullif(btrim(profile.raw_user_meta_data ->> 'display_name'), ''),
       nullif(btrim(profile.raw_user_meta_data ->> 'name'), ''),
-      nullif(btrim(auth_user.email), '')
+      nullif(btrim(auth_user.raw_user_meta_data ->> 'display_name'), ''),
+      nullif(btrim(auth_user.raw_user_meta_data ->> 'name'), ''),
+      nullif(btrim(auth_user.email), ''),
+      nullif(btrim(auth_user.raw_user_meta_data ->> 'email'), ''),
+      nullif(btrim(profile.raw_user_meta_data ->> 'email'), '')
     ),
     profile.contact
-  from private.users as profile
-  left join auth.users as auth_user on auth_user.id = profile.id
-  where lower(btrim(coalesce(auth_user.email, profile.raw_user_meta_data ->> 'email', ''))) = v_email
-  order by auth_user.created_at desc nulls last, profile.id
+  from auth.users as auth_user
+  left join private.users as profile on profile.id = auth_user.id
+  where lower(coalesce(
+    nullif(btrim(auth_user.email), ''),
+    nullif(btrim(auth_user.raw_user_meta_data ->> 'email'), ''),
+    nullif(btrim(profile.raw_user_meta_data ->> 'email'), ''),
+    ''
+  )) = v_email
+  order by auth_user.created_at desc nulls last, auth_user.id
   limit 1;
-end
+end;
 $$;
 
 
@@ -46405,33 +46421,41 @@ $$;
 ALTER FUNCTION "private"."svc_lcia_scope_closure_reuse_completed_scan"("p_closure_check_id" "uuid", "p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_completed_check_id" "uuid") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "private"."sync_auth_users_to_public_users"() RETURNS "trigger"
+CREATE OR REPLACE FUNCTION "private"."sync_auth_users_to_private_users"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'private', 'api', 'public', 'util', 'extensions', 'pg_temp'
+    SET "search_path" TO ''
     AS $$
-BEGIN
-    -- 处理插入操作
-    IF TG_OP = 'INSERT' THEN
-        INSERT INTO private.users (id, raw_user_meta_data)
-        VALUES (NEW.id, NEW.raw_user_meta_data);
-    -- 处理更新操作
-    ELSIF TG_OP = 'UPDATE' THEN
-		IF NEW.raw_user_meta_data != OLD.raw_user_meta_data THEN
-			UPDATE private.users
-			SET raw_user_meta_data = NEW.raw_user_meta_data
-			WHERE id = NEW.id;
-	END IF;
-    -- 处理删除操作
-    ELSIF TG_OP = 'DELETE' THEN
-        DELETE FROM private.users
-        WHERE id = OLD.id;
-    END IF;
-    RETURN NEW;
-END;
+begin
+  if tg_op = 'DELETE' then
+    delete from private.users
+    where id = old.id;
+
+    return old;
+  end if;
+
+  if tg_op = 'UPDATE'
+     and new.raw_user_meta_data is not distinct from old.raw_user_meta_data then
+    return new;
+  end if;
+
+  insert into private.users as profile (
+    id,
+    raw_user_meta_data
+  )
+  values (
+    new.id,
+    new.raw_user_meta_data
+  )
+  on conflict (id) do update
+  set raw_user_meta_data = excluded.raw_user_meta_data
+  where profile.raw_user_meta_data is distinct from excluded.raw_user_meta_data;
+
+  return new;
+end;
 $$;
 
 
-ALTER FUNCTION "private"."sync_auth_users_to_public_users"() OWNER TO "postgres";
+ALTER FUNCTION "private"."sync_auth_users_to_private_users"() OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "private"."sync_json_to_jsonb"() RETURNS "trigger"
@@ -62914,9 +62938,7 @@ GRANT ALL ON FUNCTION "private"."svc_lcia_scope_closure_reuse_completed_scan"("p
 
 
 
-REVOKE ALL ON FUNCTION "private"."sync_auth_users_to_public_users"() FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."sync_auth_users_to_public_users"() TO "service_role";
-GRANT ALL ON FUNCTION "private"."sync_auth_users_to_public_users"() TO "api_internal_executor";
+REVOKE ALL ON FUNCTION "private"."sync_auth_users_to_private_users"() FROM PUBLIC;
 
 
 
