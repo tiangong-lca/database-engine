@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-09
-lastReviewedCommit: 5ee102c80db8c1437777eddf098e34b77a484cab
-lastReviewedNote: "Reviewed for Issue #323: the existing exact-local schema workspace and database-types refresh commands captured the scope-basis repair deterministically; script behavior is unchanged."
+lastReviewedCommit: cab102d900d1be38a42666ee0b6025aad6503ff1
+lastReviewedNote: "Reviewed for Issue #439: the existing exact-local schema workspace and database-types refresh commands captured the rejected-reference resubmission change deterministically; script behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

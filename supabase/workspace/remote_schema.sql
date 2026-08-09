@@ -13732,30 +13732,6 @@ begin
     );
   end if;
 
-  if exists (
-    select 1
-    from private.reviews as rejected
-    where rejected.review_kind = 'reference'
-      and rejected.target_table = v_table
-      and rejected.data_id = p_target_id
-      and btrim(rejected.data_version::text) = p_target_version
-      and rejected.submitted_revision_checksum = v_checksum
-      and rejected.state_code = -1
-      and exists (
-        select 1
-        from private.reviews as root_review
-        where root_review.review_kind = 'root'
-          and root_review.current_reference_review_ids
-            @> array[rejected.id]::uuid[]
-      )
-  ) then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'REFERENCE_REVISION_REJECTED_UNCHANGED',
-      'status', 409,
-      'message', 'The rejected reference must be changed before resubmission'
-    );
-  end if;
 
   select coalesce(array_agg(rejected.id order by rejected.id), array[]::uuid[])
   into v_old_reference_ids
@@ -14015,25 +13991,12 @@ begin
         'introduced_field_path', null
       );
     else
-      begin
-        v_reference := private.review_get_or_create_reference_v1(
-          v_target.table_name,
-          v_target.dataset_row,
-          v_target_checksum,
-          v_actor
-        );
-      exception
-        when unique_violation then
-          if sqlerrm = 'REFERENCE_REVISION_REJECTED_UNCHANGED' then
-            return jsonb_build_object(
-              'ok', false,
-              'code', 'REFERENCE_REVISION_REJECTED_UNCHANGED',
-              'status', 409,
-              'message', 'A rejected reference revision must be changed'
-            );
-          end if;
-          raise;
-      end;
+      v_reference := private.review_get_or_create_reference_v1(
+        v_target.table_name,
+        v_target.dataset_row,
+        v_target_checksum,
+        v_actor
+      );
 
       v_reference_ids := array_append(v_reference_ids, v_reference.id);
       v_item := jsonb_build_object(
@@ -14207,10 +14170,7 @@ begin
 exception
   when others then
     perform set_config('app.review_controlled_write', 'off', true);
-    if sqlerrm in (
-      'REFERENCE_REVISION_REJECTED_UNCHANGED',
-      'REFERENCE_OWNER_UNRESOLVED'
-    ) then
+    if sqlerrm = 'REFERENCE_OWNER_UNRESOLVED' then
       return jsonb_build_object(
         'ok', false,
         'code', sqlerrm,
@@ -39872,20 +39832,6 @@ begin
       message = 'REFERENCE_OWNER_UNRESOLVED';
   end if;
 
-  if exists (
-    select 1
-    from private.reviews as rejected
-    where rejected.review_kind = 'reference'
-      and rejected.target_table = p_target_table
-      and rejected.data_id = (p_target_row->>'id')::uuid
-      and btrim(rejected.data_version::text) = p_target_row->>'version'
-      and rejected.submitted_revision_checksum = p_checksum
-      and rejected.state_code = -1
-  ) then
-    raise exception using
-      errcode = '23505',
-      message = 'REFERENCE_REVISION_REJECTED_UNCHANGED';
-  end if;
 
   select reference_row.*
   into v_reference

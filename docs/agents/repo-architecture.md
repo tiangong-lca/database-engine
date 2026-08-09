@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-09
-lastReviewedCommit: 1b556b3c33fb486a7077cd08e913b05067f99ee7
-lastReviewedNote: "Reviewed for Issue #323: the Reviewer metadata scope-basis fix remains within the API function migration boundary and does not change repository architecture."
+lastReviewedCommit: cab102d900d1be38a42666ee0b6025aad6503ff1
+lastReviewedNote: "Reviewed for Issue #439: unchanged rejected Reference Review resubmission remains within the API/private function migration boundary and does not change repository architecture."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

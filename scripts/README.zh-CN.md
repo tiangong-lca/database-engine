@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-09
-lastReviewedCommit: 5ee102c80db8c1437777eddf098e34b77a484cab
-lastReviewedNote: "已为 Issue #323 复核：现有 exact-local schema workspace 与数据库类型刷新命令可确定性捕获 scope-basis 修复，脚本行为不变。"
+lastReviewedCommit: cab102d900d1be38a42666ee0b6025aad6503ff1
+lastReviewedNote: "已为 Issue #439 复核：现有 exact-local schema workspace 与数据库类型刷新命令可确定性捕获被拒引用重新提交的变更，脚本行为不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

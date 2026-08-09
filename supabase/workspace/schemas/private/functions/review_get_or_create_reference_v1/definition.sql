@@ -14,20 +14,6 @@ begin
       message = 'REFERENCE_OWNER_UNRESOLVED';
   end if;
 
-  if exists (
-    select 1
-    from private.reviews as rejected
-    where rejected.review_kind = 'reference'
-      and rejected.target_table = p_target_table
-      and rejected.data_id = (p_target_row->>'id')::uuid
-      and btrim(rejected.data_version::text) = p_target_row->>'version'
-      and rejected.submitted_revision_checksum = p_checksum
-      and rejected.state_code = -1
-  ) then
-    raise exception using
-      errcode = '23505',
-      message = 'REFERENCE_REVISION_REJECTED_UNCHANGED';
-  end if;
 
   select reference_row.*
   into v_reference
