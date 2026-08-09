@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-09
-lastReviewedCommit: cab102d900d1be38a42666ee0b6025aad6503ff1
-lastReviewedNote: "Reviewed for Issue #439: the existing exact-local schema workspace and database-types refresh commands captured the rejected-reference resubmission change deterministically; script behavior is unchanged."
+lastReviewedAt: 2026-08-10
+lastReviewedCommit: 24ba3e64eedd8c557277e9fe62ee6f86e8cc4d83
+lastReviewedNote: "Reviewed for Issue #442: the existing exact-local schema workspace and database-types refresh commands deterministically capture canonical cutoff normalization; script behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

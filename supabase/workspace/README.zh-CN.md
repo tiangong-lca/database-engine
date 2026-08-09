@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-09
-lastReviewedCommit: cab102d900d1be38a42666ee0b6025aad6503ff1
-lastReviewedNote: "已为 Issue #439 复核：被拒引用重新提交的 exact-local schema 快照可确定性重建，且 Data API 类型无漂移，workspace 行为不变。"
+lastReviewedAt: 2026-08-10
+lastReviewedCommit: 24ba3e64eedd8c557277e9fe62ee6f86e8cc4d83
+lastReviewedNote: "已为 Issue #442 复核：canonical cutoff 的 exact-local schema 快照可确定性重建，且 Data API 类型无漂移，workspace 行为不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
