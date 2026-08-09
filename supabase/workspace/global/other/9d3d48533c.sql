@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."lcia_scope_closure_normalize_request"("p_requested_scope" "jsonb") IS 'Normalizes closure roots and canonicalizes every supported legacy technosphere boundary input to cutoff before request hashing and snapshot freezing.';

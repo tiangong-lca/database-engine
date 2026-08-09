@@ -199,7 +199,7 @@ begin
      or coalesce(v_policy->>'linkSemanticsVersion', 'signed-flow-balance-v1') <> 'signed-flow-balance-v1'
      or coalesce(v_policy->>'flowIdentityPolicy', 'exact-flow-version-reference-unit-v2') <> 'exact-flow-version-reference-unit-v2'
      or coalesce(v_policy->>'allocationSemanticsVersion', 'tidas-reference-allocation-v3') <> 'tidas-reference-allocation-v3'
-     or coalesce(v_policy->>'technosphereBoundaryPolicy', 'closed') not in ('closed', 'open', 'cutoff')
+     or coalesce(v_policy->>'technosphereBoundaryPolicy', 'cutoff') not in ('closed', 'open', 'cutoff')
      or coalesce(v_policy->>'providerUniversePolicy', 'scope_only') not in ('scope_only', 'eligible_transitive_expansion-v1') then
     raise exception using errcode = '22023', message = 'invalid_closure_link_policy';
   end if;
@@ -217,8 +217,7 @@ begin
       'linkSemanticsVersion', 'signed-flow-balance-v1',
       'flowIdentityPolicy', 'exact-flow-version-reference-unit-v2',
       'allocationSemanticsVersion', 'tidas-reference-allocation-v3',
-      'technosphereBoundaryPolicy',
-        coalesce(v_policy->>'technosphereBoundaryPolicy', 'closed'),
+      'technosphereBoundaryPolicy', 'cutoff',
       'providerUniversePolicy',
         coalesce(v_policy->>'providerUniversePolicy', 'scope_only')
     ),
