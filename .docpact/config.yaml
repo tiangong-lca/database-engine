@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-08"
-lastReviewedCommit: "277ba6efddb966dd2e3562bf93b0d373c90f2756"
-lastReviewedNote: "Reviewed for Issue #435: Auth identity/profile synchronization follows the existing migration, SQL-test, and generated-workspace governance routes; no rule change is required."
+lastReviewedAt: "2026-08-09"
+lastReviewedCommit: "1b556b3c33fb486a7077cd08e913b05067f99ee7"
+lastReviewedNote: "Reviewed for Issue #323: the Reviewer metadata scope-basis fix follows the existing migration, SQL-test, and generated-workspace governance routes; no rule change is required."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
