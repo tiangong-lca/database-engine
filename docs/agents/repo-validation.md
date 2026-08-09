@@ -29,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-08
-lastReviewedCommit: 277ba6efddb966dd2e3562bf93b0d373c90f2756
-lastReviewedNote: "Updated for Issue #435: Auth identity/profile mirror changes require clean-reset, populated-upgrade, trigger, ACL, and Auth-only lookup proof."
+lastReviewedAt: 2026-08-09
+lastReviewedCommit: 1b556b3c33fb486a7077cd08e913b05067f99ee7
+lastReviewedNote: "Reviewed for Issue #323: clean reset plus the focused and existing Root/Reference Review v2 pgTAP suites satisfy the current proof contract."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

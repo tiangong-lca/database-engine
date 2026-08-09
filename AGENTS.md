@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-08
-lastReviewedCommit: 91a0817bb19882643089de2a63a3d1aad372847d
-lastReviewedNote: "Reviewed for Issue #435: Auth profile synchronization follows the existing migration, SQL-test, generated-workspace, and dev-to-main delivery contract."
+lastReviewedAt: 2026-08-09
+lastReviewedCommit: 1b556b3c33fb486a7077cd08e913b05067f99ee7
+lastReviewedNote: "Reviewed for Issue #323: the Reviewer metadata scope-basis fix follows the existing migration, SQL-test, generated-workspace, and dev-to-main delivery contract."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

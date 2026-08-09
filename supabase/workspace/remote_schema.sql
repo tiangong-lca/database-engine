@@ -13473,7 +13473,7 @@ begin
     if jsonb_array_length(v_new_items) > 0 then
       perform private.review_append_scope_snapshot_v1(
         p_review_id,
-        'reviewer_metadata',
+        'review_metadata',
         v_current_snapshot->>'root_revision_checksum',
         v_items || v_new_items,
         v_actor

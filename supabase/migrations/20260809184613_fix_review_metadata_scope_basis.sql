@@ -1,3 +1,6 @@
+-- Fix the canonical scope-basis value used when Reviewer metadata adds references.
+-- Item provenance remains `reviewer_metadata`; snapshot provenance is `review_metadata`.
+
 CREATE OR REPLACE FUNCTION "api"."cmd_review_submit_comment"("p_review_id" "uuid", "p_json" "jsonb", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO ''
