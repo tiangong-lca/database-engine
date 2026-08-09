@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-08
-lastReviewedCommit: 91a0817bb19882643089de2a63a3d1aad372847d
-lastReviewedNote: "已为 Issue #435 复核：Auth profile 的 exact-local schema 快照连续生成结果一致，workspace 行为不变。"
+lastReviewedAt: 2026-08-09
+lastReviewedCommit: 5ee102c80db8c1437777eddf098e34b77a484cab
+lastReviewedNote: "已为 Issue #323 复核：scope-basis 的 exact-local schema 快照可确定性重建，且 Data API 类型无漂移，workspace 行为不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

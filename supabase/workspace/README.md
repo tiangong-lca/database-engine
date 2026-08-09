@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-08
-lastReviewedCommit: 91a0817bb19882643089de2a63a3d1aad372847d
-lastReviewedNote: "Reviewed for Issue #435: the exact-local Auth profile schema snapshot was regenerated twice with identical output; workspace behavior is unchanged."
+lastReviewedAt: 2026-08-09
+lastReviewedCommit: 5ee102c80db8c1437777eddf098e34b77a484cab
+lastReviewedNote: "Reviewed for Issue #323: the exact-local scope-basis schema snapshot regenerated deterministically with no Data API type drift; workspace behavior is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
