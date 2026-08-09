@@ -124,6 +124,73 @@ set state_code = excluded.state_code,
     json_ordered = excluded.json_ordered,
     user_id = excluded.user_id;
 
+create temporary table candidate_boundary_normalizations as
+select input.label,
+  private.lcia_scope_closure_normalize_request(
+    jsonb_build_object(
+      'coverageMode', 'subset',
+      'processes', jsonb_build_array(jsonb_build_object(
+        'id', 'c7240000-0000-4000-8000-000000000010',
+        'version', '01.00.000'
+      )),
+      'lciaMethods', jsonb_build_array(jsonb_build_object(
+        'id', '503699e0-eca9-4089-8bf8-e0f49c93e578',
+        'version', '01.01.000'
+      )),
+      'linkPolicy', case
+        when input.boundary_policy is null then '{}'::jsonb
+        else jsonb_build_object(
+          'technosphereBoundaryPolicy', input.boundary_policy
+        )
+      end
+    )
+  ) as normalized_scope
+from (values
+  ('omitted', null::text),
+  ('closed', 'closed'),
+  ('open', 'open'),
+  ('cutoff', 'cutoff')
+) as input(label, boundary_policy);
+
+select is(
+  (
+    select count(*)
+    from candidate_boundary_normalizations
+    where normalized_scope->'linkPolicy'->>'technosphereBoundaryPolicy' = 'cutoff'
+  ),
+  4::bigint,
+  'all supported legacy boundary inputs normalize to cutoff'
+);
+select is(
+  (
+    select count(distinct normalized_scope)
+    from candidate_boundary_normalizations
+  ),
+  1::bigint,
+  'legacy boundary inputs produce one canonical requested scope and fingerprint input'
+);
+select throws_ok(
+  $sql$
+    select private.lcia_scope_closure_normalize_request(
+      '{
+        "coverageMode":"subset",
+        "processes":[{
+          "id":"c7240000-0000-4000-8000-000000000010",
+          "version":"01.00.000"
+        }],
+        "lciaMethods":[{
+          "id":"503699e0-eca9-4089-8bf8-e0f49c93e578",
+          "version":"01.01.000"
+        }],
+        "linkPolicy":{"technosphereBoundaryPolicy":"unknown"}
+      }'::jsonb
+    )
+  $sql$,
+  '22023',
+  'invalid_closure_link_policy',
+  'unknown boundary policies remain invalid'
+);
+
 select is(
   (
     select count(*)
@@ -252,6 +319,15 @@ select is(
   ),
   '503699e0-eca9-4089-8bf8-e0f49c93e578',
   'LCIA normalization preserves canonical method identity rather than its artifact locator'
+);
+select is(
+  (
+    select requested_scope_manifest->'linkPolicy'->>'technosphereBoundaryPolicy'
+    from private.lcia_scope_closure_checks
+    where request_idempotency_token = 'candidate-subset-a'
+  ),
+  'cutoff',
+  'persisted Scope Closure requests freeze the canonical cutoff boundary policy'
 );
 select is(
   (
