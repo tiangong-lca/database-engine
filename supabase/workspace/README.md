@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 3f49c4b8ac21fcc3bd7c20b1322edb48b028bbdf
+lastReviewedCommit: 65b651f233fc8bc6af0d3291bedc11a6dff0d6e9
 lastReviewedNote: "Reviewed for Issue #446: the exact-local Comment draft/submission snapshot regenerates deterministically with no Data API type drift; workspace behavior is unchanged."
 related:
   - ../../AGENTS.md

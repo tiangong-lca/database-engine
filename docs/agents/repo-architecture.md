@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 3f49c4b8ac21fcc3bd7c20b1322edb48b028bbdf
-lastReviewedNote: "Reviewed for Issue #446: separating temporary Comment drafts from formal submission changes generated functions but not stable repository ownership or workspace structure."
+lastReviewedCommit: 65b651f233fc8bc6af0d3291bedc11a6dff0d6e9
+lastReviewedNote: "Updated for Issue #455: mutable package scopes reuse only active jobs, selected_roots retains exact-identity terminal reuse, and package authorization remains API-owned."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -225,7 +225,7 @@ or duplicate indexes.
 
 `worker_jobs` is the canonical lifecycle and queue-control table for work that cannot be safely carried by Edge Function request/response execution.
 
-Retained domain tables such as `lca_package_artifacts`, `lca_package_export_items`, `lca_package_request_cache`, `lca_results`, `lca_result_cache`, `lca_latest_all_unit_results`, `lca_network_snapshots`, `dataset_review_submit_requests`, and `dataset_review_submit_gate_runs` are not replacement job tables. They store worker-produced artifacts, caches, projections, reports, or coordinator domain state. Post-cutover rows should be traceable back to `worker_jobs` through the appropriate worker job reference columns, except for explicitly documented exceptions such as snapshot identity rows that are traced through downstream worker-linked records.
+Retained domain tables such as `lca_package_artifacts`, `lca_package_export_items`, `lca_package_request_cache`, `lca_results`, `lca_result_cache`, `lca_latest_all_unit_results`, `lca_network_snapshots`, `dataset_review_submit_requests`, and `dataset_review_submit_gate_runs` are not replacement job tables. They store worker-produced artifacts, caches, projections, reports, or coordinator domain state. The package request cache deduplicates active work for mutable scopes (`current_user`, `open_data`, and `current_user_and_open_data`), but a new intent after completion must advance to a fresh Worker/package job; only `selected_roots`, whose exact root IDs and versions are request content, retains terminal artifact reuse. Post-cutover rows should be traceable back to `worker_jobs` through the appropriate worker job reference columns, except for explicitly documented exceptions such as snapshot identity rows that are traced through downstream worker-linked records.
 
 Use `private.worker_domain_traceability_cutoffs` and
 `util.worker_domain_traceability_violations` for DB-side audit checks when
