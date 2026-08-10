@@ -11539,8 +11539,6 @@ declare
   v_approved_checksum text;
   v_review_items jsonb := '[]'::jsonb;
   v_compliance_items jsonb := '[]'::jsonb;
-  v_current_snapshot jsonb;
-  v_approved_items jsonb;
 begin
   if v_actor is null or not api.cmd_review_is_review_admin(v_actor) then
     return jsonb_build_object(
@@ -11673,31 +11671,6 @@ begin
 
   if v_review.review_kind = 'reference' then
     v_approved_checksum := v_review.submitted_revision_checksum;
-  else
-    v_current_snapshot := private.review_scope_current_snapshot_v1(
-      v_review.scope_history
-    );
-    v_approved_items := (
-      select jsonb_agg(
-        case when item.value->>'item_kind' = 'root'
-          then item.value || jsonb_build_object(
-            'submitted_revision_checksum', v_approved_checksum
-          )
-          else item.value
-        end
-        order by item.ordinality
-      )
-      from jsonb_array_elements(v_current_snapshot->'items')
-        with ordinality as item(value, ordinality)
-    );
-
-    perform private.review_append_scope_snapshot_v1(
-      p_review_id,
-      'approved',
-      v_approved_checksum,
-      v_approved_items,
-      v_actor
-    );
   end if;
 
   execute format(
@@ -11891,10 +11864,7 @@ begin
     v_review.data_id,
     btrim(v_review.data_version::text),
     case when v_review.review_kind = 'root' then v_review.id else null end,
-    case when v_review.review_kind = 'root'
-      then (v_review.scope_history->>'current_version')::integer
-      else null
-    end,
+    null,
     'ADMIN_REJECTED'
   );
 
@@ -13238,10 +13208,6 @@ declare
   v_target record;
   v_reference private.reviews%rowtype;
   v_ref_roots jsonb := '[]'::jsonb;
-  v_current_snapshot jsonb;
-  v_items jsonb;
-  v_new_items jsonb := '[]'::jsonb;
-  v_item jsonb;
   v_checksum text;
   v_affected jsonb := '[]'::jsonb;
   v_reason text;
@@ -13362,11 +13328,6 @@ begin
     select *
     from api.cmd_review_collect_dataset_targets(v_ref_roots, true);
 
-    v_current_snapshot := private.review_scope_current_snapshot_v1(
-      v_review.scope_history
-    );
-    v_items := coalesce(v_current_snapshot->'items', '[]'::jsonb);
-
     for v_target in
       select *
       from review_comment_v2_targets
@@ -13404,33 +13365,6 @@ begin
         v_actor
       );
 
-      if not exists (
-        select 1
-        from private.review_scope_current_items_v1(v_review.scope_history) as current_item
-        where current_item.item_kind = 'reference'
-          and current_item.target_table = v_target.table_name
-          and current_item.data_id = v_target.dataset_id
-          and current_item.data_version = v_target.dataset_version
-          and current_item.submitted_revision_checksum = v_checksum
-          and current_item.reference_review_id = v_reference.id
-      ) then
-        v_item := jsonb_build_object(
-          'item_kind', 'reference',
-          'target_table', v_target.table_name,
-          'data_id', v_target.dataset_id,
-          'data_version', v_target.dataset_version,
-          'submitted_revision_checksum', v_checksum,
-          'reference_review_id', v_reference.id,
-          'target_owner_id', v_target.dataset_row->>'user_id',
-          'target_team_id', v_target.dataset_row->'team_id',
-          'relation_type', 'reviewer_metadata',
-          'relation_path', '$.modellingAndValidation',
-          'introduced_by', 'reviewer_metadata',
-          'introduced_field_path', '$.modellingAndValidation'
-        );
-        v_new_items := v_new_items || jsonb_build_array(v_item);
-      end if;
-
       perform set_config('app.review_controlled_write', 'on', true);
       execute format(
         'update public.%I
@@ -13456,8 +13390,8 @@ begin
           v_target.table_name,
           v_target.dataset_id,
           v_target.dataset_version,
-          p_review_id,
-          (v_review.scope_history->>'current_version')::integer + 1,
+          null,
+          null,
           null
         );
       end if;
@@ -13470,15 +13404,6 @@ begin
       ));
     end loop;
 
-    if jsonb_array_length(v_new_items) > 0 then
-      perform private.review_append_scope_snapshot_v1(
-        p_review_id,
-        'review_metadata',
-        v_current_snapshot->>'root_revision_checksum',
-        v_items || v_new_items,
-        v_actor
-      );
-    end if;
   end if;
 
   insert into private.comments (
@@ -13531,7 +13456,13 @@ begin
     coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
       'reviewer_id', v_actor,
       'comment_state_code', p_comment_state,
-      'affected_datasets', v_affected
+      'affected_datasets', (
+        select coalesce(
+          jsonb_agg(affected.value - 'reference_review_id'),
+          '[]'::jsonb
+        )
+        from jsonb_array_elements(v_affected) as affected(value)
+      )
     )
   );
 
@@ -13569,15 +13500,7 @@ declare
   v_reference private.reviews%rowtype;
   v_target record;
   v_target_checksum text;
-  v_items jsonb := '[]'::jsonb;
-  v_item jsonb;
-  v_scope_history jsonb;
   v_affected jsonb := '[]'::jsonb;
-  v_reference_ids uuid[] := array[]::uuid[];
-  v_old_reference_ids uuid[] := array[]::uuid[];
-  v_impacted_root private.reviews%rowtype;
-  v_current_snapshot jsonb;
-  v_repair_items jsonb;
   v_conflict_version text;
   v_event_key text;
 begin
@@ -13733,23 +13656,20 @@ begin
   end if;
 
 
-  select coalesce(array_agg(rejected.id order by rejected.id), array[]::uuid[])
-  into v_old_reference_ids
-  from private.reviews as rejected
-  where rejected.review_kind = 'reference'
-    and rejected.target_table = v_table
-    and rejected.data_id = p_target_id
-    and btrim(rejected.data_version::text) = p_target_version
-    and rejected.state_code = -1
-    and exists (
-      select 1
-      from private.reviews as root_review
-      where root_review.review_kind = 'root'
-        and root_review.current_reference_review_ids
-          @> array[rejected.id]::uuid[]
-    );
-
-  if cardinality(v_old_reference_ids) > 0 then
+  if exists (
+    select 1
+    from private.review_candidate_root_ids_v1(
+      v_table,
+      p_target_id,
+      p_target_version
+    ) as candidate
+    where private.review_root_currently_references_target_v1(
+      candidate.root_review_id,
+      v_table,
+      p_target_id,
+      p_target_version
+    )
+  ) then
     v_reference := private.review_get_or_create_reference_v1(
       v_table,
       v_root_row,
@@ -13769,69 +13689,14 @@ begin
     ) using p_target_id, p_target_version;
     perform set_config('app.review_controlled_write', 'off', true);
 
-    for v_impacted_root in
-      select root_review.*
-      from private.reviews as root_review
-      where root_review.review_kind = 'root'
-        and root_review.current_reference_review_ids && v_old_reference_ids
-      order by root_review.id
-      for update
-    loop
-      v_current_snapshot := private.review_scope_current_snapshot_v1(
-        v_impacted_root.scope_history
-      );
-      v_repair_items := private.review_replace_reference_item_v1(
-        v_current_snapshot->'items',
-        v_table,
-        p_target_id,
-        p_target_version,
-        v_checksum,
-        v_reference.id,
-        nullif(v_root_row->>'user_id', '')::uuid,
-        nullif(v_root_row->>'team_id', '')::uuid
-      );
-
-      perform private.review_append_scope_snapshot_v1(
-        v_impacted_root.id,
-        'reference_repair',
-        v_current_snapshot->>'root_revision_checksum',
-        v_repair_items,
-        v_actor
-      );
-
-      perform private.review_notify_event_v1(
-        'reference_repaired',
-        v_reference.id,
-        v_impacted_root.target_owner_id,
-        v_actor,
-        v_table,
-        p_target_id,
-        p_target_version,
-        v_impacted_root.id,
-        (v_impacted_root.scope_history->>'current_version')::integer + 1,
-        null
-      );
-    end loop;
-
     insert into private.command_audit_log (
-      command,
-      actor_user_id,
-      target_table,
-      target_id,
-      target_version,
-      payload
-    )
-    values (
-      'cmd_review_submit_v2',
-      v_actor,
-      v_table,
-      p_target_id,
-      p_target_version,
+      command, actor_user_id, target_table, target_id, target_version, payload
+    ) values (
+      'cmd_review_submit_v2', v_actor, v_table, p_target_id, p_target_version,
       coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
         'review_id', v_reference.id,
         'review_kind', 'reference',
-        'submission_mode', 'reference_repair',
-        'replaced_reference_review_ids', to_jsonb(v_old_reference_ids)
+        'submission_mode', 'reference_repair'
       )
     );
 
@@ -13975,62 +13840,15 @@ begin
       v_target.dataset_row
     );
 
-    if v_target.is_root then
-      v_item := jsonb_build_object(
-        'item_kind', 'root',
-        'target_table', v_target.table_name,
-        'data_id', v_target.dataset_id,
-        'data_version', v_target.dataset_version,
-        'submitted_revision_checksum', v_target_checksum,
-        'reference_review_id', null,
-        'target_owner_id', v_target.dataset_row->>'user_id',
-        'target_team_id', v_target.dataset_row->'team_id',
-        'relation_type', 'root',
-        'relation_path', '$',
-        'introduced_by', 'submitted_data',
-        'introduced_field_path', null
-      );
-    else
+    if not v_target.is_root then
       v_reference := private.review_get_or_create_reference_v1(
         v_target.table_name,
         v_target.dataset_row,
         v_target_checksum,
         v_actor
       );
-
-      v_reference_ids := array_append(v_reference_ids, v_reference.id);
-      v_item := jsonb_build_object(
-        'item_kind', 'reference',
-        'target_table', v_target.table_name,
-        'data_id', v_target.dataset_id,
-        'data_version', v_target.dataset_version,
-        'submitted_revision_checksum', v_target_checksum,
-        'reference_review_id', v_reference.id,
-        'target_owner_id', v_target.dataset_row->>'user_id',
-        'target_team_id', v_target.dataset_row->'team_id',
-        'relation_type', 'dependency',
-        'relation_path', '$',
-        'introduced_by', 'submitted_data',
-        'introduced_field_path', null
-      );
     end if;
-
-    v_items := v_items || jsonb_build_array(v_item);
   end loop;
-
-  v_scope_history := jsonb_build_object(
-    'schema_version', 'review_scope.v1',
-    'current_version', 1,
-    'snapshots', jsonb_build_array(jsonb_build_object(
-      'version_no', 1,
-      'scope_basis', 'submitted',
-      'root_revision_checksum', v_checksum,
-      'scope_checksum', private.review_scope_checksum_v1(v_items),
-      'created_by', v_actor,
-      'created_at', to_jsonb(now()),
-      'items', v_items
-    ))
-  );
 
   insert into private.reviews (
     id,
@@ -14043,9 +13861,7 @@ begin
     target_table,
     submitted_revision_checksum,
     target_owner_id,
-    target_team_id,
-    scope_schema_version,
-    scope_history
+    target_team_id
   )
   values (
     v_root_review_id,
@@ -14064,16 +13880,9 @@ begin
     v_table,
     v_checksum,
     v_actor,
-    nullif(v_root_row->>'team_id', '')::uuid,
-    'review_scope.v1',
-    v_scope_history
+    nullif(v_root_row->>'team_id', '')::uuid
   )
   returning * into v_root_review;
-
-  perform private.review_validate_scope_history_v1(
-    v_root_review_id,
-    v_scope_history
-  );
 
   perform set_config('app.review_controlled_write', 'on', true);
   for v_target in
@@ -14101,12 +13910,21 @@ begin
       v_event_key := private.review_notify_event_v1(
         'reference_entered_review',
         (
-          select item.reference_review_id
-          from private.review_scope_current_items_v1(v_scope_history) as item
-          where item.item_kind = 'reference'
-            and item.target_table = v_target.table_name
-            and item.data_id = v_target.dataset_id
-            and item.data_version = v_target.dataset_version
+          select reference_review.id
+          from private.reviews as reference_review
+          where reference_review.review_kind = 'reference'
+            and reference_review.target_table = v_target.table_name
+            and reference_review.data_id = v_target.dataset_id
+            and btrim(reference_review.data_version::text) = v_target.dataset_version
+            and reference_review.submitted_revision_checksum =
+              private.review_revision_fingerprint_v1(
+                v_target.table_name,
+                v_target.dataset_row
+              )
+            and reference_review.state_code in (-1, 0, 1, 2)
+          order by case when reference_review.state_code in (0, 1, 2) then 0 else 1 end,
+                   reference_review.modified_at desc,
+                   reference_review.id
           limit 1
         ),
         nullif(v_target.dataset_row->>'user_id', '')::uuid,
@@ -14114,8 +13932,8 @@ begin
         v_target.table_name,
         v_target.dataset_id,
         v_target.dataset_version,
-        v_root_review_id,
-        1,
+        null,
+        null,
         null
       );
     end if;
@@ -14151,8 +13969,6 @@ begin
       'review_id', v_root_review_id,
       'review_kind', 'root',
       'submission_mode', 'root',
-      'scope_version', 1,
-      'reference_review_ids', to_jsonb(v_reference_ids),
       'affected_datasets', v_affected
     )
   );
@@ -19318,36 +19134,59 @@ ALTER FUNCTION "api"."qry_notification_get_my_team_items"("p_days" integer) OWNE
 
 
 CREATE OR REPLACE FUNCTION "api"."qry_reference_review_impacted_roots"("p_reference_review_id" "uuid", "p_include_history" boolean DEFAULT false) RETURNS TABLE("root_review_id" "uuid", "target_table" "text", "data_id" "uuid", "data_version" "text", "state_code" integer, "is_current" boolean)
-    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
   v_actor uuid := auth.uid();
+  v_reference private.reviews%rowtype;
+  v_candidate_ids uuid[];
 begin
   if v_actor is null or not api.cmd_review_is_review_admin(v_actor) then
     raise exception using errcode = '42501', message = 'REVIEW_ADMIN_REQUIRED';
   end if;
+
+  select review_row.*
+  into v_reference
+  from private.reviews as review_row
+  where review_row.id = p_reference_review_id
+    and review_row.review_kind = 'reference';
+
+  if not found then
+    return;
+  end if;
+
+  select coalesce(
+    pg_catalog.array_agg(candidate.root_review_id order by candidate.root_review_id),
+    array[]::uuid[]
+  )
+  into v_candidate_ids
+  from (
+    select hinted.root_review_id
+    from private.review_candidate_root_ids_v1(
+      v_reference.target_table,
+      v_reference.data_id,
+      pg_catalog.btrim(v_reference.data_version::text)
+    ) as hinted
+    union
+    select root_review.id
+    from private.reviews as root_review
+    where root_review.review_kind = 'root'
+  ) as candidate;
 
   return query
   select
     root_review.id,
     root_review.target_table,
     root_review.data_id,
-    btrim(root_review.data_version::text),
+    pg_catalog.btrim(root_review.data_version::text),
     root_review.state_code,
-    root_review.current_reference_review_ids
-      @> array[p_reference_review_id]::uuid[]
-  from private.reviews as root_review
-  where root_review.review_kind = 'root'
-    and (
-      root_review.current_reference_review_ids
-        @> array[p_reference_review_id]::uuid[]
-      or (
-        coalesce(p_include_history, false)
-        and root_review.all_reference_review_ids
-          @> array[p_reference_review_id]::uuid[]
-      )
-    )
+    true
+  from private.review_derive_current_references_v1(v_candidate_ids) as derived
+  join private.reviews as root_review
+    on root_review.id = derived.root_review_id
+    and root_review.review_kind = 'root'
+  where derived.reference_review_id = p_reference_review_id
   order by root_review.modified_at desc, root_review.id;
 end;
 $$;
@@ -19356,8 +19195,12 @@ $$;
 ALTER FUNCTION "api"."qry_reference_review_impacted_roots"("p_reference_review_id" "uuid", "p_include_history" boolean) OWNER TO "postgres";
 
 
+COMMENT ON FUNCTION "api"."qry_reference_review_impacted_roots"("p_reference_review_id" "uuid", "p_include_history" boolean) IS 'Returns current dynamically validated impacted roots. p_include_history is retained for signature compatibility and does not restore historical relationships.';
+
+
+
 CREATE OR REPLACE FUNCTION "api"."qry_review_admin_queue_items_v2"("p_status" "text" DEFAULT NULL::"text", "p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 20) RETURNS TABLE("id" "uuid", "review_kind" "text", "target_table" "text", "data_id" "uuid", "data_version" "text", "state_code" integer, "target_owner_id" "uuid", "target_team_id" "uuid", "submitted_revision_checksum" "text", "reviewer_id" "jsonb", "deadline" timestamp with time zone, "reference_count" integer, "completed_reviewer_count" integer, "modified_at" timestamp with time zone, "total_count" bigint)
-    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
@@ -19368,36 +19211,47 @@ begin
   end if;
 
   return query
+  with review_rows as materialized (
+    select review_row.*
+    from private.reviews as review_row
+    where review_row.review_kind in ('root', 'reference')
+      and (
+        p_status is null
+        or (p_status = 'unassigned' and review_row.state_code = 0)
+        or (p_status = 'assigned' and review_row.state_code = 1)
+        or (p_status = 'approved' and review_row.state_code = 2)
+        or (p_status = 'rejected' and review_row.state_code = -1)
+      )
+  )
   select
     review_row.id,
     review_row.review_kind,
     review_row.target_table,
     review_row.data_id,
-    btrim(review_row.data_version::text),
+    pg_catalog.btrim(review_row.data_version::text),
     review_row.state_code,
     review_row.target_owner_id,
     review_row.target_team_id,
     review_row.submitted_revision_checksum,
     coalesce(review_row.reviewer_id, '[]'::jsonb),
     review_row.deadline,
-    cardinality(review_row.current_reference_review_ids)::integer,
+    case when review_row.review_kind = 'root' then (
+      select pg_catalog.count(*)::integer
+      from private.review_derive_current_references_v1(array[review_row.id])
+    ) else 0 end,
     count(comment_row.reviewer_id)
       filter (where comment_row.state_code in (1, -3, 2))::integer,
     review_row.modified_at,
-    count(*) over ()
-  from private.reviews as review_row
+    pg_catalog.count(*) over ()
+  from review_rows as review_row
   left join private.comments as comment_row
     on comment_row.review_id = review_row.id
     and comment_row.state_code <> -2
-  where review_row.review_kind in ('root', 'reference')
-    and (
-      p_status is null
-      or (p_status = 'unassigned' and review_row.state_code = 0)
-      or (p_status = 'assigned' and review_row.state_code = 1)
-      or (p_status = 'approved' and review_row.state_code = 2)
-      or (p_status = 'rejected' and review_row.state_code = -1)
-    )
-  group by review_row.id
+  group by review_row.id, review_row.review_kind, review_row.target_table,
+    review_row.data_id, review_row.data_version, review_row.state_code,
+    review_row.target_owner_id, review_row.target_team_id,
+    review_row.submitted_revision_checksum, review_row.reviewer_id,
+    review_row.deadline, review_row.modified_at
   order by review_row.modified_at desc, review_row.id
   offset greatest(coalesce(p_page, 1) - 1, 0)
     * greatest(coalesce(p_page_size, 20), 1)
@@ -19537,14 +19391,14 @@ ALTER FUNCTION "api"."qry_review_get_admin_queue_items"("p_status" "text", "p_pa
 
 
 CREATE OR REPLACE FUNCTION "api"."qry_review_get_admin_root_queue_items_v2"("p_status" "text" DEFAULT NULL::"text", "p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10, "p_sort_by" "text" DEFAULT 'modified_at'::"text", "p_sort_order" "text" DEFAULT 'desc'::"text") RETURNS TABLE("id" "uuid", "data_id" "uuid", "data_version" "text", "state_code" integer, "review_kind" "text", "target_table" "text", "reviewer_id" "jsonb", "json" "jsonb", "deadline" timestamp with time zone, "created_at" timestamp with time zone, "modified_at" timestamp with time zone, "comment_state_codes" "jsonb", "root_matches_status" boolean, "root_can_read" boolean, "total_count" bigint)
-    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
   v_actor uuid := auth.uid();
   v_limit integer := greatest(1, least(coalesce(p_page_size, 10), 100));
   v_offset integer := (greatest(coalesce(p_page, 1), 1) - 1) * v_limit;
-  v_sort_key text := case lower(coalesce(p_sort_by, ''))
+  v_sort_key text := case pg_catalog.lower(coalesce(p_sort_by, ''))
     when 'created_at' then 'created_at'
     when 'createat' then 'created_at'
     when 'deadline' then 'deadline'
@@ -19553,7 +19407,7 @@ declare
     else 'modified_at'
   end;
   v_order_dir text := api.cmd_membership_resolve_sort_direction(p_sort_order);
-  v_status text := lower(coalesce(p_status, ''));
+  v_status text := pg_catalog.lower(coalesce(p_status, ''));
   v_state_code integer;
 begin
   if v_actor is null or not api.cmd_review_is_review_admin(v_actor) then
@@ -19569,92 +19423,114 @@ begin
   end case;
 
   return query
-      with root_matches as (
-        select
-          root_review.id as root_review_id,
-          true as root_matches_status,
-          root_review.modified_at as matching_task_modified_at
-        from private.reviews as root_review
-        where root_review.review_kind = 'root'
-          and (v_state_code is null or root_review.state_code = v_state_code)
-
-        union all
-
-        select
-          root_review.id as root_review_id,
-          false as root_matches_status,
-          reference_review.modified_at as matching_task_modified_at
-        from private.reviews as reference_review
-        join private.reviews as root_review
-          on root_review.review_kind = 'root'
-          and root_review.current_reference_review_ids
-            @> array[reference_review.id]::uuid[]
-        where v_state_code is not null
-          and reference_review.review_kind = 'reference'
-          and reference_review.state_code = v_state_code
-      ),
-      root_candidates as (
-        select
-          root_match.root_review_id,
-          pg_catalog.bool_or(root_match.root_matches_status)
-            as root_matches_status,
-          pg_catalog.max(root_match.matching_task_modified_at)
-            as matching_task_modified_at
-        from root_matches as root_match
-        group by root_match.root_review_id
-      ),
-      q as (
-        select
-          root_review.id,
-          root_review.data_id,
-          pg_catalog.btrim(root_review.data_version::text) as data_version,
-          root_review.state_code,
-          root_review.review_kind,
-          root_review.target_table,
-          coalesce(root_review.reviewer_id, '[]'::jsonb) as reviewer_id,
-          coalesce(root_review.json, '{}'::jsonb) as json,
-          root_review.deadline,
-          root_review.created_at,
-          root_candidate.matching_task_modified_at as modified_at,
-          coalesce(root_comments.comment_state_codes, '[]'::jsonb)
-            as comment_state_codes,
-          root_candidate.root_matches_status,
-          true as root_can_read
-        from root_candidates as root_candidate
-        join private.reviews as root_review
-          on root_review.id = root_candidate.root_review_id
-          and root_review.review_kind = 'root'
-        left join lateral (
-          select pg_catalog.jsonb_agg(
-            pg_catalog.to_jsonb(root_comment.state_code)
-            order by root_comment.created_at, root_comment.reviewer_id
-          ) filter (where root_comment.reviewer_id is not null)
-            as comment_state_codes
-          from private.comments as root_comment
-          where root_comment.review_id = root_review.id
-        ) as root_comments on true
+  with matching_reference_tasks as materialized (
+    select reference_review.*
+    from private.reviews as reference_review
+    where v_state_code is not null
+      and reference_review.review_kind = 'reference'
+      and reference_review.state_code = v_state_code
+  ),
+  direct_roots as materialized (
+    select root_review.id
+    from private.reviews as root_review
+    where root_review.review_kind = 'root'
+      and (v_state_code is null or root_review.state_code = v_state_code)
+  ),
+  hinted_roots as materialized (
+    select distinct candidate.root_review_id as id
+    from matching_reference_tasks as reference_review
+    cross join lateral private.review_candidate_root_ids_v1(
+      reference_review.target_table,
+      reference_review.data_id,
+      pg_catalog.btrim(reference_review.data_version::text)
+    ) as candidate
+  ),
+  candidate_roots as materialized (
+    select direct_root.id from direct_roots as direct_root
+    union
+    select hinted_root.id from hinted_roots as hinted_root
+    union
+    select root_review.id
+    from private.reviews as root_review
+    where root_review.review_kind = 'root'
+  ),
+  derived_references as materialized (
+    select derived.*
+    from private.review_derive_current_references_v1(
+      coalesce(
+        (select pg_catalog.array_agg(candidate.id order by candidate.id) from candidate_roots as candidate),
+        array[]::uuid[]
       )
-      select q.*, pg_catalog.count(*) over() as total_count
-      from q
-      order by
-        case when v_sort_key = 'created_at' and v_order_dir = 'asc'
-          then q.created_at end asc nulls last,
-        case when v_sort_key = 'created_at' and v_order_dir = 'desc'
-          then q.created_at end desc nulls last,
-        case when v_sort_key = 'deadline' and v_order_dir = 'asc'
-          then q.deadline end asc nulls last,
-        case when v_sort_key = 'deadline' and v_order_dir = 'desc'
-          then q.deadline end desc nulls last,
-        case when v_sort_key = 'state_code' and v_order_dir = 'asc'
-          then q.state_code end asc nulls last,
-        case when v_sort_key = 'state_code' and v_order_dir = 'desc'
-          then q.state_code end desc nulls last,
-        case when v_sort_key = 'modified_at' and v_order_dir = 'asc'
-          then q.modified_at end asc nulls last,
-        case when v_sort_key = 'modified_at' and v_order_dir = 'desc'
-          then q.modified_at end desc nulls last,
-        q.id asc
-      limit v_limit offset v_offset;
+    ) as derived
+  ),
+  root_matches as (
+    select
+      root_review.id as root_review_id,
+      true as root_matches_status,
+      root_review.modified_at as matching_task_modified_at
+    from private.reviews as root_review
+    join direct_roots as direct_root on direct_root.id = root_review.id
+
+    union all
+
+    select
+      derived.root_review_id,
+      false,
+      reference_review.modified_at
+    from derived_references as derived
+    join matching_reference_tasks as reference_review
+      on reference_review.id = derived.reference_review_id
+  ),
+  grouped_roots as (
+    select
+      root_match.root_review_id,
+      pg_catalog.bool_or(root_match.root_matches_status) as root_matches_status,
+      pg_catalog.max(root_match.matching_task_modified_at) as matching_task_modified_at
+    from root_matches as root_match
+    group by root_match.root_review_id
+  ),
+  q as (
+    select
+      root_review.id,
+      root_review.data_id,
+      pg_catalog.btrim(root_review.data_version::text) as data_version,
+      root_review.state_code,
+      root_review.review_kind,
+      root_review.target_table,
+      coalesce(root_review.reviewer_id, '[]'::jsonb) as reviewer_id,
+      coalesce(root_review.json, '{}'::jsonb) as json,
+      root_review.deadline,
+      root_review.created_at,
+      grouped.matching_task_modified_at as modified_at,
+      coalesce(root_comments.comment_state_codes, '[]'::jsonb) as comment_state_codes,
+      grouped.root_matches_status,
+      true as root_can_read
+    from grouped_roots as grouped
+    join private.reviews as root_review
+      on root_review.id = grouped.root_review_id
+      and root_review.review_kind = 'root'
+    left join lateral (
+      select pg_catalog.jsonb_agg(
+        pg_catalog.to_jsonb(root_comment.state_code)
+        order by root_comment.created_at, root_comment.reviewer_id
+      ) filter (where root_comment.reviewer_id is not null) as comment_state_codes
+      from private.comments as root_comment
+      where root_comment.review_id = root_review.id
+    ) as root_comments on true
+  )
+  select q.*, pg_catalog.count(*) over() as total_count
+  from q
+  order by
+    case when v_sort_key = 'created_at' and v_order_dir = 'asc' then q.created_at end asc nulls last,
+    case when v_sort_key = 'created_at' and v_order_dir = 'desc' then q.created_at end desc nulls last,
+    case when v_sort_key = 'deadline' and v_order_dir = 'asc' then q.deadline end asc nulls last,
+    case when v_sort_key = 'deadline' and v_order_dir = 'desc' then q.deadline end desc nulls last,
+    case when v_sort_key = 'state_code' and v_order_dir = 'asc' then q.state_code end asc nulls last,
+    case when v_sort_key = 'state_code' and v_order_dir = 'desc' then q.state_code end desc nulls last,
+    case when v_sort_key = 'modified_at' and v_order_dir = 'asc' then q.modified_at end asc nulls last,
+    case when v_sort_key = 'modified_at' and v_order_dir = 'desc' then q.modified_at end desc nulls last,
+    q.id
+  limit v_limit offset v_offset;
 end;
 $$;
 
@@ -19662,7 +19538,7 @@ $$;
 ALTER FUNCTION "api"."qry_review_get_admin_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "api"."qry_review_get_admin_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") IS 'Server-paginated Review Admin queue with one row per Root Review; a matching current Reference Review includes its Root.';
+COMMENT ON FUNCTION "api"."qry_review_get_admin_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") IS 'Current-state Admin queue grouped by Root Review. Root/Reference pairs are derived from JSON/comments and are not persisted.';
 
 
 
@@ -19878,14 +19754,14 @@ ALTER FUNCTION "api"."qry_review_get_member_queue_items"("p_status" "text", "p_p
 
 
 CREATE OR REPLACE FUNCTION "api"."qry_review_get_member_root_queue_items_v2"("p_status" "text" DEFAULT 'pending'::"text", "p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10, "p_sort_by" "text" DEFAULT 'modified_at'::"text", "p_sort_order" "text" DEFAULT 'desc'::"text") RETURNS TABLE("id" "uuid", "data_id" "uuid", "data_version" "text", "review_state_code" integer, "review_kind" "text", "target_table" "text", "reviewer_id" "jsonb", "json" "jsonb", "deadline" timestamp with time zone, "created_at" timestamp with time zone, "modified_at" timestamp with time zone, "comment_state_code" integer, "comment_json" "jsonb", "comment_created_at" timestamp with time zone, "comment_modified_at" timestamp with time zone, "root_matches_status" boolean, "root_can_read" boolean, "total_count" bigint)
-    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
   v_actor uuid := auth.uid();
   v_limit integer := greatest(1, least(coalesce(p_page_size, 10), 100));
   v_offset integer := (greatest(coalesce(p_page, 1), 1) - 1) * v_limit;
-  v_sort_key text := case lower(coalesce(p_sort_by, ''))
+  v_sort_key text := case pg_catalog.lower(coalesce(p_sort_by, ''))
     when 'created_at' then 'created_at'
     when 'createat' then 'created_at'
     when 'deadline' then 'deadline'
@@ -19896,7 +19772,7 @@ declare
     else 'modified_at'
   end;
   v_order_dir text := api.cmd_membership_resolve_sort_direction(p_sort_order);
-  v_status text := lower(coalesce(p_status, 'pending'));
+  v_status text := pg_catalog.lower(coalesce(p_status, 'pending'));
 begin
   if v_actor is null or not api.cmd_review_is_review_member(v_actor) then
     return;
@@ -19906,150 +19782,162 @@ begin
   end if;
 
   return query
-      with matching_tasks as (
-        select
-          review_row.id,
-          review_row.review_kind,
-          comment_row.state_code as comment_state_code,
-          coalesce(comment_row.json::jsonb, '{}'::jsonb) as comment_json,
-          comment_row.created_at as comment_created_at,
-          comment_row.modified_at as comment_modified_at,
-          greatest(review_row.modified_at, comment_row.modified_at) as task_modified_at
-        from private.comments as comment_row
-        join private.reviews as review_row on review_row.id = comment_row.review_id
-        where review_row.review_kind in ('root', 'reference')
-          and comment_row.reviewer_id = v_actor
-          and api.policy_review_can_read(review_row.id, v_actor)
-          and (
-            (v_status = 'pending' and comment_row.state_code = 0 and review_row.state_code > 0)
-            or (v_status = 'reviewed'
-              and comment_row.state_code = any (array[1, 2, -3])
-              and review_row.state_code > 0)
-            or (v_status = 'reviewer-rejected'
-              and comment_row.state_code = -1
-              and review_row.state_code = -1)
-          )
-      ),
-      root_matches as (
-        select
-          task.id as root_review_id,
-          true as root_matches_status,
-          task.task_modified_at
-        from matching_tasks as task
-        where task.review_kind = 'root'
-
-        union all
-
-        select
-          root_review.id as root_review_id,
-          false as root_matches_status,
-          task.task_modified_at
-        from matching_tasks as task
-        join private.reviews as root_review
-          on root_review.review_kind = 'root'
-          and root_review.current_reference_review_ids
-            @> array[task.id]::uuid[]
-        where task.review_kind = 'reference'
-      ),
-      root_candidates as (
-        select
-          root_match.root_review_id,
-          pg_catalog.bool_or(root_match.root_matches_status)
-            as root_matches_status,
-          pg_catalog.max(root_match.task_modified_at) as matching_task_modified_at
-        from root_matches as root_match
-        group by root_match.root_review_id
-      ),
-      q as (
-        select
-          root_review.id,
-          root_review.data_id,
-          pg_catalog.btrim(root_review.data_version::text) as data_version,
-          root_review.state_code,
-          root_review.review_kind,
-          root_review.target_table,
-          coalesce(root_review.reviewer_id, '[]'::jsonb) as reviewer_id,
-          case
-            when api.policy_review_can_read(root_review.id, v_actor) then
-              coalesce(root_review.json, '{}'::jsonb)
-            else pg_catalog.jsonb_build_object(
-              'review_kind', 'root',
-              'data', pg_catalog.jsonb_build_object(
-                'id', root_review.data_id,
-                'version', pg_catalog.btrim(root_review.data_version::text),
-                'name', root_review.json #> '{data,name}',
-                'table', root_review.target_table
-              ),
-              'user', pg_catalog.jsonb_build_object(
-                'id', root_review.target_owner_id,
-                'name', root_review.json #> '{user,name}'
-              ),
-              'team', pg_catalog.jsonb_build_object(
-                'id', root_review.target_team_id,
-                'name', root_review.json #> '{team,name}'
-              )
-            )
-          end as json,
-          root_review.deadline,
-          root_review.created_at,
-          root_candidate.matching_task_modified_at as modified_at,
-          direct_task.comment_state_code,
-          coalesce(direct_task.comment_json, '{}'::jsonb) as comment_json,
-          direct_task.comment_created_at,
-          root_candidate.matching_task_modified_at as comment_modified_at,
-          root_candidate.root_matches_status,
-          api.policy_review_can_read(root_review.id, v_actor) as root_can_read
-        from root_candidates as root_candidate
-        join private.reviews as root_review
-          on root_review.id = root_candidate.root_review_id
-          and root_review.review_kind = 'root'
-        left join matching_tasks as direct_task
-          on direct_task.id = root_review.id
-          and direct_task.review_kind = 'root'
+  with matching_tasks as materialized (
+    select
+      review_row.id,
+      review_row.review_kind,
+      review_row.target_table,
+      review_row.data_id,
+      pg_catalog.btrim(review_row.data_version::text) as data_version,
+      comment_row.state_code as comment_state_code,
+      coalesce(comment_row.json::jsonb, '{}'::jsonb) as comment_json,
+      comment_row.created_at as comment_created_at,
+      comment_row.modified_at as comment_modified_at,
+      greatest(review_row.modified_at, comment_row.modified_at) as task_modified_at
+    from private.comments as comment_row
+    join private.reviews as review_row on review_row.id = comment_row.review_id
+    where review_row.review_kind in ('root', 'reference')
+      and comment_row.reviewer_id = v_actor
+      and api.policy_review_can_read(review_row.id, v_actor)
+      and (
+        (v_status = 'pending' and comment_row.state_code = 0 and review_row.state_code > 0)
+        or (v_status = 'reviewed' and comment_row.state_code = any(array[1, 2, -3]) and review_row.state_code > 0)
+        or (v_status = 'reviewer-rejected' and comment_row.state_code = -1 and review_row.state_code = -1)
       )
-      select
-        q.id,
-        q.data_id,
-        q.data_version,
-        q.state_code as review_state_code,
-        q.review_kind,
-        q.target_table,
-        q.reviewer_id,
-        q.json,
-        q.deadline,
-        q.created_at,
-        q.modified_at,
-        q.comment_state_code,
-        q.comment_json,
-        q.comment_created_at,
-        q.comment_modified_at,
-        q.root_matches_status,
-        q.root_can_read,
-        pg_catalog.count(*) over() as total_count
-      from q
-      order by
-        case when v_sort_key = 'created_at' and v_order_dir = 'asc'
-          then q.created_at end asc nulls last,
-        case when v_sort_key = 'created_at' and v_order_dir = 'desc'
-          then q.created_at end desc nulls last,
-        case when v_sort_key = 'deadline' and v_order_dir = 'asc'
-          then q.deadline end asc nulls last,
-        case when v_sort_key = 'deadline' and v_order_dir = 'desc'
-          then q.deadline end desc nulls last,
-        case when v_sort_key = 'state_code' and v_order_dir = 'asc'
-          then q.state_code end asc nulls last,
-        case when v_sort_key = 'state_code' and v_order_dir = 'desc'
-          then q.state_code end desc nulls last,
-        case when v_sort_key = 'comment_modified_at' and v_order_dir = 'asc'
-          then q.comment_modified_at end asc nulls last,
-        case when v_sort_key = 'comment_modified_at' and v_order_dir = 'desc'
-          then q.comment_modified_at end desc nulls last,
-        case when v_sort_key = 'modified_at' and v_order_dir = 'asc'
-          then q.modified_at end asc nulls last,
-        case when v_sort_key = 'modified_at' and v_order_dir = 'desc'
-          then q.modified_at end desc nulls last,
-        q.id asc
-      limit v_limit offset v_offset;
+  ),
+  direct_roots as materialized (
+    select task.id
+    from matching_tasks as task
+    where task.review_kind = 'root'
+  ),
+  hinted_roots as materialized (
+    select distinct candidate.root_review_id as id
+    from matching_tasks as task
+    cross join lateral private.review_candidate_root_ids_v1(
+      task.target_table,
+      task.data_id,
+      task.data_version
+    ) as candidate
+    where task.review_kind = 'reference'
+  ),
+  candidate_roots as materialized (
+    select direct_root.id from direct_roots as direct_root
+    union
+    select hinted_root.id from hinted_roots as hinted_root
+    union
+    select root_review.id
+    from private.reviews as root_review
+    where root_review.review_kind = 'root'
+  ),
+  derived_references as materialized (
+    select derived.*
+    from private.review_derive_current_references_v1(
+      coalesce(
+        (select pg_catalog.array_agg(candidate.id order by candidate.id) from candidate_roots as candidate),
+        array[]::uuid[]
+      )
+    ) as derived
+  ),
+  root_matches as (
+    select task.id as root_review_id, true as root_matches_status, task.task_modified_at
+    from matching_tasks as task
+    where task.review_kind = 'root'
+
+    union all
+
+    select derived.root_review_id, false, task.task_modified_at
+    from derived_references as derived
+    join matching_tasks as task
+      on task.id = derived.reference_review_id
+      and task.review_kind = 'reference'
+  ),
+  grouped_roots as (
+    select
+      root_match.root_review_id,
+      pg_catalog.bool_or(root_match.root_matches_status) as root_matches_status,
+      pg_catalog.max(root_match.task_modified_at) as matching_task_modified_at
+    from root_matches as root_match
+    group by root_match.root_review_id
+  ),
+  q as (
+    select
+      root_review.id,
+      root_review.data_id,
+      pg_catalog.btrim(root_review.data_version::text) as data_version,
+      root_review.state_code,
+      root_review.review_kind,
+      root_review.target_table,
+      coalesce(root_review.reviewer_id, '[]'::jsonb) as reviewer_id,
+      case
+        when api.policy_review_can_read(root_review.id, v_actor) then coalesce(root_review.json, '{}'::jsonb)
+        else pg_catalog.jsonb_build_object(
+          'review_kind', 'root',
+          'data', pg_catalog.jsonb_build_object(
+            'id', root_review.data_id,
+            'version', pg_catalog.btrim(root_review.data_version::text),
+            'name', root_review.json #> '{data,name}',
+            'table', root_review.target_table
+          ),
+          'user', pg_catalog.jsonb_build_object(
+            'id', root_review.target_owner_id,
+            'name', root_review.json #> '{user,name}'
+          ),
+          'team', pg_catalog.jsonb_build_object(
+            'id', root_review.target_team_id,
+            'name', root_review.json #> '{team,name}'
+          )
+        )
+      end as json,
+      root_review.deadline,
+      root_review.created_at,
+      grouped.matching_task_modified_at as modified_at,
+      direct_task.comment_state_code,
+      coalesce(direct_task.comment_json, '{}'::jsonb) as comment_json,
+      direct_task.comment_created_at,
+      grouped.matching_task_modified_at as comment_modified_at,
+      grouped.root_matches_status,
+      api.policy_review_can_read(root_review.id, v_actor) as root_can_read
+    from grouped_roots as grouped
+    join private.reviews as root_review
+      on root_review.id = grouped.root_review_id
+      and root_review.review_kind = 'root'
+    left join matching_tasks as direct_task
+      on direct_task.id = root_review.id
+      and direct_task.review_kind = 'root'
+  )
+  select
+    q.id,
+    q.data_id,
+    q.data_version,
+    q.state_code,
+    q.review_kind,
+    q.target_table,
+    q.reviewer_id,
+    q.json,
+    q.deadline,
+    q.created_at,
+    q.modified_at,
+    q.comment_state_code,
+    q.comment_json,
+    q.comment_created_at,
+    q.comment_modified_at,
+    q.root_matches_status,
+    q.root_can_read,
+    pg_catalog.count(*) over()
+  from q
+  order by
+    case when v_sort_key = 'created_at' and v_order_dir = 'asc' then q.created_at end asc nulls last,
+    case when v_sort_key = 'created_at' and v_order_dir = 'desc' then q.created_at end desc nulls last,
+    case when v_sort_key = 'deadline' and v_order_dir = 'asc' then q.deadline end asc nulls last,
+    case when v_sort_key = 'deadline' and v_order_dir = 'desc' then q.deadline end desc nulls last,
+    case when v_sort_key = 'state_code' and v_order_dir = 'asc' then q.state_code end asc nulls last,
+    case when v_sort_key = 'state_code' and v_order_dir = 'desc' then q.state_code end desc nulls last,
+    case when v_sort_key = 'comment_modified_at' and v_order_dir = 'asc' then q.comment_modified_at end asc nulls last,
+    case when v_sort_key = 'comment_modified_at' and v_order_dir = 'desc' then q.comment_modified_at end desc nulls last,
+    case when v_sort_key = 'modified_at' and v_order_dir = 'asc' then q.modified_at end asc nulls last,
+    case when v_sort_key = 'modified_at' and v_order_dir = 'desc' then q.modified_at end desc nulls last,
+    q.id
+  limit v_limit offset v_offset;
 end;
 $$;
 
@@ -20057,7 +19945,7 @@ $$;
 ALTER FUNCTION "api"."qry_review_get_member_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "api"."qry_review_get_member_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") IS 'Server-paginated Review Member queue grouped by Root Review without exposing unassigned sibling Reference Reviews.';
+COMMENT ON FUNCTION "api"."qry_review_get_member_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") IS 'Current-state Member queue grouped by Root Review. Derived child matches can include a parent even when the Root itself does not match.';
 
 
 
@@ -20188,7 +20076,7 @@ ALTER FUNCTION "api"."qry_review_member_queue_items_v2"("p_status" "text", "p_pa
 
 
 CREATE OR REPLACE FUNCTION "api"."qry_root_review_reference_progress"("p_root_review_id" "uuid") RETURNS TABLE("reference_review_id" "uuid", "target_table" "text", "data_id" "uuid", "data_version" "text", "submitted_revision_checksum" "text", "state_code" integer, "reviewer_count" integer, "completed_reviewer_count" integer, "relation_paths" "jsonb")
-    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
@@ -20200,44 +20088,16 @@ begin
 
   return query
   select
-    reference_review.id,
-    item.target_table,
-    item.data_id,
-    item.data_version,
-    item.submitted_revision_checksum,
-    reference_review.state_code,
-    pg_catalog.jsonb_array_length(
-      coalesce(reference_review.reviewer_id, '[]'::jsonb)
-    )::integer,
-    count(comment_row.reviewer_id)
-      filter (where comment_row.state_code in (1, -3, 2))::integer,
-    coalesce(
-      pg_catalog.jsonb_agg(distinct item.relation_path)
-        filter (where item.relation_path is not null),
-      '[]'::jsonb
-    )
-  from private.reviews as root_review
-  cross join lateral private.review_scope_current_items_v1(
-    root_review.scope_history
-  ) as item
-  join private.reviews as reference_review
-    on reference_review.id = item.reference_review_id
-    and reference_review.review_kind = 'reference'
-  left join private.comments as comment_row
-    on comment_row.review_id = reference_review.id
-    and comment_row.state_code <> -2
-  where root_review.id = p_root_review_id
-    and root_review.review_kind = 'root'
-    and item.item_kind = 'reference'
-  group by
-    reference_review.id,
-    item.target_table,
-    item.data_id,
-    item.data_version,
-    item.submitted_revision_checksum,
-    reference_review.state_code,
-    reference_review.reviewer_id
-  order by item.target_table, item.data_id, item.data_version;
+    progress.reference_review_id,
+    progress.target_table,
+    progress.data_id,
+    progress.data_version,
+    progress.submitted_revision_checksum,
+    progress.state_code,
+    progress.reviewer_count,
+    progress.completed_reviewer_count,
+    '[]'::jsonb
+  from api.qry_root_review_reference_progress_v2(p_root_review_id) as progress;
 end;
 $$;
 
@@ -20246,7 +20106,7 @@ ALTER FUNCTION "api"."qry_root_review_reference_progress"("p_root_review_id" "uu
 
 
 CREATE OR REPLACE FUNCTION "api"."qry_root_review_reference_progress_v2"("p_root_review_id" "uuid") RETURNS TABLE("reference_review_id" "uuid", "target_table" "text", "data_id" "uuid", "data_version" "text", "data_name" "jsonb", "submitted_revision_checksum" "text", "state_code" integer, "reviewer_count" integer, "completed_reviewer_count" integer, "actor_comment_state_code" integer, "actor_comment_modified_at" timestamp with time zone)
-    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
@@ -20266,9 +20126,9 @@ begin
   return query
   select
     reference_review.id,
-    reference_review.target_table,
-    reference_review.data_id,
-    pg_catalog.btrim(reference_review.data_version::text),
+    derived.target_table,
+    derived.data_id,
+    derived.data_version,
     coalesce(reference_review.json #> '{data,name}', '{}'::jsonb),
     reference_review.submitted_revision_checksum,
     reference_review.state_code,
@@ -20283,13 +20143,11 @@ begin
     ),
     actor_comment.state_code,
     actor_comment.modified_at
-  from private.reviews as root_review
-  cross join lateral pg_catalog.unnest(
-    coalesce(root_review.current_reference_review_ids, '{}'::uuid[])
-  ) with ordinality as current_reference(reference_review_id, ordinal_position)
+  from private.review_derive_current_references_v1(
+    array[p_root_review_id]::uuid[]
+  ) as derived
   join private.reviews as reference_review
-    on reference_review.id = current_reference.reference_review_id
-    and reference_review.review_kind = 'reference'
+    on reference_review.id = derived.reference_review_id
   left join lateral (
     select comment_row.state_code, comment_row.modified_at
     from private.comments as comment_row
@@ -20298,21 +20156,14 @@ begin
     order by comment_row.modified_at desc, comment_row.created_at desc
     limit 1
   ) as actor_comment on true
-  where root_review.id = p_root_review_id
-    and root_review.review_kind = 'root'
-    and (
-      v_is_admin
-      or (
-        v_is_member
-        and api.policy_review_can_read(reference_review.id, v_actor)
-        and actor_comment.state_code is not null
-        and actor_comment.state_code <> -2
-      )
+  where v_is_admin
+    or (
+      v_is_member
+      and api.policy_review_can_read(reference_review.id, v_actor)
+      and actor_comment.state_code is not null
+      and actor_comment.state_code <> -2
     )
-  order by
-    current_reference.ordinal_position,
-    reference_review.target_table,
-    reference_review.id;
+  order by derived.target_table, derived.data_id, derived.data_version;
 end;
 $$;
 
@@ -29620,295 +29471,6 @@ $$;
 
 
 ALTER FUNCTION "private"."cmd_review_lifecycle_error"("p_code" "text", "p_path" "text", "p_ref_table" "text", "p_ref_id" "uuid", "p_ref_version" "text") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "private"."cmd_review_migrate_legacy_v2"("p_legacy_review_id" "uuid", "p_new_root_review_id" "uuid", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'private', 'api', 'public', 'util', 'extensions', 'pg_temp'
-    AS $_$
-declare
-  v_legacy private.reviews%rowtype;
-  v_root_row jsonb;
-  v_table text;
-  v_table_count integer := 0;
-  v_candidate text;
-  v_owner_id uuid;
-  v_checksum text;
-  v_target record;
-  v_reference private.reviews%rowtype;
-  v_target_checksum text;
-  v_item jsonb;
-  v_items jsonb := '[]'::jsonb;
-  v_scope_history jsonb;
-  v_reference_ids uuid[] := array[]::uuid[];
-begin
-  if not coalesce(util.is_service_request(), false) then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'SERVICE_ROLE_REQUIRED',
-      'status', 403
-    );
-  end if;
-
-  select review_row.*
-  into v_legacy
-  from private.reviews as review_row
-  where review_row.id = p_legacy_review_id
-  for update;
-
-  if not found then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'LEGACY_REVIEW_NOT_FOUND',
-      'status', 404
-    );
-  end if;
-
-  if v_legacy.review_kind is not null then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'REVIEW_ALREADY_MIGRATED',
-      'status', 409
-    );
-  end if;
-
-  if exists (select 1 from public.processes
-             where id = v_legacy.data_id
-               and version = btrim(v_legacy.data_version::text)) then
-    v_candidate := 'processes';
-    v_table_count := v_table_count + 1;
-  end if;
-  if exists (select 1 from public.lifecyclemodels
-             where id = v_legacy.data_id
-               and version = btrim(v_legacy.data_version::text)) then
-    v_candidate := 'lifecyclemodels';
-    v_table_count := v_table_count + 1;
-  end if;
-
-  if v_table_count <> 1 then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'LEGACY_REVIEW_TARGET_AMBIGUOUS',
-      'status', 409,
-      'details', jsonb_build_object('matching_table_count', v_table_count)
-    );
-  end if;
-  v_table := v_candidate;
-
-  v_root_row := api.cmd_review_get_dataset_row(
-    v_table,
-    v_legacy.data_id,
-    btrim(v_legacy.data_version::text),
-    true
-  );
-  v_owner_id := nullif(v_root_row->>'user_id', '')::uuid;
-  if v_root_row is null or v_owner_id is null then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'LEGACY_REVIEW_TARGET_INVALID',
-      'status', 409
-    );
-  end if;
-
-  if exists (
-    select 1
-    from private.reviews as migrated
-    where migrated.review_kind = 'root'
-      and migrated.json->>'legacy_review_id' = p_legacy_review_id::text
-  ) then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'LEGACY_REVIEW_ALREADY_MAPPED',
-      'status', 409
-    );
-  end if;
-
-  create temporary table if not exists review_legacy_v2_targets (
-    table_name text not null,
-    dataset_id uuid not null,
-    dataset_version text not null,
-    state_code integer not null,
-    reviews jsonb,
-    dataset_row jsonb not null,
-    is_root boolean not null default false,
-    primary key (table_name, dataset_id, dataset_version)
-  ) on commit drop;
-  truncate table review_legacy_v2_targets;
-
-  insert into review_legacy_v2_targets
-  select *
-  from api.cmd_review_collect_dataset_targets(
-    jsonb_build_array(jsonb_build_object(
-      'table', v_table,
-      'id', v_legacy.data_id,
-      'version', btrim(v_legacy.data_version::text),
-      'is_root', true
-    )),
-    true
-  );
-
-  for v_target in
-    select *
-    from review_legacy_v2_targets
-    order by is_root desc, table_name, dataset_id, dataset_version
-  loop
-    v_target_checksum := private.review_revision_fingerprint_v1(
-      v_target.table_name,
-      v_target.dataset_row
-    );
-    if v_target.is_root then
-      v_checksum := v_target_checksum;
-      v_item := jsonb_build_object(
-        'item_kind', 'root',
-        'target_table', v_target.table_name,
-        'data_id', v_target.dataset_id,
-        'data_version', v_target.dataset_version,
-        'submitted_revision_checksum', v_target_checksum,
-        'reference_review_id', null,
-        'target_owner_id', v_target.dataset_row->>'user_id',
-        'target_team_id', v_target.dataset_row->'team_id',
-        'relation_type', 'root',
-        'relation_path', '$',
-        'introduced_by', 'legacy_migration',
-        'introduced_field_path', null
-      );
-    else
-      v_reference := private.review_get_or_create_reference_v1(
-        v_target.table_name,
-        v_target.dataset_row,
-        v_target_checksum,
-        v_owner_id
-      );
-      v_reference_ids := array_append(v_reference_ids, v_reference.id);
-      v_item := jsonb_build_object(
-        'item_kind', 'reference',
-        'target_table', v_target.table_name,
-        'data_id', v_target.dataset_id,
-        'data_version', v_target.dataset_version,
-        'submitted_revision_checksum', v_target_checksum,
-        'reference_review_id', v_reference.id,
-        'target_owner_id', v_target.dataset_row->>'user_id',
-        'target_team_id', v_target.dataset_row->'team_id',
-        'relation_type', 'dependency',
-        'relation_path', '$',
-        'introduced_by', 'legacy_migration',
-        'introduced_field_path', null
-      );
-    end if;
-    v_items := v_items || jsonb_build_array(v_item);
-  end loop;
-
-  v_scope_history := jsonb_build_object(
-    'schema_version', 'review_scope.v1',
-    'current_version', 1,
-    'snapshots', jsonb_build_array(jsonb_build_object(
-      'version_no', 1,
-      'scope_basis', 'legacy_migration',
-      'root_revision_checksum', v_checksum,
-      'scope_checksum', private.review_scope_checksum_v1(v_items),
-      'created_by', v_owner_id,
-      'created_at', to_jsonb(now()),
-      'items', v_items
-    ))
-  );
-
-  insert into private.reviews (
-    id,
-    data_id,
-    data_version,
-    state_code,
-    reviewer_id,
-    json,
-    deadline,
-    review_kind,
-    target_table,
-    submitted_revision_checksum,
-    approved_revision_checksum,
-    target_owner_id,
-    target_team_id,
-    scope_schema_version,
-    scope_history,
-    created_at,
-    modified_at
-  )
-  values (
-    p_new_root_review_id,
-    v_legacy.data_id,
-    v_legacy.data_version,
-    v_legacy.state_code,
-    v_legacy.reviewer_id,
-    coalesce(v_legacy.json, '{}'::jsonb)
-      || jsonb_build_object(
-        'review_kind', 'root',
-        'legacy_review_id', p_legacy_review_id,
-        'data', coalesce(v_legacy.json->'data', '{}'::jsonb)
-          || jsonb_build_object('table', v_table)
-      ),
-    v_legacy.deadline,
-    'root',
-    v_table,
-    v_checksum,
-    case when v_legacy.state_code = 2 then v_checksum else null end,
-    v_owner_id,
-    nullif(v_root_row->>'team_id', '')::uuid,
-    'review_scope.v1',
-    v_scope_history,
-    v_legacy.created_at,
-    v_legacy.modified_at
-  );
-
-  insert into private.comments (
-    review_id,
-    reviewer_id,
-    state_code,
-    json,
-    created_at,
-    modified_at
-  )
-  select
-    p_new_root_review_id,
-    comment_row.reviewer_id,
-    comment_row.state_code,
-    comment_row.json,
-    comment_row.created_at,
-    comment_row.modified_at
-  from private.comments as comment_row
-  where comment_row.review_id = p_legacy_review_id;
-
-  insert into private.command_audit_log (
-    command,
-    actor_user_id,
-    target_table,
-    target_id,
-    payload
-  )
-  values (
-    'cmd_review_migrate_legacy_v2',
-    v_owner_id,
-    'reviews',
-    p_new_root_review_id,
-    coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
-      'legacy_review_id', p_legacy_review_id,
-      'new_root_review_id', p_new_root_review_id,
-      'target_table', v_table,
-      'reference_review_ids', to_jsonb(v_reference_ids)
-    )
-  );
-
-  return jsonb_build_object(
-    'ok', true,
-    'data', jsonb_build_object(
-      'legacyReviewId', p_legacy_review_id,
-      'rootReviewId', p_new_root_review_id,
-      'targetTable', v_table,
-      'referenceReviewIds', to_jsonb(v_reference_ids)
-    )
-  );
-end;
-$_$;
-
-
-ALTER FUNCTION "private"."cmd_review_migrate_legacy_v2"("p_legacy_review_id" "uuid", "p_new_root_review_id" "uuid", "p_audit" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "private"."cmd_review_reference_roles"("p_table" "text", "p_source" "text", "p_json" "jsonb") RETURNS TABLE("reference_path" "text", "lifecycle_role" "text", "ref_type" "text", "ref_table" "text", "ref_object_id" "uuid", "ref_version" "text")
@@ -39468,137 +39030,6 @@ $$;
 ALTER FUNCTION "private"."processes_sync_jsonb_version"() OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "private"."review_append_scope_snapshot_v1"("p_root_review_id" "uuid", "p_scope_basis" "text", "p_root_revision_checksum" "text", "p_items" "jsonb", "p_created_by" "uuid" DEFAULT "auth"."uid"()) RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $_$
-declare
-  v_root private.reviews%rowtype;
-  v_version integer;
-  v_snapshot jsonb;
-  v_history jsonb;
-begin
-  select review_row.*
-  into v_root
-  from private.reviews as review_row
-  where review_row.id = p_root_review_id
-  for update;
-
-  if not found or v_root.review_kind <> 'root' then
-    raise exception using errcode = 'P0002', message = 'ROOT_REVIEW_NOT_FOUND';
-  end if;
-
-  if p_scope_basis not in (
-    'submitted',
-    'review_metadata',
-    'approved',
-    'reference_repair',
-    'migration'
-  ) or p_root_revision_checksum !~ '^[a-f0-9]{64}$'
-    or pg_catalog.jsonb_typeof(p_items) <> 'array' then
-    raise exception using errcode = '22023', message = 'REVIEW_SCOPE_INVALID';
-  end if;
-
-  v_version := coalesce((v_root.scope_history->>'current_version')::integer, 0) + 1;
-  v_snapshot := pg_catalog.jsonb_build_object(
-    'version_no', v_version,
-    'scope_basis', p_scope_basis,
-    'root_revision_checksum', p_root_revision_checksum,
-    'scope_checksum', private.review_scope_checksum_v1(p_items),
-    'created_by', p_created_by,
-    'created_at', pg_catalog.to_jsonb(pg_catalog.now()),
-    'items', p_items
-  );
-
-  v_history := case
-    when v_root.scope_history is null then pg_catalog.jsonb_build_object(
-      'schema_version', 'review_scope.v1',
-      'current_version', v_version,
-      'snapshots', pg_catalog.jsonb_build_array(v_snapshot)
-    )
-    else pg_catalog.jsonb_set(
-      pg_catalog.jsonb_set(
-        v_root.scope_history,
-        '{current_version}',
-        pg_catalog.to_jsonb(v_version),
-        false
-      ),
-      '{snapshots}',
-      (v_root.scope_history->'snapshots') || pg_catalog.jsonb_build_array(v_snapshot),
-      false
-    )
-  end;
-
-  perform private.review_validate_scope_history_v1(p_root_review_id, v_history);
-
-  perform pg_catalog.set_config('app.review_scope_write', 'on', true);
-  update private.reviews
-  set scope_history = v_history,
-      modified_at = pg_catalog.now()
-  where id = p_root_review_id;
-  perform pg_catalog.set_config('app.review_scope_write', 'off', true);
-
-  return v_history;
-exception
-  when others then
-    perform pg_catalog.set_config('app.review_scope_write', 'off', true);
-    raise;
-end;
-$_$;
-
-
-ALTER FUNCTION "private"."review_append_scope_snapshot_v1"("p_root_review_id" "uuid", "p_scope_basis" "text", "p_root_revision_checksum" "text", "p_items" "jsonb", "p_created_by" "uuid") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "private"."review_scope_all_reference_ids_v1"("p_scope_history" "jsonb") RETURNS "uuid"[]
-    LANGUAGE "sql" IMMUTABLE PARALLEL SAFE
-    SET "search_path" TO ''
-    AS $_$
-  select case
-    when pg_catalog.jsonb_typeof(p_scope_history) <> 'object'
-      or p_scope_history->>'schema_version' <> 'review_scope.v1'
-      or pg_catalog.jsonb_typeof(p_scope_history->'snapshots') <> 'array'
-      then array[]::uuid[]
-    else coalesce((
-      select pg_catalog.array_agg(distinct
-        nullif(item.value->>'reference_review_id', '')::uuid
-        order by nullif(item.value->>'reference_review_id', '')::uuid
-      ) filter (
-        where item.value->>'item_kind' = 'reference'
-          and coalesce(item.value->>'reference_review_id', '')
-            ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-      )
-      from pg_catalog.jsonb_array_elements(p_scope_history->'snapshots')
-        as snapshot(value)
-      cross join lateral pg_catalog.jsonb_array_elements(
-        coalesce(snapshot.value->'items', '[]'::jsonb)
-      ) as item(value)
-    ), array[]::uuid[])
-  end
-$_$;
-
-
-ALTER FUNCTION "private"."review_scope_all_reference_ids_v1"("p_scope_history" "jsonb") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "private"."review_scope_current_reference_ids_v1"("p_scope_history" "jsonb") RETURNS "uuid"[]
-    LANGUAGE "sql" IMMUTABLE PARALLEL SAFE
-    SET "search_path" TO ''
-    AS $$
-  select coalesce(
-    pg_catalog.array_agg(distinct item.reference_review_id
-      order by item.reference_review_id)
-      filter (where item.reference_review_id is not null),
-    array[]::uuid[]
-  )
-  from private.review_scope_current_items_v1(p_scope_history) as item
-  where item.item_kind = 'reference'
-$$;
-
-
-ALTER FUNCTION "private"."review_scope_current_reference_ids_v1"("p_scope_history" "jsonb") OWNER TO "postgres";
-
-
 CREATE TABLE IF NOT EXISTS "private"."reviews" (
     "id" "uuid" NOT NULL,
     "data_id" "uuid",
@@ -39615,12 +39046,8 @@ CREATE TABLE IF NOT EXISTS "private"."reviews" (
     "approved_revision_checksum" "text",
     "target_owner_id" "uuid",
     "target_team_id" "uuid",
-    "scope_schema_version" "text",
-    "scope_history" "jsonb",
-    "current_reference_review_ids" "uuid"[] GENERATED ALWAYS AS ("private"."review_scope_current_reference_ids_v1"("scope_history")) STORED,
-    "all_reference_review_ids" "uuid"[] GENERATED ALWAYS AS ("private"."review_scope_all_reference_ids_v1"("scope_history")) STORED,
     CONSTRAINT "reviews_approved_checksum_v2_chk" CHECK ((("approved_revision_checksum" IS NULL) OR ("approved_revision_checksum" ~ '^[a-f0-9]{64}$'::"text"))),
-    CONSTRAINT "reviews_kind_scope_v2_chk" CHECK ((("review_kind" IS NULL) OR (("target_table" IS NOT NULL) AND ("data_id" IS NOT NULL) AND ("data_version" IS NOT NULL) AND ("submitted_revision_checksum" IS NOT NULL) AND ((("review_kind" = 'root'::"text") AND ("scope_schema_version" = 'review_scope.v1'::"text") AND ("scope_history" IS NOT NULL) AND (("scope_history" ->> 'schema_version'::"text") = "scope_schema_version")) OR (("review_kind" = 'reference'::"text") AND ("scope_schema_version" IS NULL) AND ("scope_history" IS NULL)))))),
+    CONSTRAINT "reviews_kind_target_v3_chk" CHECK ((("review_kind" IS NULL) OR (("target_table" IS NOT NULL) AND ("data_id" IS NOT NULL) AND ("data_version" IS NOT NULL) AND ("submitted_revision_checksum" IS NOT NULL)))),
     CONSTRAINT "reviews_review_kind_v2_chk" CHECK ((("review_kind" IS NULL) OR ("review_kind" = ANY (ARRAY['root'::"text", 'reference'::"text"])))),
     CONSTRAINT "reviews_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 1, 2]))),
     CONSTRAINT "reviews_submitted_checksum_v2_chk" CHECK ((("submitted_revision_checksum" IS NULL) OR ("submitted_revision_checksum" ~ '^[a-f0-9]{64}$'::"text"))),
@@ -39629,6 +39056,10 @@ CREATE TABLE IF NOT EXISTS "private"."reviews" (
 
 
 ALTER TABLE "private"."reviews" OWNER TO "postgres";
+
+
+COMMENT ON CONSTRAINT "reviews_kind_target_v3_chk" ON "private"."reviews" IS 'Root and Reference Reviews require target identity and checksum; no Root/Reference relationship fields are persisted.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."review_assert_all_reviewers_completed_v1"("p_review" "private"."reviews") RETURNS "void"
@@ -39737,6 +39168,52 @@ $$;
 ALTER FUNCTION "private"."review_build_json_v1"("p_target_table" "text", "p_target_row" "jsonb", "p_owner_id" "uuid", "p_action" "text", "p_actor" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "private"."review_candidate_root_ids_v1"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text") RETURNS TABLE("root_review_id" "uuid")
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+begin
+  if p_target_table not in (
+    'contacts',
+    'sources',
+    'unitgroups',
+    'flowproperties',
+    'flows',
+    'processes',
+    'lifecyclemodels'
+  ) then
+    return;
+  end if;
+
+  return query execute pg_catalog.format(
+    $query$
+      select distinct (entry.value->>'id')::uuid
+      from public.%I as dataset_row
+      cross join lateral pg_catalog.jsonb_array_elements(
+        case
+          when pg_catalog.jsonb_typeof(dataset_row.reviews) = 'array'
+            then dataset_row.reviews
+          else '[]'::jsonb
+        end
+      ) as entry(value)
+      where dataset_row.id = $1
+        and pg_catalog.btrim(dataset_row.version::text) = $2
+        and coalesce(entry.value->>'id', '')
+          ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    $query$,
+    p_target_table
+  ) using p_target_id, p_target_version;
+end;
+$_$;
+
+
+ALTER FUNCTION "private"."review_candidate_root_ids_v1"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "private"."review_candidate_root_ids_v1"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text") IS 'Reads append-only business reviews[].id Root candidates. Callers must validate every candidate against current JSON/comments.';
+
+
+
 CREATE OR REPLACE FUNCTION "private"."review_canonical_json_text_v1"("p_value" "jsonb") RETURNS "text"
     LANGUAGE "plpgsql" IMMUTABLE STRICT PARALLEL SAFE
     SET "search_path" TO ''
@@ -39828,6 +39305,75 @@ $$;
 
 
 ALTER FUNCTION "private"."review_dataset_content_guard_v1"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "private"."review_derive_current_references_v1"("p_root_review_ids" "uuid"[]) RETURNS TABLE("root_review_id" "uuid", "reference_review_id" "uuid", "target_table" "text", "data_id" "uuid", "data_version" "text", "submitted_revision_checksum" "text", "state_code" integer)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+begin
+  if exists (
+    select 1
+    from private.review_resolve_current_reference_targets_v1(
+      p_root_review_ids
+    ) as target
+    join private.reviews as root_review
+      on root_review.id = target.root_review_id
+      and root_review.state_code in (0, 1)
+    where not exists (
+      select 1
+      from private.reviews as candidate
+      where candidate.review_kind = 'reference'
+        and candidate.target_table = target.target_table
+        and candidate.data_id = target.data_id
+        and pg_catalog.btrim(candidate.data_version::text) = target.data_version
+        and candidate.submitted_revision_checksum = target.revision_checksum
+        and candidate.state_code in (-1, 0, 1, 2)
+    )
+  ) then
+    raise exception using
+      errcode = '55000',
+      message = 'MISSING_CURRENT_REFERENCE_REVIEW';
+  end if;
+
+  return query
+  select
+    target.root_review_id,
+    reference_review.id,
+    target.target_table,
+    target.data_id,
+    target.data_version,
+    reference_review.submitted_revision_checksum,
+    reference_review.state_code
+  from private.review_resolve_current_reference_targets_v1(
+    p_root_review_ids
+  ) as target
+  join lateral (
+    select candidate.*
+    from private.reviews as candidate
+    where candidate.review_kind = 'reference'
+      and candidate.target_table = target.target_table
+      and candidate.data_id = target.data_id
+      and pg_catalog.btrim(candidate.data_version::text) = target.data_version
+      and candidate.submitted_revision_checksum = target.revision_checksum
+      and candidate.state_code in (-1, 0, 1, 2)
+    order by
+      case when candidate.state_code in (0, 1, 2) then 0 else 1 end,
+      candidate.modified_at desc,
+      candidate.id
+    limit 1
+  ) as reference_review on true
+  order by target.root_review_id, target.target_table,
+    target.data_id, target.data_version;
+end;
+$$;
+
+
+ALTER FUNCTION "private"."review_derive_current_references_v1"("p_root_review_ids" "uuid"[]) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "private"."review_derive_current_references_v1"("p_root_review_ids" "uuid"[]) IS 'Derives current Root/Reference Review pairs from dataset JSON, non-revoked Reviewer comments, target identity, and revision checksum; persists no pair.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."review_get_or_create_reference_v1"("p_target_table" "text", "p_target_row" "jsonb", "p_checksum" "text", "p_actor" "uuid") RETURNS "private"."reviews"
@@ -39987,15 +39533,17 @@ CREATE OR REPLACE FUNCTION "private"."review_notify_impacted_roots_v1"("p_refere
     SET "search_path" TO ''
     AS $$
 declare
-  v_root private.reviews%rowtype;
+  v_root record;
 begin
   for v_root in
-    select root_review.*
-    from private.reviews as root_review
-    where root_review.review_kind = 'root'
-      and root_review.current_reference_review_ids
-        @> array[p_reference_review.id]::uuid[]
-    order by root_review.id
+    select impacted.root_review_id, root_review.target_owner_id
+    from api.qry_reference_review_impacted_roots(
+      p_reference_review.id,
+      false
+    ) as impacted
+    join private.reviews as root_review
+      on root_review.id = impacted.root_review_id
+    order by impacted.root_review_id
   loop
     perform private.review_notify_event_v1(
       p_event_type,
@@ -40004,9 +39552,9 @@ begin
       p_actor,
       p_reference_review.target_table,
       p_reference_review.data_id,
-      btrim(p_reference_review.data_version::text),
-      v_root.id,
-      (v_root.scope_history->>'current_version')::integer,
+      pg_catalog.btrim(p_reference_review.data_version::text),
+      null,
+      null,
       p_reason_code
     );
   end loop;
@@ -40017,33 +39565,199 @@ $$;
 ALTER FUNCTION "private"."review_notify_impacted_roots_v1"("p_reference_review" "private"."reviews", "p_event_type" "text", "p_actor" "uuid", "p_reason_code" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "private"."review_replace_reference_item_v1"("p_items" "jsonb", "p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_checksum" "text", "p_reference_review_id" "uuid", "p_owner_id" "uuid", "p_team_id" "uuid") RETURNS "jsonb"
-    LANGUAGE "sql" IMMUTABLE
+CREATE OR REPLACE FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) RETURNS TABLE("root_review_id" "uuid", "target_table" "text", "data_id" "uuid", "data_version" "text", "revision_checksum" "text", "provenance" "jsonb")
+    LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO ''
-    AS $$
-  select coalesce(jsonb_agg(
-    case
-      when item.value->>'item_kind' = 'reference'
-        and item.value->>'target_table' = p_target_table
-        and item.value->>'data_id' = p_target_id::text
-        and item.value->>'data_version' = p_target_version
-      then item.value || jsonb_build_object(
-        'submitted_revision_checksum', p_checksum,
-        'reference_review_id', p_reference_review_id,
-        'target_owner_id', p_owner_id,
-        'target_team_id', p_team_id,
-        'introduced_by', 'reference_repair'
+    AS $_$
+  with recursive requested_roots as materialized (
+    select review_row.*
+    from private.reviews as review_row
+    where review_row.review_kind = 'root'
+      and review_row.id = any(coalesce(p_root_review_ids, array[]::uuid[]))
+  ),
+  seed_targets as (
+    select
+      root_review.id as root_review_id,
+      root_review.target_table,
+      root_review.data_id,
+      pg_catalog.btrim(root_review.data_version::text) as data_version,
+      true as is_root,
+      api.cmd_review_get_dataset_row(
+        root_review.target_table,
+        root_review.data_id,
+        pg_catalog.btrim(root_review.data_version::text),
+        false
+      ) as dataset_row
+    from requested_roots as root_review
+
+    union
+
+    select
+      root_review.id,
+      api.cmd_review_ref_type_to_table(ref.ref_type),
+      ref.ref_object_id,
+      ref.ref_version,
+      false,
+      api.cmd_review_get_dataset_row(
+        api.cmd_review_ref_type_to_table(ref.ref_type),
+        ref.ref_object_id,
+        ref.ref_version,
+        false
       )
-      else item.value
-    end
-    order by item.ordinality
-  ), '[]'::jsonb)
-  from jsonb_array_elements(coalesce(p_items, '[]'::jsonb))
-    with ordinality as item(value, ordinality)
-$$;
+    from requested_roots as root_review
+    join private.comments as comment_row
+      on comment_row.review_id = root_review.id
+      and comment_row.state_code <> -2
+    cross join lateral api.cmd_review_extract_refs(
+      coalesce(comment_row.json::jsonb, '{}'::jsonb)
+    ) as ref
+    where api.cmd_review_ref_type_to_table(ref.ref_type) is not null
+  ),
+  closure (
+    root_review_id,
+    target_table,
+    data_id,
+    data_version,
+    is_root,
+    dataset_row
+  ) as (
+    select
+      seed.root_review_id,
+      seed.target_table,
+      seed.data_id,
+      seed.data_version,
+      seed.is_root,
+      seed.dataset_row
+    from seed_targets as seed
+    where seed.dataset_row is not null
+
+    union
+
+    select
+      current_target.root_review_id,
+      neighbour.target_table,
+      neighbour.data_id,
+      neighbour.data_version,
+      false,
+      dataset.dataset_row
+    from closure as current_target
+    cross join lateral (
+      select
+        api.cmd_review_ref_type_to_table(ref.ref_type) as target_table,
+        ref.ref_object_id as data_id,
+        ref.ref_version as data_version
+      from (
+        select * from api.cmd_review_extract_refs(
+          coalesce(current_target.dataset_row->'json_ordered', '{}'::jsonb)
+        )
+        union
+        select * from api.cmd_review_extract_refs(
+          coalesce(current_target.dataset_row->'json', '{}'::jsonb)
+        )
+        union
+        select * from api.cmd_review_extract_refs(
+          coalesce(current_target.dataset_row->'json_tg', '{}'::jsonb)
+        )
+      ) as ref
+      where (
+          current_target.is_root
+          or coalesce((current_target.dataset_row->>'state_code')::integer, 0) < 100
+        )
+        and api.cmd_review_ref_type_to_table(ref.ref_type) is not null
+
+      union
+
+      select
+        'lifecyclemodels',
+        current_target.data_id,
+        current_target.data_version
+      where current_target.target_table = 'processes'
+        and not current_target.is_root
+
+      union
+
+      select
+        'processes',
+        current_target.data_id,
+        current_target.data_version
+      where current_target.target_table = 'lifecyclemodels'
+        and current_target.is_root
+
+      union
+
+      select
+        'processes',
+        (submodel.value->>'id')::uuid,
+        coalesce(
+          nullif(submodel.value->>'version', ''),
+          current_target.data_version
+        )
+      from pg_catalog.jsonb_array_elements(
+        case
+          when pg_catalog.jsonb_typeof(
+            current_target.dataset_row->'json_tg'->'submodels'
+          ) = 'array'
+            then current_target.dataset_row->'json_tg'->'submodels'
+          else '[]'::jsonb
+        end
+      ) as submodel(value)
+      where current_target.target_table = 'lifecyclemodels'
+        and (
+          current_target.is_root
+          or coalesce((current_target.dataset_row->>'state_code')::integer, 0) < 100
+        )
+        and pg_catalog.lower(coalesce(submodel.value->>'type', '')) = 'secondary'
+        and coalesce(submodel.value->>'id', '')
+          ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    ) as neighbour
+    cross join lateral (
+      select api.cmd_review_get_dataset_row(
+        neighbour.target_table,
+        neighbour.data_id,
+        neighbour.data_version,
+        false
+      ) as dataset_row
+    ) as dataset
+    where dataset.dataset_row is not null
+      and not (
+        neighbour.target_table = current_target.target_table
+        and neighbour.data_id = current_target.data_id
+        and neighbour.data_version = current_target.data_version
+      )
+  )
+  select
+    current_target.root_review_id,
+    current_target.target_table,
+    current_target.data_id,
+    current_target.data_version,
+    private.review_revision_fingerprint_v1(
+      current_target.target_table,
+      current_target.dataset_row
+    ),
+    pg_catalog.jsonb_build_array('current_json_or_comment')
+  from closure as current_target
+  join requested_roots as root_review
+    on root_review.id = current_target.root_review_id
+  where not current_target.is_root
+    and not (
+      current_target.target_table = root_review.target_table
+      and current_target.data_id = root_review.data_id
+      and current_target.data_version = pg_catalog.btrim(root_review.data_version::text)
+    )
+  group by
+    current_target.root_review_id,
+    current_target.target_table,
+    current_target.data_id,
+    current_target.data_version,
+    current_target.dataset_row
+$_$;
 
 
-ALTER FUNCTION "private"."review_replace_reference_item_v1"("p_items" "jsonb", "p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_checksum" "text", "p_reference_review_id" "uuid", "p_owner_id" "uuid", "p_team_id" "uuid") OWNER TO "postgres";
+ALTER FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) IS 'Set-oriented recursive current JSON/comment closure for multiple Root Reviews; returns identities/checksums only and persists no relationship.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."review_revision_fingerprint_v1"("p_target_table" "text", "p_target_row" "jsonb") RETURNS "text"
@@ -40094,141 +39808,73 @@ COMMENT ON FUNCTION "private"."review_revision_fingerprint_v1"("p_target_table" 
 
 
 
-CREATE OR REPLACE FUNCTION "private"."review_scope_checksum_v1"("p_items" "jsonb") RETURNS "text"
-    LANGUAGE "sql" IMMUTABLE STRICT PARALLEL SAFE
-    SET "search_path" TO ''
-    AS $$
-  select pg_catalog.encode(
-    extensions.digest(
-      pg_catalog.convert_to(
-        private.review_canonical_json_text_v1(p_items),
-        'UTF8'
-      ),
-      'sha256'
-    ),
-    'hex'
-  )
-$$;
-
-
-ALTER FUNCTION "private"."review_scope_checksum_v1"("p_items" "jsonb") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "private"."review_scope_current_items_v1"("p_scope_history" "jsonb") RETURNS TABLE("item_kind" "text", "target_table" "text", "data_id" "uuid", "data_version" "text", "submitted_revision_checksum" "text", "reference_review_id" "uuid", "target_owner_id" "uuid", "target_team_id" "uuid", "relation_type" "text", "relation_path" "text", "introduced_by" "text", "introduced_field_path" "text")
-    LANGUAGE "sql" IMMUTABLE PARALLEL SAFE
-    SET "search_path" TO ''
-    AS $$
-  select
-    item.value->>'item_kind',
-    item.value->>'target_table',
-    nullif(item.value->>'data_id', '')::uuid,
-    item.value->>'data_version',
-    item.value->>'submitted_revision_checksum',
-    nullif(item.value->>'reference_review_id', '')::uuid,
-    nullif(item.value->>'target_owner_id', '')::uuid,
-    nullif(item.value->>'target_team_id', '')::uuid,
-    item.value->>'relation_type',
-    item.value->>'relation_path',
-    item.value->>'introduced_by',
-    nullif(item.value->>'introduced_field_path', '')
-  from pg_catalog.jsonb_array_elements(
-    coalesce(
-      private.review_scope_current_snapshot_v1(p_scope_history)->'items',
-      '[]'::jsonb
-    )
-  ) as item(value)
-$$;
-
-
-ALTER FUNCTION "private"."review_scope_current_items_v1"("p_scope_history" "jsonb") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "private"."review_scope_current_snapshot_v1"("p_scope_history" "jsonb") RETURNS "jsonb"
-    LANGUAGE "sql" IMMUTABLE PARALLEL SAFE
-    SET "search_path" TO ''
-    AS $$
-  select case
-    when pg_catalog.jsonb_typeof(p_scope_history) <> 'object'
-      or p_scope_history->>'schema_version' <> 'review_scope.v1'
-      or pg_catalog.jsonb_typeof(p_scope_history->'snapshots') <> 'array'
-      then null
-    else (
-      select snapshot.value
-      from pg_catalog.jsonb_array_elements(p_scope_history->'snapshots')
-        with ordinality as snapshot(value, ordinality)
-      where snapshot.value->>'version_no' = p_scope_history->>'current_version'
-      order by snapshot.ordinality desc
-      limit 1
-    )
-  end
-$$;
-
-
-ALTER FUNCTION "private"."review_scope_current_snapshot_v1"("p_scope_history" "jsonb") OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "private"."review_scope_history_guard_v1"() RETURNS "trigger"
+CREATE OR REPLACE FUNCTION "private"."review_root_currently_references_target_v1"("p_root_review_id" "uuid", "p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text") RETURNS boolean
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
+    SET "search_path" TO 'pg_temp'
     AS $$
+declare
+  v_root private.reviews%rowtype;
+  v_comment_roots jsonb;
 begin
-  if tg_op = 'DELETE' and old.review_kind in ('root', 'reference') then
-    raise exception using errcode = '55000', message = 'REVIEW_HISTORY_DELETE_FORBIDDEN';
+  select review_row.*
+  into v_root
+  from private.reviews as review_row
+  where review_row.id = p_root_review_id
+    and review_row.review_kind = 'root';
+
+  if not found then
+    return false;
   end if;
 
-  if tg_op = 'UPDATE' then
-    if old.review_kind is null and new.review_kind is not null then
-      -- Reserved for the explicit legacy migration.
-      if pg_catalog.current_setting('app.review_legacy_migration', true)
-        is distinct from 'on' then
-        raise exception using errcode = '55000', message = 'LEGACY_REVIEW_READ_ONLY';
-      end if;
-    elsif old.review_kind is distinct from new.review_kind
-      or old.target_table is distinct from new.target_table
-      or old.data_id is distinct from new.data_id
-      or old.data_version is distinct from new.data_version
-      or old.submitted_revision_checksum
-        is distinct from new.submitted_revision_checksum
-      or old.target_owner_id is distinct from new.target_owner_id
-      or old.target_team_id is distinct from new.target_team_id
-      or old.scope_schema_version is distinct from new.scope_schema_version then
-      raise exception using errcode = '55000', message = 'REVIEW_IDENTITY_IMMUTABLE';
-    end if;
-
-    if old.scope_history is distinct from new.scope_history then
-      if pg_catalog.current_setting('app.review_scope_write', true)
-        is distinct from 'on' then
-        raise exception using errcode = '55000', message = 'REVIEW_SCOPE_DIRECT_WRITE_FORBIDDEN';
-      end if;
-
-      perform private.review_validate_scope_history_v1(new.id, new.scope_history);
-
-      if old.scope_history is not null and (
-        pg_catalog.jsonb_array_length(new.scope_history->'snapshots')
-          <> pg_catalog.jsonb_array_length(old.scope_history->'snapshots') + 1
-        or (
-          select pg_catalog.jsonb_agg(snapshot.value order by snapshot.ordinality)
-          from pg_catalog.jsonb_array_elements(new.scope_history->'snapshots')
-            with ordinality as snapshot(value, ordinality)
-          where snapshot.ordinality
-            <= pg_catalog.jsonb_array_length(old.scope_history->'snapshots')
-        ) is distinct from old.scope_history->'snapshots'
-      ) then
-        raise exception using errcode = '55000', message = 'REVIEW_SCOPE_APPEND_ONLY';
-      end if;
-    end if;
+  if exists (
+    select 1
+    from api.cmd_review_collect_dataset_targets(
+      pg_catalog.jsonb_build_array(pg_catalog.jsonb_build_object(
+        'table', v_root.target_table,
+        'id', v_root.data_id,
+        'version', pg_catalog.btrim(v_root.data_version::text),
+        'is_root', true
+      )),
+      false
+    ) as target
+    where not target.is_root
+      and target.table_name = p_target_table
+      and target.dataset_id = p_target_id
+      and target.dataset_version = pg_catalog.btrim(p_target_version)
+  ) then
+    return true;
   end if;
 
-  if tg_op = 'DELETE' then
-    return old;
-  end if;
+  select coalesce(
+    pg_catalog.jsonb_agg(distinct pg_catalog.jsonb_build_object(
+      'table', api.cmd_review_ref_type_to_table(ref.ref_type),
+      'id', ref.ref_object_id,
+      'version', ref.ref_version,
+      'is_root', false
+    )),
+    '[]'::jsonb
+  )
+  into v_comment_roots
+  from private.comments as comment_row
+  cross join lateral api.cmd_review_extract_refs(
+    coalesce(comment_row.json::jsonb, '{}'::jsonb)
+  ) as ref
+  where comment_row.review_id = p_root_review_id
+    and comment_row.state_code <> -2
+    and api.cmd_review_ref_type_to_table(ref.ref_type) is not null;
 
-  return new;
+  return exists (
+    select 1
+    from api.cmd_review_collect_dataset_targets(v_comment_roots, false) as target
+    where target.table_name = p_target_table
+      and target.dataset_id = p_target_id
+      and target.dataset_version = pg_catalog.btrim(p_target_version)
+  );
 end;
 $$;
 
 
-ALTER FUNCTION "private"."review_scope_history_guard_v1"() OWNER TO "postgres";
+ALTER FUNCTION "private"."review_root_currently_references_target_v1"("p_root_review_id" "uuid", "p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "private"."review_v2_comment_guard"() RETURNS "trigger"
@@ -40286,156 +39932,6 @@ $$;
 
 
 ALTER FUNCTION "private"."review_v2_kind_guard"() OWNER TO "postgres";
-
-
-CREATE OR REPLACE FUNCTION "private"."review_validate_scope_history_v1"("p_root_review_id" "uuid", "p_scope_history" "jsonb") RETURNS "void"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $_$
-declare
-  v_snapshot jsonb;
-  v_item jsonb;
-  v_expected_version integer := 1;
-  v_reference private.reviews%rowtype;
-begin
-  if pg_catalog.jsonb_typeof(p_scope_history) <> 'object'
-    or p_scope_history->>'schema_version' <> 'review_scope.v1'
-    or pg_catalog.jsonb_typeof(p_scope_history->'snapshots') <> 'array'
-    or pg_catalog.jsonb_array_length(p_scope_history->'snapshots') = 0 then
-    raise exception using errcode = '22023', message = 'REVIEW_SCOPE_INVALID';
-  end if;
-
-  if pg_catalog.jsonb_array_length(p_scope_history->'snapshots') > 100 then
-    raise exception using errcode = '54000', message = 'REVIEW_SCOPE_SNAPSHOT_LIMIT';
-  end if;
-
-  if pg_catalog.pg_column_size(p_scope_history) > 8388608 then
-    raise exception using errcode = '54000', message = 'REVIEW_SCOPE_SIZE_LIMIT';
-  end if;
-
-  for v_snapshot in
-    select value
-    from pg_catalog.jsonb_array_elements(p_scope_history->'snapshots')
-      with ordinality as snapshot(value, ordinality)
-    order by snapshot.ordinality
-  loop
-    if coalesce((v_snapshot->>'version_no')::integer, 0) <> v_expected_version
-      or v_snapshot->>'scope_basis' not in (
-        'submitted',
-        'review_metadata',
-        'approved',
-        'reference_repair',
-        'migration'
-      )
-      or coalesce(v_snapshot->>'root_revision_checksum', '')
-        !~ '^[a-f0-9]{64}$'
-      or coalesce(v_snapshot->>'scope_checksum', '')
-        !~ '^[a-f0-9]{64}$'
-      or pg_catalog.jsonb_typeof(v_snapshot->'items') <> 'array'
-      or pg_catalog.jsonb_array_length(v_snapshot->'items') = 0
-      or pg_catalog.jsonb_array_length(v_snapshot->'items') > 5000 then
-      raise exception using errcode = '22023', message = 'REVIEW_SCOPE_INVALID';
-    end if;
-
-    if v_snapshot->>'scope_checksum'
-      <> private.review_scope_checksum_v1(v_snapshot->'items') then
-      raise exception using errcode = '22023', message = 'REVIEW_SCOPE_CHECKSUM_MISMATCH';
-    end if;
-
-    if (
-      select count(*)
-      from pg_catalog.jsonb_array_elements(v_snapshot->'items') as item(value)
-    ) <> (
-      select count(*)
-      from (
-        select distinct
-          item.value->>'target_table',
-          item.value->>'data_id',
-          item.value->>'data_version',
-          item.value->>'submitted_revision_checksum'
-        from pg_catalog.jsonb_array_elements(v_snapshot->'items') as item(value)
-      ) as distinct_items
-    ) then
-      raise exception using errcode = '22023', message = 'REVIEW_SCOPE_ITEM_DUPLICATE';
-    end if;
-
-    for v_item in
-      select value
-      from pg_catalog.jsonb_array_elements(v_snapshot->'items')
-    loop
-      if v_item->>'item_kind' not in ('root', 'reference')
-        or v_item->>'target_table' not in (
-          'contacts',
-          'sources',
-          'unitgroups',
-          'flowproperties',
-          'flows',
-          'processes',
-          'lifecyclemodels'
-        )
-        or coalesce(v_item->>'data_id', '')
-          !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-        or nullif(v_item->>'data_version', '') is null
-        or coalesce(v_item->>'submitted_revision_checksum', '')
-          !~ '^[a-f0-9]{64}$'
-        or coalesce(v_item->>'target_owner_id', '')
-          !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-        or (
-          nullif(v_item->>'target_team_id', '') is not null
-          and v_item->>'target_team_id'
-            !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-        ) then
-        raise exception using errcode = '22023', message = 'REVIEW_SCOPE_ITEM_INVALID';
-      end if;
-
-      if v_item->>'item_kind' = 'root' then
-        if nullif(v_item->>'reference_review_id', '') is not null then
-          raise exception using errcode = '22023', message = 'REVIEW_SCOPE_ROOT_REFERENCE_INVALID';
-        end if;
-      else
-        if coalesce(v_item->>'reference_review_id', '')
-          !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
-          raise exception using errcode = '22023', message = 'REVIEW_SCOPE_REFERENCE_REQUIRED';
-        end if;
-
-        select review_row.*
-        into v_reference
-        from private.reviews as review_row
-        where review_row.id = (v_item->>'reference_review_id')::uuid;
-
-        if not found
-          or v_reference.review_kind <> 'reference'
-          or v_reference.target_table <> v_item->>'target_table'
-          or v_reference.data_id <> (v_item->>'data_id')::uuid
-          or btrim(v_reference.data_version::text) <> v_item->>'data_version'
-          or v_reference.submitted_revision_checksum
-            <> v_item->>'submitted_revision_checksum' then
-          raise exception using errcode = '23503', message = 'REVIEW_SCOPE_REFERENCE_MISMATCH';
-        end if;
-      end if;
-    end loop;
-
-    v_expected_version := v_expected_version + 1;
-  end loop;
-
-  if coalesce((p_scope_history->>'current_version')::integer, 0)
-    <> v_expected_version - 1 then
-    raise exception using errcode = '22023', message = 'REVIEW_SCOPE_CURRENT_VERSION_INVALID';
-  end if;
-
-  if p_root_review_id is not null and not exists (
-    select 1
-    from private.reviews as root_review
-    where root_review.id = p_root_review_id
-      and root_review.review_kind = 'root'
-  ) then
-    raise exception using errcode = '23503', message = 'ROOT_REVIEW_NOT_FOUND';
-  end if;
-end;
-$_$;
-
-
-ALTER FUNCTION "private"."review_validate_scope_history_v1"("p_root_review_id" "uuid", "p_scope_history" "jsonb") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "private"."save_lifecycle_model_bundle"("p_plan" "jsonb") RETURNS "jsonb"
@@ -58531,14 +58027,6 @@ COMMENT ON INDEX "private"."reviews_reference_revision_active_uidx" IS 'One reus
 
 
 
-CREATE INDEX "reviews_root_current_reference_ids_gin_idx" ON "private"."reviews" USING "gin" ("current_reference_review_ids") WHERE ("review_kind" = 'root'::"text");
-
-
-
-COMMENT ON INDEX "private"."reviews_root_current_reference_ids_gin_idx" IS 'Supports current Reference Review to Root Review reverse lookup without indexing historical scope.';
-
-
-
 CREATE INDEX "roles_role_idx" ON "private"."roles" USING "btree" ("role");
 
 
@@ -59240,10 +58728,6 @@ CREATE OR REPLACE TRIGGER "lcia_scope_closure_scan_executions_preallocate_snapsh
 
 
 CREATE OR REPLACE TRIGGER "notifications_set_modified_at_trigger" BEFORE UPDATE ON "private"."notifications" FOR EACH ROW EXECUTE FUNCTION "private"."update_modified_at"();
-
-
-
-CREATE OR REPLACE TRIGGER "reviews_scope_history_guard_v1" BEFORE DELETE OR UPDATE ON "private"."reviews" FOR EACH ROW EXECUTE FUNCTION "private"."review_scope_history_guard_v1"();
 
 
 
@@ -62002,12 +61486,6 @@ GRANT ALL ON FUNCTION "private"."cmd_review_lifecycle_error"("p_code" "text", "p
 
 
 
-REVOKE ALL ON FUNCTION "private"."cmd_review_migrate_legacy_v2"("p_legacy_review_id" "uuid", "p_new_root_review_id" "uuid", "p_audit" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."cmd_review_migrate_legacy_v2"("p_legacy_review_id" "uuid", "p_new_root_review_id" "uuid", "p_audit" "jsonb") TO "service_role";
-GRANT ALL ON FUNCTION "private"."cmd_review_migrate_legacy_v2"("p_legacy_review_id" "uuid", "p_new_root_review_id" "uuid", "p_audit" "jsonb") TO "api_internal_executor";
-
-
-
 REVOKE ALL ON FUNCTION "private"."cmd_review_reference_roles"("p_table" "text", "p_source" "text", "p_json" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."cmd_review_reference_roles"("p_table" "text", "p_source" "text", "p_json" "jsonb") TO "api_internal_executor";
 
@@ -62534,21 +62012,6 @@ GRANT ALL ON FUNCTION "private"."processes_sync_jsonb_version"() TO "api_interna
 
 
 
-REVOKE ALL ON FUNCTION "private"."review_append_scope_snapshot_v1"("p_root_review_id" "uuid", "p_scope_basis" "text", "p_root_revision_checksum" "text", "p_items" "jsonb", "p_created_by" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."review_append_scope_snapshot_v1"("p_root_review_id" "uuid", "p_scope_basis" "text", "p_root_revision_checksum" "text", "p_items" "jsonb", "p_created_by" "uuid") TO "api_internal_executor";
-
-
-
-REVOKE ALL ON FUNCTION "private"."review_scope_all_reference_ids_v1"("p_scope_history" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."review_scope_all_reference_ids_v1"("p_scope_history" "jsonb") TO "api_internal_executor";
-
-
-
-REVOKE ALL ON FUNCTION "private"."review_scope_current_reference_ids_v1"("p_scope_history" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."review_scope_current_reference_ids_v1"("p_scope_history" "jsonb") TO "api_internal_executor";
-
-
-
 GRANT ALL ON TABLE "private"."reviews" TO "service_role";
 GRANT SELECT ON TABLE "private"."reviews" TO "api_internal_executor";
 GRANT SELECT ON TABLE "private"."reviews" TO "authenticated";
@@ -62562,6 +62025,11 @@ GRANT ALL ON FUNCTION "private"."review_assert_all_reviewers_completed_v1"("p_re
 
 REVOKE ALL ON FUNCTION "private"."review_build_json_v1"("p_target_table" "text", "p_target_row" "jsonb", "p_owner_id" "uuid", "p_action" "text", "p_actor" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."review_build_json_v1"("p_target_table" "text", "p_target_row" "jsonb", "p_owner_id" "uuid", "p_action" "text", "p_actor" "uuid") TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."review_candidate_root_ids_v1"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."review_candidate_root_ids_v1"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text") TO "api_internal_executor";
 
 
 
@@ -62580,6 +62048,11 @@ GRANT ALL ON FUNCTION "private"."review_dataset_content_guard_v1"() TO "api_inte
 
 
 
+REVOKE ALL ON FUNCTION "private"."review_derive_current_references_v1"("p_root_review_ids" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."review_derive_current_references_v1"("p_root_review_ids" "uuid"[]) TO "api_internal_executor";
+
+
+
 REVOKE ALL ON FUNCTION "private"."review_get_or_create_reference_v1"("p_target_table" "text", "p_target_row" "jsonb", "p_checksum" "text", "p_actor" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."review_get_or_create_reference_v1"("p_target_table" "text", "p_target_row" "jsonb", "p_checksum" "text", "p_actor" "uuid") TO "api_internal_executor";
 
@@ -62595,8 +62068,8 @@ GRANT ALL ON FUNCTION "private"."review_notify_impacted_roots_v1"("p_reference_r
 
 
 
-REVOKE ALL ON FUNCTION "private"."review_replace_reference_item_v1"("p_items" "jsonb", "p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_checksum" "text", "p_reference_review_id" "uuid", "p_owner_id" "uuid", "p_team_id" "uuid") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."review_replace_reference_item_v1"("p_items" "jsonb", "p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_checksum" "text", "p_reference_review_id" "uuid", "p_owner_id" "uuid", "p_team_id" "uuid") TO "api_internal_executor";
+REVOKE ALL ON FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) TO "api_internal_executor";
 
 
 
@@ -62606,23 +62079,8 @@ GRANT ALL ON FUNCTION "private"."review_revision_fingerprint_v1"("p_target_table
 
 
 
-REVOKE ALL ON FUNCTION "private"."review_scope_checksum_v1"("p_items" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."review_scope_checksum_v1"("p_items" "jsonb") TO "api_internal_executor";
-
-
-
-REVOKE ALL ON FUNCTION "private"."review_scope_current_items_v1"("p_scope_history" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."review_scope_current_items_v1"("p_scope_history" "jsonb") TO "api_internal_executor";
-
-
-
-REVOKE ALL ON FUNCTION "private"."review_scope_current_snapshot_v1"("p_scope_history" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."review_scope_current_snapshot_v1"("p_scope_history" "jsonb") TO "api_internal_executor";
-
-
-
-REVOKE ALL ON FUNCTION "private"."review_scope_history_guard_v1"() FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."review_scope_history_guard_v1"() TO "api_internal_executor";
+REVOKE ALL ON FUNCTION "private"."review_root_currently_references_target_v1"("p_root_review_id" "uuid", "p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."review_root_currently_references_target_v1"("p_root_review_id" "uuid", "p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text") TO "api_internal_executor";
 
 
 
@@ -62633,11 +62091,6 @@ GRANT ALL ON FUNCTION "private"."review_v2_comment_guard"() TO "api_internal_exe
 
 REVOKE ALL ON FUNCTION "private"."review_v2_kind_guard"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."review_v2_kind_guard"() TO "api_internal_executor";
-
-
-
-REVOKE ALL ON FUNCTION "private"."review_validate_scope_history_v1"("p_root_review_id" "uuid", "p_scope_history" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."review_validate_scope_history_v1"("p_root_review_id" "uuid", "p_scope_history" "jsonb") TO "api_internal_executor";
 
 
 

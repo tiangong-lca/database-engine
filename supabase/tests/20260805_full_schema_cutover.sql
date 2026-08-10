@@ -80,7 +80,7 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  202::bigint,
+  196::bigint,
   'private contains existing helpers plus all reviewed internal functions'
 );
 
@@ -112,7 +112,7 @@ select is(
     from pg_trigger trigger_record
     where not trigger_record.tgisinternal
   ),
-  107::bigint,
+  106::bigint,
   'all application triggers remain present'
 );
 

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(8);
+select plan(10);
 
 create or replace function pg_temp.disable_trigger_if_exists(
   p_table regclass,
@@ -139,36 +139,6 @@ values (
   '[]'::jsonb
 );
 
-with root_items as (
-  select pg_catalog.jsonb_build_array(
-    pg_catalog.jsonb_build_object(
-      'item_kind', 'root',
-      'target_table', 'processes',
-      'data_id', '49800000-0000-0000-0000-000000000001',
-      'data_version', '01.01.000',
-      'submitted_revision_checksum', pg_catalog.repeat('a', 64),
-      'target_owner_id', '19800000-0000-0000-0000-000000000001'
-    )
-  ) as items
-),
-root_history as (
-  select pg_catalog.jsonb_build_object(
-    'schema_version', 'review_scope.v1',
-    'current_version', 1,
-    'snapshots', pg_catalog.jsonb_build_array(
-      pg_catalog.jsonb_build_object(
-        'version_no', 1,
-        'scope_basis', 'submitted',
-        'root_revision_checksum', pg_catalog.repeat('a', 64),
-        'scope_checksum', private.review_scope_checksum_v1(root_items.items),
-        'created_by', '19800000-0000-0000-0000-000000000001',
-        'created_at', pg_catalog.to_jsonb(pg_catalog.now()),
-        'items', root_items.items
-      )
-    )
-  ) as scope_history
-  from root_items
-)
 insert into private.reviews (
   id,
   data_id,
@@ -179,11 +149,9 @@ insert into private.reviews (
   review_kind,
   target_table,
   submitted_revision_checksum,
-  target_owner_id,
-  scope_schema_version,
-  scope_history
+  target_owner_id
 )
-select
+values (
   '59800000-0000-0000-0000-000000000001',
   '49800000-0000-0000-0000-000000000001',
   '01.01.000',
@@ -193,10 +161,8 @@ select
   'root',
   'processes',
   pg_catalog.repeat('a', 64),
-  '19800000-0000-0000-0000-000000000001',
-  'review_scope.v1',
-  root_history.scope_history
-from root_history;
+  '19800000-0000-0000-0000-000000000001'
+);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config(
@@ -241,52 +207,57 @@ select ok(
   'Reviewer metadata comment submission succeeds when it introduces references'
 );
 
-select is(
-  (
-    select (scope_history->>'current_version')::integer
-    from private.reviews
-    where id = '59800000-0000-0000-0000-000000000001'
+select ok(
+  not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'private' and table_name = 'reviews'
+      and column_name = 'scope_history'
   ),
-  2,
-  'Reviewer metadata appends exactly one scope snapshot'
-);
-
-select is(
-  (
-    select private.review_scope_current_snapshot_v1(scope_history)->>'scope_basis'
-    from private.reviews
-    where id = '59800000-0000-0000-0000-000000000001'
-  ),
-  'review_metadata',
-  'appended snapshot uses the canonical review_metadata scope basis'
-);
-
-select is(
-  (
-    select pg_catalog.jsonb_array_length(
-      private.review_scope_current_snapshot_v1(scope_history)->'items'
-    )
-    from private.reviews
-    where id = '59800000-0000-0000-0000-000000000001'
-  ),
-  3,
-  'current scope retains the root and adds both Reviewer metadata references'
+  'Reviewer metadata persists no relationship snapshot'
 );
 
 select is(
   (
     select count(*)::integer
-    from private.reviews as root_review
-    cross join lateral pg_catalog.jsonb_array_elements(
-      private.review_scope_current_snapshot_v1(root_review.scope_history)->'items'
-    ) as item(value)
-    where root_review.id = '59800000-0000-0000-0000-000000000001'
-      and item.value->>'item_kind' = 'reference'
-      and item.value->>'relation_type' = 'reviewer_metadata'
-      and item.value->>'introduced_by' = 'reviewer_metadata'
+    from private.review_derive_current_references_v1(array[
+      '59800000-0000-0000-0000-000000000001'::uuid
+    ])
   ),
   2,
-  'item-level provenance remains reviewer_metadata for both references'
+  'current Comment JSON dynamically derives both metadata references'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from (
+      select reviews from public.sources
+      where id = '39800000-0000-0000-0000-000000000001'
+      union all
+      select reviews from public.contacts
+      where id = '39800000-0000-0000-0000-000000000002'
+    ) as target
+    where target.reviews @> '[{"id":"59800000-0000-0000-0000-000000000001"}]'
+  ),
+  0,
+  'approved metadata targets remain immutable; queue completeness uses the all-Root fallback'
+);
+
+select ok(
+  not exists (
+    select 1
+    from (
+      select reviews from public.sources
+      where id = '39800000-0000-0000-0000-000000000001'
+      union all
+      select reviews from public.contacts
+      where id = '39800000-0000-0000-0000-000000000002'
+    ) as target
+    cross join lateral pg_catalog.jsonb_array_elements(target.reviews) as entry(value)
+    where entry.value ? 'reference_review_id'
+      or entry.value ? 'scope_history'
+  ),
+  'business candidate entries contain no Reference Review mapping data'
 );
 
 select is(
@@ -314,6 +285,20 @@ select is(
   'command response reports both affected datasets'
 );
 
+select ok(
+  not exists (
+    select 1
+    from private.command_audit_log as audit
+    cross join lateral pg_catalog.jsonb_array_elements(
+      coalesce(audit.payload->'affected_datasets', '[]'::jsonb)
+    ) as affected(value)
+    where audit.command = 'cmd_review_submit_comment'
+      and audit.target_id = '59800000-0000-0000-0000-000000000001'
+      and affected.value ? 'reference_review_id'
+  ),
+  'command audit preserves command facts without persisting Root/Reference mappings'
+);
+
 select is(
   (
     select state_code
@@ -323,6 +308,22 @@ select is(
   ),
   1,
   'Reviewer approval comment is stored after scope expansion'
+);
+
+update private.comments
+set state_code = -2
+where review_id = '59800000-0000-0000-0000-000000000001'
+  and reviewer_id = '19800000-0000-0000-0000-000000000001';
+
+select is(
+  (
+    select count(*)::integer
+    from private.review_derive_current_references_v1(array[
+      '59800000-0000-0000-0000-000000000001'::uuid
+    ])
+  ),
+  0,
+  'revoking the Comment removes both current relationships without cleanup writes'
 );
 
 select * from finish();

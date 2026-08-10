@@ -1,34 +1,57 @@
 CREATE OR REPLACE FUNCTION "api"."qry_reference_review_impacted_roots"("p_reference_review_id" "uuid", "p_include_history" boolean DEFAULT false) RETURNS TABLE("root_review_id" "uuid", "target_table" "text", "data_id" "uuid", "data_version" "text", "state_code" integer, "is_current" boolean)
-    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
   v_actor uuid := auth.uid();
+  v_reference private.reviews%rowtype;
+  v_candidate_ids uuid[];
 begin
   if v_actor is null or not api.cmd_review_is_review_admin(v_actor) then
     raise exception using errcode = '42501', message = 'REVIEW_ADMIN_REQUIRED';
   end if;
+
+  select review_row.*
+  into v_reference
+  from private.reviews as review_row
+  where review_row.id = p_reference_review_id
+    and review_row.review_kind = 'reference';
+
+  if not found then
+    return;
+  end if;
+
+  select coalesce(
+    pg_catalog.array_agg(candidate.root_review_id order by candidate.root_review_id),
+    array[]::uuid[]
+  )
+  into v_candidate_ids
+  from (
+    select hinted.root_review_id
+    from private.review_candidate_root_ids_v1(
+      v_reference.target_table,
+      v_reference.data_id,
+      pg_catalog.btrim(v_reference.data_version::text)
+    ) as hinted
+    union
+    select root_review.id
+    from private.reviews as root_review
+    where root_review.review_kind = 'root'
+  ) as candidate;
 
   return query
   select
     root_review.id,
     root_review.target_table,
     root_review.data_id,
-    btrim(root_review.data_version::text),
+    pg_catalog.btrim(root_review.data_version::text),
     root_review.state_code,
-    root_review.current_reference_review_ids
-      @> array[p_reference_review_id]::uuid[]
-  from private.reviews as root_review
-  where root_review.review_kind = 'root'
-    and (
-      root_review.current_reference_review_ids
-        @> array[p_reference_review_id]::uuid[]
-      or (
-        coalesce(p_include_history, false)
-        and root_review.all_reference_review_ids
-          @> array[p_reference_review_id]::uuid[]
-      )
-    )
+    true
+  from private.review_derive_current_references_v1(v_candidate_ids) as derived
+  join private.reviews as root_review
+    on root_review.id = derived.root_review_id
+    and root_review.review_kind = 'root'
+  where derived.reference_review_id = p_reference_review_id
   order by root_review.modified_at desc, root_review.id;
 end;
 $$;

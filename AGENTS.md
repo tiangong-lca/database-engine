@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 04b8f3d31fca78e82509208e6369a7440b502550
-lastReviewedNote: "Reviewed for Issue #450 main-to-dev reconciliation: database ownership, migration source-of-truth, include-all persistent-dev deployment, and the Issue #448 package contracts remain unchanged."
+lastReviewedCommit: bdf9831d7df70e23403d8ef4fdc559f516b07953
+lastReviewedNote: "Reviewed for Issue #446: database ownership, migration source-of-truth, include-all persistent-dev deployment, and workspace integration rules remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 04b8f3d31fca78e82509208e6369a7440b502550
-lastReviewedNote: "Updated for Issue #450 while retaining Issue #448: blocked shared-scan reuse has no numerical snapshot, new requests use the revised scanner cache identity, and package authorization remains API-owned."
+lastReviewedCommit: bdf9831d7df70e23403d8ef4fdc559f516b07953
+lastReviewedNote: "Reviewed for Issue #446: removing persisted review relationships changes schema and generated objects but not stable repository ownership or workspace structure."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -10,8 +10,6 @@ declare
   v_approved_checksum text;
   v_review_items jsonb := '[]'::jsonb;
   v_compliance_items jsonb := '[]'::jsonb;
-  v_current_snapshot jsonb;
-  v_approved_items jsonb;
 begin
   if v_actor is null or not api.cmd_review_is_review_admin(v_actor) then
     return jsonb_build_object(
@@ -144,31 +142,6 @@ begin
 
   if v_review.review_kind = 'reference' then
     v_approved_checksum := v_review.submitted_revision_checksum;
-  else
-    v_current_snapshot := private.review_scope_current_snapshot_v1(
-      v_review.scope_history
-    );
-    v_approved_items := (
-      select jsonb_agg(
-        case when item.value->>'item_kind' = 'root'
-          then item.value || jsonb_build_object(
-            'submitted_revision_checksum', v_approved_checksum
-          )
-          else item.value
-        end
-        order by item.ordinality
-      )
-      from jsonb_array_elements(v_current_snapshot->'items')
-        with ordinality as item(value, ordinality)
-    );
-
-    perform private.review_append_scope_snapshot_v1(
-      p_review_id,
-      'approved',
-      v_approved_checksum,
-      v_approved_items,
-      v_actor
-    );
   end if;
 
   execute format(

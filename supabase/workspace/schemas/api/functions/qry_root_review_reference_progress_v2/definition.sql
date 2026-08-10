@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION "api"."qry_root_review_reference_progress_v2"("p_root_review_id" "uuid") RETURNS TABLE("reference_review_id" "uuid", "target_table" "text", "data_id" "uuid", "data_version" "text", "data_name" "jsonb", "submitted_revision_checksum" "text", "state_code" integer, "reviewer_count" integer, "completed_reviewer_count" integer, "actor_comment_state_code" integer, "actor_comment_modified_at" timestamp with time zone)
-    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
@@ -19,9 +19,9 @@ begin
   return query
   select
     reference_review.id,
-    reference_review.target_table,
-    reference_review.data_id,
-    pg_catalog.btrim(reference_review.data_version::text),
+    derived.target_table,
+    derived.data_id,
+    derived.data_version,
     coalesce(reference_review.json #> '{data,name}', '{}'::jsonb),
     reference_review.submitted_revision_checksum,
     reference_review.state_code,
@@ -36,13 +36,11 @@ begin
     ),
     actor_comment.state_code,
     actor_comment.modified_at
-  from private.reviews as root_review
-  cross join lateral pg_catalog.unnest(
-    coalesce(root_review.current_reference_review_ids, '{}'::uuid[])
-  ) with ordinality as current_reference(reference_review_id, ordinal_position)
+  from private.review_derive_current_references_v1(
+    array[p_root_review_id]::uuid[]
+  ) as derived
   join private.reviews as reference_review
-    on reference_review.id = current_reference.reference_review_id
-    and reference_review.review_kind = 'reference'
+    on reference_review.id = derived.reference_review_id
   left join lateral (
     select comment_row.state_code, comment_row.modified_at
     from private.comments as comment_row
@@ -51,21 +49,14 @@ begin
     order by comment_row.modified_at desc, comment_row.created_at desc
     limit 1
   ) as actor_comment on true
-  where root_review.id = p_root_review_id
-    and root_review.review_kind = 'root'
-    and (
-      v_is_admin
-      or (
-        v_is_member
-        and api.policy_review_can_read(reference_review.id, v_actor)
-        and actor_comment.state_code is not null
-        and actor_comment.state_code <> -2
-      )
+  where v_is_admin
+    or (
+      v_is_member
+      and api.policy_review_can_read(reference_review.id, v_actor)
+      and actor_comment.state_code is not null
+      and actor_comment.state_code <> -2
     )
-  order by
-    current_reference.ordinal_position,
-    reference_review.target_table,
-    reference_review.id;
+  order by derived.target_table, derived.data_id, derived.data_version;
 end;
 $$;
 

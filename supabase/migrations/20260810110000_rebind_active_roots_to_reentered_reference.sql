@@ -1,0 +1,5 @@
+-- Migration version retained because it was already applied by PR #447 preview
+-- environments before Issue #446 changed direction. The rebind implementation
+-- is intentionally removed: Root/Reference relationships are now derived from
+-- current dataset JSON and Reviewer comments by migrations 20260810160000 and
+-- 20260810161000, and no relationship update is performed here.

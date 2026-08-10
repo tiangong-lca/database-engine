@@ -138,12 +138,24 @@ select is((select state_code from public.contacts
   'submitted root becomes read-only state 20');
 select is((select count(*)::integer from private.reviews
   where review_kind = 'root'), 1, 'one Root Review is created');
-select is((select jsonb_array_length(scope_history->'snapshots')
-  from private.reviews where review_kind = 'root'), 1,
-  'Root Review receives its initial immutable scope snapshot');
-select is((select cardinality(current_reference_review_ids)
-  from private.reviews where review_kind = 'root'), 0,
-  'a Contact with no references has an empty child review list');
+select ok(
+  not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'private' and table_name = 'reviews'
+      and column_name = 'scope_history'
+  ),
+  'Root Reviews do not persist an immutable relationship scope snapshot'
+);
+select is(
+  (
+    select count(*)::integer
+    from private.review_derive_current_references_v1(array[
+      (select id from private.reviews where review_kind = 'root')
+    ])
+  ),
+  0,
+  'a Contact with no current JSON/comment references has no derived child review'
+);
 select matches((select submitted_revision_checksum from private.reviews
   where review_kind = 'root'), '^[a-f0-9]{64}$',
   'submitted checksum matches the Gate checksum format');
