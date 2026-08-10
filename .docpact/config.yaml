@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-10"
-lastReviewedCommit: "8fa104141ff1fb30731acd6159cd6f144943606a"
-lastReviewedNote: "Reviewed for Issue #442 main-to-dev hotfix reconciliation: current routing and ownership remain correct; the older-timestamped public hotfix stays migration/test owned and no-ops after the dev private-schema cutover."
+lastReviewedCommit: "bf614555b27df207a45b6673e4bd23768befba5c"
+lastReviewedNote: "Reviewed for database-engine Issue #448 / workspace Issue #566: package artifact ownership and per-attempt worker diagnostics remain migration/test owned; routing and ownership are unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 8fa104141ff1fb30731acd6159cd6f144943606a
-lastReviewedNote: "Reviewed for Issue #442 main-to-dev reconciliation: database ownership, migration source-of-truth, the production hotfix path, and the include-all persistent-dev deployment contract remain unchanged."
+lastReviewedCommit: bf614555b27df207a45b6673e4bd23768befba5c
+lastReviewedNote: "Reviewed for database-engine Issue #448 / workspace Issue #566: the ownership-safe package read fix and attempt-local diagnostics belong in versioned migrations with pgTAP coverage; governance is unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

@@ -29,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-09
-lastReviewedCommit: cab102d900d1be38a42666ee0b6025aad6503ff1
-lastReviewedNote: "Updated for Issue #439: rejected Reference Review revisions may re-enter review without a checksum change, with historical rejection preservation and active-review reuse proof."
+lastReviewedAt: 2026-08-10
+lastReviewedCommit: bf614555b27df207a45b6673e4bd23768befba5c
+lastReviewedNote: "Reviewed for database-engine Issue #448 / workspace Issue #566: validate the forward migration with a blank reset and focused pgTAP coverage for ownership and retry diagnostics."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

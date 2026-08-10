@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-09
-lastReviewedCommit: cab102d900d1be38a42666ee0b6025aad6503ff1
-lastReviewedNote: "Reviewed for Issue #439: unchanged rejected Reference Review resubmission remains within the API/private function migration boundary and does not change repository architecture."
+lastReviewedAt: 2026-08-10
+lastReviewedCommit: bf614555b27df207a45b6673e4bd23768befba5c
+lastReviewedNote: "Reviewed for database-engine Issue #448 / workspace Issue #566: package authorization remains in the API facade and worker attempt state remains private; repository architecture is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
