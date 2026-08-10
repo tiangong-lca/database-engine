@@ -46,6 +46,7 @@ begin
         leased_by = null,
         lease_token = null,
         lease_expires_at = null,
+        diagnostics = '{}'::jsonb,
         error_code = null,
         error_message = null,
         error_details = null,

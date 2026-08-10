@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: bf614555b27df207a45b6673e4bd23768befba5c
-lastReviewedNote: "Reviewed for database-engine Issue #448 / workspace Issue #566: validate the forward migration with a blank reset and focused pgTAP coverage for ownership and retry diagnostics."
+lastReviewedCommit: 4f6607c7778827556fb29f8b62bd85bf98edf19a
+lastReviewedNote: "Reviewed for database-engine Issue #448 / workspace Issue #566: blank reset, focused pgTAP, deterministic exact-local schema regeneration, and CI remain the required proof layers."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

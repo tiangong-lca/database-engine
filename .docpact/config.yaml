@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-10"
-lastReviewedCommit: "bf614555b27df207a45b6673e4bd23768befba5c"
-lastReviewedNote: "Reviewed for database-engine Issue #448 / workspace Issue #566: package artifact ownership and per-attempt worker diagnostics remain migration/test owned; routing and ownership are unchanged."
+lastReviewedCommit: "4f6607c7778827556fb29f8b62bd85bf98edf19a"
+lastReviewedNote: "Reviewed for database-engine Issue #448 / workspace Issue #566: migration, pgTAP, and exact-local schema snapshot paths remain correctly governed; routing and ownership are unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

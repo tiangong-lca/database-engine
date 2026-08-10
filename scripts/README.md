@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 24ba3e64eedd8c557277e9fe62ee6f86e8cc4d83
-lastReviewedNote: "Reviewed for Issue #442: the existing exact-local schema workspace and database-types refresh commands deterministically capture canonical cutoff normalization; script behavior is unchanged."
+lastReviewedCommit: 4f6607c7778827556fb29f8b62bd85bf98edf19a
+lastReviewedNote: "Reviewed for database-engine Issue #448 / workspace Issue #566: the existing exact-local schema workspace and Data API type commands capture the package and worker function contract; script behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
