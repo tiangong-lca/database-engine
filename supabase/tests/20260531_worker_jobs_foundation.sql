@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(46);
+select plan(50);
 
 select ok(to_regclass('public.worker_job_kinds') is not null, 'worker job kind registry exists');
 select ok(to_regclass('public.worker_jobs') is not null, 'worker_jobs table exists');
@@ -428,6 +428,29 @@ select is(
 );
 
 select is(
+  (
+    select progress::text
+    from public.worker_jobs
+    where id = (select job_id from worker_job_test_ids where label = 'gate_primary')
+  ),
+  '1',
+  'completed jobs normalize progress to one'
+);
+
+select is(
+  (
+    select progress::text
+    from public.worker_job_events
+    where job_id = (select job_id from worker_job_test_ids where label = 'gate_primary')
+      and event_type = 'completed'
+    order by created_at desc
+    limit 1
+  ),
+  '1',
+  'completed terminal events record normalized progress'
+);
+
+select is(
   public.worker_cancel_job(
     p_job_id => (select job_id from worker_job_test_ids where label = 'gate_primary'),
     p_reason => 'should not cancel terminal'
@@ -549,6 +572,17 @@ jsonb_array_elements(
 ) as claimed;
 
 select is(
+  public.worker_heartbeat_job(
+    p_job_id => (select job_id from worker_job_test_ids where label = 'blocked_gate'),
+    p_lease_token => (select lease_token from worker_job_test_ids where label = 'blocked_gate'),
+    p_phase => 'blocked-check',
+    p_progress => 0.6
+  )->'data'->>'progress',
+  '0.6',
+  'blocked fixture records partial progress before its terminal result'
+);
+
+select is(
   public.worker_record_job_result(
     p_job_id => (select job_id from worker_job_test_ids where label = 'blocked_gate'),
     p_lease_token => (select lease_token from worker_job_test_ids where label = 'blocked_gate'),
@@ -560,6 +594,16 @@ select is(
   )->'data'->>'status',
   'blocked',
   'record result marks business blockers as blocked'
+);
+
+select is(
+  (
+    select progress::text
+    from public.worker_jobs
+    where id = (select job_id from worker_job_test_ids where label = 'blocked_gate')
+  ),
+  '0.6',
+  'blocked jobs preserve their actual partial progress'
 );
 
 select is(

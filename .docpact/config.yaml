@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-10"
-lastReviewedCommit: "609a6e84b4417e719bcb4b8123e52543d7e42bdb"
-lastReviewedNote: "Reviewed for Issue #450 production-main hotfix: blocked shared-scan reuse and scanner cache revision remain migration/test owned under current routing."
+lastReviewedCommit: "e351496897698b3d4bc149bd5da1ebaccde0a143"
+lastReviewedNote: "Reviewed for Issue #453 production-main hotfix: completed-progress normalization and direct reused-certificate binding remain migration/test owned under current routing."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
