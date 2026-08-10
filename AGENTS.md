@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-09
-lastReviewedCommit: cab102d900d1be38a42666ee0b6025aad6503ff1
-lastReviewedNote: "Reviewed for Issue #439: unchanged rejected Reference Review resubmission follows the existing migration, SQL-test, generated-workspace, and dev-to-main delivery contract; no governance change is required."
+lastReviewedAt: 2026-08-10
+lastReviewedCommit: bc21cd0857636e465ee8f69bf33ddcce1b563a98
+lastReviewedNote: "Reviewed for Issue #442: canonical cutoff Scope Closure normalization follows the existing migration, SQL-test, generated-workspace, and dev-to-main delivery contract; no governance change is required."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-09"
-lastReviewedCommit: "cab102d900d1be38a42666ee0b6025aad6503ff1"
-lastReviewedNote: "Reviewed for Issue #439: unchanged rejected Reference Review resubmission follows the existing migration, Root/Reference Review v2 SQL-test, and generated-workspace governance routes; no rule change is required."
+lastReviewedAt: "2026-08-10"
+lastReviewedCommit: "bc21cd0857636e465ee8f69bf33ddcce1b563a98"
+lastReviewedNote: "Reviewed for Issue #442: canonical cutoff Scope Closure normalization remains inside the existing migration, SQL-test, and generated-workspace governance routes; no rule change is required."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-09
-lastReviewedCommit: cab102d900d1be38a42666ee0b6025aad6503ff1
-lastReviewedNote: "Reviewed for Issue #439: the exact-local rejected-reference resubmission snapshot regenerated deterministically with no Data API type drift; workspace behavior is unchanged."
+lastReviewedAt: 2026-08-10
+lastReviewedCommit: 24ba3e64eedd8c557277e9fe62ee6f86e8cc4d83
+lastReviewedNote: "Reviewed for Issue #442: the exact-local canonical cutoff snapshot regenerates deterministically with no Data API type drift; workspace behavior is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
