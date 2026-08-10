@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 24ba3e64eedd8c557277e9fe62ee6f86e8cc4d83
-lastReviewedNote: "已为 Issue #442 复核：现有 exact-local schema workspace 与数据库类型刷新命令可确定性捕获 canonical cutoff 规范化，脚本行为不变。"
+lastReviewedCommit: 4f6607c7778827556fb29f8b62bd85bf98edf19a
+lastReviewedNote: "已为 database-engine Issue #448 / workspace Issue #566 复核：现有 exact-local schema workspace 与 Data API 类型命令可捕获 package 和 worker 函数合同，脚本行为不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

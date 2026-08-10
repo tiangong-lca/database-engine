@@ -1,7 +1,91 @@
-CREATE OR REPLACE FUNCTION "api"."svc_tidas_package_read"("p_requested_by" "uuid", "p_lookup_id" "uuid") RETURNS "jsonb"
-    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
+-- Issue #448 / workspace #566
+--
+-- Package artifacts are authorized by ownership of their request cache or
+-- canonical worker job. Artifact metadata is worker output and must not be an
+-- authorization source. Worker diagnostics describe only the current attempt;
+-- the append-only worker_job_events table retains attempt history.
+
+do $worker_attempt_diagnostics$
+declare
+  v_oid oid;
+  v_definition text;
+  v_rewritten text;
+begin
+  select routine.oid
+    into strict v_oid
+  from pg_proc as routine
+  join pg_namespace as namespace on namespace.oid = routine.pronamespace
+  where namespace.nspname = 'private'
+    and routine.proname = 'worker_claim_jobs';
+
+  v_definition := pg_get_functiondef(v_oid);
+  v_rewritten := replace(
+    v_definition,
+    $old$          updated_at = now(),
+          error_code = null,$old$,
+    $new$          updated_at = now(),
+          diagnostics = case
+            when j.attempt_count > 0 then '{}'::jsonb
+            else j.diagnostics
+          end,
+          error_code = null,$new$
+  );
+  if v_rewritten = v_definition then
+    raise exception 'private.worker_claim_jobs diagnostics rewrite target not found';
+  end if;
+  execute v_rewritten;
+
+  select routine.oid
+    into strict v_oid
+  from pg_proc as routine
+  join pg_namespace as namespace on namespace.oid = routine.pronamespace
+  where namespace.nspname = 'private'
+    and routine.proname = 'worker_record_job_result';
+
+  v_definition := pg_get_functiondef(v_oid);
+  v_rewritten := replace(
+    v_definition,
+    $old$        diagnostics = diagnostics || coalesce(p_diagnostics, '{}'::jsonb),$old$,
+    $new$        diagnostics = coalesce(p_diagnostics, '{}'::jsonb),$new$
+  );
+  if v_rewritten = v_definition then
+    raise exception 'private.worker_record_job_result diagnostics rewrite target not found';
+  end if;
+  execute v_rewritten;
+
+  select routine.oid
+    into strict v_oid
+  from pg_proc as routine
+  join pg_namespace as namespace on namespace.oid = routine.pronamespace
+  where namespace.nspname = 'private'
+    and routine.proname = 'worker_retry_job';
+
+  v_definition := pg_get_functiondef(v_oid);
+  v_rewritten := replace(
+    v_definition,
+    $old$        lease_expires_at = null,
+        error_code = null,$old$,
+    $new$        lease_expires_at = null,
+        diagnostics = '{}'::jsonb,
+        error_code = null,$new$
+  );
+  if v_rewritten = v_definition then
+    raise exception 'private.worker_retry_job diagnostics rewrite target not found';
+  end if;
+  execute v_rewritten;
+end
+$worker_attempt_diagnostics$;
+
+create or replace function api.svc_tidas_package_read(
+  p_requested_by uuid,
+  p_lookup_id uuid
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $function$
 declare
   v_cache private.lca_package_request_cache%rowtype;
   v_job private.worker_jobs%rowtype;
@@ -95,10 +179,4 @@ begin
     'updatedAt', coalesce(v_job.updated_at, v_cache.updated_at)
   )));
 end
-$$;
-
-ALTER FUNCTION "api"."svc_tidas_package_read"("p_requested_by" "uuid", "p_lookup_id" "uuid") OWNER TO "postgres";
-
-REVOKE ALL ON FUNCTION "api"."svc_tidas_package_read"("p_requested_by" "uuid", "p_lookup_id" "uuid") FROM PUBLIC;
-
-GRANT ALL ON FUNCTION "api"."svc_tidas_package_read"("p_requested_by" "uuid", "p_lookup_id" "uuid") TO "service_role";
+$function$;

@@ -136,7 +136,7 @@ begin
         result_schema_version = coalesce(nullif(trim(p_result_schema_version), ''), result_schema_version),
         result_json = p_result_json,
         result_ref = p_result_ref,
-        diagnostics = diagnostics || coalesce(p_diagnostics, '{}'::jsonb),
+        diagnostics = coalesce(p_diagnostics, '{}'::jsonb),
         error_code = nullif(trim(p_error_code), ''),
         error_message = nullif(trim(p_error_message), ''),
         error_details = p_error_details,

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 24ba3e64eedd8c557277e9fe62ee6f86e8cc4d83
-lastReviewedNote: "Reviewed for Issue #442: the exact-local canonical cutoff snapshot regenerates deterministically with no Data API type drift; workspace behavior is unchanged."
+lastReviewedCommit: 4f6607c7778827556fb29f8b62bd85bf98edf19a
+lastReviewedNote: "Reviewed for database-engine Issue #448 / workspace Issue #566: the exact-local package and worker function snapshot regenerates deterministically with no Data API type drift; workspace behavior is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
