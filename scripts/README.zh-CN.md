@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-10
-lastReviewedCommit: 131c3b061c3da1e0f62e34d049b399fad43fa634
-lastReviewedNote: "已为 Issue #459 复核：现有 exact-local schema workspace 与 Data API 类型命令可重建七张表的 nullable text[] search_text 列、已审核行派生 guard 与正式 Search RPC 契约，脚本行为不变。"
+lastReviewedAt: 2026-08-11
+lastReviewedCommit: 91a1f96
+lastReviewedNote: "已为 Issue #460 复核：现有 exact-local schema workspace 与 Data API 类型命令可重建七张表的 nullable text[] search_text 列、七个 Database B PGroonga 索引、fail-closed source-switch gate、已审核行派生 guard 与正式 Search RPC 契约；脚本行为不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

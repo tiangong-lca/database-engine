@@ -31,7 +31,7 @@ begin
   if cardinality(escaped_query_terms) = 0 then
     escaped_query_terms := private.pgroonga_escape_query_terms(array[query_text]);
   end if;
-  text_match_clause := 'where l.extracted_md &@~| $10';
+  text_match_clause := 'where l.search_text &@~| $10';
 
   if exact_query_id is not null then
     return query

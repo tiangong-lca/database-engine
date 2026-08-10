@@ -458,40 +458,53 @@ select 'a1000000-0000-0000-0000-000000000101', '01.00.000', '{"name":"public-uni
        '# Unit group public-unitgroup-token', test_vector.value, now(), now()
 from test_vector;
 
-with query_vector(value) as (
-  select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
-)
-select is(
-  (select id::text from api.semantic_search_contacts_v1((select value from query_vector), '{}', 0.5, 20, 'tg') limit 1),
-  'ca000000-0000-0000-0000-000000000101',
-  'contact Semantic Search returns the visible public row'
+update public.contacts
+set search_text = array[extracted_md]
+where id in (
+  'ca000000-0000-0000-0000-000000000101'::uuid,
+  'ca000000-0000-0000-0000-000000000201'::uuid,
+  'ca000000-0000-0000-0000-000000000202'::uuid,
+  'ca000000-0000-0000-0000-000000000203'::uuid
 );
 
-with query_vector(value) as (
-  select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
-)
-select is(
-  (select id::text from api.semantic_search_flowproperties_v1((select value from query_vector), '{}', 0.5, 20, 'tg') limit 1),
-  'fb000000-0000-0000-0000-000000000101',
-  'flow-property Semantic Search returns the visible public row'
+update public.flowproperties
+set search_text = array[extracted_md]
+where id = 'fb000000-0000-0000-0000-000000000101'::uuid;
+
+update public.sources
+set search_text = array[extracted_md]
+where id = '5a000000-0000-0000-0000-000000000101'::uuid;
+
+update public.unitgroups
+set search_text = array[extracted_md]
+where id = 'a1000000-0000-0000-0000-000000000101'::uuid;
+
+select throws_ok(
+  $$select * from api.semantic_search_contacts_v1('not-a-vector', '{}', 0.5, 20, 'tg')$$,
+  '42501',
+  'permission denied for function semantic_search_contacts_v1',
+  'legacy contact Semantic Search facade remains present but is closed by the API contract'
 );
 
-with query_vector(value) as (
-  select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
-)
-select is(
-  (select id::text from api.semantic_search_sources_v1((select value from query_vector), '{}', 0.5, 20, 'tg') limit 1),
-  '5a000000-0000-0000-0000-000000000101',
-  'source Semantic Search returns the visible public row'
+select throws_ok(
+  $$select * from api.semantic_search_flowproperties_v1('not-a-vector', '{}', 0.5, 20, 'tg')$$,
+  '42501',
+  'permission denied for function semantic_search_flowproperties_v1',
+  'legacy flow-property Semantic Search facade remains present but is closed by the API contract'
 );
 
-with query_vector(value) as (
-  select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
-)
-select is(
-  (select id::text from api.semantic_search_unitgroups_v1((select value from query_vector), '{}', 0.5, 20, 'tg') limit 1),
-  'a1000000-0000-0000-0000-000000000101',
-  'unit-group Semantic Search returns the visible public row'
+select throws_ok(
+  $$select * from api.semantic_search_sources_v1('not-a-vector', '{}', 0.5, 20, 'tg')$$,
+  '42501',
+  'permission denied for function semantic_search_sources_v1',
+  'legacy source Semantic Search facade remains present but is closed by the API contract'
+);
+
+select throws_ok(
+  $$select * from api.semantic_search_unitgroups_v1('not-a-vector', '{}', 0.5, 20, 'tg')$$,
+  '42501',
+  'permission denied for function semantic_search_unitgroups_v1',
+  'legacy unit-group Semantic Search facade remains present but is closed by the API contract'
 );
 
 with query_vector(value) as (
@@ -535,22 +548,18 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', 'a1000000-0000-0000-0000-000000000297', true);
 select set_config('request.jwt.claims', '{"role":"authenticated","sub":"a1000000-0000-0000-0000-000000000297"}', true);
 
-with query_vector(value) as (
-  select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
-)
-select is(
-  (select array_agg(id::text order by id) from api.semantic_search_contacts_v1((select value from query_vector), '{}', 0.5, 20, 'my')),
-  array['ca000000-0000-0000-0000-000000000201']::text[],
-  'my Semantic Search returns only rows owned by the authenticated actor'
+select throws_ok(
+  $$select * from api.semantic_search_contacts_v1('not-a-vector', '{}', 0.5, 20, 'my')$$,
+  '42501',
+  'permission denied for function semantic_search_contacts_v1',
+  'legacy my-data Semantic Search facade remains closed after the API contract cutover'
 );
 
-with query_vector(value) as (
-  select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
-)
-select is(
-  (select array_agg(id::text order by id) from api.semantic_search_contacts_v1((select value from query_vector), '{}', 0.5, 20, 'te', null, 'c3000000-0000-0000-0000-000000000297')),
-  array['ca000000-0000-0000-0000-000000000202']::text[],
-  'team Semantic Search returns only rows from the selected team the actor belongs to'
+select throws_ok(
+  $$select * from api.semantic_search_contacts_v1('not-a-vector', '{}', 0.5, 20, 'te', null, 'c3000000-0000-0000-0000-000000000297')$$,
+  '42501',
+  'permission denied for function semantic_search_contacts_v1',
+  'legacy team Semantic Search facade remains closed after the API contract cutover'
 );
 
 with query_vector(value) as (

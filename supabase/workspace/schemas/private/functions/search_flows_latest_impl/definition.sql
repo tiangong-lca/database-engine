@@ -35,7 +35,7 @@ begin
   if cardinality(escaped_query_terms) = 0 then
     escaped_query_terms := private.pgroonga_escape_query_terms(array[query_text]);
   end if;
-  text_match_clause := 'where f.extracted_md &@~| $14';
+  text_match_clause := 'where f.search_text &@~| $14';
 
   flow_type := nullif(btrim(filter_condition_jsonb->>'flowType'), '');
   if flow_type is not null then

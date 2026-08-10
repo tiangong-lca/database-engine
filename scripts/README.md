@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-10
-lastReviewedCommit: 131c3b061c3da1e0f62e34d049b399fad43fa634
-lastReviewedNote: "Reviewed for Issue #459: the existing exact-local schema workspace and Data API type commands regenerate the seven nullable text[] search_text columns, reviewed-row derivative guard, and canonical Search RPC contract; script behavior is unchanged."
+lastReviewedAt: 2026-08-11
+lastReviewedCommit: 91a1f96
+lastReviewedNote: "Reviewed for Issue #460: the existing exact-local schema workspace and Data API type commands regenerate the seven nullable text[] search_text columns, the seven Database B PGroonga indexes, the fail-closed source-switch gate, the reviewed-row derivative guard, and the canonical Search RPC contract; script behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

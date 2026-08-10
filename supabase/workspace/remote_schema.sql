@@ -168,7 +168,7 @@ begin
              d.user_id,
              pgroonga_score(d.tableoid, d.ctid) as search_score
       from %1$s d
-      where d.extracted_md &@~ $1
+      where d.search_text &@~ $1
     ),
     matched_ids as (
       select d.id, max(d.search_score) as search_score
@@ -36961,7 +36961,7 @@ $$;
 ALTER FUNCTION "private"."hybrid_search_flows_v2_impl"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "private"."hybrid_search_flows_v2_impl"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) IS 'Private Flow Hybrid v2 implementation using one extracted_md lexical weight plus embedding_ft semantic weight.';
+COMMENT ON FUNCTION "private"."hybrid_search_flows_v2_impl"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) IS 'Private Flow Hybrid v2 implementation using one search_text lexical weight plus embedding_ft semantic weight.';
 
 
 
@@ -37075,7 +37075,7 @@ $$;
 ALTER FUNCTION "private"."hybrid_search_lifecyclemodels_v2_impl"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "private"."hybrid_search_lifecyclemodels_v2_impl"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) IS 'Private LifecycleModel Hybrid v2 implementation using one extracted_md lexical weight plus embedding_ft semantic weight.';
+COMMENT ON FUNCTION "private"."hybrid_search_lifecyclemodels_v2_impl"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) IS 'Private LifecycleModel Hybrid v2 implementation using one search_text lexical weight plus embedding_ft semantic weight.';
 
 
 
@@ -37192,7 +37192,7 @@ $$;
 ALTER FUNCTION "private"."hybrid_search_processes_v2_impl"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "private"."hybrid_search_processes_v2_impl"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) IS 'Private Process Hybrid v2 implementation using one extracted_md lexical weight plus embedding_ft semantic weight.';
+COMMENT ON FUNCTION "private"."hybrid_search_processes_v2_impl"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) IS 'Private Process Hybrid v2 implementation using one search_text lexical weight plus embedding_ft semantic weight.';
 
 
 
@@ -37272,7 +37272,7 @@ begin
   end;
   text_match_clause := case
     when cardinality(escaped_query_terms) = 0 then 'false'
-    else 'd.extracted_md &@~| $1'
+    else 'd.search_text &@~| $1'
   end;
 
   hybrid_sql := format(
@@ -37383,7 +37383,7 @@ $_$;
 ALTER FUNCTION "private"."hybrid_search_simple_dataset_v2"("p_table" "regclass", "query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "private"."hybrid_search_simple_dataset_v2"("p_table" "regclass", "query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") IS 'Private allowlisted foundation-dataset Hybrid v2 implementation using extracted_md plus embedding_ft.';
+COMMENT ON FUNCTION "private"."hybrid_search_simple_dataset_v2"("p_table" "regclass", "query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") IS 'Private allowlisted foundation-dataset Hybrid v2 implementation using search_text plus embedding_ft.';
 
 
 
@@ -41234,7 +41234,7 @@ begin
   if cardinality(escaped_query_terms) = 0 then
     escaped_query_terms := private.pgroonga_escape_query_terms(array[query_text]);
   end if;
-  text_match_clause := 'where f.extracted_md &@~| $14';
+  text_match_clause := 'where f.search_text &@~| $14';
 
   flow_type := nullif(btrim(filter_condition_jsonb->>'flowType'), '');
   if flow_type is not null then
@@ -41502,7 +41502,7 @@ begin
   if cardinality(escaped_query_terms) = 0 then
     escaped_query_terms := private.pgroonga_escape_query_terms(array[query_text]);
   end if;
-  text_match_clause := 'where l.extracted_md &@~| $10';
+  text_match_clause := 'where l.search_text &@~| $10';
 
   if exact_query_id is not null then
     return query
@@ -41816,7 +41816,7 @@ begin
   if cardinality(escaped_query_terms) = 0 then
     escaped_query_terms := private.pgroonga_escape_query_terms(array[query_text]);
   end if;
-  text_match_clause := 'where p.extracted_md &@~| $11';
+  text_match_clause := 'where p.search_text &@~| $11';
 
   if exact_query_id is not null then
     return query
@@ -41943,6 +41943,72 @@ $_$;
 
 
 ALTER FUNCTION "private"."search_processes_latest_v2_impl"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "private"."search_text_cutover_gate_v1"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  v_total bigint := 0;
+  v_missing bigint := 0;
+  v_tables jsonb := '[]'::jsonb;
+begin
+  with coverage(table_name, total_rows, missing_rows) as (
+    select 'contacts', count(*)::bigint, count(*) filter (where search_text is null)::bigint
+    from public.contacts
+    union all
+    select 'flowproperties', count(*)::bigint, count(*) filter (where search_text is null)::bigint
+    from public.flowproperties
+    union all
+    select 'flows', count(*)::bigint, count(*) filter (where search_text is null)::bigint
+    from public.flows
+    union all
+    select 'lifecyclemodels', count(*)::bigint, count(*) filter (where search_text is null)::bigint
+    from public.lifecyclemodels
+    union all
+    select 'processes', count(*)::bigint, count(*) filter (where search_text is null)::bigint
+    from public.processes
+    union all
+    select 'sources', count(*)::bigint, count(*) filter (where search_text is null)::bigint
+    from public.sources
+    union all
+    select 'unitgroups', count(*)::bigint, count(*) filter (where search_text is null)::bigint
+    from public.unitgroups
+  )
+  select
+    coalesce(sum(coverage.total_rows), 0)::bigint,
+    coalesce(sum(coverage.missing_rows), 0)::bigint,
+    coalesce(
+      jsonb_agg(
+        jsonb_build_object(
+          'table', coverage.table_name,
+          'total', coverage.total_rows,
+          'missing_search_text', coverage.missing_rows
+        )
+        order by coverage.table_name
+      ),
+      '[]'::jsonb
+    )
+  into v_total, v_missing, v_tables
+  from coverage;
+
+  return jsonb_build_object(
+    'fresh_database', v_total = 0,
+    'ready', v_total = 0 or v_missing = 0,
+    'total_rows', v_total,
+    'missing_rows', v_missing,
+    'tables', v_tables
+  );
+end
+$$;
+
+
+ALTER FUNCTION "private"."search_text_cutover_gate_v1"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "private"."search_text_cutover_gate_v1"() IS 'Database B gate: an empty new/test database is allowed; an existing environment must have non-NULL search_text for every row in all seven dataset tables before lexical source switch.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."semantic_flow_candidates"("query_embedding" "text", "filter_condition" "text" DEFAULT ''::"text", "match_threshold" double precision DEFAULT 0.5, "match_count" integer DEFAULT 20, "data_source" "text" DEFAULT 'tg'::"text") RETURNS TABLE("rank" bigint, "id" "uuid", "distance" double precision)
@@ -58711,6 +58777,10 @@ CREATE INDEX "contacts_json_idx" ON "public"."contacts" USING "gin" ("json");
 
 
 
+CREATE INDEX "contacts_search_text_pgroonga" ON "public"."contacts" USING "pgroonga" ("search_text") WITH ("tokenizer"='TokenBigram', "normalizer"='NormalizerAuto');
+
+
+
 CREATE INDEX "contacts_state_code_id_version_modified_at_idx" ON "public"."contacts" USING "btree" ("state_code", "id", "version" DESC, "modified_at" DESC);
 
 
@@ -58760,6 +58830,10 @@ CREATE INDEX "flowproperties_json_refobjectid" ON "public"."flowproperties" USIN
 
 
 CREATE INDEX "flowproperties_modified_at_idx" ON "public"."flowproperties" USING "btree" ("modified_at");
+
+
+
+CREATE INDEX "flowproperties_search_text_pgroonga" ON "public"."flowproperties" USING "pgroonga" ("search_text") WITH ("tokenizer"='TokenBigram', "normalizer"='NormalizerAuto');
 
 
 
@@ -58832,6 +58906,10 @@ CREATE INDEX "flows_public_latest_keys_cover_idx" ON "public"."flows" USING "btr
 
 
 CREATE INDEX "flows_review_id_idx" ON "public"."flows" USING "btree" ("review_id");
+
+
+
+CREATE INDEX "flows_search_text_pgroonga" ON "public"."flows" USING "pgroonga" ("search_text") WITH ("tokenizer"='TokenBigram', "normalizer"='NormalizerAuto');
 
 
 
@@ -58931,6 +59009,10 @@ CREATE INDEX "lifecyclemodels_public_latest_keys_cover_idx" ON "public"."lifecyc
 
 
 
+CREATE INDEX "lifecyclemodels_search_text_pgroonga" ON "public"."lifecyclemodels" USING "pgroonga" ("search_text") WITH ("tokenizer"='TokenBigram', "normalizer"='NormalizerAuto');
+
+
+
 CREATE INDEX "lifecyclemodels_state_code_id_version_modified_at_idx" ON "public"."lifecyclemodels" USING "btree" ("state_code", "id", "version" DESC, "modified_at" DESC);
 
 
@@ -58999,6 +59081,10 @@ CREATE INDEX "processes_rule_verification_idx" ON "public"."processes" USING "bt
 
 
 
+CREATE INDEX "processes_search_text_pgroonga" ON "public"."processes" USING "pgroonga" ("search_text") WITH ("tokenizer"='TokenBigram', "normalizer"='NormalizerAuto');
+
+
+
 CREATE INDEX "processes_state_code_id_version_modified_at_idx" ON "public"."processes" USING "btree" ("state_code", "id", "version" DESC, "modified_at" DESC);
 
 
@@ -59055,6 +59141,10 @@ CREATE INDEX "sources_modified_at_idx" ON "public"."sources" USING "btree" ("mod
 
 
 
+CREATE INDEX "sources_search_text_pgroonga" ON "public"."sources" USING "pgroonga" ("search_text") WITH ("tokenizer"='TokenBigram', "normalizer"='NormalizerAuto');
+
+
+
 CREATE INDEX "sources_state_code_id_version_modified_at_idx" ON "public"."sources" USING "btree" ("state_code", "id", "version" DESC, "modified_at" DESC);
 
 
@@ -59100,6 +59190,10 @@ CREATE INDEX "unitgroups_json_referencetoreferenceunit" ON "public"."unitgroups"
 
 
 CREATE INDEX "unitgroups_modified_at_idx" ON "public"."unitgroups" USING "btree" ("modified_at");
+
+
+
+CREATE INDEX "unitgroups_search_text_pgroonga" ON "public"."unitgroups" USING "pgroonga" ("search_text") WITH ("tokenizer"='TokenBigram', "normalizer"='NormalizerAuto');
 
 
 
@@ -62814,6 +62908,10 @@ GRANT ALL ON FUNCTION "private"."search_processes_latest_impl"("query_text" "tex
 REVOKE ALL ON FUNCTION "private"."search_processes_latest_v2_impl"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."search_processes_latest_v2_impl"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) TO "service_role";
 GRANT ALL ON FUNCTION "private"."search_processes_latest_v2_impl"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."search_text_cutover_gate_v1"() FROM PUBLIC;
 
 
 
