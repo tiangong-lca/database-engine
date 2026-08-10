@@ -28,7 +28,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 49f582ee6226e129f623fd7840c113414490f9a7
+lastReviewedCommit: 04b8f3d31fca78e82509208e6369a7440b502550
 lastReviewedNote: "Updated for Issue #450 while retaining Issue #448: blocked shared-scan reuse has no numerical snapshot, new requests use the revised scanner cache identity, and package authorization remains API-owned."
 related:
   - ../../AGENTS.md
