@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
 lastReviewedCommit: 54d068742efb8b148f6a5cdfb981419e39a1a839
-lastReviewedNote: "Reviewed for Issue #459: the exact-local snapshot regenerates additive search_text columns and canonical Search RPC types deterministically; workspace behavior is unchanged."
+lastReviewedNote: "Reviewed for Issue #459: the exact-local snapshot regenerates the seven nullable text[] search_text columns, the reviewed-row derivative guard, and canonical Search RPC types deterministically; workspace behavior is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

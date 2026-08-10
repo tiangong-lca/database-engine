@@ -31,10 +31,12 @@ select extensions.is(
    where table_schema = 'public'
      and table_name in ('contacts', 'flowproperties', 'flows', 'lifecyclemodels', 'processes', 'sources', 'unitgroups')
      and column_name = 'search_text'
+     and data_type = 'ARRAY'
+     and udt_name = '_text'
      and is_nullable = 'YES'
      and column_default is null),
   7::bigint,
-  'all seven search_text columns are nullable and have no default'
+  'all seven search_text columns are nullable text[] values with no default'
 );
 
 select extensions.ok(

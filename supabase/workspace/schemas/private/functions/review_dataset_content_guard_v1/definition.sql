@@ -8,10 +8,10 @@ begin
       is distinct from 'on'
     and (
       to_jsonb(old)
-        - array['state_code', 'review_id', 'reviews', 'modified_at']
+        - array['extracted_md', 'search_text', 'embedding_ft', 'embedding_ft_at']
       is distinct from
       to_jsonb(new)
-        - array['state_code', 'review_id', 'reviews', 'modified_at']
+        - array['extracted_md', 'search_text', 'embedding_ft', 'embedding_ft_at']
     ) then
     raise exception using
       errcode = '55000',

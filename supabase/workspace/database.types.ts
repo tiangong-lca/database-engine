@@ -2805,7 +2805,7 @@ export type Database = {
           review_id: string | null
           reviews: Json | null
           rule_verification: boolean | null
-          search_text: string | null
+          search_text: string[] | null
           state_code: number | null
           team_id: string | null
           user_id: string | null
@@ -2823,7 +2823,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
-          search_text?: string | null
+          search_text?: string[] | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2841,7 +2841,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
-          search_text?: string | null
+          search_text?: string[] | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2862,7 +2862,7 @@ export type Database = {
           review_id: string | null
           reviews: Json | null
           rule_verification: boolean | null
-          search_text: string | null
+          search_text: string[] | null
           state_code: number | null
           team_id: string | null
           user_id: string | null
@@ -2880,7 +2880,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
-          search_text?: string | null
+          search_text?: string[] | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2898,7 +2898,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
-          search_text?: string | null
+          search_text?: string[] | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2919,7 +2919,7 @@ export type Database = {
           review_id: string | null
           reviews: Json | null
           rule_verification: boolean | null
-          search_text: string | null
+          search_text: string[] | null
           state_code: number | null
           team_id: string | null
           user_id: string | null
@@ -2937,7 +2937,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
-          search_text?: string | null
+          search_text?: string[] | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2955,7 +2955,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
-          search_text?: string | null
+          search_text?: string[] | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -3039,7 +3039,7 @@ export type Database = {
           modified_at: string | null
           reviews: Json | null
           rule_verification: boolean | null
-          search_text: string | null
+          search_text: string[] | null
           state_code: number | null
           team_id: string | null
           user_id: string | null
@@ -3057,7 +3057,7 @@ export type Database = {
           modified_at?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
-          search_text?: string | null
+          search_text?: string[] | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -3075,7 +3075,7 @@ export type Database = {
           modified_at?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
-          search_text?: string | null
+          search_text?: string[] | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -3097,7 +3097,7 @@ export type Database = {
           review_id: string | null
           reviews: Json | null
           rule_verification: boolean | null
-          search_text: string | null
+          search_text: string[] | null
           state_code: number | null
           team_id: string | null
           user_id: string | null
@@ -3116,7 +3116,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
-          search_text?: string | null
+          search_text?: string[] | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -3135,7 +3135,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
-          search_text?: string | null
+          search_text?: string[] | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -3156,7 +3156,7 @@ export type Database = {
           review_id: string | null
           reviews: Json | null
           rule_verification: boolean | null
-          search_text: string | null
+          search_text: string[] | null
           state_code: number | null
           team_id: string | null
           user_id: string | null
@@ -3174,7 +3174,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
-          search_text?: string | null
+          search_text?: string[] | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -3192,7 +3192,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
-          search_text?: string | null
+          search_text?: string[] | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -3213,7 +3213,7 @@ export type Database = {
           review_id: string | null
           reviews: Json | null
           rule_verification: boolean | null
-          search_text: string | null
+          search_text: string[] | null
           state_code: number | null
           team_id: string | null
           user_id: string | null
@@ -3231,7 +3231,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
-          search_text?: string | null
+          search_text?: string[] | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -3249,7 +3249,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
-          search_text?: string | null
+          search_text?: string[] | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null

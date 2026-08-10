@@ -29,7 +29,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
 lastReviewedCommit: a8072e018efc2f1f8c245f8fec6ca3d2148bbcbf
-lastReviewedNote: "Updated for Issue #459: Database A adds nullable search_text projections, fourteen canonical Search RPCs, and bounded enqueue only; extracted_md remains the lexical source. Historical backfill is the workspace#565-coordinated Release 1 operational gate after Edge double-write deployment, not migration work; Database B owns index/source switch, Database C old-index cleanup, and Database D old-RPC cleanup."
+lastReviewedNote: "Updated for Issue #459: Database A adds nullable text[] search_text projections, preserves legacy scalar values losslessly during migration, restricts reviewed-row writes to four derived fields, and provides bounded enqueue only; extracted_md remains the lexical source. Historical backfill is the workspace#565-coordinated Release 1 operational gate after Edge double-write deployment, not migration work; Database B owns index/source switch, Database C old-index cleanup, and Database D old-RPC cleanup."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -182,6 +182,16 @@ It refuses to run while a guarded derivative rebuild or non-FT embedding job is
 active and uses `RESTRICT` for dependency-sensitive drops. `extracted_md`,
 `embedding_ft`, `embedding_ft_at`, their seven PGroonga indexes, and their HNSW
 indexes remain the supported derivative contract.
+
+The Release 1 `search_text` projection is nullable `text[]` on all seven
+dataset tables and remains an Edge-owned derivative until Database B switches
+the search source. The forward type migration preserves a non-NULL legacy
+scalar as one complete array element, including embedded newlines; the later
+service/Edge backfill replaces that compatibility value with the full
+normalized projection. State 20/100 rows keep authored content, review
+metadata, and `modified_at` immutable outside the existing review-controlled
+command context; only `extracted_md`, `search_text`, `embedding_ft`, and
+`embedding_ft_at` are derivative-write exceptions.
 
 Contacts, FlowProperties, Sources, and UnitGroups otherwise follow the same
 durable search-derivative shape as the established Process, Flow, and

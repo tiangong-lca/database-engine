@@ -1,0 +1,1 @@
+COMMENT ON COLUMN "public"."contacts"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. A legacy non-NULL text value is preserved as one array element during migration; the later backfill replaces it with the complete projection. Not a lexical search source until Database B.';
