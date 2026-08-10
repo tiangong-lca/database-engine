@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 8fa104141ff1fb30731acd6159cd6f144943606a
-lastReviewedNote: "Reviewed for Issue #442 main-to-dev reconciliation: database ownership, migration source-of-truth, the production hotfix path, and the include-all persistent-dev deployment contract remain unchanged."
+lastReviewedCommit: bf6145597e9964125b26910a21a5b522db77fbe8
+lastReviewedNote: "Reviewed for Issue #446: active Root Reviews share a re-entered Reference Review through append-only scope repair; the existing repo ownership and delivery contract remains unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

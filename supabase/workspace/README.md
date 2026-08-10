@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 24ba3e64eedd8c557277e9fe62ee6f86e8cc4d83
-lastReviewedNote: "Reviewed for Issue #442: the exact-local canonical cutoff snapshot regenerates deterministically with no Data API type drift; workspace behavior is unchanged."
+lastReviewedCommit: bf6145597e9964125b26910a21a5b522db77fbe8
+lastReviewedNote: "Reviewed for Issue #446: the exact-local review helper snapshot regenerates deterministically with no Data API type drift; workspace behavior is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

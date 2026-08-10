@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(19);
+select plan(21);
 
 select ok(
   pg_catalog.strpos(
@@ -500,8 +500,35 @@ select is(
       select first_root_review_id from issue439_dependency_cycle
     )
   ),
-  (select rejected_reference_id from issue439_dependency_cycle),
-  'the earlier Root Review retains its immutable historical rejected relationship'
+  (
+    select root_review.current_reference_review_ids[1]
+    from private.reviews as root_review
+    where root_review.id = (
+      select (result #>> '{data,reviewId}')::uuid
+      from issue439_dependency_root_two_result
+    )
+  ),
+  'the earlier active Root Review is rebound to the shared new Reference Review'
+);
+
+select is(
+  (
+    select item.value->>'reference_review_id'
+    from private.reviews as root_review
+    cross join lateral pg_catalog.jsonb_array_elements(
+      root_review.scope_history->'snapshots'
+    ) as snapshot(value)
+    cross join lateral pg_catalog.jsonb_array_elements(
+      snapshot.value->'items'
+    ) as item(value)
+    where root_review.id = (
+      select first_root_review_id from issue439_dependency_cycle
+    )
+      and (snapshot.value->>'version_no')::integer = 1
+      and item.value->>'item_kind' = 'reference'
+  ),
+  (select rejected_reference_id::text from issue439_dependency_cycle),
+  'the earlier Root Review preserves the rejected relationship in its historical snapshot'
 );
 
 set local role authenticated;
@@ -538,6 +565,18 @@ select is(
     )
   ),
   'active-review deduplication remains unchanged after the rejected retry'
+);
+
+select is(
+  (
+    select (root_review.scope_history->>'current_version')::integer
+    from private.reviews as root_review
+    where root_review.id = (
+      select first_root_review_id from issue439_dependency_cycle
+    )
+  ),
+  2,
+  'later reuse does not append a duplicate repair snapshot to the earlier Root Review'
 );
 
 select is(

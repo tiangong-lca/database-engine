@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 24ba3e64eedd8c557277e9fe62ee6f86e8cc4d83
-lastReviewedNote: "已为 Issue #442 复核：canonical cutoff 的 exact-local schema 快照可确定性重建，且 Data API 类型无漂移，workspace 行为不变。"
+lastReviewedCommit: bf6145597e9964125b26910a21a5b522db77fbe8
+lastReviewedNote: "已为 Issue #446 复核：审核 helper 的 exact-local schema 快照可确定性重建，且 Data API 类型无漂移，workspace 行为不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

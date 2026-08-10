@@ -80,7 +80,7 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  202::bigint,
+  203::bigint,
   'private contains existing helpers plus all reviewed internal functions'
 );
 

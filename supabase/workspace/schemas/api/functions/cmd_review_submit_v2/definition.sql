@@ -217,6 +217,7 @@ begin
       select root_review.*
       from private.reviews as root_review
       where root_review.review_kind = 'root'
+        and root_review.state_code in (0, 1)
         and root_review.current_reference_review_ids && v_old_reference_ids
       order by root_review.id
       for update
@@ -439,6 +440,14 @@ begin
         v_target.table_name,
         v_target.dataset_row,
         v_target_checksum,
+        v_actor
+      );
+
+      perform private.review_rebind_active_roots_to_reference_v1(
+        v_target.table_name,
+        v_target.dataset_row,
+        v_target_checksum,
+        v_reference.id,
         v_actor
       );
 

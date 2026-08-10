@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-10"
-lastReviewedCommit: "8fa104141ff1fb30731acd6159cd6f144943606a"
-lastReviewedNote: "Reviewed for Issue #442 main-to-dev hotfix reconciliation: current routing and ownership remain correct; the older-timestamped public hotfix stays migration/test owned and no-ops after the dev private-schema cutover."
+lastReviewedCommit: "bf6145597e9964125b26910a21a5b522db77fbe8"
+lastReviewedNote: "Reviewed for Issue #446: active-root Reference Review rebinding remains governed by the existing migration, SQL-test, and generated-workspace routes; no routing rule changes are required."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

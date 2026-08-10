@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-09
-lastReviewedCommit: cab102d900d1be38a42666ee0b6025aad6503ff1
-lastReviewedNote: "Reviewed for Issue #439: unchanged rejected Reference Review resubmission remains within the API/private function migration boundary and does not change repository architecture."
+lastReviewedAt: 2026-08-10
+lastReviewedCommit: bf6145597e9964125b26910a21a5b522db77fbe8
+lastReviewedNote: "Reviewed for Issue #446: shared active-root rebinding remains within the API/private review function boundary and does not change repository architecture."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."review_rebind_active_roots_to_reference_v1"("p_target_table" "text", "p_target_row" "jsonb", "p_checksum" "text", "p_reference_review_id" "uuid", "p_actor" "uuid") IS 'Appends reference_repair snapshots to active roots that still point at a rejected review for the same target identity.';
