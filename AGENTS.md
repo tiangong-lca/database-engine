@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: bc21cd0857636e465ee8f69bf33ddcce1b563a98
-lastReviewedNote: "Reviewed for Issue #442: canonical cutoff Scope Closure normalization follows the existing migration, SQL-test, generated-workspace, and dev-to-main delivery contract; no governance change is required."
+lastReviewedCommit: 8fa104141ff1fb30731acd6159cd6f144943606a
+lastReviewedNote: "Reviewed for Issue #442 main-to-dev reconciliation: database ownership, migration source-of-truth, the production hotfix path, and the include-all persistent-dev deployment contract remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
