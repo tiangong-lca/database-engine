@@ -2,7 +2,7 @@ begin;
 
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
-select plan(2);
+select plan(3);
 
 insert into auth.users (
   instance_id, id, aud, role, email, encrypted_password, email_confirmed_at,
@@ -19,13 +19,14 @@ values ('30830000-0000-4000-8000-000000000001', '{}', null);
 
 insert into public.worker_jobs (
   id, job_kind, worker_runtime, worker_queue, requester_type, requested_by,
-  visibility, payload_schema_version, payload_json, status, created_at
+  visibility, payload_schema_version, payload_json, status, progress,
+  created_at, updated_at
 ) values (
   '30830000-0000-4000-8000-000000000101',
   'lcia.scope_closure_check', 'calculator', 'solver', 'operator',
   '30830000-0000-4000-8000-000000000001', 'operator',
-  'lcia.scope_closure_check.request.v1', '{}', 'completed',
-  now() - interval '8 days'
+  'lcia.scope_closure_check.request.v1', '{}', 'completed', 0.84,
+  now() - interval '8 days', now() - interval '8 days'
 );
 
 insert into public.worker_job_artifacts (
@@ -105,6 +106,15 @@ select is(
   ),
   3::bigint,
   'canonical PR base contains all three historical evidence artifacts'
+);
+select is(
+  (
+    select progress::text
+    from public.worker_jobs
+    where id = '30830000-0000-4000-8000-000000000101'
+  ),
+  '0.84',
+  'canonical PR base preserves a historical completed job with partial progress'
 );
 
 select * from finish();

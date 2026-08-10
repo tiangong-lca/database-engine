@@ -199,6 +199,40 @@ select is(public.svc_lcia_scope_closure_finalize_reused_scan(
 )->>'ok','true','second run finalizes with a target-owned report');
 select ok((select a.certificate_hash<>b.certificate_hash and b.reused_from_check_id=a.id and b.report_artifact_id='c7220000-0000-4000-8000-000000000202'::uuid and b.result_summary->>'scan'='reused-target' from public.lcia_scope_closure_checks a join public.lcia_scope_closure_checks b on true where a.request_idempotency_token='closure-e2e-a' and b.request_idempotency_token='closure-e2e-b'),'reuse creates a distinct certificate, report and target summary with source-run linkage');
 select ok((select public.lcia_scope_closure_evidence_usable(b) from public.lcia_scope_closure_checks b where b.request_idempotency_token='closure-e2e-b'),'reused certificate remains build-usable with target report and source machine/bundle evidence');
+select ok((
+  select public.lcia_scope_closure_bundle_binding_matches(target, bundle)
+  from public.lcia_scope_closure_checks target
+  join public.worker_job_artifacts bundle
+    on bundle.id=target.closure_bundle_artifact_id
+  where target.request_idempotency_token='closure-e2e-b'
+),'reused certificate accepts the exact source-owned Closure Bundle lineage');
+select ok((
+  select not public.lcia_scope_closure_bundle_binding_matches(
+    target,
+    null::public.worker_job_artifacts
+  )
+  from public.lcia_scope_closure_checks target
+  where target.request_idempotency_token='closure-e2e-b'
+),'reused certificate fails closed when the Closure Bundle row is absent');
+update public.worker_job_artifacts bundle
+set metadata=jsonb_set(bundle.metadata,'{closureCheckId}',to_jsonb(target.id::text),true)
+from public.lcia_scope_closure_checks target
+where target.request_idempotency_token='closure-e2e-b'
+  and bundle.id=target.closure_bundle_artifact_id;
+select ok((
+  select not public.lcia_scope_closure_bundle_binding_matches(target, bundle)
+  from public.lcia_scope_closure_checks target
+  join public.worker_job_artifacts bundle
+    on bundle.id=target.closure_bundle_artifact_id
+  where target.request_idempotency_token='closure-e2e-b'
+),'reused certificate rejects Bundle metadata forged to claim target ownership');
+update public.worker_job_artifacts bundle
+set metadata=jsonb_set(bundle.metadata,'{closureCheckId}',to_jsonb(source.id::text),true)
+from public.lcia_scope_closure_checks target
+join public.lcia_scope_closure_checks source
+  on source.id=target.reused_from_check_id
+where target.request_idempotency_token='closure-e2e-b'
+  and bundle.id=target.closure_bundle_artifact_id;
 
 -- Operator visibility is strictly owner-scoped.  A second valid DPM cannot
 -- use SECURITY DEFINER reads, report lookup, or the task feed to enumerate
@@ -383,6 +417,8 @@ select ok((select count(*)=1 from public.worker_jobs j join closure_build_ids b 
 insert into closure_build_ids select 'build-b',(r->'data'->>'buildId')::uuid from (select public.cmd_lcia_result_build_request_v2('frozen build two',null,'subset',null,'[]'::jsonb,'closure-e2e-build-b',(select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),(select requested_scope_hash from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),(select policy_fingerprint from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'{}') r) q;
 select ok((select count(*)=2 and count(distinct subject_id)=2 from public.worker_jobs where job_kind='lcia_result.package_build' and payload_json->>'closure_check_id'=(select id::text from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')),'two explicit Build V2 requests create independent jobs bound to the same certificate');
 insert into closure_build_ids select 'build-revoked',(r->'data'->>'buildId')::uuid from (select public.cmd_lcia_result_build_request_v2('revocation fence build',null,'subset',null,'[]'::jsonb,'closure-e2e-build-revoked',(select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),(select requested_scope_hash from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),(select policy_fingerprint from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'{}') r) q;
+insert into closure_build_ids select 'build-reused',(r->'data'->>'buildId')::uuid from (select public.cmd_lcia_result_build_request_v2('reused certificate build',null,'subset',null,'[]'::jsonb,'closure-e2e-build-reused',(select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),(select requested_scope_hash from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),(select policy_fingerprint from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),'{}') r) q;
+select ok((select count(*)=1 from public.worker_jobs j join closure_build_ids b on j.subject_id=b.id where b.label='build-reused' and j.job_kind='lcia_result.package_build' and j.payload_json->>'closure_check_id'=(select id::text from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b')),'reused certificate passes calculation admission and enqueues a target-bound build');
 
 -- Exercise the real package-ready boundary using the certificate's pinned
 -- snapshot and output rows.  This is intentionally not a trigger-only unit
@@ -393,6 +429,8 @@ insert into public.lca_results (id,job_id,snapshot_id,payload,diagnostics,artifa
 values ('c7220000-0000-4000-8000-000000000401',(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')),(select snapshot_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),'{}'::jsonb,'{}'::jsonb,'s3://test/closure-e2e-result.json',repeat('c',64),128,'application/json',(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')),false);
 insert into public.lca_latest_all_unit_results (id,snapshot_id,job_id,result_id,query_artifact_url,query_artifact_sha256,query_artifact_byte_size,query_artifact_format,status,worker_job_id)
 values ('c7220000-0000-4000-8000-000000000402',(select snapshot_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a'),(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')),'c7220000-0000-4000-8000-000000000401','s3://test/closure-e2e-query.json',repeat('d',64),64,'application/json','ready',(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a')));
+insert into public.lca_results (id,job_id,snapshot_id,payload,diagnostics,artifact_url,artifact_sha256,artifact_byte_size,artifact_format,worker_job_id,is_pinned)
+values ('c7220000-0000-4000-8000-000000000404',(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-reused')),(select snapshot_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),'{}'::jsonb,'{}'::jsonb,'s3://test/closure-e2e-reused-result.json',repeat('e',64),128,'application/json',(select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-reused')),false);
 
 update public.worker_jobs
 set status='running',lease_token=gen_random_uuid(),lease_expires_at=now()+interval '10 minutes',started_at=coalesce(started_at,now())
@@ -435,6 +473,21 @@ select ok((
     (select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-a'))
   ) result) binding
 ),'after-lease binding returns the authoritative snapshot, bundle, and exact process axis without extending the solver contract');
+select ok((
+  select result->>'ok'='true'
+     and result#>>'{data,closureCheckId}'=(
+           select id::text from public.lcia_scope_closure_checks
+           where request_idempotency_token='closure-e2e-b'
+         )
+     and result#>>'{data,closureBundleArtifactId}'=(
+           select closure_bundle_artifact_id::text
+           from public.lcia_scope_closure_checks
+           where request_idempotency_token='closure-e2e-a'
+         )
+  from (select public.svc_lcia_scope_closure_build_binding(
+    (select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-reused'))
+  ) result) binding
+),'after-lease binding accepts the target certificate with its exact source-owned Bundle');
 
 update public.worker_jobs
 set payload_json=jsonb_set(payload_json,'{lcia_method_set}','[]'::jsonb)
@@ -479,6 +532,29 @@ select ok((
   join public.lcia_scope_closure_checks c on c.id=p.closure_check_id
   where p.id=(select id from closure_e2e_package_ids where label='package-a')
 ),'mark_ready persists closure check, certificate hash and snapshot hash from the bound build');
+insert into closure_e2e_package_ids
+select 'package-reused',(r->'data'->>'packageId')::uuid
+from (
+  select public.cmd_lcia_result_package_mark_ready(
+    (select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-reused')),
+    'closure-e2e-package-reused',
+    (select snapshot_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),
+    'c7220000-0000-4000-8000-000000000404',
+    null,
+    '{}'::jsonb,'{}'::jsonb,jsonb_build_object('persistenceMode','pinned'),jsonb_build_array('climate-change'),'climate-change','closure-e2e-package-reused-result','{}'::jsonb
+  ) r
+) q;
+select ok((
+  select p.closure_check_id=target.id
+     and p.closure_certificate_hash=target.certificate_hash
+     and p.closure_snapshot_hash=source.snapshot_hash
+     and target.closure_bundle_artifact_id=source.closure_bundle_artifact_id
+     and target.report_artifact_id<>source.report_artifact_id
+  from public.lcia_result_packages p
+  join public.lcia_scope_closure_checks target on target.id=p.closure_check_id
+  join public.lcia_scope_closure_checks source on source.id=target.reused_from_check_id
+  where p.id=(select id from closure_e2e_package_ids where label='package-reused')
+),'mark_ready publishes a Calculation Bundle bound to the target certificate and exact source evidence');
 select is(public.cmd_lcia_result_package_mark_ready(
   (select id from public.worker_jobs where subject_id=(select id from closure_build_ids where label='build-b')),
   'closure-e2e-package-wrong-snapshot',
@@ -647,7 +723,7 @@ select is((select count(*) from util.list_lca_snapshot_gc_candidates(
   interval '1 day',interval '1 day',now(),10,10,100000
 ) where snapshot_id=(select snapshot_id from closure_e2e_gc_refs)),0::bigint,'strong result/package references keep a revoked snapshot out of GC candidates');
 delete from public.lcia_result_packages
-where id=(select id from closure_e2e_package_ids where label='package-a');
+where id in (select id from closure_e2e_package_ids);
 delete from public.lca_latest_all_unit_results
 where snapshot_id=(select snapshot_id from closure_e2e_gc_refs);
 delete from public.lca_results
