@@ -46314,7 +46314,10 @@ begin
   if v_execution.id is null
      or v_execution.status <> 'completed'
      or v_execution.completed_check_id <> v_source.id
-     or v_execution.numerical_snapshot_id is distinct from v_source.snapshot_id
+     or (
+       v_source.status = 'passed'
+       and v_execution.numerical_snapshot_id is distinct from v_source.snapshot_id
+     )
      or v_source.status not in ('passed', 'blocked')
      or v_source.scan_completeness <> 'complete'
      or v_source.requested_scope_hash <> v_target.requested_scope_hash

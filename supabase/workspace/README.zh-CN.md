@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 4f6607c7778827556fb29f8b62bd85bf98edf19a
+lastReviewedCommit: 04b8f3d31fca78e82509208e6369a7440b502550
 lastReviewedNote: "已为 database-engine Issue #448 / workspace Issue #566 复核：package 与 worker 函数的 exact-local schema 快照可确定性重建，且 Data API 类型无漂移，workspace 行为不变。"
 related:
   - ../../AGENTS.md
