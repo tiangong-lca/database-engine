@@ -187,8 +187,6 @@ $function$;
 alter function api.svc_dataset_search_text_backfill_enqueue(text, uuid, text, integer) owner to postgres;
 revoke all on function api.svc_dataset_search_text_backfill_enqueue(text, uuid, text, integer)
   from public, anon, authenticated;
-grant execute on function api.svc_dataset_search_text_backfill_enqueue(text, uuid, text, integer)
-  to service_role;
 comment on function api.svc_dataset_search_text_backfill_enqueue(text, uuid, text, integer) is
   'Service-role-only, bounded, cursor-based and queue-deduplicated search_text replay enqueue. It never writes projections or embeds data.';
 
@@ -213,21 +211,21 @@ begin
   for facade in
     select *
     from (values
-      ('api.search_contacts_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure, 'search_contacts', false, 'text,jsonb,bigint,bigint,text,text,uuid,integer'),
-      ('api.search_flowproperties_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure, 'search_flowproperties', false, 'text,jsonb,bigint,bigint,text,text,uuid,integer'),
-      ('api.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure, 'search_flows', true, 'text,jsonb,bigint,bigint,text,text,uuid,integer,text[]'),
-      ('api.search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure, 'search_lifecyclemodels', true, 'text,jsonb,bigint,bigint,text,text,uuid,integer,text[]'),
-      ('api.search_processes_latest_v2(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'::regprocedure, 'search_processes', true, 'text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean'),
-      ('api.search_sources_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure, 'search_sources', false, 'text,jsonb,bigint,bigint,text,text,uuid,integer'),
-      ('api.search_unitgroups_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure, 'search_unitgroups', false, 'text,jsonb,bigint,bigint,text,text,uuid,integer'),
-      ('api.hybrid_search_contacts_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'::regprocedure, 'hybrid_search_contacts', false, 'text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid'),
-      ('api.hybrid_search_flowproperties_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'::regprocedure, 'hybrid_search_flowproperties', false, 'text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid'),
-      ('api.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure, 'hybrid_search_flows', false, 'text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[]'),
-      ('api.hybrid_search_lifecyclemodels_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure, 'hybrid_search_lifecyclemodels', false, 'text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[]'),
-      ('api.hybrid_search_processes_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure, 'hybrid_search_processes', false, 'text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[]'),
-      ('api.hybrid_search_sources_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'::regprocedure, 'hybrid_search_sources', false, 'text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid'),
-      ('api.hybrid_search_unitgroups_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'::regprocedure, 'hybrid_search_unitgroups', false, 'text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid')
-    ) as facade(source, target_name, remove_order_by, target_args)
+      ('api.search_contacts_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure, 'search_contacts', false, false, 'text,jsonb,integer,integer,text,text,uuid,integer'),
+      ('api.search_flowproperties_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure, 'search_flowproperties', false, false, 'text,jsonb,integer,integer,text,text,uuid,integer'),
+      ('api.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure, 'search_flows', true, false, 'text,jsonb,integer,integer,text,text,uuid,integer,text[]'),
+      ('api.search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure, 'search_lifecyclemodels', true, false, 'text,jsonb,integer,integer,text,text,uuid,integer,text[]'),
+      ('api.search_processes_latest_v2(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'::regprocedure, 'search_processes', true, false, 'text,jsonb,integer,integer,text,text,uuid,integer,text,text[],boolean'),
+      ('api.search_sources_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure, 'search_sources', false, false, 'text,jsonb,integer,integer,text,text,uuid,integer'),
+      ('api.search_unitgroups_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure, 'search_unitgroups', false, false, 'text,jsonb,integer,integer,text,text,uuid,integer'),
+      ('api.hybrid_search_contacts_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'::regprocedure, 'hybrid_search_contacts', false, true, 'text,text,jsonb,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid'),
+      ('api.hybrid_search_flowproperties_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'::regprocedure, 'hybrid_search_flowproperties', false, true, 'text,text,jsonb,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid'),
+      ('api.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure, 'hybrid_search_flows', false, true, 'text,text,jsonb,double precision,integer,double precision,double precision,integer,text,integer,integer,text[]'),
+      ('api.hybrid_search_lifecyclemodels_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure, 'hybrid_search_lifecyclemodels', false, true, 'text,text,jsonb,double precision,integer,double precision,double precision,integer,text,integer,integer,text[]'),
+      ('api.hybrid_search_processes_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure, 'hybrid_search_processes', false, true, 'text,text,jsonb,double precision,integer,double precision,double precision,integer,text,integer,integer,text[]'),
+      ('api.hybrid_search_sources_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'::regprocedure, 'hybrid_search_sources', false, true, 'text,text,jsonb,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid'),
+      ('api.hybrid_search_unitgroups_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'::regprocedure, 'hybrid_search_unitgroups', false, true, 'text,text,jsonb,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid')
+    ) as facade(source, target_name, remove_order_by, json_filter, target_args)
   loop
     definition := pg_get_functiondef(facade.source);
     select proc.proname
@@ -242,6 +240,28 @@ begin
     if facade.remove_order_by then
       definition := replace(definition, 'order_by jsonb DEFAULT ''{}''::jsonb, ', '');
     end if;
+    if facade.json_filter then
+      definition := replace(
+        definition,
+        'filter_condition text DEFAULT ''''::text',
+        'filter_condition jsonb DEFAULT ''{}''::jsonb'
+      );
+      definition := regexp_replace(
+        definition,
+        E'(\\n\\s*)filter_condition,',
+        E'\\1filter_condition::text,',
+        'g'
+      );
+    else
+      definition := replace(definition, 'page_size bigint DEFAULT 10', 'page_size integer DEFAULT 10');
+      definition := replace(definition, 'page_current bigint DEFAULT 1', 'page_current integer DEFAULT 1');
+      definition := regexp_replace(
+        definition,
+        E'(\\n\\s*)page_size,(\\n\\s*)page_current,',
+        E'\\1page_size::bigint,\\2page_current::bigint,',
+        'g'
+      );
+    end if;
     execute definition;
 
     target := to_regprocedure(format('api.%I(%s)', facade.target_name, facade.target_args));
@@ -249,7 +269,6 @@ begin
       raise exception 'canonical search facade was not created: %', facade.target_name;
     end if;
     execute format('revoke all on function %s from public', target);
-    execute format('grant execute on function %s to anon, authenticated, service_role', target);
     execute format(
       'comment on function %s is %L',
       target,
@@ -300,31 +319,105 @@ alter function api.search_processes_latest(text, jsonb, jsonb, bigint, bigint, t
   security definer;
 revoke all on function api.search_processes_latest(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer, text, text[])
   from public;
-grant execute on function api.search_processes_latest(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer, text, text[])
-  to anon, authenticated, service_role;
 comment on function api.search_processes_latest(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer, text, text[]) is
   'Compatibility Process Search RPC. Delegates to the canonical Process private implementation with owner_draft_only=false.';
 
--- api_contract_closure intentionally closed inherited grants.  Preserve the
--- three-role compatibility contract while callers migrate to the canonical
--- names; Database D is the only phase allowed to remove these entrypoints.
-grant execute on function api.search_contacts_latest(text, jsonb, bigint, bigint, text, text, uuid, integer),
-  api.search_flowproperties_latest(text, jsonb, bigint, bigint, text, text, uuid, integer),
-  api.search_flows_latest(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer, text[]),
-  api.search_lifecyclemodels_latest(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer, text[]),
-  api.search_processes_latest(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer, text, text[]),
-  api.search_processes_latest_v2(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer, text, text[], boolean),
-  api.search_sources_latest(text, jsonb, bigint, bigint, text, text, uuid, integer),
-  api.search_unitgroups_latest(text, jsonb, bigint, bigint, text, text, uuid, integer),
-  api.hybrid_search_contacts_v2(text, text, text, double precision, integer, double precision, double precision, integer, text, integer, integer, text[], integer, uuid),
-  api.hybrid_search_flowproperties_v2(text, text, text, double precision, integer, double precision, double precision, integer, text, integer, integer, text[], integer, uuid),
-  api.hybrid_search_flows_v2(text, text, text, double precision, integer, double precision, double precision, integer, text, integer, integer, text[]),
-  api.hybrid_search_lifecyclemodels_v2(text, text, text, double precision, integer, double precision, double precision, integer, text, integer, integer, text[]),
-  api.hybrid_search_processes_v2(text, text, text, double precision, integer, double precision, double precision, integer, text, integer, integer, text[]),
-  api.hybrid_search_sources_v2(text, text, text, double precision, integer, double precision, double precision, integer, text, integer, integer, text[], integer, uuid),
-  api.hybrid_search_unitgroups_v2(text, text, text, double precision, integer, double precision, double precision, integer, text, integer, integer, text[], integer, uuid)
-to service_role;
-
 reset role;
 revoke create on schema api from api_internal_executor;
+revoke api_internal_executor from postgres;
+
+-- The closed API contract admits every external execute grant by exact
+-- regprocedure identity. Canonical search and its compatibility window retain
+-- the established NX-CORE-02 anon/authenticated contract; there is no caller
+-- evidence for a service-role expansion. The bounded queue control is the
+-- sole service-only Database A capability.
+insert into private.api_capability_grants (
+  routine_identity, capability_id, allow_anon, allow_authenticated, allow_service_role
+)
+values
+  ('api.search_contacts(text, jsonb, integer, integer, text, text, uuid, integer)', 'NX-CORE-02', true, true, false),
+  ('api.search_flowproperties(text, jsonb, integer, integer, text, text, uuid, integer)', 'NX-CORE-02', true, true, false),
+  ('api.search_flows(text, jsonb, integer, integer, text, text, uuid, integer, text[])', 'NX-CORE-02', true, true, false),
+  ('api.search_lifecyclemodels(text, jsonb, integer, integer, text, text, uuid, integer, text[])', 'NX-CORE-02', true, true, false),
+  ('api.search_processes(text, jsonb, integer, integer, text, text, uuid, integer, text, text[], boolean)', 'NX-CORE-02', true, true, false),
+  ('api.search_sources(text, jsonb, integer, integer, text, text, uuid, integer)', 'NX-CORE-02', true, true, false),
+  ('api.search_unitgroups(text, jsonb, integer, integer, text, text, uuid, integer)', 'NX-CORE-02', true, true, false),
+  ('api.hybrid_search_contacts(text, text, jsonb, double precision, integer, double precision, double precision, integer, text, integer, integer, text[], integer, uuid)', 'NX-CORE-02', true, true, false),
+  ('api.hybrid_search_flowproperties(text, text, jsonb, double precision, integer, double precision, double precision, integer, text, integer, integer, text[], integer, uuid)', 'NX-CORE-02', true, true, false),
+  ('api.hybrid_search_flows(text, text, jsonb, double precision, integer, double precision, double precision, integer, text, integer, integer, text[])', 'NX-CORE-02', true, true, false),
+  ('api.hybrid_search_lifecyclemodels(text, text, jsonb, double precision, integer, double precision, double precision, integer, text, integer, integer, text[])', 'NX-CORE-02', true, true, false),
+  ('api.hybrid_search_processes(text, text, jsonb, double precision, integer, double precision, double precision, integer, text, integer, integer, text[])', 'NX-CORE-02', true, true, false),
+  ('api.hybrid_search_sources(text, text, jsonb, double precision, integer, double precision, double precision, integer, text, integer, integer, text[], integer, uuid)', 'NX-CORE-02', true, true, false),
+  ('api.hybrid_search_unitgroups(text, text, jsonb, double precision, integer, double precision, double precision, integer, text, integer, integer, text[], integer, uuid)', 'NX-CORE-02', true, true, false),
+  ('api.search_processes_latest(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer, text, text[])', 'NX-CORE-02', true, true, false),
+  ('api.svc_dataset_search_text_backfill_enqueue(text, uuid, text, integer)', 'DBA-SEARCH-01', false, false, true)
+on conflict (routine_identity) do update set
+  capability_id = excluded.capability_id,
+  allow_anon = excluded.allow_anon,
+  allow_authenticated = excluded.allow_authenticated,
+  allow_service_role = excluded.allow_service_role;
+
+do $apply_database_a_postgres_capabilities$
+declare
+  grant_row record;
+begin
+  for grant_row in
+    select *
+    from private.api_capability_grants
+    where routine_identity = 'api.svc_dataset_search_text_backfill_enqueue(text, uuid, text, integer)'
+  loop
+    if grant_row.allow_service_role then
+      execute format('grant execute on function %s to service_role', grant_row.routine_identity);
+    end if;
+  end loop;
+end
+$apply_database_a_postgres_capabilities$;
+
+grant api_internal_executor to postgres;
+grant usage on schema private to api_internal_executor;
+grant select on table private.api_capability_grants to api_internal_executor;
+set role api_internal_executor;
+do $apply_database_a_executor_capabilities$
+declare
+  grant_row record;
+begin
+  for grant_row in
+    select manifest.*
+    from private.api_capability_grants as manifest
+    join pg_catalog.pg_proc as routine
+      on routine.oid = pg_catalog.to_regprocedure(manifest.routine_identity)
+    where routine.proowner = current_user::regrole
+      and manifest.routine_identity = any (array[
+        'api.search_contacts(text, jsonb, integer, integer, text, text, uuid, integer)',
+        'api.search_flowproperties(text, jsonb, integer, integer, text, text, uuid, integer)',
+        'api.search_flows(text, jsonb, integer, integer, text, text, uuid, integer, text[])',
+        'api.search_lifecyclemodels(text, jsonb, integer, integer, text, text, uuid, integer, text[])',
+        'api.search_processes(text, jsonb, integer, integer, text, text, uuid, integer, text, text[], boolean)',
+        'api.search_sources(text, jsonb, integer, integer, text, text, uuid, integer)',
+        'api.search_unitgroups(text, jsonb, integer, integer, text, text, uuid, integer)',
+        'api.hybrid_search_contacts(text, text, jsonb, double precision, integer, double precision, double precision, integer, text, integer, integer, text[], integer, uuid)',
+        'api.hybrid_search_flowproperties(text, text, jsonb, double precision, integer, double precision, double precision, integer, text, integer, integer, text[], integer, uuid)',
+        'api.hybrid_search_flows(text, text, jsonb, double precision, integer, double precision, double precision, integer, text, integer, integer, text[])',
+        'api.hybrid_search_lifecyclemodels(text, text, jsonb, double precision, integer, double precision, double precision, integer, text, integer, integer, text[])',
+        'api.hybrid_search_processes(text, text, jsonb, double precision, integer, double precision, double precision, integer, text, integer, integer, text[])',
+        'api.hybrid_search_sources(text, text, jsonb, double precision, integer, double precision, double precision, integer, text, integer, integer, text[], integer, uuid)',
+        'api.hybrid_search_unitgroups(text, text, jsonb, double precision, integer, double precision, double precision, integer, text, integer, integer, text[], integer, uuid)',
+        'api.search_processes_latest(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer, text, text[])'
+      ])
+  loop
+    if grant_row.allow_anon then
+      execute format('grant execute on function %s to anon', grant_row.routine_identity);
+    end if;
+    if grant_row.allow_authenticated then
+      execute format('grant execute on function %s to authenticated', grant_row.routine_identity);
+    end if;
+    if grant_row.allow_service_role then
+      execute format('grant execute on function %s to service_role', grant_row.routine_identity);
+    end if;
+  end loop;
+end
+$apply_database_a_executor_capabilities$;
+reset role;
+revoke select on table private.api_capability_grants from api_internal_executor;
+revoke usage on schema private from api_internal_executor;
 revoke api_internal_executor from postgres;

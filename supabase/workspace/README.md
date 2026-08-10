@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 65b651f233fc8bc6af0d3291bedc11a6dff0d6e9
-lastReviewedNote: "Reviewed for Issue #446: the exact-local Comment draft/submission snapshot regenerates deterministically with no Data API type drift; workspace behavior is unchanged."
+lastReviewedCommit: 54d068742efb8b148f6a5cdfb981419e39a1a839
+lastReviewedNote: "Reviewed for Issue #459: the exact-local snapshot regenerates additive search_text columns and canonical Search RPC types deterministically; workspace behavior is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

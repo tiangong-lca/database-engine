@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: ec2be49ee4294d59d090c4f2753440336cec505c
-lastReviewedNote: "Reviewed for Issue #455: mutable package terminal-cache lifecycle remains database-owned and does not change migration source-of-truth, branch, or workspace-integration boundaries."
+lastReviewedCommit: 54d068742efb8b148f6a5cdfb981419e39a1a839
+lastReviewedNote: "Reviewed for Issue #459: Database A adds seven nullable, no-default search_text projections and fourteen canonical Search RPCs while lexical reads remain on extracted_md; Database B indexing/source cutover and Database C/D backfill/cleanup remain deferred."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

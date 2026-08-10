@@ -15172,11 +15172,16 @@ CREATE TABLE IF NOT EXISTS "public"."contacts" (
     "extracted_md" "text",
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
+    "search_text" "text",
     CONSTRAINT "contacts_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 3, 20, 100])))
 );
 
 
 ALTER TABLE "public"."contacts" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."contacts"."search_text" IS 'Edge-owned multilingual lexical projection. Nullable during the Release 1 backfill; not a lexical search source until Database B.';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."contacts_embedding_ft_input"("proc" "public"."contacts") RETURNS "text"
@@ -15206,11 +15211,16 @@ CREATE TABLE IF NOT EXISTS "public"."flowproperties" (
     "extracted_md" "text",
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
+    "search_text" "text",
     CONSTRAINT "flowproperties_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
 );
 
 
 ALTER TABLE "public"."flowproperties" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."flowproperties"."search_text" IS 'Edge-owned multilingual lexical projection. Nullable during the Release 1 backfill; not a lexical search source until Database B.';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."flowproperties_embedding_ft_input"("proc" "public"."flowproperties") RETURNS "text"
@@ -15240,11 +15250,16 @@ CREATE TABLE IF NOT EXISTS "public"."flows" (
     "embedding_ft_at" timestamp with time zone,
     "extracted_md" "text",
     "embedding_ft" "extensions"."vector"(1024),
+    "search_text" "text",
     CONSTRAINT "flows_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
 );
 
 
 ALTER TABLE "public"."flows" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."flows"."search_text" IS 'Edge-owned multilingual lexical projection. Nullable during the Release 1 backfill; not a lexical search source until Database B.';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."flows_embedding_ft_input"("proc" "public"."flows") RETURNS "text"
@@ -17042,6 +17057,38 @@ $$;
 ALTER FUNCTION "api"."get_task_summary_v2_feed"("p_category" "text", "p_job_kinds" "text"[], "p_statuses" "text"[], "p_updated_since" timestamp with time zone, "p_cursor_updated_at" timestamp with time zone, "p_cursor_job_id" "uuid", "p_limit" integer, "p_root_only" boolean) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "api"."hybrid_search_contacts"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "match_threshold" double precision DEFAULT 0.5, "match_count" integer DEFAULT 20, "lexical_weight" double precision DEFAULT 0.5, "semantic_weight" double precision DEFAULT 0.5, "rrf_k" integer DEFAULT 10, "data_source" "text" DEFAULT 'tg'::"text", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "query_terms" "text"[] DEFAULT NULL::"text"[], "state_code_filter" integer DEFAULT NULL::integer, "team_id_filter" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
+    SET "statement_timeout" TO '60s'
+    AS $$
+  select *
+  from private.hybrid_search_simple_dataset_v2('public.contacts'::regclass,
+    query_text,
+    query_embedding,
+    filter_condition::text,
+    match_threshold,
+    match_count,
+    lexical_weight,
+    semantic_weight,
+    rrf_k,
+    data_source,
+    page_size,
+    page_current,
+    query_terms,
+    state_code_filter,
+    team_id_filter
+  );
+$$;
+
+
+ALTER FUNCTION "api"."hybrid_search_contacts"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "api"."hybrid_search_contacts"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") IS 'Canonical Release 1 Search RPC. Compatibility entrypoint api.hybrid_search_contacts_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid) delegates to the same private implementation; lexical reads remain on extracted_md until Database B.';
+
+
+
 CREATE OR REPLACE FUNCTION "api"."hybrid_search_contacts_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text" DEFAULT ''::"text", "match_threshold" double precision DEFAULT 0.5, "match_count" integer DEFAULT 20, "lexical_weight" double precision DEFAULT 0.5, "semantic_weight" double precision DEFAULT 0.5, "rrf_k" integer DEFAULT 10, "data_source" "text" DEFAULT 'tg'::"text", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "query_terms" "text"[] DEFAULT NULL::"text"[], "state_code_filter" integer DEFAULT NULL::integer, "team_id_filter" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
@@ -17071,6 +17118,38 @@ ALTER FUNCTION "api"."hybrid_search_contacts_v2"("query_text" "text", "query_emb
 
 
 COMMENT ON FUNCTION "api"."hybrid_search_contacts_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") IS 'Hybrid Search v2: extracted_md lexical candidates plus embedding_ft semantic candidates, fused with lexical_weight and semantic_weight.';
+
+
+
+CREATE OR REPLACE FUNCTION "api"."hybrid_search_flowproperties"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "match_threshold" double precision DEFAULT 0.5, "match_count" integer DEFAULT 20, "lexical_weight" double precision DEFAULT 0.5, "semantic_weight" double precision DEFAULT 0.5, "rrf_k" integer DEFAULT 10, "data_source" "text" DEFAULT 'tg'::"text", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "query_terms" "text"[] DEFAULT NULL::"text"[], "state_code_filter" integer DEFAULT NULL::integer, "team_id_filter" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
+    SET "statement_timeout" TO '60s'
+    AS $$
+  select *
+  from private.hybrid_search_simple_dataset_v2('public.flowproperties'::regclass,
+    query_text,
+    query_embedding,
+    filter_condition::text,
+    match_threshold,
+    match_count,
+    lexical_weight,
+    semantic_weight,
+    rrf_k,
+    data_source,
+    page_size,
+    page_current,
+    query_terms,
+    state_code_filter,
+    team_id_filter
+  );
+$$;
+
+
+ALTER FUNCTION "api"."hybrid_search_flowproperties"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "api"."hybrid_search_flowproperties"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") IS 'Canonical Release 1 Search RPC. Compatibility entrypoint api.hybrid_search_flowproperties_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid) delegates to the same private implementation; lexical reads remain on extracted_md until Database B.';
 
 
 
@@ -17106,6 +17185,36 @@ COMMENT ON FUNCTION "api"."hybrid_search_flowproperties_v2"("query_text" "text",
 
 
 
+CREATE OR REPLACE FUNCTION "api"."hybrid_search_flows"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "match_threshold" double precision DEFAULT 0.5, "match_count" integer DEFAULT 20, "lexical_weight" double precision DEFAULT 0.5, "semantic_weight" double precision DEFAULT 0.5, "rrf_k" integer DEFAULT 10, "data_source" "text" DEFAULT 'tg'::"text", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "query_terms" "text"[] DEFAULT NULL::"text"[]) RETURNS TABLE("id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
+    SET "statement_timeout" TO '60s'
+    AS $$
+  select *
+  from private.hybrid_search_flows_v2_impl(
+    query_text,
+    query_embedding,
+    filter_condition::text,
+    match_threshold,
+    match_count,
+    lexical_weight,
+    semantic_weight,
+    rrf_k,
+    data_source,
+    page_size,
+    page_current,
+    query_terms
+  );
+$$;
+
+
+ALTER FUNCTION "api"."hybrid_search_flows"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "api"."hybrid_search_flows"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) IS 'Canonical Release 1 Search RPC. Compatibility entrypoint api.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[]) delegates to the same private implementation; lexical reads remain on extracted_md until Database B.';
+
+
+
 CREATE OR REPLACE FUNCTION "api"."hybrid_search_flows_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text" DEFAULT ''::"text", "match_threshold" double precision DEFAULT 0.5, "match_count" integer DEFAULT 20, "lexical_weight" double precision DEFAULT 0.5, "semantic_weight" double precision DEFAULT 0.5, "rrf_k" integer DEFAULT 10, "data_source" "text" DEFAULT 'tg'::"text", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "query_terms" "text"[] DEFAULT NULL::"text"[]) RETURNS TABLE("id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
@@ -17133,6 +17242,36 @@ ALTER FUNCTION "api"."hybrid_search_flows_v2"("query_text" "text", "query_embedd
 
 
 COMMENT ON FUNCTION "api"."hybrid_search_flows_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) IS 'Hybrid Search v2: extracted_md lexical candidates plus embedding_ft semantic candidates, fused with lexical_weight and semantic_weight.';
+
+
+
+CREATE OR REPLACE FUNCTION "api"."hybrid_search_lifecyclemodels"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "match_threshold" double precision DEFAULT 0.5, "match_count" integer DEFAULT 20, "lexical_weight" double precision DEFAULT 0.5, "semantic_weight" double precision DEFAULT 0.5, "rrf_k" integer DEFAULT 10, "data_source" "text" DEFAULT 'tg'::"text", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "query_terms" "text"[] DEFAULT NULL::"text"[]) RETURNS TABLE("id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
+    SET "statement_timeout" TO '60s'
+    AS $$
+  select *
+  from private.hybrid_search_lifecyclemodels_v2_impl(
+    query_text,
+    query_embedding,
+    filter_condition::text,
+    match_threshold,
+    match_count,
+    lexical_weight,
+    semantic_weight,
+    rrf_k,
+    data_source,
+    page_size,
+    page_current,
+    query_terms
+  );
+$$;
+
+
+ALTER FUNCTION "api"."hybrid_search_lifecyclemodels"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "api"."hybrid_search_lifecyclemodels"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) IS 'Canonical Release 1 Search RPC. Compatibility entrypoint api.hybrid_search_lifecyclemodels_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[]) delegates to the same private implementation; lexical reads remain on extracted_md until Database B.';
 
 
 
@@ -17166,6 +17305,36 @@ COMMENT ON FUNCTION "api"."hybrid_search_lifecyclemodels_v2"("query_text" "text"
 
 
 
+CREATE OR REPLACE FUNCTION "api"."hybrid_search_processes"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "match_threshold" double precision DEFAULT 0.5, "match_count" integer DEFAULT 20, "lexical_weight" double precision DEFAULT 0.5, "semantic_weight" double precision DEFAULT 0.5, "rrf_k" integer DEFAULT 10, "data_source" "text" DEFAULT 'tg'::"text", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "query_terms" "text"[] DEFAULT NULL::"text"[]) RETURNS TABLE("id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "model_id" "uuid", "team_id" "uuid", "total_count" bigint)
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
+    SET "statement_timeout" TO '60s'
+    AS $$
+  select *
+  from private.hybrid_search_processes_v2_impl(
+    query_text,
+    query_embedding,
+    filter_condition::text,
+    match_threshold,
+    match_count,
+    lexical_weight,
+    semantic_weight,
+    rrf_k,
+    data_source,
+    page_size,
+    page_current,
+    query_terms
+  );
+$$;
+
+
+ALTER FUNCTION "api"."hybrid_search_processes"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "api"."hybrid_search_processes"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) IS 'Canonical Release 1 Search RPC. Compatibility entrypoint api.hybrid_search_processes_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[]) delegates to the same private implementation; lexical reads remain on extracted_md until Database B.';
+
+
+
 CREATE OR REPLACE FUNCTION "api"."hybrid_search_processes_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text" DEFAULT ''::"text", "match_threshold" double precision DEFAULT 0.5, "match_count" integer DEFAULT 20, "lexical_weight" double precision DEFAULT 0.5, "semantic_weight" double precision DEFAULT 0.5, "rrf_k" integer DEFAULT 10, "data_source" "text" DEFAULT 'tg'::"text", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "query_terms" "text"[] DEFAULT NULL::"text"[]) RETURNS TABLE("id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "model_id" "uuid", "team_id" "uuid", "total_count" bigint)
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
@@ -17193,6 +17362,38 @@ ALTER FUNCTION "api"."hybrid_search_processes_v2"("query_text" "text", "query_em
 
 
 COMMENT ON FUNCTION "api"."hybrid_search_processes_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) IS 'Hybrid Search v2: extracted_md lexical candidates plus embedding_ft semantic candidates, fused with lexical_weight and semantic_weight.';
+
+
+
+CREATE OR REPLACE FUNCTION "api"."hybrid_search_sources"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "match_threshold" double precision DEFAULT 0.5, "match_count" integer DEFAULT 20, "lexical_weight" double precision DEFAULT 0.5, "semantic_weight" double precision DEFAULT 0.5, "rrf_k" integer DEFAULT 10, "data_source" "text" DEFAULT 'tg'::"text", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "query_terms" "text"[] DEFAULT NULL::"text"[], "state_code_filter" integer DEFAULT NULL::integer, "team_id_filter" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
+    SET "statement_timeout" TO '60s'
+    AS $$
+  select *
+  from private.hybrid_search_simple_dataset_v2('public.sources'::regclass,
+    query_text,
+    query_embedding,
+    filter_condition::text,
+    match_threshold,
+    match_count,
+    lexical_weight,
+    semantic_weight,
+    rrf_k,
+    data_source,
+    page_size,
+    page_current,
+    query_terms,
+    state_code_filter,
+    team_id_filter
+  );
+$$;
+
+
+ALTER FUNCTION "api"."hybrid_search_sources"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "api"."hybrid_search_sources"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") IS 'Canonical Release 1 Search RPC. Compatibility entrypoint api.hybrid_search_sources_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid) delegates to the same private implementation; lexical reads remain on extracted_md until Database B.';
 
 
 
@@ -17225,6 +17426,38 @@ ALTER FUNCTION "api"."hybrid_search_sources_v2"("query_text" "text", "query_embe
 
 
 COMMENT ON FUNCTION "api"."hybrid_search_sources_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") IS 'Hybrid Search v2: extracted_md lexical candidates plus embedding_ft semantic candidates, fused with lexical_weight and semantic_weight.';
+
+
+
+CREATE OR REPLACE FUNCTION "api"."hybrid_search_unitgroups"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "match_threshold" double precision DEFAULT 0.5, "match_count" integer DEFAULT 20, "lexical_weight" double precision DEFAULT 0.5, "semantic_weight" double precision DEFAULT 0.5, "rrf_k" integer DEFAULT 10, "data_source" "text" DEFAULT 'tg'::"text", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "query_terms" "text"[] DEFAULT NULL::"text"[], "state_code_filter" integer DEFAULT NULL::integer, "team_id_filter" "uuid" DEFAULT NULL::"uuid") RETURNS TABLE("id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
+    SET "statement_timeout" TO '60s'
+    AS $$
+  select *
+  from private.hybrid_search_simple_dataset_v2('public.unitgroups'::regclass,
+    query_text,
+    query_embedding,
+    filter_condition::text,
+    match_threshold,
+    match_count,
+    lexical_weight,
+    semantic_weight,
+    rrf_k,
+    data_source,
+    page_size,
+    page_current,
+    query_terms,
+    state_code_filter,
+    team_id_filter
+  );
+$$;
+
+
+ALTER FUNCTION "api"."hybrid_search_unitgroups"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "api"."hybrid_search_unitgroups"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") IS 'Canonical Release 1 Search RPC. Compatibility entrypoint api.hybrid_search_unitgroups_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid) delegates to the same private implementation; lexical reads remain on extracted_md until Database B.';
 
 
 
@@ -17476,11 +17709,16 @@ CREATE TABLE IF NOT EXISTS "public"."lifecyclemodels" (
     "extracted_md" "text",
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
+    "search_text" "text",
     CONSTRAINT "lifecyclemodels_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100])))
 );
 
 
 ALTER TABLE "public"."lifecyclemodels" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."lifecyclemodels"."search_text" IS 'Edge-owned multilingual lexical projection. Nullable during the Release 1 backfill; not a lexical search source until Database B.';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."lifecyclemodels_embedding_ft_input"("proc" "public"."lifecyclemodels") RETURNS "text"
@@ -18811,11 +19049,16 @@ CREATE TABLE IF NOT EXISTS "public"."processes" (
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
     "extracted_md" "text",
+    "search_text" "text",
     CONSTRAINT "processes_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
 );
 
 
 ALTER TABLE "public"."processes" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."processes"."search_text" IS 'Edge-owned multilingual lexical projection. Nullable during the Release 1 backfill; not a lexical search source until Database B.';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."processes_embedding_ft_input"("proc" "public"."processes") RETURNS "text"
@@ -20646,6 +20889,36 @@ $$;
 ALTER FUNCTION "api"."qry_team_list"("p_mode" "text", "p_keyword" "text", "p_page" integer, "p_page_size" integer) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "api"."search_contacts"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '60s'
+    AS $$
+begin
+  return query
+    select *
+    from api._search_simple_dataset_latest(
+      'public.contacts'::regclass,
+      query_text,
+      filter_condition,
+      page_size::bigint,
+      page_current::bigint,
+      data_source,
+      this_user_id,
+      team_id_filter,
+      state_code_filter
+    );
+end;
+$$;
+
+
+ALTER FUNCTION "api"."search_contacts"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "api"."search_contacts"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) IS 'Canonical Release 1 Search RPC. Compatibility entrypoint api.search_contacts_latest(text,jsonb,bigint,bigint,text,text,uuid,integer) delegates to the same private implementation; lexical reads remain on extracted_md until Database B.';
+
+
+
 CREATE OR REPLACE FUNCTION "api"."search_contacts_latest"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -20696,6 +20969,36 @@ $$;
 ALTER FUNCTION "api"."search_dataset_json_uuid_mentions"("p_uuid" "uuid", "p_source_entity_kinds" "text"[], "p_data_source" "text", "p_this_user_id" "text", "p_team_id_filter" "uuid", "p_state_code_filter" integer, "p_limit" integer) OWNER TO "api_internal_executor";
 
 
+CREATE OR REPLACE FUNCTION "api"."search_flowproperties"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '60s'
+    AS $$
+begin
+  return query
+    select *
+    from api._search_simple_dataset_latest(
+      'public.flowproperties'::regclass,
+      query_text,
+      filter_condition,
+      page_size::bigint,
+      page_current::bigint,
+      data_source,
+      this_user_id,
+      team_id_filter,
+      state_code_filter
+    );
+end;
+$$;
+
+
+ALTER FUNCTION "api"."search_flowproperties"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "api"."search_flowproperties"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) IS 'Canonical Release 1 Search RPC. Compatibility entrypoint api.search_flowproperties_latest(text,jsonb,bigint,bigint,text,text,uuid,integer) delegates to the same private implementation; lexical reads remain on extracted_md until Database B.';
+
+
+
 CREATE OR REPLACE FUNCTION "api"."search_flowproperties_latest"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -20720,6 +21023,36 @@ $$;
 
 
 ALTER FUNCTION "api"."search_flowproperties_latest"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) OWNER TO "api_internal_executor";
+
+
+CREATE OR REPLACE FUNCTION "api"."search_flows"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "query_terms" "text"[] DEFAULT NULL::"text"[]) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
+    SET "statement_timeout" TO '60s'
+    AS $$
+begin
+  return query
+    select *
+    from private.search_flows_latest_impl(
+      query_text,
+      filter_condition,
+      page_size::bigint,
+      page_current::bigint,
+      data_source,
+      this_user_id,
+      team_id_filter,
+      state_code_filter,
+      query_terms
+    );
+end;
+$$;
+
+
+ALTER FUNCTION "api"."search_flows"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "query_terms" "text"[]) OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "api"."search_flows"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "query_terms" "text"[]) IS 'Canonical Release 1 Search RPC. Compatibility entrypoint api.search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[]) delegates to the same private implementation; lexical reads remain on extracted_md until Database B.';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."search_flows_latest"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "order_by" "jsonb" DEFAULT '{}'::"jsonb", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "query_terms" "text"[] DEFAULT NULL::"text"[]) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
@@ -20748,6 +21081,36 @@ $$;
 ALTER FUNCTION "api"."search_flows_latest"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "query_terms" "text"[]) OWNER TO "api_internal_executor";
 
 
+CREATE OR REPLACE FUNCTION "api"."search_lifecyclemodels"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "query_terms" "text"[] DEFAULT NULL::"text"[]) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
+    SET "statement_timeout" TO '60s'
+    AS $$
+begin
+  return query
+    select *
+    from private.search_lifecyclemodels_latest_impl(
+      query_text,
+      filter_condition,
+      page_size::bigint,
+      page_current::bigint,
+      data_source,
+      this_user_id,
+      team_id_filter,
+      state_code_filter,
+      query_terms
+    );
+end;
+$$;
+
+
+ALTER FUNCTION "api"."search_lifecyclemodels"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "query_terms" "text"[]) OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "api"."search_lifecyclemodels"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "query_terms" "text"[]) IS 'Canonical Release 1 Search RPC. Compatibility entrypoint api.search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text[]) delegates to the same private implementation; lexical reads remain on extracted_md until Database B.';
+
+
+
 CREATE OR REPLACE FUNCTION "api"."search_lifecyclemodels_latest"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "order_by" "jsonb" DEFAULT '{}'::"jsonb", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "query_terms" "text"[] DEFAULT NULL::"text"[]) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
@@ -20774,31 +21137,54 @@ $$;
 ALTER FUNCTION "api"."search_lifecyclemodels_latest"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "query_terms" "text"[]) OWNER TO "api_internal_executor";
 
 
-CREATE OR REPLACE FUNCTION "api"."search_processes_latest"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "order_by" "jsonb" DEFAULT '{}'::"jsonb", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "type_of_data_set_filter" "text" DEFAULT 'all'::"text", "query_terms" "text"[] DEFAULT NULL::"text"[]) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "model_id" "uuid", "total_count" bigint)
-    LANGUAGE "plpgsql" SECURITY DEFINER
+CREATE OR REPLACE FUNCTION "api"."search_processes"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "type_of_data_set_filter" "text" DEFAULT 'all'::"text", "query_terms" "text"[] DEFAULT NULL::"text"[], "owner_draft_only" boolean DEFAULT false) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "model_id" "uuid", "total_count" bigint)
+    LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
     SET "statement_timeout" TO '60s'
     AS $$
-begin
-  return query
-    select *
-    from private.search_processes_latest_impl(
-      query_text,
-      filter_condition,
-      page_size,
-      page_current,
-      data_source,
-      this_user_id,
-      team_id_filter,
-      state_code_filter,
-      type_of_data_set_filter,
-      query_terms
-    );
-end;
+  select *
+  from private.search_processes_latest_v2_impl(
+    query_text,
+    filter_condition,
+    page_size::bigint,
+    page_current::bigint,
+    data_source,
+    this_user_id,
+    team_id_filter,
+    state_code_filter,
+    type_of_data_set_filter,
+    query_terms,
+    owner_draft_only
+  );
+$$;
+
+
+ALTER FUNCTION "api"."search_processes"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "api"."search_processes"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) IS 'Canonical Release 1 Search RPC. Compatibility entrypoint api.search_processes_latest_v2(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean) delegates to the same private implementation; lexical reads remain on extracted_md until Database B.';
+
+
+
+CREATE OR REPLACE FUNCTION "api"."search_processes_latest"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "order_by" "jsonb" DEFAULT '{}'::"jsonb", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "type_of_data_set_filter" "text" DEFAULT 'all'::"text", "query_terms" "text"[] DEFAULT NULL::"text"[]) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "model_id" "uuid", "total_count" bigint)
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
+    SET "statement_timeout" TO '60s'
+    AS $$
+  select *
+  from private.search_processes_latest_v2_impl(
+    query_text, filter_condition, page_size, page_current, data_source,
+    this_user_id, team_id_filter, state_code_filter, type_of_data_set_filter,
+    query_terms, false
+  )
 $$;
 
 
 ALTER FUNCTION "api"."search_processes_latest"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[]) OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "api"."search_processes_latest"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[]) IS 'Compatibility Process Search RPC. Delegates to the canonical Process private implementation with owner_draft_only=false.';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."search_processes_latest_v2"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "order_by" "jsonb" DEFAULT '{}'::"jsonb", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "type_of_data_set_filter" "text" DEFAULT 'all'::"text", "query_terms" "text"[] DEFAULT NULL::"text"[], "owner_draft_only" boolean DEFAULT false) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "model_id" "uuid", "total_count" bigint)
@@ -20830,6 +21216,36 @@ COMMENT ON FUNCTION "api"."search_processes_latest_v2"("query_text" "text", "fil
 
 
 
+CREATE OR REPLACE FUNCTION "api"."search_sources"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '60s'
+    AS $$
+begin
+  return query
+    select *
+    from api._search_simple_dataset_latest(
+      'public.sources'::regclass,
+      query_text,
+      filter_condition,
+      page_size::bigint,
+      page_current::bigint,
+      data_source,
+      this_user_id,
+      team_id_filter,
+      state_code_filter
+    );
+end;
+$$;
+
+
+ALTER FUNCTION "api"."search_sources"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "api"."search_sources"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) IS 'Canonical Release 1 Search RPC. Compatibility entrypoint api.search_sources_latest(text,jsonb,bigint,bigint,text,text,uuid,integer) delegates to the same private implementation; lexical reads remain on extracted_md until Database B.';
+
+
+
 CREATE OR REPLACE FUNCTION "api"."search_sources_latest"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -20854,6 +21270,36 @@ $$;
 
 
 ALTER FUNCTION "api"."search_sources_latest"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) OWNER TO "api_internal_executor";
+
+
+CREATE OR REPLACE FUNCTION "api"."search_unitgroups"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '60s'
+    AS $$
+begin
+  return query
+    select *
+    from api._search_simple_dataset_latest(
+      'public.unitgroups'::regclass,
+      query_text,
+      filter_condition,
+      page_size::bigint,
+      page_current::bigint,
+      data_source,
+      this_user_id,
+      team_id_filter,
+      state_code_filter
+    );
+end;
+$$;
+
+
+ALTER FUNCTION "api"."search_unitgroups"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "api"."search_unitgroups"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) IS 'Canonical Release 1 Search RPC. Compatibility entrypoint api.search_unitgroups_latest(text,jsonb,bigint,bigint,text,text,uuid,integer) delegates to the same private implementation; lexical reads remain on extracted_md until Database B.';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."search_unitgroups_latest"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "total_count" bigint)
@@ -21248,11 +21694,16 @@ CREATE TABLE IF NOT EXISTS "public"."sources" (
     "extracted_md" "text",
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
+    "search_text" "text",
     CONSTRAINT "sources_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100])))
 );
 
 
 ALTER TABLE "public"."sources" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."sources"."search_text" IS 'Edge-owned multilingual lexical projection. Nullable during the Release 1 backfill; not a lexical search source until Database B.';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."sources_embedding_ft_input"("proc" "public"."sources") RETURNS "text"
@@ -21501,6 +21952,135 @@ $$;
 
 
 ALTER FUNCTION "api"."svc_dataset_review_submit_job_record_result"("p_job_id" "uuid", "p_status" "text", "p_gate_run_id" "uuid", "p_result" "jsonb", "p_error_code" "text", "p_error_message" "text", "p_error_details" "jsonb", "p_audit" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "api"."svc_dataset_search_text_backfill_enqueue"("p_entity_kind" "text", "p_after_id" "uuid" DEFAULT NULL::"uuid", "p_after_version" "text" DEFAULT NULL::"text", "p_limit" integer DEFAULT 100) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+declare
+  v_entity_kind text := lower(btrim(coalesce(p_entity_kind, '')));
+  v_table name;
+  v_queue_entity_kind text;
+  v_limit integer := least(greatest(coalesce(p_limit, 100), 1), 500);
+  v_cursor_version character(9);
+  v_result jsonb;
+begin
+  if coalesce(current_setting('request.jwt.claim.role', true), '') <> 'service_role' then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'SERVICE_ROLE_REQUIRED',
+      'status', 403,
+      'message', 'Service role is required'
+    );
+  end if;
+
+  select mapping.table_name, mapping.queue_entity_kind
+  into v_table, v_queue_entity_kind
+  from (values
+    ('contact', 'contacts'::name, 'contact'),
+    ('flowproperty', 'flowproperties'::name, 'flowproperty'),
+    ('flow', 'flows'::name, 'flow'),
+    ('lifecyclemodel', 'lifecyclemodels'::name, 'lifecyclemodel'),
+    ('process', 'processes'::name, 'process'),
+    ('source', 'sources'::name, 'source'),
+    ('unitgroup', 'unitgroups'::name, 'unitgroup')
+  ) as mapping(entity_kind, table_name, queue_entity_kind)
+  where mapping.entity_kind = v_entity_kind;
+
+  if v_table is null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'INVALID_ENTITY_KIND',
+      'status', 400,
+      'message', 'entity_kind must be one of contact, flowproperty, flow, lifecyclemodel, process, source, or unitgroup'
+    );
+  end if;
+
+  if p_after_id is null and p_after_version is not null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'INVALID_CURSOR',
+      'status', 400,
+      'message', 'after_version requires after_id'
+    );
+  end if;
+
+  v_cursor_version := nullif(btrim(coalesce(p_after_version, '')), '')::character(9);
+
+  execute format($sql$
+    with candidates as materialized (
+      select row.id, row.version
+      from public.%1$I as row
+      where row.search_text is null
+        and (
+          $1::uuid is null
+          or (row.id, row.version) > ($1::uuid, coalesce($2::character(9), ''::character(9)))
+        )
+      order by row.id, row.version
+      limit $3
+    ), enqueueable as materialized (
+      select candidate.id, candidate.version
+      from candidates as candidate
+      where not exists (
+        select 1
+        from pgmq.q_dataset_extraction_jobs as queued
+        where queued.message ->> 'schema' = 'public'
+          and queued.message ->> 'table' = %1$L
+          and queued.message ->> 'id' = candidate.id::text
+          and queued.message ->> 'version' = candidate.version::text
+          and queued.message ->> 'extraction_kind' = 'search_text'
+      )
+    ), sent as (
+      select pgmq.send(
+        'dataset_extraction_jobs',
+        jsonb_build_object(
+          'schema', 'public',
+          'table', %1$L,
+          'id', enqueueable.id,
+          'version', enqueueable.version,
+          'entity_kind', %2$L,
+          'extraction_kind', 'search_text',
+          'created_at', clock_timestamp()
+        )
+      ) as msg_id
+      from enqueueable
+    ), summary as (
+      select
+        (select count(*) from candidates) as scanned,
+        (select count(*) from sent) as enqueued,
+        (select count(*) from candidates) - (select count(*) from sent) as already_queued,
+        (select id from candidates order by id desc, version desc limit 1) as next_after_id,
+        (select version from candidates order by id desc, version desc limit 1) as next_after_version
+    )
+    select jsonb_build_object(
+      'ok', true,
+      'data', jsonb_build_object(
+        'entity_kind', %2$L,
+        'table', %1$L,
+        'limit', $3,
+        'scanned', summary.scanned,
+        'enqueued', summary.enqueued,
+        'already_queued', summary.already_queued,
+        'next_after_id', summary.next_after_id,
+        'next_after_version', summary.next_after_version
+      )
+    )
+    from summary
+  $sql$, v_table, v_queue_entity_kind)
+  into v_result
+  using p_after_id, v_cursor_version, v_limit;
+
+  return v_result;
+end
+$_$;
+
+
+ALTER FUNCTION "api"."svc_dataset_search_text_backfill_enqueue"("p_entity_kind" "text", "p_after_id" "uuid", "p_after_version" "text", "p_limit" integer) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "api"."svc_dataset_search_text_backfill_enqueue"("p_entity_kind" "text", "p_after_id" "uuid", "p_after_version" "text", "p_limit" integer) IS 'Service-role-only, bounded, cursor-based and queue-deduplicated search_text replay enqueue. It never writes projections or embeds data.';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."svc_identity_desired_state_read"("p_keycloak_sub" "text") RETURNS "jsonb"
@@ -22752,11 +23332,16 @@ CREATE TABLE IF NOT EXISTS "public"."unitgroups" (
     "extracted_md" "text",
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
+    "search_text" "text",
     CONSTRAINT "unitgroups_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
 );
 
 
 ALTER TABLE "public"."unitgroups" OWNER TO "postgres";
+
+
+COMMENT ON COLUMN "public"."unitgroups"."search_text" IS 'Edge-owned multilingual lexical projection. Nullable during the Release 1 backfill; not a lexical search source until Database B.';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."unitgroups_embedding_ft_input"("proc" "public"."unitgroups") RETURNS "text"
@@ -58778,11 +59363,11 @@ CREATE OR REPLACE TRIGGER "contacts_set_modified_at_trigger" BEFORE UPDATE OF "j
 
 
 
-CREATE OR REPLACE TRIGGER "dataset_flow_identity_flow_active_fence" BEFORE UPDATE ON "public"."flows" FOR EACH ROW WHEN ((("to_jsonb"("new".*) - ARRAY['extracted_md'::"text", 'embedding_ft'::"text", 'embedding_ft_at'::"text"]) IS DISTINCT FROM ("to_jsonb"("old".*) - ARRAY['extracted_md'::"text", 'embedding_ft'::"text", 'embedding_ft_at'::"text"]))) EXECUTE FUNCTION "private"."dataset_flow_identity_active_fence_v2"();
+CREATE OR REPLACE TRIGGER "dataset_flow_identity_flow_active_fence" BEFORE UPDATE ON "public"."flows" FOR EACH ROW WHEN ((("to_jsonb"("new".*) - ARRAY['extracted_md'::"text", 'embedding_ft'::"text", 'embedding_ft_at'::"text", 'search_text'::"text"]) IS DISTINCT FROM ("to_jsonb"("old".*) - ARRAY['extracted_md'::"text", 'embedding_ft'::"text", 'embedding_ft_at'::"text", 'search_text'::"text"]))) EXECUTE FUNCTION "private"."dataset_flow_identity_active_fence_v2"();
 
 
 
-COMMENT ON TRIGGER "dataset_flow_identity_flow_active_fence" ON "public"."flows" IS 'Fail-closed Step 3 actor fence for Flow updates that change any identity-guard-relevant or future non-derivative column; extracted_md, embedding_ft, and embedding_ft_at updates bypass the owner-wide fence.';
+COMMENT ON TRIGGER "dataset_flow_identity_flow_active_fence" ON "public"."flows" IS 'Fail-closed Step 3 actor fence. Only extracted_md, embedding_ft, embedding_ft_at, and asynchronous search_text projection updates bypass the owner-wide fence.';
 
 
 
@@ -60688,9 +61273,21 @@ GRANT ALL ON FUNCTION "api"."get_task_summary_v2_feed"("p_category" "text", "p_j
 
 
 
+REVOKE ALL ON FUNCTION "api"."hybrid_search_contacts"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."hybrid_search_contacts"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "api"."hybrid_search_contacts"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "api"."hybrid_search_contacts_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."hybrid_search_contacts_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "api"."hybrid_search_contacts_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "api"."hybrid_search_flowproperties"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."hybrid_search_flowproperties"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "api"."hybrid_search_flowproperties"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") TO "authenticated";
 
 
 
@@ -60700,9 +61297,21 @@ GRANT ALL ON FUNCTION "api"."hybrid_search_flowproperties_v2"("query_text" "text
 
 
 
+REVOKE ALL ON FUNCTION "api"."hybrid_search_flows"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."hybrid_search_flows"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) TO "anon";
+GRANT ALL ON FUNCTION "api"."hybrid_search_flows"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "api"."hybrid_search_flows_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."hybrid_search_flows_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) TO "anon";
 GRANT ALL ON FUNCTION "api"."hybrid_search_flows_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "api"."hybrid_search_lifecyclemodels"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."hybrid_search_lifecyclemodels"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) TO "anon";
+GRANT ALL ON FUNCTION "api"."hybrid_search_lifecyclemodels"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) TO "authenticated";
 
 
 
@@ -60712,15 +61321,33 @@ GRANT ALL ON FUNCTION "api"."hybrid_search_lifecyclemodels_v2"("query_text" "tex
 
 
 
+REVOKE ALL ON FUNCTION "api"."hybrid_search_processes"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."hybrid_search_processes"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) TO "anon";
+GRANT ALL ON FUNCTION "api"."hybrid_search_processes"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "api"."hybrid_search_processes_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."hybrid_search_processes_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) TO "anon";
 GRANT ALL ON FUNCTION "api"."hybrid_search_processes_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[]) TO "authenticated";
 
 
 
+REVOKE ALL ON FUNCTION "api"."hybrid_search_sources"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."hybrid_search_sources"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "api"."hybrid_search_sources"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "api"."hybrid_search_sources_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."hybrid_search_sources_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") TO "anon";
 GRANT ALL ON FUNCTION "api"."hybrid_search_sources_v2"("query_text" "text", "query_embedding" "text", "filter_condition" "text", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "api"."hybrid_search_unitgroups"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."hybrid_search_unitgroups"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") TO "anon";
+GRANT ALL ON FUNCTION "api"."hybrid_search_unitgroups"("query_text" "text", "query_embedding" "text", "filter_condition" "jsonb", "match_threshold" double precision, "match_count" integer, "lexical_weight" double precision, "semantic_weight" double precision, "rrf_k" integer, "data_source" "text", "page_size" integer, "page_current" integer, "query_terms" "text"[], "state_code_filter" integer, "team_id_filter" "uuid") TO "authenticated";
 
 
 
@@ -61084,6 +61711,12 @@ GRANT ALL ON FUNCTION "api"."qry_team_list"("p_mode" "text", "p_keyword" "text",
 
 
 
+REVOKE ALL ON FUNCTION "api"."search_contacts"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."search_contacts"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) TO "anon";
+GRANT ALL ON FUNCTION "api"."search_contacts"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "api"."search_contacts_latest"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."search_contacts_latest"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) TO "anon";
 GRANT ALL ON FUNCTION "api"."search_contacts_latest"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) TO "authenticated";
@@ -61096,9 +61729,21 @@ GRANT ALL ON FUNCTION "api"."search_dataset_json_uuid_mentions"("p_uuid" "uuid",
 
 
 
+REVOKE ALL ON FUNCTION "api"."search_flowproperties"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."search_flowproperties"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) TO "anon";
+GRANT ALL ON FUNCTION "api"."search_flowproperties"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "api"."search_flowproperties_latest"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."search_flowproperties_latest"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) TO "anon";
 GRANT ALL ON FUNCTION "api"."search_flowproperties_latest"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "api"."search_flows"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "query_terms" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."search_flows"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "query_terms" "text"[]) TO "anon";
+GRANT ALL ON FUNCTION "api"."search_flows"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "query_terms" "text"[]) TO "authenticated";
 
 
 
@@ -61108,13 +61753,27 @@ GRANT ALL ON FUNCTION "api"."search_flows_latest"("query_text" "text", "filter_c
 
 
 
+REVOKE ALL ON FUNCTION "api"."search_lifecyclemodels"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "query_terms" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."search_lifecyclemodels"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "query_terms" "text"[]) TO "anon";
+GRANT ALL ON FUNCTION "api"."search_lifecyclemodels"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "query_terms" "text"[]) TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "api"."search_lifecyclemodels_latest"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "query_terms" "text"[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."search_lifecyclemodels_latest"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "query_terms" "text"[]) TO "anon";
 GRANT ALL ON FUNCTION "api"."search_lifecyclemodels_latest"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "query_terms" "text"[]) TO "authenticated";
 
 
 
+REVOKE ALL ON FUNCTION "api"."search_processes"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."search_processes"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) TO "anon";
+GRANT ALL ON FUNCTION "api"."search_processes"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "api"."search_processes_latest"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."search_processes_latest"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[]) TO "anon";
+GRANT ALL ON FUNCTION "api"."search_processes_latest"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[]) TO "authenticated";
 
 
 
@@ -61124,9 +61783,21 @@ GRANT ALL ON FUNCTION "api"."search_processes_latest_v2"("query_text" "text", "f
 
 
 
+REVOKE ALL ON FUNCTION "api"."search_sources"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."search_sources"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) TO "anon";
+GRANT ALL ON FUNCTION "api"."search_sources"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "api"."search_sources_latest"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."search_sources_latest"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) TO "anon";
 GRANT ALL ON FUNCTION "api"."search_sources_latest"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "api"."search_unitgroups"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."search_unitgroups"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) TO "anon";
+GRANT ALL ON FUNCTION "api"."search_unitgroups"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer) TO "authenticated";
 
 
 
@@ -61221,6 +61892,11 @@ GRANT ALL ON FUNCTION "api"."svc_dataset_review_submit_job_claim"("p_qty" intege
 
 REVOKE ALL ON FUNCTION "api"."svc_dataset_review_submit_job_record_result"("p_job_id" "uuid", "p_status" "text", "p_gate_run_id" "uuid", "p_result" "jsonb", "p_error_code" "text", "p_error_message" "text", "p_error_details" "jsonb", "p_audit" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."svc_dataset_review_submit_job_record_result"("p_job_id" "uuid", "p_status" "text", "p_gate_run_id" "uuid", "p_result" "jsonb", "p_error_code" "text", "p_error_message" "text", "p_error_details" "jsonb", "p_audit" "jsonb") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "api"."svc_dataset_search_text_backfill_enqueue"("p_entity_kind" "text", "p_after_id" "uuid", "p_after_version" "text", "p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."svc_dataset_search_text_backfill_enqueue"("p_entity_kind" "text", "p_after_id" "uuid", "p_after_version" "text", "p_limit" integer) TO "service_role";
 
 
 

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 65b651f233fc8bc6af0d3291bedc11a6dff0d6e9
-lastReviewedNote: "Reviewed for Issue #446: existing exact-local schema workspace and Data API type commands capture the Comment draft/submission boundary; script behavior is unchanged."
+lastReviewedCommit: 54d068742efb8b148f6a5cdfb981419e39a1a839
+lastReviewedNote: "Reviewed for Issue #459: the existing exact-local schema workspace and Data API type commands regenerate the additive search_text and canonical Search RPC contract; script behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

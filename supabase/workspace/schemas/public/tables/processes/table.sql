@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS "public"."processes" (
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
     "extracted_md" "text",
+    "search_text" "text",
     CONSTRAINT "processes_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
 );
 

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 65b651f233fc8bc6af0d3291bedc11a6dff0d6e9
-lastReviewedNote: "已为 Issue #446 复核：现有 exact-local schema workspace 与 Data API 类型命令可捕获 Comment 暂存/正式保存边界，脚本行为不变。"
+lastReviewedCommit: 54d068742efb8b148f6a5cdfb981419e39a1a839
+lastReviewedNote: "已为 Issue #459 复核：现有 exact-local schema workspace 与 Data API 类型命令可重建新增 search_text 与正式 Search RPC 契约，脚本行为不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

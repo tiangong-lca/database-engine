@@ -204,8 +204,7 @@ select is(
     select count(*)::integer
     from (values
       ('anon'),
-      ('authenticated'),
-      ('service_role')
+      ('authenticated')
     ) expected(role_name)
     cross join (values
       ('api.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'),
@@ -222,8 +221,8 @@ select is(
       'EXECUTE'
     )
   ),
-  21,
-  'all API roles can execute all seven v2 RPCs'
+  14,
+  'anon and authenticated can execute all seven v2 RPCs; service_role remains excluded by NX-CORE-02'
 );
 
 select is(

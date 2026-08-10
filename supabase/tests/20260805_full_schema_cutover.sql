@@ -68,8 +68,8 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  239::bigint,
-  'api contains the cutover functions plus all reviewed consumer facades'
+  254::bigint,
+  'api contains the cutover functions, reviewed consumer facades, and Database A Search RPCs'
 );
 
 select is(
@@ -204,8 +204,8 @@ select is(
       and routine.prosecdef
       and owner_role.rolname = 'api_internal_executor'
   ),
-  20::bigint,
-  'private RLS helper facades use the constrained executor'
+  34::bigint,
+  'private RLS helper facades and Database A Search RPCs use the constrained executor'
 );
 
 select ok(

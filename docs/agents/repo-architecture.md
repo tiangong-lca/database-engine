@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: ec2be49ee4294d59d090c4f2753440336cec505c
-lastReviewedNote: "Updated for Issue #455: mutable package scopes reuse only active jobs, selected_roots retains exact-identity terminal reuse, and package authorization remains API-owned."
+lastReviewedCommit: 54d068742efb8b148f6a5cdfb981419e39a1a839
+lastReviewedNote: "Updated for Issue #459: Database A adds nullable search_text projections and fourteen canonical Search RPCs over existing private implementations; extracted_md remains the lexical source and Database B/C/D index, source-switch, backfill, and cleanup work is deferred."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

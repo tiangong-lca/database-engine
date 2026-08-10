@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS "public"."flows" (
     "embedding_ft_at" timestamp with time zone,
     "extracted_md" "text",
     "embedding_ft" "extensions"."vector"(1024),
+    "search_text" "text",
     CONSTRAINT "flows_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
 );
 

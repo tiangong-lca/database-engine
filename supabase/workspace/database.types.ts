@@ -883,10 +883,62 @@ export type Database = {
         }
         Returns: Json
       }
+      hybrid_search_contacts: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
+          lexical_weight?: number
+          match_count?: number
+          match_threshold?: number
+          page_current?: number
+          page_size?: number
+          query_embedding: string
+          query_terms?: string[]
+          query_text: string
+          rrf_k?: number
+          semantic_weight?: number
+          state_code_filter?: number
+          team_id_filter?: string
+        }
+        Returns: {
+          id: string
+          json: Json
+          modified_at: string
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
       hybrid_search_contacts_v2: {
         Args: {
           data_source?: string
           filter_condition?: string
+          lexical_weight?: number
+          match_count?: number
+          match_threshold?: number
+          page_current?: number
+          page_size?: number
+          query_embedding: string
+          query_terms?: string[]
+          query_text: string
+          rrf_k?: number
+          semantic_weight?: number
+          state_code_filter?: number
+          team_id_filter?: string
+        }
+        Returns: {
+          id: string
+          json: Json
+          modified_at: string
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
+      hybrid_search_flowproperties: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
           lexical_weight?: number
           match_count?: number
           match_threshold?: number
@@ -935,10 +987,58 @@ export type Database = {
           version: string
         }[]
       }
+      hybrid_search_flows: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
+          lexical_weight?: number
+          match_count?: number
+          match_threshold?: number
+          page_current?: number
+          page_size?: number
+          query_embedding: string
+          query_terms?: string[]
+          query_text: string
+          rrf_k?: number
+          semantic_weight?: number
+        }
+        Returns: {
+          id: string
+          json: Json
+          modified_at: string
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
       hybrid_search_flows_v2: {
         Args: {
           data_source?: string
           filter_condition?: string
+          lexical_weight?: number
+          match_count?: number
+          match_threshold?: number
+          page_current?: number
+          page_size?: number
+          query_embedding: string
+          query_terms?: string[]
+          query_text: string
+          rrf_k?: number
+          semantic_weight?: number
+        }
+        Returns: {
+          id: string
+          json: Json
+          modified_at: string
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
+      hybrid_search_lifecyclemodels: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
           lexical_weight?: number
           match_count?: number
           match_threshold?: number
@@ -983,6 +1083,31 @@ export type Database = {
           version: string
         }[]
       }
+      hybrid_search_processes: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
+          lexical_weight?: number
+          match_count?: number
+          match_threshold?: number
+          page_current?: number
+          page_size?: number
+          query_embedding: string
+          query_terms?: string[]
+          query_text: string
+          rrf_k?: number
+          semantic_weight?: number
+        }
+        Returns: {
+          id: string
+          json: Json
+          model_id: string
+          modified_at: string
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
       hybrid_search_processes_v2: {
         Args: {
           data_source?: string
@@ -1008,10 +1133,62 @@ export type Database = {
           version: string
         }[]
       }
+      hybrid_search_sources: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
+          lexical_weight?: number
+          match_count?: number
+          match_threshold?: number
+          page_current?: number
+          page_size?: number
+          query_embedding: string
+          query_terms?: string[]
+          query_text: string
+          rrf_k?: number
+          semantic_weight?: number
+          state_code_filter?: number
+          team_id_filter?: string
+        }
+        Returns: {
+          id: string
+          json: Json
+          modified_at: string
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
       hybrid_search_sources_v2: {
         Args: {
           data_source?: string
           filter_condition?: string
+          lexical_weight?: number
+          match_count?: number
+          match_threshold?: number
+          page_current?: number
+          page_size?: number
+          query_embedding: string
+          query_terms?: string[]
+          query_text: string
+          rrf_k?: number
+          semantic_weight?: number
+          state_code_filter?: number
+          team_id_filter?: string
+        }
+        Returns: {
+          id: string
+          json: Json
+          modified_at: string
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
+      hybrid_search_unitgroups: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
           lexical_weight?: number
           match_count?: number
           match_threshold?: number
@@ -1819,6 +1996,27 @@ export type Database = {
           total_count: number
         }[]
       }
+      search_contacts: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
+          page_current?: number
+          page_size?: number
+          query_text: string
+          state_code_filter?: number
+          team_id_filter?: string
+          this_user_id?: string
+        }
+        Returns: {
+          id: string
+          json: Json
+          modified_at: string
+          rank: number
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
       search_contacts_latest: {
         Args: {
           data_source?: string
@@ -1863,12 +2061,55 @@ export type Database = {
           source_version: string
         }[]
       }
+      search_flowproperties: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
+          page_current?: number
+          page_size?: number
+          query_text: string
+          state_code_filter?: number
+          team_id_filter?: string
+          this_user_id?: string
+        }
+        Returns: {
+          id: string
+          json: Json
+          modified_at: string
+          rank: number
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
       search_flowproperties_latest: {
         Args: {
           data_source?: string
           filter_condition?: Json
           page_current?: number
           page_size?: number
+          query_text: string
+          state_code_filter?: number
+          team_id_filter?: string
+          this_user_id?: string
+        }
+        Returns: {
+          id: string
+          json: Json
+          modified_at: string
+          rank: number
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
+      search_flows: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
+          page_current?: number
+          page_size?: number
+          query_terms?: string[]
           query_text: string
           state_code_filter?: number
           team_id_filter?: string
@@ -1907,6 +2148,28 @@ export type Database = {
           version: string
         }[]
       }
+      search_lifecyclemodels: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
+          page_current?: number
+          page_size?: number
+          query_terms?: string[]
+          query_text: string
+          state_code_filter?: number
+          team_id_filter?: string
+          this_user_id?: string
+        }
+        Returns: {
+          id: string
+          json: Json
+          modified_at: string
+          rank: number
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
       search_lifecyclemodels_latest: {
         Args: {
           data_source?: string
@@ -1923,6 +2186,31 @@ export type Database = {
         Returns: {
           id: string
           json: Json
+          modified_at: string
+          rank: number
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
+      search_processes: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
+          owner_draft_only?: boolean
+          page_current?: number
+          page_size?: number
+          query_terms?: string[]
+          query_text: string
+          state_code_filter?: number
+          team_id_filter?: string
+          this_user_id?: string
+          type_of_data_set_filter?: string
+        }
+        Returns: {
+          id: string
+          json: Json
+          model_id: string
           modified_at: string
           rank: number
           team_id: string
@@ -1981,7 +2269,49 @@ export type Database = {
           version: string
         }[]
       }
+      search_sources: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
+          page_current?: number
+          page_size?: number
+          query_text: string
+          state_code_filter?: number
+          team_id_filter?: string
+          this_user_id?: string
+        }
+        Returns: {
+          id: string
+          json: Json
+          modified_at: string
+          rank: number
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
       search_sources_latest: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
+          page_current?: number
+          page_size?: number
+          query_text: string
+          state_code_filter?: number
+          team_id_filter?: string
+          this_user_id?: string
+        }
+        Returns: {
+          id: string
+          json: Json
+          modified_at: string
+          rank: number
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
+      search_unitgroups: {
         Args: {
           data_source?: string
           filter_condition?: Json
@@ -2243,6 +2573,15 @@ export type Database = {
         }
         Returns: Json
       }
+      svc_dataset_search_text_backfill_enqueue: {
+        Args: {
+          p_after_id?: string
+          p_after_version?: string
+          p_entity_kind: string
+          p_limit?: number
+        }
+        Returns: Json
+      }
       svc_identity_desired_state_read: {
         Args: { p_keycloak_sub: string }
         Returns: Json
@@ -2466,6 +2805,7 @@ export type Database = {
           review_id: string | null
           reviews: Json | null
           rule_verification: boolean | null
+          search_text: string | null
           state_code: number | null
           team_id: string | null
           user_id: string | null
@@ -2483,6 +2823,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
+          search_text?: string | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2500,6 +2841,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
+          search_text?: string | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2520,6 +2862,7 @@ export type Database = {
           review_id: string | null
           reviews: Json | null
           rule_verification: boolean | null
+          search_text: string | null
           state_code: number | null
           team_id: string | null
           user_id: string | null
@@ -2537,6 +2880,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
+          search_text?: string | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2554,6 +2898,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
+          search_text?: string | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2574,6 +2919,7 @@ export type Database = {
           review_id: string | null
           reviews: Json | null
           rule_verification: boolean | null
+          search_text: string | null
           state_code: number | null
           team_id: string | null
           user_id: string | null
@@ -2591,6 +2937,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
+          search_text?: string | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2608,6 +2955,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
+          search_text?: string | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2691,6 +3039,7 @@ export type Database = {
           modified_at: string | null
           reviews: Json | null
           rule_verification: boolean | null
+          search_text: string | null
           state_code: number | null
           team_id: string | null
           user_id: string | null
@@ -2708,6 +3057,7 @@ export type Database = {
           modified_at?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
+          search_text?: string | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2725,6 +3075,7 @@ export type Database = {
           modified_at?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
+          search_text?: string | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2746,6 +3097,7 @@ export type Database = {
           review_id: string | null
           reviews: Json | null
           rule_verification: boolean | null
+          search_text: string | null
           state_code: number | null
           team_id: string | null
           user_id: string | null
@@ -2764,6 +3116,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
+          search_text?: string | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2782,6 +3135,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
+          search_text?: string | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2802,6 +3156,7 @@ export type Database = {
           review_id: string | null
           reviews: Json | null
           rule_verification: boolean | null
+          search_text: string | null
           state_code: number | null
           team_id: string | null
           user_id: string | null
@@ -2819,6 +3174,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
+          search_text?: string | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2836,6 +3192,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
+          search_text?: string | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2856,6 +3213,7 @@ export type Database = {
           review_id: string | null
           reviews: Json | null
           rule_verification: boolean | null
+          search_text: string | null
           state_code: number | null
           team_id: string | null
           user_id: string | null
@@ -2873,6 +3231,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
+          search_text?: string | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
@@ -2890,6 +3249,7 @@ export type Database = {
           review_id?: string | null
           reviews?: Json | null
           rule_verification?: boolean | null
+          search_text?: string | null
           state_code?: number | null
           team_id?: string | null
           user_id?: string | null
