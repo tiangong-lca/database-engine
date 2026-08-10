@@ -118,14 +118,14 @@ select is(
     select count(*)::integer
     from (values
       ('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'),
-      ('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'),
+      ('private.search_processes_latest_v2_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'),
       ('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])')
     ) expected(signature)
     join pg_proc routine on routine.oid = to_regprocedure(expected.signature)
-    where strpos(routine.prosrc, '.extracted_md &@~|') > 0
+    where strpos(routine.prosrc, '.search_text &@~|') > 0
   ),
   3,
-  'all three core latest-search implementations read extracted_md'
+  'all three core latest-search implementations read search_text'
 );
 
 select is(
@@ -133,7 +133,7 @@ select is(
     select count(*)::integer
     from (values
       ('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'),
-      ('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'),
+      ('private.search_processes_latest_v2_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'),
       ('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])')
     ) expected(signature)
     join pg_proc routine on routine.oid = to_regprocedure(expected.signature)
@@ -148,9 +148,9 @@ select ok(
     pg_get_functiondef(
       'api._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure
     ),
-    'd.extracted_md &@~'
+    'd.search_text &@~'
   ) > 0,
-  'foundation latest search reads extracted_md'
+  'foundation latest search reads search_text'
 );
 
 select is(
@@ -169,9 +169,9 @@ select ok(
     pg_get_functiondef(
       'private.hybrid_search_simple_dataset_v2(regclass,text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[],integer,uuid)'::regprocedure
     ),
-    'd.extracted_md &@~|'
+    'd.search_text &@~|'
   ) > 0,
-  'foundation Hybrid Search reads extracted_md'
+  'foundation Hybrid Search reads search_text'
 );
 
 select is(
@@ -233,10 +233,10 @@ select is(
     join pg_description description on description.objoid = routine.oid
     where namespace.nspname = 'api'
       and routine.proname like 'hybrid_search_%_v2'
-      and description.description like 'Hybrid Search v2: extracted_md lexical candidates%'
+      and description.description like 'Hybrid Search v2:%'
   ),
   7,
-  'all v2 RPCs document extracted_md as their lexical source'
+  'all v2 RPCs retain their documented compatibility contract'
 );
 
 select ok(
@@ -280,6 +280,7 @@ insert into public.processes (
   state_code,
   team_id,
   extracted_md,
+  search_text,
   rule_verification,
   created_at,
   modified_at
@@ -294,6 +295,7 @@ values
     0,
     null,
     'strict-owner-draft-token',
+    array['strict-owner-draft-token'],
     true,
     now(),
     now()
@@ -307,6 +309,7 @@ values
     20,
     null,
     'strict-owner-draft-token',
+    array['strict-owner-draft-token'],
     true,
     now(),
     now()

@@ -74,7 +74,7 @@ begin
   end;
   text_match_clause := case
     when cardinality(escaped_query_terms) = 0 then 'false'
-    else 'd.extracted_md &@~| $1'
+    else 'd.search_text &@~| $1'
   end;
 
   hybrid_sql := format(

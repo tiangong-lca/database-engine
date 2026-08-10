@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-10
-lastReviewedCommit: a8072e018efc2f1f8c245f8fec6ca3d2148bbcbf
-lastReviewedNote: "Updated for Issue #459: Database A adds nullable text[] search_text projections, preserves legacy scalar values losslessly during migration, restricts reviewed-row writes to four derived fields, and provides bounded enqueue only; extracted_md remains the lexical source. Historical backfill is the workspace#565-coordinated Release 1 operational gate after Edge double-write deployment, not migration work; Database B owns index/source switch, Database C old-index cleanup, and Database D old-RPC cleanup."
+lastReviewedAt: 2026-08-11
+lastReviewedCommit: 91a1f96
+lastReviewedNote: "Updated for Issue #460: Database A adds nullable text[] search_text projections, preserves legacy scalar values losslessly during migration, and provides bounded enqueue. Database B adds seven explicit PGroonga search_text indexes and switches formal lexical and hybrid-lexical execution behind a fail-closed coverage gate; Edge array deployment and 100% historical backfill remain external Release 1 gates. Database C old-index cleanup and Database D old-RPC cleanup remain separate."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -163,35 +163,41 @@ the checked-in Edge route lexical parameter profile with redacted real staging
 vectors; it must not derive lexical terms from shared Markdown document-prefix
 tokens or retain raw embeddings, UUIDs, or user query text.
 
-All seven dataset families use deterministic `extracted_md` as the single
-lexical document and as the source for backpressured 1024-dimensional
-`embedding_ft` jobs. PGroonga indexes cover `extracted_md` for Process, Flow,
-LifecycleModel, Contact, FlowProperty, Source, and UnitGroup search. Hybrid v2
-RPCs expose one `lexical_weight`; the old two-weight signatures remain only as
-an historical Expand-phase compatibility surface and do not represent two
-lexical branches. The Contract migration retires those signatures after all
-consumers have moved to v2. On the hosted branch, standard `idx_scan` statistics and the
-Performance Advisor may continue to report a PGroonga index as unused after a
-query plan has used it; a direct `EXPLAIN (ANALYZE, BUFFERS)` naming the index is
-the required cross-check before any retention decision. After Edge and Next
-consumer cutover, the fail-closed Contract migration removes the legacy RPC
-signatures, seven `extracted_text` columns/triggers/indexes, the rule-based text
-projection/backfill helpers, three `embedding_flag` columns, three legacy
-`embedding_at` columns, and the obsolete embedding-input/generation routines.
-It refuses to run while a guarded derivative rebuild or non-FT embedding job is
-active and uses `RESTRICT` for dependency-sensitive drops. `extracted_md`,
-`embedding_ft`, `embedding_ft_at`, their seven PGroonga indexes, and their HNSW
-indexes remain the supported derivative contract.
+All seven dataset families use deterministic `extracted_md` as the source for
+backpressured 1024-dimensional `embedding_ft` jobs. Database A retains the
+legacy scalar lexical document and its seven PGroonga indexes. Database B adds
+one explicit `search_text text[]` PGroonga index per dataset table and switches
+formal lexical candidates plus the hybrid lexical branch to `search_text`; the
+legacy `extracted_md` indexes remain until the separately tracked Database C
+cleanup. Hybrid v2 RPCs expose one `lexical_weight`; the old two-weight
+signatures remain only as an historical Expand-phase compatibility surface and
+do not represent two lexical branches. The Contract migration retires those
+signatures after all consumers have moved to v2. On the hosted branch, standard
+`idx_scan` statistics and the Performance Advisor may continue to report a
+PGroonga index as unused after a query plan has used it; a direct
+`EXPLAIN (ANALYZE, BUFFERS)` naming the index is the required cross-check before
+any retention decision. After Edge and Next consumer cutover, the fail-closed
+Contract migration removes the legacy RPC signatures, seven `extracted_text`
+columns/triggers/indexes, the rule-based text projection/backfill helpers, three
+`embedding_flag` columns, three legacy `embedding_at` columns, and the obsolete
+embedding-input/generation routines. It refuses to run while a guarded
+derivative rebuild or non-FT embedding job is active and uses `RESTRICT` for
+dependency-sensitive drops. `extracted_md`, `search_text`, `embedding_ft`,
+`embedding_ft_at`, the seven `extracted_md` indexes, the seven `search_text`
+indexes, and the HNSW indexes remain supported derivative surfaces until their
+separately gated cleanup.
 
 The Release 1 `search_text` projection is nullable `text[]` on all seven
-dataset tables and remains an Edge-owned derivative until Database B switches
-the search source. The forward type migration preserves a non-NULL legacy
-scalar as one complete array element, including embedded newlines; the later
+dataset tables. The forward type migration preserves a non-NULL legacy scalar
+as one complete array element, including embedded newlines; the later
 service/Edge backfill replaces that compatibility value with the full
-normalized projection. State 20/100 rows keep authored content, review
-metadata, and `modified_at` immutable outside the existing review-controlled
-command context; only `extracted_md`, `search_text`, `embedding_ft`, and
-`embedding_ft_at` are derivative-write exceptions.
+normalized projection. Database B's source-switch migration is fail-closed for
+existing rows with incomplete coverage and permits an empty new database; the
+persistent-Dev and hosted cutover gate still requires Edge array deployment,
+100% eligible-row backfill, and zero terminal failures. State 20/100 rows keep
+authored content, review metadata, and `modified_at` immutable outside the
+existing review-controlled command context; only `extracted_md`, `search_text`,
+`embedding_ft`, and `embedding_ft_at` are derivative-write exceptions.
 
 Contacts, FlowProperties, Sources, and UnitGroups otherwise follow the same
 durable search-derivative shape as the established Process, Flow, and

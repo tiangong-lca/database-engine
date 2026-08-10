@@ -273,26 +273,21 @@ select extensions.ok(
 
 select extensions.ok(
   pg_get_functiondef('private.search_processes_latest_v2_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'::regprocedure)
-    like '%extracted_md%',
-  'Expand keeps Process lexical execution on extracted_md'
+    like '%search_text%',
+  'Database B switches Process lexical execution to search_text'
 );
 
 select extensions.is(
   (select count(*) from pg_indexes where schemaname = 'public' and indexdef ilike '%search_text%'),
-  0::bigint,
-  'Database A creates no search_text index'
+  7::bigint,
+  'Database B creates one search_text index per dataset table'
 );
 
 select extensions.ok(
-  not exists (
-    select 1
-    from pg_proc as routine
-    join pg_namespace as namespace on namespace.oid = routine.pronamespace
-    where namespace.nspname in ('api', 'private')
-      and routine.oid = 'private.search_processes_latest_v2_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'::regprocedure
-      and pg_get_functiondef(routine.oid) like '%search_text%'
-  ),
-  'Database A does not switch the Process lexical private implementation to search_text'
+  pg_get_functiondef(
+    'private.search_processes_latest_v2_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'::regprocedure
+  ) like '%where p.search_text &@~| $11%',
+  'Database B switches the Process lexical private implementation to search_text'
 );
 
 select extensions.is(

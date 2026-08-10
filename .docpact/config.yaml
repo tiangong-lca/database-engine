@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-10"
-lastReviewedCommit: "131c3b061c3da1e0f62e34d049b399fad43fa634"
-lastReviewedNote: "Reviewed for Issue #459: Database A owns seven nullable text[] search_text projections, lossless scalar-to-array migration, four-field reviewed-row derivative updates, fourteen canonical Search RPCs, and bounded enqueue only; historical backfill is the workspace#565 Release 1 operational gate after Edge double-write deployment, not migration work. Database B owns index/source switch, Database C old-index cleanup, and Database D old-RPC cleanup."
+lastReviewedAt: "2026-08-11"
+lastReviewedCommit: "91a1f96"
+lastReviewedNote: "Reviewed for Issue #460: Database A owns seven nullable text[] search_text projections, lossless scalar-to-array migration, four-field reviewed-row derivative updates, canonical Search RPCs, and bounded enqueue. Database B owns seven explicit PGroonga search_text indexes plus the fail-closed lexical and hybrid-lexical source switch; existing rows require complete non-NULL coverage while an empty new database passes. Edge array deployment and 100% historical backfill remain the workspace#565 Release 1 operational gates; Database C old-index cleanup and Database D old-RPC cleanup remain separate."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-10
-lastReviewedCommit: 54d068742efb8b148f6a5cdfb981419e39a1a839
-lastReviewedNote: "Reviewed for Issue #459: the exact-local snapshot regenerates the seven nullable text[] search_text columns, the reviewed-row derivative guard, and canonical Search RPC types deterministically; workspace behavior is unchanged."
+lastReviewedAt: 2026-08-11
+lastReviewedCommit: 91a1f96
+lastReviewedNote: "Reviewed for Issue #460: the exact-local snapshot regenerates the seven nullable text[] search_text columns, seven Database B PGroonga index definitions, the fail-closed source-switch gate, the reviewed-row derivative guard, and canonical Search RPC types deterministically; workspace behavior is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

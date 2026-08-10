@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-10
-lastReviewedCommit: 131c3b061c3da1e0f62e34d049b399fad43fa634
-lastReviewedNote: "Reviewed for Issue #459: Database A adds seven nullable, no-default text[] search_text projections with lossless scalar migration, restricts reviewed-row updates to the four derived fields, and provides fourteen canonical Search RPCs plus bounded enqueue only; historical backfill is the workspace#565-coordinated Release 1 operational gate after Edge double-write deployment, not a migration action. Database B owns index/source switch, Database C old-index cleanup, and Database D old-RPC cleanup."
+lastReviewedAt: 2026-08-11
+lastReviewedCommit: 91a1f96
+lastReviewedNote: "Reviewed for Issue #460: Database A's seven nullable, no-default text[] search_text projections preserve legacy scalar values losslessly and retain bounded enqueue. Database B adds one explicit PGroonga index per dataset table and switches formal lexical and hybrid-lexical execution to search_text behind a fail-closed coverage gate; existing rows require complete non-NULL coverage while an empty new database passes. Edge array deployment and 100% historical backfill remain the workspace#565 Release 1 operational gates; Database C old-index cleanup and Database D old-RPC cleanup remain separate."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
