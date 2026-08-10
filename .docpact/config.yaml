@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-10"
-lastReviewedCommit: "827b086a3d7b79ebaffc57a401aaed1ab2f819a6"
-lastReviewedNote: "Reviewed for Issue #446: no-storage Root/Reference derivation remains migration/test owned; repository routing, ownership, and generated-workspace rules are unchanged."
+lastReviewedCommit: "3f49c4b8ac21fcc3bd7c20b1322edb48b028bbdf"
+lastReviewedNote: "Reviewed for Issue #446: separating temporary Comment drafts from formal submission remains migration/test owned; repository routing, ownership, and generated-workspace rules are unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
