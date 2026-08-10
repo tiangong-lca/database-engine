@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-10"
-lastReviewedCommit: "65b651f233fc8bc6af0d3291bedc11a6dff0d6e9"
+lastReviewedCommit: "ec2be49ee4294d59d090c4f2753440336cec505c"
 lastReviewedNote: "Reviewed for Issue #455: mutable-scope package terminal-cache refresh remains migration/test owned; routing, ownership, and workspace integration rules are unchanged."
 
 # Keep deterministic governance facts here.

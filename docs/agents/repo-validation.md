@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 65b651f233fc8bc6af0d3291bedc11a6dff0d6e9
+lastReviewedCommit: ec2be49ee4294d59d090c4f2753440336cec505c
 lastReviewedNote: "Updated for Issue #455: package proof now covers active mutable-scope dedupe, terminal refresh, selected_roots reuse, ownership, and attempt diagnostics; blank reset and CI remain required."
 related:
   - ../../AGENTS.md

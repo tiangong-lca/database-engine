@@ -35,7 +35,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 65b651f233fc8bc6af0d3291bedc11a6dff0d6e9
+lastReviewedCommit: ec2be49ee4294d59d090c4f2753440336cec505c
 lastReviewedNote: "Reviewed for Issue #455: mutable package terminal-cache lifecycle remains database-owned and does not change migration source-of-truth, branch, or workspace-integration boundaries."
 related:
   - .docpact/config.yaml
