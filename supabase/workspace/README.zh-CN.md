@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 30bc395004b3cde9a2b11209e69e3dae7ee3ce4d
+lastReviewedCommit: 827b086a3d7b79ebaffc57a401aaed1ab2f819a6
 lastReviewedNote: "已为 Issue #446 复核：审核 schema 的 exact-local 快照可确定性重建，且 Data API 类型无漂移，workspace 行为不变。"
 related:
   - ../../AGENTS.md

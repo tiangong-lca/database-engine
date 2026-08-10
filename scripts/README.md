@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 30bc395004b3cde9a2b11209e69e3dae7ee3ce4d
+lastReviewedCommit: 827b086a3d7b79ebaffc57a401aaed1ab2f819a6
 lastReviewedNote: "Reviewed for Issue #446: existing exact-local schema workspace and Data API type commands capture the review schema cutover; script behavior is unchanged."
 related:
   - ../AGENTS.md

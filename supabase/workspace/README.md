@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 30bc395004b3cde9a2b11209e69e3dae7ee3ce4d
+lastReviewedCommit: 827b086a3d7b79ebaffc57a401aaed1ab2f819a6
 lastReviewedNote: "Reviewed for Issue #446: the exact-local review schema snapshot regenerates deterministically with no Data API type drift; workspace behavior is unchanged."
 related:
   - ../../AGENTS.md
