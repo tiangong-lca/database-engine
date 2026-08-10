@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: bf6145597e9964125b26910a21a5b522db77fbe8
-lastReviewedNote: "Reviewed for Issue #446: the existing exact-local refresh commands deterministically capture the shared Reference Review helper and submit-function update; script behavior is unchanged."
+lastReviewedCommit: 04b8f3d31fca78e82509208e6369a7440b502550
+lastReviewedNote: "Reviewed for database-engine Issue #448 / workspace Issue #566: the existing exact-local schema workspace and Data API type commands capture the package and worker function contract; script behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-10"
-lastReviewedCommit: "bf6145597e9964125b26910a21a5b522db77fbe8"
-lastReviewedNote: "Reviewed for Issue #446: active-root Reference Review rebinding remains governed by the existing migration, SQL-test, and generated-workspace routes; no routing rule changes are required."
+lastReviewedCommit: "04b8f3d31fca78e82509208e6369a7440b502550"
+lastReviewedNote: "Reviewed for Issue #450 main-to-dev reconciliation: blocked shared-scan reuse and scanner cache revision remain migration/test owned; the Issue #448 package paths, routing, and ownership remain unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

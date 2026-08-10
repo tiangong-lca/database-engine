@@ -110,3 +110,9 @@ REVOKE ALL ON FUNCTION "private"."svc_lcia_scope_closure_reuse_completed_scan"("
 GRANT ALL ON FUNCTION "private"."svc_lcia_scope_closure_reuse_completed_scan"("p_closure_check_id" "uuid", "p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_completed_check_id" "uuid") TO "service_role";
 
 GRANT ALL ON FUNCTION "private"."svc_lcia_scope_closure_reuse_completed_scan"("p_closure_check_id" "uuid", "p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_completed_check_id" "uuid") TO "api_internal_executor";
+
+-- The production-main hotfix precedes this reconciliation in migration order
+-- and may recreate its pre-cutover public helper while back-merging into dev.
+-- Keep the completed schema cutover exact: the service helper exists only in
+-- private after this migration commits.
+DROP FUNCTION IF EXISTS "public"."svc_lcia_scope_closure_reuse_completed_scan"("uuid", "uuid", "uuid", "uuid");

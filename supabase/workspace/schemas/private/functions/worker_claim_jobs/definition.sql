@@ -99,6 +99,10 @@ begin
           heartbeat_at = now(),
           started_at = coalesce(j.started_at, now()),
           updated_at = now(),
+          diagnostics = case
+            when j.attempt_count > 0 then '{}'::jsonb
+            else j.diagnostics
+          end,
           error_code = null,
           error_message = null,
           error_details = null

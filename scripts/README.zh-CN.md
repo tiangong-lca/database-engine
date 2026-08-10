@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: bf6145597e9964125b26910a21a5b522db77fbe8
-lastReviewedNote: "已为 Issue #446 复核：现有 exact-local 刷新命令可确定性捕获共享 Reference Review helper 与提交函数更新，脚本行为不变。"
+lastReviewedCommit: 04b8f3d31fca78e82509208e6369a7440b502550
+lastReviewedNote: "已为 database-engine Issue #448 / workspace Issue #566 复核：现有 exact-local schema workspace 与 Data API 类型命令可捕获 package 和 worker 函数合同，脚本行为不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
