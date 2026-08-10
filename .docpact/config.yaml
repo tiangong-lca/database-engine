@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-10"
-lastReviewedCommit: "3f49c4b8ac21fcc3bd7c20b1322edb48b028bbdf"
-lastReviewedNote: "Reviewed for Issue #446: separating temporary Comment drafts from formal submission remains migration/test owned; repository routing, ownership, and generated-workspace rules are unchanged."
+lastReviewedCommit: "65b651f233fc8bc6af0d3291bedc11a6dff0d6e9"
+lastReviewedNote: "Reviewed for Issue #455: mutable-scope package terminal-cache refresh remains migration/test owned; routing, ownership, and workspace integration rules are unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

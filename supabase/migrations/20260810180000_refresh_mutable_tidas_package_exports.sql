@@ -1,7 +1,21 @@
-CREATE OR REPLACE FUNCTION "api"."svc_tidas_package_export_enqueue"("p_requested_by" "uuid", "p_scope" "text", "p_roots" "jsonb", "p_request_key" "text", "p_request_payload" "jsonb", "p_job_id" "uuid", "p_idempotency_key" "text") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $_$
+-- Issue #455: keep active export idempotency without treating a mutable-scope
+-- request key as a permanent artifact identity.
+
+create or replace function api.svc_tidas_package_export_enqueue(
+  p_requested_by uuid,
+  p_scope text,
+  p_roots jsonb,
+  p_request_key text,
+  p_request_payload jsonb,
+  p_job_id uuid,
+  p_idempotency_key text
+)
+returns jsonb
+language plpgsql
+volatile
+security definer
+set search_path = ''
+as $function$
 declare
   v_scope text := lower(btrim(coalesce(p_scope, '')));
   v_request_key text := nullif(btrim(p_request_key), '');
@@ -206,10 +220,4 @@ begin
     'root_count', v_root_count
   );
 end
-$_$;
-
-ALTER FUNCTION "api"."svc_tidas_package_export_enqueue"("p_requested_by" "uuid", "p_scope" "text", "p_roots" "jsonb", "p_request_key" "text", "p_request_payload" "jsonb", "p_job_id" "uuid", "p_idempotency_key" "text") OWNER TO "postgres";
-
-REVOKE ALL ON FUNCTION "api"."svc_tidas_package_export_enqueue"("p_requested_by" "uuid", "p_scope" "text", "p_roots" "jsonb", "p_request_key" "text", "p_request_payload" "jsonb", "p_job_id" "uuid", "p_idempotency_key" "text") FROM PUBLIC;
-
-GRANT ALL ON FUNCTION "api"."svc_tidas_package_export_enqueue"("p_requested_by" "uuid", "p_scope" "text", "p_roots" "jsonb", "p_request_key" "text", "p_request_payload" "jsonb", "p_job_id" "uuid", "p_idempotency_key" "text") TO "service_role";
+$function$;

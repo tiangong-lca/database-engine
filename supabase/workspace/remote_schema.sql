@@ -22324,9 +22324,21 @@ begin
     update private.lca_package_request_cache set
       hit_count = hit_count + 1, last_accessed_at = now(), updated_at = now()
     where id = v_cache.id returning * into v_cache;
-    if v_cache.status = 'ready' and v_cache.job_id is not null then
-      return jsonb_build_object('ok', true, 'mode', 'cache_hit', 'job_id', v_cache.job_id, 'worker_job_id', v_cache.worker_job_id);
+
+    -- selected_roots contains exact immutable dataset identities, so its ready
+    -- artifact remains reusable. The other scopes describe mutable datasets and
+    -- must reach worker_enqueue_job after completion to allocate fresh work.
+    if v_scope = 'selected_roots'
+       and v_cache.status = 'ready'
+       and v_cache.job_id is not null then
+      return jsonb_build_object(
+        'ok', true,
+        'mode', 'cache_hit',
+        'job_id', v_cache.job_id,
+        'worker_job_id', v_cache.worker_job_id
+      );
     end if;
+
     if v_cache.worker_job_id is not null then
       select * into v_worker from private.worker_jobs where id = v_cache.worker_job_id;
       if v_worker.status in ('queued', 'running', 'waiting', 'stale', 'completed', 'blocked') then
@@ -22336,16 +22348,19 @@ begin
           where id = v_cache.id
           returning * into v_cache;
         end if;
-        return jsonb_build_object(
-          'ok', true,
-          'mode', case
-            when v_worker.status = 'completed' then 'cache_hit'
-            when v_worker.status = 'blocked' then 'blocked'
-            else 'in_progress'
-          end,
-          'job_id', v_cache.job_id,
-          'worker_job_id', v_cache.worker_job_id
-        );
+
+        if v_worker.status <> 'completed' or v_scope = 'selected_roots' then
+          return jsonb_build_object(
+            'ok', true,
+            'mode', case
+              when v_worker.status = 'completed' then 'cache_hit'
+              when v_worker.status = 'blocked' then 'blocked'
+              else 'in_progress'
+            end,
+            'job_id', v_cache.job_id,
+            'worker_job_id', v_cache.worker_job_id
+          );
+        end if;
       end if;
     end if;
   end if;
