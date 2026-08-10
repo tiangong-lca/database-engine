@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 65b651f233fc8bc6af0d3291bedc11a6dff0d6e9
-lastReviewedNote: "已为 Issue #446 复核：Comment 暂存/正式保存边界的 exact-local 快照可确定性重建，且 Data API 类型无漂移，workspace 行为不变。"
+lastReviewedCommit: 54d068742efb8b148f6a5cdfb981419e39a1a839
+lastReviewedNote: "已为 Issue #459 复核：exact-local 快照可确定性重建新增的 search_text 列与正式 Search RPC 类型，workspace 行为不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

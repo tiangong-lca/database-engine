@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 65b651f233fc8bc6af0d3291bedc11a6dff0d6e9
-lastReviewedNote: "Updated for Issue #455: mutable package scopes reuse only active jobs, selected_roots retains exact-identity terminal reuse, and package authorization remains API-owned."
+lastReviewedCommit: a8072e018efc2f1f8c245f8fec6ca3d2148bbcbf
+lastReviewedNote: "Updated for Issue #459: Database A adds nullable search_text projections, fourteen canonical Search RPCs, and bounded enqueue only; extracted_md remains the lexical source. Historical backfill is the workspace#565-coordinated Release 1 operational gate after Edge double-write deployment, not migration work; Database B owns index/source switch, Database C old-index cleanup, and Database D old-RPC cleanup."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

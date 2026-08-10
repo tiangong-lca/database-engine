@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 65b651f233fc8bc6af0d3291bedc11a6dff0d6e9
-lastReviewedNote: "Reviewed for Issue #455: mutable package terminal-cache lifecycle remains database-owned and does not change migration source-of-truth, branch, or workspace-integration boundaries."
+lastReviewedCommit: a8072e018efc2f1f8c245f8fec6ca3d2148bbcbf
+lastReviewedNote: "Reviewed for Issue #459: Database A adds seven nullable, no-default search_text projections, fourteen canonical Search RPCs, and bounded enqueue only; historical backfill is the workspace#565-coordinated Release 1 operational gate after Edge double-write deployment, not a migration action. Database B owns index/source switch, Database C old-index cleanup, and Database D old-RPC cleanup."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

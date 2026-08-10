@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-10"
-lastReviewedCommit: "65b651f233fc8bc6af0d3291bedc11a6dff0d6e9"
-lastReviewedNote: "Reviewed for Issue #455: mutable-scope package terminal-cache refresh remains migration/test owned; routing, ownership, and workspace integration rules are unchanged."
+lastReviewedCommit: "a8072e018efc2f1f8c245f8fec6ca3d2148bbcbf"
+lastReviewedNote: "Reviewed for Issue #459: Database A owns additive nullable search_text columns, guard-neutral Flow projection updates, fourteen canonical Search RPCs, and bounded enqueue only; historical backfill is the workspace#565 Release 1 operational gate after Edge double-write deployment, not migration work. Database B owns index/source switch, Database C old-index cleanup, and Database D old-RPC cleanup."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
