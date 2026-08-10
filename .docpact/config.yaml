@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-10"
-lastReviewedCommit: "bc21cd0857636e465ee8f69bf33ddcce1b563a98"
-lastReviewedNote: "Reviewed for Issue #442: canonical cutoff Scope Closure normalization remains inside the existing migration, SQL-test, and generated-workspace governance routes; no rule change is required."
+lastReviewedCommit: "8fa104141ff1fb30731acd6159cd6f144943606a"
+lastReviewedNote: "Reviewed for Issue #442 main-to-dev hotfix reconciliation: current routing and ownership remain correct; the older-timestamped public hotfix stays migration/test owned and no-ops after the dev private-schema cutover."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
