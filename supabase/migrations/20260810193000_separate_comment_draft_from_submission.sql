@@ -1,7 +1,17 @@
-CREATE OR REPLACE FUNCTION "api"."cmd_review_save_comment_draft"("p_review_id" "uuid", "p_json" "jsonb", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
+-- Issue #446 follow-up: temporarily storing a reviewer Comment must not
+-- provision Reference Reviews. Only formal Comment submission makes its
+-- references part of the current Root/Reference relationship.
+
+create or replace function api.cmd_review_save_comment_draft(
+  p_review_id uuid,
+  p_json jsonb,
+  p_audit jsonb default '{}'::jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $$
 declare
   v_actor uuid := auth.uid();
   v_review private.reviews%rowtype;
@@ -150,10 +160,45 @@ begin
 end;
 $$;
 
-ALTER FUNCTION "api"."cmd_review_save_comment_draft"("p_review_id" "uuid", "p_json" "jsonb", "p_audit" "jsonb") OWNER TO "postgres";
+alter function api.cmd_review_save_comment_draft(uuid, jsonb, jsonb)
+  owner to postgres;
+revoke all on function api.cmd_review_save_comment_draft(uuid, jsonb, jsonb)
+  from public, anon;
+grant execute on function api.cmd_review_save_comment_draft(uuid, jsonb, jsonb)
+  to authenticated, api_internal_executor;
 
-REVOKE ALL ON FUNCTION "api"."cmd_review_save_comment_draft"("p_review_id" "uuid", "p_json" "jsonb", "p_audit" "jsonb") FROM PUBLIC;
+comment on function api.cmd_review_save_comment_draft(uuid, jsonb, jsonb) is
+  'Temporarily stores editable reviewer Comment JSON and audit metadata without provisioning Reference Reviews or Root candidate hints.';
 
-GRANT ALL ON FUNCTION "api"."cmd_review_save_comment_draft"("p_review_id" "uuid", "p_json" "jsonb", "p_audit" "jsonb") TO "api_internal_executor";
+do $migration$
+declare
+  v_definition text;
+  v_draft_filter text :=
+    '      and comment_row.state_code <> -2';
+  v_submitted_filter text :=
+    '      and comment_row.state_code in (1, -3, 2)';
+begin
+  select pg_catalog.pg_get_functiondef(
+    'private.review_resolve_current_reference_targets_v1(uuid[])'
+      ::pg_catalog.regprocedure
+  )
+  into v_definition;
 
-GRANT ALL ON FUNCTION "api"."cmd_review_save_comment_draft"("p_review_id" "uuid", "p_json" "jsonb", "p_audit" "jsonb") TO "authenticated";
+  if pg_catalog.strpos(v_definition, v_draft_filter) = 0 then
+    raise exception using
+      errcode = '55000',
+      message = 'EXPECTED_COMMENT_RELATIONSHIP_FILTER_NOT_FOUND';
+  end if;
+
+  execute pg_catalog.replace(
+    v_definition,
+    v_draft_filter,
+    v_submitted_filter
+  );
+end;
+$migration$;
+
+comment on function private.review_resolve_current_reference_targets_v1(
+  uuid[]
+) is
+  'Set-oriented recursive current JSON/submitted-Comment closure for multiple Root Reviews; state-zero drafts are excluded and no relationship is persisted.';

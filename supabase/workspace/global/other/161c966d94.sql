@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) IS 'Set-oriented recursive current JSON/comment closure for multiple Root Reviews; returns identities/checksums only and persists no relationship.';

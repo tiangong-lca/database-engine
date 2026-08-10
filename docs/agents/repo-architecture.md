@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 827b086a3d7b79ebaffc57a401aaed1ab2f819a6
-lastReviewedNote: "Reviewed for Issue #446: removing persisted review relationships changes schema and generated objects but not stable repository ownership or workspace structure."
+lastReviewedCommit: 3f49c4b8ac21fcc3bd7c20b1322edb48b028bbdf
+lastReviewedNote: "Reviewed for Issue #446: separating temporary Comment drafts from formal submission changes generated functions but not stable repository ownership or workspace structure."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

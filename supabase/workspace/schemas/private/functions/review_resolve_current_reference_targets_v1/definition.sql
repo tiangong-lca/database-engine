@@ -40,7 +40,7 @@ CREATE OR REPLACE FUNCTION "private"."review_resolve_current_reference_targets_v
     from requested_roots as root_review
     join private.comments as comment_row
       on comment_row.review_id = root_review.id
-      and comment_row.state_code <> -2
+      and comment_row.state_code in (1, -3, 2)
     cross join lateral api.cmd_review_extract_refs(
       coalesce(comment_row.json::jsonb, '{}'::jsonb)
     ) as ref

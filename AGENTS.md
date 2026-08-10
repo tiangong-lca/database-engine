@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 827b086a3d7b79ebaffc57a401aaed1ab2f819a6
-lastReviewedNote: "Reviewed for Issue #446: database ownership, migration source-of-truth, include-all persistent-dev deployment, and workspace integration rules remain unchanged."
+lastReviewedCommit: 3f49c4b8ac21fcc3bd7c20b1322edb48b028bbdf
+lastReviewedNote: "Reviewed for Issue #446: the Comment draft/submission boundary changes database behavior but not ownership, migration source-of-truth, deployment, or workspace integration rules."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
