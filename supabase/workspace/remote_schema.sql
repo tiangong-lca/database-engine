@@ -12983,17 +12983,23 @@ ALTER FUNCTION "api"."cmd_review_save_assignment_draft"("p_review_id" "uuid", "p
 
 CREATE OR REPLACE FUNCTION "api"."cmd_review_save_comment_draft"("p_review_id" "uuid", "p_json" "jsonb", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
-    AS $$
+    SET "search_path" TO ''
+    AS $_$
 declare
   v_actor uuid := auth.uid();
   v_review private.reviews%rowtype;
   v_comment private.comments%rowtype;
   v_comment_json jsonb := coalesce(p_json, '{}'::jsonb);
   v_review_json jsonb;
+  v_ref record;
+  v_target record;
+  v_reference private.reviews%rowtype;
+  v_ref_roots jsonb := '[]'::jsonb;
+  v_checksum text;
+  v_affected jsonb := '[]'::jsonb;
 begin
   if v_actor is null then
-    return jsonb_build_object(
+    return pg_catalog.jsonb_build_object(
       'ok', false,
       'code', 'AUTH_REQUIRED',
       'status', 401,
@@ -13001,8 +13007,8 @@ begin
     );
   end if;
 
-  if coalesce(jsonb_typeof(v_comment_json), 'null') <> 'object' then
-    return jsonb_build_object(
+  if coalesce(pg_catalog.jsonb_typeof(v_comment_json), 'null') <> 'object' then
+    return pg_catalog.jsonb_build_object(
       'ok', false,
       'code', 'INVALID_COMMENT_JSON',
       'status', 400,
@@ -13010,14 +13016,14 @@ begin
     );
   end if;
 
-  select *
-    into v_review
-  from private.reviews
-  where id = p_review_id
+  select review_row.*
+  into v_review
+  from private.reviews as review_row
+  where review_row.id = p_review_id
   for update;
 
   if not found then
-    return jsonb_build_object(
+    return pg_catalog.jsonb_build_object(
       'ok', false,
       'code', 'REVIEW_NOT_FOUND',
       'status', 404,
@@ -13026,19 +13032,20 @@ begin
   end if;
 
   if v_review.state_code not in (-1, 1) then
-    return jsonb_build_object(
+    return pg_catalog.jsonb_build_object(
       'ok', false,
       'code', 'INVALID_REVIEW_STATE',
       'status', 409,
       'message', 'Review comments can only be edited for assigned or rejected reviews',
-      'details', jsonb_build_object(
+      'details', pg_catalog.jsonb_build_object(
         'state_code', v_review.state_code
       )
     );
   end if;
 
-  if not api.cmd_review_json_array(v_review.reviewer_id) @> jsonb_build_array(to_jsonb(v_actor::text)) then
-    return jsonb_build_object(
+  if not api.cmd_review_json_array(v_review.reviewer_id)
+    @> pg_catalog.jsonb_build_array(pg_catalog.to_jsonb(v_actor::text)) then
+    return pg_catalog.jsonb_build_object(
       'ok', false,
       'code', 'REVIEWER_REQUIRED',
       'status', 403,
@@ -13046,26 +13053,127 @@ begin
     );
   end if;
 
-  select *
-    into v_comment
-  from private.comments
-  where review_id = p_review_id
-    and reviewer_id = v_actor
+  select comment_row.*
+  into v_comment
+  from private.comments as comment_row
+  where comment_row.review_id = p_review_id
+    and comment_row.reviewer_id = v_actor
   for update;
 
   if found and v_comment.state_code in (-2, 2) then
-    return jsonb_build_object(
+    return pg_catalog.jsonb_build_object(
       'ok', false,
       'code', 'INVALID_COMMENT_STATE',
       'status', 409,
       'message', 'This reviewer comment can no longer be edited',
-      'details', jsonb_build_object(
+      'details', pg_catalog.jsonb_build_object(
         'state_code', v_comment.state_code
       )
     );
   end if;
 
-  if not found then
+  if v_review.review_kind = 'root'
+    and v_review.target_table in ('processes', 'lifecyclemodels') then
+    for v_ref in
+      select extracted.*
+      from api.cmd_review_extract_refs(v_comment_json) as extracted
+    loop
+      if api.cmd_review_ref_type_to_table(v_ref.ref_type) is not null then
+        v_ref_roots := v_ref_roots || pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'table', api.cmd_review_ref_type_to_table(v_ref.ref_type),
+            'id', v_ref.ref_object_id,
+            'version', v_ref.ref_version,
+            'is_root', false
+          )
+        );
+      end if;
+    end loop;
+
+    for v_target in
+      select collected.*
+      from api.cmd_review_collect_dataset_targets(
+        v_ref_roots,
+        true
+      ) as collected
+      order by collected.table_name, collected.dataset_id,
+        collected.dataset_version
+    loop
+      if nullif(v_target.dataset_row->>'user_id', '') is null then
+        return pg_catalog.jsonb_build_object(
+          'ok', false,
+          'code', 'REFERENCE_OWNER_UNRESOLVED',
+          'status', 409
+        );
+      end if;
+
+      if nullif(v_target.dataset_row->>'user_id', '')::uuid <> v_actor
+        and not private.review_dataset_can_read_v1(
+          v_actor,
+          v_target.table_name,
+          v_target.dataset_row
+        ) then
+        return pg_catalog.jsonb_build_object(
+          'ok', false,
+          'code', 'REFERENCE_ACCESS_DENIED',
+          'status', 403
+        );
+      end if;
+
+      v_checksum := private.review_revision_fingerprint_v1(
+        v_target.table_name,
+        v_target.dataset_row
+      );
+      v_reference := private.review_get_or_create_reference_v1(
+        v_target.table_name,
+        v_target.dataset_row,
+        v_checksum,
+        v_actor
+      );
+
+      perform pg_catalog.set_config('app.review_controlled_write', 'on', true);
+      execute pg_catalog.format(
+        'update public.%I
+            set state_code = case when state_code < 20 then 20 else state_code end,
+                reviews = case when state_code < 100
+                  then api.cmd_review_append_review_ref(reviews, $1)
+                  else reviews
+                end,
+                modified_at = now()
+          where id = $2
+            and version = $3',
+        v_target.table_name
+      ) using p_review_id, v_target.dataset_id, v_target.dataset_version;
+      perform pg_catalog.set_config('app.review_controlled_write', 'off', true);
+
+      if v_target.state_code < 20
+        and nullif(v_target.dataset_row->>'user_id', '')::uuid <> v_actor then
+        perform private.review_notify_event_v1(
+          'reference_entered_review',
+          v_reference.id,
+          nullif(v_target.dataset_row->>'user_id', '')::uuid,
+          v_actor,
+          v_target.table_name,
+          v_target.dataset_id,
+          v_target.dataset_version,
+          null,
+          null,
+          null
+        );
+      end if;
+
+      v_affected := v_affected || pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object(
+          'table', v_target.table_name,
+          'id', v_target.dataset_id,
+          'version', v_target.dataset_version,
+          'reference_review_id', v_reference.id
+        )
+      );
+    end loop;
+  end if;
+
+  if v_comment.review_id is null then
     insert into private.comments (
       review_id,
       reviewer_id,
@@ -13081,33 +13189,28 @@ begin
         else 0
       end
     )
-    returning *
-      into v_comment;
+    returning * into v_comment;
   else
     update private.comments
-      set json = v_comment_json::json,
-          modified_at = now()
+    set json = v_comment_json::json,
+        modified_at = pg_catalog.now()
     where review_id = p_review_id
       and reviewer_id = v_actor
-    returning *
-      into v_comment;
+    returning * into v_comment;
   end if;
 
   v_review_json := api.cmd_review_append_log(
     coalesce(v_review.json, '{}'::jsonb),
     'submit_comments_temporary',
     v_actor,
-    jsonb_build_object(
-      'reviewer_id', v_actor
-    )
+    pg_catalog.jsonb_build_object('reviewer_id', v_actor)
   );
 
   update private.reviews
-    set json = v_review_json,
-        modified_at = now()
+  set json = v_review_json,
+      modified_at = pg_catalog.now()
   where id = p_review_id
-  returning *
-    into v_review;
+  returning * into v_review;
 
   insert into private.command_audit_log (
     command,
@@ -13121,21 +13224,33 @@ begin
     v_actor,
     'reviews',
     p_review_id,
-    coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
+    coalesce(p_audit, '{}'::jsonb) || pg_catalog.jsonb_build_object(
       'reviewer_id', v_actor,
-      'comment_state_code', v_comment.state_code
+      'comment_state_code', v_comment.state_code,
+      'affected_datasets', (
+        select coalesce(
+          pg_catalog.jsonb_agg(affected.value - 'reference_review_id'),
+          '[]'::jsonb
+        )
+        from pg_catalog.jsonb_array_elements(v_affected) as affected(value)
+      )
     )
   );
 
-  return jsonb_build_object(
+  return pg_catalog.jsonb_build_object(
     'ok', true,
-    'data', jsonb_build_object(
-      'review', to_jsonb(v_review),
-      'comment', to_jsonb(v_comment)
+    'data', pg_catalog.jsonb_build_object(
+      'review', pg_catalog.to_jsonb(v_review),
+      'comment', pg_catalog.to_jsonb(v_comment),
+      'affected_datasets', v_affected
     )
   );
+exception
+  when others then
+    perform pg_catalog.set_config('app.review_controlled_write', 'off', true);
+    raise;
 end;
-$$;
+$_$;
 
 
 ALTER FUNCTION "api"."cmd_review_save_comment_draft"("p_review_id" "uuid", "p_json" "jsonb", "p_audit" "jsonb") OWNER TO "postgres";
@@ -19449,10 +19564,6 @@ begin
     select direct_root.id from direct_roots as direct_root
     union
     select hinted_root.id from hinted_roots as hinted_root
-    union
-    select root_review.id
-    from private.reviews as root_review
-    where root_review.review_kind = 'root'
   ),
   derived_references as materialized (
     select derived.*
@@ -19538,7 +19649,7 @@ $$;
 ALTER FUNCTION "api"."qry_review_get_admin_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "api"."qry_review_get_admin_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") IS 'Current-state Admin queue grouped by Root Review. Root/Reference pairs are derived from JSON/comments and are not persisted.';
+COMMENT ON FUNCTION "api"."qry_review_get_admin_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") IS 'Current-state Admin queue grouped by candidate Root Review. Direct or candidate-hinted child matches can include a parent; unrelated roots are not derived.';
 
 
 
@@ -19824,10 +19935,6 @@ begin
     select direct_root.id from direct_roots as direct_root
     union
     select hinted_root.id from hinted_roots as hinted_root
-    union
-    select root_review.id
-    from private.reviews as root_review
-    where root_review.review_kind = 'root'
   ),
   derived_references as materialized (
     select derived.*
@@ -19945,7 +20052,7 @@ $$;
 ALTER FUNCTION "api"."qry_review_get_member_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "api"."qry_review_get_member_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") IS 'Current-state Member queue grouped by Root Review. Derived child matches can include a parent even when the Root itself does not match.';
+COMMENT ON FUNCTION "api"."qry_review_get_member_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") IS 'Current-state Member queue grouped by candidate Root Review. Direct or candidate-hinted child matches can include a parent; unrelated roots are not derived.';
 
 
 

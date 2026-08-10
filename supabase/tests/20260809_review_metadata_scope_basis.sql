@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(10);
+select plan(17);
 
 create or replace function pg_temp.disable_trigger_if_exists(
   p_table regclass,
@@ -68,6 +68,22 @@ values (
 on conflict (id) do update
 set raw_user_meta_data = excluded.raw_user_meta_data;
 
+insert into private.teams (id, json, rank, is_public)
+values (
+  '00000000-0000-0000-0000-000000000000',
+  '{"name":"System Team"}',
+  0,
+  false
+)
+on conflict (id) do nothing;
+
+insert into private.roles (user_id, team_id, role)
+values (
+  '19800000-0000-0000-0000-000000000001',
+  '00000000-0000-0000-0000-000000000000',
+  'review-admin'
+);
+
 select pg_temp.disable_trigger_if_exists(
   'public.sources'::regclass,
   'sources_json_sync_trigger'
@@ -111,6 +127,16 @@ values (
   '{"sourceDataSet":{"sourceInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"zh","#text":"审核员-来源"}]}}}}'::json,
   '19800000-0000-0000-0000-000000000001',
   100,
+  null,
+  true,
+  '[]'::jsonb
+), (
+  '39800000-0000-0000-0000-000000000003',
+  '01.01.000',
+  '{"sourceDataSet":{"sourceInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"zh","#text":"审核草稿-待分配来源"}]}}}}'::jsonb,
+  '{"sourceDataSet":{"sourceInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"zh","#text":"审核草稿-待分配来源"}]}}}}'::json,
+  '19800000-0000-0000-0000-000000000001',
+  20,
   null,
   true,
   '[]'::jsonb
@@ -162,6 +188,17 @@ values (
   'processes',
   pg_catalog.repeat('a', 64),
   '19800000-0000-0000-0000-000000000001'
+), (
+  '59800000-0000-0000-0000-000000000002',
+  '49800000-0000-0000-0000-000000000002',
+  '01.01.000',
+  1,
+  '["19800000-0000-0000-0000-000000000001"]'::jsonb,
+  '{"logs":[]}'::jsonb,
+  'root',
+  'processes',
+  pg_catalog.repeat('b', 64),
+  '19800000-0000-0000-0000-000000000001'
 );
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
@@ -207,6 +244,105 @@ select ok(
   'Reviewer metadata comment submission succeeds when it introduces references'
 );
 
+create temporary table review_metadata_draft_result as
+select api.cmd_review_save_comment_draft(
+  '59800000-0000-0000-0000-000000000002',
+  '{
+    "modellingAndValidation": {
+      "complianceDeclarations": {
+        "compliance": [{
+          "common:referenceToComplianceSystem": {
+            "@refObjectId": "39800000-0000-0000-0000-000000000003",
+            "@type": "source data set",
+            "@uri": "../sources/39800000-0000-0000-0000-000000000003.xml",
+            "@version": "01.01.000"
+          }
+        }]
+      }
+    }
+  }'::jsonb,
+  '{}'::jsonb
+) as result;
+
+select ok(
+  (select (result->>'ok')::boolean from review_metadata_draft_result),
+  'Reviewer metadata draft save succeeds when it introduces a reference'
+);
+
+select is(
+  (
+    select state_code
+    from private.comments
+    where review_id = '59800000-0000-0000-0000-000000000002'
+      and reviewer_id = '19800000-0000-0000-0000-000000000001'
+  ),
+  0,
+  'Reviewer metadata draft remains an editable state-zero Comment'
+);
+
+select is(
+  (
+    select state_code
+    from private.reviews
+    where review_kind = 'reference'
+      and target_table = 'sources'
+      and data_id = '39800000-0000-0000-0000-000000000003'
+      and pg_catalog.btrim(data_version::text) = '01.01.000'
+  ),
+  0,
+  'draft-introduced Source receives an unassigned Reference Review'
+);
+
+select ok(
+  (
+    select reviews @> '[{"id":"59800000-0000-0000-0000-000000000002"}]'
+    from public.sources
+    where id = '39800000-0000-0000-0000-000000000003'
+      and version = '01.01.000'
+  ),
+  'draft-introduced Source stores the parent Root candidate hint'
+);
+
+select is(
+  (
+    select id
+    from api.qry_review_get_admin_root_queue_items_v2(
+      'unassigned', 1, 10, 'modified_at', 'desc'
+    )
+    where id = '59800000-0000-0000-0000-000000000002'
+  ),
+  '59800000-0000-0000-0000-000000000002'::uuid,
+  'draft-introduced unassigned Reference Review is grouped under its Root'
+);
+
+select is(
+  (
+    select root_matches_status
+    from api.qry_review_get_admin_root_queue_items_v2(
+      'unassigned', 1, 10, 'modified_at', 'desc'
+    )
+    where id = '59800000-0000-0000-0000-000000000002'
+  ),
+  false,
+  'draft-introduced Root is included by its unassigned child task'
+);
+
+update private.roles
+set role = 'review-member'
+where user_id = '19800000-0000-0000-0000-000000000001'
+  and team_id = '00000000-0000-0000-0000-000000000000';
+
+select is(
+  (
+    select count(*)::integer
+    from api.qry_review_get_member_root_queue_items_v2(
+      'reviewed', 1, 10, 'modified_at', 'descend'
+    )
+  ),
+  1,
+  'reviewed Member queue ignores the unrelated state-zero draft Root'
+);
+
 select ok(
   not exists (
     select 1 from information_schema.columns
@@ -240,7 +376,7 @@ select is(
     where target.reviews @> '[{"id":"59800000-0000-0000-0000-000000000001"}]'
   ),
   0,
-  'approved metadata targets remain immutable; queue completeness uses the all-Root fallback'
+  'approved metadata targets remain immutable without active candidate hints'
 );
 
 select ok(

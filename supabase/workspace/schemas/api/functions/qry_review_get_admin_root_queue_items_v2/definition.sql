@@ -57,10 +57,6 @@ begin
     select direct_root.id from direct_roots as direct_root
     union
     select hinted_root.id from hinted_roots as hinted_root
-    union
-    select root_review.id
-    from private.reviews as root_review
-    where root_review.review_kind = 'root'
   ),
   derived_references as materialized (
     select derived.*

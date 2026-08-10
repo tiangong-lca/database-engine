@@ -28,7 +28,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: bdf9831d7df70e23403d8ef4fdc559f516b07953
+lastReviewedCommit: 827b086a3d7b79ebaffc57a401aaed1ab2f819a6
 lastReviewedNote: "Reviewed for Issue #446: removing persisted review relationships changes schema and generated objects but not stable repository ownership or workspace structure."
 related:
   - ../../AGENTS.md
