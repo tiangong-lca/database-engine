@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 54d068742efb8b148f6a5cdfb981419e39a1a839
-lastReviewedNote: "Updated for Issue #459: Database A adds nullable search_text projections and fourteen canonical Search RPCs over existing private implementations; extracted_md remains the lexical source and Database B/C/D index, source-switch, backfill, and cleanup work is deferred."
+lastReviewedCommit: a8072e018efc2f1f8c245f8fec6ca3d2148bbcbf
+lastReviewedNote: "Updated for Issue #459: Database A adds nullable search_text projections, fourteen canonical Search RPCs, and bounded enqueue only; extracted_md remains the lexical source. Historical backfill is the workspace#565-coordinated Release 1 operational gate after Edge double-write deployment, not migration work; Database B owns index/source switch, Database C old-index cleanup, and Database D old-RPC cleanup."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
