@@ -80,8 +80,8 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  196::bigint,
-  'private contains existing helpers plus all reviewed internal functions'
+  197::bigint,
+  'private contains existing helpers, the Database B cutover gate, and all reviewed internal functions'
 );
 
 select ok(
