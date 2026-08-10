@@ -4,6 +4,14 @@ create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 select no_plan();
 
+select is(
+  (select expected_validator_scanner_fingerprint
+   from public.lcia_scope_closure_config
+   where singleton),
+  'scope-closure-validator-scanner.v1+cutoff-readiness-r1',
+  'new closure requests use the cutoff-readiness scanner cache revision'
+);
+
 -- A minimal immutable current release.  The closure request must use this
 -- manifest, rather than any live state-code rows, as its identity universe.
 insert into auth.users (instance_id,id,aud,role,email,encrypted_password,email_confirmed_at,raw_app_meta_data,raw_user_meta_data,created_at,updated_at,is_sso_user,is_anonymous)
@@ -218,6 +226,135 @@ select set_config('request.jwt.claim.role','service_role',true);
 select is(public.svc_lcia_scope_closure_fail_before_scan((select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-fail'),(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-fail'),'c7220000-0000-4000-8000-000000000104','bootstrap_failed')->>'code','worker_job_lease_invalid','early failure rejects a stale lease token');
 select is(public.svc_lcia_scope_closure_fail_before_scan((select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-fail'),(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-fail'),'c7220000-0000-4000-8000-000000000103','bootstrap_failed')->>'ok','true','early failure is lease fenced and records the run');
 select is((select status from public.lcia_scope_closure_scan_executions limit 1),'completed','a later worker bootstrap failure does not corrupt the completed shared execution');
+
+-- Scanner semantics participate in request and shared-execution identity.  A
+-- rollout may still have old requests in flight, but new requests must not
+-- select their completed evidence after the configured revision changes.
+update public.lcia_scope_closure_config
+set expected_validator_scanner_fingerprint='scope-closure-validator-scanner.v1',
+    updated_at=now()
+where singleton;
+select set_config('request.jwt.claim.role','authenticated',true);
+select is(public.cmd_lcia_scope_closure_check_request_v2(
+  '{"coverageMode":"subset","processes":[{"id":"c7220000-0000-4000-8000-000000000020","version":"01.00.000"}],"lciaMethods":[{"id":"c7220000-0000-4000-8000-000000000021","version":"01.00.000"}]}'::jsonb,
+  'closure-e2e-old-scanner','{}'
+)->>'ok','true','historical scanner request fixture is accepted by the database command');
+update public.lcia_scope_closure_config
+set expected_validator_scanner_fingerprint='scope-closure-validator-scanner.v1+cutoff-readiness-r1',
+    updated_at=now()
+where singleton;
+select is(public.cmd_lcia_scope_closure_check_request_v2(
+  '{"coverageMode":"subset","processes":[{"id":"c7220000-0000-4000-8000-000000000020","version":"01.00.000"}],"lciaMethods":[{"id":"c7220000-0000-4000-8000-000000000021","version":"01.00.000"}]}'::jsonb,
+  'closure-e2e-new-scanner','{}'
+)->>'ok','true','cutoff-readiness scanner request fixture is accepted');
+select ok((
+  select old_scan.scan_execution_id <> new_scan.scan_execution_id
+     and old_scan.request_fingerprint <> new_scan.request_fingerprint
+     and old_scan.expected_validator_scanner_fingerprint='scope-closure-validator-scanner.v1'
+     and new_scan.expected_validator_scanner_fingerprint='scope-closure-validator-scanner.v1+cutoff-readiness-r1'
+  from public.lcia_scope_closure_checks old_scan
+  join public.lcia_scope_closure_checks new_scan on true
+  where old_scan.request_idempotency_token='closure-e2e-old-scanner'
+    and new_scan.request_idempotency_token='closure-e2e-new-scanner'
+),'scanner revision change produces a fresh request fingerprint and scan execution');
+
+-- A blocked source has complete reusable administrative evidence but no
+-- numerical snapshot.  The shared execution still owns its preallocated UUID.
+select is(public.cmd_lcia_scope_closure_check_request_v2(
+  '{"coverageMode":"global_eligible","processes":[],"lciaMethods":[{"id":"c7220000-0000-4000-8000-000000000021","version":"01.00.000"}]}'::jsonb,
+  'closure-e2e-blocked-a','{}'
+)->>'ok','true','blocked-source fixture request is accepted');
+select is(public.cmd_lcia_scope_closure_check_request_v2(
+  '{"coverageMode":"global_eligible","processes":[],"lciaMethods":[{"id":"c7220000-0000-4000-8000-000000000021","version":"01.00.000"}]}'::jsonb,
+  'closure-e2e-blocked-b','{}'
+)->>'ok','true','blocked-target fixture request is accepted');
+update public.worker_jobs
+set status='running', lease_token='c7220000-0000-4000-8000-000000000105',
+    lease_expires_at=now()+interval '10 minutes', started_at=now()
+where id=(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-blocked-a');
+select set_config('request.jwt.claim.role','service_role',true);
+select is(public.svc_lcia_scope_closure_claim_scan_execution(
+  (select scan_execution_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-blocked-a'),
+  (select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-blocked-a'),
+  'c7220000-0000-4000-8000-000000000105'
+)->'data'->>'acquired','true','blocked-source worker acquires its shared execution');
+insert into public.worker_job_artifacts(
+  id,job_id,artifact_type,storage_bucket,storage_path,content_type,byte_size,checksum_sha256
+) values (
+  'c7220000-0000-4000-8000-000000000206',
+  (select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-blocked-a'),
+  'closure_report_xlsx','test','reports/blocked-a.xlsx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',12,repeat('6',64)
+);
+select is(public.svc_lcia_scope_closure_check_record_result_v3(
+  (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-blocked-a'),
+  (select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-blocked-a'),
+  'c7220000-0000-4000-8000-000000000105','blocked','complete',
+  (select requested_scope_manifest from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-blocked-a'),
+  jsonb_build_object('sourceFingerprint','blocked-source','resolutionMapHash',repeat('7',64)),
+  jsonb_build_object('schemaVersion','lcia.scope-closure-summary.v1','scan','blocked-source'),
+  jsonb_build_array(jsonb_build_object(
+    'issueKey','blocked-reuse-fixture','severity','blocker','blocking',true,
+    'issueCode','blocked_reuse_fixture','message','blocked reuse fixture',
+    'occurrenceCount',1,'affectedRootCount',0
+  )),
+  array['blocked_reuse_fixture']::text[],
+  'c7220000-0000-4000-8000-000000000206',null::uuid,null::uuid
+)->>'ok','true','blocked source records complete reusable evidence without a numerical snapshot');
+select ok((
+  select source.snapshot_id is null
+     and execution.numerical_snapshot_id is not null
+     and execution.status='completed'
+     and execution.completed_check_id=source.id
+  from public.lcia_scope_closure_checks source
+  join public.lcia_scope_closure_scan_executions execution on execution.id=source.scan_execution_id
+  where source.request_idempotency_token='closure-e2e-blocked-a'
+),'blocked source deliberately has no snapshot while its execution retains the preallocated UUID');
+update public.worker_jobs
+set status='running', lease_token='c7220000-0000-4000-8000-000000000106',
+    lease_expires_at=now()+interval '10 minutes', started_at=now()
+where id=(select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-blocked-b');
+select is(public.svc_lcia_scope_closure_reuse_completed_scan(
+  (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-blocked-b'),
+  (select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-blocked-b'),
+  'c7220000-0000-4000-8000-000000000106',
+  (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-blocked-a')
+)->'data'->>'reuseAvailable','true','complete blocked evidence is reusable without snapshot identity equality');
+insert into public.worker_job_artifacts(
+  id,job_id,artifact_type,storage_bucket,storage_path,content_type,byte_size,checksum_sha256
+) values (
+  'c7220000-0000-4000-8000-000000000207',
+  (select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-blocked-b'),
+  'closure_report_xlsx','test','reports/blocked-b.xlsx',
+  'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',13,repeat('7',64)
+);
+select is(public.svc_lcia_scope_closure_finalize_reused_scan(
+  (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-blocked-b'),
+  (select worker_job_id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-blocked-b'),
+  'c7220000-0000-4000-8000-000000000106',
+  (select id from public.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-blocked-a'),
+  'c7220000-0000-4000-8000-000000000207',
+  jsonb_build_object('schemaVersion','lcia.scope-closure-summary.v1','scan','blocked-reused-target')
+)->>'ok','true','blocked evidence finalizes into a target-owned report');
+select ok((
+  select target.status='blocked'
+     and target.snapshot_id is null
+     and target.reused_from_check_id=source.id
+     and job.status='blocked'
+  from public.lcia_scope_closure_checks target
+  join public.lcia_scope_closure_checks source on source.request_idempotency_token='closure-e2e-blocked-a'
+  join public.worker_jobs job on job.id=target.worker_job_id
+  where target.request_idempotency_token='closure-e2e-blocked-b'
+),'blocked reuse preserves the no-snapshot contract and terminal worker state');
+select ok(
+  position('v_source.status = ''passed''' in pg_get_functiondef(
+    'public.svc_lcia_scope_closure_reuse_completed_scan(uuid,uuid,uuid,uuid)'::regprocedure
+  )) > 0
+  and position('v_execution.numerical_snapshot_id is distinct from v_source.snapshot_id' in pg_get_functiondef(
+    'public.svc_lcia_scope_closure_reuse_completed_scan(uuid,uuid,uuid,uuid)'::regprocedure
+  )) > 0,
+  'passed scan reuse retains the exact numerical snapshot mismatch fence'
+);
 
 -- A content change with the same exact process identity is a new public
 -- release, hence a new snapshot/fingerprint. Frozen evidence remains valid;

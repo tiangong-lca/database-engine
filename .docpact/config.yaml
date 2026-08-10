@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-10"
-lastReviewedCommit: "1516ad7bb3f74734095756e741f00f60e93b79b3"
-lastReviewedNote: "Reviewed for Issue #442 production-main hotfix: current routing and ownership remain correct; Scope Closure cutoff canonicalization stays migration/test owned, with the architecture and validation contracts updated."
+lastReviewedCommit: "609a6e84b4417e719bcb4b8123e52543d7e42bdb"
+lastReviewedNote: "Reviewed for Issue #450 production-main hotfix: blocked shared-scan reuse and scanner cache revision remain migration/test owned under current routing."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
