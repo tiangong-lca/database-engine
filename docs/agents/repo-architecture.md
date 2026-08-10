@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-31
-lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
-lastReviewedNote: "Reviewed through Issues #323, #324, and #329: schema truth remains migration-owned; the narrowed Flow fence and Root/Reference Review workflow preserve ownership and generated-workspace boundaries, while isolated provider evidence stays script-owned."
+lastReviewedAt: 2026-08-10
+lastReviewedCommit: 609a6e84b4417e719bcb4b8123e52543d7e42bdb
+lastReviewedNote: "Updated for Issue #450: blocked shared-scan reuse remains administrative evidence without a numerical snapshot, and new requests use a revised internal scanner cache identity."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -190,6 +190,8 @@ The data-product completeness check can run before the first formal `lca_release
 Candidate snapshots compute `canonicalContentHash` with the same recursively key-sorted, compact JSON algorithm used by the Worker and normalize the reviewed LCIA method/artifact-locator alias before freezing identities. Because the initial production universe exceeds 120,000 exact rows, migration backfill pays the canonical-hash cost once into a private cache; eight table triggers then refresh only changed identities, while interactive requests aggregate the cached manifest inside the authenticated role timeout. This one-time production-volume administrative statement must declare a bounded session `statement_timeout` above the platform's ordinary two-minute cap and restore the default immediately after the backfill; a small Preview dataset is not sufficient evidence for that bound. `candidateData.sourceKind=candidate-public-state` is the authoritative source discriminator. The zero-UUID `currentPublicRelease` object is only a deterministic compatibility projection required by the deployed Worker v2 schema and must never be treated as publication evidence. `current-membership-required-v1` continues to require a real current release; the default frozen-artifact policy may consume a candidate snapshot.
 
 Certificate-grade Scope Closure normalization canonicalizes omitted and supported legacy `closed/open/cutoff` technosphere boundary inputs to `cutoff` before requested-scope, policy, snapshot, and request fingerprints are computed. Unknown values remain invalid. The production-main hotfix targets the pre-cutover `public` normalizer and is intentionally a no-op after that function has moved to `private`; the dev-line migration owns the equivalent post-cutover definition. Historical frozen requests and artifacts are not rewritten.
+
+The current internal scanner cache identity is `scope-closure-validator-scanner.v1+cutoff-readiness-r1`; changing it creates a distinct request fingerprint and scan execution without changing any public V1 DTO or artifact schema. Historical requests retain their recorded revision for in-flight compatibility. A completed `blocked` scan has complete reusable administrative evidence but deliberately no numerical snapshot, even though its scan-execution row retains a preallocated `numerical_snapshot_id`. Reuse therefore compares that ID with the source check snapshot only for `passed` certificate evidence; all immutable scope, policy, data-snapshot, completion, and source-status fences still apply to both terminal outcomes.
 
 ## Scope-Closure Evidence Retention
 
