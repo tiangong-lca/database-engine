@@ -17,7 +17,7 @@ select extensions.ok(
       and trigger.tgname = 'dataset_flow_identity_flow_active_fence'
       and not trigger.tgisinternal
   ),
-  'Flow UPDATE actor fence excludes only the three guard-neutral derivative columns'
+  'Flow UPDATE actor fence excludes the four guard-neutral derivative columns'
 );
 
 select extensions.ok(
@@ -98,7 +98,7 @@ select extensions.lives_ok(
 select extensions.lives_ok(
   $test$
     update public.flows
-    set search_text = 'multilingual lexical projection'
+    set search_text = array['multilingual lexical projection']::text[]
     where id = 'fa324000-0000-4000-8000-000000000001'::uuid
   $test$,
   'search_text-only Flow update bypasses a busy owner actor fence'

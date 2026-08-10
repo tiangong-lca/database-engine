@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
 lastReviewedCommit: 54d068742efb8b148f6a5cdfb981419e39a1a839
-lastReviewedNote: "已为 Issue #459 复核：exact-local 快照可确定性重建新增的 search_text 列与正式 Search RPC 类型，workspace 行为不变。"
+lastReviewedNote: "已为 Issue #459 复核：exact-local 快照可确定性重建七张表的 nullable text[] search_text 列、已审核行派生 guard 与正式 Search RPC 类型，workspace 行为不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

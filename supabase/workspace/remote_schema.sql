@@ -15172,7 +15172,7 @@ CREATE TABLE IF NOT EXISTS "public"."contacts" (
     "extracted_md" "text",
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
-    "search_text" "text",
+    "search_text" "text"[],
     CONSTRAINT "contacts_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 3, 20, 100])))
 );
 
@@ -15180,7 +15180,7 @@ CREATE TABLE IF NOT EXISTS "public"."contacts" (
 ALTER TABLE "public"."contacts" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."contacts"."search_text" IS 'Edge-owned multilingual lexical projection. Nullable during the Release 1 backfill; not a lexical search source until Database B.';
+COMMENT ON COLUMN "public"."contacts"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. A legacy non-NULL text value is preserved as one array element during migration; the later backfill replaces it with the complete projection. Not a lexical search source until Database B.';
 
 
 
@@ -15211,7 +15211,7 @@ CREATE TABLE IF NOT EXISTS "public"."flowproperties" (
     "extracted_md" "text",
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
-    "search_text" "text",
+    "search_text" "text"[],
     CONSTRAINT "flowproperties_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
 );
 
@@ -15219,7 +15219,7 @@ CREATE TABLE IF NOT EXISTS "public"."flowproperties" (
 ALTER TABLE "public"."flowproperties" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."flowproperties"."search_text" IS 'Edge-owned multilingual lexical projection. Nullable during the Release 1 backfill; not a lexical search source until Database B.';
+COMMENT ON COLUMN "public"."flowproperties"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. A legacy non-NULL text value is preserved as one array element during migration; the later backfill replaces it with the complete projection. Not a lexical search source until Database B.';
 
 
 
@@ -15250,7 +15250,7 @@ CREATE TABLE IF NOT EXISTS "public"."flows" (
     "embedding_ft_at" timestamp with time zone,
     "extracted_md" "text",
     "embedding_ft" "extensions"."vector"(1024),
-    "search_text" "text",
+    "search_text" "text"[],
     CONSTRAINT "flows_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
 );
 
@@ -15258,7 +15258,7 @@ CREATE TABLE IF NOT EXISTS "public"."flows" (
 ALTER TABLE "public"."flows" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."flows"."search_text" IS 'Edge-owned multilingual lexical projection. Nullable during the Release 1 backfill; not a lexical search source until Database B.';
+COMMENT ON COLUMN "public"."flows"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. A legacy non-NULL text value is preserved as one array element during migration; the later backfill replaces it with the complete projection. Not a lexical search source until Database B.';
 
 
 
@@ -17709,7 +17709,7 @@ CREATE TABLE IF NOT EXISTS "public"."lifecyclemodels" (
     "extracted_md" "text",
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
-    "search_text" "text",
+    "search_text" "text"[],
     CONSTRAINT "lifecyclemodels_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100])))
 );
 
@@ -17717,7 +17717,7 @@ CREATE TABLE IF NOT EXISTS "public"."lifecyclemodels" (
 ALTER TABLE "public"."lifecyclemodels" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."lifecyclemodels"."search_text" IS 'Edge-owned multilingual lexical projection. Nullable during the Release 1 backfill; not a lexical search source until Database B.';
+COMMENT ON COLUMN "public"."lifecyclemodels"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. A legacy non-NULL text value is preserved as one array element during migration; the later backfill replaces it with the complete projection. Not a lexical search source until Database B.';
 
 
 
@@ -19049,7 +19049,7 @@ CREATE TABLE IF NOT EXISTS "public"."processes" (
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
     "extracted_md" "text",
-    "search_text" "text",
+    "search_text" "text"[],
     CONSTRAINT "processes_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
 );
 
@@ -19057,7 +19057,7 @@ CREATE TABLE IF NOT EXISTS "public"."processes" (
 ALTER TABLE "public"."processes" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."processes"."search_text" IS 'Edge-owned multilingual lexical projection. Nullable during the Release 1 backfill; not a lexical search source until Database B.';
+COMMENT ON COLUMN "public"."processes"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. A legacy non-NULL text value is preserved as one array element during migration; the later backfill replaces it with the complete projection. Not a lexical search source until Database B.';
 
 
 
@@ -21694,7 +21694,7 @@ CREATE TABLE IF NOT EXISTS "public"."sources" (
     "extracted_md" "text",
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
-    "search_text" "text",
+    "search_text" "text"[],
     CONSTRAINT "sources_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100])))
 );
 
@@ -21702,7 +21702,7 @@ CREATE TABLE IF NOT EXISTS "public"."sources" (
 ALTER TABLE "public"."sources" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."sources"."search_text" IS 'Edge-owned multilingual lexical projection. Nullable during the Release 1 backfill; not a lexical search source until Database B.';
+COMMENT ON COLUMN "public"."sources"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. A legacy non-NULL text value is preserved as one array element during migration; the later backfill replaces it with the complete projection. Not a lexical search source until Database B.';
 
 
 
@@ -23332,7 +23332,7 @@ CREATE TABLE IF NOT EXISTS "public"."unitgroups" (
     "extracted_md" "text",
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
-    "search_text" "text",
+    "search_text" "text"[],
     CONSTRAINT "unitgroups_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
 );
 
@@ -23340,7 +23340,7 @@ CREATE TABLE IF NOT EXISTS "public"."unitgroups" (
 ALTER TABLE "public"."unitgroups" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."unitgroups"."search_text" IS 'Edge-owned multilingual lexical projection. Nullable during the Release 1 backfill; not a lexical search source until Database B.';
+COMMENT ON COLUMN "public"."unitgroups"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. A legacy non-NULL text value is preserved as one array element during migration; the later backfill replaces it with the complete projection. Not a lexical search source until Database B.';
 
 
 
@@ -39878,10 +39878,10 @@ begin
       is distinct from 'on'
     and (
       to_jsonb(old)
-        - array['state_code', 'review_id', 'reviews', 'modified_at']
+        - array['extracted_md', 'search_text', 'embedding_ft', 'embedding_ft_at']
       is distinct from
       to_jsonb(new)
-        - array['state_code', 'review_id', 'reviews', 'modified_at']
+        - array['extracted_md', 'search_text', 'embedding_ft', 'embedding_ft_at']
     ) then
     raise exception using
       errcode = '55000',
@@ -39897,6 +39897,10 @@ $$;
 
 
 ALTER FUNCTION "private"."review_dataset_content_guard_v1"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "private"."review_dataset_content_guard_v1"() IS 'State 20/100 authored content is immutable; uncontrolled writes may change only extracted_md, search_text, embedding_ft, and embedding_ft_at. Review-controlled commands retain their existing bypass context.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."review_derive_current_references_v1"("p_root_review_ids" "uuid"[]) RETURNS TABLE("root_review_id" "uuid", "reference_review_id" "uuid", "target_table" "text", "data_id" "uuid", "data_version" "text", "submitted_revision_checksum" "text", "state_code" integer)
