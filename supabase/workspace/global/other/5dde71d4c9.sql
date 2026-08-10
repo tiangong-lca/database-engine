@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "api"."qry_review_get_member_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") IS 'Server-paginated Review Member queue grouped by Root Review without exposing unassigned sibling Reference Reviews.';

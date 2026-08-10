@@ -13,15 +13,7 @@ declare
   v_reference private.reviews%rowtype;
   v_target record;
   v_target_checksum text;
-  v_items jsonb := '[]'::jsonb;
-  v_item jsonb;
-  v_scope_history jsonb;
   v_affected jsonb := '[]'::jsonb;
-  v_reference_ids uuid[] := array[]::uuid[];
-  v_old_reference_ids uuid[] := array[]::uuid[];
-  v_impacted_root private.reviews%rowtype;
-  v_current_snapshot jsonb;
-  v_repair_items jsonb;
   v_conflict_version text;
   v_event_key text;
 begin
@@ -177,23 +169,20 @@ begin
   end if;
 
 
-  select coalesce(array_agg(rejected.id order by rejected.id), array[]::uuid[])
-  into v_old_reference_ids
-  from private.reviews as rejected
-  where rejected.review_kind = 'reference'
-    and rejected.target_table = v_table
-    and rejected.data_id = p_target_id
-    and btrim(rejected.data_version::text) = p_target_version
-    and rejected.state_code = -1
-    and exists (
-      select 1
-      from private.reviews as root_review
-      where root_review.review_kind = 'root'
-        and root_review.current_reference_review_ids
-          @> array[rejected.id]::uuid[]
-    );
-
-  if cardinality(v_old_reference_ids) > 0 then
+  if exists (
+    select 1
+    from private.review_candidate_root_ids_v1(
+      v_table,
+      p_target_id,
+      p_target_version
+    ) as candidate
+    where private.review_root_currently_references_target_v1(
+      candidate.root_review_id,
+      v_table,
+      p_target_id,
+      p_target_version
+    )
+  ) then
     v_reference := private.review_get_or_create_reference_v1(
       v_table,
       v_root_row,
@@ -213,70 +202,14 @@ begin
     ) using p_target_id, p_target_version;
     perform set_config('app.review_controlled_write', 'off', true);
 
-    for v_impacted_root in
-      select root_review.*
-      from private.reviews as root_review
-      where root_review.review_kind = 'root'
-        and root_review.state_code in (0, 1)
-        and root_review.current_reference_review_ids && v_old_reference_ids
-      order by root_review.id
-      for update
-    loop
-      v_current_snapshot := private.review_scope_current_snapshot_v1(
-        v_impacted_root.scope_history
-      );
-      v_repair_items := private.review_replace_reference_item_v1(
-        v_current_snapshot->'items',
-        v_table,
-        p_target_id,
-        p_target_version,
-        v_checksum,
-        v_reference.id,
-        nullif(v_root_row->>'user_id', '')::uuid,
-        nullif(v_root_row->>'team_id', '')::uuid
-      );
-
-      perform private.review_append_scope_snapshot_v1(
-        v_impacted_root.id,
-        'reference_repair',
-        v_current_snapshot->>'root_revision_checksum',
-        v_repair_items,
-        v_actor
-      );
-
-      perform private.review_notify_event_v1(
-        'reference_repaired',
-        v_reference.id,
-        v_impacted_root.target_owner_id,
-        v_actor,
-        v_table,
-        p_target_id,
-        p_target_version,
-        v_impacted_root.id,
-        (v_impacted_root.scope_history->>'current_version')::integer + 1,
-        null
-      );
-    end loop;
-
     insert into private.command_audit_log (
-      command,
-      actor_user_id,
-      target_table,
-      target_id,
-      target_version,
-      payload
-    )
-    values (
-      'cmd_review_submit_v2',
-      v_actor,
-      v_table,
-      p_target_id,
-      p_target_version,
+      command, actor_user_id, target_table, target_id, target_version, payload
+    ) values (
+      'cmd_review_submit_v2', v_actor, v_table, p_target_id, p_target_version,
       coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
         'review_id', v_reference.id,
         'review_kind', 'reference',
-        'submission_mode', 'reference_repair',
-        'replaced_reference_review_ids', to_jsonb(v_old_reference_ids)
+        'submission_mode', 'reference_repair'
       )
     );
 
@@ -420,70 +353,15 @@ begin
       v_target.dataset_row
     );
 
-    if v_target.is_root then
-      v_item := jsonb_build_object(
-        'item_kind', 'root',
-        'target_table', v_target.table_name,
-        'data_id', v_target.dataset_id,
-        'data_version', v_target.dataset_version,
-        'submitted_revision_checksum', v_target_checksum,
-        'reference_review_id', null,
-        'target_owner_id', v_target.dataset_row->>'user_id',
-        'target_team_id', v_target.dataset_row->'team_id',
-        'relation_type', 'root',
-        'relation_path', '$',
-        'introduced_by', 'submitted_data',
-        'introduced_field_path', null
-      );
-    else
+    if not v_target.is_root then
       v_reference := private.review_get_or_create_reference_v1(
         v_target.table_name,
         v_target.dataset_row,
         v_target_checksum,
         v_actor
       );
-
-      perform private.review_rebind_active_roots_to_reference_v1(
-        v_target.table_name,
-        v_target.dataset_row,
-        v_target_checksum,
-        v_reference.id,
-        v_actor
-      );
-
-      v_reference_ids := array_append(v_reference_ids, v_reference.id);
-      v_item := jsonb_build_object(
-        'item_kind', 'reference',
-        'target_table', v_target.table_name,
-        'data_id', v_target.dataset_id,
-        'data_version', v_target.dataset_version,
-        'submitted_revision_checksum', v_target_checksum,
-        'reference_review_id', v_reference.id,
-        'target_owner_id', v_target.dataset_row->>'user_id',
-        'target_team_id', v_target.dataset_row->'team_id',
-        'relation_type', 'dependency',
-        'relation_path', '$',
-        'introduced_by', 'submitted_data',
-        'introduced_field_path', null
-      );
     end if;
-
-    v_items := v_items || jsonb_build_array(v_item);
   end loop;
-
-  v_scope_history := jsonb_build_object(
-    'schema_version', 'review_scope.v1',
-    'current_version', 1,
-    'snapshots', jsonb_build_array(jsonb_build_object(
-      'version_no', 1,
-      'scope_basis', 'submitted',
-      'root_revision_checksum', v_checksum,
-      'scope_checksum', private.review_scope_checksum_v1(v_items),
-      'created_by', v_actor,
-      'created_at', to_jsonb(now()),
-      'items', v_items
-    ))
-  );
 
   insert into private.reviews (
     id,
@@ -496,9 +374,7 @@ begin
     target_table,
     submitted_revision_checksum,
     target_owner_id,
-    target_team_id,
-    scope_schema_version,
-    scope_history
+    target_team_id
   )
   values (
     v_root_review_id,
@@ -517,16 +393,9 @@ begin
     v_table,
     v_checksum,
     v_actor,
-    nullif(v_root_row->>'team_id', '')::uuid,
-    'review_scope.v1',
-    v_scope_history
+    nullif(v_root_row->>'team_id', '')::uuid
   )
   returning * into v_root_review;
-
-  perform private.review_validate_scope_history_v1(
-    v_root_review_id,
-    v_scope_history
-  );
 
   perform set_config('app.review_controlled_write', 'on', true);
   for v_target in
@@ -554,12 +423,21 @@ begin
       v_event_key := private.review_notify_event_v1(
         'reference_entered_review',
         (
-          select item.reference_review_id
-          from private.review_scope_current_items_v1(v_scope_history) as item
-          where item.item_kind = 'reference'
-            and item.target_table = v_target.table_name
-            and item.data_id = v_target.dataset_id
-            and item.data_version = v_target.dataset_version
+          select reference_review.id
+          from private.reviews as reference_review
+          where reference_review.review_kind = 'reference'
+            and reference_review.target_table = v_target.table_name
+            and reference_review.data_id = v_target.dataset_id
+            and btrim(reference_review.data_version::text) = v_target.dataset_version
+            and reference_review.submitted_revision_checksum =
+              private.review_revision_fingerprint_v1(
+                v_target.table_name,
+                v_target.dataset_row
+              )
+            and reference_review.state_code in (-1, 0, 1, 2)
+          order by case when reference_review.state_code in (0, 1, 2) then 0 else 1 end,
+                   reference_review.modified_at desc,
+                   reference_review.id
           limit 1
         ),
         nullif(v_target.dataset_row->>'user_id', '')::uuid,
@@ -567,8 +445,8 @@ begin
         v_target.table_name,
         v_target.dataset_id,
         v_target.dataset_version,
-        v_root_review_id,
-        1,
+        null,
+        null,
         null
       );
     end if;
@@ -604,8 +482,6 @@ begin
       'review_id', v_root_review_id,
       'review_kind', 'root',
       'submission_mode', 'root',
-      'scope_version', 1,
-      'reference_review_ids', to_jsonb(v_reference_ids),
       'affected_datasets', v_affected
     )
   );

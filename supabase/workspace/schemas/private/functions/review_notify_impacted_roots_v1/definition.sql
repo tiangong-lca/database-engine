@@ -3,15 +3,17 @@ CREATE OR REPLACE FUNCTION "private"."review_notify_impacted_roots_v1"("p_refere
     SET "search_path" TO ''
     AS $$
 declare
-  v_root private.reviews%rowtype;
+  v_root record;
 begin
   for v_root in
-    select root_review.*
-    from private.reviews as root_review
-    where root_review.review_kind = 'root'
-      and root_review.current_reference_review_ids
-        @> array[p_reference_review.id]::uuid[]
-    order by root_review.id
+    select impacted.root_review_id, root_review.target_owner_id
+    from api.qry_reference_review_impacted_roots(
+      p_reference_review.id,
+      false
+    ) as impacted
+    join private.reviews as root_review
+      on root_review.id = impacted.root_review_id
+    order by impacted.root_review_id
   loop
     perform private.review_notify_event_v1(
       p_event_type,
@@ -20,9 +22,9 @@ begin
       p_actor,
       p_reference_review.target_table,
       p_reference_review.data_id,
-      btrim(p_reference_review.data_version::text),
-      v_root.id,
-      (v_root.scope_history->>'current_version')::integer,
+      pg_catalog.btrim(p_reference_review.data_version::text),
+      null,
+      null,
       p_reason_code
     );
   end loop;

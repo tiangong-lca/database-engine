@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION "api"."qry_review_admin_queue_items_v2"("p_status" "text" DEFAULT NULL::"text", "p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 20) RETURNS TABLE("id" "uuid", "review_kind" "text", "target_table" "text", "data_id" "uuid", "data_version" "text", "state_code" integer, "target_owner_id" "uuid", "target_team_id" "uuid", "submitted_revision_checksum" "text", "reviewer_id" "jsonb", "deadline" timestamp with time zone, "reference_count" integer, "completed_reviewer_count" integer, "modified_at" timestamp with time zone, "total_count" bigint)
-    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
@@ -10,36 +10,47 @@ begin
   end if;
 
   return query
+  with review_rows as materialized (
+    select review_row.*
+    from private.reviews as review_row
+    where review_row.review_kind in ('root', 'reference')
+      and (
+        p_status is null
+        or (p_status = 'unassigned' and review_row.state_code = 0)
+        or (p_status = 'assigned' and review_row.state_code = 1)
+        or (p_status = 'approved' and review_row.state_code = 2)
+        or (p_status = 'rejected' and review_row.state_code = -1)
+      )
+  )
   select
     review_row.id,
     review_row.review_kind,
     review_row.target_table,
     review_row.data_id,
-    btrim(review_row.data_version::text),
+    pg_catalog.btrim(review_row.data_version::text),
     review_row.state_code,
     review_row.target_owner_id,
     review_row.target_team_id,
     review_row.submitted_revision_checksum,
     coalesce(review_row.reviewer_id, '[]'::jsonb),
     review_row.deadline,
-    cardinality(review_row.current_reference_review_ids)::integer,
+    case when review_row.review_kind = 'root' then (
+      select pg_catalog.count(*)::integer
+      from private.review_derive_current_references_v1(array[review_row.id])
+    ) else 0 end,
     count(comment_row.reviewer_id)
       filter (where comment_row.state_code in (1, -3, 2))::integer,
     review_row.modified_at,
-    count(*) over ()
-  from private.reviews as review_row
+    pg_catalog.count(*) over ()
+  from review_rows as review_row
   left join private.comments as comment_row
     on comment_row.review_id = review_row.id
     and comment_row.state_code <> -2
-  where review_row.review_kind in ('root', 'reference')
-    and (
-      p_status is null
-      or (p_status = 'unassigned' and review_row.state_code = 0)
-      or (p_status = 'assigned' and review_row.state_code = 1)
-      or (p_status = 'approved' and review_row.state_code = 2)
-      or (p_status = 'rejected' and review_row.state_code = -1)
-    )
-  group by review_row.id
+  group by review_row.id, review_row.review_kind, review_row.target_table,
+    review_row.data_id, review_row.data_version, review_row.state_code,
+    review_row.target_owner_id, review_row.target_team_id,
+    review_row.submitted_revision_checksum, review_row.reviewer_id,
+    review_row.deadline, review_row.modified_at
   order by review_row.modified_at desc, review_row.id
   offset greatest(coalesce(p_page, 1) - 1, 0)
     * greatest(coalesce(p_page_size, 20), 1)

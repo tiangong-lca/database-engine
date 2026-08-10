@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-10
-lastReviewedCommit: 04b8f3d31fca78e82509208e6369a7440b502550
-lastReviewedNote: "Reviewed for database-engine Issue #448 / workspace Issue #566: the existing exact-local schema workspace and Data API type commands capture the package and worker function contract; script behavior is unchanged."
+lastReviewedCommit: 30bc395004b3cde9a2b11209e69e3dae7ee3ce4d
+lastReviewedNote: "Reviewed for Issue #446: existing exact-local schema workspace and Data API type commands capture the review schema cutover; script behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

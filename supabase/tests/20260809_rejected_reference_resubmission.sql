@@ -385,29 +385,25 @@ select is(
 
 select is(
   (
-    select root_review.current_reference_review_ids[1]
-    from private.reviews as root_review
-    where root_review.id = (
-      select root_review_id from issue439_owner_cycle
-    )
+    select derived.reference_review_id
+    from private.review_derive_current_references_v1(array[
+      (select root_review_id from issue439_owner_cycle)
+    ]) as derived
   ),
   (
     select (result #>> '{data,reviewId}')::uuid
     from issue439_owner_resubmit_result
   ),
-  'reference repair rebinds the impacted Root Review to the new review identity'
+  'current JSON derives the new Reference Review identity without rebind storage'
 );
 
-select is(
-  (
-    select (root_review.scope_history->>'current_version')::integer
-    from private.reviews as root_review
-    where root_review.id = (
-      select root_review_id from issue439_owner_cycle
-    )
+select ok(
+  not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'private' and table_name = 'reviews'
+      and column_name = 'scope_history'
   ),
-  2,
-  'unchanged reference repair appends a second scope snapshot'
+  'unchanged reference repair persists no relationship snapshot'
 );
 
 set local role authenticated;
@@ -481,12 +477,11 @@ select ok(
 
 select isnt(
   (
-    select root_review.current_reference_review_ids[1]
-    from private.reviews as root_review
-    where root_review.id = (
-      select (result #>> '{data,reviewId}')::uuid
-      from issue439_dependency_root_two_result
-    )
+    select derived.reference_review_id
+    from private.review_derive_current_references_v1(array[
+      (select (result #>> '{data,reviewId}')::uuid
+       from issue439_dependency_root_two_result)
+    ]) as derived
   ),
   (select rejected_reference_id from issue439_dependency_cycle),
   'the new Root Review receives a new Reference Review instead of the rejected row'
@@ -494,41 +489,28 @@ select isnt(
 
 select is(
   (
-    select root_review.current_reference_review_ids[1]
-    from private.reviews as root_review
-    where root_review.id = (
-      select first_root_review_id from issue439_dependency_cycle
-    )
+    select derived.reference_review_id
+    from private.review_derive_current_references_v1(array[
+      (select first_root_review_id from issue439_dependency_cycle)
+    ]) as derived
   ),
   (
-    select root_review.current_reference_review_ids[1]
-    from private.reviews as root_review
-    where root_review.id = (
-      select (result #>> '{data,reviewId}')::uuid
-      from issue439_dependency_root_two_result
-    )
+    select derived.reference_review_id
+    from private.review_derive_current_references_v1(array[
+      (select (result #>> '{data,reviewId}')::uuid
+       from issue439_dependency_root_two_result)
+    ]) as derived
   ),
-  'the earlier active Root Review is rebound to the shared new Reference Review'
+  'both current JSON closures derive the shared new Reference Review'
 );
 
-select is(
-  (
-    select item.value->>'reference_review_id'
-    from private.reviews as root_review
-    cross join lateral pg_catalog.jsonb_array_elements(
-      root_review.scope_history->'snapshots'
-    ) as snapshot(value)
-    cross join lateral pg_catalog.jsonb_array_elements(
-      snapshot.value->'items'
-    ) as item(value)
-    where root_review.id = (
-      select first_root_review_id from issue439_dependency_cycle
-    )
-      and (snapshot.value->>'version_no')::integer = 1
-      and item.value->>'item_kind' = 'reference'
+select ok(
+  not exists (
+    select 1 from information_schema.columns
+    where table_schema = 'private' and table_name = 'reviews'
+      and column_name in ('scope_history', 'current_reference_review_ids')
   ),
-  (select rejected_reference_id::text from issue439_dependency_cycle),
-  'the earlier Root Review preserves the rejected relationship in its historical snapshot'
+  'the earlier Root Review preserves no historical Root/Reference relationship'
 );
 
 set local role authenticated;
@@ -549,34 +531,26 @@ select ok(
 
 select is(
   (
-    select root_review.current_reference_review_ids[1]
-    from private.reviews as root_review
-    where root_review.id = (
-      select (result #>> '{data,reviewId}')::uuid
-      from issue439_dependency_root_two_result
-    )
+    select derived.reference_review_id
+    from private.review_derive_current_references_v1(array[
+      (select (result #>> '{data,reviewId}')::uuid
+       from issue439_dependency_root_two_result)
+    ]) as derived
   ),
   (
-    select root_review.current_reference_review_ids[1]
-    from private.reviews as root_review
-    where root_review.id = (
-      select (result #>> '{data,reviewId}')::uuid
-      from issue439_dependency_root_three_result
-    )
+    select derived.reference_review_id
+    from private.review_derive_current_references_v1(array[
+      (select (result #>> '{data,reviewId}')::uuid
+       from issue439_dependency_root_three_result)
+    ]) as derived
   ),
   'active-review deduplication remains unchanged after the rejected retry'
 );
 
-select is(
-  (
-    select (root_review.scope_history->>'current_version')::integer
-    from private.reviews as root_review
-    where root_review.id = (
-      select first_root_review_id from issue439_dependency_cycle
-    )
-  ),
-  2,
-  'later reuse does not append a duplicate repair snapshot to the earlier Root Review'
+select hasnt_function(
+  'private', 'review_append_scope_snapshot_v1',
+  array['uuid', 'text', 'text', 'jsonb', 'uuid'],
+  'later reuse has no snapshot append mechanism'
 );
 
 select is(

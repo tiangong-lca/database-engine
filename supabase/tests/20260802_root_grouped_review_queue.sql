@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(27);
+select plan(35);
 
 select is(
   api.cmd_review_get_dataset_name(
@@ -105,37 +105,87 @@ values
     'review-admin'
   );
 
--- One unassigned shared Reference Review and two independently assigned
--- Reference Reviews provide mixed-status and access-isolation fixtures.
+-- Real business JSON is the relationship source. reviews[].id only narrows the
+-- candidate roots and intentionally contains no Reference Review IDs.
+set local session_replication_role = replica;
+insert into public.flows (id, version, json, json_ordered, user_id, state_code, reviews)
+values (
+  '48200000-0000-4000-8000-000000000201', '01.00.000',
+  '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":[{"@xml:lang":"en","#text":"Shared Flow"}]}}}}}',
+  '{}', '48200000-0000-4000-8000-000000000001', 20,
+  '[{"key":0,"id":"48200000-0000-4000-8000-000000000111"},{"key":0,"id":"48200000-0000-4000-8000-000000000112"}]'
+);
+insert into public.sources (id, version, json, json_ordered, user_id, state_code, reviews)
+values (
+  '48200000-0000-4000-8000-000000000202', '01.00.000',
+  '{"sourceDataSet":{"sourceInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"en","#text":"Reviewer A Source"}]}}}}',
+  '{}', '48200000-0000-4000-8000-000000000001', 20,
+  '[{"key":0,"id":"48200000-0000-4000-8000-000000000111"},{"key":0,"id":"48200000-0000-4000-8000-000000000113"}]'
+);
+insert into public.contacts (id, version, json, json_ordered, user_id, state_code, reviews)
+values (
+  '48200000-0000-4000-8000-000000000203', '01.00.000',
+  '{"contactDataSet":{"contactInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"en","#text":"Reviewer B Contact"}]}}}}',
+  '{}', '48200000-0000-4000-8000-000000000001', 20,
+  '[{"key":0,"id":"48200000-0000-4000-8000-000000000111"}]'
+);
+
+insert into public.processes (id, version, json, json_ordered, user_id, state_code, reviews)
+values
+  (
+    '48200000-0000-4000-8000-000000000111', '01.00.000', '{}',
+    '{"processDataSet":{"exchanges":{"exchange":{"referenceToFlowDataSet":{"@type":"flow data set","@refObjectId":"48200000-0000-4000-8000-000000000201","@version":"01.00.000"}}},"fixtures":[{"@type":"source data set","@refObjectId":"48200000-0000-4000-8000-000000000202","@version":"01.00.000"},{"@type":"contact data set","@refObjectId":"48200000-0000-4000-8000-000000000203","@version":"01.00.000"}]}}',
+    '48200000-0000-4000-8000-000000000001', 20,
+    '[{"key":0,"id":"48200000-0000-4000-8000-000000000111"}]'
+  ),
+  (
+    '48200000-0000-4000-8000-000000000112', '01.00.000', '{}',
+    '{"processDataSet":{"exchanges":{"exchange":{"referenceToFlowDataSet":{"@type":"flow data set","@refObjectId":"48200000-0000-4000-8000-000000000201","@version":"01.00.000"}}}}}',
+    '48200000-0000-4000-8000-000000000001', 20,
+    '[{"key":0,"id":"48200000-0000-4000-8000-000000000112"}]'
+  ),
+  (
+    '48200000-0000-4000-8000-000000000113', '01.00.000', '{}',
+    '{"processDataSet":{"fixtures":[{"@type":"source data set","@refObjectId":"48200000-0000-4000-8000-000000000202","@version":"01.00.000"}]}}',
+    '48200000-0000-4000-8000-000000000001', 20,
+    '[{"key":0,"id":"48200000-0000-4000-8000-000000000113"}]'
+  );
+set local session_replication_role = origin;
+
 insert into private.reviews (
   id, data_id, data_version, state_code, reviewer_id, json,
   review_kind, target_table, submitted_revision_checksum, target_owner_id,
   created_at, modified_at
 )
-values
+select
+  fixture.review_id, fixture.data_id, '01.00.000', fixture.state_code,
+  fixture.reviewer_id, fixture.review_json, 'reference', fixture.target_table,
+  private.review_revision_fingerprint_v1(
+    fixture.target_table,
+    api.cmd_review_get_dataset_row(
+      fixture.target_table, fixture.data_id, '01.00.000', false
+    )
+  ),
+  '48200000-0000-4000-8000-000000000001', now(), now()
+from (values
   (
-    '48200000-0000-4000-8000-000000000101',
-    '48200000-0000-4000-8000-000000000201', '01.00.000', 0, '[]',
-    '{"review_kind":"reference","data":{"id":"48200000-0000-4000-8000-000000000201","version":"01.00.000","table":"flows","name":{"baseName":{"en":"Shared Flow"}}}}',
-    'reference', 'flows', repeat('1', 64),
-    '48200000-0000-4000-8000-000000000001', now(), now()
+    '48200000-0000-4000-8000-000000000101'::uuid,
+    '48200000-0000-4000-8000-000000000201'::uuid, 'flows', 0, '[]'::jsonb,
+    '{"review_kind":"reference","data":{"table":"flows","name":{"baseName":{"en":"Shared Flow"}}}}'::jsonb
   ),
   (
-    '48200000-0000-4000-8000-000000000102',
-    '48200000-0000-4000-8000-000000000202', '01.00.000', 1,
-    '["48200000-0000-4000-8000-000000000002"]',
-    '{"review_kind":"reference","data":{"id":"48200000-0000-4000-8000-000000000202","version":"01.00.000","table":"sources","name":{"baseName":{"en":"Reviewer A Source"}}}}',
-    'reference', 'sources', repeat('2', 64),
-    '48200000-0000-4000-8000-000000000001', now(), now()
+    '48200000-0000-4000-8000-000000000102'::uuid,
+    '48200000-0000-4000-8000-000000000202'::uuid, 'sources', 1,
+    '["48200000-0000-4000-8000-000000000002"]'::jsonb,
+    '{"review_kind":"reference","data":{"table":"sources","name":{"baseName":{"en":"Reviewer A Source"}}}}'::jsonb
   ),
   (
-    '48200000-0000-4000-8000-000000000103',
-    '48200000-0000-4000-8000-000000000203', '01.00.000', 1,
-    '["48200000-0000-4000-8000-000000000003"]',
-    '{"review_kind":"reference","data":{"id":"48200000-0000-4000-8000-000000000203","version":"01.00.000","table":"contacts","name":{"baseName":{"en":"Reviewer B Contact"}}}}',
-    'reference', 'contacts', repeat('3', 64),
-    '48200000-0000-4000-8000-000000000001', now(), now()
-  );
+    '48200000-0000-4000-8000-000000000103'::uuid,
+    '48200000-0000-4000-8000-000000000203'::uuid, 'contacts', 1,
+    '["48200000-0000-4000-8000-000000000003"]'::jsonb,
+    '{"review_kind":"reference","data":{"table":"contacts","name":{"baseName":{"en":"Reviewer B Contact"}}}}'::jsonb
+  )
+) as fixture(review_id, data_id, target_table, state_code, reviewer_id, review_json);
 
 insert into private.comments (review_id, reviewer_id, json, state_code)
 values
@@ -148,104 +198,24 @@ values
     '48200000-0000-4000-8000-000000000003', '{}', 0
   );
 
-create temporary table grouped_root_fixture (
-  root_review_id uuid primary key,
-  root_state_code integer not null,
-  reference_ids uuid[] not null
-) on commit drop;
-
-insert into grouped_root_fixture (root_review_id, root_state_code, reference_ids)
-values
-  (
-    '48200000-0000-4000-8000-000000000111', 1,
-    array[
-      '48200000-0000-4000-8000-000000000101'::uuid,
-      '48200000-0000-4000-8000-000000000102'::uuid,
-      '48200000-0000-4000-8000-000000000103'::uuid
-    ]
-  ),
-  (
-    '48200000-0000-4000-8000-000000000112', 0,
-    array['48200000-0000-4000-8000-000000000101'::uuid]
-  ),
-  (
-    '48200000-0000-4000-8000-000000000113', 1,
-    array['48200000-0000-4000-8000-000000000102'::uuid]
-  );
-
-with root_items as (
-  select
-    fixture.root_review_id,
-    fixture.root_state_code,
-    pg_catalog.jsonb_build_array(
-      pg_catalog.jsonb_build_object(
-        'item_kind', 'root',
-        'target_table', 'processes',
-        'data_id', fixture.root_review_id,
-        'data_version', '01.00.000',
-        'submitted_revision_checksum', repeat('a', 64),
-        'target_owner_id', '48200000-0000-4000-8000-000000000001'
-      )
-    ) || coalesce((
-      select pg_catalog.jsonb_agg(
-        pg_catalog.jsonb_build_object(
-          'item_kind', 'reference',
-          'target_table', reference_review.target_table,
-          'data_id', reference_review.data_id,
-          'data_version', pg_catalog.btrim(reference_review.data_version::text),
-          'submitted_revision_checksum', reference_review.submitted_revision_checksum,
-          'reference_review_id', reference_review.id,
-          'target_owner_id', reference_review.target_owner_id
-        )
-        order by reference_review.id
-      )
-      from pg_catalog.unnest(fixture.reference_ids) as related(reference_review_id)
-      join private.reviews as reference_review
-        on reference_review.id = related.reference_review_id
-    ), '[]'::jsonb) as items
-  from grouped_root_fixture as fixture
-),
-root_histories as (
-  select
-    root_item.root_review_id,
-    root_item.root_state_code,
-    pg_catalog.jsonb_build_object(
-      'schema_version', 'review_scope.v1',
-      'current_version', 1,
-      'snapshots', pg_catalog.jsonb_build_array(
-        pg_catalog.jsonb_build_object(
-          'version_no', 1,
-          'scope_basis', 'submitted',
-          'root_revision_checksum', repeat('a', 64),
-          'scope_checksum', private.review_scope_checksum_v1(root_item.items),
-          'created_by', '48200000-0000-4000-8000-000000000001',
-          'created_at', pg_catalog.to_jsonb(now()),
-          'items', root_item.items
-        )
-      )
-    ) as scope_history
-  from root_items as root_item
-)
 insert into private.reviews (
   id, data_id, data_version, state_code, reviewer_id, json,
   review_kind, target_table, submitted_revision_checksum, target_owner_id,
-  scope_schema_version, scope_history, created_at, modified_at
+  created_at, modified_at
 )
 select
-  root_history.root_review_id,
-  root_history.root_review_id,
-  '01.00.000',
-  root_history.root_state_code,
+  fixture.root_review_id, fixture.root_review_id, '01.00.000',
+  fixture.root_state_code,
   '[]',
   pg_catalog.jsonb_build_object(
     'review_kind', 'root',
     'data', pg_catalog.jsonb_build_object(
-      'id', root_history.root_review_id,
+      'id', fixture.root_review_id,
       'version', '01.00.000',
       'table', 'processes',
       'name', pg_catalog.jsonb_build_object(
         'baseName', pg_catalog.jsonb_build_object(
-          'en', 'Root ' || root_history.root_review_id::text
+          'en', 'Root ' || fixture.root_review_id::text
         )
       )
     ),
@@ -254,10 +224,19 @@ select
       'name', 'Queue Owner'
     )
   ),
-  'root', 'processes', repeat('a', 64),
-  '48200000-0000-4000-8000-000000000001',
-  'review_scope.v1', root_history.scope_history, now(), now()
-from root_histories as root_history;
+  'root', 'processes',
+  private.review_revision_fingerprint_v1(
+    'processes',
+    api.cmd_review_get_dataset_row(
+      'processes', fixture.root_review_id, '01.00.000', false
+    )
+  ),
+  '48200000-0000-4000-8000-000000000001', now(), now()
+from (values
+  ('48200000-0000-4000-8000-000000000111'::uuid, 1),
+  ('48200000-0000-4000-8000-000000000112'::uuid, 0),
+  ('48200000-0000-4000-8000-000000000113'::uuid, 1)
+) as fixture(root_review_id, root_state_code);
 
 select has_function(
   'api', 'qry_review_get_admin_root_queue_items_v2',
@@ -468,6 +447,149 @@ select is(
 );
 
 reset role;
+
+update private.comments
+set state_code = 1
+where review_id = '48200000-0000-4000-8000-000000000102'
+  and reviewer_id = '48200000-0000-4000-8000-000000000002';
+set local role authenticated;
+select is(
+  (
+    select count(*)::integer
+    from api.qry_review_get_member_root_queue_items_v2(
+      'reviewed', 1, 10, 'modified_at', 'desc'
+    )
+  ),
+  2,
+  'Member reviewed tab includes every root that currently derives a reviewed child'
+);
+reset role;
+
+update private.reviews
+set state_code = -1
+where id = '48200000-0000-4000-8000-000000000102';
+update private.comments
+set state_code = -1
+where review_id = '48200000-0000-4000-8000-000000000102'
+  and reviewer_id = '48200000-0000-4000-8000-000000000002';
+set local role authenticated;
+select is(
+  (
+    select count(*)::integer
+    from api.qry_review_get_member_root_queue_items_v2(
+      'reviewer-rejected', 1, 10, 'modified_at', 'desc'
+    )
+  ),
+  2,
+  'Member rejected tab requires both rejected Review and rejected actor Comment'
+);
+reset role;
+
+select set_config(
+  'request.jwt.claim.sub',
+  '48200000-0000-4000-8000-000000000004',
+  true
+);
+set local role authenticated;
+select is(
+  (
+    select count(*)::integer
+    from api.qry_review_get_admin_root_queue_items_v2(
+      'assigned', 1, 10, 'modified_at', 'desc'
+    )
+  ),
+  2,
+  'Admin assigned tab groups direct assigned roots and assigned children'
+);
+reset role;
+
+update private.reviews
+set state_code = -1
+where id = '48200000-0000-4000-8000-000000000101';
+update private.reviews
+set state_code = -1
+where id = '48200000-0000-4000-8000-000000000112';
+set local role authenticated;
+select is(
+  (
+    select count(*)::integer
+    from api.qry_review_get_admin_root_queue_items_v2(
+      'admin-rejected', 1, 10, 'modified_at', 'desc'
+    )
+  ),
+  3,
+  'Admin rejected tab groups roots matched directly or by rejected children'
+);
+select is(
+  (
+    select root_matches_status
+    from api.qry_review_get_admin_root_queue_items_v2(
+      'admin-rejected', 1, 10, 'modified_at', 'desc'
+    )
+    where id = '48200000-0000-4000-8000-000000000112'
+  ),
+  true,
+  'Admin rejected tab marks a directly rejected root as a direct match'
+);
+select is(
+  (
+    select root_matches_status
+    from api.qry_review_get_admin_root_queue_items_v2(
+      'admin-rejected', 1, 10, 'modified_at', 'desc'
+    )
+    where id = '48200000-0000-4000-8000-000000000113'
+  ),
+  false,
+  'Admin rejected tab marks a root included only by its rejected child'
+);
+reset role;
+
+set local session_replication_role = replica;
+update public.processes
+set json_ordered = '{"processDataSet":{}}'::json,
+    modified_at = now()
+where id = '48200000-0000-4000-8000-000000000113'
+  and version = '01.00.000';
+set local session_replication_role = origin;
+set local role authenticated;
+select is(
+  (
+    select count(*)::integer
+    from api.qry_review_get_admin_root_queue_items_v2(
+      'admin-rejected', 1, 10, 'modified_at', 'desc'
+    )
+  ),
+  2,
+  'stale business reviews[].id candidates are removed by current JSON validation'
+);
+reset role;
+
+set local session_replication_role = replica;
+insert into public.contacts (
+  id, version, json, json_ordered, user_id, state_code, reviews
+)
+values (
+  '48200000-0000-4000-8000-000000000204', '01.00.000',
+  '{"contactDataSet":{}}', '{}',
+  '48200000-0000-4000-8000-000000000001', 20,
+  '[{"key":0,"id":"48200000-0000-4000-8000-000000000113"}]'
+);
+update public.processes
+set json_ordered = '{"processDataSet":{"fixtures":[{"@type":"contact data set","@refObjectId":"48200000-0000-4000-8000-000000000204","@version":"01.00.000"}]}}'::json
+where id = '48200000-0000-4000-8000-000000000113'
+  and version = '01.00.000';
+set local session_replication_role = origin;
+set local role authenticated;
+select throws_ok(
+  $$select * from api.qry_review_get_admin_root_queue_items_v2(
+    'assigned', 1, 10, 'modified_at', 'desc'
+  )$$,
+  '55000',
+  'MISSING_CURRENT_REFERENCE_REVIEW',
+  'active roots fail closed when a current JSON target has no Reference Review'
+);
+reset role;
+
 select set_config('request.jwt.claim.sub', '', true);
 set local role authenticated;
 select throws_ok(

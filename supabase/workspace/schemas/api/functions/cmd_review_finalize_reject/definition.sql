@@ -108,10 +108,7 @@ begin
     v_review.data_id,
     btrim(v_review.data_version::text),
     case when v_review.review_kind = 'root' then v_review.id else null end,
-    case when v_review.review_kind = 'root'
-      then (v_review.scope_history->>'current_version')::integer
-      else null
-    end,
+    null,
     'ADMIN_REJECTED'
   );
 

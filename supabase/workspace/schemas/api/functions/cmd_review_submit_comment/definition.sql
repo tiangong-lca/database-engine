@@ -24,10 +24,6 @@ declare
   v_target record;
   v_reference private.reviews%rowtype;
   v_ref_roots jsonb := '[]'::jsonb;
-  v_current_snapshot jsonb;
-  v_items jsonb;
-  v_new_items jsonb := '[]'::jsonb;
-  v_item jsonb;
   v_checksum text;
   v_affected jsonb := '[]'::jsonb;
   v_reason text;
@@ -148,11 +144,6 @@ begin
     select *
     from api.cmd_review_collect_dataset_targets(v_ref_roots, true);
 
-    v_current_snapshot := private.review_scope_current_snapshot_v1(
-      v_review.scope_history
-    );
-    v_items := coalesce(v_current_snapshot->'items', '[]'::jsonb);
-
     for v_target in
       select *
       from review_comment_v2_targets
@@ -190,33 +181,6 @@ begin
         v_actor
       );
 
-      if not exists (
-        select 1
-        from private.review_scope_current_items_v1(v_review.scope_history) as current_item
-        where current_item.item_kind = 'reference'
-          and current_item.target_table = v_target.table_name
-          and current_item.data_id = v_target.dataset_id
-          and current_item.data_version = v_target.dataset_version
-          and current_item.submitted_revision_checksum = v_checksum
-          and current_item.reference_review_id = v_reference.id
-      ) then
-        v_item := jsonb_build_object(
-          'item_kind', 'reference',
-          'target_table', v_target.table_name,
-          'data_id', v_target.dataset_id,
-          'data_version', v_target.dataset_version,
-          'submitted_revision_checksum', v_checksum,
-          'reference_review_id', v_reference.id,
-          'target_owner_id', v_target.dataset_row->>'user_id',
-          'target_team_id', v_target.dataset_row->'team_id',
-          'relation_type', 'reviewer_metadata',
-          'relation_path', '$.modellingAndValidation',
-          'introduced_by', 'reviewer_metadata',
-          'introduced_field_path', '$.modellingAndValidation'
-        );
-        v_new_items := v_new_items || jsonb_build_array(v_item);
-      end if;
-
       perform set_config('app.review_controlled_write', 'on', true);
       execute format(
         'update public.%I
@@ -242,8 +206,8 @@ begin
           v_target.table_name,
           v_target.dataset_id,
           v_target.dataset_version,
-          p_review_id,
-          (v_review.scope_history->>'current_version')::integer + 1,
+          null,
+          null,
           null
         );
       end if;
@@ -256,15 +220,6 @@ begin
       ));
     end loop;
 
-    if jsonb_array_length(v_new_items) > 0 then
-      perform private.review_append_scope_snapshot_v1(
-        p_review_id,
-        'review_metadata',
-        v_current_snapshot->>'root_revision_checksum',
-        v_items || v_new_items,
-        v_actor
-      );
-    end if;
   end if;
 
   insert into private.comments (
@@ -317,7 +272,13 @@ begin
     coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
       'reviewer_id', v_actor,
       'comment_state_code', p_comment_state,
-      'affected_datasets', v_affected
+      'affected_datasets', (
+        select coalesce(
+          jsonb_agg(affected.value - 'reference_review_id'),
+          '[]'::jsonb
+        )
+        from jsonb_array_elements(v_affected) as affected(value)
+      )
     )
   );
 
