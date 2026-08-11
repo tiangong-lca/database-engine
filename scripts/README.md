@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-11
-lastReviewedCommit: 340e83613d3d611f881b2fd49036ddac80f3101a
-lastReviewedNote: "Reviewed for Issue #467: existing exact-local workspace and Data API type commands deterministically regenerate the v3 review queue filter signatures, 50-row defaults, and supporting index; script behavior is unchanged."
+lastReviewedCommit: 79d7befb12023d8c0d45160dbaeafc3e7aeafa70
+lastReviewedNote: "Reviewed for Issue #471: existing migration-generation and exact-local workspace refresh commands cover the json_tg decoupling functions and model-membership index; script behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

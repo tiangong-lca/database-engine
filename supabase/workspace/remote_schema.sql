@@ -11203,7 +11203,6 @@ declare
   v_current_state_code integer;
   v_ref record;
   v_ref_table text;
-  v_submodel jsonb;
   v_paired_model_exists boolean;
   v_paired_process_exists boolean;
 begin
@@ -11366,9 +11365,6 @@ begin
       union
       select *
       from api.cmd_review_extract_refs(coalesce(v_current_row->'json', '{}'::jsonb))
-      union
-      select *
-      from api.cmd_review_extract_refs(coalesce(v_current_row->'json_tg', '{}'::jsonb))
     ) loop
       v_ref_table := api.cmd_review_ref_type_to_table(v_ref.ref_type);
 
@@ -11448,32 +11444,21 @@ begin
         end if;
       end if;
 
-      for v_submodel in
-        select value
-        from jsonb_array_elements(coalesce(v_current_row->'json_tg'->'submodels', '[]'::jsonb))
-      loop
-        if lower(coalesce(v_submodel->>'type', '')) <> 'secondary' then
-          continue;
-        end if;
-
-        if not ((v_submodel->>'id') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') then
-          continue;
-        end if;
-
-        insert into cmd_review_collect_queue (
-          table_name,
-          dataset_id,
-          dataset_version,
-          is_root
-        )
-        values (
-          'processes',
-          (v_submodel->>'id')::uuid,
-          coalesce(nullif(v_submodel->>'version', ''), v_current.dataset_version),
-          false
-        )
-        on conflict do nothing;
-      end loop;
+      insert into cmd_review_collect_queue (
+        table_name,
+        dataset_id,
+        dataset_version,
+        is_root
+      )
+      select
+        'processes',
+        model_process.id,
+        model_process.version,
+        false
+      from public.processes as model_process
+      where model_process.model_id = v_current.dataset_id
+        and model_process.version = v_current.dataset_version
+      on conflict do nothing;
     end if;
   end loop;
 
@@ -29495,14 +29480,14 @@ begin
     );
   elsif v_root_table = 'lifecyclemodels' then
     select coalesce(
-      array_agg((submodel.value->>'id')::uuid),
+      array_agg(model_process.id order by model_process.id),
       array[]::uuid[]
     )
       into v_submodel_ids
-    from jsonb_array_elements(coalesce(v_root_row->'json_tg'->'submodels', '[]'::jsonb))
-         as submodel(value)
-    where lower(coalesce(submodel.value->>'type', '')) = 'secondary'
-      and (submodel.value->>'id') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$';
+    from public.processes as model_process
+    where model_process.model_id = v_review.data_id
+      and model_process.version = v_review.data_version
+      and model_process.id <> v_review.data_id;
 
     foreach v_submodel_id in array v_submodel_ids
     loop
@@ -29671,11 +29656,7 @@ declare
   v_doc jsonb;
   v_root_owner uuid;
   v_ref record;
-  v_submodel record;
-  v_dependency jsonb;
   v_paired jsonb;
-  v_has_mismatch boolean;
-  v_json_tg_submodels jsonb;
   v_publish_root_table text;
   v_publish_root_id uuid;
   v_publish_root_version text;
@@ -29697,24 +29678,8 @@ begin
     primary key (table_name, dataset_id, dataset_version)
   ) on commit drop;
 
-  create temporary table if not exists pg_temp.cmd_review_policy_ilcd (
-    dataset_id uuid not null,
-    dataset_version text not null,
-    reference_path text not null,
-    primary key (dataset_id, dataset_version)
-  ) on commit drop;
-
-  create temporary table if not exists pg_temp.cmd_review_policy_tg (
-    dataset_id uuid not null,
-    dataset_version text not null,
-    reference_path text not null,
-    primary key (dataset_id, dataset_version)
-  ) on commit drop;
-
   truncate table pg_temp.cmd_review_policy_queue;
   truncate table pg_temp.cmd_review_policy_seen;
-  truncate table pg_temp.cmd_review_policy_ilcd;
-  truncate table pg_temp.cmd_review_policy_tg;
 
   if p_actor is null
     or pg_catalog.jsonb_typeof(p_roots) <> 'array'
@@ -29901,66 +29866,7 @@ begin
           v_ref.reference_path
         )
         on conflict do nothing;
-      elsif v_ref.lifecycle_role = 'ModelComposition'
-        and v_current.table_name <> 'lifecyclemodels' then
-        insert into pg_temp.cmd_review_policy_queue (
-          table_name,
-          dataset_id,
-          dataset_version,
-          is_root,
-          dependency_role,
-          reference_path
-        )
-        values (
-          v_ref.ref_table,
-          v_ref.ref_object_id,
-          v_ref.ref_version,
-          false,
-          'ModelComposition',
-          v_ref.reference_path
-        )
-        on conflict do nothing;
-      end if;
-    end loop;
-
-    for v_ref in
-      select *
-      from private.cmd_review_reference_roles(
-        v_current.table_name,
-        'json_tg',
-        coalesce(v_row->'json_tg', '{}'::jsonb)
-      )
-      order by reference_path, ref_table, ref_object_id, ref_version
-    loop
-      if v_ref.lifecycle_role = 'PolicyGap' then
-        return private.cmd_review_lifecycle_error(
-          'REFERENCE_ROLE_POLICY_GAP',
-          v_ref.reference_path,
-          v_ref.ref_table,
-          v_ref.ref_object_id,
-          v_ref.ref_version
-        );
-      elsif v_ref.lifecycle_role = 'RequiredSupport'
-        and p_action in ('submit', 'approve') then
-        insert into pg_temp.cmd_review_policy_queue (
-          table_name,
-          dataset_id,
-          dataset_version,
-          is_root,
-          dependency_role,
-          reference_path
-        )
-        values (
-          v_ref.ref_table,
-          v_ref.ref_object_id,
-          v_ref.ref_version,
-          false,
-          'RequiredSupport',
-          v_ref.reference_path
-        )
-        on conflict do nothing;
-      elsif v_ref.lifecycle_role = 'ModelComposition'
-        and v_current.table_name <> 'lifecyclemodels' then
+      elsif v_ref.lifecycle_role = 'ModelComposition' then
         insert into pg_temp.cmd_review_policy_queue (
           table_name,
           dataset_id,
@@ -29982,154 +29888,29 @@ begin
     end loop;
 
     if v_current.table_name = 'lifecyclemodels' then
-      truncate table pg_temp.cmd_review_policy_ilcd;
-      truncate table pg_temp.cmd_review_policy_tg;
-
-      insert into pg_temp.cmd_review_policy_ilcd (
+      insert into pg_temp.cmd_review_policy_queue (
+        table_name,
         dataset_id,
         dataset_version,
+        is_root,
+        dependency_role,
         reference_path
       )
       select
-        role_ref.ref_object_id,
-        role_ref.ref_version,
-        role_ref.reference_path
-      from private.cmd_review_reference_roles(
-        'lifecyclemodels',
-        'json',
-        v_doc
-      ) as role_ref
-      where role_ref.lifecycle_role = 'ModelComposition'
+        'processes',
+        model_process.id,
+        model_process.version,
+        false,
+        'ModelComposition',
+        pg_catalog.format(
+          'modelResults[%s@%s]',
+          model_process.id,
+          model_process.version
+        )
+      from public.processes as model_process
+      where model_process.model_id = v_current.dataset_id
+        and model_process.version = v_current.dataset_version
       on conflict do nothing;
-
-      v_json_tg_submodels := coalesce(v_row#>'{json_tg,submodels}', '[]'::jsonb);
-      if pg_catalog.jsonb_typeof(v_json_tg_submodels) <> 'array' then
-        return private.cmd_review_lifecycle_error(
-          'MODEL_COMPOSITION_POLICY_GAP',
-          'json_tg.submodels'
-        );
-      end if;
-
-      for v_submodel in
-        select
-          submodel.value,
-          submodel.ordinality - 1 as item_index
-        from pg_catalog.jsonb_array_elements(v_json_tg_submodels)
-          with ordinality as submodel(value, ordinality)
-        where lower(coalesce(submodel.value->>'type', '')) = 'secondary'
-        order by submodel.ordinality
-      loop
-        if coalesce(v_submodel.value->>'id', '')
-          !~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-          then
-          return private.cmd_review_lifecycle_error(
-            'MODEL_COMPOSITION_POLICY_GAP',
-            'json_tg.submodels[' || v_submodel.item_index || ']'
-          );
-        end if;
-
-        insert into pg_temp.cmd_review_policy_tg (
-          dataset_id,
-          dataset_version,
-          reference_path
-        )
-        values (
-          (v_submodel.value->>'id')::uuid,
-          coalesce(
-            nullif(v_submodel.value->>'version', ''),
-            v_current.dataset_version
-          ),
-          'json_tg.submodels[' || v_submodel.item_index || ']'
-        )
-        on conflict do nothing;
-      end loop;
-
-      select exists (
-        (
-          select ilcd.dataset_id, ilcd.dataset_version
-          from pg_temp.cmd_review_policy_ilcd as ilcd
-          except
-          select tg.dataset_id, tg.dataset_version
-          from pg_temp.cmd_review_policy_tg as tg
-        )
-        union all
-        (
-          select tg.dataset_id, tg.dataset_version
-          from pg_temp.cmd_review_policy_tg as tg
-          except
-          select ilcd.dataset_id, ilcd.dataset_version
-          from pg_temp.cmd_review_policy_ilcd as ilcd
-        )
-      )
-      into v_has_mismatch;
-
-      if v_has_mismatch then
-        return private.cmd_review_lifecycle_error(
-          'MODEL_COMPOSITION_POLICY_GAP',
-          'json_tg.submodels'
-        );
-      end if;
-
-      for v_submodel in
-        select
-          tg.dataset_id,
-          tg.dataset_version,
-          tg.reference_path
-        from pg_temp.cmd_review_policy_tg as tg
-        order by tg.dataset_id, tg.dataset_version
-      loop
-        v_dependency := api.cmd_review_get_dataset_row(
-          'processes',
-          v_submodel.dataset_id,
-          v_submodel.dataset_version,
-          true
-        );
-
-        if v_dependency is null
-          or (
-            p_action = 'publish'
-            and coalesce((v_dependency->>'state_code')::integer, 0) < 100
-            and not (
-              v_publish_root_table = 'processes'
-              and v_submodel.dataset_id = v_publish_root_id
-              and v_submodel.dataset_version = v_publish_root_version
-            )
-          )
-          or (
-            p_action in ('submit', 'approve')
-            and coalesce((v_dependency->>'state_code')::integer, 0) < 100
-            and nullif(v_dependency->>'user_id', '')::uuid
-              is distinct from v_root_owner
-          ) then
-          return private.cmd_review_lifecycle_error(
-            'MODEL_DEPENDENCY_NOT_PUBLIC',
-            v_submodel.reference_path,
-            'processes',
-            v_submodel.dataset_id,
-            v_submodel.dataset_version
-          );
-        end if;
-
-        if p_action in ('submit', 'approve') then
-          insert into pg_temp.cmd_review_policy_queue (
-            table_name,
-            dataset_id,
-            dataset_version,
-            is_root,
-            dependency_role,
-            reference_path
-          )
-          values (
-            'processes',
-            v_submodel.dataset_id,
-            v_submodel.dataset_version,
-            false,
-            'ModelComposition',
-            v_submodel.reference_path
-          )
-          on conflict do nothing;
-        end if;
-      end loop;
     end if;
 
     if v_current.table_name = 'processes' then
@@ -30232,8 +30013,6 @@ begin
 
   truncate table pg_temp.cmd_review_policy_queue;
   truncate table pg_temp.cmd_review_policy_seen;
-  truncate table pg_temp.cmd_review_policy_ilcd;
-  truncate table pg_temp.cmd_review_policy_tg;
   return null;
 end;
 $_$;
@@ -31571,7 +31350,6 @@ declare
   v_user_meta jsonb;
   v_ref record;
   v_ref_table text;
-  v_submodel jsonb;
   v_paired_process_exists boolean;
   v_paired_model_exists boolean;
   v_affected_datasets jsonb := '[]'::jsonb;
@@ -31858,9 +31636,6 @@ begin
       union
       select *
       from api.cmd_review_extract_refs(coalesce(v_current_row->'json', '{}'::jsonb))
-      union
-      select *
-      from api.cmd_review_extract_refs(coalesce(v_current_row->'json_tg', '{}'::jsonb))
     ) loop
       v_ref_table := api.cmd_review_ref_type_to_table(v_ref.ref_type);
 
@@ -31940,32 +31715,21 @@ begin
         end if;
       end if;
 
-      for v_submodel in
-        select value
-        from jsonb_array_elements(coalesce(v_current_row->'json_tg'->'submodels', '[]'::jsonb))
-      loop
-        if coalesce(v_submodel->>'type', '') <> 'secondary' then
-          continue;
-        end if;
-
-        if not ((v_submodel->>'id') ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$') then
-          continue;
-        end if;
-
-        insert into cmd_review_submit_queue (
-          table_name,
-          dataset_id,
-          dataset_version,
-          is_root
-        )
-        values (
-          'processes',
-          (v_submodel->>'id')::uuid,
-          coalesce(nullif(v_submodel->>'version', ''), v_current.dataset_version),
-          false
-        )
-        on conflict do nothing;
-      end loop;
+      insert into cmd_review_submit_queue (
+        table_name,
+        dataset_id,
+        dataset_version,
+        is_root
+      )
+      select
+        'processes',
+        model_process.id,
+        model_process.version,
+        false
+      from public.processes as model_process
+      where model_process.model_id = v_current.dataset_id
+        and model_process.version = v_current.dataset_version
+      on conflict do nothing;
     end if;
   end loop;
 
@@ -37101,18 +36865,14 @@ CREATE OR REPLACE FUNCTION "private"."delete_lifecycle_model_bundle"("p_model_id
     SET "search_path" TO 'private', 'api', 'public', 'util', 'extensions', 'pg_temp'
     AS $_$
 declare
-    v_model_row lifecyclemodels%rowtype;
-    v_submodel jsonb;
-    v_submodel_version text;
     v_rows_affected integer;
 begin
     if p_model_id is null or nullif(btrim(coalesce(p_version, '')), '') is null then
         raise exception 'INVALID_PLAN';
     end if;
 
-    select *
-      into v_model_row
-      from lifecyclemodels
+    perform 1
+      from public.lifecyclemodels
      where id = p_model_id
        and version = p_version
      for update;
@@ -37121,22 +36881,10 @@ begin
         raise exception 'MODEL_NOT_FOUND';
     end if;
 
-    for v_submodel in
-        select value
-          from jsonb_array_elements(coalesce(v_model_row.json_tg->'submodels', '[]'::jsonb))
-    loop
-        if nullif(v_submodel->>'id', '') is not null then
-            v_submodel_version := coalesce(
-                nullif(btrim(coalesce(v_submodel->>'version', '')), ''),
-                p_version
-            );
-
-            -- Treat bundle deletion as idempotent for child processes so partially
-            -- cleaned-up bundles do not block removal of the parent model row.
-            execute 'del' || 'ete from processes where id = $1 and version = $2 and model_id = $3'
-               using (v_submodel->>'id')::uuid, v_submodel_version, p_model_id;
-        end if;
-    end loop;
+    -- The relational ownership columns define bundle membership. json_tg is
+    -- frontend state and may be absent, stale, or malformed.
+    execute 'del' || 'ete from processes where model_id = $1 and version = $2'
+       using p_model_id, p_version;
 
     execute 'del' || 'ete from lifecyclemodels where id = $1 and version = $2'
        using p_model_id, p_version;
@@ -40557,7 +40305,7 @@ ALTER FUNCTION "private"."review_notify_impacted_roots_v1"("p_reference_review" 
 CREATE OR REPLACE FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) RETURNS TABLE("root_review_id" "uuid", "target_table" "text", "data_id" "uuid", "data_version" "text", "revision_checksum" "text", "provenance" "jsonb")
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO ''
-    AS $_$
+    AS $$
   with recursive requested_roots as materialized (
     select review_row.*
     from private.reviews as review_row
@@ -40643,10 +40391,6 @@ CREATE OR REPLACE FUNCTION "private"."review_resolve_current_reference_targets_v
         select * from api.cmd_review_extract_refs(
           coalesce(current_target.dataset_row->'json', '{}'::jsonb)
         )
-        union
-        select * from api.cmd_review_extract_refs(
-          coalesce(current_target.dataset_row->'json_tg', '{}'::jsonb)
-        )
       ) as ref
       where (
           current_target.is_root
@@ -40676,28 +40420,16 @@ CREATE OR REPLACE FUNCTION "private"."review_resolve_current_reference_targets_v
 
       select
         'processes',
-        (submodel.value->>'id')::uuid,
-        coalesce(
-          nullif(submodel.value->>'version', ''),
-          current_target.data_version
-        )
-      from pg_catalog.jsonb_array_elements(
-        case
-          when pg_catalog.jsonb_typeof(
-            current_target.dataset_row->'json_tg'->'submodels'
-          ) = 'array'
-            then current_target.dataset_row->'json_tg'->'submodels'
-          else '[]'::jsonb
-        end
-      ) as submodel(value)
+        model_process.id,
+        model_process.version
+      from public.processes as model_process
       where current_target.target_table = 'lifecyclemodels'
         and (
           current_target.is_root
           or coalesce((current_target.dataset_row->>'state_code')::integer, 0) < 100
         )
-        and pg_catalog.lower(coalesce(submodel.value->>'type', '')) = 'secondary'
-        and coalesce(submodel.value->>'id', '')
-          ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+        and model_process.model_id = current_target.data_id
+        and model_process.version = current_target.data_version
     ) as neighbour
     cross join lateral (
       select api.cmd_review_get_dataset_row(
@@ -40739,7 +40471,7 @@ CREATE OR REPLACE FUNCTION "private"."review_resolve_current_reference_targets_v
     current_target.data_id,
     current_target.data_version,
     current_target.dataset_row
-$_$;
+$$;
 
 
 ALTER FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) OWNER TO "postgres";
@@ -59467,6 +59199,10 @@ CREATE INDEX "processes_json_ordered_alias_exchange_gin_idx" ON "public"."proces
 
 
 CREATE INDEX "processes_json_referenceyear" ON "public"."processes" USING "btree" (((((("json" -> 'processDataSet'::"text") -> 'processInformation'::"text") -> 'time'::"text") ->> 'common:referenceYear'::"text")));
+
+
+
+CREATE INDEX "processes_model_id_version_idx" ON "public"."processes" USING "btree" ("model_id", "version") WHERE ("model_id" IS NOT NULL);
 
 
 

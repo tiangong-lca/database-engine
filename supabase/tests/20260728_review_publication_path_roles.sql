@@ -848,6 +848,18 @@ values
     null,
     true,
     '[]'::jsonb
+  ),
+  (
+    '33800000-0000-0000-0000-000000000021',
+    '01.00.000',
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Relational model result"}]}}}}}'::jsonb,
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"#text":"Relational model result"}]}}}}}'::json,
+    '12800000-0000-0000-0000-000000000001',
+    0,
+    '22800000-0000-0000-0000-000000000001',
+    '34800000-0000-0000-0000-000000000012',
+    true,
+    '[]'::jsonb
   );
 
 insert into public.lifecyclemodels (
@@ -1729,9 +1741,9 @@ values
   );
 
 select is(
-  (select result->>'code' from path_role_results where label = 'submit_mismatched_composition'),
-  'MODEL_COMPOSITION_POLICY_GAP',
-  'json_tg submodels and ILCD processInstance mismatch fails closed'
+  (select result->>'ok' from path_role_results where label = 'submit_mismatched_composition'),
+  'true',
+  'stale json_tg composition does not block authoritative ILCD and relational model targets'
 );
 
 select pg_temp.is_deeply(
@@ -1754,6 +1766,12 @@ select pg_temp.is_deeply(
       where id = '33800000-0000-0000-0000-000000000013'
         and version = '01.00.000'
     ),
+    'relationProcessState', (
+      select state_code
+      from public.processes
+      where id = '33800000-0000-0000-0000-000000000021'
+        and version = '01.00.000'
+    ),
     'reviewCount', (
       select count(*)
       from private.reviews
@@ -1766,13 +1784,14 @@ select pg_temp.is_deeply(
     )
   ),
   '{
-    "rootState": 0,
-    "ilcdProcessState": 0,
+    "rootState": 20,
+    "ilcdProcessState": 20,
     "jsonTgProcessState": 0,
-    "reviewCount": 0,
-    "auditCount": 0
+    "relationProcessState": 20,
+    "reviewCount": 1,
+    "auditCount": 1
   }'::jsonb,
-  'composition-source mismatch leaves both locators, review rows, and audits unchanged'
+  'review follows ILCD sources and relational model results while ignoring json_tg-only entries'
 );
 
 select is(
@@ -1879,8 +1898,8 @@ select is(
     from path_role_results
     where label = 'submit_foreign_composition'
   ),
-  'json_tg.submodels[0]',
-  'composition error identifies only the submitter-visible reference path'
+  'json.lifeCycleModelDataSet.lifeCycleModelInformation.technology.processes.processInstance[0].referenceToProcess',
+  'composition error identifies only the authoritative ILCD reference path'
 );
 
 select is(

@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-11
-lastReviewedCommit: 340e83613d3d611f881b2fd49036ddac80f3101a
-lastReviewedNote: "Updated for Issue #467: the API-owned v3 review queues flatten Root and Reference rows, filter display mode and exact target table before totals and pagination, and default to 50 rows while preserving the 256-function inventory."
+lastReviewedCommit: 79d7befb12023d8c0d45160dbaeafc3e7aeafa70
+lastReviewedNote: "Updated for Issue #471: ILCD processInstance defines source composition, exact-version processes.model_id defines generated model results, and json_tg remains non-authoritative frontend state."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -42,6 +42,8 @@ related:
 This repo is organized around one checked-in Supabase project plus a generated schema-inspection workspace.
 
 ## Schema Boundaries
+
+For LifecycleModel review and bundle operations, authoritative composition comes from ILCD `processInstance` references and exact-version `public.processes.model_id` ownership. `lifecyclemodels.json_tg` is persisted for frontend reconstruction only and must not define review closure, approval targets, publication admission, or deletion membership.
 
 The application database uses five durable schemas with deliberately different
 responsibilities:
