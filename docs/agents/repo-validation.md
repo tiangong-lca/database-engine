@@ -31,7 +31,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-11
 lastReviewedCommit: 3c9b67b8a1194266abdb2ce37ea3d8518a213f12
-lastReviewedNote: "Updated for Issue #460: Database A keeps nullable text[] search_text projections lossless across the scalar-to-array migration and retains bounded enqueue. Database B validates seven exact PGroonga search_text indexes, array-boundary semantics, real selective EXPLAIN evidence, and the fail-closed lexical and hybrid-lexical source switch. Edge array deployment and 100% historical backfill remain the workspace#565 Release 1 operational gates; Database C old-index cleanup and Database D old-RPC cleanup remain separate."
+lastReviewedNote: "Updated for Issue #467: validation covers first-class Root and Reference rows from both v3 review queue RPCs, accurate row-level pagination and totals, and the exact 256-function API cutover contract after adding those RPCs. The focused full-schema cutover test passes all 23 assertions; Issue #460 search validation and workspace#565 rollout gates remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

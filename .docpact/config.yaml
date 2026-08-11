@@ -2,7 +2,7 @@ version: 1
 layout: repo
 lastReviewedAt: "2026-08-11"
 lastReviewedCommit: "3c9b67b8a1194266abdb2ce37ea3d8518a213f12"
-lastReviewedNote: "Reviewed for Issue #460: Database A owns seven nullable text[] search_text projections, lossless scalar-to-array migration, four-field reviewed-row derivative updates, canonical Search RPCs, and bounded enqueue. Database B owns seven explicit PGroonga search_text indexes plus the fail-closed lexical and hybrid-lexical source switch; existing rows require complete non-NULL coverage while an empty new database passes. Edge array deployment and 100% historical backfill remain the workspace#565 Release 1 operational gates; Database C old-index cleanup and Database D old-RPC cleanup remain separate."
+lastReviewedNote: "Reviewed for Issue #467: Root and Reference reviews are first-class rows in the v3 admin and member queue RPCs, with accurate row-level pagination and totals. The full-schema cutover contract now expects 256 API functions after adding the two queue RPCs; the focused cutover suite passes all 23 assertions. Existing Issue #460 search ownership and workspace#565 rollout gates remain unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

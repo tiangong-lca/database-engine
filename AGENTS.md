@@ -36,7 +36,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-11
 lastReviewedCommit: 3c9b67b8a1194266abdb2ce37ea3d8518a213f12
-lastReviewedNote: "Reviewed for Issue #460: Database A's seven nullable, no-default text[] search_text projections preserve legacy scalar values losslessly and retain bounded enqueue. Database B adds one explicit PGroonga index per dataset table and switches formal lexical and hybrid-lexical execution to search_text behind a fail-closed coverage gate; existing rows require complete non-NULL coverage while an empty new database passes. Edge array deployment and 100% historical backfill remain the workspace#565 Release 1 operational gates; Database C old-index cleanup and Database D old-RPC cleanup remain separate."
+lastReviewedNote: "Reviewed for Issue #467: the review queue contract exposes Root and Reference reviews as independently paginated first-class rows through the v3 admin and member RPCs. The API cutover inventory increases to 256 functions for these two additions; existing Issue #460 search ownership and workspace#565 rollout gates remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
