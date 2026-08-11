@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(54);
+select plan(68);
 
 select is(
   api.cmd_review_get_dataset_name(
@@ -250,12 +250,12 @@ select has_function(
 );
 select has_function(
   'api', 'qry_review_get_admin_queue_items_v3',
-  array['text', 'integer', 'integer', 'text', 'text'],
+  array['text', 'integer', 'integer', 'text', 'text', 'text', 'text'],
   'flat Review Admin queue function exists'
 );
 select has_function(
   'api', 'qry_review_get_member_queue_items_v3',
-  array['text', 'integer', 'integer', 'text', 'text'],
+  array['text', 'integer', 'integer', 'text', 'text', 'text', 'text'],
   'flat Review Member queue function exists'
 );
 select has_index(
@@ -265,6 +265,22 @@ select has_index(
 select has_index(
   'private', 'comments', 'comments_reviewer_queue_state_review_idx',
   'Member Review queues have a reviewer and state index'
+);
+select has_index(
+  'private', 'reviews', 'reviews_review_queue_target_status_modified_idx',
+  'filtered Review queues have a target, status, and modified-time index'
+);
+select ok(
+  pg_catalog.pg_get_function_arguments(
+    'api.qry_review_get_admin_queue_items_v3(text,integer,integer,text,text,text,text)'::regprocedure
+  ) like '%p_page_size integer DEFAULT 50%',
+  'flat Admin queue defaults to fifty rows per page'
+);
+select ok(
+  pg_catalog.pg_get_function_arguments(
+    'api.qry_review_get_member_queue_items_v3(text,integer,integer,text,text,text,text)'::regprocedure
+  ) like '%p_page_size integer DEFAULT 50%',
+  'flat Member queue defaults to fifty rows per page'
 );
 select has_function(
   'api', 'qry_root_review_reference_progress_v2', array['uuid'],
@@ -390,6 +406,74 @@ select is(
 );
 select is(
   (
+    select pg_catalog.count(*)::integer
+    from api.qry_review_get_admin_queue_items_v3(
+      p_status => 'unassigned', p_display_mode => 'model_process'
+    )
+  ),
+  1,
+  'flat Admin model/process mode includes only the matching Process Root'
+);
+select is(
+  (
+    select pg_catalog.count(*)::integer
+    from api.qry_review_get_admin_queue_items_v3(
+      p_status => 'unassigned', p_display_mode => 'other'
+    )
+  ),
+  1,
+  'flat Admin other mode includes only the matching non-model Reference'
+);
+select is(
+  (
+    select pg_catalog.count(*)::integer
+    from api.qry_review_get_admin_queue_items_v3(
+      p_status => 'unassigned', p_target_table => 'processes'
+    )
+  ),
+  1,
+  'flat Admin exact Process filter includes only Process reviews'
+);
+select is(
+  (
+    select pg_catalog.count(*)::integer
+    from api.qry_review_get_admin_queue_items_v3(
+      p_status => 'unassigned', p_target_table => 'flows'
+    )
+  ),
+  1,
+  'flat Admin exact Flow filter includes only Flow reviews'
+);
+select is(
+  (
+    select pg_catalog.count(*)::integer
+    from api.qry_review_get_admin_queue_items_v3(
+      p_status => 'unassigned',
+      p_display_mode => 'model_process',
+      p_target_table => 'flows'
+    )
+  ),
+  0,
+  'flat Admin display mode and exact data type use intersection semantics'
+);
+select throws_ok(
+  $$select * from api.qry_review_get_admin_queue_items_v3(
+    p_status => 'unassigned', p_display_mode => 'unsupported'
+  )$$,
+  '22023',
+  'INVALID_REVIEW_DISPLAY_MODE',
+  'flat Admin queue rejects an unknown display mode'
+);
+select throws_ok(
+  $$select * from api.qry_review_get_admin_queue_items_v3(
+    p_status => 'unassigned', p_target_table => 'unknown_table'
+  )$$,
+  '22023',
+  'INVALID_REVIEW_TARGET_TABLE',
+  'flat Admin queue rejects an unknown target table'
+);
+select is(
+  (
     select pg_catalog.max(total_count)::integer
     from api.qry_review_get_admin_queue_items_v3(
       'unassigned', 1, 1, 'modified_at', 'desc'
@@ -504,6 +588,44 @@ select is(
   ),
   1,
   'flat Member total_count counts independent actor tasks'
+);
+select is(
+  (
+    select pg_catalog.count(*)::integer
+    from api.qry_review_get_member_queue_items_v3(
+      p_status => 'pending', p_display_mode => 'other'
+    )
+  ),
+  1,
+  'flat Member other mode includes the assigned Source Review'
+);
+select is(
+  (
+    select pg_catalog.count(*)::integer
+    from api.qry_review_get_member_queue_items_v3(
+      p_status => 'pending', p_display_mode => 'model_process'
+    )
+  ),
+  0,
+  'flat Member model/process mode excludes an assigned Source Review'
+);
+select is(
+  (
+    select pg_catalog.max(total_count)::integer
+    from api.qry_review_get_member_queue_items_v3(
+      p_status => 'pending', p_target_table => 'sources'
+    )
+  ),
+  1,
+  'flat Member exact Source filter retains the filtered total count'
+);
+select throws_ok(
+  $$select * from api.qry_review_get_member_queue_items_v3(
+    p_status => 'pending', p_target_table => 'unknown_table'
+  )$$,
+  '22023',
+  'INVALID_REVIEW_TARGET_TABLE',
+  'flat Member queue rejects an unknown target table'
 );
 select is(
   (
@@ -761,7 +883,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'anon',
-    'api.qry_review_get_admin_queue_items_v3(text,integer,integer,text,text)',
+    'api.qry_review_get_admin_queue_items_v3(text,integer,integer,text,text,text,text)',
     'EXECUTE'
   ),
   'anonymous callers cannot execute the flat Admin queue'
@@ -769,7 +891,7 @@ select ok(
 select ok(
   not has_function_privilege(
     'anon',
-    'api.qry_review_get_member_queue_items_v3(text,integer,integer,text,text)',
+    'api.qry_review_get_member_queue_items_v3(text,integer,integer,text,text,text,text)',
     'EXECUTE'
   ),
   'anonymous callers cannot execute the flat Member queue'
@@ -779,8 +901,8 @@ select is(
     select pg_catalog.count(*)::integer
     from private.api_capability_grants
     where routine_identity in (
-      'api.qry_review_get_admin_queue_items_v3(text, integer, integer, text, text)',
-      'api.qry_review_get_member_queue_items_v3(text, integer, integer, text, text)'
+      'api.qry_review_get_admin_queue_items_v3(text, integer, integer, text, text, text, text)',
+      'api.qry_review_get_member_queue_items_v3(text, integer, integer, text, text, text, text)'
     )
       and capability_id = 'NX-REV-01'
       and allow_authenticated

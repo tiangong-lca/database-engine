@@ -1,10 +1,10 @@
-CREATE OR REPLACE FUNCTION "api"."qry_review_get_admin_queue_items_v3"("p_status" "text" DEFAULT NULL::"text", "p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10, "p_sort_by" "text" DEFAULT 'modified_at'::"text", "p_sort_order" "text" DEFAULT 'desc'::"text") RETURNS TABLE("id" "uuid", "data_id" "uuid", "data_version" "text", "state_code" integer, "review_kind" "text", "target_table" "text", "reviewer_id" "jsonb", "json" "jsonb", "deadline" timestamp with time zone, "created_at" timestamp with time zone, "modified_at" timestamp with time zone, "comment_state_codes" "jsonb", "root_matches_status" boolean, "root_can_read" boolean, "total_count" bigint)
+CREATE OR REPLACE FUNCTION "api"."qry_review_get_admin_queue_items_v3"("p_status" "text" DEFAULT NULL::"text", "p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 50, "p_sort_by" "text" DEFAULT 'modified_at'::"text", "p_sort_order" "text" DEFAULT 'desc'::"text", "p_display_mode" "text" DEFAULT 'all'::"text", "p_target_table" "text" DEFAULT NULL::"text") RETURNS TABLE("id" "uuid", "data_id" "uuid", "data_version" "text", "state_code" integer, "review_kind" "text", "target_table" "text", "reviewer_id" "jsonb", "json" "jsonb", "deadline" timestamp with time zone, "created_at" timestamp with time zone, "modified_at" timestamp with time zone, "comment_state_codes" "jsonb", "root_matches_status" boolean, "root_can_read" boolean, "total_count" bigint)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     AS $$
 declare
   v_actor uuid := auth.uid();
-  v_limit integer := greatest(1, least(coalesce(p_page_size, 10), 100));
+  v_limit integer := greatest(1, least(coalesce(p_page_size, 50), 100));
   v_offset integer := (greatest(coalesce(p_page, 1), 1) - 1) * v_limit;
   v_sort_key text := case pg_catalog.lower(coalesce(p_sort_by, ''))
     when 'created_at' then 'created_at'
@@ -16,6 +16,11 @@ declare
   end;
   v_order_dir text := api.cmd_membership_resolve_sort_direction(p_sort_order);
   v_status text := pg_catalog.lower(coalesce(p_status, ''));
+  v_display_mode text := pg_catalog.lower(pg_catalog.btrim(coalesce(p_display_mode, 'all')));
+  v_target_table text := nullif(
+    pg_catalog.lower(pg_catalog.btrim(coalesce(p_target_table, ''))),
+    ''
+  );
   v_state_code integer;
 begin
   if v_actor is null or not api.cmd_review_is_review_admin(v_actor) then
@@ -29,6 +34,22 @@ begin
     when 'admin-rejected' then v_state_code := -1;
     else return;
   end case;
+
+  if v_display_mode not in ('all', 'model_process', 'other') then
+    raise exception using
+      errcode = '22023',
+      message = 'INVALID_REVIEW_DISPLAY_MODE';
+  end if;
+  if v_target_table is not null and not (
+    v_target_table = any(array[
+      'contacts', 'sources', 'unitgroups', 'flowproperties', 'flows',
+      'processes', 'lifecyclemodels'
+    ]::text[])
+  ) then
+    raise exception using
+      errcode = '22023',
+      message = 'INVALID_REVIEW_TARGET_TABLE';
+  end if;
 
   return query
   with q as (
@@ -58,6 +79,18 @@ begin
     ) as review_comments on true
     where review_row.review_kind in ('root', 'reference')
       and (v_state_code is null or review_row.state_code = v_state_code)
+      and (
+        v_display_mode = 'all'
+        or (
+          v_display_mode = 'model_process'
+          and review_row.target_table in ('processes', 'lifecyclemodels')
+        )
+        or (
+          v_display_mode = 'other'
+          and review_row.target_table not in ('processes', 'lifecyclemodels')
+        )
+      )
+      and (v_target_table is null or review_row.target_table = v_target_table)
   )
   select q.*, pg_catalog.count(*) over() as total_count
   from q
@@ -75,10 +108,10 @@ begin
 end;
 $$;
 
-ALTER FUNCTION "api"."qry_review_get_admin_queue_items_v3"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") OWNER TO "postgres";
+ALTER FUNCTION "api"."qry_review_get_admin_queue_items_v3"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text") OWNER TO "postgres";
 
-REVOKE ALL ON FUNCTION "api"."qry_review_get_admin_queue_items_v3"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") FROM PUBLIC;
+REVOKE ALL ON FUNCTION "api"."qry_review_get_admin_queue_items_v3"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text") FROM PUBLIC;
 
-GRANT ALL ON FUNCTION "api"."qry_review_get_admin_queue_items_v3"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "api"."qry_review_get_admin_queue_items_v3"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text") TO "authenticated";
 
-GRANT ALL ON FUNCTION "api"."qry_review_get_admin_queue_items_v3"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") TO "api_internal_executor";
+GRANT ALL ON FUNCTION "api"."qry_review_get_admin_queue_items_v3"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text") TO "api_internal_executor";

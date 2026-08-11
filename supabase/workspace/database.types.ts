@@ -1723,11 +1723,13 @@ export type Database = {
       }
       qry_review_get_admin_queue_items_v3: {
         Args: {
+          p_display_mode?: string
           p_page?: number
           p_page_size?: number
           p_sort_by?: string
           p_sort_order?: string
           p_status?: string
+          p_target_table?: string
         }
         Returns: {
           comment_state_codes: Json
@@ -1849,11 +1851,13 @@ export type Database = {
       }
       qry_review_get_member_queue_items_v3: {
         Args: {
+          p_display_mode?: string
           p_page?: number
           p_page_size?: number
           p_sort_by?: string
           p_sort_order?: string
           p_status?: string
+          p_target_table?: string
         }
         Returns: {
           comment_created_at: string
