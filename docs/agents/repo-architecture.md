@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-11
-lastReviewedCommit: 91a1f96
-lastReviewedNote: "Updated for Issue #460: Database A adds nullable text[] search_text projections, preserves legacy scalar values losslessly during migration, and provides bounded enqueue. Database B adds seven explicit PGroonga search_text indexes and switches formal lexical and hybrid-lexical execution behind a fail-closed coverage gate; Edge array deployment and 100% historical backfill remain external Release 1 gates. Database C old-index cleanup and Database D old-RPC cleanup remain separate."
+lastReviewedCommit: 3c9b67b8a1194266abdb2ce37ea3d8518a213f12
+lastReviewedNote: "Updated for Issue #467: the API-owned v3 review queues flatten Root and Reference rows, filter display mode and exact target table before totals and pagination, and default to 50 rows while preserving the 256-function inventory."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

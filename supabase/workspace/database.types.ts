@@ -1721,6 +1721,34 @@ export type Database = {
           total_count: number
         }[]
       }
+      qry_review_get_admin_queue_items_v3: {
+        Args: {
+          p_display_mode?: string
+          p_page?: number
+          p_page_size?: number
+          p_sort_by?: string
+          p_sort_order?: string
+          p_status?: string
+          p_target_table?: string
+        }
+        Returns: {
+          comment_state_codes: Json
+          created_at: string
+          data_id: string
+          data_version: string
+          deadline: string
+          id: string
+          json: Json
+          modified_at: string
+          review_kind: string
+          reviewer_id: Json
+          root_can_read: boolean
+          root_matches_status: boolean
+          state_code: number
+          target_table: string
+          total_count: number
+        }[]
+      }
       qry_review_get_admin_root_queue_items_v2: {
         Args: {
           p_page?: number
@@ -1818,6 +1846,37 @@ export type Database = {
           modified_at: string
           review_state_code: number
           reviewer_id: Json
+          total_count: number
+        }[]
+      }
+      qry_review_get_member_queue_items_v3: {
+        Args: {
+          p_display_mode?: string
+          p_page?: number
+          p_page_size?: number
+          p_sort_by?: string
+          p_sort_order?: string
+          p_status?: string
+          p_target_table?: string
+        }
+        Returns: {
+          comment_created_at: string
+          comment_json: Json
+          comment_modified_at: string
+          comment_state_code: number
+          created_at: string
+          data_id: string
+          data_version: string
+          deadline: string
+          id: string
+          json: Json
+          modified_at: string
+          review_kind: string
+          review_state_code: number
+          reviewer_id: Json
+          root_can_read: boolean
+          root_matches_status: boolean
+          target_table: string
           total_count: number
         }[]
       }
