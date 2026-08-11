@@ -35,7 +35,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-11
-lastReviewedCommit: 3c9b67b8a1194266abdb2ce37ea3d8518a213f12
+lastReviewedCommit: 340e83613d3d611f881b2fd49036ddac80f3101a
 lastReviewedNote: "Reviewed for Issue #467: the v3 admin and member review queues filter display mode and exact target type before totals and pagination, default to 50 rows, and keep Root and Reference reviews as independent rows; existing search and rollout ownership remains unchanged."
 related:
   - .docpact/config.yaml

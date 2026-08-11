@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-11
-lastReviewedCommit: 3c9b67b8a1194266abdb2ce37ea3d8518a213f12
+lastReviewedCommit: 340e83613d3d611f881b2fd49036ddac80f3101a
 lastReviewedNote: "Reviewed for Issue #467: existing exact-local workspace and Data API type commands deterministically regenerate the v3 review queue filter signatures, 50-row defaults, and supporting index; script behavior is unchanged."
 related:
   - ../AGENTS.md
