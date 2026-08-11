@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-11
-lastReviewedCommit: 340e83613d3d611f881b2fd49036ddac80f3101a
-lastReviewedNote: "Reviewed for Issue #467: the v3 admin and member review queues filter display mode and exact target type before totals and pagination, default to 50 rows, and keep Root and Reference reviews as independent rows; existing search and rollout ownership remains unchanged."
+lastReviewedCommit: 79d7befb12023d8c0d45160dbaeafc3e7aeafa70
+lastReviewedNote: "Reviewed for Issue #471: lifecycle review and bundle membership now use ILCD content and exact-version process model ownership; json_tg remains frontend state and does not define database correctness."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

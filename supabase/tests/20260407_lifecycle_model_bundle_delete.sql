@@ -41,18 +41,7 @@ values (
       }
     }
   }'::json,
-  '{
-    "submodels": [
-      {
-        "id": "95000000-0000-0000-0000-000000000101",
-        "version": "01.00.000"
-      },
-      {
-        "id": "95000000-0000-0000-0000-000000000102",
-        "version": "01.00.000"
-      }
-    ]
-  }'::jsonb,
+  '{"submodels":"stale frontend-only state"}'::jsonb,
   true
 );
 
@@ -90,7 +79,7 @@ select is(
     'model_id', '95000000-0000-0000-0000-000000000001',
     'version', '01.00.000'
   )::text,
-  'delete_lifecycle_model_bundle succeeds even when some referenced submodel processes are already missing'
+  'delete_lifecycle_model_bundle succeeds when json_tg does not describe bundle membership'
 );
 
 select is(
@@ -100,7 +89,7 @@ select is(
     where model_id = '95000000-0000-0000-0000-000000000001'
   ),
   '0',
-  'delete_lifecycle_model_bundle removes remaining persisted submodel processes'
+  'delete_lifecycle_model_bundle removes relationally owned processes despite malformed json_tg'
 );
 
 select is(

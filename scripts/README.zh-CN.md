@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-11
-lastReviewedCommit: 340e83613d3d611f881b2fd49036ddac80f3101a
-lastReviewedNote: "已为 Issue #467 复核：现有 exact-local workspace 与 Data API 类型命令可确定性重建 v3 审核队列筛选签名、默认 50 行和配套索引；脚本行为不变。"
+lastReviewedCommit: 79d7befb12023d8c0d45160dbaeafc3e7aeafa70
+lastReviewedNote: "已为 Issue #471 复核：现有 migration 生成与 exact-local workspace 刷新命令覆盖 json_tg 解耦函数和模型成员关系索引；脚本行为不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

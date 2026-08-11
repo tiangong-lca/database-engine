@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) RETURNS TABLE("root_review_id" "uuid", "target_table" "text", "data_id" "uuid", "data_version" "text", "revision_checksum" "text", "provenance" "jsonb")
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO ''
-    AS $$
+    AS $_$
   with recursive requested_roots as materialized (
     select review_row.*
     from private.reviews as review_row
@@ -167,7 +167,7 @@ CREATE OR REPLACE FUNCTION "private"."review_resolve_current_reference_targets_v
     current_target.data_id,
     current_target.data_version,
     current_target.dataset_row
-$$;
+$_$;
 
 ALTER FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) OWNER TO "postgres";
 

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-11
-lastReviewedCommit: 340e83613d3d611f881b2fd49036ddac80f3101a
-lastReviewedNote: "已为 Issue #467 复核：exact-local 快照可确定性重建 v3 审核队列筛选签名、默认 50 行、正式类型和配套索引；workspace 行为不变。"
+lastReviewedCommit: 79d7befb12023d8c0d45160dbaeafc3e7aeafa70
+lastReviewedNote: "已为 Issue #471 复核：exact-local 快照可确定性重建不依赖 json_tg 的审核函数和精确版本模型成员关系索引；workspace 行为不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

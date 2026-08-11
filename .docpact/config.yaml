@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-11"
-lastReviewedCommit: "340e83613d3d611f881b2fd49036ddac80f3101a"
-lastReviewedNote: "Reviewed for Issue #467: the v3 admin and member queues apply display-mode and exact target-table filters before count and pagination, default to 50 rows, reject unsupported values, and retain the 256-function API cutover contract."
+lastReviewedCommit: "79d7befb12023d8c0d45160dbaeafc3e7aeafa70"
+lastReviewedNote: "Reviewed for Issue #471: lifecycle review correctness is independent of json_tg; existing ownership, routing, migration, test, and generated-workspace contracts remain unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
