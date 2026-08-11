@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."qry_review_get_member_queue_items_v3"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") IS 'Current actor queue with one independently paginated row per readable assigned Root or Reference Review.';

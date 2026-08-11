@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-11
-lastReviewedCommit: 91a1f96
+lastReviewedCommit: 3c9b67b8a1194266abdb2ce37ea3d8518a213f12
 lastReviewedNote: "已为 Issue #460 复核：exact-local 快照可确定性重建七张表的 nullable text[] search_text 列、七个 Database B PGroonga 索引、fail-closed source-switch gate、已审核行派生 guard 与正式 Search RPC 类型；workspace 行为不变。"
 related:
   - ../../AGENTS.md

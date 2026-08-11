@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(35);
+select plan(54);
 
 select is(
   api.cmd_review_get_dataset_name(
@@ -249,6 +249,24 @@ select has_function(
   'grouped Review Member queue function exists'
 );
 select has_function(
+  'api', 'qry_review_get_admin_queue_items_v3',
+  array['text', 'integer', 'integer', 'text', 'text'],
+  'flat Review Admin queue function exists'
+);
+select has_function(
+  'api', 'qry_review_get_member_queue_items_v3',
+  array['text', 'integer', 'integer', 'text', 'text'],
+  'flat Review Member queue function exists'
+);
+select has_index(
+  'private', 'reviews', 'reviews_review_queue_status_modified_idx',
+  'flat Review queues have a status and modified-time index'
+);
+select has_index(
+  'private', 'comments', 'comments_reviewer_queue_state_review_idx',
+  'Member Review queues have a reviewer and state index'
+);
+select has_function(
   'api', 'qry_root_review_reference_progress_v2', array['uuid'],
   'versioned root child query function exists'
 );
@@ -341,6 +359,48 @@ select is(
 select is(
   (
     select pg_catalog.count(*)::integer
+    from api.qry_review_get_admin_queue_items_v3(
+      'unassigned', 1, 10, 'modified_at', 'desc'
+    )
+  ),
+  2,
+  'flat Admin queue lists the matching Root and Reference as independent rows'
+);
+select is(
+  (
+    select pg_catalog.count(*)::integer
+    from api.qry_review_get_admin_queue_items_v3(
+      'unassigned', 1, 10, 'modified_at', 'desc'
+    )
+    where review_kind = 'root'
+  ),
+  1,
+  'flat Admin queue retains the directly matching Root row'
+);
+select is(
+  (
+    select pg_catalog.count(*)::integer
+    from api.qry_review_get_admin_queue_items_v3(
+      'unassigned', 1, 10, 'modified_at', 'desc'
+    )
+    where review_kind = 'reference'
+  ),
+  1,
+  'flat Admin queue retains the shared Reference only once'
+);
+select is(
+  (
+    select pg_catalog.max(total_count)::integer
+    from api.qry_review_get_admin_queue_items_v3(
+      'unassigned', 1, 1, 'modified_at', 'desc'
+    )
+  ),
+  2,
+  'flat Admin total_count counts independent Reviews before pagination'
+);
+select is(
+  (
+    select pg_catalog.count(*)::integer
     from api.qry_root_review_reference_progress_v2(
       '48200000-0000-4000-8000-000000000111'
     )
@@ -418,6 +478,36 @@ select is(
 select is(
   (
     select pg_catalog.count(*)::integer
+    from api.qry_review_get_member_queue_items_v3(
+      'pending', 1, 10, 'modified_at', 'desc'
+    )
+  ),
+  1,
+  'flat Member queue lists the assigned Reference once instead of related Roots'
+);
+select is(
+  (
+    select id
+    from api.qry_review_get_member_queue_items_v3(
+      'pending', 1, 10, 'modified_at', 'desc'
+    )
+  ),
+  '48200000-0000-4000-8000-000000000102'::uuid,
+  'flat Member queue preserves the assigned Reference Review identity'
+);
+select is(
+  (
+    select pg_catalog.max(total_count)::integer
+    from api.qry_review_get_member_queue_items_v3(
+      'pending', 1, 1, 'modified_at', 'desc'
+    )
+  ),
+  1,
+  'flat Member total_count counts independent actor tasks'
+);
+select is(
+  (
+    select pg_catalog.count(*)::integer
     from api.qry_root_review_reference_progress_v2(
       '48200000-0000-4000-8000-000000000111'
     )
@@ -463,6 +553,16 @@ select is(
   2,
   'Member reviewed tab includes every root that currently derives a reviewed child'
 );
+select is(
+  (
+    select count(*)::integer
+    from api.qry_review_get_member_queue_items_v3(
+      'reviewed', 1, 10, 'modified_at', 'desc'
+    )
+  ),
+  1,
+  'flat Member reviewed tab lists the reviewed Reference itself'
+);
 reset role;
 
 update private.reviews
@@ -483,6 +583,16 @@ select is(
   2,
   'Member rejected tab requires both rejected Review and rejected actor Comment'
 );
+select is(
+  (
+    select count(*)::integer
+    from api.qry_review_get_member_queue_items_v3(
+      'reviewer-rejected', 1, 10, 'modified_at', 'desc'
+    )
+  ),
+  1,
+  'flat Member rejected tab lists the rejected Reference itself'
+);
 reset role;
 
 select set_config(
@@ -500,6 +610,16 @@ select is(
   ),
   2,
   'Admin assigned tab groups direct assigned roots and assigned children'
+);
+select is(
+  (
+    select count(*)::integer
+    from api.qry_review_get_admin_queue_items_v3(
+      'assigned', 1, 10, 'modified_at', 'desc'
+    )
+  ),
+  3,
+  'flat Admin assigned tab lists two matching Roots and one matching Reference'
 );
 reset role;
 
@@ -542,6 +662,16 @@ select is(
   false,
   'Admin rejected tab marks a root included only by its rejected child'
 );
+select is(
+  (
+    select count(*)::integer
+    from api.qry_review_get_admin_queue_items_v3(
+      'admin-rejected', 1, 10, 'modified_at', 'desc'
+    )
+  ),
+  3,
+  'flat Admin rejected tab lists one Root and two References independently'
+);
 reset role;
 
 set local session_replication_role = replica;
@@ -561,6 +691,16 @@ select is(
   ),
   2,
   'stale business reviews[].id candidates are removed by current JSON validation'
+);
+select is(
+  (
+    select count(*)::integer
+    from api.qry_review_get_admin_queue_items_v3(
+      'admin-rejected', 1, 10, 'modified_at', 'desc'
+    )
+  ),
+  3,
+  'flat queue membership is independent from changing Root relationship candidates'
 );
 reset role;
 
@@ -617,6 +757,38 @@ select ok(
     'EXECUTE'
   ),
   'anonymous callers cannot execute the grouped Member queue'
+);
+select ok(
+  not has_function_privilege(
+    'anon',
+    'api.qry_review_get_admin_queue_items_v3(text,integer,integer,text,text)',
+    'EXECUTE'
+  ),
+  'anonymous callers cannot execute the flat Admin queue'
+);
+select ok(
+  not has_function_privilege(
+    'anon',
+    'api.qry_review_get_member_queue_items_v3(text,integer,integer,text,text)',
+    'EXECUTE'
+  ),
+  'anonymous callers cannot execute the flat Member queue'
+);
+select is(
+  (
+    select pg_catalog.count(*)::integer
+    from private.api_capability_grants
+    where routine_identity in (
+      'api.qry_review_get_admin_queue_items_v3(text, integer, integer, text, text)',
+      'api.qry_review_get_member_queue_items_v3(text, integer, integer, text, text)'
+    )
+      and capability_id = 'NX-REV-01'
+      and allow_authenticated
+      and not allow_anon
+      and not allow_service_role
+  ),
+  2,
+  'the exact capability manifest admits both flat queues for authenticated only'
 );
 
 select * from finish();
