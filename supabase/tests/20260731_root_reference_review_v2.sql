@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(23);
+select plan(29);
 
 select is((
   select count(*)::integer
@@ -180,7 +180,7 @@ select set_config(
   true
 );
 select ok((
-  api.cmd_simple_review_submit_decision(
+  api.cmd_reviewer_submit_decision(
     (select id from private.reviews where review_kind = 'root'),
     'approve',
     null,
@@ -189,11 +189,24 @@ select ok((
 )::boolean, 'Reviewer approval requires no opinion payload');
 select is((select state_code from private.comments limit 1), 1,
   'Reviewer approval is stored as comment state 1');
+select is((select state_code from private.reviews
+  where review_kind = 'root'), 1,
+  'Reviewer approval does not perform the Review Admin final transition');
 
 select set_config(
   'request.jwt.claim.sub',
   '19000000-0000-0000-0000-000000000003',
   true
+);
+select is(
+  api.cmd_reviewer_submit_decision(
+    (select id from private.reviews where review_kind = 'root'),
+    'approve',
+    null,
+    '{}'::jsonb
+  )->>'code',
+  'REVIEWER_REQUIRED',
+  'Review Admin cannot submit a Reviewer opinion without a Reviewer assignment'
 );
 select ok((
   api.cmd_review_finalize_approve(
@@ -244,6 +257,58 @@ select api.cmd_review_submit_v2(
   null,
   '{}'::jsonb
 );
+
+select set_config(
+  'request.jwt.claim.sub',
+  '19000000-0000-0000-0000-000000000003',
+  true
+);
+
+select ok((
+  api.cmd_review_assign_reviewers(
+    (select id from private.reviews
+      where review_kind = 'root'
+        and data_id = '39000000-0000-0000-0000-000000000002'),
+    '["19000000-0000-0000-0000-000000000002"]'::jsonb,
+    now() + interval '7 days',
+    '{}'::jsonb
+  )->>'ok'
+)::boolean, 'Review Admin assigns the Root Review before Reviewer rejection');
+
+select set_config(
+  'request.jwt.claim.sub',
+  '19000000-0000-0000-0000-000000000002',
+  true
+);
+
+select ok((
+  api.cmd_reviewer_submit_decision(
+    (select id from private.reviews
+      where review_kind = 'root'
+        and data_id = '39000000-0000-0000-0000-000000000002'),
+    'reject',
+    'Reviewer batch rejection',
+    '{"command":"reviewer_batch_decision","batch_id":"test-batch"}'::jsonb
+  )->>'ok'
+)::boolean, 'Reviewer rejection is accepted as an opinion');
+
+select is((
+  select state_code
+  from private.comments
+  where review_id = (
+    select id from private.reviews
+    where review_kind = 'root'
+      and data_id = '39000000-0000-0000-0000-000000000002'
+  )
+    and reviewer_id = '19000000-0000-0000-0000-000000000002'
+), -3, 'Reviewer rejection is stored as Comment state -3');
+
+select is((
+  select state_code
+  from private.reviews
+  where review_kind = 'root'
+    and data_id = '39000000-0000-0000-0000-000000000002'
+), 1, 'Reviewer rejection leaves the Review assigned for final admin action');
 
 select set_config(
   'request.jwt.claim.sub',

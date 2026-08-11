@@ -612,6 +612,15 @@ export type Database = {
         }
         Returns: Json
       }
+      cmd_reviewer_submit_decision: {
+        Args: {
+          p_audit?: Json
+          p_decision: string
+          p_reason?: string
+          p_review_id: string
+        }
+        Returns: Json
+      }
       cmd_simple_review_submit_decision: {
         Args: {
           p_audit?: Json
