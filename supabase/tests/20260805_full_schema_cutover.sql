@@ -68,7 +68,7 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  256::bigint,
+  257::bigint,
   'api contains the cutover functions, reviewed consumer facades, and Database A Search RPCs'
 );
 
