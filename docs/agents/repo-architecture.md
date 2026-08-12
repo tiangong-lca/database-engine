@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-12
-lastReviewedCommit: 7e4bcaa42cdb0bb77aef35ce8bbd397e410b49aa
-lastReviewedNote: "Reviewed for Issue #446: candidate-hinted Reference impact lookup and current target/checksum validation fit the existing database-owned review topology."
+lastReviewedCommit: aca7ed0f1d5894fadb958b940212022048e64f80
+lastReviewedNote: "Reviewed for Issue #478: the bounded scope-closure RPC timeout does not change candidate snapshot ownership, manifest semantics, or Edge/Worker boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

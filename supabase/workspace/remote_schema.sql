@@ -9723,6 +9723,7 @@ ALTER FUNCTION "api"."cmd_lcia_result_publication_unpublish"("p_publication_id" 
 CREATE OR REPLACE FUNCTION "api"."cmd_lcia_scope_closure_check_request_v2"("p_requested_scope" "jsonb", "p_request_idempotency_token" "text", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
+    SET "statement_timeout" TO '60s'
     AS $$
 declare
   v_actor uuid := auth.uid();

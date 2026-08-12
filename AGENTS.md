@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-12
-lastReviewedCommit: 7e4bcaa42cdb0bb77aef35ce8bbd397e410b49aa
-lastReviewedNote: "Reviewed for Issue #446: Reference approval scope isolation remains database-owned RPC and notification behavior under the existing validation and delivery contract."
+lastReviewedCommit: aca7ed0f1d5894fadb958b940212022048e64f80
+lastReviewedNote: "Reviewed for Issue #478: the scope-closure RPC timeout remains database-owned migration behavior under the existing branch, validation, and delivery boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

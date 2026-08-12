@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-12
-lastReviewedCommit: 7e4bcaa42cdb0bb77aef35ce8bbd397e410b49aa
-lastReviewedNote: "已为 Issue #446 复核：exact-local 快照现已反映候选范围内的 Reference 影响查询；workspace 生成行为不变。"
+lastReviewedCommit: aca7ed0f1d5894fadb958b940212022048e64f80
+lastReviewedNote: "已为 Issue #478 复核：exact-local 快照现已反映 scope-closure RPC 的超时配置；workspace 生成行为不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

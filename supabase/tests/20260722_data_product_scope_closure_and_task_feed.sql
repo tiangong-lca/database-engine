@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(102);
+select plan(103);
 
 select has_table('private', 'lcia_scope_closure_checks', 'closure checks are persisted');
 select has_table('private', 'lcia_scope_closure_issues', 'closure issues are persisted');
@@ -28,6 +28,21 @@ select ok(not has_table_privilege('authenticated', 'private.lcia_scope_closure_c
 select ok(not has_table_privilege('authenticated', 'private.lcia_scope_closure_issues', 'select'), 'authenticated cannot directly read closure issues');
 
 select has_function('api', 'cmd_lcia_scope_closure_check_request_v2', array['jsonb','text','jsonb'], 'closure request RPC accepts a server-normalized scope intent');
+select is(
+  (
+    select config_value
+    from pg_proc as routine
+    join pg_namespace as namespace on namespace.oid = routine.pronamespace
+    cross join lateral unnest(coalesce(routine.proconfig, '{}'::text[])) as config(config_value)
+    where namespace.nspname = 'api'
+      and routine.proname = 'cmd_lcia_scope_closure_check_request_v2'
+      and pg_get_function_identity_arguments(routine.oid) =
+        'p_requested_scope jsonb, p_request_idempotency_token text, p_audit jsonb'
+      and config_value like 'statement_timeout=%'
+  ),
+  'statement_timeout=60s'::text,
+  'closure request RPC receives the bounded production-scale statement timeout'
+);
 select has_function('private', 'svc_lcia_scope_closure_check_get_worker_input', array['uuid'], 'worker can read the frozen scope through a service-only RPC');
 select has_function('private', 'svc_lcia_scope_closure_check_record_result_v2', array['uuid','uuid','uuid','text','text','jsonb','jsonb','jsonb','jsonb','text[]','uuid'], 'lease-fenced completion RPC exists');
 select has_function('private', 'svc_lcia_scope_closure_check_record_result_v3', array['uuid','uuid','uuid','text','text','jsonb','jsonb','jsonb','jsonb','text[]','uuid','uuid','uuid'], 'database-owned numerical snapshot completion RPC exists');
