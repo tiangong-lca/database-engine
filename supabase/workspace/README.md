@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-12
-lastReviewedCommit: f9973d9b16c5b4a7391fd0d5aa5e8695fd9a5da3
-lastReviewedNote: "Reviewed for Issue #474: the exact-local snapshot deterministically includes completed-progress normalization and direct reused-certificate Bundle binding; workspace behavior is unchanged."
+lastReviewedCommit: 8be2ea266bcbcebd5acf74392ad1839407347a77
+lastReviewedNote: "Reviewed for Issue #422: the exact-local snapshot now reflects bounded skip-locked expired-lease recovery and idempotent terminal-result replay; workspace behavior is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
