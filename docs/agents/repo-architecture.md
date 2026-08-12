@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-12
-lastReviewedCommit: 19454d0fd9d40e8062ecf14d06de2caf8cc253e7
-lastReviewedNote: "Reviewed for Issue #422 worker control-plane recovery: bounded skip-locked lease cleanup and same-lease terminal idempotency remain database-owned queue semantics."
+lastReviewedCommit: 7e4bcaa42cdb0bb77aef35ce8bbd397e410b49aa
+lastReviewedNote: "Reviewed for Issue #446: candidate-hinted Reference impact lookup and current target/checksum validation fit the existing database-owned review topology."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

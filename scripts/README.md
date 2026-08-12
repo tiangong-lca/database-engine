@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-12
-lastReviewedCommit: 8be2ea266bcbcebd5acf74392ad1839407347a77
-lastReviewedNote: "Reviewed for Issue #422: existing exact-local refresh commands generated the worker control-plane recovery schema snapshots; script behavior is unchanged."
+lastReviewedCommit: 7e4bcaa42cdb0bb77aef35ce8bbd397e410b49aa
+lastReviewedNote: "Reviewed for Issue #446: existing exact-local refresh commands generated the Reference impact lookup snapshot; script behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

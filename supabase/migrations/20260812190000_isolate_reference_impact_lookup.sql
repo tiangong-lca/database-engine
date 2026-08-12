@@ -1,7 +1,22 @@
-CREATE OR REPLACE FUNCTION "api"."qry_reference_review_impacted_roots"("p_reference_review_id" "uuid", "p_include_history" boolean DEFAULT false) RETURNS TABLE("root_review_id" "uuid", "target_table" "text", "data_id" "uuid", "data_version" "text", "state_code" integer, "is_current" boolean)
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
+-- Issue #446: keep one Reference Review's impacted-root lookup isolated from
+-- incomplete, unrelated Root Reviews.
+
+create or replace function api.qry_reference_review_impacted_roots(
+  p_reference_review_id uuid,
+  p_include_history boolean default false
+)
+returns table (
+  root_review_id uuid,
+  target_table text,
+  data_id uuid,
+  data_version text,
+  state_code integer,
+  is_current boolean
+)
+language plpgsql
+security definer
+set search_path = ''
+as $$
 declare
   v_actor uuid := auth.uid();
   v_reference private.reviews%rowtype;
@@ -54,8 +69,12 @@ begin
 end;
 $$;
 
-ALTER FUNCTION "api"."qry_reference_review_impacted_roots"("p_reference_review_id" "uuid", "p_include_history" boolean) OWNER TO "postgres";
+alter function api.qry_reference_review_impacted_roots(uuid, boolean)
+  owner to postgres;
+revoke all on function api.qry_reference_review_impacted_roots(uuid, boolean)
+  from public, anon, authenticated, service_role;
+grant execute on function api.qry_reference_review_impacted_roots(uuid, boolean)
+  to api_internal_executor;
 
-REVOKE ALL ON FUNCTION "api"."qry_reference_review_impacted_roots"("p_reference_review_id" "uuid", "p_include_history" boolean) FROM PUBLIC;
-
-GRANT ALL ON FUNCTION "api"."qry_reference_review_impacted_roots"("p_reference_review_id" "uuid", "p_include_history" boolean) TO "api_internal_executor";
+comment on function api.qry_reference_review_impacted_roots(uuid, boolean) is
+  'Returns current dynamically validated impacted roots from append-only target hints without evaluating unrelated roots. p_include_history is retained for signature compatibility and does not restore historical relationships.';

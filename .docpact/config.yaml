@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-12"
-lastReviewedCommit: "7ea0843fe34ef53930a7d4030b6ab7a0790c1bd0"
-lastReviewedNote: "Reviewed for Issue #422 and PR #476 CI: the service-only exact-head assertion advances with the worker control-plane recovery migration; SQL-test governance is unchanged."
+lastReviewedCommit: "7e4bcaa42cdb0bb77aef35ce8bbd397e410b49aa"
+lastReviewedNote: "Reviewed for Issue #446: Reference impact lookup remains candidate-scoped database behavior; routing and SQL-test governance are unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

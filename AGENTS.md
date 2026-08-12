@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-12
-lastReviewedCommit: 19454d0fd9d40e8062ecf14d06de2caf8cc253e7
-lastReviewedNote: "Reviewed for Issue #474 and PR #475 CI: immutable hotfix history, private-schema reconciliation, and exact contract-head assertions follow existing repository governance."
+lastReviewedCommit: 7e4bcaa42cdb0bb77aef35ce8bbd397e410b49aa
+lastReviewedNote: "Reviewed for Issue #446: Reference approval scope isolation remains database-owned RPC and notification behavior under the existing validation and delivery contract."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

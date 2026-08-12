@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-12
-lastReviewedCommit: 8be2ea266bcbcebd5acf74392ad1839407347a77
-lastReviewedNote: "已为 Issue #422 复核：现有 exact-local 刷新命令已生成 worker 控制面恢复 schema 快照；脚本行为不变。"
+lastReviewedCommit: 7e4bcaa42cdb0bb77aef35ce8bbd397e410b49aa
+lastReviewedNote: "已为 Issue #446 复核：现有 exact-local 刷新命令已生成 Reference 影响范围查询快照；脚本行为不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
