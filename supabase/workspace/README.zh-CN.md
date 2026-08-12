@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-11
-lastReviewedCommit: 79d7befb12023d8c0d45160dbaeafc3e7aeafa70
-lastReviewedNote: "已为 Issue #471 复核：exact-local 快照可确定性重建不依赖 json_tg 的审核函数和精确版本模型成员关系索引；workspace 行为不变。"
+lastReviewedAt: 2026-08-12
+lastReviewedCommit: f9973d9b16c5b4a7391fd0d5aa5e8695fd9a5da3
+lastReviewedNote: "已为 Issue #474 复核：exact-local 快照可确定性包含 completed progress 归一化与直接复用证书 Bundle 绑定；workspace 行为不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

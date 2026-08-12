@@ -20,9 +20,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-08
-lastReviewedCommit: 1d1d153edb92aa01dd5fb7717441b16bedc4a96b
-lastReviewedNote: "Reviewed for Issue #422: persistent Dev deploys the database here, then deploys and validates Functions through the Edge repository."
+lastReviewedAt: 2026-08-12
+lastReviewedCommit: f9973d9b16c5b4a7391fd0d5aa5e8695fd9a5da3
+lastReviewedNote: "Reviewed for Issue #474: document the one-time persistent Dev migration-ledger repair for the duplicate 20260810170000 version."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -170,6 +170,34 @@ eligible for application. It is required when a governed `main -> dev`
 backmerge introduces a migration whose timestamp precedes newer migrations
 already recorded on persistent `dev`; migrations already present in remote
 history are still skipped.
+
+### One-time Issue #474 persistent Dev ledger repair
+
+Persistent Dev previously recorded the comment-draft migration under version
+`20260810170000`, while production recorded a different hotfix under that same
+version. The reconciled tree keeps the production file at `20260810170000`,
+renames the byte-identical Dev migration to `20260810170001`, and adds the
+post-cutover private-schema repair at `20260812090000`.
+
+Before the first persistent Dev deployment of the reconciled tree, an operator
+must link to the Dev project, confirm the remote `20260810170000` row is the
+old comment-draft migration, and repair only the history ledger:
+
+```bash
+supabase migration repair 20260810170000 --status reverted
+supabase migration repair 20260810170001 --status applied
+supabase migration list
+supabase db push --include-all
+```
+
+`reverted` deletes the old version record; it does not roll back the SQL that
+already ran. `applied` records the renamed, byte-identical migration without
+running it again. The final push then applies the production hotfix migration
+(a deliberate no-op after the private-schema cutover) and the new private-schema
+reconciliation migration. Do not run this sequence against production: its
+`20260810170000` record already identifies the canonical production hotfix.
+Capture the before/after migration list and hosted validation in Issue #474 or
+the delivery PR before allowing the normal persistent Dev workflow to proceed.
 
 Promote path:
 

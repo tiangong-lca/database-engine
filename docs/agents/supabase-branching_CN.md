@@ -20,9 +20,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-08
-lastReviewedCommit: 1d1d153edb92aa01dd5fb7717441b16bedc4a96b
-lastReviewedNote: "已为 Issue #422 复核：持久化 Dev 先在本仓部署数据库，再通过 Edge 仓部署并验证 Functions。"
+lastReviewedAt: 2026-08-12
+lastReviewedCommit: f9973d9b16c5b4a7391fd0d5aa5e8695fd9a5da3
+lastReviewedNote: "已为 Issue #474 复核：记录重复 20260810170000 版本的一次性持久化 Dev migration 账本修复。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -151,6 +151,31 @@ related:
 都可以被应用。受治理的 `main -> dev` 回合并可能带入时间戳早于 `dev` 已记录新
 migration 的提交，因此必须使用该参数；已经存在于远端 history 中的 migration
 仍会被跳过。
+
+### Issue #474 一次性持久化 Dev 账本修复
+
+持久化 Dev 曾把 comment-draft migration 记录为 `20260810170000`，而生产环境
+用同一版本号记录了内容不同的热修复。收敛后的 Git 历史保留生产文件
+`20260810170000`，把内容逐字节不变的 Dev migration 重编号为
+`20260810170001`，并在 `20260812090000` 增加 cutover 后的 private-schema 修复。
+
+第一次把该历史部署到持久化 Dev 之前，运维人员必须先绑定 Dev 项目，确认远端
+`20260810170000` 当前确实是旧 comment-draft migration，然后只修复 migration
+history 账本：
+
+```bash
+supabase migration repair 20260810170000 --status reverted
+supabase migration repair 20260810170001 --status applied
+supabase migration list
+supabase db push --include-all
+```
+
+`reverted` 只删除旧版本记录，不会回滚已经执行的 SQL；`applied` 只登记重编号后、
+内容完全相同的 migration，不会再次执行。最后一次 push 会应用生产热修复（在
+private-schema cutover 后按设计为空操作）以及新的 private-schema 收敛 migration。
+不要对生产环境运行这组命令：生产的 `20260810170000` 已经是规范热修复记录。
+正常持久化 Dev workflow 放行前，必须把修复前后的 migration list 与托管验证证据
+记录到 Issue #474 或交付 PR。
 
 Promote 路径：
 

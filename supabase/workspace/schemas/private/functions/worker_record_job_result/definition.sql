@@ -133,6 +133,10 @@ begin
 
   update private.worker_jobs
     set status = v_status,
+        progress = case
+          when v_status = 'completed' then 1
+          else progress
+        end,
         result_schema_version = coalesce(nullif(trim(p_result_schema_version), ''), result_schema_version),
         result_json = p_result_json,
         result_ref = p_result_ref,

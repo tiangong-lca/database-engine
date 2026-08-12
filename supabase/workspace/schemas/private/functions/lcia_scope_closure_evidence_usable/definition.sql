@@ -37,17 +37,7 @@ CREATE OR REPLACE FUNCTION "private"."lcia_scope_closure_evidence_usable"("p_che
         and machine_result.storage_bucket is not null
         and machine_result.storage_path is not null
         and machine_result.checksum_sha256 is not null
-        and bundle.id = (p_check).closure_bundle_artifact_id
-        and (
-          bundle.job_id = (p_check).worker_job_id
-          or exists (
-            select 1
-            from private.lcia_scope_closure_checks source
-            where source.id = (p_check).reused_from_check_id
-              and source.worker_job_id = bundle.job_id
-          )
-        )
-        and bundle.artifact_role = 'closure_bundle'
+        and private.lcia_scope_closure_bundle_binding_matches(p_check, bundle)
         and bundle.lifecycle_state = 'ready'
         and bundle.expires_at > now()
         and bundle.storage_bucket is not null

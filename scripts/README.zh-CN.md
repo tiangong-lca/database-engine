@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-11
-lastReviewedCommit: 79d7befb12023d8c0d45160dbaeafc3e7aeafa70
-lastReviewedNote: "已为 Issue #471 复核：现有 migration 生成与 exact-local workspace 刷新命令覆盖 json_tg 解耦函数和模型成员关系索引；脚本行为不变。"
+lastReviewedAt: 2026-08-12
+lastReviewedCommit: f9973d9b16c5b4a7391fd0d5aa5e8695fd9a5da3
+lastReviewedNote: "已为 Issue #474 复核：现有 exact-local 刷新与 migration head 校验命令覆盖本次收敛；脚本行为不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

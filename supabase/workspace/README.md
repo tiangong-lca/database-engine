@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-11
-lastReviewedCommit: 79d7befb12023d8c0d45160dbaeafc3e7aeafa70
-lastReviewedNote: "Reviewed for Issue #471: the exact-local snapshot deterministically regenerates json_tg-independent review functions and the exact-version process model-membership index; workspace behavior is unchanged."
+lastReviewedAt: 2026-08-12
+lastReviewedCommit: f9973d9b16c5b4a7391fd0d5aa5e8695fd9a5da3
+lastReviewedNote: "Reviewed for Issue #474: the exact-local snapshot deterministically includes completed-progress normalization and direct reused-certificate Bundle binding; workspace behavior is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

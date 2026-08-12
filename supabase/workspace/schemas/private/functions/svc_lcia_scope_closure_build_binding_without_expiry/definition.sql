@@ -92,11 +92,7 @@ begin
      or v_artifact.effective_scope_hash <> v_check.effective_scope_hash
      or v_artifact.data_snapshot_token <> v_check.data_snapshot_token
      or v_artifact.closure_bundle_hash <> v_check.closure_bundle_hash
-     or v_bundle.id is null
-     or v_bundle.job_id <> v_check.worker_job_id
-     or v_bundle.artifact_type <> 'closure_bundle'
-     or v_bundle.checksum_sha256 <> v_check.closure_bundle_hash
-     or coalesce(v_bundle.metadata->>'closureCheckId', '') <> v_check.id::text
+     or not private.lcia_scope_closure_bundle_binding_matches(v_check, v_bundle)
      or v_report.id is null
      or v_report.job_id <> v_check.worker_job_id
      or v_report.artifact_type <> 'closure_report_xlsx'
