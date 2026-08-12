@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "api"."qry_reference_review_impacted_roots"("p_reference_review_id" "uuid", "p_include_history" boolean) IS 'Returns current dynamically validated impacted roots. p_include_history is retained for signature compatibility and does not restore historical relationships.';

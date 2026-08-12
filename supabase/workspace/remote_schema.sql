@@ -19547,17 +19547,10 @@ begin
     array[]::uuid[]
   )
   into v_candidate_ids
-  from (
-    select hinted.root_review_id
-    from private.review_candidate_root_ids_v1(
-      v_reference.target_table,
-      v_reference.data_id,
-      pg_catalog.btrim(v_reference.data_version::text)
-    ) as hinted
-    union
-    select root_review.id
-    from private.reviews as root_review
-    where root_review.review_kind = 'root'
+  from private.review_candidate_root_ids_v1(
+    v_reference.target_table,
+    v_reference.data_id,
+    pg_catalog.btrim(v_reference.data_version::text)
   ) as candidate;
 
   return query
@@ -19568,11 +19561,16 @@ begin
     pg_catalog.btrim(root_review.data_version::text),
     root_review.state_code,
     true
-  from private.review_derive_current_references_v1(v_candidate_ids) as derived
+  from private.review_resolve_current_reference_targets_v1(
+    v_candidate_ids
+  ) as target
   join private.reviews as root_review
-    on root_review.id = derived.root_review_id
+    on root_review.id = target.root_review_id
     and root_review.review_kind = 'root'
-  where derived.reference_review_id = p_reference_review_id
+  where target.target_table = v_reference.target_table
+    and target.data_id = v_reference.data_id
+    and target.data_version = pg_catalog.btrim(v_reference.data_version::text)
+    and target.revision_checksum = v_reference.submitted_revision_checksum
   order by root_review.modified_at desc, root_review.id;
 end;
 $$;
@@ -19581,7 +19579,7 @@ $$;
 ALTER FUNCTION "api"."qry_reference_review_impacted_roots"("p_reference_review_id" "uuid", "p_include_history" boolean) OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "api"."qry_reference_review_impacted_roots"("p_reference_review_id" "uuid", "p_include_history" boolean) IS 'Returns current dynamically validated impacted roots. p_include_history is retained for signature compatibility and does not restore historical relationships.';
+COMMENT ON FUNCTION "api"."qry_reference_review_impacted_roots"("p_reference_review_id" "uuid", "p_include_history" boolean) IS 'Returns current dynamically validated impacted roots from append-only target hints without evaluating unrelated roots. p_include_history is retained for signature compatibility and does not restore historical relationships.';
 
 
 
