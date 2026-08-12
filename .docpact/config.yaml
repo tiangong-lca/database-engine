@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-12"
-lastReviewedCommit: "7e4bcaa42cdb0bb77aef35ce8bbd397e410b49aa"
-lastReviewedNote: "Reviewed for Issue #446: Reference impact lookup remains candidate-scoped database behavior; routing and SQL-test governance are unchanged."
+lastReviewedCommit: "aca7ed0f1d5894fadb958b940212022048e64f80"
+lastReviewedNote: "Reviewed for Issue #478: the RPC-specific scope-closure timeout remains covered by the existing migration/RPC ownership and SQL-test validation rules; governance is unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
