@@ -27,7 +27,19 @@ begin
     );
   end if;
 
-  with expired as (
+  with expired_candidates as (
+    select id
+    from private.worker_jobs
+    where worker_runtime = 'calculator'
+      and worker_queue = v_worker_queue
+      and status = 'running'
+      and lease_expires_at < now()
+      and attempt_count >= max_attempts
+    order by lease_expires_at asc, created_at asc
+    limit v_limit
+    for update skip locked
+  ),
+  expired as (
     update private.worker_jobs as j
       set status = 'failed',
           error_code = coalesce(j.error_code, 'lease_expired_max_attempts'),
@@ -44,11 +56,8 @@ begin
           heartbeat_at = coalesce(j.heartbeat_at, now()),
           updated_at = now(),
           finished_at = now()
-    where j.worker_runtime = 'calculator'
-      and j.worker_queue = v_worker_queue
-      and j.status = 'running'
-      and j.lease_expires_at < now()
-      and j.attempt_count >= j.max_attempts
+    from expired_candidates
+    where j.id = expired_candidates.id
     returning j.*
   ),
   expired_events as (

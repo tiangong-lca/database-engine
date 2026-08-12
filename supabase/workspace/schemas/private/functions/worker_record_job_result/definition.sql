@@ -105,6 +105,41 @@ begin
   end if;
 
   if v_job.status <> 'running' then
+    if v_job.status = v_status
+      and v_job.result_json is not distinct from p_result_json
+      and v_job.result_schema_version is not distinct from coalesce(
+        nullif(trim(p_result_schema_version), ''),
+        v_job.result_schema_version
+      )
+      and v_job.result_ref is not distinct from p_result_ref
+      and v_job.diagnostics is not distinct from coalesce(p_diagnostics, '{}'::jsonb)
+      and v_job.error_code is not distinct from nullif(trim(p_error_code), '')
+      and v_job.error_message is not distinct from nullif(trim(p_error_message), '')
+      and v_job.error_details is not distinct from p_error_details
+      and v_job.blocker_codes is not distinct from (case
+        when v_status = 'blocked' then v_blocker_codes
+        else '{}'::text[]
+      end)
+      and v_job.resolution_scope is not distinct from (case
+        when v_status = 'blocked' then v_resolution_scope
+        else null
+      end)
+      and v_job.retryable is not distinct from p_retryable
+      and exists (
+        select 1
+        from private.worker_job_events as event
+        where event.job_id = v_job.id
+          and event.event_type = v_status
+          and event.lease_token is not distinct from p_lease_token
+      )
+    then
+      return jsonb_build_object(
+        'ok', true,
+        'data', private.worker_job_payload(v_job, true),
+        'idempotentReplay', true
+      );
+    end if;
+
     return jsonb_build_object(
       'ok', false,
       'code', 'WORKER_JOB_NOT_RUNNING',
