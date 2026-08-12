@@ -36,7 +36,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-11
 lastReviewedCommit: 79d7befb12023d8c0d45160dbaeafc3e7aeafa70
-lastReviewedNote: "Reviewed for Issue #471: lifecycle review and bundle membership now use ILCD content and exact-version process model ownership; json_tg remains frontend state and does not define database correctness."
+lastReviewedNote: "Reviewed for Issue #474: the production hotfix history stays immutable, while duplicate-version repair and private-schema reconciliation follow the existing migration and branching contracts."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

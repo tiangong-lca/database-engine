@@ -28714,11 +28714,7 @@ begin
      or v_artifact.effective_scope_hash <> v_check.effective_scope_hash
      or v_artifact.data_snapshot_token <> v_check.data_snapshot_token
      or v_artifact.closure_bundle_hash <> v_check.closure_bundle_hash
-     or v_bundle.id is null
-     or v_bundle.job_id <> v_check.worker_job_id
-     or v_bundle.artifact_type <> 'closure_bundle'
-     or v_bundle.checksum_sha256 <> v_check.closure_bundle_hash
-     or coalesce(v_bundle.metadata->>'closureCheckId', '') <> v_check.id::text
+     or not private.lcia_scope_closure_bundle_binding_matches(v_check, v_bundle)
      or v_report.id is null
      or v_report.job_id <> v_check.worker_job_id
      or v_report.artifact_type <> 'closure_report_xlsx'
@@ -38259,11 +38255,7 @@ begin
      or v_artifact.effective_scope_hash <> v_check.effective_scope_hash
      or v_artifact.data_snapshot_token <> v_check.data_snapshot_token
      or v_artifact.closure_bundle_hash <> v_check.closure_bundle_hash
-     or v_bundle.id is null
-     or v_bundle.job_id <> v_check.worker_job_id
-     or v_bundle.artifact_type <> 'closure_bundle'
-     or v_bundle.checksum_sha256 <> v_check.closure_bundle_hash
-     or coalesce(v_bundle.metadata->>'closureCheckId', '') <> v_check.id::text
+     or not private.lcia_scope_closure_bundle_binding_matches(v_check, v_bundle)
      or v_report.id is null
      or v_report.job_id <> v_check.worker_job_id
      or v_report.artifact_type <> 'closure_report_xlsx'
@@ -38899,6 +38891,50 @@ $$;
 ALTER FUNCTION "private"."lcia_scope_closure_build_admission_guard"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "private"."lcia_scope_closure_bundle_binding_matches"("p_check" "private"."lcia_scope_closure_checks", "p_bundle" "private"."worker_job_artifacts") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO 'private', 'api', 'public', 'util', 'extensions', 'pg_temp'
+    AS $$
+  SELECT coalesce((
+    (p_bundle).id = (p_check).closure_bundle_artifact_id
+    AND (p_bundle).artifact_role = 'closure_bundle'
+    AND (p_bundle).artifact_type = 'closure_bundle'
+    AND (p_bundle).checksum_sha256 = (p_check).closure_bundle_hash
+    AND (
+      (
+        (p_check).reused_from_check_id IS NULL
+        AND (p_bundle).job_id = (p_check).worker_job_id
+        AND coalesce((p_bundle).metadata->>'closureCheckId', '') = (p_check).id::text
+      )
+      OR EXISTS (
+        SELECT 1
+        FROM private.lcia_scope_closure_checks source
+        WHERE source.id = (p_check).reused_from_check_id
+          AND source.reused_from_check_id IS NULL
+          AND source.status = 'passed'
+          AND source.scan_completeness = 'complete'
+          AND source.worker_job_id = (p_bundle).job_id
+          AND source.closure_bundle_artifact_id = (p_bundle).id
+          AND source.closure_bundle_hash = (p_check).closure_bundle_hash
+          AND source.snapshot_id = (p_check).snapshot_id
+          AND source.snapshot_hash = (p_check).snapshot_hash
+          AND source.snapshot_artifact_id = (p_check).snapshot_artifact_id
+          AND source.snapshot_index_sha256 = (p_check).snapshot_index_sha256
+          AND source.snapshot_build_contract_hash = (p_check).snapshot_build_contract_hash
+          AND source.effective_scope_hash = (p_check).effective_scope_hash
+          AND source.requested_scope_hash = (p_check).requested_scope_hash
+          AND source.policy_fingerprint = (p_check).policy_fingerprint
+          AND source.data_snapshot_token = (p_check).data_snapshot_token
+          AND coalesce((p_bundle).metadata->>'closureCheckId', '') = source.id::text
+      )
+    )
+  ), false)
+$$;
+
+
+ALTER FUNCTION "private"."lcia_scope_closure_bundle_binding_matches"("p_check" "private"."lcia_scope_closure_checks", "p_bundle" "private"."worker_job_artifacts") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "private"."lcia_scope_closure_candidate_dataset_manifest"() RETURNS "jsonb"
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
@@ -38985,17 +39021,7 @@ begin
      )
      or v_machine_result.artifact_role <> 'complete_machine_result'
      or v_machine_result.lifecycle_state <> 'ready'
-     or v_bundle.id is null
-     or (
-       v_bundle.job_id <> new.worker_job_id
-       and not exists (
-         select 1
-         from private.lcia_scope_closure_checks source
-         where source.id = new.reused_from_check_id
-           and source.worker_job_id = v_bundle.job_id
-       )
-     )
-     or v_bundle.artifact_role <> 'closure_bundle'
+     or not private.lcia_scope_closure_bundle_binding_matches(new, v_bundle)
      or v_bundle.lifecycle_state <> 'ready'
      or v_report.expires_at is null
      or v_machine_result.expires_at is null
@@ -39079,17 +39105,7 @@ CREATE OR REPLACE FUNCTION "private"."lcia_scope_closure_evidence_usable"("p_che
         and machine_result.storage_bucket is not null
         and machine_result.storage_path is not null
         and machine_result.checksum_sha256 is not null
-        and bundle.id = (p_check).closure_bundle_artifact_id
-        and (
-          bundle.job_id = (p_check).worker_job_id
-          or exists (
-            select 1
-            from private.lcia_scope_closure_checks source
-            where source.id = (p_check).reused_from_check_id
-              and source.worker_job_id = bundle.job_id
-          )
-        )
-        and bundle.artifact_role = 'closure_bundle'
+        and private.lcia_scope_closure_bundle_binding_matches(p_check, bundle)
         and bundle.lifecycle_state = 'ready'
         and bundle.expires_at > now()
         and bundle.storage_bucket is not null
@@ -45532,11 +45548,7 @@ begin
      or v_artifact.effective_scope_hash <> v_check.effective_scope_hash
      or v_artifact.data_snapshot_token <> v_check.data_snapshot_token
      or v_artifact.closure_bundle_hash <> v_check.closure_bundle_hash
-     or v_bundle.id is null
-     or v_bundle.job_id <> v_check.worker_job_id
-     or v_bundle.artifact_type <> 'closure_bundle'
-     or v_bundle.checksum_sha256 <> v_check.closure_bundle_hash
-     or coalesce(v_bundle.metadata->>'closureCheckId', '') <> v_check.id::text
+     or not private.lcia_scope_closure_bundle_binding_matches(v_check, v_bundle)
      or v_report.id is null
      or v_report.job_id <> v_check.worker_job_id
      or v_report.artifact_type <> 'closure_report_xlsx'
@@ -47809,6 +47821,10 @@ begin
 
   update private.worker_jobs
     set status = v_status,
+        progress = case
+          when v_status = 'completed' then 1
+          else progress
+        end,
         result_schema_version = coalesce(nullif(trim(p_result_schema_version), ''), result_schema_version),
         result_json = p_result_json,
         result_ref = p_result_ref,
@@ -62838,6 +62854,10 @@ GRANT ALL ON FUNCTION "private"."lcia_scope_closure_artifact_write_set_json"("p_
 
 REVOKE ALL ON FUNCTION "private"."lcia_scope_closure_build_admission_guard"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."lcia_scope_closure_build_admission_guard"() TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."lcia_scope_closure_bundle_binding_matches"("p_check" "private"."lcia_scope_closure_checks", "p_bundle" "private"."worker_job_artifacts") FROM PUBLIC;
 
 
 

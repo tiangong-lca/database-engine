@@ -50,6 +50,15 @@ select is(
   'expired,expired,expired',
   'all eight-day historical evidence is classified expired'
 );
+select ok(
+  (
+    select progress = 1
+       and updated_at < now() - interval '7 days'
+    from private.worker_jobs
+    where id = '30830000-0000-4000-8000-000000000101'
+  ),
+  'base-to-head migration normalizes completed progress without rewriting its timestamp'
+);
 select throws_ok(
   $$
     update private.lcia_scope_closure_checks
@@ -87,18 +96,19 @@ select is(
       '20260729030109',
       '20260729045326',
       '20260729060609',
-      '20260729070000'
+      '20260729070000',
+      '20260810170000'
     )
   ),
-  5::bigint,
-  'all five PR migrations committed without partial DDL'
+  6::bigint,
+  'all retained upgrade and completed-progress migrations committed without partial DDL'
 );
 select has_table(
-  'public', 'lcia_scope_closure_artifact_write_sets',
+  'private', 'lcia_scope_closure_artifact_write_sets',
   'final additive staging contract exists after real base-to-head upgrade'
 );
 select has_function(
-  'public', 'svc_lcia_scope_closure_artifact_gc_renew',
+  'private', 'svc_lcia_scope_closure_artifact_gc_renew',
   array['uuid', 'integer'],
   'final additive GC renewal contract exists after real upgrade'
 );

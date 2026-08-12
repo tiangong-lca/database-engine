@@ -41,17 +41,7 @@ begin
      )
      or v_machine_result.artifact_role <> 'complete_machine_result'
      or v_machine_result.lifecycle_state <> 'ready'
-     or v_bundle.id is null
-     or (
-       v_bundle.job_id <> new.worker_job_id
-       and not exists (
-         select 1
-         from private.lcia_scope_closure_checks source
-         where source.id = new.reused_from_check_id
-           and source.worker_job_id = v_bundle.job_id
-       )
-     )
-     or v_bundle.artifact_role <> 'closure_bundle'
+     or not private.lcia_scope_closure_bundle_binding_matches(new, v_bundle)
      or v_bundle.lifecycle_state <> 'ready'
      or v_report.expires_at is null
      or v_machine_result.expires_at is null

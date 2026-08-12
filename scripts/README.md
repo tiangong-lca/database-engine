@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-11
-lastReviewedCommit: 79d7befb12023d8c0d45160dbaeafc3e7aeafa70
-lastReviewedNote: "Reviewed for Issue #471: existing migration-generation and exact-local workspace refresh commands cover the json_tg decoupling functions and model-membership index; script behavior is unchanged."
+lastReviewedAt: 2026-08-12
+lastReviewedCommit: f9973d9b16c5b4a7391fd0d5aa5e8695fd9a5da3
+lastReviewedNote: "Reviewed for Issue #474: existing exact-local refresh and migration-head validation commands cover the reconciliation; script behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
