@@ -29,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-11
-lastReviewedCommit: 79d7befb12023d8c0d45160dbaeafc3e7aeafa70
-lastReviewedNote: "Reviewed for Issue #474 and PR #475 CI: full-schema routine counts and service-only migration-head readback must advance with additive governed migrations."
+lastReviewedAt: 2026-08-12
+lastReviewedCommit: 7ea0843fe34ef53930a7d4030b6ab7a0790c1bd0
+lastReviewedNote: "Reviewed for Issue #422 and PR #476 CI: the service-only migration-head readback was advanced with the additive worker control-plane recovery migration; validation commands are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

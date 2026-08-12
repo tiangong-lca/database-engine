@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-11"
-lastReviewedCommit: "79d7befb12023d8c0d45160dbaeafc3e7aeafa70"
-lastReviewedNote: "Reviewed for Issue #474 and PR #475 CI: schema routine-count and exact-head assertions remain governed by the existing SQL-test contract."
+lastReviewedAt: "2026-08-12"
+lastReviewedCommit: "7ea0843fe34ef53930a7d4030b6ab7a0790c1bd0"
+lastReviewedNote: "Reviewed for Issue #422 and PR #476 CI: the service-only exact-head assertion advances with the worker control-plane recovery migration; SQL-test governance is unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-12
-lastReviewedCommit: f9973d9b16c5b4a7391fd0d5aa5e8695fd9a5da3
-lastReviewedNote: "已为 Issue #474 复核：exact-local 快照可确定性包含 completed progress 归一化与直接复用证书 Bundle 绑定；workspace 行为不变。"
+lastReviewedCommit: 8be2ea266bcbcebd5acf74392ad1839407347a77
+lastReviewedNote: "已为 Issue #422 复核：exact-local 快照现已反映有界 SKIP LOCKED 过期租约恢复与终态结果幂等重放；workspace 行为不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -1,7 +1,189 @@
-CREATE OR REPLACE FUNCTION "private"."worker_record_job_result"("p_job_id" "uuid", "p_lease_token" "uuid", "p_status" "text", "p_result_json" "jsonb" DEFAULT NULL::"jsonb", "p_result_schema_version" "text" DEFAULT NULL::"text", "p_result_ref" "jsonb" DEFAULT NULL::"jsonb", "p_diagnostics" "jsonb" DEFAULT NULL::"jsonb", "p_error_code" "text" DEFAULT NULL::"text", "p_error_message" "text" DEFAULT NULL::"text", "p_error_details" "jsonb" DEFAULT NULL::"jsonb", "p_blocker_codes" "text"[] DEFAULT NULL::"text"[], "p_resolution_scope" "text" DEFAULT NULL::"text", "p_retryable" boolean DEFAULT NULL::boolean) RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'private', 'api', 'public', 'util', 'extensions', 'pg_temp'
-    AS $$
+-- Keep queue polling non-blocking when another transaction owns an expired row,
+-- and make ambiguous terminal-result retries safe for the same lease.
+
+create or replace function private.worker_claim_jobs(
+  p_worker_queue text,
+  p_worker_id text default null,
+  p_limit integer default 10,
+  p_lease_seconds integer default null
+) returns jsonb
+language plpgsql
+security definer
+set search_path = private, api, public, util, extensions, pg_temp
+as $$
+declare
+  v_worker_queue text := lower(trim(coalesce(p_worker_queue, '')));
+  v_worker_id text := nullif(trim(p_worker_id), '');
+  v_limit integer := greatest(1, least(coalesce(p_limit, 10), 50));
+  v_lease_seconds integer := greatest(1, least(coalesce(p_lease_seconds, 300), 86400));
+  v_jobs jsonb := '[]'::jsonb;
+begin
+  if not coalesce(util.is_service_request(), false) then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'SERVICE_ROLE_REQUIRED',
+      'status', 403,
+      'message', 'Service role is required to claim worker jobs'
+    );
+  end if;
+
+  if v_worker_queue not in ('solver', 'review_submit', 'review_submit_gate', 'package', 'maintenance') then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'INVALID_WORKER_QUEUE',
+      'status', 400,
+      'message', 'workerQueue must be solver, review_submit, review_submit_gate, package, or maintenance'
+    );
+  end if;
+
+  with expired_candidates as (
+    select id
+    from private.worker_jobs
+    where worker_runtime = 'calculator'
+      and worker_queue = v_worker_queue
+      and status = 'running'
+      and lease_expires_at < now()
+      and attempt_count >= max_attempts
+    order by lease_expires_at asc, created_at asc
+    limit v_limit
+    for update skip locked
+  ),
+  expired as (
+    update private.worker_jobs as j
+      set status = 'failed',
+          error_code = coalesce(j.error_code, 'lease_expired_max_attempts'),
+          error_message = coalesce(j.error_message, 'Worker job lease expired after the maximum attempt count'),
+          error_details = coalesce(j.error_details, '{}'::jsonb) || jsonb_build_object(
+            'leasedBy', j.leased_by,
+            'leaseExpiresAt', j.lease_expires_at,
+            'attemptCount', j.attempt_count,
+            'maxAttempts', j.max_attempts
+          ),
+          leased_by = null,
+          lease_token = null,
+          lease_expires_at = null,
+          heartbeat_at = coalesce(j.heartbeat_at, now()),
+          updated_at = now(),
+          finished_at = now()
+    from expired_candidates
+    where j.id = expired_candidates.id
+    returning j.*
+  ),
+  expired_events as (
+    insert into private.worker_job_events (
+      job_id,
+      event_type,
+      status,
+      worker_id,
+      message,
+      details
+    )
+    select
+      expired.id,
+      'failed',
+      expired.status,
+      expired.leased_by,
+      'Worker job lease expired after the maximum attempt count',
+      jsonb_build_object(
+        'errorCode', expired.error_code,
+        'attemptCount', expired.attempt_count,
+        'maxAttempts', expired.max_attempts
+      )
+    from expired
+    returning id
+  ),
+  candidate as (
+    select id
+    from private.worker_jobs
+    where worker_runtime = 'calculator'
+      and worker_queue = v_worker_queue
+      and run_after <= now()
+      and attempt_count < max_attempts
+      and (
+        status in ('queued', 'stale')
+        or (status = 'running' and lease_expires_at < now())
+      )
+    order by priority desc, run_after asc, created_at asc
+    limit v_limit
+    for update skip locked
+  ),
+  updated as (
+    update private.worker_jobs as j
+      set status = 'running',
+          attempt_count = j.attempt_count + 1,
+          leased_by = v_worker_id,
+          lease_token = gen_random_uuid(),
+          lease_expires_at = now() + make_interval(secs => v_lease_seconds),
+          heartbeat_at = now(),
+          started_at = coalesce(j.started_at, now()),
+          updated_at = now(),
+          diagnostics = case
+            when j.attempt_count > 0 then '{}'::jsonb
+            else j.diagnostics
+          end,
+          error_code = null,
+          error_message = null,
+          error_details = null
+    from candidate
+    where j.id = candidate.id
+    returning j.*
+  ),
+  claim_events as (
+    insert into private.worker_job_events (
+      job_id,
+      event_type,
+      status,
+      phase,
+      progress,
+      worker_id,
+      lease_token,
+      details
+    )
+    select
+      updated.id,
+      'claimed',
+      updated.status,
+      updated.phase,
+      updated.progress,
+      updated.leased_by,
+      updated.lease_token,
+      jsonb_build_object(
+        'attemptCount', updated.attempt_count,
+        'leaseExpiresAt', updated.lease_expires_at
+      )
+    from updated
+    returning id
+  )
+  select coalesce(jsonb_agg(private.worker_job_payload(updated, true)), '[]'::jsonb)
+    into v_jobs
+  from updated;
+
+  return jsonb_build_object(
+    'ok', true,
+    'data', v_jobs
+  );
+end;
+$$;
+
+create or replace function private.worker_record_job_result(
+  p_job_id uuid,
+  p_lease_token uuid,
+  p_status text,
+  p_result_json jsonb default null,
+  p_result_schema_version text default null,
+  p_result_ref jsonb default null,
+  p_diagnostics jsonb default null,
+  p_error_code text default null,
+  p_error_message text default null,
+  p_error_details jsonb default null,
+  p_blocker_codes text[] default null,
+  p_resolution_scope text default null,
+  p_retryable boolean default null
+) returns jsonb
+language plpgsql
+security definer
+set search_path = private, api, public, util, extensions, pg_temp
+as $$
 declare
   v_status text := lower(trim(coalesce(p_status, '')));
   v_resolution_scope text := lower(trim(coalesce(p_resolution_scope, '')));
@@ -236,11 +418,3 @@ begin
   );
 end;
 $$;
-
-ALTER FUNCTION "private"."worker_record_job_result"("p_job_id" "uuid", "p_lease_token" "uuid", "p_status" "text", "p_result_json" "jsonb", "p_result_schema_version" "text", "p_result_ref" "jsonb", "p_diagnostics" "jsonb", "p_error_code" "text", "p_error_message" "text", "p_error_details" "jsonb", "p_blocker_codes" "text"[], "p_resolution_scope" "text", "p_retryable" boolean) OWNER TO "postgres";
-
-REVOKE ALL ON FUNCTION "private"."worker_record_job_result"("p_job_id" "uuid", "p_lease_token" "uuid", "p_status" "text", "p_result_json" "jsonb", "p_result_schema_version" "text", "p_result_ref" "jsonb", "p_diagnostics" "jsonb", "p_error_code" "text", "p_error_message" "text", "p_error_details" "jsonb", "p_blocker_codes" "text"[], "p_resolution_scope" "text", "p_retryable" boolean) FROM PUBLIC;
-
-GRANT ALL ON FUNCTION "private"."worker_record_job_result"("p_job_id" "uuid", "p_lease_token" "uuid", "p_status" "text", "p_result_json" "jsonb", "p_result_schema_version" "text", "p_result_ref" "jsonb", "p_diagnostics" "jsonb", "p_error_code" "text", "p_error_message" "text", "p_error_details" "jsonb", "p_blocker_codes" "text"[], "p_resolution_scope" "text", "p_retryable" boolean) TO "service_role";
-
-GRANT ALL ON FUNCTION "private"."worker_record_job_result"("p_job_id" "uuid", "p_lease_token" "uuid", "p_status" "text", "p_result_json" "jsonb", "p_result_schema_version" "text", "p_result_ref" "jsonb", "p_diagnostics" "jsonb", "p_error_code" "text", "p_error_message" "text", "p_error_details" "jsonb", "p_blocker_codes" "text"[], "p_resolution_scope" "text", "p_retryable" boolean) TO "api_internal_executor";

@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(50);
+select plan(52);
 
 select ok(to_regclass('private.worker_job_kinds') is not null, 'worker job kind registry exists');
 select ok(to_regclass('private.worker_jobs') is not null, 'worker_jobs table exists');
@@ -428,6 +428,17 @@ select is(
 );
 
 select is(
+  private.worker_record_job_result(
+    p_job_id => (select job_id from worker_job_test_ids where label = 'gate_primary'),
+    p_lease_token => (select lease_token from worker_job_test_ids where label = 'claimed_gate'),
+    p_status => 'completed',
+    p_result_json => '{"revisionChecksum":"aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa"}'::jsonb
+  )->>'idempotentReplay',
+  'true',
+  'an identical terminal result from the same lease is an idempotent replay'
+);
+
+select is(
   (
     select progress::text
     from private.worker_jobs
@@ -552,6 +563,12 @@ select is(
   ),
   'failed:lease_expired_max_attempts',
   'expired running job at max attempts is marked failed'
+);
+
+select ok(
+  pg_get_functiondef('private.worker_claim_jobs(text,text,integer,integer)'::regprocedure)
+    like '%expired_candidates as (%for update skip locked%',
+  'expired max-attempt cleanup selects a bounded skip-locked candidate set'
 );
 
 insert into worker_job_test_ids (label, job_id, lease_token)
