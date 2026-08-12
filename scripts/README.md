@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-12
-lastReviewedCommit: 7e4bcaa42cdb0bb77aef35ce8bbd397e410b49aa
-lastReviewedNote: "Reviewed for Issue #446: existing exact-local refresh commands generated the Reference impact lookup snapshot; script behavior is unchanged."
+lastReviewedCommit: aca7ed0f1d5894fadb958b940212022048e64f80
+lastReviewedNote: "Reviewed for Issue #478: existing exact-local refresh commands capture the RPC-level statement timeout; script behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
