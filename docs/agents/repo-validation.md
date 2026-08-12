@@ -31,7 +31,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-11
 lastReviewedCommit: 79d7befb12023d8c0d45160dbaeafc3e7aeafa70
-lastReviewedNote: "Updated for Issue #471: validation proves lifecycle review and bundle deletion ignore stale or malformed json_tg while retaining ILCD sources and exact-version relational model results."
+lastReviewedNote: "Reviewed for Issue #474 and PR #475 CI: full-schema routine counts and service-only migration-head readback must advance with additive governed migrations."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -29,7 +29,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-11
 lastReviewedCommit: 79d7befb12023d8c0d45160dbaeafc3e7aeafa70
-lastReviewedNote: "Updated for Issue #471: ILCD processInstance defines source composition, exact-version processes.model_id defines generated model results, and json_tg remains non-authoritative frontend state."
+lastReviewedNote: "Reviewed for Issue #474 and PR #475 CI: the added private reused-certificate helper is part of the governed internal-function inventory and exact migration head."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
