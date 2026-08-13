@@ -28,7 +28,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: 628ecbb1702bcd9bccad418e03048bdcb0e4b58c
+lastReviewedCommit: 86df2a9fe68cdf6455908ccf7957cbbe9a0653cd
 lastReviewedNote: "Reviewed for Issue #422: the metadata-only search_text repair changes upgrade mechanics without changing schema ownership, API boundaries, or migration source-of-truth rules."
 related:
   - ../../AGENTS.md
