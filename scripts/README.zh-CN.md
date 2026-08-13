@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: 8f68826e2c18e623e11faff46ff90b2486dfe828
+lastReviewedCommit: 7222920fcc107afc14746b2c459681f137a03feb
 lastReviewedNote: "已为 Issue #422 复核：脚本目录现包含 search_text 生产 hotfix 的精确 metadata-only 与非空 scalar fail-closed 证明。"
 related:
   - ../AGENTS.md
