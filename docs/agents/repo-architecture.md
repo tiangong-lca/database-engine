@@ -28,7 +28,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: c7accd945a60747c14910d7b63ea9951512e099f
+lastReviewedCommit: 628ecbb1702bcd9bccad418e03048bdcb0e4b58c
 lastReviewedNote: "Reviewed for Issue #422: the metadata-only search_text repair changes upgrade mechanics without changing schema ownership, API boundaries, or migration source-of-truth rules."
 related:
   - ../../AGENTS.md
@@ -258,6 +258,8 @@ validating that new worker-produced domain rows remain traceable.
 `lca_release_runs` is the durable release state machine; `lca_release_dataset_versions`, `lca_release_artifacts`, `lca_release_approvals`, and `lca_release_publications` are immutable/indexed release facts. The dataset index binds every generated identity to its exact source Process and requires exactly one Unit Process, LifecycleModel, and Result Process per source identity; the Unit Process mapping must point to itself. Generated LifecycleModel and Result Process documents are referenced from canonical object artifacts and never inserted into editable `lifecyclemodels` or `processes` authoring rows.
 
 Authenticated prepare, approve, publish, readback, and unpublish commands re-check `auth.uid()` against the live `data_product_manager` platform role. The separate service-only finalize command binds four uploaded package refs to the exact prepared plan and validated release manifest, but service identity has neither direct table writes nor approval/publication function grants. Public and private read/download projections remain RPC-owned so Edge can issue signed downloads without exposing database mutation capability.
+
+The manager-authorized Calculation Bundle projection reads the immutable bundle reference already persisted in the result package. Legacy packages may have no semantic downloads. New packages must carry exactly five unique `tiangong.calculation-download.v1` roles: LCIA XLSX/CSV, LCI Parquet/CSV, and the whole-bundle audit ZIP. Database validates each fixed role/group/filename/media-type tuple plus hash, size, count, and object reference, removes those locators from the returned bundle object, and exposes them only as a separate `productDownloads` projection for Edge signing. Canonical manifest shards remain bundle evidence and are not duplicated into database rows.
 
 ## Scope-Closure Snapshot Sources
 

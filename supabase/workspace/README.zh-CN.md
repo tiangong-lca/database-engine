@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: 1ba35c273ee51c47a25a055fdd8f7db84d22a4c5
+lastReviewedCommit: 8f68826e2c18e623e11faff46ff90b2486dfe828
 lastReviewedNote: "已为 Issue #422 复核：生成的 search_text 注释更新不改变 exact-local workspace 的生成或刷新行为。"
 related:
   - ../../AGENTS.md

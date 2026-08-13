@@ -1,7 +1,14 @@
-CREATE OR REPLACE FUNCTION "api"."get_lcia_result_calculation_bundle"("p_package_id" "uuid") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
-    AS $_$
+-- Issue #487: project Worker-produced semantic calculation files as durable,
+-- role-bound product downloads without turning canonical bundle shards into UI products.
+
+create or replace function api.get_lcia_result_calculation_bundle(
+  p_package_id uuid
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
+as $$
 declare
   v_package private.lcia_result_packages%rowtype;
   v_result private.lca_results%rowtype;
@@ -120,12 +127,13 @@ begin
     )
   );
 end;
-$_$;
+$$;
 
-ALTER FUNCTION "api"."get_lcia_result_calculation_bundle"("p_package_id" "uuid") OWNER TO "postgres";
+alter function api.get_lcia_result_calculation_bundle(uuid) owner to postgres;
+revoke all on function api.get_lcia_result_calculation_bundle(uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function api.get_lcia_result_calculation_bundle(uuid)
+  to api_internal_executor, authenticated;
 
-REVOKE ALL ON FUNCTION "api"."get_lcia_result_calculation_bundle"("p_package_id" "uuid") FROM PUBLIC;
-
-GRANT ALL ON FUNCTION "api"."get_lcia_result_calculation_bundle"("p_package_id" "uuid") TO "api_internal_executor";
-
-GRANT ALL ON FUNCTION "api"."get_lcia_result_calculation_bundle"("p_package_id" "uuid") TO "authenticated";
+comment on function api.get_lcia_result_calculation_bundle(uuid) is
+  'Projects a verified Calculation Bundle plus five role-bound semantic downloads; canonical shards remain internal preview and audit evidence.';
