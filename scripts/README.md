@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-12
-lastReviewedCommit: aca7ed0f1d5894fadb958b940212022048e64f80
-lastReviewedNote: "Reviewed for Issue #478: existing exact-local refresh commands capture the RPC-level statement timeout; script behavior is unchanged."
+lastReviewedAt: 2026-08-13
+lastReviewedCommit: c7accd945a60747c14910d7b63ea9951512e099f
+lastReviewedNote: "Reviewed for Issue #422: the script catalog now includes exact metadata-only and populated-scalar failure proof for the search_text production hotfix."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -52,12 +52,15 @@ Local migration outputs and audit JSONL files should be written under `_artifact
 Rebuilds the local database to the migration immediately before the full
 Schema cutover, adds a representative business row, snapshots relation and
 routine identities plus trigger, RLS-policy, constraint, and exact row-count
-state, applies the cutover and contract-closure migrations, and verifies
+state, reproduces the production ledger where the later reuse-binding hotfix
+was already applied, runs the fail-closed bridge, applies the cutover and
+contract-closure migrations, and verifies
 complete preservation, capability-manifest installation, idempotency-index
 creation, Data Product consumer-facade installation, and removal of PostgreSQL
 `PUBLIC` execution from the API surface. It also applies the Issue #422 runtime
 ACL repair and verifies the exact authenticated RLS-helper and Edge release
-façade grants after a populated upgrade.
+façade grants after a populated upgrade, then proves the bridge is a strict
+no-op on an already-cut-over database.
 
 Usage:
 
@@ -66,6 +69,19 @@ scripts/test_full_schema_cutover_upgrade.sh
 ```
 
 This script is local-only and resets the local Supabase database.
+
+### `test_search_text_array_upgrade.sh`
+
+Rebuilds the local database to `20260810200000`, exercises the exact
+production `search_text` migration, and proves that all seven table OIDs and
+heap relfilenodes remain stable while an unrelated business row is preserved.
+It then rebuilds the pre-migration state with one populated scalar and proves
+the migration fails before changing any column or discarding the value. The
+script finishes with a clean reset to the checked-out migration head.
+
+```bash
+scripts/test_search_text_array_upgrade.sh
+```
 
 ### `resolve_migration_head.py`
 

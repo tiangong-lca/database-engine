@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-12
-lastReviewedCommit: aca7ed0f1d5894fadb958b940212022048e64f80
-lastReviewedNote: "Reviewed for Issue #478: the scope-closure RPC timeout remains database-owned migration behavior under the existing branch, validation, and delivery boundaries."
+lastReviewedAt: 2026-08-13
+lastReviewedCommit: 1ba35c273ee51c47a25a055fdd8f7db84d22a4c5
+lastReviewedNote: "Reviewed for Issue #422: the metadata-only search_text repair remains database-owned migration behavior under the existing hotfix, validation, and delivery boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

@@ -1,0 +1,1 @@
+COMMENT ON COLUMN "public"."contacts"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. The empty scalar precursor was replaced without a heap rewrite; the later backfill writes the complete projection. Not a lexical search source until Database B.';

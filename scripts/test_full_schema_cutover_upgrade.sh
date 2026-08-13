@@ -2,6 +2,8 @@
 set -euo pipefail
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+production_reuse_binding_hotfix="$repo_root/supabase/migrations/20260810170000_fix_completed_progress_and_reused_closure_binding.sql"
+production_cutover_bridge="$repo_root/supabase/migrations/20260805120000_bridge_production_reuse_binding_cutover.sql"
 cutover_migration="$repo_root/supabase/migrations/20260805130000_full_schema_cutover.sql"
 contract_migrations=(
   "$repo_root/supabase/migrations/20260806160000_api_contract_closure.sql"
@@ -23,6 +25,10 @@ fi
 cd "$repo_root"
 
 supabase db reset --version 20260804090000 --no-seed
+
+# Reproduce the production ledger order from Issue #422: the later main-only
+# hotfix is already recorded before the older full-schema cutover is applied.
+psql "$database_url" -v ON_ERROR_STOP=1 -f "$production_reuse_binding_hotfix"
 
 psql "$database_url" -v ON_ERROR_STOP=1 <<'SQL'
 insert into public.identity_center_processed_events (event_id, event_type)
@@ -112,6 +118,77 @@ where constraint_record.connamespace in (
 );
 SQL
 
+psql "$database_url" -v ON_ERROR_STOP=1 -f "$production_cutover_bridge"
+
+psql "$database_url" -v ON_ERROR_STOP=1 <<'SQL'
+do $verify_production_cutover_bridge$
+declare
+  actual_public_functions bigint;
+  actual_private_callers text[];
+  expected_private_callers constant text[] := array[
+    'cmd_lcia_result_build_request_v2_without_expiry',
+    'lcia_result_package_bind_closure_certificate',
+    'lcia_scope_closure_certificate_validity_guard',
+    'lcia_scope_closure_evidence_usable',
+    'svc_lcia_scope_closure_build_binding_without_expiry'
+  ];
+begin
+  select count(*)
+  into actual_public_functions
+  from pg_catalog.pg_proc as routine
+  join pg_catalog.pg_namespace as namespace
+    on namespace.oid = routine.pronamespace
+  where namespace.nspname = 'public'
+    and routine.prokind = 'f';
+
+  if actual_public_functions <> 333 then
+    raise exception
+      'production cutover bridge expected 333 public functions, found %',
+      actual_public_functions;
+  end if;
+
+  if pg_catalog.to_regprocedure(
+       'public.lcia_scope_closure_bundle_binding_matches(public.lcia_scope_closure_checks,public.worker_job_artifacts)'
+     ) is not null
+     or pg_catalog.to_regprocedure(
+       'private.lcia_scope_closure_bundle_binding_matches(public.lcia_scope_closure_checks,public.worker_job_artifacts)'
+     ) is null then
+    raise exception 'production cutover bridge did not move the helper to private';
+  end if;
+
+  actual_private_callers := array(
+    select routine.proname::text
+    from pg_catalog.pg_proc as routine
+    join pg_catalog.pg_namespace as namespace
+      on namespace.oid = routine.pronamespace
+    where namespace.nspname = 'public'
+      and routine.prosrc
+        like '%private.lcia_scope_closure_bundle_binding_matches%'
+    order by routine.proname
+  );
+
+  if actual_private_callers is distinct from expected_private_callers then
+    raise exception
+      'production cutover bridge caller manifest drifted: expected %, found %',
+      expected_private_callers,
+      actual_private_callers;
+  end if;
+
+  if exists (
+    select 1
+    from pg_catalog.pg_proc as routine
+    join pg_catalog.pg_namespace as namespace
+      on namespace.oid = routine.pronamespace
+    where namespace.nspname = 'public'
+      and routine.prosrc
+        like '%public.lcia_scope_closure_bundle_binding_matches%'
+  ) then
+    raise exception 'production cutover bridge left a public helper reference';
+  end if;
+end
+$verify_production_cutover_bridge$;
+SQL
+
 psql "$database_url" -v ON_ERROR_STOP=1 -f "$cutover_migration"
 
 psql "$database_url" -v ON_ERROR_STOP=1 <<'SQL'
@@ -119,6 +196,12 @@ do $verify$
 declare
   mismatch_count bigint;
 begin
+  if (select count(*) from archive.issue_422_routine_snapshot) <> 334 then
+    raise exception
+      'production-shaped routine snapshot expected 334 functions, found %',
+      (select count(*) from archive.issue_422_routine_snapshot);
+  end if;
+
   select count(*)
   into mismatch_count
   from archive.issue_422_relation_snapshot snapshot
@@ -236,6 +319,12 @@ begin
   ) then
     raise exception 'representative pre-cutover business row was not preserved';
   end if;
+
+  if pg_catalog.to_regprocedure(
+       'private.lcia_scope_closure_bundle_binding_matches(private.lcia_scope_closure_checks,private.worker_job_artifacts)'
+     ) is null then
+    raise exception 'production bridge helper was not preserved through the cutover';
+  end if;
 end
 $verify$;
 
@@ -335,6 +424,10 @@ psql "$database_url" -v ON_ERROR_STOP=1 -f "$drift_cleanup_migration"
 psql "$database_url" -v ON_ERROR_STOP=1 -f "$consumer_facade_migration"
 psql "$database_url" -v ON_ERROR_STOP=1 -f "$acl_runtime_repair_migration"
 
+# Reapplying the older bridge after the private-schema cutover proves the dev
+# back-merge path is a strict no-op rather than a second state transition.
+psql "$database_url" -v ON_ERROR_STOP=1 -f "$production_cutover_bridge"
+
 psql "$database_url" -v ON_ERROR_STOP=1 <<'SQL'
 do $verify_contract_closure_upgrade$
 begin
@@ -360,6 +453,26 @@ begin
      or pg_catalog.to_regprocedure('api.svc_data_product_current_public_package()') is null
      or pg_catalog.to_regprocedure('api.svc_membership_is_review_admin(uuid)') is null then
     raise exception 'an Edge consumer facade is missing after upgrade';
+  end if;
+
+  if not exists (
+    select 1
+    from archive.issue_422_routine_snapshot as snapshot
+    join pg_catalog.pg_proc as routine on routine.oid = snapshot.object_oid
+    join pg_catalog.pg_namespace as namespace on namespace.oid = routine.pronamespace
+    where snapshot.object_name = 'lcia_scope_closure_bundle_binding_matches'
+      and routine.proname = 'lcia_scope_closure_bundle_binding_matches'
+      and namespace.nspname = 'private'
+  ) then
+    raise exception 'production bridge helper identity drifted after cutover or no-op replay';
+  end if;
+
+  if exists (
+    select 1
+    from pg_catalog.pg_proc as routine
+    where routine.prosrc like '%public.lcia_scope_closure_bundle_binding_matches%'
+  ) then
+    raise exception 'a public production bridge helper reference survived cutover';
   end if;
 
   if exists (
