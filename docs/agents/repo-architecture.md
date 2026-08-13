@@ -29,7 +29,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
 lastReviewedCommit: 86df2a9fe68cdf6455908ccf7957cbbe9a0653cd
-lastReviewedNote: "Reviewed for Issue #484 on the current Issue #422/#487 baseline: review submission is independent of whole-matrix quality computation, and Review Admin diagnostics use worker_jobs without changing existing schema ownership or artifact boundaries."
+lastReviewedNote: "Reviewed for Issue #484 on the current Issue #422/#487 baseline: Review Admin diagnostics add reviewed API/private routines and a worker_jobs constraint without changing existing schema ownership, search-text behavior, or artifact boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

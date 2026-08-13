@@ -31,7 +31,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
 lastReviewedCommit: 86df2a9fe68cdf6455908ccf7957cbbe9a0653cd
-lastReviewedNote: "Reviewed for Issue #484 on the current Issue #422/#487 baseline: Review Admin diagnostics are manual and informational, while current full-schema, search-text, and semantic-artifact proof remains cumulative."
+lastReviewedNote: "Reviewed for Issue #484 on the current Issue #422/#487 baseline: the manual diagnostic and updated schema counts use the cumulative clean-reset, contract-pgTAP, cutover-upgrade, search-text, and semantic-artifact proof path."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

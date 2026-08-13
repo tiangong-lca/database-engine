@@ -36,7 +36,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
 lastReviewedCommit: 86df2a9fe68cdf6455908ccf7957cbbe9a0653cd
-lastReviewedNote: "Reviewed for Issue #484 on the current Issue #422/#487 baseline: the database owns non-blocking Review Admin diagnostic admission/readback, while existing search-text and semantic-artifact ownership remains unchanged."
+lastReviewedNote: "Reviewed for Issue #484 on the current Issue #422/#487 baseline: the database owns non-blocking Review Admin diagnostic admission/readback and its schema inventory, while Worker/Edge computation and existing search-text/artifact ownership remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
