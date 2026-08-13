@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-13"
-lastReviewedCommit: "1ba35c273ee51c47a25a055fdd8f7db84d22a4c5"
+lastReviewedCommit: "8f68826e2c18e623e11faff46ff90b2486dfe828"
 lastReviewedNote: "Reviewed for Issue #422: the metadata-only search_text hotfix remains covered by existing migration, test, workspace-generation, and documentation routing rules; governance is unchanged."
 
 # Keep deterministic governance facts here.
