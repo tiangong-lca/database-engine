@@ -29,7 +29,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
 lastReviewedCommit: c7accd945a60747c14910d7b63ea9951512e099f
-lastReviewedNote: "Reviewed for Issue #422: the production cutover bridge does not change schema ownership, API boundaries, or migration source-of-truth rules."
+lastReviewedNote: "Reviewed for Issue #422: the metadata-only search_text repair changes upgrade mechanics without changing schema ownership, API boundaries, or migration source-of-truth rules."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -190,10 +190,12 @@ indexes, and the HNSW indexes remain supported derivative surfaces until their
 separately gated cleanup.
 
 The Release 1 `search_text` projection is nullable `text[]` on all seven
-dataset tables. The forward type migration preserves a non-NULL legacy scalar
-as one complete array element, including embedded newlines; the later
-service/Edge backfill replaces that compatibility value with the full
-normalized projection. Database B's source-switch migration is fail-closed for
+dataset tables. Production verification established that the additive scalar
+columns were empty, so the forward migration replaces each empty column with a
+`text[]` catalog entry instead of rewriting the seven table heaps. It fails
+before changing any column if a value, dependency, or column contract has
+drifted; the later service/Edge backfill writes the full normalized projection.
+Database B's source-switch migration is fail-closed for
 existing rows with incomplete coverage and permits an empty new database; the
 persistent-Dev and hosted cutover gate still requires Edge array deployment,
 100% eligible-row backfill, and zero terminal failures. State 20/100 rows keep

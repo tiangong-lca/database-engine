@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
 lastReviewedCommit: c7accd945a60747c14910d7b63ea9951512e099f
-lastReviewedNote: "Reviewed for Issue #422: the populated cutover test now reproduces the production ledger, validates the bridge, and proves post-cutover replay is a no-op."
+lastReviewedNote: "Reviewed for Issue #422: the script catalog now includes exact metadata-only and populated-scalar failure proof for the search_text production hotfix."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -69,6 +69,19 @@ scripts/test_full_schema_cutover_upgrade.sh
 ```
 
 This script is local-only and resets the local Supabase database.
+
+### `test_search_text_array_upgrade.sh`
+
+Rebuilds the local database to `20260810200000`, exercises the exact
+production `search_text` migration, and proves that all seven table OIDs and
+heap relfilenodes remain stable while an unrelated business row is preserved.
+It then rebuilds the pre-migration state with one populated scalar and proves
+the migration fails before changing any column or discarding the value. The
+script finishes with a clean reset to the checked-out migration head.
+
+```bash
+scripts/test_search_text_array_upgrade.sh
+```
 
 ### `resolve_migration_head.py`
 

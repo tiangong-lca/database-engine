@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
 lastReviewedCommit: c7accd945a60747c14910d7b63ea9951512e099f
-lastReviewedNote: "已为 Issue #422 复核：有数据切换测试现会复现生产 ledger、验证 bridge，并证明切换后重放严格 no-op。"
+lastReviewedNote: "已为 Issue #422 复核：脚本目录现包含 search_text 生产 hotfix 的精确 metadata-only 与非空 scalar fail-closed 证明。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -64,6 +64,17 @@ scripts/test_full_schema_cutover_upgrade.sh
 ```
 
 此脚本仅用于本地验证，并会重置本地 Supabase 数据库。
+
+### `test_search_text_array_upgrade.sh`
+
+把本地数据库重建到 `20260810200000`，执行与生产相同的 `search_text`
+migration，并证明七张表的 OID 与 heap relfilenode 都不变，同时代表性业务行完整保留。
+随后脚本会再次重建迁移前状态，写入一个非空 scalar，证明 migration 会在修改任何列或
+丢弃该值之前 fail closed。最后会把本地数据库完整重置到当前 checkout 的 migration head。
+
+```bash
+scripts/test_search_text_array_upgrade.sh
+```
 
 ### `resolve_migration_head.py`
 

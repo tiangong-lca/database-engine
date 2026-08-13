@@ -15324,7 +15324,7 @@ CREATE TABLE IF NOT EXISTS "public"."contacts" (
 ALTER TABLE "public"."contacts" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."contacts"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. A legacy non-NULL text value is preserved as one array element during migration; the later backfill replaces it with the complete projection. Not a lexical search source until Database B.';
+COMMENT ON COLUMN "public"."contacts"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. The empty scalar precursor was replaced without a heap rewrite; the later backfill writes the complete projection. Not a lexical search source until Database B.';
 
 
 
@@ -15363,7 +15363,7 @@ CREATE TABLE IF NOT EXISTS "public"."flowproperties" (
 ALTER TABLE "public"."flowproperties" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."flowproperties"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. A legacy non-NULL text value is preserved as one array element during migration; the later backfill replaces it with the complete projection. Not a lexical search source until Database B.';
+COMMENT ON COLUMN "public"."flowproperties"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. The empty scalar precursor was replaced without a heap rewrite; the later backfill writes the complete projection. Not a lexical search source until Database B.';
 
 
 
@@ -15402,7 +15402,7 @@ CREATE TABLE IF NOT EXISTS "public"."flows" (
 ALTER TABLE "public"."flows" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."flows"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. A legacy non-NULL text value is preserved as one array element during migration; the later backfill replaces it with the complete projection. Not a lexical search source until Database B.';
+COMMENT ON COLUMN "public"."flows"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. The empty scalar precursor was replaced without a heap rewrite; the later backfill writes the complete projection. Not a lexical search source until Database B.';
 
 
 
@@ -17861,7 +17861,7 @@ CREATE TABLE IF NOT EXISTS "public"."lifecyclemodels" (
 ALTER TABLE "public"."lifecyclemodels" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."lifecyclemodels"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. A legacy non-NULL text value is preserved as one array element during migration; the later backfill replaces it with the complete projection. Not a lexical search source until Database B.';
+COMMENT ON COLUMN "public"."lifecyclemodels"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. The empty scalar precursor was replaced without a heap rewrite; the later backfill writes the complete projection. Not a lexical search source until Database B.';
 
 
 
@@ -19201,7 +19201,7 @@ CREATE TABLE IF NOT EXISTS "public"."processes" (
 ALTER TABLE "public"."processes" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."processes"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. A legacy non-NULL text value is preserved as one array element during migration; the later backfill replaces it with the complete projection. Not a lexical search source until Database B.';
+COMMENT ON COLUMN "public"."processes"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. The empty scalar precursor was replaced without a heap rewrite; the later backfill writes the complete projection. Not a lexical search source until Database B.';
 
 
 
@@ -22079,7 +22079,7 @@ CREATE TABLE IF NOT EXISTS "public"."sources" (
 ALTER TABLE "public"."sources" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."sources"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. A legacy non-NULL text value is preserved as one array element during migration; the later backfill replaces it with the complete projection. Not a lexical search source until Database B.';
+COMMENT ON COLUMN "public"."sources"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. The empty scalar precursor was replaced without a heap rewrite; the later backfill writes the complete projection. Not a lexical search source until Database B.';
 
 
 
@@ -23717,7 +23717,7 @@ CREATE TABLE IF NOT EXISTS "public"."unitgroups" (
 ALTER TABLE "public"."unitgroups" OWNER TO "postgres";
 
 
-COMMENT ON COLUMN "public"."unitgroups"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. A legacy non-NULL text value is preserved as one array element during migration; the later backfill replaces it with the complete projection. Not a lexical search source until Database B.';
+COMMENT ON COLUMN "public"."unitgroups"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. The empty scalar precursor was replaced without a heap rewrite; the later backfill writes the complete projection. Not a lexical search source until Database B.';
 
 
 
