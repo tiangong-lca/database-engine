@@ -20,9 +20,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-07-29
-lastReviewedCommit: 6577b7a48f90ae449cbdd2ef419d92d13c273a0c
-lastReviewedNote: "Reviewed Issue #308 rollout follow-up: the additive publication/GC migration reapplies final guards and RPCs so an existing Preview can advance even when earlier PR migrations were already recorded."
+lastReviewedAt: 2026-08-12
+lastReviewedCommit: f9973d9b16c5b4a7391fd0d5aa5e8695fd9a5da3
+lastReviewedNote: "Reviewed for Issue #474: document the one-time persistent Dev migration-ledger repair for the duplicate 20260810170000 version."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -58,7 +58,7 @@ Those stay in consumer repositories such as `tiangong-lca-next` and `tiangong-lc
 ## Branch contract
 
 - Git `main` -> production baseline migrated automatically by the Supabase GitHub integration
-- Git `dev` -> persistent Supabase `dev` branch migrated by `.github/workflows/supabase-dev.yml`
+- Git `dev` -> persistent Supabase `dev` branch migrated and verified by `.github/workflows/supabase-dev.yml`
 - PR / feature branches -> preview branches created by the Supabase GitHub integration
 
 Rules:
@@ -77,14 +77,21 @@ When review changes an already-applied PR migration, add a later migration that 
 - Treat committed files in `supabase/migrations/` as the schema source of truth for production, `dev`, and preview branches.
 - Keep branch-specific overrides in `[remotes.<branch>]` inside `supabase/config.toml`.
 - Do not create a separate `supabase/` directory per Git branch.
-- Keep `.github/workflows/supabase-dev.yml` as the only GitHub Actions flow in this repo that runs `supabase db push` for the persistent Supabase `dev` branch.
+- Keep `.github/workflows/supabase-dev.yml` as the sole persistent-`dev` migration deployer. It may run `supabase link` and exactly one `supabase db push --include-all`, but must not deploy/delete Edge Functions or push project configuration.
+- After the database workflow succeeds, deploy and validate the intended persistent-Dev Functions through `tiangong-lca-edge-functions`. Function source, function selection, deployment commands, and runtime validation remain owned by that repository.
 - Do not add a checked-in GitHub Actions production deploy for Git `main`; the production project is migrated by the Supabase GitHub integration bound to this repository.
 - Do not author normal schema changes by editing the remote database first and reconstructing migrations later.
+
+### Edge Function deployment
+
+- This repository contains no `supabase/functions/` runtime source and does not deploy Functions.
+- After the persistent-Dev database workflow succeeds, deploy the intended Dev Functions from `tiangong-lca-edge-functions` and run that repository's current validation procedure.
+- Keep the function list, deployment command, authentication settings, and runtime probes in the Edge repository instead of duplicating them here.
 
 ## Files to maintain
 
 - `supabase/config.toml`: shared baseline plus `[remotes.dev]`
-- `.github/workflows/supabase-dev.yml`: pushes committed migrations to the persistent Supabase `dev` branch on Git `dev`
+- `.github/workflows/supabase-dev.yml`: rebuilds the local contract, deploys committed migrations to persistent `dev`, and verifies the exact hosted result
 - `supabase/migrations/*.sql`: committed migration history
 - `supabase/seed.sql`: shared seed data
 - `supabase/seeds/dev.sql`: optional persistent-dev-only seed data
@@ -140,11 +147,17 @@ Normal PR path:
    the checked-in `supabase/` directory.
 4. The preview branch is PR-scoped proof only; it is not the persistent
    Supabase `dev` branch.
-5. After the PR merges, the resulting push to Git `dev` triggers
-   `.github/workflows/supabase-dev.yml`.
-6. The workflow links to `SUPABASE_DEV_PROJECT_ID` and runs `supabase db push --include-all`.
-7. Pending checked-in migrations are then applied to the persistent Supabase
-   `dev` branch.
+5. After merge, `.github/workflows/supabase-dev.yml` performs a blank local
+   rebuild, links the configured persistent Dev project, and runs
+   `supabase db push --include-all` after the local contract passes.
+6. The workflow derives the expected head from the checked-out migration
+   directory and waits until a service-only readback reports that exact head;
+   it never carries a manually pinned head.
+7. The workflow reads `public,api,graphql_public` and
+   `public,api,extensions` through the Management API and probes the hosted
+   Data API boundary. After `db push`, these checks are read-only.
+8. After the database workflow succeeds, deploy and validate the intended Dev
+   Functions through `tiangong-lca-edge-functions`.
 
 An existing Preview branch applies newly added migration files on later PR
 pushes. Editing a migration already recorded in that Preview's migration
@@ -158,6 +171,34 @@ backmerge introduces a migration whose timestamp precedes newer migrations
 already recorded on persistent `dev`; migrations already present in remote
 history are still skipped.
 
+### One-time Issue #474 persistent Dev ledger repair
+
+Persistent Dev previously recorded the comment-draft migration under version
+`20260810170000`, while production recorded a different hotfix under that same
+version. The reconciled tree keeps the production file at `20260810170000`,
+renames the byte-identical Dev migration to `20260810170001`, and adds the
+post-cutover private-schema repair at `20260812090000`.
+
+Before the first persistent Dev deployment of the reconciled tree, an operator
+must link to the Dev project, confirm the remote `20260810170000` row is the
+old comment-draft migration, and repair only the history ledger:
+
+```bash
+supabase migration repair 20260810170000 --status reverted
+supabase migration repair 20260810170001 --status applied
+supabase migration list
+supabase db push --include-all
+```
+
+`reverted` deletes the old version record; it does not roll back the SQL that
+already ran. `applied` records the renamed, byte-identical migration without
+running it again. The final push then applies the production hotfix migration
+(a deliberate no-op after the private-schema cutover) and the new private-schema
+reconciliation migration. Do not run this sequence against production: its
+`20260810170000` record already identifies the canonical production hotfix.
+Capture the before/after migration list and hosted validation in Issue #474 or
+the delivery PR before allowing the normal persistent Dev workflow to proceed.
+
 Promote path:
 
 1. A `dev -> main` promote PR merges into Git `main`.
@@ -165,14 +206,27 @@ Promote path:
    `supabase/` directory from Git `main`.
 3. Pending checked-in migrations are applied automatically to the production
    project.
-4. Operators validate production migration state and application behavior after
+4. If `supabase/config.toml` changed, an operator runs
+   `supabase config push --project-ref <production-project-ref> --yes` after the
+   migration is present, then verifies the PostgREST configuration through the
+   Management API.
+5. Operators validate production migration state and application behavior after
    the promote merge.
+
+For a schema-boundary cutover, validation on Preview and persistent `dev` must
+cover profile-less core entity access through the hosted default `public`
+profile, explicit `public` entity access, explicit `api` RPC access, rejection
+of `private`, and absence of the former `public` RPC route. Data API consumers
+must select `public` for entity tables and `api` for RPCs rather than relying on
+local CLI schema ordering. A short maintenance window may be used for the
+production migration, but all consumer changes must already be validated
+against persistent `dev` before the `dev -> main` promote.
 
 This repository currently has no checked-in `workflow_dispatch` production
 deploy for Supabase. That is intentional: Git `main` is handled by the Supabase
 GitHub integration. An operator can still run `supabase link` and
-`supabase db push` locally as an explicit fallback or recovery path, but that
-manual action must be recorded in validation or incident notes.
+`supabase db push --include-all` locally as an explicit fallback or recovery
+path, but that manual action must be recorded in validation or incident notes.
 
 ## Vault secret contract
 
@@ -203,22 +257,35 @@ Rules:
 7. Commit migrations, seeds, tests, and config together.
 8. Open the PR into Git `dev`.
 9. Let Supabase create or update the preview branch for that PR.
-10. After merge, validate the persistent remote `dev` branch.
+10. After merge, validate the persistent remote `dev` database, then deploy and
+    validate the intended Dev Functions through `tiangong-lca-edge-functions`.
 11. Promote `dev` to `main` when ready to release.
 12. Validate that the production Supabase project was migrated automatically by
     the Supabase GitHub integration.
 
 ### Persistent `dev` branch deployment
 
-- Pushes to Git `dev` trigger `.github/workflows/supabase-dev.yml`.
-- That workflow links to the persistent Supabase `dev` branch and runs `supabase db push --include-all` so governed backmerges can apply every committed migration missing from remote history, including older-timestamped entries.
-- Do not add a second automation path that pushes the same target.
+- Pushes to Git `dev` are deployed by `.github/workflows/supabase-dev.yml`.
+- The workflow first rebuilds and verifies the complete migration history
+  locally. The hosted job depends on that success, links the configured Dev
+  project, and runs exactly one `supabase db push --include-all`.
+- It then derives the expected head from its checkout and fails unless the
+  exact-head readback, Management API readback, and REST profile probes match
+  the checked-in contract.
+- The workflow owns database migrations only. It must not run `supabase
+  functions deploy`, `supabase functions delete`, or `supabase config push`.
+- After the database workflow succeeds, use the Edge repository's current Dev
+  deployment and validation procedure. Do not reproduce its function inventory
+  or deployment flags in this repository.
 
 ### Production `main` deployment
 
 - Pushes to Git `main` are handled by the production project's Supabase GitHub integration.
 - The integration watches repository `tiangong-lca/database-engine` with relative path `supabase`.
 - Checked-in pending migrations are applied automatically to the production project when `main` advances.
+- Project configuration is not assumed to follow the migration automatically;
+  when `supabase/config.toml` changes, push it explicitly to the production
+  project and verify the hosted PostgREST settings.
 - Do not treat the missing checked-in GitHub Actions workflow for `main` as a manual-deploy requirement.
 - Use local `supabase db push` only as an explicit fallback or recovery path, and record that action.
 

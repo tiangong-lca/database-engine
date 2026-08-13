@@ -367,7 +367,7 @@ create temp table flow_identity_state (
 ) on commit drop;
 
 grant select, insert, update, delete on flow_identity_state to authenticated;
-grant select on public.command_audit_log to authenticated;
+grant select on private.command_audit_log to authenticated;
 grant select on util.dataset_derivative_rebuild_requests to authenticated;
 grant select on util.dataset_flow_identity_process_ledger to authenticated;
 grant select on util.dataset_flow_identity_scopes to authenticated;
@@ -1045,7 +1045,7 @@ begin
   select scope.* into strict v_scope
   from util.dataset_flow_identity_scopes as scope
   where scope.id = p_scope_id and scope.actor_user_id = auth.uid();
-  v_status := public.cmd_dataset_flow_identity_scope_read(p_scope_id);
+  v_status := api.cmd_dataset_flow_identity_scope_read(p_scope_id);
   if v_status->>'status' in ('failed', 'live_drift')
     or v_status->>'whole_scope_proof_sha256' !~ '^[a-f0-9]{64}$' then
     raise exception 'test recovery status proof failed: %', v_status;
@@ -1110,7 +1110,7 @@ security definer
 set search_path = pg_temp, public
 as $$
 begin
-  return public.cmd_dataset_flow_identity_scope_recover_guarded(
+  return api.cmd_dataset_flow_identity_scope_recover_guarded(
     p_scope_id,
     pg_temp.flow_identity_recovery_request(
       p_scope_id, p_reason, gen_random_uuid()
@@ -1131,7 +1131,7 @@ as $$
       from util.dataset_flow_identity_scopes),
     'invocation_count', (select count(*)
       from util.dataset_flow_identity_wrapper_invocations),
-    'audit_count', (select count(*) from public.command_audit_log)
+    'audit_count', (select count(*) from private.command_audit_log)
   )
 $$;
 
@@ -1195,7 +1195,7 @@ as $$
     ), '[]'::jsonb)),
     'audit_rows_sha256', util.dataset_flow_identity_sha256(coalesce((
       select jsonb_agg(to_jsonb(audit) order by audit.id)
-      from public.command_audit_log as audit
+      from private.command_audit_log as audit
       where audit.payload->>'scope_id' = p_scope_id::text
     ), '[]'::jsonb)),
     'derivative_rows_sha256', util.dataset_flow_identity_sha256(coalesce((
@@ -1394,14 +1394,14 @@ begin
     where id = v_scope_id;
     v_injected := pg_temp.flow_identity_business_state(v_scope_id);
     if p_phase = 'process' then
-      v_result := public.cmd_dataset_flow_identity_process_rewrite_guarded(
+      v_result := api.cmd_dataset_flow_identity_process_rewrite_guarded(
         v_scope_id,
         (select value from pg_temp.flow_identity_state
           where key = 'process_request'),
         p_authorization
       );
     else
-      v_result := public.cmd_dataset_flow_identity_scope_finalize_guarded(
+      v_result := api.cmd_dataset_flow_identity_scope_finalize_guarded(
         v_scope_id,
         (select value from pg_temp.flow_identity_state
           where key = 'finalize_request'),
@@ -1536,80 +1536,80 @@ as $$
 $$;
 
 select has_function(
-    'public', 'cmd_dataset_flow_identity_scope_preflight_guarded',
+    'api', 'cmd_dataset_flow_identity_scope_preflight_guarded',
     array['jsonb'],
   'scope preflight RPC exists'
 );
 select has_function(
-    'public', 'cmd_dataset_flow_identity_process_rewrite_guarded',
+    'api', 'cmd_dataset_flow_identity_process_rewrite_guarded',
     array['uuid', 'jsonb', 'jsonb'],
   'one-process rewrite RPC exists'
 );
 select has_function(
-  'public', 'cmd_dataset_flow_identity_scope_read', array['uuid'],
+  'api', 'cmd_dataset_flow_identity_scope_read', array['uuid'],
   'scope read RPC exists'
 );
 select has_function(
-    'public', 'cmd_dataset_flow_identity_scope_finalize_guarded',
+    'api', 'cmd_dataset_flow_identity_scope_finalize_guarded',
     array['uuid', 'jsonb', 'jsonb'],
   'scope finalize RPC exists'
 );
 select has_function(
-    'public', 'cmd_dataset_flow_identity_scope_recover_guarded',
+    'api', 'cmd_dataset_flow_identity_scope_recover_guarded',
     array['uuid', 'jsonb'],
   'fresh approved recovery RPC exists'
 );
 select has_function(
-    'public', 'cmd_dataset_flow_identity_scope_lookup', array['jsonb'],
+    'api', 'cmd_dataset_flow_identity_scope_lookup', array['jsonb'],
   'read-only lost-response scope lookup RPC exists'
 );
 select has_function(
-    'public', 'cmd_dataset_flow_identity_scope_cancel_guarded',
+    'api', 'cmd_dataset_flow_identity_scope_cancel_guarded',
     array['uuid', 'jsonb'],
   'zero-write scope cancel RPC exists'
 );
 select has_function(
-    'public', 'cmd_dataset_flow_identity_capture_attest_guarded',
+    'api', 'cmd_dataset_flow_identity_capture_attest_guarded',
     array['jsonb'],
   'v2 database capture/attestation RPC exists'
 );
 select function_privs_are(
-  'public', 'cmd_dataset_flow_identity_scope_preflight_guarded',
+  'api', 'cmd_dataset_flow_identity_scope_preflight_guarded',
   array['jsonb'], 'authenticated', array['EXECUTE'],
   'preflight is authenticated-only'
 );
 select function_privs_are(
-  'public', 'cmd_dataset_flow_identity_process_rewrite_guarded',
+  'api', 'cmd_dataset_flow_identity_process_rewrite_guarded',
   array['uuid', 'jsonb', 'jsonb'], 'authenticated', array['EXECUTE'],
   'process mutation is authenticated-only'
 );
 select function_privs_are(
-  'public', 'cmd_dataset_flow_identity_scope_read',
+  'api', 'cmd_dataset_flow_identity_scope_read',
   array['uuid'], 'authenticated', array['EXECUTE'],
   'scope read is authenticated-only'
 );
 select function_privs_are(
-  'public', 'cmd_dataset_flow_identity_scope_finalize_guarded',
+  'api', 'cmd_dataset_flow_identity_scope_finalize_guarded',
   array['uuid', 'jsonb', 'jsonb'], 'authenticated', array['EXECUTE'],
   'finalize is authenticated-only'
 );
 select function_privs_are(
-  'public', 'cmd_dataset_flow_identity_scope_recover_guarded',
+  'api', 'cmd_dataset_flow_identity_scope_recover_guarded',
   array['uuid', 'jsonb'], 'authenticated', array['EXECUTE'],
   'recovery admission is authenticated-only'
 );
 select function_privs_are(
-  'public', 'cmd_dataset_flow_identity_scope_lookup',
+  'api', 'cmd_dataset_flow_identity_scope_lookup',
   array['jsonb'], 'authenticated', array['EXECUTE'],
   'scope lookup is authenticated-only'
 );
 select function_privs_are(
-  'public', 'cmd_dataset_flow_identity_scope_cancel_guarded',
+  'api', 'cmd_dataset_flow_identity_scope_cancel_guarded',
   array['uuid', 'jsonb'], 'authenticated', array['EXECUTE'],
   'zero-write cancel is authenticated-only'
 );
 select function_privs_are(
-  'public', 'cmd_dataset_flow_identity_capture_attest_guarded',
+  'api', 'cmd_dataset_flow_identity_capture_attest_guarded',
   array['jsonb'], 'authenticated', array['EXECUTE'],
   'capture attestation is authenticated-only'
 );
@@ -1735,13 +1735,13 @@ select ok(
 );
 select ok(
   pg_get_functiondef(
-    'public.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb,jsonb)'::regprocedure
+    'api.cmd_dataset_flow_identity_scope_finalize_guarded(uuid,jsonb,jsonb)'::regprocedure
   ) not like '%read_dataset_derivative_rebuild_batch_any%',
   'installed finalize contains no per-child derivative reader'
 );
 select ok(
   pg_get_functiondef(
-    'public.cmd_dataset_flow_identity_scope_preflight_guarded(jsonb)'::regprocedure
+    'api.cmd_dataset_flow_identity_scope_preflight_guarded(jsonb)'::regprocedure
   ) not ilike '%lock table%',
   'preflight takes no table-level SHARE locks'
 );
@@ -1776,7 +1776,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_dataset_flow_identity_capture_attest_guarded(
+  api.cmd_dataset_flow_identity_capture_attest_guarded(
     pg_temp.flow_identity_bad_capture()
   )->>'code',
   'FLOW_IDENTITY_CAPTURE_FAILED',
@@ -1791,7 +1791,7 @@ select is(
 );
 
 insert into flow_identity_state(key, value)
-select 'capture', public.cmd_dataset_flow_identity_capture_attest_guarded(
+select 'capture', api.cmd_dataset_flow_identity_capture_attest_guarded(
   pg_temp.flow_identity_capture()
 );
 select is(
@@ -1800,7 +1800,7 @@ select is(
   'fresh semantic capture returns a DB-owned immutable receipt'
 );
 select is(
-  public.cmd_dataset_flow_identity_capture_attest_guarded(
+  api.cmd_dataset_flow_identity_capture_attest_guarded(
     pg_temp.flow_identity_capture()
   )->>'replay',
   'true',
@@ -1809,7 +1809,7 @@ select is(
 
 insert into flow_identity_state(key, value)
 select 'preflight',
-  public.cmd_dataset_flow_identity_scope_preflight_guarded(
+  api.cmd_dataset_flow_identity_scope_preflight_guarded(
     pg_temp.flow_identity_preflight()
   );
 
@@ -1832,7 +1832,7 @@ insert into flow_identity_state(key, value)
 select 'lookup_before', pg_temp.flow_identity_private_counts();
 insert into flow_identity_state(key, value)
 select 'lookup_result',
-  public.cmd_dataset_flow_identity_scope_lookup(pg_temp.flow_identity_lookup());
+  api.cmd_dataset_flow_identity_scope_lookup(pg_temp.flow_identity_lookup());
 insert into flow_identity_state(key, value)
 select 'lookup_after', pg_temp.flow_identity_private_counts();
 select is(
@@ -1857,7 +1857,7 @@ select is(
   'scope lookup changes no scope, invocation, or audit row count'
 );
 select is(
-  public.cmd_dataset_flow_identity_scope_lookup(jsonb_set(
+  api.cmd_dataset_flow_identity_scope_lookup(jsonb_set(
     pg_temp.flow_identity_lookup(),
     '{freeze_sha256}', to_jsonb(repeat('0', 64)), false
   ))->>'code',
@@ -1869,14 +1869,14 @@ select is(
     'replay', replay.value->>'replay',
     'permit_is_null', replay.value->'execution_permit' = 'null'::jsonb
   )
-  from public.cmd_dataset_flow_identity_scope_preflight_guarded(
+  from api.cmd_dataset_flow_identity_scope_preflight_guarded(
     pg_temp.flow_identity_preflight()
   ) as replay(value)),
   jsonb_build_object('replay', 'true', 'permit_is_null', true),
   'exact preflight replay is proof-only and cannot mint a second permit'
 );
 select is(
-  public.cmd_dataset_flow_identity_scope_preflight_guarded(
+  api.cmd_dataset_flow_identity_scope_preflight_guarded(
     jsonb_set(
       pg_temp.flow_identity_preflight(),
       '{freeze_sha256}', to_jsonb(repeat('0', 64)), false
@@ -1894,7 +1894,7 @@ select is(
     'derivative_status_is_null',
       result #> '{processes,0,derivative_status}' = 'null'::jsonb
   )
-  from public.cmd_dataset_flow_identity_scope_read(
+  from api.cmd_dataset_flow_identity_scope_read(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight')
   ) as result),
@@ -1913,7 +1913,7 @@ select 'cancel_request', pg_temp.flow_identity_cancel_request(
 );
 insert into flow_identity_state(key, value)
 select 'cancel_result',
-  public.cmd_dataset_flow_identity_scope_cancel_guarded(
+  api.cmd_dataset_flow_identity_scope_cancel_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'cancel_request')
@@ -1929,13 +1929,13 @@ select is(
       'replay', replay.value->>'replay',
       'audit_count', (
         select count(*)::integer
-        from public.command_audit_log as audit
+        from private.command_audit_log as audit
         where audit.command = 'cmd_dataset_flow_identity_scope_cancel_guarded'
           and audit.payload->>'scope_id' = preflight.value->>'scope_id'
       )
     )
     from flow_identity_state as preflight
-    cross join lateral public.cmd_dataset_flow_identity_scope_cancel_guarded(
+    cross join lateral api.cmd_dataset_flow_identity_scope_cancel_guarded(
       (preflight.value->>'scope_id')::uuid,
       (select value from flow_identity_state where key = 'cancel_request')
     ) as replay(value)
@@ -1945,7 +1945,7 @@ select is(
   'exact cancel replay is read-only and retains one authoritative audit'
 );
 select is(
-  public.cmd_dataset_flow_identity_scope_cancel_guarded(
+  api.cmd_dataset_flow_identity_scope_cancel_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     jsonb_set(
@@ -1967,7 +1967,7 @@ select lives_ok(
 set local role authenticated;
 
 update flow_identity_state
-set value = public.cmd_dataset_flow_identity_capture_attest_guarded(
+set value = api.cmd_dataset_flow_identity_capture_attest_guarded(
   pg_temp.flow_identity_capture() || jsonb_build_object(
     'request_id', 'fb000000-0000-4000-8000-000000000011',
     'operation_id', 'flow-identity-test-operation-after-cancel'
@@ -1975,7 +1975,7 @@ set value = public.cmd_dataset_flow_identity_capture_attest_guarded(
 )
 where key = 'capture';
 select is(
-  public.cmd_dataset_flow_identity_scope_preflight_guarded(
+  api.cmd_dataset_flow_identity_scope_preflight_guarded(
     pg_temp.flow_identity_preflight() || jsonb_build_object(
       'request_id', 'fa000000-0000-4000-8000-000000000011',
       'operation_id', 'flow-identity-test-operation-after-cancel',
@@ -1999,7 +1999,7 @@ select 'preflight_request_2',
     'execution_approval_identity_sha256', repeat('4', 64)
   );
 update flow_identity_state
-set value = public.cmd_dataset_flow_identity_scope_preflight_guarded(
+set value = api.cmd_dataset_flow_identity_scope_preflight_guarded(
   (select value from flow_identity_state where key = 'preflight_request_2')
 )
 where key = 'preflight';
@@ -2085,7 +2085,7 @@ select extensions.dblink_exec(
 );
 set local role authenticated;
 select is(
-  public.cmd_dataset_flow_identity_process_rewrite_guarded(
+  api.cmd_dataset_flow_identity_process_rewrite_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'process_request'),
@@ -2109,7 +2109,7 @@ select extensions.dblink_disconnect('flow_identity_scope_lock');
 set local role authenticated;
 
 select is(
-  public.cmd_dataset_flow_identity_process_rewrite_guarded(
+  api.cmd_dataset_flow_identity_process_rewrite_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'process_request'),
@@ -2175,12 +2175,12 @@ where preflight.key = 'preflight';
 
 reset role;
 create trigger dataset_flow_identity_test_post_primary_fault
-before update on public.command_audit_log
+before update on private.command_audit_log
 for each row execute function pg_temp.flow_identity_post_primary_fault();
 set local role authenticated;
 
 select throws_ok(
-  $$select public.cmd_dataset_flow_identity_process_rewrite_guarded(
+  $$select api.cmd_dataset_flow_identity_process_rewrite_guarded(
       (select (value->>'scope_id')::uuid
         from flow_identity_state where key = 'preflight'),
       (select value from flow_identity_state where key = 'process_request'),
@@ -2205,12 +2205,12 @@ select is(
 
 reset role;
 drop trigger dataset_flow_identity_test_post_primary_fault
-  on public.command_audit_log;
+  on private.command_audit_log;
 set local role authenticated;
 
 insert into flow_identity_state(key, value)
 select 'process_result',
-  public.cmd_dataset_flow_identity_process_rewrite_guarded(
+  api.cmd_dataset_flow_identity_process_rewrite_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     value,
@@ -2303,7 +2303,7 @@ select is(
   'exchange count and converged rows are preserved'
 );
 select is(
-  (select count(*)::integer from public.command_audit_log
+  (select count(*)::integer from private.command_audit_log
     where command = 'cmd_dataset_flow_identity_process_rewrite_guarded'
       and target_id = pg_temp.flow_identity_id('process')),
   1,
@@ -2320,7 +2320,7 @@ select is(
   'one protected derivative child is admitted atomically'
 );
 select is(
-  public.cmd_dataset_flow_identity_scope_cancel_guarded(
+  api.cmd_dataset_flow_identity_scope_cancel_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     pg_temp.flow_identity_cancel_request(
@@ -2337,7 +2337,7 @@ select is(
     'ledger_status', ledger.status,
     'ledger_active', ledger.active,
     'primary_audit_count', (
-      select count(*)::integer from public.command_audit_log as audit
+      select count(*)::integer from private.command_audit_log as audit
       where audit.command = 'cmd_dataset_flow_identity_process_rewrite_guarded'
         and audit.payload->>'scope_id' = scope.id::text
     )
@@ -2367,7 +2367,7 @@ select is(
   'dynamic derivative reader accepts a one-target Step 3 batch'
 );
 select is(
-  public.cmd_dataset_flow_identity_process_rewrite_guarded(
+  api.cmd_dataset_flow_identity_process_rewrite_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'process_request_2'),
@@ -2403,7 +2403,7 @@ select is(
 
 insert into flow_identity_state(key, value)
 select 'process_result_2',
-  public.cmd_dataset_flow_identity_process_rewrite_guarded(
+  api.cmd_dataset_flow_identity_process_rewrite_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     value,
@@ -2457,7 +2457,7 @@ select is(
   'ordinal two rewrites its exact owner-draft process reference'
 );
 select is(
-  public.cmd_dataset_flow_identity_process_rewrite_guarded(
+  api.cmd_dataset_flow_identity_process_rewrite_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'process_request_2'),
@@ -2468,7 +2468,7 @@ select is(
   'ordinal two rejects its stale generation-one permit after rotation'
 );
 select is(
-  public.cmd_dataset_flow_identity_process_rewrite_guarded(
+  api.cmd_dataset_flow_identity_process_rewrite_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'process_request_2'),
@@ -2488,7 +2488,7 @@ select is(
 );
 select is(
   (select count(*)::integer
-   from public.command_audit_log as audit
+   from private.command_audit_log as audit
    where audit.command = 'cmd_dataset_flow_identity_process_rewrite_guarded'
      and audit.payload->>'scope_id' = (
        select value->>'scope_id'
@@ -2521,14 +2521,14 @@ select is(
   'atomic snapshot includes a same-actor/reason/target orphan causal child without a ledger batch link'
 );
 select is(
-  (select count(*)::integer from public.command_audit_log
+  (select count(*)::integer from private.command_audit_log
     where command = 'cmd_dataset_flow_identity_process_rewrite_guarded'
       and target_id = pg_temp.flow_identity_id('process')),
   1,
   'exact replay does not create a second audit or write'
 );
 select is(
-  public.cmd_dataset_flow_identity_scope_read(
+  api.cmd_dataset_flow_identity_scope_read(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight')
   )->>'status',
@@ -2536,7 +2536,7 @@ select is(
   'scope read resumes from durable derivative-pending state'
 );
 select is(
-  public.cmd_dataset_flow_identity_scope_read(
+  api.cmd_dataset_flow_identity_scope_read(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight')
   )->>'protected_closure_current',
@@ -2624,7 +2624,7 @@ select 'recovery_request_1', pg_temp.flow_identity_recovery_request(
 from flow_identity_state where key = 'preflight';
 insert into flow_identity_state(key, value)
 select 'recovery_result_1',
-  public.cmd_dataset_flow_identity_scope_recover_guarded(
+  api.cmd_dataset_flow_identity_scope_recover_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     value
@@ -2654,7 +2654,7 @@ select is(
     'replay', replay.value->>'replay',
     'permit_is_null', replay.value->'execution_permit' = 'null'::jsonb
   )
-  from public.cmd_dataset_flow_identity_scope_recover_guarded(
+  from api.cmd_dataset_flow_identity_scope_recover_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'recovery_request_1')
@@ -2663,7 +2663,7 @@ select is(
   'exact recovery replay returns the same proof but never another permit'
 );
 select is(
-  public.cmd_dataset_flow_identity_scope_recover_guarded(
+  api.cmd_dataset_flow_identity_scope_recover_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     jsonb_set(
@@ -2691,14 +2691,14 @@ select 'recovery_request_2', pg_temp.flow_identity_recovery_request(
 from flow_identity_state where key = 'preflight';
 insert into flow_identity_state(key, value)
 select 'recovery_result_2',
-  public.cmd_dataset_flow_identity_scope_recover_guarded(
+  api.cmd_dataset_flow_identity_scope_recover_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     value
   )
 from flow_identity_state where key = 'recovery_request_2';
 select is(
-  public.cmd_dataset_flow_identity_scope_finalize_guarded(
+  api.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'finalize_request'),
@@ -2711,7 +2711,7 @@ select is(
 
 insert into flow_identity_state(key, value)
 select 'finalize_result',
-  public.cmd_dataset_flow_identity_scope_finalize_guarded(
+  api.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'finalize_request'),
@@ -2767,7 +2767,7 @@ where batch_id = (
 set local role authenticated;
 
 insert into flow_identity_state(key, value)
-select 'failed_scope_read', public.cmd_dataset_flow_identity_scope_read(
+select 'failed_scope_read', api.cmd_dataset_flow_identity_scope_read(
   (select (value->>'scope_id')::uuid
     from flow_identity_state where key = 'preflight')
 );
@@ -2829,7 +2829,7 @@ select is(
 
 insert into flow_identity_state(key, value)
 select 'failed_finalize',
-  public.cmd_dataset_flow_identity_scope_finalize_guarded(
+  api.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'finalize_request'),
@@ -2885,7 +2885,7 @@ where batch_id = (
 );
 set local role authenticated;
 insert into flow_identity_state(key, value)
-select 'stale_scope_read', public.cmd_dataset_flow_identity_scope_read(
+select 'stale_scope_read', api.cmd_dataset_flow_identity_scope_read(
   (select (value->>'scope_id')::uuid
     from flow_identity_state where key = 'preflight')
 );
@@ -2908,7 +2908,7 @@ select is(
 );
 insert into flow_identity_state(key, value)
 select 'stale_finalize',
-  public.cmd_dataset_flow_identity_scope_finalize_guarded(
+  api.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'finalize_request'),
@@ -2970,7 +2970,7 @@ where preflight.key = 'preflight'
 
 insert into flow_identity_state(key, value)
 select 'compensation_result',
-  public.cmd_dataset_derivative_rebuild_plan_guarded(value)
+  api.cmd_dataset_derivative_rebuild_plan_guarded(value)
 from flow_identity_state where key = 'compensation_plan';
 select is(
   (select value->>'ok'
@@ -2990,7 +2990,7 @@ select is(
 
 insert into flow_identity_state(key, value)
 select 'compensation_finalize',
-  public.cmd_dataset_flow_identity_scope_finalize_guarded(
+  api.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'finalize_request'),
@@ -3026,7 +3026,7 @@ set local role authenticated;
 
 insert into flow_identity_state(key, value)
 select 'completed_finalize',
-  public.cmd_dataset_flow_identity_scope_finalize_guarded(
+  api.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'finalize_request'),
@@ -3052,7 +3052,7 @@ where scope.id = (
 );
 insert into flow_identity_state(key, value)
 select 'completed_terminal_audit', to_jsonb(audit)
-from public.command_audit_log as audit
+from private.command_audit_log as audit
 where audit.command = 'cmd_dataset_flow_identity_scope_finalize_guarded'
   and audit.target_table is null
   and audit.payload->>'scope_id' = (
@@ -3062,7 +3062,7 @@ where audit.command = 'cmd_dataset_flow_identity_scope_finalize_guarded'
 order by audit.id desc limit 1;
 
 insert into flow_identity_state(key, value)
-select 'completed_lookup', public.cmd_dataset_flow_identity_scope_lookup(
+select 'completed_lookup', api.cmd_dataset_flow_identity_scope_lookup(
   jsonb_set(
     value, '{schema_version}',
     '"dataset-flow-identity-scope-lookup.v1"'::jsonb, false
@@ -3085,7 +3085,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_flow_identity_scope_finalize_guarded(
+  api.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'finalize_request'),
@@ -3106,7 +3106,7 @@ select is(
 );
 select is(
   (select to_jsonb(audit)
-   from public.command_audit_log as audit
+   from private.command_audit_log as audit
    where audit.command = 'cmd_dataset_flow_identity_scope_finalize_guarded'
      and audit.target_table is null
      and audit.payload->>'scope_id' = (
@@ -3126,7 +3126,7 @@ where id = pg_temp.flow_identity_id('process');
 set local role authenticated;
 insert into flow_identity_state(key, value)
 select 'completed_scope_derivative_drift',
-  public.cmd_dataset_flow_identity_scope_read(
+  api.cmd_dataset_flow_identity_scope_read(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight')
   );
@@ -3197,7 +3197,7 @@ select is(
 );
 select is(
   (select to_jsonb(audit)
-   from public.command_audit_log as audit
+   from private.command_audit_log as audit
    where audit.command = 'cmd_dataset_flow_identity_scope_finalize_guarded'
      and audit.target_table is null
      and audit.payload->>'scope_id' = (
@@ -3211,7 +3211,7 @@ select is(
 
 insert into flow_identity_state(key, value)
 select 'completed_drift_finalize',
-  public.cmd_dataset_flow_identity_scope_finalize_guarded(
+  api.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'finalize_request'),
@@ -3235,7 +3235,7 @@ select is(
 );
 select is(
   (select to_jsonb(audit)
-   from public.command_audit_log as audit
+   from private.command_audit_log as audit
    where audit.command = 'cmd_dataset_flow_identity_scope_finalize_guarded'
      and audit.target_table is null
      and audit.payload->>'scope_id' = (
@@ -3261,7 +3261,7 @@ where batch_id = (
   );
 set local role authenticated;
 insert into flow_identity_state(key, value)
-select 'missing_child_read', public.cmd_dataset_flow_identity_scope_read(
+select 'missing_child_read', api.cmd_dataset_flow_identity_scope_read(
   (select (value->>'scope_id')::uuid
     from flow_identity_state where key = 'preflight')
 );
@@ -3324,7 +3324,7 @@ select is(
 
 insert into flow_identity_state(key, value)
 select 'missing_child_finalize',
-  public.cmd_dataset_flow_identity_scope_finalize_guarded(
+  api.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'finalize_request'),
@@ -3368,7 +3368,7 @@ where preflight.key = 'preflight'
 
 insert into flow_identity_state(key, value)
 select 'second_compensation_result',
-  public.cmd_dataset_derivative_rebuild_plan_guarded(value)
+  api.cmd_dataset_derivative_rebuild_plan_guarded(value)
 from flow_identity_state where key = 'second_compensation_plan';
 select is(
   (select value->>'ok'
@@ -3395,7 +3395,7 @@ select pg_temp.complete_flow_identity_derivative(
 set local role authenticated;
 insert into flow_identity_state(key, value)
 select 'recovered_completed_finalize',
-  public.cmd_dataset_flow_identity_scope_finalize_guarded(
+  api.cmd_dataset_flow_identity_scope_finalize_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     (select value from flow_identity_state where key = 'finalize_request'),
@@ -3419,7 +3419,7 @@ select is(
 );
 select is(
   (select to_jsonb(audit)
-   from public.command_audit_log as audit
+   from private.command_audit_log as audit
    where audit.command = 'cmd_dataset_flow_identity_scope_finalize_guarded'
      and audit.target_table is null
      and audit.payload->>'scope_id' = (
@@ -3438,7 +3438,7 @@ select set_config(
   'request.jwt.claim.email', 'flow-other@example.com', true
 );
 select is(
-  public.cmd_dataset_flow_identity_scope_lookup(jsonb_set(
+  api.cmd_dataset_flow_identity_scope_lookup(jsonb_set(
     jsonb_set(
       pg_temp.flow_identity_lookup(),
       '{actor,user_id}',
@@ -3450,7 +3450,7 @@ select is(
   'foreign actor lookup returns the same non-leaking not-found result'
 );
 select is(
-  public.cmd_dataset_flow_identity_scope_read(
+  api.cmd_dataset_flow_identity_scope_read(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight')
   )->>'code',
@@ -3458,7 +3458,7 @@ select is(
   'foreign actor cannot read another owner scope'
 );
 select is(
-  public.cmd_dataset_flow_identity_scope_cancel_guarded(
+  api.cmd_dataset_flow_identity_scope_cancel_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     pg_temp.flow_identity_cancel_request(
@@ -3473,14 +3473,14 @@ select is(
 select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claim.email', '', true);
 select is(
-  public.cmd_dataset_flow_identity_scope_preflight_guarded(
+  api.cmd_dataset_flow_identity_scope_preflight_guarded(
     '{}'::jsonb
   )->>'code',
   'AUTH_REQUIRED',
   'preflight requires an authenticated actor'
 );
 select is(
-  public.cmd_dataset_flow_identity_scope_cancel_guarded(
+  api.cmd_dataset_flow_identity_scope_cancel_guarded(
     (select (value->>'scope_id')::uuid
       from flow_identity_state where key = 'preflight'),
     pg_temp.flow_identity_cancel_request(

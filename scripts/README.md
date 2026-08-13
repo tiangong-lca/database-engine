@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-31
-lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
-lastReviewedNote: "Reviewed through Issues #323 and #329: document the local Root/Reference Review backup/cutover runner and exact Worker-compatible isolated database/storage qualification adapters without changing schema-workspace behavior."
+lastReviewedAt: 2026-08-12
+lastReviewedCommit: aca7ed0f1d5894fadb958b940212022048e64f80
+lastReviewedNote: "Reviewed for Issue #478: existing exact-local refresh commands capture the RPC-level statement timeout; script behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -46,6 +46,55 @@ Those runners should keep their own `README.md` with dry-run, apply, and validat
 Local migration outputs and audit JSONL files should be written under `_artifacts/`, which is intentionally ignored by Git.
 
 ## Script List
+
+### `test_full_schema_cutover_upgrade.sh`
+
+Rebuilds the local database to the migration immediately before the full
+Schema cutover, adds a representative business row, snapshots relation and
+routine identities plus trigger, RLS-policy, constraint, and exact row-count
+state, applies the cutover and contract-closure migrations, and verifies
+complete preservation, capability-manifest installation, idempotency-index
+creation, Data Product consumer-facade installation, and removal of PostgreSQL
+`PUBLIC` execution from the API surface. It also applies the Issue #422 runtime
+ACL repair and verifies the exact authenticated RLS-helper and Edge release
+façade grants after a populated upgrade.
+
+Usage:
+
+```bash
+scripts/test_full_schema_cutover_upgrade.sh
+```
+
+This script is local-only and resets the local Supabase database.
+
+### `resolve_migration_head.py`
+
+Prints the latest valid migration version from the checked-out
+`supabase/migrations` directory. It rejects an empty directory, malformed SQL
+migration names, and duplicate 14-digit versions so hosted verification cannot
+silently select an ambiguous head.
+
+```bash
+python scripts/resolve_migration_head.py
+```
+
+Run its regression suite with:
+
+```bash
+python scripts/test_resolve_migration_head.py
+```
+
+### `test_supabase_dev_workflow_contract.py`
+
+Fails closed unless the persistent-Dev workflow performs exactly one database
+deployment with `supabase db push --include-all` after linking the configured
+project. It rejects Functions deploy/delete, `config push`, Management API
+mutation, and a manually pinned migration head, then requires exact-head
+readback from the same checkout.
+
+```bash
+python scripts/test_supabase_dev_workflow_contract.py
+```
 
 ### `data_migrations/tidas_schema_202606/runner.py`
 
@@ -136,6 +185,7 @@ python scripts/build_schema_workspace.py --environment local
 Behavior:
 
 - Exports the latest remote schema first
+- Canonicalizes trailing whitespace in the generated SQL view for deterministic review diffs
 - Rebuilds `global/` and `schemas/`
 - Preserves `supabase/workspace/README.md`
 - Preserves `supabase/workspace/README.zh-CN.md`
@@ -146,7 +196,17 @@ Warnings:
 - Manual edits inside `remote_schema.sql`, `global/`, and `schemas/` are not stable
 - Refresh can overwrite uncommitted Git changes in generated workspace files
 - If you want `--git-changes` to reflect only later hand edits, commit the refreshed `supabase/workspace/schemas` to Git after syncing the remote database and before editing files.
-- Remote `dev` remains the canonical generated-schema target. Commit local reconstruction output only after proving applied migration parity and running targeted hosted catalog checks for the affected contract.
+- Remote `dev` remains the canonical generated-schema target. A schema-changing PR may commit an exact-local review snapshot after a blank migration rebuild, targeted contract tests, and a second deterministic regeneration show no drift. After merge, the database-only Dev deployment must reach the exact head, hosted catalog checks must pass, and a remote-Dev refresh must be compared with the review snapshot; commit any resulting drift as a follow-up.
+
+### `build_database_types.py`
+
+Generates the checked-in TypeScript contract for the two schemas exposed through the Data API: `public` and `api`.
+
+```bash
+python scripts/build_database_types.py --environment local
+```
+
+Use `--environment linked` only when the linked Supabase target is intentionally the source. CI regenerates the local contract and fails when `supabase/workspace/database.types.ts` drifts.
 
 ### `check_generated_workspace_legacy_tables.py`
 

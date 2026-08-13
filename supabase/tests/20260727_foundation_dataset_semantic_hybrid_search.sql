@@ -143,7 +143,7 @@ select is(
     select count(*)::integer
     from pg_proc routine
     join pg_namespace namespace on namespace.oid = routine.pronamespace
-    where namespace.nspname = 'public'
+    where namespace.nspname = 'api'
       and routine.proname in (
         'contacts_embedding_ft_input',
         'flowproperties_embedding_ft_input',
@@ -302,7 +302,7 @@ select is(
     select count(*)::integer
     from pg_proc routine
     join pg_namespace namespace on namespace.oid = routine.pronamespace
-    where namespace.nspname = 'public'
+    where namespace.nspname = 'api'
       and routine.proname in (
         'semantic_search_contacts_v1',
         'semantic_search_flowproperties_v1',
@@ -319,7 +319,7 @@ select is(
     select count(*)::integer
     from pg_proc routine
     join pg_namespace namespace on namespace.oid = routine.pronamespace
-    where namespace.nspname = 'public'
+    where namespace.nspname = 'api'
       and routine.proname in (
         'hybrid_search_contacts_v2',
         'hybrid_search_flowproperties_v2',
@@ -334,7 +334,7 @@ select is(
 select ok(
   not has_function_privilege(
     'authenticated',
-    'public.cmd_dataset_semantic_backfill(text,integer,uuid,text,boolean)',
+    'private.cmd_dataset_semantic_backfill(text,integer,uuid,text,boolean)',
     'execute'
   ),
   'historical semantic backfill is not callable by authenticated users'
@@ -345,7 +345,7 @@ select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 select set_config('request.headers', '{}', true);
 
 select is(
-  public.cmd_dataset_semantic_backfill('sources', 10, null, null, false)->>'code',
+  private.cmd_dataset_semantic_backfill('sources', 10, null, null, false)->>'code',
   'SERVICE_ROLE_REQUIRED',
   'historical semantic backfill rejects non-service request context'
 );
@@ -397,15 +397,15 @@ values
     false
   );
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values
   ('a1000000-0000-0000-0000-000000000297', '{"email":"foundation-owner@example.com"}'::jsonb, null),
   ('b2000000-0000-0000-0000-000000000297', '{"email":"foundation-outsider@example.com"}'::jsonb, null);
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values ('c3000000-0000-0000-0000-000000000297', '{"name":"Foundation Search Team"}'::jsonb, 1, false);
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values ('a1000000-0000-0000-0000-000000000297', 'c3000000-0000-0000-0000-000000000297', 'owner');
 
 with test_vector(value) as (
@@ -458,47 +458,60 @@ select 'a1000000-0000-0000-0000-000000000101', '01.00.000', '{"name":"public-uni
        '# Unit group public-unitgroup-token', test_vector.value, now(), now()
 from test_vector;
 
-with query_vector(value) as (
-  select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
-)
-select is(
-  (select id::text from public.semantic_search_contacts_v1((select value from query_vector), '{}', 0.5, 20, 'tg') limit 1),
-  'ca000000-0000-0000-0000-000000000101',
-  'contact Semantic Search returns the visible public row'
+update public.contacts
+set search_text = array[extracted_md]
+where id in (
+  'ca000000-0000-0000-0000-000000000101'::uuid,
+  'ca000000-0000-0000-0000-000000000201'::uuid,
+  'ca000000-0000-0000-0000-000000000202'::uuid,
+  'ca000000-0000-0000-0000-000000000203'::uuid
+);
+
+update public.flowproperties
+set search_text = array[extracted_md]
+where id = 'fb000000-0000-0000-0000-000000000101'::uuid;
+
+update public.sources
+set search_text = array[extracted_md]
+where id = '5a000000-0000-0000-0000-000000000101'::uuid;
+
+update public.unitgroups
+set search_text = array[extracted_md]
+where id = 'a1000000-0000-0000-0000-000000000101'::uuid;
+
+select throws_ok(
+  $$select * from api.semantic_search_contacts_v1('not-a-vector', '{}', 0.5, 20, 'tg')$$,
+  '42501',
+  'permission denied for function semantic_search_contacts_v1',
+  'legacy contact Semantic Search facade remains present but is closed by the API contract'
+);
+
+select throws_ok(
+  $$select * from api.semantic_search_flowproperties_v1('not-a-vector', '{}', 0.5, 20, 'tg')$$,
+  '42501',
+  'permission denied for function semantic_search_flowproperties_v1',
+  'legacy flow-property Semantic Search facade remains present but is closed by the API contract'
+);
+
+select throws_ok(
+  $$select * from api.semantic_search_sources_v1('not-a-vector', '{}', 0.5, 20, 'tg')$$,
+  '42501',
+  'permission denied for function semantic_search_sources_v1',
+  'legacy source Semantic Search facade remains present but is closed by the API contract'
+);
+
+select throws_ok(
+  $$select * from api.semantic_search_unitgroups_v1('not-a-vector', '{}', 0.5, 20, 'tg')$$,
+  '42501',
+  'permission denied for function semantic_search_unitgroups_v1',
+  'legacy unit-group Semantic Search facade remains present but is closed by the API contract'
 );
 
 with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select id::text from public.semantic_search_flowproperties_v1((select value from query_vector), '{}', 0.5, 20, 'tg') limit 1),
-  'fb000000-0000-0000-0000-000000000101',
-  'flow-property Semantic Search returns the visible public row'
-);
-
-with query_vector(value) as (
-  select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
-)
-select is(
-  (select id::text from public.semantic_search_sources_v1((select value from query_vector), '{}', 0.5, 20, 'tg') limit 1),
-  '5a000000-0000-0000-0000-000000000101',
-  'source Semantic Search returns the visible public row'
-);
-
-with query_vector(value) as (
-  select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
-)
-select is(
-  (select id::text from public.semantic_search_unitgroups_v1((select value from query_vector), '{}', 0.5, 20, 'tg') limit 1),
-  'a1000000-0000-0000-0000-000000000101',
-  'unit-group Semantic Search returns the visible public row'
-);
-
-with query_vector(value) as (
-  select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
-)
-select is(
-  (select id::text from public.hybrid_search_contacts_v2('public-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'tg', 10, 1, array['public-contact-token']) limit 1),
+  (select id::text from api.hybrid_search_contacts_v2('public-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'tg', 10, 1, array['public-contact-token']) limit 1),
   'ca000000-0000-0000-0000-000000000101',
   'contact Hybrid Search fuses text and semantic candidates'
 );
@@ -507,7 +520,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_flowproperties_v2('public-flowproperty-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'tg', 10, 1, array['public-flowproperty-token']) limit 1),
+  (select id::text from api.hybrid_search_flowproperties_v2('public-flowproperty-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'tg', 10, 1, array['public-flowproperty-token']) limit 1),
   'fb000000-0000-0000-0000-000000000101',
   'flow-property Hybrid Search fuses text and semantic candidates'
 );
@@ -516,7 +529,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_sources_v2('public-source-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'tg', 10, 1, array['public-source-token']) limit 1),
+  (select id::text from api.hybrid_search_sources_v2('public-source-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'tg', 10, 1, array['public-source-token']) limit 1),
   '5a000000-0000-0000-0000-000000000101',
   'source Hybrid Search fuses text and semantic candidates'
 );
@@ -525,7 +538,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_unitgroups_v2('public-unitgroup-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'tg', 10, 1, array['public-unitgroup-token']) limit 1),
+  (select id::text from api.hybrid_search_unitgroups_v2('public-unitgroup-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'tg', 10, 1, array['public-unitgroup-token']) limit 1),
   'a1000000-0000-0000-0000-000000000101',
   'unit-group Hybrid Search fuses text and semantic candidates'
 );
@@ -535,29 +548,25 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claim.sub', 'a1000000-0000-0000-0000-000000000297', true);
 select set_config('request.jwt.claims', '{"role":"authenticated","sub":"a1000000-0000-0000-0000-000000000297"}', true);
 
-with query_vector(value) as (
-  select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
-)
-select is(
-  (select array_agg(id::text order by id) from public.semantic_search_contacts_v1((select value from query_vector), '{}', 0.5, 20, 'my')),
-  array['ca000000-0000-0000-0000-000000000201']::text[],
-  'my Semantic Search returns only rows owned by the authenticated actor'
+select throws_ok(
+  $$select * from api.semantic_search_contacts_v1('not-a-vector', '{}', 0.5, 20, 'my')$$,
+  '42501',
+  'permission denied for function semantic_search_contacts_v1',
+  'legacy my-data Semantic Search facade remains closed after the API contract cutover'
+);
+
+select throws_ok(
+  $$select * from api.semantic_search_contacts_v1('not-a-vector', '{}', 0.5, 20, 'te', null, 'c3000000-0000-0000-0000-000000000297')$$,
+  '42501',
+  'permission denied for function semantic_search_contacts_v1',
+  'legacy team Semantic Search facade remains closed after the API contract cutover'
 );
 
 with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select array_agg(id::text order by id) from public.semantic_search_contacts_v1((select value from query_vector), '{}', 0.5, 20, 'te', null, 'c3000000-0000-0000-0000-000000000297')),
-  array['ca000000-0000-0000-0000-000000000202']::text[],
-  'team Semantic Search returns only rows from the selected team the actor belongs to'
-);
-
-with query_vector(value) as (
-  select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
-)
-select is(
-  (select id::text from public.hybrid_search_contacts_v2('outsider-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'my', 10, 1, array['outsider-contact-token']) limit 1),
+  (select id::text from api.hybrid_search_contacts_v2('outsider-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'my', 10, 1, array['outsider-contact-token']) limit 1),
   'ca000000-0000-0000-0000-000000000201',
   'my Hybrid Search does not leak an outsider text or semantic candidate'
 );
@@ -566,7 +575,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select count(*)::integer from public.hybrid_search_contacts_v2('owner-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'my', 10, 1, array['owner-contact-token'], 1, null)),
+  (select count(*)::integer from api.hybrid_search_contacts_v2('owner-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'my', 10, 1, array['owner-contact-token'], 1, null)),
   0,
   'my Hybrid Search preserves the explicit state filter'
 );
@@ -575,7 +584,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select id::text from public.hybrid_search_contacts_v2('team-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'te', 10, 1, array['team-contact-token'], 0, 'c3000000-0000-0000-0000-000000000297') limit 1),
+  (select id::text from api.hybrid_search_contacts_v2('team-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'te', 10, 1, array['team-contact-token'], 0, 'c3000000-0000-0000-0000-000000000297') limit 1),
   'ca000000-0000-0000-0000-000000000202',
   'team Hybrid Search preserves the selected team and state filters'
 );
@@ -584,7 +593,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select count(*)::integer from public.hybrid_search_contacts_v2('team-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'te', 10, 1, array['team-contact-token'], 0, null)),
+  (select count(*)::integer from api.hybrid_search_contacts_v2('team-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'te', 10, 1, array['team-contact-token'], 0, null)),
   0,
   'team Hybrid Search fails closed without an explicit team filter'
 );
@@ -593,7 +602,7 @@ with query_vector(value) as (
   select '[1,' || array_to_string(array_fill('0'::text, array[1023]), ',') || ']'
 )
 select is(
-  (select count(*)::integer from public.hybrid_search_contacts_v2('public-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'tg', 10, 1, array['public-contact-token'], null, 'c3000000-0000-0000-0000-000000000297')),
+  (select count(*)::integer from api.hybrid_search_contacts_v2('public-contact-token', (select value from query_vector), '{}', 0.5, 20, 0.5, 0.5, 10, 'tg', 10, 1, array['public-contact-token'], null, 'c3000000-0000-0000-0000-000000000297')),
   0,
   'public Hybrid Search preserves an explicit team scope'
 );
@@ -697,7 +706,7 @@ select set_config('request.jwt.claim.role', 'service_role', true);
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
 select is(
-  public.cmd_dataset_semantic_backfill('unitgroups', 10, null, null, false)->>'already_queued_count',
+  private.cmd_dataset_semantic_backfill('unitgroups', 10, null, null, false)->>'already_queued_count',
   '1',
   'bounded backfill recognizes already queued extraction work'
 );
@@ -726,13 +735,13 @@ select set_config('request.jwt.claim.role', 'service_role', true);
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
 select is(
-  public.cmd_dataset_semantic_backfill('sources', 10, 'f9000000-0000-0000-0000-000000000000', null, false)->>'embedding_enqueued_count',
+  private.cmd_dataset_semantic_backfill('sources', 10, 'f9000000-0000-0000-0000-000000000000', null, false)->>'embedding_enqueued_count',
   '1',
   'bounded backfill can resume a row that has Markdown but lacks embedding_ft'
 );
 
 select is(
-  public.cmd_dataset_semantic_backfill('not_a_dataset', 10, null, null, false)->>'code',
+  private.cmd_dataset_semantic_backfill('not_a_dataset', 10, null, null, false)->>'code',
   'UNSUPPORTED_DATASET_TABLE',
   'bounded backfill rejects tables outside the four-table allow-list'
 );
@@ -760,7 +769,7 @@ select set_config('request.jwt.claim.role', 'service_role', true);
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
 select is(
-  public.cmd_dataset_semantic_backfill(
+  private.cmd_dataset_semantic_backfill(
     'flowproperties',
     10,
     'fe000000-0000-0000-0000-000000000000',

@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS "public"."lifecyclemodels" (
     "extracted_md" "text",
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
+    "search_text" "text"[],
     CONSTRAINT "lifecyclemodels_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100])))
 );
 
@@ -24,8 +25,10 @@ ALTER TABLE ONLY "public"."lifecyclemodels"
 
 ALTER TABLE "public"."lifecyclemodels" ENABLE ROW LEVEL SECURITY;
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."lifecyclemodels" TO "anon";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."lifecyclemodels" TO "anon";
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."lifecyclemodels" TO "authenticated";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."lifecyclemodels" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."lifecyclemodels" TO "service_role";
+
+GRANT SELECT ON TABLE "public"."lifecyclemodels" TO "api_internal_executor";

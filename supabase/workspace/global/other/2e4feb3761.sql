@@ -1,0 +1,1 @@
+COMMENT ON COLUMN "private"."lcia_scope_closure_artifact_write_sets"."worker_lease_token_sha256" IS 'One-way binding to the Worker lease generation. Raw lease authority is never persisted in the write-set registry or returned by status.';

@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-31
-lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
-lastReviewedNote: "已为 Issue #323 与 #329 复核：记录本地 Root/Reference Review 备份/切换 runner，以及与 Worker 精确兼容的隔离数据库和存储资格验证入口，不改变 schema workspace 行为。"
+lastReviewedAt: 2026-08-12
+lastReviewedCommit: aca7ed0f1d5894fadb958b940212022048e64f80
+lastReviewedNote: "已为 Issue #478 复核：现有 exact-local 刷新命令会捕获 RPC 级 statement timeout；脚本行为不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -46,6 +46,50 @@ related:
 本地迁移输出和审计 JSONL 文件应写入 `_artifacts/`，该目录已被 Git 忽略。
 
 ## 脚本列表
+
+### `test_full_schema_cutover_upgrade.sh`
+
+把本地数据库重建到全量 Schema 切换前的最后一个 migration，写入一条代表性业务数据，
+快照关系与函数身份、触发器、RLS 策略、约束及精确行数，再应用切换与契约收口
+migration，验证对象和数据完整保留、能力清单、幂等索引及 Data Product 消费者 façade
+已安装，并确认 API 函数不再向 PostgreSQL `PUBLIC` 角色开放执行权限。脚本还会应用
+Issue #422 运行时 ACL 修复，并在有数据升级后校验 authenticated RLS helper 与 Edge
+release façade 的精确授权。
+
+用法：
+
+```bash
+scripts/test_full_schema_cutover_upgrade.sh
+```
+
+此脚本仅用于本地验证，并会重置本地 Supabase 数据库。
+
+### `resolve_migration_head.py`
+
+从当前 checkout 的 `supabase/migrations` 目录输出最新的有效 migration 版本。
+如果目录为空、SQL migration 文件名不合法，或存在重复的 14 位版本号，脚本会
+fail closed，避免托管验证静默选择含糊的 head。
+
+```bash
+python scripts/resolve_migration_head.py
+```
+
+运行对应回归测试：
+
+```bash
+python scripts/test_resolve_migration_head.py
+```
+
+### `test_supabase_dev_workflow_contract.py`
+
+除非持久化 Dev workflow 在绑定目标项目后准确执行一次
+`supabase db push --include-all`，否则立即失败。该契约同时拒绝 Functions
+deploy/delete、`config push`、Management API 写操作和手工固定 migration head，
+并要求 Hosted job 使用同一 checkout 完成 exact-head readback。
+
+```bash
+python scripts/test_supabase_dev_workflow_contract.py
+```
 
 ### `data_migrations/tidas_schema_202606/runner.py`
 
@@ -132,6 +176,7 @@ python scripts/build_schema_workspace.py --environment local
 行为：
 
 - 先导出最新远程 schema
+- 规范化生成 SQL 视图的行尾空白，保证审查 diff 可重复
 - 重建 `global/` 和 `schemas/`
 - 保留 `supabase/workspace/README.md`
 - 保留 `supabase/workspace/README.zh-CN.md`
@@ -142,7 +187,17 @@ python scripts/build_schema_workspace.py --environment local
 - `remote_schema.sql`、`global/` 和 `schemas/` 中的手工修改都不稳定
 - 刷新时可能覆盖这些生成文件里尚未提交到 Git 的改动
 - 如果你希望 `--git-changes` 只反映后续手工修改，应在同步远程数据库并刷新 workspace 之后，先把新的 `supabase/workspace/schemas` 提交到 Git，再开始编辑
-- 远程 `dev` 仍是生成 schema 的权威目标。只有在已应用 migration 与托管目标一致，并对本次合同完成托管 catalog 定向检查后，才能提交本地重建产物。
+- 远程 `dev` 仍是生成 schema 的权威目标。Schema 变更 PR 可以提交 exact-local 审查快照，但必须先通过空库 migration 重建、定向合同测试，并再次生成证明无漂移。合并后，数据库专用 Dev 部署必须到达准确 head、托管 catalog 检查必须通过，还要将 remote-Dev 刷新结果与审查快照比较；若有漂移，以后续提交收口。
+
+### `build_database_types.py`
+
+生成纳入版本控制的 TypeScript 数据合同，仅覆盖 Data API 暴露的 `public` 与 `api` 两个 schema。
+
+```bash
+python scripts/build_database_types.py --environment local
+```
+
+只有在刻意以已链接的 Supabase 项目为来源时才使用 `--environment linked`。CI 会从本地完整 migration 状态重新生成，并在 `supabase/workspace/database.types.ts` 漂移时失败。
 
 ### `check_generated_workspace_legacy_tables.py`
 

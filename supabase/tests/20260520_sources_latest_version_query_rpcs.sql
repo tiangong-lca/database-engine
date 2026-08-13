@@ -39,7 +39,7 @@ values
     false
   );
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values
   ('26000000-0000-0000-0000-000000000001', '{"name":"Latest Source Team A"}'::jsonb, 1, false),
   ('26000000-0000-0000-0000-000000000002', '{"name":"Latest Source Team B"}'::jsonb, 2, false);
@@ -141,7 +141,7 @@ select set_config('request.jwt.claim.sub', '16000000-0000-0000-0000-000000000001
 select is(
   (
     select version::text
-    from public.get_latest_source_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000001')
+    from api.get_latest_source_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000001')
     where id = '36000000-0000-0000-0000-000000000001'
   ),
   '01.00.002',
@@ -152,7 +152,7 @@ select is(
 select is(
   (
     select max(total_count)
-    from public.get_latest_source_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000001')
+    from api.get_latest_source_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000001')
   ),
   3::bigint,
   'open source list total_count counts unique UUIDs, not version rows'
@@ -161,7 +161,7 @@ select is(
 select is(
   (
     select count(*)
-    from public.get_latest_source_versions(
+    from api.get_latest_source_versions(
       10,
       1,
       'tg',
@@ -178,7 +178,7 @@ select is(
 select is(
   (
     select version::text
-    from public.pgroonga_search_sources_latest(
+    from api.pgroonga_search_sources_latest(
       'Legacy matched source',
       '{}'::jsonb,
       10,
@@ -195,7 +195,7 @@ select is(
 select is(
   (
     select max(total_count)
-    from public.pgroonga_search_sources_latest(
+    from api.pgroonga_search_sources_latest(
       'Legacy matched source',
       '{}'::jsonb,
       10,
@@ -209,7 +209,7 @@ select is(
 );
 
 select is(
-  strpos(pg_get_functiondef('public.pgroonga_search_sources_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'user_id::text = this_user_id'),
+  strpos(pg_get_functiondef('api.pgroonga_search_sources_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'user_id::text = this_user_id'),
   0,
   'source latest search does not cast user_id on the my-data predicate'
 );
@@ -227,12 +227,12 @@ select ok(
 );
 
 select ok(
-  strpos(pg_get_functiondef('public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'join lateral') > 0,
+  strpos(pg_get_functiondef('api._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'join lateral') > 0,
   'source latest PGroonga search fetches latest versions with lateral index lookups'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'd.extracted_md &@~ $1') > 0,
+  strpos(pg_get_functiondef('api._search_simple_dataset_latest(regclass,text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'd.extracted_md &@~ $1') > 0,
   'source latest PGroonga search matches query_text against extracted_md'
 );
 
@@ -241,7 +241,7 @@ select ok(
     select 1
     from pg_proc p
     cross join unnest(p.proconfig) cfg
-    where p.oid = 'public.pgroonga_search_sources_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure
+    where p.oid = 'api.pgroonga_search_sources_latest(text,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure
       and cfg = 'statement_timeout=60s'
   ),
   'source latest PGroonga search has a function-level timeout budget'

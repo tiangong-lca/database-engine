@@ -23,17 +23,17 @@ end;
 $$;
 
 select ok(
-  strpos(pg_get_functiondef('private.hybrid_search_flows_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.search_flows_latest') > 0,
+  strpos(pg_get_functiondef('private.hybrid_search_flows_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'api.search_flows_latest') > 0,
   'flow hybrid search uses latest text search for text candidates'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.hybrid_search_processes_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.search_processes_latest') > 0,
+  strpos(pg_get_functiondef('private.hybrid_search_processes_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'api.search_processes_latest') > 0,
   'process hybrid search uses latest text search for text candidates'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.hybrid_search_lifecyclemodels_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'public.search_lifecyclemodels_latest') > 0,
+  strpos(pg_get_functiondef('private.hybrid_search_lifecyclemodels_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'api.search_lifecyclemodels_latest') > 0,
   'lifecyclemodel hybrid search uses latest text search for text candidates'
 );
 
@@ -43,7 +43,7 @@ select ok(
   'process hybrid search no longer depends on legacy process PGroonga helpers'
 );
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values
   ('a1000000-0000-0000-0000-000000000101', '{"email":"hybrid-search-owner@example.com"}'::jsonb, null),
   ('b2000000-0000-0000-0000-000000000101', '{"email":"hybrid-search-outsider@example.com"}'::jsonb, null);
@@ -89,7 +89,7 @@ with latest_zero_embedding(value) as (
 select is(
   (
     select id::text
-    from public.hybrid_search_flows_v2(
+    from api.hybrid_search_flows_v2(
       '(电子器件) OR (electronic component)',
       (select value from latest_zero_embedding),
       '{}',
@@ -115,7 +115,7 @@ with latest_zero_embedding(value) as (
 select is(
   (
     select id::text
-    from public.hybrid_search_flows_v2(
+    from api.hybrid_search_flows_v2(
       '(电子器件) OR (electronic component)',
       (select value from latest_zero_embedding),
       '{}',
@@ -139,7 +139,7 @@ with latest_zero_embedding(value) as (
   select '[' || array_to_string(array_fill('0'::text, array[1024]), ',') || ']'
 )
 select is(
-  (select count(*) from public.hybrid_search_flows_v2('hybrid-outsider-flow-token', (select value from latest_zero_embedding), '{}', 0.5, 20, 0.5, 0.5, 10, 'my', 10, 1)),
+  (select count(*) from api.hybrid_search_flows_v2('hybrid-outsider-flow-token', (select value from latest_zero_embedding), '{}', 0.5, 20, 0.5, 0.5, 10, 'my', 10, 1)),
   0::bigint,
   'flow hybrid my search cannot return another user text candidate'
 );
@@ -150,7 +150,7 @@ with latest_zero_embedding(value) as (
 select is(
   (
     select id::text
-    from public.hybrid_search_processes_v2(
+    from api.hybrid_search_processes_v2(
       '(正极材料) OR (cathode material)',
       (select value from latest_zero_embedding),
       '{}',
@@ -176,7 +176,7 @@ with latest_zero_embedding(value) as (
 select is(
   (
     select id::text
-    from public.hybrid_search_processes_v2(
+    from api.hybrid_search_processes_v2(
       '(正极材料) OR (cathode material)',
       (select value from latest_zero_embedding),
       '{}',
@@ -200,7 +200,7 @@ with latest_zero_embedding(value) as (
   select '[' || array_to_string(array_fill('0'::text, array[1024]), ',') || ']'
 )
 select is(
-  (select count(*) from public.hybrid_search_processes_v2('hybrid-outsider-process-token', (select value from latest_zero_embedding), '{}', 0.5, 20, 0.5, 0.5, 10, 'my', 10, 1)),
+  (select count(*) from api.hybrid_search_processes_v2('hybrid-outsider-process-token', (select value from latest_zero_embedding), '{}', 0.5, 20, 0.5, 0.5, 10, 'my', 10, 1)),
   0::bigint,
   'process hybrid my search cannot return another user text candidate'
 );
@@ -211,7 +211,7 @@ with latest_zero_embedding(value) as (
 select is(
   (
     select id::text
-    from public.hybrid_search_lifecyclemodels_v2(
+    from api.hybrid_search_lifecyclemodels_v2(
       '(交流电) OR (electricity)',
       (select value from latest_zero_embedding),
       '{}',
@@ -237,7 +237,7 @@ with latest_zero_embedding(value) as (
 select is(
   (
     select id::text
-    from public.hybrid_search_lifecyclemodels_v2(
+    from api.hybrid_search_lifecyclemodels_v2(
       '(交流电) OR (electricity)',
       (select value from latest_zero_embedding),
       '{}',

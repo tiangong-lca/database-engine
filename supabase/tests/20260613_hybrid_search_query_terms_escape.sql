@@ -72,7 +72,7 @@ select pg_temp.disable_trigger_if_exists('public.processes'::regclass, 'process_
 select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodels_json_sync_trigger');
 select pg_temp.disable_trigger_if_exists('public.lifecyclemodels'::regclass, 'lifecyclemodel_extract_md_trigger_insert');
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values
   ('a6130000-0000-0000-0000-000000000001', '{"email":"query-terms-owner@example.com"}'::jsonb, null),
   ('b6130000-0000-0000-0000-000000000001', '{"email":"query-terms-outsider@example.com"}'::jsonb, null);
@@ -169,13 +169,32 @@ values
     now()
   );
 
+update public.flows
+set search_text = array[extracted_md]
+where id in (
+  'f6130000-0000-0000-0000-000000000001'::uuid,
+  'f6130000-0000-0000-0000-000000000002'::uuid,
+  'f6130000-0000-0000-0000-000000000003'::uuid
+);
+
+update public.processes
+set search_text = array[extracted_md]
+where id = 'e6130000-0000-0000-0000-000000000001'::uuid;
+
+update public.lifecyclemodels
+set search_text = array[extracted_md]
+where id in (
+  'd6130000-0000-0000-0000-000000000001'::uuid,
+  'd6130000-0000-0000-0000-000000000002'::uuid
+);
+
 with chemical(term) as (
   values ('Propanoic acid, 2-[4-[(6-chloro-2-quinoxalinyl)oxy]phenoxy]-, 2-[[(1-methylethylidene)amino]oxy]ethyl ester, (2R)-')
 )
 select is(
   (
     select id::text
-    from public.search_flows_latest(
+    from api.search_flows_latest(
       '(111479-05-1) OR (Propanoic acid, 2-[4-[(6-chloro-2-quinoxalinyl)oxy]phenoxy]-, 2-[[(1-methylethylidene)amino]oxy]ethyl ester, (2R)-)',
       '{}'::jsonb,
       '{}'::jsonb,
@@ -202,7 +221,7 @@ chemical(term) as (
 select is(
   (
     select id::text
-    from public.hybrid_search_flows_v2(
+    from api.hybrid_search_flows_v2(
       '(111479-05-1) OR (Propanoic acid, 2-[4-[(6-chloro-2-quinoxalinyl)oxy]phenoxy]-, 2-[[(1-methylethylidene)amino]oxy]ethyl ester, (2R)-)',
       (select value from latest_zero_embedding),
       '{}',
@@ -225,7 +244,7 @@ select is(
 select is(
   (
     select id::text
-    from public.search_processes_latest(
+    from api.search_processes_latest(
       'ignored-invalid-query (alternating current) OR (AC power)',
       '{}'::jsonb,
       '{}'::jsonb,
@@ -247,7 +266,7 @@ select is(
 select is(
   (
     select id::text
-    from public.search_processes_latest(
+    from api.search_processes_latest(
       'alternating current',
       '{}'::jsonb,
       '{}'::jsonb,
@@ -268,7 +287,7 @@ select is(
 select is(
   (
     select id::text
-    from public.search_lifecyclemodels_latest(
+    from api.search_lifecyclemodels_latest(
       'ignored-invalid-query (硅酸盐水泥)',
       '{}'::jsonb,
       '{}'::jsonb,
@@ -292,7 +311,7 @@ with chemical(term) as (
 select is(
   (
     select id::text
-    from public.search_flows_latest(
+    from api.search_flows_latest(
       (select term from chemical),
       '{}'::jsonb,
       '{}'::jsonb,
@@ -312,7 +331,7 @@ select is(
 select is(
   (
     select id::text
-    from public.search_lifecyclemodels_latest(
+    from api.search_lifecyclemodels_latest(
       'legacy fallback term',
       '{}'::jsonb,
       '{}'::jsonb,
@@ -332,7 +351,7 @@ select is(
 select is(
   (
     select id::text
-    from public.search_flows_latest(
+    from api.search_flows_latest(
       'ignored',
       '{}'::jsonb,
       '{}'::jsonb,
@@ -353,7 +372,7 @@ select is(
 select is(
   (
     select count(*)
-    from public.search_flows_latest(
+    from api.search_flows_latest(
       'ignored',
       '{}'::jsonb,
       '{}'::jsonb,
@@ -371,25 +390,25 @@ select is(
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_md &@~| $14') > 0
+  strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.search_text &@~| $14') > 0
     and strpos(pg_get_functiondef('private.search_flows_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'f.extracted_text &@~') = 0,
   'flow latest implementation always uses escaped term-array text search'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'p.extracted_md &@~| $11') > 0
-    and strpos(pg_get_functiondef('private.search_processes_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[])'::regprocedure), 'p.extracted_text &@~') = 0,
+  strpos(pg_get_functiondef('private.search_processes_latest_v2_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'::regprocedure), 'p.search_text &@~| $11') > 0
+    and strpos(pg_get_functiondef('private.search_processes_latest_v2_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'::regprocedure), 'p.extracted_text &@~') = 0,
   'process latest implementation always uses escaped term-array text search'
 );
 
 select ok(
-  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'l.extracted_md &@~| $10') > 0
+  strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'l.search_text &@~| $10') > 0
     and strpos(pg_get_functiondef('private.search_lifecyclemodels_latest_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text[])'::regprocedure), 'l.extracted_text &@~') = 0,
   'lifecyclemodel latest implementation always uses escaped term-array text search'
 );
 
 select ok(
-  strpos(pg_get_functiondef('public.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'query_terms') > 0,
+  strpos(pg_get_functiondef('api.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'::regprocedure), 'query_terms') > 0,
   'flow hybrid signature exposes query_terms as the trailing optional argument'
 );
 

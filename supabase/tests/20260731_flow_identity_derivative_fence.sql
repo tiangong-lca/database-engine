@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 create extension if not exists dblink with schema extensions;
 
-select extensions.plan(8);
+select extensions.plan(9);
 
 select extensions.ok(
   (
@@ -17,7 +17,7 @@ select extensions.ok(
       and trigger.tgname = 'dataset_flow_identity_flow_active_fence'
       and not trigger.tgisinternal
   ),
-  'Flow UPDATE actor fence excludes only the three guard-neutral derivative columns'
+  'Flow UPDATE actor fence excludes the four guard-neutral derivative columns'
 );
 
 select extensions.ok(
@@ -47,7 +47,7 @@ insert into public.flows (
   'fa324000-0000-4000-8000-000000000001'::uuid,
   '01.00.000',
   'fa324000-0000-4000-8000-000000000002'::uuid,
-  100,
+  0,
   '{}'::jsonb,
   '{}'::json
 );
@@ -95,6 +95,15 @@ select extensions.lives_ok(
   'embedding value/timestamp Flow update bypasses a busy owner actor fence'
 );
 
+select extensions.lives_ok(
+  $test$
+    update public.flows
+    set search_text = array['multilingual lexical projection']::text[]
+    where id = 'fa324000-0000-4000-8000-000000000001'::uuid
+  $test$,
+  'search_text-only Flow update bypasses a busy owner actor fence'
+);
+
 select extensions.throws_ok(
   $test$
     update public.flows
@@ -109,7 +118,7 @@ select extensions.throws_ok(
 select extensions.throws_ok(
   $test$
     update public.flows
-    set state_code = 0
+    set state_code = 1
     where id = 'fa324000-0000-4000-8000-000000000001'::uuid
   $test$,
   '55P03',

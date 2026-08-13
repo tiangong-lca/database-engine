@@ -5,58 +5,58 @@ set local search_path = extensions, public, auth;
 
 select no_plan();
 
-select has_table('public', 'lca_release_runs', 'release runs table exists');
-select has_table('public', 'lca_release_dataset_versions', 'release dataset index exists');
-select has_table('public', 'lca_release_artifacts', 'release artifacts table exists');
-select has_table('public', 'lca_release_approvals', 'release approvals table exists');
-select has_table('public', 'lca_release_publications', 'release publications table exists');
+select has_table('private', 'lca_release_runs', 'release runs table exists');
+select has_table('private', 'lca_release_dataset_versions', 'release dataset index exists');
+select has_table('private', 'lca_release_artifacts', 'release artifacts table exists');
+select has_table('private', 'lca_release_approvals', 'release approvals table exists');
+select has_table('private', 'lca_release_publications', 'release publications table exists');
 
 select has_function(
-  'public', 'cmd_lca_release_prepare',
+  'api', 'cmd_lca_release_prepare',
   array['uuid', 'text', 'text', 'text', 'jsonb', 'text', 'text', 'jsonb', 'text', 'text', 'jsonb'],
   'release prepare command exists'
 );
 select has_function(
-  'public', 'assert_lca_release_manager', array[]::text[],
+  'api', 'assert_lca_release_manager', array[]::text[],
   'side-effect-free release manager assertion exists'
 );
 select has_function(
-  'public', 'cmd_lca_release_artifacts_finalize_service',
+  'private', 'cmd_lca_release_artifacts_finalize_service',
   array['uuid', 'text', 'jsonb', 'text', 'jsonb', 'jsonb'],
   'service artifact finalize command exists'
 );
 select has_function(
-  'public', 'cmd_lca_release_approve',
+  'api', 'cmd_lca_release_approve',
   array['uuid', 'text', 'timestamptz', 'text', 'jsonb'],
   'release approval command exists'
 );
 select has_function(
-  'public', 'cmd_lca_release_publish',
+  'api', 'cmd_lca_release_publish',
   array['uuid', 'uuid', 'text', 'text', 'text', 'text', 'text', 'jsonb'],
   'release publish command exists'
 );
 select has_function(
-  'public', 'cmd_lca_release_readback_verify',
+  'api', 'cmd_lca_release_readback_verify',
   array['uuid', 'text', 'jsonb', 'jsonb'],
   'release readback command exists'
 );
 select has_function(
-  'public', 'cmd_lca_release_unpublish',
+  'api', 'cmd_lca_release_unpublish',
   array['uuid', 'text', 'jsonb'],
   'release unpublish command exists'
 );
-select has_function('public', 'get_lca_release_run', array['uuid'], 'release run query exists');
-select has_function('public', 'get_current_lca_release', array[]::text[], 'current release query exists');
+select has_function('api', 'get_lca_release_run', array['uuid'], 'release run query exists');
+select has_function('api', 'get_current_lca_release', array[]::text[], 'current release query exists');
 select has_function(
-  'public', 'get_current_lca_release_process', array['uuid', 'text'],
+  'api', 'get_current_lca_release_process', array['uuid', 'text'],
   'current release process identity projection exists'
 );
 select has_function(
-  'public', 'get_lca_release_artifact_download', array['uuid'],
+  'api', 'get_lca_release_artifact_download', array['uuid'],
   'release artifact download projection exists'
 );
 select has_function(
-  'public', 'get_lcia_result_calculation_bundle', array['uuid'],
+  'api', 'get_lcia_result_calculation_bundle', array['uuid'],
   'calculation bundle preview query exists'
 );
 
@@ -64,29 +64,29 @@ select ok(
   (select bool_and(relrowsecurity)
    from pg_class
    where oid = any(array[
-     'public.lca_release_runs'::regclass,
-     'public.lca_release_dataset_versions'::regclass,
-     'public.lca_release_artifacts'::regclass,
-     'public.lca_release_approvals'::regclass,
-     'public.lca_release_publications'::regclass
+     'private.lca_release_runs'::regclass,
+     'private.lca_release_dataset_versions'::regclass,
+     'private.lca_release_artifacts'::regclass,
+     'private.lca_release_approvals'::regclass,
+     'private.lca_release_publications'::regclass
    ])),
   'all release tables have RLS enabled'
 );
 select ok(
-  not has_table_privilege('authenticated', 'public.lca_release_runs', 'SELECT')
-  and not has_table_privilege('authenticated', 'public.lca_release_runs', 'INSERT')
-  and not has_table_privilege('anon', 'public.lca_release_publications', 'SELECT'),
+  not has_table_privilege('authenticated', 'private.lca_release_runs', 'SELECT')
+  and not has_table_privilege('authenticated', 'private.lca_release_runs', 'INSERT')
+  and not has_table_privilege('anon', 'private.lca_release_publications', 'SELECT'),
   'anon and authenticated roles cannot access release tables directly'
 );
 select ok(
-  not has_table_privilege('service_role', 'public.lca_release_runs', 'INSERT')
-  and not has_table_privilege('service_role', 'public.lca_release_publications', 'INSERT'),
+  not has_table_privilege('service_role', 'private.lca_release_runs', 'INSERT')
+  and not has_table_privilege('service_role', 'private.lca_release_publications', 'INSERT'),
   'service role cannot bypass release commands with direct table writes'
 );
 select ok(
   has_function_privilege(
     'service_role',
-    'public.cmd_lca_release_artifacts_finalize_service(uuid,text,jsonb,text,jsonb,jsonb)',
+    'private.cmd_lca_release_artifacts_finalize_service(uuid,text,jsonb,text,jsonb,jsonb)',
     'EXECUTE'
   ),
   'service role can execute only artifact finalization callback'
@@ -94,20 +94,20 @@ select ok(
 select ok(
   not has_function_privilege(
     'service_role',
-    'public.cmd_lca_release_publish(uuid,uuid,text,text,text,text,text,jsonb)',
+    'api.cmd_lca_release_publish(uuid,uuid,text,text,text,text,text,jsonb)',
     'EXECUTE'
   )
   and not has_function_privilege(
     'service_role',
-    'public.cmd_lca_release_approve(uuid,text,timestamptz,text,jsonb)',
+    'api.cmd_lca_release_approve(uuid,text,timestamptz,text,jsonb)',
     'EXECUTE'
   ),
   'service role cannot approve or publish releases'
 );
 select ok(
-  has_function_privilege('authenticated', 'public.assert_lca_release_manager()', 'EXECUTE')
-  and not has_function_privilege('anon', 'public.assert_lca_release_manager()', 'EXECUTE')
-  and not has_function_privilege('service_role', 'public.assert_lca_release_manager()', 'EXECUTE'),
+  has_function_privilege('authenticated', 'api.assert_lca_release_manager()', 'EXECUTE')
+  and not has_function_privilege('anon', 'api.assert_lca_release_manager()', 'EXECUTE')
+  and not has_function_privilege('service_role', 'api.assert_lca_release_manager()', 'EXECUTE'),
   'only authenticated user sessions can invoke the release manager assertion'
 );
 
@@ -136,16 +136,16 @@ values
     now(), now(), false, false
   );
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values
   ('a7160000-0000-4000-8000-000000001001', '{"email":"release-manager@example.com"}'::jsonb, null),
   ('a7160000-0000-4000-8000-000000001002', '{"email":"release-reader@example.com"}'::jsonb, null);
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values ('00000000-0000-0000-0000-000000000000', '{"name":"System Team"}'::jsonb, 0, false)
 on conflict (id) do nothing;
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values (
   'a7160000-0000-4000-8000-000000001001',
   '00000000-0000-0000-0000-000000000000',
@@ -291,19 +291,27 @@ as $$
   )
 $$;
 
+-- The schema cutover closes postgres-owned function EXECUTE by default. These
+-- helpers are transaction-local test fixtures, so grant only the two roles
+-- that evaluate their payloads below.
+grant execute on function pg_temp.release_publish_plan() to authenticated;
+grant execute on function pg_temp.report_ref(text) to service_role;
+grant execute on function pg_temp.release_manifest() to service_role;
+grant execute on function pg_temp.uploaded_artifacts() to service_role;
+
 set local role authenticated;
 select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 select set_config('request.jwt.claim.sub', '', true);
 
 select is(
-  public.assert_lca_release_manager()->>'code',
+  api.assert_lca_release_manager()->>'code',
   'auth_required',
   'publishable-key context without a user fails the manager assertion'
 );
 
 select is(
-  public.cmd_lca_release_prepare(
+  api.cmd_lca_release_prepare(
     'a7160000-0000-4000-8000-000000002001', '01.00.000', repeat('a', 64), repeat('b', 64),
     jsonb_build_object('manifestUrl', 's3://bundle/manifest.json'), repeat('c', 64), repeat('d', 64),
     pg_temp.release_publish_plan(), repeat('e', 64), 'release-prepare-1', '{}'::jsonb
@@ -315,13 +323,13 @@ select is(
 select set_config('request.jwt.claim.sub', 'a7160000-0000-4000-8000-000000001002', true);
 
 select is(
-  public.assert_lca_release_manager()->>'code',
+  api.assert_lca_release_manager()->>'code',
   'not_data_product_manager',
   'ordinary authenticated user fails the side-effect-free manager assertion'
 );
 
 select is(
-  public.cmd_lca_release_prepare(
+  api.cmd_lca_release_prepare(
     'a7160000-0000-4000-8000-000000002001', '01.00.000', repeat('a', 64), repeat('b', 64),
     jsonb_build_object('manifestUrl', 's3://bundle/manifest.json'), repeat('c', 64), repeat('d', 64),
     pg_temp.release_publish_plan(), repeat('e', 64), 'release-prepare-1', '{}'::jsonb
@@ -330,14 +338,14 @@ select is(
   'ordinary authenticated user cannot prepare releases'
 );
 select is(
-  public.cmd_lca_release_approve(
+  api.cmd_lca_release_approve(
     'a7160000-0000-4000-8000-000000002001', repeat('e', 64), null, null, '{}'::jsonb
   )->>'code',
   'not_data_product_manager',
   'ordinary authenticated user cannot approve releases'
 );
 select is(
-  public.get_lca_release_run('a7160000-0000-4000-8000-000000002001')->>'code',
+  api.get_lca_release_run('a7160000-0000-4000-8000-000000002001')->>'code',
   'release_run_not_found',
   'uncreated release remains absent'
 );
@@ -345,13 +353,13 @@ select is(
 select set_config('request.jwt.claim.sub', 'a7160000-0000-4000-8000-000000001001', true);
 
 select is(
-  public.assert_lca_release_manager()->'data'->>'userId',
+  api.assert_lca_release_manager()->'data'->>'userId',
   'a7160000-0000-4000-8000-000000001001',
   'manager assertion returns the live authenticated manager identity'
 );
 
 select is(
-  public.cmd_lca_release_prepare(
+  api.cmd_lca_release_prepare(
     'a7160000-0000-4000-8000-000000002001', '01.00.000', repeat('a', 64), repeat('b', 64),
     jsonb_build_object('manifestUrl', 's3://bundle/manifest.json'), repeat('c', 64), repeat('d', 64),
     pg_temp.release_publish_plan() || jsonb_build_object('planHash', repeat('0', 64)),
@@ -362,7 +370,7 @@ select is(
 );
 
 select is(
-  public.cmd_lca_release_prepare(
+  api.cmd_lca_release_prepare(
     'a7160000-0000-4000-8000-000000002001', '01.00.000', repeat('a', 64), repeat('b', 64),
     jsonb_build_object('manifestUrl', 's3://bundle/manifest.json'), repeat('c', 64), repeat('d', 64),
     pg_temp.release_publish_plan(), repeat('e', 64), 'release-prepare-1', '{}'::jsonb
@@ -371,7 +379,7 @@ select is(
   'manager prepares an exact immutable release plan'
 );
 select ok(
-  (public.cmd_lca_release_prepare(
+  (api.cmd_lca_release_prepare(
     'a7160000-0000-4000-8000-000000002001', '01.00.000', repeat('a', 64), repeat('b', 64),
     jsonb_build_object('manifestUrl', 's3://bundle/manifest.json'), repeat('c', 64), repeat('d', 64),
     pg_temp.release_publish_plan(), repeat('e', 64), 'release-prepare-1', '{}'::jsonb
@@ -379,7 +387,7 @@ select ok(
   'identical prepare retry is idempotent'
 );
 select is(
-  public.cmd_lca_release_prepare(
+  api.cmd_lca_release_prepare(
     'a7160000-0000-4000-8000-000000002001', '01.00.000', repeat('a', 64), repeat('0', 64),
     jsonb_build_object('manifestUrl', 's3://bundle/manifest.json'), repeat('c', 64), repeat('d', 64),
     pg_temp.release_publish_plan(), repeat('e', 64), 'release-prepare-1', '{}'::jsonb
@@ -388,7 +396,7 @@ select is(
   'same release id cannot be rebound to different inputs'
 );
 select is(
-  public.get_lca_release_run('a7160000-0000-4000-8000-000000002001')->'data'->'calculationBundle'->>'manifestUrl',
+  api.get_lca_release_run('a7160000-0000-4000-8000-000000002001')->'data'->'calculationBundle'->>'manifestUrl',
   's3://bundle/manifest.json',
   'manager private read exposes Calculation Bundle ref'
 );
@@ -398,7 +406,7 @@ select set_config('request.jwt.claim.role', 'service_role', true);
 select set_config('request.jwt.claims', '{"role":"service_role"}', true);
 
 select is(
-  public.cmd_lca_release_artifacts_finalize_service(
+  private.cmd_lca_release_artifacts_finalize_service(
     'a7160000-0000-4000-8000-000000002001', repeat('0', 64), pg_temp.release_manifest(),
     repeat('9', 64), pg_temp.uploaded_artifacts(), '{}'::jsonb
   )->>'code',
@@ -406,7 +414,7 @@ select is(
   'service finalize cannot change the prepared plan hash'
 );
 select is(
-  public.cmd_lca_release_artifacts_finalize_service(
+  private.cmd_lca_release_artifacts_finalize_service(
     'a7160000-0000-4000-8000-000000002001', repeat('e', 64),
     jsonb_set(pg_temp.release_manifest(), '{validation,numericParity,status}', '"failed"'::jsonb),
     repeat('9', 64), pg_temp.uploaded_artifacts(), '{}'::jsonb
@@ -415,7 +423,7 @@ select is(
   'service finalize rejects a failed numerical gate'
 );
 select is(
-  public.cmd_lca_release_artifacts_finalize_service(
+  private.cmd_lca_release_artifacts_finalize_service(
     'a7160000-0000-4000-8000-000000002001', repeat('e', 64),
     jsonb_set(
       pg_temp.release_manifest(), '{datasets,0,sourceProcess,id}',
@@ -427,7 +435,7 @@ select is(
   'service finalize requires each Unit Process source identity to map to itself'
 );
 select is(
-  public.cmd_lca_release_artifacts_finalize_service(
+  private.cmd_lca_release_artifacts_finalize_service(
     'a7160000-0000-4000-8000-000000002001', repeat('e', 64),
     jsonb_set(
       pg_temp.release_manifest(), '{datasets,1,sourceProcess,id}',
@@ -439,7 +447,7 @@ select is(
   'service finalize requires one complete Unit Process, LifecycleModel, and Result identity set per source Process'
 );
 select is(
-  public.cmd_lca_release_artifacts_finalize_service(
+  private.cmd_lca_release_artifacts_finalize_service(
     'a7160000-0000-4000-8000-000000002001', repeat('e', 64), pg_temp.release_manifest(),
     repeat('9', 64), pg_temp.uploaded_artifacts(), '{}'::jsonb
   )->'data'->>'status',
@@ -447,7 +455,7 @@ select is(
   'service finalizes exact validated artifacts without publishing'
 );
 select ok(
-  (public.cmd_lca_release_artifacts_finalize_service(
+  (private.cmd_lca_release_artifacts_finalize_service(
     'a7160000-0000-4000-8000-000000002001', repeat('e', 64), pg_temp.release_manifest(),
     repeat('9', 64), pg_temp.uploaded_artifacts(), '{}'::jsonb
   )->>'reused')::boolean,
@@ -455,10 +463,10 @@ select ok(
 );
 
 reset role;
-select is((select count(*)::integer from public.lca_release_artifacts), 4, 'four package refs are durable');
-select is((select count(*)::integer from public.lca_release_dataset_versions), 3, 'dataset identity/version index is durable');
+select is((select count(*)::integer from private.lca_release_artifacts), 4, 'four package refs are durable');
+select is((select count(*)::integer from private.lca_release_dataset_versions), 3, 'dataset identity/version index is durable');
 select is(
-  (select status from public.lca_release_runs where id = 'a7160000-0000-4000-8000-000000002001'),
+  (select status from private.lca_release_runs where id = 'a7160000-0000-4000-8000-000000002001'),
   'ready_for_approval',
   'service callback cannot advance beyond ready_for_approval'
 );
@@ -469,7 +477,7 @@ select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 select set_config('request.jwt.claim.sub', 'a7160000-0000-4000-8000-000000001001', true);
 
 select is(
-  public.cmd_lca_release_approve(
+  api.cmd_lca_release_approve(
     'a7160000-0000-4000-8000-000000002001', repeat('0', 64), null, null, '{}'::jsonb
   )->>'code',
   'publish_plan_hash_mismatch',
@@ -490,7 +498,7 @@ select
   (result->'data'->>'approvalId')::uuid,
   result->'data'->>'approvalHash'
 from (
-  select public.cmd_lca_release_approve(
+  select api.cmd_lca_release_approve(
     'a7160000-0000-4000-8000-000000002001', repeat('e', 64), now() + interval '1 day',
     'release approved by data manager', jsonb_build_object('correlationId', 'approval-1')
   ) as result
@@ -502,14 +510,14 @@ select matches(
   'approval creates a durable receipt hash'
 );
 select ok(
-  (public.cmd_lca_release_approve(
+  (api.cmd_lca_release_approve(
     'a7160000-0000-4000-8000-000000002001', repeat('e', 64), null, null, '{}'::jsonb
   )->>'reused')::boolean,
   'approval retry reuses the active receipt'
 );
 
 select is(
-  public.cmd_lca_release_publish(
+  api.cmd_lca_release_publish(
     'a7160000-0000-4000-8000-000000002001',
     (select id from release_test_receipts where label = 'approval'),
     repeat('0', 64), repeat('e', 64), 'release-publish-1', repeat('8', 64), null, '{}'::jsonb
@@ -523,7 +531,7 @@ select
   'publication',
   (result->'data'->>'publicationId')::uuid
 from (
-  select public.cmd_lca_release_publish(
+  select api.cmd_lca_release_publish(
     'a7160000-0000-4000-8000-000000002001',
     (select id from release_test_receipts where label = 'approval'),
     (select hash from release_test_receipts where label = 'approval'),
@@ -537,27 +545,27 @@ select ok((select id is not null from release_test_receipts where label = 'publi
 reset role;
 insert into release_test_receipts(label, id)
 select 'download_artifact', id
-from public.lca_release_artifacts
+from private.lca_release_artifacts
 order by profile_id, artifact_format
 limit 1;
 insert into release_test_receipts(label, payload)
 select
   'readback',
   jsonb_agg(jsonb_build_object('artifactId', id, 'sha256', sha256) order by id)
-from public.lca_release_artifacts
+from private.lca_release_artifacts
 where release_run_id = 'a7160000-0000-4000-8000-000000002001';
 select ok(
-  (select bool_and(pinned and published_at is not null) from public.lca_release_artifacts),
+  (select bool_and(pinned and published_at is not null) from private.lca_release_artifacts),
   'published artifacts are permanently pinned'
 );
 select is(
-  (select status from public.lca_release_approvals where id = (select id from release_test_receipts where label = 'approval')),
+  (select status from private.lca_release_approvals where id = (select id from release_test_receipts where label = 'approval')),
   'consumed',
   'publish consumes the durable approval'
 );
 select ok(
   exists (
-    select 1 from public.lca_release_publications
+    select 1 from private.lca_release_publications
     where id = (select id from release_test_receipts where label = 'publication')
       and approved_by = 'a7160000-0000-4000-8000-000000001001'
       and executed_by = 'a7160000-0000-4000-8000-000000001001'
@@ -571,7 +579,7 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 select set_config('request.jwt.claim.sub', 'a7160000-0000-4000-8000-000000001001', true);
 select ok(
-  (public.cmd_lca_release_publish(
+  (api.cmd_lca_release_publish(
     'a7160000-0000-4000-8000-000000002001',
     (select id from release_test_receipts where label = 'approval'),
     (select hash from release_test_receipts where label = 'approval'),
@@ -586,28 +594,28 @@ select set_config('request.jwt.claims', '{"role":"anon"}', true);
 select set_config('request.jwt.claim.sub', '', true);
 
 select is(
-  public.get_current_lca_release()->'data'->>'releaseVersion',
+  api.get_current_lca_release()->'data'->>'releaseVersion',
   '01.00.000',
   'anonymous consumer can read the current public release projection'
 );
 select is(
-  public.get_current_lca_release()->'data'->>'createdBy',
+  api.get_current_lca_release()->'data'->>'createdBy',
   null,
   'public release projection does not expose the manager user id'
 );
 select is(
-  public.get_current_lca_release()->'data'->'validation'->>'semanticRoundtrip',
+  api.get_current_lca_release()->'data'->'validation'->>'semanticRoundtrip',
   'passed',
   'public release projection exposes sanitized validation status'
 );
 select is(
-  (public.get_current_lca_release()->'data'->'datasetCounts'->>'result_process')::integer,
+  (api.get_current_lca_release()->'data'->'datasetCounts'->>'result_process')::integer,
   1,
   'public release projection exposes role counts without dataset object locators'
 );
 select is(
   jsonb_array_length(
-    public.get_current_lca_release_process(
+    api.get_current_lca_release_process(
       'a7160000-0000-4000-8000-000000003001', '01.00.000'
     )->'data'->'datasets'
   ),
@@ -616,7 +624,7 @@ select is(
 );
 select is(
   jsonb_path_query_first(
-    public.get_current_lca_release_process(
+    api.get_current_lca_release_process(
       'a7160000-0000-4000-8000-000000003001', '01.00.000'
     ),
     '$.data.datasets[*] ? (@.role == "lifecycle_model").uuid'
@@ -625,26 +633,32 @@ select is(
   'process projection exposes the generated LifecycleModel identity'
 );
 select ok(
-  public.get_current_lca_release_process(
+  api.get_current_lca_release_process(
     'a7160000-0000-4000-8000-000000003001', '01.00.000'
   )::text not like '%objectKey%'
-  and public.get_current_lca_release_process(
+  and api.get_current_lca_release_process(
     'a7160000-0000-4000-8000-000000003001', '01.00.000'
   )::text not like '%artifact_ref%',
   'process projection does not expose internal storage locators'
 );
 select is(
-  public.get_current_lca_release_process(
+  api.get_current_lca_release_process(
     'a7160000-0000-4000-8000-000000009999', '01.00.000'
   )->>'code',
   'release_process_not_found',
   'process projection has an explicit legacy or out-of-scope empty state'
 );
+
+set local role service_role;
+select set_config('request.jwt.claim.role', 'service_role', true);
+select set_config('request.jwt.claims', '{"role":"service_role"}', true);
+select set_config('request.jwt.claim.sub', '', true);
+
 select ok(
-  (public.get_lca_release_artifact_download(
+  (api.get_lca_release_artifact_download(
     (select id from release_test_receipts where label = 'download_artifact')
   )->'data'->>'public')::boolean,
-  'published artifact is eligible for Edge signed download'
+  'published artifact is eligible for Edge service-mediated signed download'
 );
 
 set local role authenticated;
@@ -653,7 +667,7 @@ select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 select set_config('request.jwt.claim.sub', 'a7160000-0000-4000-8000-000000001001', true);
 
 select is(
-  public.cmd_lca_release_readback_verify(
+  api.cmd_lca_release_readback_verify(
     'a7160000-0000-4000-8000-000000002001', repeat('0', 64), '[]'::jsonb, '{}'::jsonb
   )->>'code',
   'readback_manifest_hash_mismatch',
@@ -661,7 +675,7 @@ select is(
 );
 
 select is(
-  public.cmd_lca_release_readback_verify(
+  api.cmd_lca_release_readback_verify(
     'a7160000-0000-4000-8000-000000002001',
     repeat('9', 64),
     (select payload from release_test_receipts where label = 'readback'),
@@ -674,7 +688,7 @@ select is(
 reset role;
 select throws_ok(
   $$
-    update public.lca_release_runs
+    update private.lca_release_runs
     set publish_plan_hash = repeat('0', 64)
     where id = 'a7160000-0000-4000-8000-000000002001'
   $$,
@@ -684,7 +698,7 @@ select throws_ok(
 );
 select throws_ok(
   $$
-    update public.lca_release_artifacts
+    update private.lca_release_artifacts
     set sha256 = repeat('0', 64)
     where release_run_id = 'a7160000-0000-4000-8000-000000002001'
   $$,
@@ -699,7 +713,7 @@ select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 select set_config('request.jwt.claim.sub', 'a7160000-0000-4000-8000-000000001002', true);
 
 select is(
-  public.cmd_lca_release_unpublish(
+  api.cmd_lca_release_unpublish(
     (select id from release_test_receipts where label = 'publication'),
     'ordinary user attempt', '{}'::jsonb
   )->>'code',
@@ -709,7 +723,7 @@ select is(
 
 select set_config('request.jwt.claim.sub', 'a7160000-0000-4000-8000-000000001001', true);
 select is(
-  public.cmd_lca_release_unpublish(
+  api.cmd_lca_release_unpublish(
     (select id from release_test_receipts where label = 'publication'),
     'channel withdrawal test', jsonb_build_object('correlationId', 'unpublish-1')
   )->'data'->>'status',
@@ -722,7 +736,7 @@ select set_config('request.jwt.claim.role', 'anon', true);
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
 select set_config('request.jwt.claim.sub', '', true);
 select is(
-  public.get_current_lca_release()->>'code',
+  api.get_current_lca_release()->>'code',
   'publication_not_found',
   'unpublished release is removed from the current public projection'
 );

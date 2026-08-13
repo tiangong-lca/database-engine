@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "pending_embedding_jobs_pending_scope_key" ON "util"."pending_embedding_jobs" USING "btree" ("schema_name", "table_name", "record_id", "record_version", "embedding_column", "edge_function") WHERE ("status" = 'pending'::"text");

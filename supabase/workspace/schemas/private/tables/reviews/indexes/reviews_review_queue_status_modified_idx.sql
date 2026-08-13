@@ -1,0 +1,1 @@
+CREATE INDEX "reviews_review_queue_status_modified_idx" ON "private"."reviews" USING "btree" ("review_kind", "state_code", "modified_at" DESC, "id") WHERE ("review_kind" = ANY (ARRAY['root'::"text", 'reference'::"text"]));

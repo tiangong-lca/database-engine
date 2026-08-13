@@ -1248,7 +1248,7 @@ begin
     and state_code = 0
     and exists (
       select 1
-      from public.command_audit_log as fixture
+      from private.command_audit_log as fixture
       where fixture.command = ${sqlLiteral(FIXTURE_COMMAND)}
         and fixture.actor_user_id = ${sqlLiteral(context.actor.userId)}::uuid
         and fixture.target_table = ${sqlLiteral(FIXTURE_TARGET_TABLE)}

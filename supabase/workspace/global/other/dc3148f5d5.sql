@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."cmd_review_finalize_approve"("p_review_id" "uuid", "p_audit" "jsonb") IS 'Review Admin final approval. Reviewer decisions are advisory: completion is required, unanimous approval is not.';

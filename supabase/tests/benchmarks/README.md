@@ -14,12 +14,12 @@ match count `20`, lexical/semantic weights `0.5/0.5`, RRF `10`, and page
 `10/1`.
 
 Run only after independently confirming that the connection is the persistent
-staging ref `fotofiyqnuyvgtotswie` and the issue #292 migration is installed:
+staging ref `submidrhbtknjxfympna` and the issue #292 migration is installed:
 
 ```bash
 psql "$DATABASE_ENGINE_292_STAGING_URL" \
   -v benchmark_target=staging \
-  -v expected_project_ref=fotofiyqnuyvgtotswie \
+  -v expected_project_ref=submidrhbtknjxfympna \
   -v explain_output=/tmp/database-engine-292-hybrid-search-explain.log \
   -f supabase/tests/benchmarks/20260727_hybrid_search_staging_explain.sql
 ```

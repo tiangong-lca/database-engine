@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "lcia_scope_closure_checks_certificate_validity" BEFORE INSERT OR UPDATE ON "private"."lcia_scope_closure_checks" FOR EACH ROW EXECUTE FUNCTION "private"."lcia_scope_closure_certificate_validity_guard"();

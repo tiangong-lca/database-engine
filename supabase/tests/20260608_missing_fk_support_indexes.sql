@@ -40,7 +40,7 @@ select plan(23);
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'dataset_review_submit_gate_runs',
     array['supersedes_gate_run_id']
   ),
@@ -49,7 +49,7 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'lca_network_snapshots',
     array['lcia_method_id', 'lcia_method_version']
   ),
@@ -58,7 +58,7 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'lca_package_request_cache',
     array['export_artifact_id']
   ),
@@ -67,7 +67,7 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'lca_package_request_cache',
     array['report_artifact_id']
   ),
@@ -76,7 +76,7 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'lca_result_cache',
     array['snapshot_id']
   ),
@@ -85,7 +85,7 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'notifications',
     array['sender_user_id']
   ),
@@ -94,7 +94,7 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'worker_jobs',
     array['job_kind']
   ),
@@ -103,7 +103,7 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'lcia_document_validation_evidence',
     array['source_worker_job_id']
   ),
@@ -112,7 +112,7 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'lcia_result_packages',
     array['latest_all_unit_result_id']
   ),
@@ -121,7 +121,7 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'lcia_result_packages',
     array['result_id']
   ),
@@ -130,7 +130,7 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'lcia_result_packages',
     array['snapshot_id']
   ),
@@ -139,7 +139,7 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'lcia_scope_closure_checks',
     array['report_artifact_id']
   ),
@@ -148,7 +148,7 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'lcia_scope_closure_checks',
     array['reused_from_check_id']
   ),
@@ -157,7 +157,7 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'lcia_scope_closure_scan_executions',
     array['completed_check_id']
   ),
@@ -166,7 +166,7 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'lcia_scope_closure_scan_executions',
     array['data_snapshot_token']
   ),
@@ -175,7 +175,7 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'lcia_scope_closure_scan_executions',
     array['leased_by_job_id']
   ),
@@ -234,7 +234,7 @@ select ok(
 
 select ok(
   pg_temp.has_usable_index_prefix(
-    'public',
+    'private',
     'lca_release_artifacts',
     array['release_run_id', 'profile_id', 'artifact_format']
   )
@@ -244,7 +244,7 @@ select ok(
     join pg_catalog.pg_index as idx
       on idx.indexrelid = index_relation.oid
     where index_relation.oid = to_regclass(
-      'public.lca_release_artifacts_profile_format_unique'
+      'private.lca_release_artifacts_profile_format_unique'
     )
       and idx.indisunique
       and idx.indisvalid

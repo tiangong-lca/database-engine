@@ -1,17 +1,35 @@
 -- Invalidate completed scans produced before cutoff-readiness blocker semantics
 -- were corrected.  The public contract remains V1; this is an internal cache
 -- identity revision accepted by the coordinated Worker hotfix.
-INSERT INTO public.lcia_scope_closure_config (
-  singleton,
-  expected_validator_scanner_fingerprint
-)
-VALUES (
-  true,
-  'scope-closure-validator-scanner.v1+cutoff-readiness-r1'
-)
-ON CONFLICT (singleton) DO UPDATE
-SET expected_validator_scanner_fingerprint = EXCLUDED.expected_validator_scanner_fingerprint,
-    updated_at = pg_catalog.now();
+DO $migration$
+BEGIN
+  IF pg_catalog.to_regclass('public.lcia_scope_closure_config') IS NOT NULL THEN
+    INSERT INTO public.lcia_scope_closure_config (
+      singleton,
+      expected_validator_scanner_fingerprint
+    )
+    VALUES (
+      true,
+      'scope-closure-validator-scanner.v1+cutoff-readiness-r1'
+    )
+    ON CONFLICT (singleton) DO UPDATE
+    SET expected_validator_scanner_fingerprint = EXCLUDED.expected_validator_scanner_fingerprint,
+        updated_at = pg_catalog.now();
+  ELSIF pg_catalog.to_regclass('private.lcia_scope_closure_config') IS NOT NULL THEN
+    INSERT INTO private.lcia_scope_closure_config (
+      singleton,
+      expected_validator_scanner_fingerprint
+    )
+    VALUES (
+      true,
+      'scope-closure-validator-scanner.v1+cutoff-readiness-r1'
+    )
+    ON CONFLICT (singleton) DO UPDATE
+    SET expected_validator_scanner_fingerprint = EXCLUDED.expected_validator_scanner_fingerprint,
+        updated_at = pg_catalog.now();
+  END IF;
+END
+$migration$;
 
 -- A blocked scan deliberately has no numerical snapshot.  Its shared scan
 -- execution still owns a preallocated numerical_snapshot_id, so compare that
@@ -21,13 +39,16 @@ CREATE OR REPLACE FUNCTION "public"."svc_lcia_scope_closure_reuse_completed_scan
     SET "search_path" TO 'public', 'pg_temp'
     AS $$
 declare
-  v_target public.lcia_scope_closure_checks%rowtype;
-  v_source public.lcia_scope_closure_checks%rowtype;
-  v_execution public.lcia_scope_closure_scan_executions%rowtype;
-  v_job public.worker_jobs%rowtype;
-  v_snapshot public.lca_network_snapshots%rowtype;
-  v_artifact public.lca_snapshot_artifacts%rowtype;
-  v_bundle public.worker_job_artifacts%rowtype;
+  -- Use records so the production-main migration remains parseable after the
+  -- dev line has moved these relations to private. The public function is
+  -- removed by the later cutover reconciliation migration on that line.
+  v_target record;
+  v_source record;
+  v_execution record;
+  v_job record;
+  v_snapshot record;
+  v_artifact record;
+  v_bundle record;
 begin
   if not coalesce(util.is_service_request(), false) then
     return public.lcia_scope_closure_error('service_role_required', 403, 'Service role is required');

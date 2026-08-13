@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "util"."process_dataset_derivative_rebuilds"("p_limit" integer) IS 'Private bounded coordinator for fenced flow/process derivative rebuilds. It never waits on network calls in-transaction; pg_net/PGMQ work is correlated through durable ids and staged proposals.';

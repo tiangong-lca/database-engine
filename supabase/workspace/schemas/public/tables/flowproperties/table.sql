@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS "public"."flowproperties" (
     "extracted_md" "text",
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
+    "search_text" "text"[],
     CONSTRAINT "flowproperties_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
 );
 
@@ -24,8 +25,10 @@ ALTER TABLE ONLY "public"."flowproperties"
 
 ALTER TABLE "public"."flowproperties" ENABLE ROW LEVEL SECURITY;
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."flowproperties" TO "anon";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."flowproperties" TO "anon";
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."flowproperties" TO "authenticated";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."flowproperties" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."flowproperties" TO "service_role";
+
+GRANT SELECT ON TABLE "public"."flowproperties" TO "api_internal_executor";

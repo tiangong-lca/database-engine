@@ -114,13 +114,13 @@ values
     false
   );
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values
   ('20000000-0000-0000-0000-000000000001', '{"name":"Team A"}'::jsonb, 1, false),
   ('20000000-0000-0000-0000-000000000002', '{"name":"Team B"}'::jsonb, 2, false),
   ('00000000-0000-0000-0000-000000000000', '{"name":"System Team"}'::jsonb, 0, false);
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values
   (
     '10000000-0000-0000-0000-000000000001',
@@ -138,7 +138,7 @@ values
     null
   );
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values
   ('10000000-0000-0000-0000-000000000001', '20000000-0000-0000-0000-000000000001', 'admin'),
   ('10000000-0000-0000-0000-000000000002', '20000000-0000-0000-0000-000000000001', 'owner'),
@@ -165,7 +165,7 @@ values (
   '20000000-0000-0000-0000-000000000001'
 );
 
-insert into public.reviews (id, data_id, data_version, reviewer_id, json, state_code)
+insert into private.reviews (id, data_id, data_version, reviewer_id, json, state_code)
 values
   (
     '40000000-0000-0000-0000-000000000001',
@@ -190,7 +190,7 @@ values
     0
   );
 
-insert into public.comments (review_id, reviewer_id, json, state_code)
+insert into private.comments (review_id, reviewer_id, json, state_code)
 values (
   '40000000-0000-0000-0000-000000000001',
   '10000000-0000-0000-0000-000000000003',
@@ -198,7 +198,7 @@ values (
   0
 );
 
-insert into public.notifications (
+insert into private.notifications (
   id,
   recipient_user_id,
   sender_user_id,
@@ -225,7 +225,7 @@ select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000001
 do $$
 begin
   begin
-    update public.teams
+    update private.teams
     set rank = 99
     where id = '20000000-0000-0000-0000-000000000002';
   exception
@@ -238,7 +238,7 @@ $$;
 reset role;
 
 select is(
-  (select rank::text from public.teams where id = '20000000-0000-0000-0000-000000000002'),
+  (select rank::text from private.teams where id = '20000000-0000-0000-0000-000000000002'),
   '2',
   'team-a admin cannot update team-b'
 );
@@ -249,7 +249,7 @@ select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003
 do $$
 begin
   begin
-    update public.comments
+    update private.comments
     set reviewer_id = '10000000-0000-0000-0000-000000000004'
     where review_id = '40000000-0000-0000-0000-000000000001'
       and reviewer_id = '10000000-0000-0000-0000-000000000003';
@@ -265,13 +265,13 @@ reset role;
 select ok(
   exists (
     select 1
-    from public.comments
+    from private.comments
     where review_id = '40000000-0000-0000-0000-000000000001'
       and reviewer_id = '10000000-0000-0000-0000-000000000003'
   )
   and not exists (
     select 1
-    from public.comments
+    from private.comments
     where review_id = '40000000-0000-0000-0000-000000000001'
       and reviewer_id = '10000000-0000-0000-0000-000000000004'
   ),
@@ -284,7 +284,7 @@ select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000003
 do $$
 begin
   begin
-    update public.reviews
+    update private.reviews
     set state_code = 2
     where id = '40000000-0000-0000-0000-000000000001';
   exception
@@ -297,7 +297,7 @@ $$;
 reset role;
 
 select is(
-  (select state_code::text from public.reviews where id = '40000000-0000-0000-0000-000000000001'),
+  (select state_code::text from private.reviews where id = '40000000-0000-0000-0000-000000000001'),
   '0',
   'assigned reviewer cannot directly update review workflow row'
 );
@@ -344,7 +344,7 @@ select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000006
 do $$
 begin
   begin
-    update public.reviews
+    update private.reviews
     set state_code = 1
     where id = '40000000-0000-0000-0000-000000000002';
   exception
@@ -357,7 +357,7 @@ $$;
 reset role;
 
 select is(
-  (select state_code::text from public.reviews where id = '40000000-0000-0000-0000-000000000002'),
+  (select state_code::text from private.reviews where id = '40000000-0000-0000-0000-000000000002'),
   '0',
   'non-submitter cannot directly update reviews row'
 );
@@ -368,7 +368,7 @@ select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000006
 do $$
 begin
   begin
-    delete from public.notifications
+    delete from private.notifications
     where id = '50000000-0000-0000-0000-000000000001';
   exception
     when others then
@@ -380,7 +380,7 @@ $$;
 reset role;
 
 select is(
-  (select count(*)::text from public.notifications where id = '50000000-0000-0000-0000-000000000001'),
+  (select count(*)::text from private.notifications where id = '50000000-0000-0000-0000-000000000001'),
   '1',
   'arbitrary user cannot delete notification row'
 );
@@ -391,7 +391,7 @@ select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000006
 do $$
 begin
   begin
-    insert into public.roles (user_id, team_id, role)
+    insert into private.roles (user_id, team_id, role)
     values (
       '10000000-0000-0000-0000-000000000006',
       '20000000-0000-0000-0000-000000000001',
@@ -409,7 +409,7 @@ reset role;
 select is(
   (
     select count(*)::text
-    from public.roles
+    from private.roles
     where user_id = '10000000-0000-0000-0000-000000000006'
       and team_id = '20000000-0000-0000-0000-000000000001'
   ),
@@ -423,7 +423,7 @@ select set_config('request.jwt.claim.sub', '10000000-0000-0000-0000-000000000002
 do $$
 begin
   begin
-    update public.users
+    update private.users
     set contact = '{"phone":"13800000000"}'::jsonb
     where id = '10000000-0000-0000-0000-000000000002';
   exception
@@ -438,7 +438,7 @@ reset role;
 select is(
   (
     select coalesce(contact::text, 'null')
-    from public.users
+    from private.users
     where id = '10000000-0000-0000-0000-000000000002'
   ),
   'null',

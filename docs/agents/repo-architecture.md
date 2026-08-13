@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-10
-lastReviewedCommit: 609a6e84b4417e719bcb4b8123e52543d7e42bdb
-lastReviewedNote: "Updated for Issue #450: blocked shared-scan reuse remains administrative evidence without a numerical snapshot, and new requests use a revised internal scanner cache identity."
+lastReviewedAt: 2026-08-12
+lastReviewedCommit: aca7ed0f1d5894fadb958b940212022048e64f80
+lastReviewedNote: "Reviewed for Issue #478: the bounded scope-closure RPC timeout does not change candidate snapshot ownership, manifest semantics, or Edge/Worker boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -40,6 +40,70 @@ related:
 ## Repo Shape
 
 This repo is organized around one checked-in Supabase project plus a generated schema-inspection workspace.
+
+## Schema Boundaries
+
+For LifecycleModel review and bundle operations, authoritative composition comes from ILCD `processInstance` references and exact-version `public.processes.model_id` ownership. `lifecyclemodels.json_tg` is persisted for frontend reconstruction only and must not define review closure, approval targets, publication admission, or deletion membership.
+
+The application database uses five durable schemas with deliberately different
+responsibilities:
+
+- `public` contains only the nine stable domain entity tables: `processes`,
+  `flows`, `contacts`, `sources`, `unitgroups`, `flowproperties`,
+  `lciamethods`, `lifecyclemodels`, and `ilcd`
+- `api` contains Data API RPCs and API-facing projections
+- `private` contains internal application state and implementation routines
+- `util` contains operational queues, controls, diagnostics, and maintenance helpers
+- `archive` contains retained historical or retired data
+
+PostgREST exposes `public` and `api`. The hosted deployment contract enforces
+the ordered list `public,api,graphql_public`, so a profile-less request remains
+on the core-entity surface. Data API consumers must still select their schema
+explicitly: `public` for entity tables and `api` for RPCs. This avoids relying
+on local CLI normalization, which may place a custom schema before `public`.
+`private`, `util`, and `archive` are not exposed. `authenticated` has only the
+`private.roles` and `private.reviews` reads needed to evaluate the preserved
+public core-table RLS policies; browser roles receive no other internal
+relation, routine, or write capability.
+
+Every external `EXECUTE` grant on an `api` routine is an exact-signature entry
+in `private.api_capability_grants`. That table records the owning capability ID
+and admitted caller roles; migrations first remove inherited grants and then
+rebuild the external ACL from this closed manifest. New or overloaded RPCs are
+therefore denied until their exact signature is deliberately classified.
+
+Edge consumers must obtain Data Product publication, package, and worker
+metadata through bounded `api.svc_data_product_*` projections rather than
+reading private relations. TIDAS package reads and import admission likewise
+remain service-only capability contracts; their DTO and terminal error codes
+are part of the consumer-facing façade and must be regression-tested.
+LifecycleModel bundle authorization uses a service-only boolean review-admin
+predicate, preserving service orchestration without returning membership rows.
+
+Schema cutovers must preserve object identity and database dependencies with
+`ALTER ... SET SCHEMA`; they must not rebuild tables, triggers, policies,
+constraints, or functions merely to change namespaces. Stored function source
+and fixed search paths must be rewritten in the same migration whenever they
+refer to moved objects. The small set of security-invoker API search facades
+that needs private RLS helpers runs through the constrained
+`api_internal_executor` role, which cannot log in or bypass RLS.
+
+## Auth Identity And Profile Boundary
+
+`auth.users` is the authoritative registry for Supabase Auth identities.
+`private.users` is an internal application-profile mirror keyed by the same
+user ID; it carries mirrored `raw_user_meta_data` plus application-owned fields
+such as `contact`. API lookups for registered users must therefore drive from
+`auth.users` and may left-join `private.users` for optional profile data. They
+must not treat a missing profile mirror as proof that the Auth identity is
+absent.
+
+A governed, deferred constraint trigger on `auth.users` mirrors inserts and
+metadata updates into `private.users` and removes the profile after an Auth
+identity is deleted. Forward migrations must also reconcile historical Auth
+rows while preserving application-owned profile fields. The trigger helper is
+`SECURITY DEFINER`, uses an empty fixed `search_path`, and is not directly
+executable by application roles.
 
 ## Stable Path Map
 
@@ -53,12 +117,13 @@ This repo is organized around one checked-in Supabase project plus a generated s
 | `supabase/tests/benchmarks/**` | explicit operator-run performance profiles; read each profile's environment guard because some are local/Preview-only while hybrid-search evidence is pinned to persistent staging |
 | `supabase/tests/preview/**` | exact-ref-bound disposable Hosted Preview mutation fixtures, cleanup, rollback-only fault assertions, and offline transport/lifecycle contracts; test-only and excluded from migrations, seeds, Dev data rehearsal, and production execution |
 | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |
-| `scripts/**` | export, refresh, change-copy, and migration-generation helpers |
-| `.github/workflows/supabase-dev.yml` | only checked-in GitHub Actions automation for pushing committed migrations to the persistent remote `dev` branch |
+| `scripts/**` | export, refresh, change-copy, migration-generation, and workflow-contract helpers; `resolve_migration_head.py` is the single parser used to derive the current checkout's exact migration head for persistent-Dev verification |
+| `.github/workflows/supabase-dev.yml` | local-contract rebuild, database-only persistent-Dev migration deployment with `db push --include-all`, and exact hosted verification |
 | `supabase/workspace/changes/**` | manual overlay area used when generating migrations from workspace files |
 | `supabase/workspace/remote_schema.sql` | generated full raw dump from the remote database |
 | `supabase/workspace/global/**` | generated split-out global objects rebuilt on workspace refresh |
 | `supabase/workspace/schemas/**` | generated human-browsable split schema objects rebuilt on workspace refresh |
+| `supabase/workspace/database.types.ts` | generated TypeScript contract for the exposed `public` and `api` Data API schemas; CI rejects drift from the full local migration state |
 
 ## Branch Model In Practice
 
@@ -67,31 +132,20 @@ This repo is organized around one checked-in Supabase project plus a generated s
 - Git `dev` is the daily integration trunk
 - Git `main` is the promoted release line
 - PR branches map to Supabase preview branches
-- `.github/workflows/supabase-dev.yml` pushes every committed migration missing from remote history to the persistent remote `dev` branch on Git `dev`, including an older-timestamped migration introduced by a governed `main -> dev` backmerge
+- `.github/workflows/supabase-dev.yml` is the sole migration deployer for Git `dev`; it gates the remote job on the local contract, issues exactly one `db push --include-all`, and verifies the exact hosted result without Functions deployment, config push, or Management API mutations
+- after the database deployment succeeds, persistent-Dev Functions are deployed and validated through `tiangong-lca-edge-functions`; this repo contains no Function runtime source or Function deploy command
 - the production Supabase project is migrated automatically by the Supabase GitHub integration when Git `main` advances
 
 This means branch behavior is part of the repo architecture, not just delivery process.
 
 ## Test Proof Layers
 
-SQL assertions own database semantics and ACL regressions. Offline Node contracts own runner-only control flow, including outer-frozen request/namespace selectors, deterministic role emails, an outer-created exact empty mode-0700 private temp directory, fsync-before-ACK secret-free recovery checkpoints, exact filtered metadata recovery, global logout, hard DELETE followed by GET-404 plus a fresh empty filtered census, in-connection application-name binding, and fail-closed rendering/parsing of the 39-surface read-only residue proof. The inner runner may not begin actor sign-in or fixture mutation until the outer process has durably acknowledged the exact actor/selectors checkpoint. Cleanup shares the derivative coordinator advisory lock and is allowed only before either exact child crosses external dispatch; otherwise it fails into separately authorized durable recovery. A missing or ambiguous global logout always retains the actor and forbids hard DELETE. Those offline contracts use no Hosted database authority and do not replace the later exact-head Hosted mutation proof or independent Auth/SQL readback execution.
-
-## Current Hotspot Themes
-
-The current migration and test history clusters around these themes:
-
-1. access control and policy hardening
-2. review workflow command/query RPCs
-3. dataset lifecycle, protected one-shot private owner-draft FP/UG alias rewrites, durable process-atomic Step 3 public-flow identity rewrites, guarded flow/process derivative rebuild coordination with dynamic 1..50 and retained fixed 23+27 closure proofs, and publish/delete flows
-4. notification and membership query boundaries
-5. lifecycle bundle cleanup, embedding compatibility, and measured process/flow plus foundation-dataset Semantic/Hybrid HNSW plan governance
-6. remote schema reconciliation and preview-branch validation
-7. review-submit gate persistence, Process-only Gate enforcement, Root/Reference Review v2 range history and shared exact-reference reviews, `worker_jobs` queue state, final submit-review assertions, and retired legacy job-table archives
-8. worker-produced domain artifact/state contracts for retained `lca_package_*`, LCA result/cache/projection, and review-submit report/coordinator tables
-9. canonical LCI/LCIA release runs, exact dataset-version indexes, immutable four-package artifact refs, durable approval, publication, and readback
-10. Performance Advisor evidence, usable foreign-key support indexes, exact duplicate removal, and lock-aware managed-schema bloat maintenance
-
-If the task touches one of those areas, expect both schema truth and regression assertions to matter.
+SQL assertions own database semantics and ACL regressions. Offline Node contracts
+own runner control flow and cleanup behavior; they do not replace exact-head
+Hosted proof or independent Auth/SQL readback. Hosted mutation fixtures must be
+bound to the intended disposable Preview and clean up only their own actors and
+effects. The exact proof required for each capability lives in
+`docs/agents/repo-validation.md`.
 
 ## Hybrid Search Plan Boundary
 
@@ -111,25 +165,41 @@ the checked-in Edge route lexical parameter profile with redacted real staging
 vectors; it must not derive lexical terms from shared Markdown document-prefix
 tokens or retain raw embeddings, UUIDs, or user query text.
 
-All seven dataset families use deterministic `extracted_md` as the single
-lexical document and as the source for backpressured 1024-dimensional
-`embedding_ft` jobs. PGroonga indexes cover `extracted_md` for Process, Flow,
-LifecycleModel, Contact, FlowProperty, Source, and UnitGroup search. Hybrid v2
-RPCs expose one `lexical_weight`; the old two-weight signatures remain only as
-an historical Expand-phase compatibility surface and do not represent two
-lexical branches. The Contract migration retires those signatures after all
-consumers have moved to v2. On the hosted branch, standard `idx_scan` statistics and the
-Performance Advisor may continue to report a PGroonga index as unused after a
-query plan has used it; a direct `EXPLAIN (ANALYZE, BUFFERS)` naming the index is
-the required cross-check before any retention decision. After Edge and Next
-consumer cutover, the fail-closed Contract migration removes the legacy RPC
-signatures, seven `extracted_text` columns/triggers/indexes, the rule-based text
-projection/backfill helpers, three `embedding_flag` columns, three legacy
-`embedding_at` columns, and the obsolete embedding-input/generation routines.
-It refuses to run while a guarded derivative rebuild or non-FT embedding job is
-active and uses `RESTRICT` for dependency-sensitive drops. `extracted_md`,
-`embedding_ft`, `embedding_ft_at`, their seven PGroonga indexes, and their HNSW
-indexes remain the supported derivative contract.
+All seven dataset families use deterministic `extracted_md` as the source for
+backpressured 1024-dimensional `embedding_ft` jobs. Database A retains the
+legacy scalar lexical document and its seven PGroonga indexes. Database B adds
+one explicit `search_text text[]` PGroonga index per dataset table and switches
+formal lexical candidates plus the hybrid lexical branch to `search_text`; the
+legacy `extracted_md` indexes remain until the separately tracked Database C
+cleanup. Hybrid v2 RPCs expose one `lexical_weight`; the old two-weight
+signatures remain only as an historical Expand-phase compatibility surface and
+do not represent two lexical branches. The Contract migration retires those
+signatures after all consumers have moved to v2. On the hosted branch, standard
+`idx_scan` statistics and the Performance Advisor may continue to report a
+PGroonga index as unused after a query plan has used it; a direct
+`EXPLAIN (ANALYZE, BUFFERS)` naming the index is the required cross-check before
+any retention decision. After Edge and Next consumer cutover, the fail-closed
+Contract migration removes the legacy RPC signatures, seven `extracted_text`
+columns/triggers/indexes, the rule-based text projection/backfill helpers, three
+`embedding_flag` columns, three legacy `embedding_at` columns, and the obsolete
+embedding-input/generation routines. It refuses to run while a guarded
+derivative rebuild or non-FT embedding job is active and uses `RESTRICT` for
+dependency-sensitive drops. `extracted_md`, `search_text`, `embedding_ft`,
+`embedding_ft_at`, the seven `extracted_md` indexes, the seven `search_text`
+indexes, and the HNSW indexes remain supported derivative surfaces until their
+separately gated cleanup.
+
+The Release 1 `search_text` projection is nullable `text[]` on all seven
+dataset tables. The forward type migration preserves a non-NULL legacy scalar
+as one complete array element, including embedded newlines; the later
+service/Edge backfill replaces that compatibility value with the full
+normalized projection. Database B's source-switch migration is fail-closed for
+existing rows with incomplete coverage and permits an empty new database; the
+persistent-Dev and hosted cutover gate still requires Edge array deployment,
+100% eligible-row backfill, and zero terminal failures. State 20/100 rows keep
+authored content, review metadata, and `modified_at` immutable outside the
+existing review-controlled command context; only `extracted_md`, `search_text`,
+`embedding_ft`, and `embedding_ft_at` are derivative-write exceptions.
 
 Contacts, FlowProperties, Sources, and UnitGroups otherwise follow the same
 durable search-derivative shape as the established Process, Flow, and
@@ -157,7 +227,7 @@ is dispatched. Selector optimization must preserve the existing per-scope
 backpressure, retry, ordering, and stale-job contracts; it is not permission to
 raise the checked-in policy defaults.
 
-The four public Semantic and Hybrid RPC families share exact-regclass
+The four Data API Semantic and Hybrid RPC families share exact-regclass
 allowlisted private helpers. Those helpers preserve owner/team/public
 visibility (`tg`/`co`/`my`/`te`): `tg`/`co` may be narrowed to an explicit
 team, `my` may be narrowed to an explicit state, and `te` requires one explicit
@@ -173,9 +243,13 @@ or duplicate indexes.
 
 `worker_jobs` is the canonical lifecycle and queue-control table for work that cannot be safely carried by Edge Function request/response execution.
 
-Retained domain tables such as `lca_package_artifacts`, `lca_package_export_items`, `lca_package_request_cache`, `lca_results`, `lca_result_cache`, `lca_latest_all_unit_results`, `lca_network_snapshots`, `dataset_review_submit_requests`, and `dataset_review_submit_gate_runs` are not replacement job tables. They store worker-produced artifacts, caches, projections, reports, or coordinator domain state. Post-cutover rows should be traceable back to `worker_jobs` through the appropriate worker job reference columns, except for explicitly documented exceptions such as snapshot identity rows that are traced through downstream worker-linked records.
+Claim must remain non-blocking under concurrent recovery: expired max-attempt rows are selected in bounded `FOR UPDATE SKIP LOCKED` batches before they are marked failed, while claimable queued/stale or expired-retry rows use their own skip-locked candidate set. Terminal result recording is lease-fenced; an exact repeat with the same lease token, status, and normalized result content is an idempotent acknowledgement, while any conflicting replay remains rejected. This permits a Worker to retry an ambiguous database/transport failure without leaving completed compute stranded in `running`.
 
-Use `public.worker_domain_traceability_cutoffs` and `public.worker_domain_traceability_violations` for DB-side audit checks when validating that new worker-produced domain rows remain traceable.
+Retained domain tables such as `lca_package_artifacts`, `lca_package_export_items`, `lca_package_request_cache`, `lca_results`, `lca_result_cache`, `lca_latest_all_unit_results`, `lca_network_snapshots`, `dataset_review_submit_requests`, and `dataset_review_submit_gate_runs` are not replacement job tables. They store worker-produced artifacts, caches, projections, reports, or coordinator domain state. The package request cache deduplicates active work for mutable scopes (`current_user`, `open_data`, and `current_user_and_open_data`), but a new intent after completion must advance to a fresh Worker/package job; only `selected_roots`, whose exact root IDs and versions are request content, retains terminal artifact reuse. Post-cutover rows should be traceable back to `worker_jobs` through the appropriate worker job reference columns, except for explicitly documented exceptions such as snapshot identity rows that are traced through downstream worker-linked records.
+
+Use `private.worker_domain_traceability_cutoffs` and
+`util.worker_domain_traceability_violations` for DB-side audit checks when
+validating that new worker-produced domain rows remain traceable.
 
 ## LCI/LCIA Release Control Plane
 
@@ -189,7 +263,7 @@ The data-product completeness check can run before the first formal `lca_release
 
 Candidate snapshots compute `canonicalContentHash` with the same recursively key-sorted, compact JSON algorithm used by the Worker and normalize the reviewed LCIA method/artifact-locator alias before freezing identities. Because the initial production universe exceeds 120,000 exact rows, migration backfill pays the canonical-hash cost once into a private cache; eight table triggers then refresh only changed identities, while interactive requests aggregate the cached manifest inside the authenticated role timeout. This one-time production-volume administrative statement must declare a bounded session `statement_timeout` above the platform's ordinary two-minute cap and restore the default immediately after the backfill; a small Preview dataset is not sufficient evidence for that bound. `candidateData.sourceKind=candidate-public-state` is the authoritative source discriminator. The zero-UUID `currentPublicRelease` object is only a deterministic compatibility projection required by the deployed Worker v2 schema and must never be treated as publication evidence. `current-membership-required-v1` continues to require a real current release; the default frozen-artifact policy may consume a candidate snapshot.
 
-Certificate-grade Scope Closure normalization canonicalizes omitted and supported legacy `closed/open/cutoff` technosphere boundary inputs to `cutoff` before requested-scope, policy, snapshot, and request fingerprints are computed. Unknown values remain invalid. The production-main hotfix targets the pre-cutover `public` normalizer and is intentionally a no-op after that function has moved to `private`; the dev-line migration owns the equivalent post-cutover definition. Historical frozen requests and artifacts are not rewritten.
+Certificate-grade Scope Closure normalization canonicalizes omitted and supported legacy `closed/open/cutoff` technosphere boundary inputs to `cutoff` before requested-scope, policy, snapshot, and request fingerprints are computed. Unknown values remain invalid. The production-main hotfix targets the pre-cutover `public` normalizer and is intentionally a no-op after that function has moved to `private`; the dev-line migration owns the equivalent post-cutover definition, and the matching Worker contract accepts only the canonical cutoff input. Historical frozen requests and artifacts are not rewritten.
 
 A passed reused Scope Closure certificate owns a new target report while retaining the direct source check's immutable numerical snapshot and Closure Bundle. Calculation admission, Worker binding, and package publication validate that single-hop source through `reused_from_check_id`; they never relabel or copy the source Bundle. The target and source must retain exact scope, policy, data-snapshot, numerical-snapshot, Bundle identity, and checksum parity. Independently, `worker_jobs.status = completed` implies canonical `progress = 1`; blocked and failed terminal states retain their actual partial progress.
 
@@ -222,7 +296,11 @@ Use it like this:
 
 Do not leave durable manual edits only inside generated paths.
 
-Remote `dev` is the canonical refresh target. `--environment local` is a validation and recovery path that uses the Supabase CLI-native local connection; locally reconstructed output must not be represented as hosted truth without matching migration-version and targeted hosted catalog evidence.
+Remote `dev` is the canonical refresh target. Refresh all application schemas
+with `--schemas public api private util archive`. `--environment local` is a
+validation and recovery path that uses the Supabase CLI-native local
+connection; locally reconstructed output must not be represented as hosted
+truth without matching migration-version and targeted hosted catalog evidence.
 
 ## Script Responsibilities
 
@@ -238,11 +316,9 @@ Remote `dev` is the canonical refresh target. `--environment local` is a validat
 
 This repo owns database truth, but not every runtime consequence:
 
-- `database-engine` owns persisted review-submit gate runs, `worker_jobs` lifecycle schema/RPCs, review-submit job coordinator state, access checks, idempotent gate lookup, result recording, legacy lifecycle cutover cleanup, retired legacy job-table archives under `archive.worker_legacy_job_table_rows`, and the final submit-review assertion
-- `database-engine` owns authoring-row review/publication lifecycle closure. It classifies references by JSON path and lifecycle role, keeps Lineage read-only, preserves RequiredSupport submit/approve linkage, requires `json_tg.submodels` and ILCD `processInstance` to agree on exact composition versions, and applies transaction-final locks and assertions before submit, approve, or direct-publish writes. A same-id/version Process/LifecycleModel pair participates only when both rows exist. Private and missing composition dependencies use the same non-disclosing error envelope; Worker numeric/source closure semantics remain outside this database role matrix.
-- `database-engine` owns durable LCI/LCIA release facts and final authorization: exact plan/artifact hashes, manager approval/publication, service-only artifact finalization, immutable pinning, and readback; it does not materialize TIDAS/ILCD bytes or place generated datasets in authoring tables
-- `database-engine` owns the protected one-shot owner-draft FP/UG alias execution contract. Authenticated callers may only run the guarded preflight, three ordered live gates, one admission, and read-only status polling; a nonce-bound service executor alone can invoke the private replay-capable whole-plan and per-dimension primitives. The sealed `dataset-alias-plan.v1` request keeps time followed by length-time, one plan hash and operation ID, `target_visibility=owner_draft`, 52 distinct action rows, 59 exchange mutations, 55 immutable alias audits, and atomic admission of all 23-flow plus 27-process derivative children. Preflight and execution independently enforce actor-owned `state_code=0`, unchanged support, embedded identity, canonical exchange hashes, no public/foreign/non-draft parent, exact closure, stable row locks, table-specific allowed paths, and exact factors; indexed `json_ordered` subtrees provide candidates, while legacy `json` is never evidence. A timeout or any primary, audit, or derivative-admission mismatch rolls back every business effect, and the sealed approval permits no redispatch or replay. Production owner-draft data execution is allowed only against a freshly frozen production state with exact human approval; Preview/Dev validate the toolchain rather than replaying that production mutation. Status polling defers the full 50-target causal proof until terminal evidence is available and returns an explicit read-only conflict if the parent ledger changes while evidence is assembled.
-- `database-engine` owns the guarded Step 3 public-flow identity rewrite contract. Preflight seals exact source/public/support guards, compatibility policy/evidence, ordered process templates, five-field rewrite locators, collision rows, derivative baselines, and exact pending/blocker occurrences. Initial and recovery approval artifacts are actor-wide non-reusable across request/text/identity hash domains. Each fresh preflight creates exactly one wrapper invocation and returns one memory-only rotating permit; the database persists only its generation and token hash, every successful process or finalize rotates it atomically, and exact preflight replay returns no permit. The public process/finalize RPCs require this authorization as their third argument. Scope read remains read-only status/resume evidence, while an exact read-only scope lookup resolves a lost preflight response without minting or disclosing a permit. If the wrapper loses its permit or exits after an ambiguous/domain-rejected call, continuation requires a fresh exact human-approved recovery artifact bound to observed scope state and whole-scope proof; recovery supersedes the old invocation and permit and never constitutes automatic retry. Each authenticated process call acquires the scope advisory lock, revalidates the next owner-draft process and every used mapping, reconstructs the desired JSON from live data, changes only `@refObjectId`, `@type`, `@uri`, `@version`, and `common:shortDescription`, records one unique audit, and admits one protected derivative child in the same transaction. An authenticated cancel request is actor/receipt/operation/plan/scope-proof bound and may release active fences only for an untouched `sealed` scope whose ledger, primary audits, derivative references, and mutation permits all prove zero writes; exact replay is read-only, while any post-primary scope is immutable to cancel. A terminal failed/stale derivative exposes the exact current single-target snapshot for a distinct derivative-only plan/freeze/approval; it never replays primary or auto-admits compensation. Finalize may consume only the newest exact approved-compensation request and retains active fences until all desired primaries, zero approved-source residue, unchanged source/public/support and protected occurrences, dynamic causal derivative proofs, and the completed final wrapper invocation/generation proof are current. The CLI/foundry own semantic review, canonical approval artifacts, raw in-memory permit custody, live plan/freeze/approval, and process-schema evidence; this repo never turns a historical oracle into execution authority.
+- `database-engine` owns persisted database state, API façades, authorization, transaction boundaries, queue/control-plane state, audit facts, and final database assertions
+- protected mutation workflows are authoritative here only for database admission, fencing, atomic effects, and readback; semantic planning, approval-artifact construction, and client-side authority custody remain with their owning consumers
+- durable release and scope-closure facts live here, while generated TIDAS/ILCD bytes and Storage object operations remain outside SQL
 - `tiangong-lca-worker` owns numeric-stability checks and the calculator report payload semantics
 - `tiangong-lca-next` owns frontend env selection and app-side Supabase clients
 - `tiangong-lca-edge-functions` owns Edge Function runtime orchestration, worker invocation, API response shape, deterministic Markdown generation for the four foundation datasets, and the exact table/column embedding allowlist

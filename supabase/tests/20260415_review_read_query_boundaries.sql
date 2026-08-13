@@ -144,7 +144,7 @@ values
     false
   );
 
-insert into public.users (id, raw_user_meta_data)
+insert into private.users (id, raw_user_meta_data)
 values
   ('15000000-0000-0000-0000-000000000001', '{"email":"review-owner@example.com"}'::jsonb),
   ('15000000-0000-0000-0000-000000000002', '{"email":"assigned-reviewer@example.com"}'::jsonb),
@@ -155,7 +155,7 @@ values
   ('15000000-0000-0000-0000-000000000007', '{"email":"team-review-admin@example.com"}'::jsonb),
   ('15000000-0000-0000-0000-000000000008', '{"email":"former-reviewer@example.com"}'::jsonb);
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values (
   '25000000-0000-0000-0000-000000000001',
   '{"title":[{"@xml:lang":"en","#text":"Review Scope Team"}]}'::jsonb,
@@ -163,7 +163,7 @@ values (
   false
 );
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values
   ('15000000-0000-0000-0000-000000000002', '00000000-0000-0000-0000-000000000000', 'review-member'),
   ('15000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'review-member'),
@@ -172,7 +172,7 @@ values
   ('15000000-0000-0000-0000-000000000007', '25000000-0000-0000-0000-000000000001', 'review-admin'),
   ('15000000-0000-0000-0000-000000000008', '00000000-0000-0000-0000-000000000000', 'review-member');
 
-insert into public.reviews (
+insert into private.reviews (
   id,
   data_id,
   data_version,
@@ -236,7 +236,7 @@ values
     now() - interval '4 days'
   );
 
-insert into public.comments (
+insert into private.comments (
   review_id,
   reviewer_id,
   json,
@@ -292,7 +292,7 @@ select set_config('request.jwt.claim.sub', '15000000-0000-0000-0000-000000000006
 select is(
   (
     select count(*)::text
-    from public.reviews
+    from private.reviews
     where id in (
       '55000000-0000-0000-0000-000000000001',
       '55000000-0000-0000-0000-000000000002',
@@ -311,7 +311,7 @@ select set_config('request.jwt.claim.sub', '15000000-0000-0000-0000-000000000007
 select is(
   (
     select count(*)::text
-    from public.reviews
+    from private.reviews
     where id = '55000000-0000-0000-0000-000000000001'
   ),
   '0',
@@ -326,7 +326,7 @@ select set_config('request.jwt.claim.sub', '15000000-0000-0000-0000-000000000001
 select is(
   (
     select count(*)::text
-    from public.reviews
+    from private.reviews
     where id in (
       '55000000-0000-0000-0000-000000000001',
       '55000000-0000-0000-0000-000000000002',
@@ -346,7 +346,7 @@ select set_config('request.jwt.claim.sub', '15000000-0000-0000-0000-000000000002
 select is(
   (
     select count(*)::text
-    from public.reviews
+    from private.reviews
     where id in (
       '55000000-0000-0000-0000-000000000001',
       '55000000-0000-0000-0000-000000000002',
@@ -361,7 +361,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.comments
+    from private.comments
     where review_id = '55000000-0000-0000-0000-000000000001'
   ),
   '1',
@@ -371,7 +371,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.qry_review_get_member_queue_items('pending', 1, 10, 'modified_at', 'desc')
+    from api.qry_review_get_member_queue_items('pending', 1, 10, 'modified_at', 'desc')
   ),
   '1',
   'member pending queue RPC only returns the actor pending rows'
@@ -380,7 +380,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.qry_review_get_member_queue_items('reviewed', 1, 10, 'modified_at', 'desc')
+    from api.qry_review_get_member_queue_items('reviewed', 1, 10, 'modified_at', 'desc')
   ),
   '1',
   'member reviewed queue RPC only returns the actor reviewed rows'
@@ -389,7 +389,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.qry_review_get_member_queue_items('reviewer-rejected', 1, 10, 'modified_at', 'desc')
+    from api.qry_review_get_member_queue_items('reviewer-rejected', 1, 10, 'modified_at', 'desc')
   ),
   '1',
   'member rejected queue RPC only returns the actor rejected rows'
@@ -398,7 +398,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.qry_review_get_comment_items('55000000-0000-0000-0000-000000000001', 'all')
+    from api.qry_review_get_comment_items('55000000-0000-0000-0000-000000000001', 'all')
   ),
   '1',
   'review-member comment query RPC still collapses all-scope requests down to the actor own rows'
@@ -412,7 +412,7 @@ select set_config('request.jwt.claim.sub', '15000000-0000-0000-0000-000000000008
 select is(
   (
     select count(*)::text
-    from public.reviews
+    from private.reviews
     where id = '55000000-0000-0000-0000-000000000004'
   ),
   '1',
@@ -427,7 +427,7 @@ select set_config('request.jwt.claim.sub', '15000000-0000-0000-0000-000000000004
 select is(
   (
     select count(*)::text
-    from public.reviews
+    from private.reviews
     where id = '55000000-0000-0000-0000-000000000001'
   ),
   '0',
@@ -442,7 +442,7 @@ select set_config('request.jwt.claim.sub', '15000000-0000-0000-0000-000000000005
 select is(
   (
     select count(*)::text
-    from public.reviews
+    from private.reviews
     where id in (
       '55000000-0000-0000-0000-000000000001',
       '55000000-0000-0000-0000-000000000002',
@@ -457,7 +457,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.comments
+    from private.comments
     where review_id = '55000000-0000-0000-0000-000000000001'
   ),
   '2',
@@ -467,7 +467,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.qry_review_get_admin_queue_items('assigned', 1, 10, 'modified_at', 'desc')
+    from api.qry_review_get_admin_queue_items('assigned', 1, 10, 'modified_at', 'desc')
   ),
   '1',
   'admin queue RPC returns the assigned review set'
@@ -479,7 +479,7 @@ select is(
     from jsonb_array_elements(
       (
         select comment_state_codes
-        from public.qry_review_get_admin_queue_items('assigned', 1, 10, 'modified_at', 'desc')
+        from api.qry_review_get_admin_queue_items('assigned', 1, 10, 'modified_at', 'desc')
         limit 1
       )
     ) as value
@@ -491,7 +491,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.qry_review_get_comment_items('55000000-0000-0000-0000-000000000001', 'all')
+    from api.qry_review_get_comment_items('55000000-0000-0000-0000-000000000001', 'all')
   ),
   '2',
   'admin comment query RPC can read every comment row for the review'
@@ -505,7 +505,7 @@ select set_config('request.jwt.claim.sub', '15000000-0000-0000-0000-000000000001
 select is(
   (
     select count(*)::text
-    from public.comments
+    from private.comments
     where review_id = '55000000-0000-0000-0000-000000000001'
   ),
   '2',
@@ -515,7 +515,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.qry_review_get_items(
+    from api.qry_review_get_items(
       array['55000000-0000-0000-0000-000000000001'::uuid],
       null,
       null,
@@ -529,7 +529,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.qry_review_get_items(
+    from api.qry_review_get_items(
       null,
       '65000000-0000-0000-0000-000000000004'::uuid,
       '01.00.000',
@@ -543,7 +543,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.qry_review_get_comment_items('55000000-0000-0000-0000-000000000001', 'all')
+    from api.qry_review_get_comment_items('55000000-0000-0000-0000-000000000001', 'all')
   ),
   '2',
   'owner comment query RPC can read every comment row for the review'
@@ -557,7 +557,7 @@ select set_config('request.jwt.claim.sub', '15000000-0000-0000-0000-000000000006
 select is(
   (
     select count(*)::text
-    from public.comments
+    from private.comments
     where review_id = '55000000-0000-0000-0000-000000000001'
   ),
   '0',
@@ -567,7 +567,7 @@ select is(
 select is(
   (
     select count(*)::text
-    from public.qry_review_get_items(
+    from api.qry_review_get_items(
       array['55000000-0000-0000-0000-000000000001'::uuid],
       null,
       null,

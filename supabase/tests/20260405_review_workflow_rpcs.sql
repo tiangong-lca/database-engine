@@ -101,7 +101,7 @@ values
     false
   );
 
-insert into public.users (id, raw_user_meta_data)
+insert into private.users (id, raw_user_meta_data)
 values
   (
     '12000000-0000-0000-0000-000000000001',
@@ -120,11 +120,11 @@ values
     '{"email":"reviewer-two@example.com","display_name":"Reviewer Two"}'::jsonb
   );
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values
   ('22000000-0000-0000-0000-000000000001', '{"title":"Review Team"}'::jsonb, 1, false);
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values
   ('12000000-0000-0000-0000-000000000001', '22000000-0000-0000-0000-000000000001', 'owner'),
   ('12000000-0000-0000-0000-000000000010', '00000000-0000-0000-0000-000000000000', 'review-admin'),
@@ -942,7 +942,7 @@ values
     '[{"key":0,"id":"53000000-0000-0000-0000-000000000304"}]'::jsonb
   );
 
-insert into public.reviews (
+insert into private.reviews (
   id,
   data_id,
   data_version,
@@ -1064,7 +1064,7 @@ values
     }'::jsonb
   );
 
-insert into public.comments (
+insert into private.comments (
   review_id,
   reviewer_id,
   json,
@@ -1242,7 +1242,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '12000000-0000-0000-0000-000000000010', true);
 
 select is(
-  public.cmd_review_save_assignment_draft(
+  api.cmd_review_save_assignment_draft(
     '53000000-0000-0000-0000-000000000201',
     '["12000000-0000-0000-0000-000000000011","12000000-0000-0000-0000-000000000012"]'::jsonb,
     '{"command":"review_save_assignment_draft"}'::jsonb
@@ -1252,13 +1252,13 @@ select is(
 );
 
 select is(
-  (select reviewer_id::text from public.reviews where id = '53000000-0000-0000-0000-000000000201'),
+  (select reviewer_id::text from private.reviews where id = '53000000-0000-0000-0000-000000000201'),
   '["12000000-0000-0000-0000-000000000011", "12000000-0000-0000-0000-000000000012"]',
   'temporary assignment draft updates review.reviewer_id'
 );
 
 select is(
-  public.cmd_review_assign_reviewers(
+  api.cmd_review_assign_reviewers(
     '53000000-0000-0000-0000-000000000201',
     '["12000000-0000-0000-0000-000000000011","12000000-0000-0000-0000-000000000012"]'::jsonb,
     '2026-05-01T00:00:00Z'::timestamptz,
@@ -1269,19 +1269,19 @@ select is(
 );
 
 select is(
-  (select state_code::text from public.reviews where id = '53000000-0000-0000-0000-000000000201'),
+  (select state_code::text from private.reviews where id = '53000000-0000-0000-0000-000000000201'),
   '1',
   'assigning reviewers moves the review into assigned state'
 );
 
 select is(
-  (select count(*)::text from public.comments where review_id = '53000000-0000-0000-0000-000000000201' and state_code = 0),
+  (select count(*)::text from private.comments where review_id = '53000000-0000-0000-0000-000000000201' and state_code = 0),
   '2',
   'assigning reviewers creates draft comment rows for each reviewer'
 );
 
 select is(
-  public.cmd_review_revoke_reviewer(
+  api.cmd_review_revoke_reviewer(
     '53000000-0000-0000-0000-000000000201',
     '12000000-0000-0000-0000-000000000012',
     '{"command":"review_revoke_reviewer"}'::jsonb
@@ -1291,13 +1291,13 @@ select is(
 );
 
 select is(
-  (select state_code::text from public.comments where review_id = '53000000-0000-0000-0000-000000000201' and reviewer_id = '12000000-0000-0000-0000-000000000012'),
+  (select state_code::text from private.comments where review_id = '53000000-0000-0000-0000-000000000201' and reviewer_id = '12000000-0000-0000-0000-000000000012'),
   '-2',
   'revoking a reviewer marks their comment row as revoked'
 );
 
 select is(
-  (select reviewer_id::text from public.reviews where id = '53000000-0000-0000-0000-000000000201'),
+  (select reviewer_id::text from private.reviews where id = '53000000-0000-0000-0000-000000000201'),
   '["12000000-0000-0000-0000-000000000011"]',
   'revoking a reviewer removes them from review.reviewer_id'
 );
@@ -1308,7 +1308,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '12000000-0000-0000-0000-000000000011', true);
 
 select is(
-  public.cmd_review_save_comment_draft(
+  api.cmd_review_save_comment_draft(
     '53000000-0000-0000-0000-000000000202',
     '{
       "modellingAndValidation": {
@@ -1338,19 +1338,19 @@ select is(
 );
 
 select is(
-  (select state_code::text from public.reviews where id = '53000000-0000-0000-0000-000000000202'),
+  (select state_code::text from private.reviews where id = '53000000-0000-0000-0000-000000000202'),
   '1',
   'saving a reviewer draft does not change the review state'
 );
 
 select is(
-  (select reviewer_id::text from public.comments where review_id = '53000000-0000-0000-0000-000000000202' and reviewer_id = '12000000-0000-0000-0000-000000000011'),
+  (select reviewer_id::text from private.comments where review_id = '53000000-0000-0000-0000-000000000202' and reviewer_id = '12000000-0000-0000-0000-000000000011'),
   '12000000-0000-0000-0000-000000000011',
   'saving a reviewer draft does not change comment.reviewer_id'
 );
 
 select is(
-  public.cmd_review_submit_comment(
+  api.cmd_review_submit_comment(
     '53000000-0000-0000-0000-000000000202',
     '{
       "modellingAndValidation": {
@@ -1391,7 +1391,7 @@ select is(
 );
 
 select is(
-  (select state_code::text from public.comments where review_id = '53000000-0000-0000-0000-000000000202' and reviewer_id = '12000000-0000-0000-0000-000000000011'),
+  (select state_code::text from private.comments where review_id = '53000000-0000-0000-0000-000000000202' and reviewer_id = '12000000-0000-0000-0000-000000000011'),
   '1',
   'submitting a reviewer comment moves the reviewer comment row to submitted state'
 );
@@ -1402,7 +1402,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '12000000-0000-0000-0000-000000000010', true);
 
 select is(
-  public.cmd_review_approve(
+  api.cmd_review_approve(
     'processes',
     '53000000-0000-0000-0000-000000000203',
     '{"command":"review_approve"}'::jsonb
@@ -1460,7 +1460,7 @@ select is(
 );
 
 select is(
-  public.cmd_review_approve(
+  api.cmd_review_approve(
     'processes',
     '53000000-0000-0000-0000-000000000205',
     '{"command":"review_approve"}'::jsonb
@@ -1488,7 +1488,7 @@ select is(
 );
 
 select is(
-  public.cmd_review_reject(
+  api.cmd_review_reject(
     'processes',
     '53000000-0000-0000-0000-000000000204',
     'Needs more evidence',
@@ -1505,13 +1505,13 @@ select is(
 );
 
 select is(
-  (select state_code::text from public.reviews where id = '53000000-0000-0000-0000-000000000204'),
+  (select state_code::text from private.reviews where id = '53000000-0000-0000-0000-000000000204'),
   '-1',
   'rejecting a review marks the review row as rejected'
 );
 
 select is(
-  public.cmd_review_approve(
+  api.cmd_review_approve(
     'lifecyclemodels',
     '53000000-0000-0000-0000-000000000301',
     '{"command":"review_approve"}'::jsonb
@@ -1605,7 +1605,7 @@ select is(
 );
 
 select is(
-  public.cmd_review_approve(
+  api.cmd_review_approve(
     'lifecyclemodels',
     '53000000-0000-0000-0000-000000000304',
     '{"command":"review_approve"}'::jsonb
@@ -1651,7 +1651,7 @@ select is(
 );
 
 select is(
-  public.cmd_review_approve(
+  api.cmd_review_approve(
     'lifecyclemodels',
     '53000000-0000-0000-0000-000000000303',
     '{"command":"review_approve"}'::jsonb
@@ -1661,7 +1661,7 @@ select is(
 );
 
 select is(
-  (select state_code::text from public.reviews where id = '53000000-0000-0000-0000-000000000303'),
+  (select state_code::text from private.reviews where id = '53000000-0000-0000-0000-000000000303'),
   '1',
   'failed lifecycle model approval leaves the review state unchanged'
 );

@@ -56,7 +56,7 @@ values
     false
   );
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values
   ('26000000-0000-0000-0000-000000000048', '{"name":"Latest Core Dataset Team"}'::jsonb, 1, false);
 
@@ -267,166 +267,166 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '16000000-0000-0000-0000-000000000047', true);
 
 select is(
-  (select version::text from public.get_latest_flow_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '47000000-0000-0000-0000-000000000001'),
+  (select version::text from api.get_latest_flow_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '47000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'flow list returns the highest visible version for a UUID'
 );
 
 
 select is(
-  (select max(total_count) from public.get_latest_flow_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047')),
+  (select max(total_count) from api.get_latest_flow_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047')),
   2::bigint,
   'flow list total_count counts unique UUIDs'
 );
 
 select is(
-  (select version::text from public.get_latest_flow_versions(10, 1, 'my', '16000000-0000-0000-0000-000000000047') where id = '47000000-0000-0000-0000-000000000001'),
+  (select version::text from api.get_latest_flow_versions(10, 1, 'my', '16000000-0000-0000-0000-000000000047') where id = '47000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'flow my data list returns the highest user-owned version for a UUID'
 );
 
 select is(
-  (select max(total_count) from public.get_latest_flow_versions(10, 1, 'my', '16000000-0000-0000-0000-000000000047')),
+  (select max(total_count) from api.get_latest_flow_versions(10, 1, 'my', '16000000-0000-0000-0000-000000000047')),
   2::bigint,
   'flow my data list total_count counts user-owned unique UUIDs'
 );
 
 select is(
-  (select version::text from public.pgroonga_search_flows_latest('legacy-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '47000000-0000-0000-0000-000000000001'),
+  (select version::text from api.pgroonga_search_flows_latest('legacy-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '47000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'flow PGroonga search can match an older version while returning the highest visible version'
 );
 
 select is(
-  (select version::text from public.pgroonga_search_flows_latest('legacy-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', '16000000-0000-0000-0000-000000000047') where id = '47000000-0000-0000-0000-000000000001'),
+  (select version::text from api.pgroonga_search_flows_latest('legacy-flow-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', '16000000-0000-0000-0000-000000000047') where id = '47000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'flow my-data PGroonga search can match an older version while returning the highest user-owned version'
 );
 
 select is(
-  (select version::text from public.search_flows_latest('legacy-flow-token', '{"search":"legacy-flow-token"}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '47000000-0000-0000-0000-000000000001'),
+  (select version::text from api.search_flows_latest('legacy-flow-token', '{"search":"legacy-flow-token"}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '47000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'flow latest search keeps non-empty JSON filters while returning the highest visible version'
 );
 
 select is(
-  (select version::text from public.hybrid_search_flows_v2('legacy-flow-token', (select value from latest_zero_embedding), '{}', 0.1, 20, 0.5, 0.5, 10, 'tg', 10, 1) where id = '47000000-0000-0000-0000-000000000001'),
+  (select version::text from api.hybrid_search_flows_v2('legacy-flow-token', (select value from latest_zero_embedding), '{}', 0.1, 20, 0.5, 0.5, 10, 'tg', 10, 1) where id = '47000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'flow hybrid search returns the highest visible version for a matching UUID'
 );
 
 select is(
-  (select version::text from public.get_latest_process_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '48000000-0000-0000-0000-000000000001'),
+  (select version::text from api.get_latest_process_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '48000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'process list returns the highest visible version for a UUID'
 );
 
 
 select is(
-  (select max(total_count) from public.get_latest_process_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047')),
+  (select max(total_count) from api.get_latest_process_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047')),
   2::bigint,
   'process list total_count counts unique UUIDs'
 );
 
 select is(
-  (select version::text from public.pgroonga_search_processes_latest('legacy-process-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '48000000-0000-0000-0000-000000000001'),
+  (select version::text from api.pgroonga_search_processes_latest('legacy-process-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '48000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'process PGroonga search can match an older version while returning the highest visible version'
 );
 
 select is(
-  (select version::text from public.search_processes_latest('legacy-process-token', '{"search":"legacy-process-token"}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047', null, null, 'all') where id = '48000000-0000-0000-0000-000000000001'),
+  (select version::text from api.search_processes_latest('legacy-process-token', '{"search":"legacy-process-token"}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047', null, null, 'all') where id = '48000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'process latest search keeps non-empty JSON filters while returning the highest visible version'
 );
 
 select is(
-  (select version::text from public.hybrid_search_processes_v2('legacy-process-token', (select value from latest_zero_embedding), '{}', 0.1, 20, 0.5, 0.5, 10, 'tg', 10, 1) where id = '48000000-0000-0000-0000-000000000001'),
+  (select version::text from api.hybrid_search_processes_v2('legacy-process-token', (select value from latest_zero_embedding), '{}', 0.1, 20, 0.5, 0.5, 10, 'tg', 10, 1) where id = '48000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'process hybrid search returns the highest visible version for a matching UUID'
 );
 
 select is(
-  (select version::text from public.get_latest_lifecyclemodel_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '49000000-0000-0000-0000-000000000001'),
+  (select version::text from api.get_latest_lifecyclemodel_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '49000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'lifecyclemodel list returns the highest visible version for a UUID'
 );
 
 
 select is(
-  (select max(total_count) from public.get_latest_lifecyclemodel_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047')),
+  (select max(total_count) from api.get_latest_lifecyclemodel_versions(10, 1, 'tg', '16000000-0000-0000-0000-000000000047')),
   2::bigint,
   'lifecyclemodel list total_count counts unique UUIDs'
 );
 
 select is(
-  (select version::text from public.pgroonga_search_lifecyclemodels_latest('legacy-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '49000000-0000-0000-0000-000000000001'),
+  (select version::text from api.pgroonga_search_lifecyclemodels_latest('legacy-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '49000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'lifecyclemodel PGroonga search can match an older version while returning the highest visible version'
 );
 
 select is(
-  (select version::text from public.pgroonga_search_lifecyclemodels_latest('legacy-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', '16000000-0000-0000-0000-000000000047') where id = '49000000-0000-0000-0000-000000000001'),
+  (select version::text from api.pgroonga_search_lifecyclemodels_latest('legacy-lifecycle-token', '{}'::jsonb, '{}'::jsonb, 10, 1, 'my', '16000000-0000-0000-0000-000000000047') where id = '49000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'lifecyclemodel my-data PGroonga search can match an older version while returning the highest user-owned version'
 );
 
 select is(
-  (select version::text from public.search_lifecyclemodels_latest('legacy-lifecycle-token', '{"search":"legacy-lifecycle-token"}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '49000000-0000-0000-0000-000000000001'),
+  (select version::text from api.search_lifecyclemodels_latest('legacy-lifecycle-token', '{"search":"legacy-lifecycle-token"}'::jsonb, '{}'::jsonb, 10, 1, 'tg', '16000000-0000-0000-0000-000000000047') where id = '49000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'lifecyclemodel latest search keeps non-empty JSON filters while returning the highest visible version'
 );
 
 select is(
-  (select version::text from public.hybrid_search_lifecyclemodels_v2('legacy-lifecycle-token', (select value from latest_zero_embedding), '{}', 0.1, 20, 0.5, 0.5, 10, 'tg', 10, 1) where id = '49000000-0000-0000-0000-000000000001'),
+  (select version::text from api.hybrid_search_lifecyclemodels_v2('legacy-lifecycle-token', (select value from latest_zero_embedding), '{}', 0.1, 20, 0.5, 0.5, 10, 'tg', 10, 1) where id = '49000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'lifecyclemodel hybrid search returns the highest visible version for a matching UUID'
 );
 
 select is(
-  (select version::text from public.get_latest_process_versions(10, 1, 'my', '16000000-0000-0000-0000-000000000047') where id = '48000000-0000-0000-0000-000000000001'),
+  (select version::text from api.get_latest_process_versions(10, 1, 'my', '16000000-0000-0000-0000-000000000047') where id = '48000000-0000-0000-0000-000000000001'),
   '01.00.002',
   'process my data list returns the highest user-owned version for a UUID'
 );
 
 select is(
-  (select max(total_count) from public.get_latest_process_versions(10, 1, 'my', '16000000-0000-0000-0000-000000000047')),
+  (select max(total_count) from api.get_latest_process_versions(10, 1, 'my', '16000000-0000-0000-0000-000000000047')),
   2::bigint,
   'process my data list total_count counts user-owned unique UUIDs'
 );
 
 select is(
-  strpos(pg_get_functiondef('public.get_latest_flow_versions(bigint,bigint,text,text,uuid,integer,jsonb,text,text)'::regprocedure), 'user_id::text = this_user_id'),
+  strpos(pg_get_functiondef('api.get_latest_flow_versions(bigint,bigint,text,text,uuid,integer,jsonb,text,text)'::regprocedure), 'user_id::text = this_user_id'),
   0,
   'flow latest list does not cast user_id on the my-data predicate'
 );
 
 select is(
-  strpos(pg_get_functiondef('public.get_latest_process_versions(bigint,bigint,text,text,uuid,integer,text,text,text)'::regprocedure), 'user_id::text = this_user_id'),
+  strpos(pg_get_functiondef('api.get_latest_process_versions(bigint,bigint,text,text,uuid,integer,text,text,text)'::regprocedure), 'user_id::text = this_user_id'),
   0,
   'process latest list does not cast user_id on the my-data predicate'
 );
 
 select is(
-  strpos(pg_get_functiondef('public.get_latest_lifecyclemodel_versions(bigint,bigint,text,text,uuid,integer,text,text)'::regprocedure), 'user_id::text = this_user_id'),
+  strpos(pg_get_functiondef('api.get_latest_lifecyclemodel_versions(bigint,bigint,text,text,uuid,integer,text,text)'::regprocedure), 'user_id::text = this_user_id'),
   0,
   'lifecyclemodel latest list does not cast user_id on the my-data predicate'
 );
 
 select is(
-  strpos(pg_get_functiondef('public.pgroonga_search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'user_id::text = this_user_id'),
+  strpos(pg_get_functiondef('api.pgroonga_search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'user_id::text = this_user_id'),
   0,
   'flow latest search does not cast user_id on the my-data predicate'
 );
 
 select is(
-  strpos(pg_get_functiondef('public.pgroonga_search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'user_id::text = this_user_id'),
+  strpos(pg_get_functiondef('api.pgroonga_search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure), 'user_id::text = this_user_id'),
   0,
   'process latest search does not cast user_id on the my-data predicate'
 );
 
 select is(
-  strpos(pg_get_functiondef('public.pgroonga_search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'user_id::text = this_user_id'),
+  strpos(pg_get_functiondef('api.pgroonga_search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure), 'user_id::text = this_user_id'),
   0,
   'lifecyclemodel latest search does not cast user_id on the my-data predicate'
 );
@@ -541,7 +541,7 @@ select ok(
     select 1
     from pg_proc p
     cross join unnest(p.proconfig) cfg
-    where p.oid = 'public.get_latest_flow_versions(bigint,bigint,text,text,uuid,integer,jsonb,text,text)'::regprocedure
+    where p.oid = 'api.get_latest_flow_versions(bigint,bigint,text,text,uuid,integer,jsonb,text,text)'::regprocedure
       and cfg = 'statement_timeout=60s'
   ),
   'flow latest list has a function-level timeout budget'
@@ -552,7 +552,7 @@ select ok(
     select 1
     from pg_proc p
     cross join unnest(p.proconfig) cfg
-    where p.oid = 'public.get_latest_process_versions(bigint,bigint,text,text,uuid,integer,text,text,text)'::regprocedure
+    where p.oid = 'api.get_latest_process_versions(bigint,bigint,text,text,uuid,integer,text,text,text)'::regprocedure
       and cfg = 'statement_timeout=60s'
   ),
   'process latest list has a function-level timeout budget'
@@ -563,7 +563,7 @@ select ok(
     select 1
     from pg_proc p
     cross join unnest(p.proconfig) cfg
-    where p.oid = 'public.get_latest_lifecyclemodel_versions(bigint,bigint,text,text,uuid,integer,text,text)'::regprocedure
+    where p.oid = 'api.get_latest_lifecyclemodel_versions(bigint,bigint,text,text,uuid,integer,text,text)'::regprocedure
       and cfg = 'statement_timeout=60s'
   ),
   'lifecyclemodel latest list has a function-level timeout budget'
@@ -574,7 +574,7 @@ select ok(
     select 1
     from pg_proc p
     cross join unnest(p.proconfig) cfg
-    where p.oid = 'public.pgroonga_search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure
+    where p.oid = 'api.pgroonga_search_flows_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure
       and cfg = 'statement_timeout=60s'
   ),
   'flow latest PGroonga search has a function-level timeout budget'
@@ -585,7 +585,7 @@ select ok(
     select 1
     from pg_proc p
     cross join unnest(p.proconfig) cfg
-    where p.oid = 'public.pgroonga_search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure
+    where p.oid = 'api.pgroonga_search_processes_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text)'::regprocedure
       and cfg = 'statement_timeout=60s'
   ),
   'process latest PGroonga search has a function-level timeout budget'
@@ -596,7 +596,7 @@ select ok(
     select 1
     from pg_proc p
     cross join unnest(p.proconfig) cfg
-    where p.oid = 'public.pgroonga_search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure
+    where p.oid = 'api.pgroonga_search_lifecyclemodels_latest(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer)'::regprocedure
       and cfg = 'statement_timeout=60s'
   ),
   'lifecyclemodel latest PGroonga search has a function-level timeout budget'

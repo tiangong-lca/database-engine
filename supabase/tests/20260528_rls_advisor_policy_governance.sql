@@ -31,7 +31,7 @@ select is(
     select count(*)::integer
     from affected a
     join pg_class c on c.relname = a.table_name
-    join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+    join pg_namespace n on n.oid = c.relnamespace and n.nspname in ('public', 'private')
     join pg_policy p on p.polrelid = c.oid and p.polname = a.policy_name
   ),
   18,
@@ -70,7 +70,7 @@ policy_exprs as (
     ) as stripped_expr
   from affected a
   join pg_class c on c.relname = a.table_name
-  join pg_namespace n on n.oid = c.relnamespace and n.nspname = 'public'
+  join pg_namespace n on n.oid = c.relnamespace and n.nspname in ('public', 'private')
   join pg_policy p on p.polrelid = c.oid and p.polname = a.policy_name
 )
 select is(
@@ -90,7 +90,7 @@ select is(
     join pg_class c on c.oid = p.polrelid
     join pg_namespace n on n.oid = c.relnamespace
     join pg_roles r on r.oid = any (p.polroles)
-    where n.nspname = 'public'
+    where n.nspname in ('public', 'private')
       and c.relname = 'comments'
       and p.polpermissive
       and p.polcmd = 'w'
@@ -106,7 +106,7 @@ select is(
     from pg_policy p
     join pg_class c on c.oid = p.polrelid
     join pg_namespace n on n.oid = c.relnamespace
-    where n.nspname = 'public'
+    where n.nspname in ('public', 'private')
       and c.relname = 'comments'
       and p.polname in ('comments update by review-admin', 'comments update by reviewer self')
   ),
@@ -120,7 +120,7 @@ select is(
     from pg_policy p
     join pg_class c on c.oid = p.polrelid
     join pg_namespace n on n.oid = c.relnamespace
-    where n.nspname = 'public'
+    where n.nspname in ('public', 'private')
       and c.relname = 'teams'
       and p.polname in ('insert by authenticated', 'select by owner or public teams', 'update by owner and admin')
   ),
@@ -134,7 +134,7 @@ select is(
     from pg_policy p
     join pg_class c on c.oid = p.polrelid
     join pg_namespace n on n.oid = c.relnamespace
-    where n.nspname = 'public'
+    where n.nspname in ('public', 'private')
       and c.relname = 'teams'
       and (
         coalesce(pg_get_expr(p.polqual, p.polrelid), '')

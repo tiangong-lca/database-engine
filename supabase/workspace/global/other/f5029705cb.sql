@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."cmd_review_finalize_reject"("p_review_id" "uuid", "p_reason" "text", "p_audit" "jsonb") IS 'Review Admin final rejection from Unassigned or Assigned. All non-revoked comments close as -1 and the reason remains in reviews.json.comment.';

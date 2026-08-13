@@ -22,8 +22,8 @@ $$;
 
 select plan(35);
 
-select has_table('public', 'lcia_result_packages', 'LCIA result packages table exists');
-select has_table('public', 'lcia_result_publications', 'LCIA result publications table exists');
+select has_table('private', 'lcia_result_packages', 'LCIA result packages table exists');
+select has_table('private', 'lcia_result_publications', 'LCIA result publications table exists');
 select ok(to_regclass('public.data_product_runs') is null, 'data_product_runs table is not created');
 select ok(to_regclass('public.data_product_run_inputs') is null, 'data_product_run_inputs table is not created');
 select ok(to_regclass('public.data_product_packages') is null, 'data_product_packages table is not created');
@@ -31,52 +31,52 @@ select ok(to_regclass('public.data_product_lcia_results') is null, 'data_product
 select ok(to_regclass('public.data_product_artifacts') is null, 'data_product_artifacts table is not created');
 
 select has_function(
-  'public',
+  'api',
   'cmd_lcia_result_build_request',
   array['text', 'jsonb', 'text', 'text', 'jsonb', 'text', 'jsonb'],
   'cmd_lcia_result_build_request exists'
 );
 
 select has_function(
-  'public',
+  'private',
   'cmd_lcia_result_package_mark_ready',
   array['uuid', 'text', 'uuid', 'uuid', 'uuid', 'jsonb', 'jsonb', 'jsonb', 'jsonb', 'text', 'text', 'jsonb'],
   'cmd_lcia_result_package_mark_ready exists'
 );
 
 select has_function(
-  'public',
+  'api',
   'cmd_lcia_result_package_publish',
   array['uuid', 'text', 'text', 'jsonb'],
   'cmd_lcia_result_package_publish exists'
 );
 
 select has_function(
-  'public',
+  'api',
   'get_lcia_result_package_preview',
   array['uuid'],
   'get_lcia_result_package_preview exists'
 );
 
 select has_function(
-  'public',
+  'api',
   'get_published_lcia_result_package',
   array['uuid', 'text', 'text'],
   'get_published_lcia_result_package exists'
 );
 
 select ok(
-  (select relrowsecurity from pg_class where oid = 'public.lcia_result_packages'::regclass),
+  (select relrowsecurity from pg_class where oid = 'private.lcia_result_packages'::regclass),
   'lcia_result_packages has RLS enabled'
 );
 
 select ok(
-  not has_table_privilege('authenticated', 'public.lcia_result_packages', 'SELECT'),
+  not has_table_privilege('authenticated', 'private.lcia_result_packages', 'SELECT'),
   'authenticated users cannot directly select unpublished LCIA result packages'
 );
 
 select ok(
-  not has_table_privilege('anon', 'public.lcia_result_publications', 'SELECT'),
+  not has_table_privilege('anon', 'private.lcia_result_publications', 'SELECT'),
   'anon users cannot directly select LCIA result publications'
 );
 
@@ -84,7 +84,7 @@ select ok(
   exists (
     select 1
     from pg_constraint
-    where conrelid = 'public.roles'::regclass
+    where conrelid = 'private.roles'::regclass
       and conname = 'roles_role_check'
       and pg_get_constraintdef(oid) like '%data_product_manager%'
   ),
@@ -95,7 +95,7 @@ select ok(
   exists (
     select 1
     from pg_constraint
-    where conrelid = 'public.lca_network_snapshots'::regclass
+    where conrelid = 'private.lca_network_snapshots'::regclass
       and conname = 'lca_network_snapshots_scope_chk'
       and pg_get_constraintdef(oid) like '%data_product%'
   ),
@@ -105,7 +105,7 @@ select ok(
 select ok(
   exists (
     select 1
-    from public.worker_job_kinds
+    from private.worker_job_kinds
     where job_kind = 'lcia_result.package_build'
       and worker_queue = 'solver'
       and default_visibility = 'operator'
@@ -163,16 +163,16 @@ values
     false
   );
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values
   ('98230000-0000-4000-8000-000000000001', '{"email":"data-product-manager@example.com"}'::jsonb, null),
   ('98230000-0000-4000-8000-000000000002', '{"email":"ordinary-user@example.com"}'::jsonb, null);
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values ('00000000-0000-0000-0000-000000000000', '{"name":"System Team"}'::jsonb, 0, false)
 on conflict (id) do nothing;
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values ('98230000-0000-4000-8000-000000000001', '00000000-0000-0000-0000-000000000000', 'data_product_manager');
 
 alter table public.processes disable trigger "process_extract_md_trigger_insert";
@@ -186,7 +186,7 @@ values
   ('98230000-0000-4000-8000-000000000103', '01.00.000', '{"processDataSet":{"name":"draft"}}'::jsonb, '98230000-0000-4000-8000-000000000001', 0);
 
 select is(
-  (public.lcia_result_current_eligible_manifest()->>'eligibleInputCount')::integer,
+  (api.lcia_result_current_eligible_manifest()->>'eligibleInputCount')::integer,
   2,
   'global eligible manifest counts latest published process versions only'
 );
@@ -194,7 +194,7 @@ select is(
 select is(
   (
     select process.value->>'version'
-    from jsonb_array_elements(public.lcia_result_current_eligible_manifest()->'inputManifest'->'processes') as process(value)
+    from jsonb_array_elements(api.lcia_result_current_eligible_manifest()->'inputManifest'->'processes') as process(value)
     where process.value->>'id' = '98230000-0000-4000-8000-000000000101'
   ),
   '01.00.001',
@@ -207,7 +207,7 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 
 select is(
-  public.cmd_lcia_result_build_request(
+  api.cmd_lcia_result_build_request(
     p_name => 'ordinary user build',
     p_processes => null,
     p_coverage_mode => 'global_eligible',
@@ -224,7 +224,7 @@ select set_config('request.jwt.claim.sub', '98230000-0000-4000-8000-000000000001
 select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 
 select is(
-  public.cmd_lcia_result_build_request(
+  api.cmd_lcia_result_build_request(
     p_name => 'draft input build',
     p_processes => jsonb_build_array(jsonb_build_object('id', '98230000-0000-4000-8000-000000000103', 'version', '01.00.000')),
     p_coverage_mode => 'subset',
@@ -238,7 +238,7 @@ select is(
 );
 
 select is(
-  public.cmd_lcia_result_build_request(
+  api.cmd_lcia_result_build_request(
     p_name => 'global build with manual input',
     p_processes => jsonb_build_array(jsonb_build_object('id', '98230000-0000-4000-8000-000000000101', 'version', '01.00.000')),
     p_coverage_mode => 'global_eligible',
@@ -263,7 +263,7 @@ select
   'build',
   (result->'data'->>'buildId')::uuid
 from (
-  select public.cmd_lcia_result_build_request(
+  select api.cmd_lcia_result_build_request(
     p_name => 'global published LCIA result build',
     p_processes => null,
     p_coverage_mode => 'global_eligible',
@@ -276,7 +276,7 @@ from (
 
 select is(
   (
-    public.cmd_lcia_result_build_request(
+    api.cmd_lcia_result_build_request(
       p_name => 'global published LCIA result build',
       p_processes => null,
       p_coverage_mode => 'global_eligible',
@@ -292,7 +292,7 @@ select is(
 
 select is(
   (
-    public.cmd_lcia_result_build_request(
+    api.cmd_lcia_result_build_request(
       p_name => 'global published LCIA result build',
       p_processes => null,
       p_coverage_mode => 'global_eligible',
@@ -308,7 +308,7 @@ select is(
 
 reset role;
 
-insert into public.worker_jobs (
+insert into private.worker_jobs (
   id,
   job_kind,
   worker_runtime,
@@ -346,8 +346,8 @@ select
     'eligibility_resolved_at', now(),
     'eligible_input_count', 2,
     'included_input_count', 2,
-    'input_manifest_hash', public.lcia_result_current_eligible_manifest()->>'inputManifestHash',
-    'input_manifest', public.lcia_result_current_eligible_manifest()->'inputManifest',
+    'input_manifest_hash', api.lcia_result_current_eligible_manifest()->>'inputManifestHash',
+    'input_manifest', api.lcia_result_current_eligible_manifest()->'inputManifest',
     'lcia_method_set', jsonb_build_array(jsonb_build_object('method', 'EF', 'version', 'v1')),
     'default_impact_category', 'climate-change',
     'postprocess_manifest', jsonb_build_object('postprocess_mode', 'skipped')
@@ -362,7 +362,7 @@ values
   ('result', '98230000-0000-4000-8000-000000000501'),
   ('latest_all_unit', '98230000-0000-4000-8000-000000000601');
 
-insert into public.lca_network_snapshots (id, scope, process_filter, source_hash, status, created_by)
+insert into private.lca_network_snapshots (id, scope, process_filter, source_hash, status, created_by)
 values (
   (select id from lcia_result_test_ids where label = 'snapshot'),
   'data_product',
@@ -372,7 +372,7 @@ values (
   '98230000-0000-4000-8000-000000000001'
 );
 
-insert into public.lca_results (
+insert into private.lca_results (
   id,
   job_id,
   snapshot_id,
@@ -399,7 +399,7 @@ values (
   false
 );
 
-insert into public.lca_latest_all_unit_results (
+insert into private.lca_latest_all_unit_results (
   id,
   snapshot_id,
   job_id,
@@ -433,7 +433,7 @@ select
   'package',
   (result->'data'->>'packageId')::uuid
 from (
-  select public.cmd_lcia_result_package_mark_ready(
+  select private.cmd_lcia_result_package_mark_ready(
     p_build_worker_job_id => (select id from lcia_result_test_ids where label = 'worker_job'),
     p_package_version => '2026-06-public',
     p_snapshot_id => (select id from lcia_result_test_ids where label = 'snapshot'),
@@ -446,13 +446,13 @@ from (
 ) as marked;
 
 select is(
-  (select status from public.lcia_result_packages where id = (select id from lcia_result_test_ids where label = 'package')),
+  (select status from private.lcia_result_packages where id = (select id from lcia_result_test_ids where label = 'package')),
   'preview_ready',
   'service role can mark an LCIA result package preview_ready'
 );
 
 select is(
-  (select build_worker_job_id from public.lcia_result_packages where id = (select id from lcia_result_test_ids where label = 'package')),
+  (select build_worker_job_id from private.lcia_result_packages where id = (select id from lcia_result_test_ids where label = 'package')),
   (select id from lcia_result_test_ids where label = 'worker_job'),
   'package keeps the producing worker_jobs reference'
 );
@@ -463,7 +463,7 @@ select set_config('request.jwt.claim.role', 'authenticated', true);
 select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 
 select is(
-  public.get_lcia_result_package_preview((select id from lcia_result_test_ids where label = 'package'))->>'code',
+  api.get_lcia_result_package_preview((select id from lcia_result_test_ids where label = 'package'))->>'code',
   'not_data_product_manager',
   'ordinary users cannot preview unpublished LCIA result packages'
 );
@@ -472,7 +472,7 @@ select set_config('request.jwt.claim.sub', '98230000-0000-4000-8000-000000000001
 select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 
 select is(
-  public.get_lcia_result_package_preview(
+  api.get_lcia_result_package_preview(
     (select id from lcia_result_test_ids where label = 'package')
   )->'data'->'summary'->>'packageVersion',
   '2026-06-public',
@@ -480,7 +480,7 @@ select is(
 );
 
 select is(
-  public.get_lcia_result_package_preview(
+  api.get_lcia_result_package_preview(
     (select id from lcia_result_test_ids where label = 'package')
   )->'data'->'summary'->>'snapshotId',
   (select id::text from lcia_result_test_ids where label = 'snapshot'),
@@ -492,7 +492,7 @@ select
   'publication',
   (result->'data'->>'publicationId')::uuid
 from (
-  select public.cmd_lcia_result_package_publish(
+  select api.cmd_lcia_result_package_publish(
     p_package_id => (select id from lcia_result_test_ids where label = 'package'),
     p_display_default_impact_category => 'climate-change',
     p_reason => 'publish pgtap package',
@@ -505,14 +505,14 @@ reset role;
 select ok(
   (
     select is_current
-    from public.lcia_result_publications
+    from private.lcia_result_publications
     where id = (select id from lcia_result_test_ids where label = 'publication')
   ),
   'manager can publish a package as current global public latest'
 );
 
 select ok(
-  (select is_pinned from public.lca_results where id = (select id from lcia_result_test_ids where label = 'result')),
+  (select is_pinned from private.lca_results where id = (select id from lcia_result_test_ids where label = 'result')),
   'published LCIA result is pinned against result GC'
 );
 
@@ -521,7 +521,7 @@ select set_config('request.jwt.claim.role', 'anon', true);
 select set_config('request.jwt.claims', '{"role":"anon"}', true);
 
 select is(
-  public.get_published_lcia_result_package(
+  api.get_published_lcia_result_package(
     '98230000-0000-4000-8000-000000000101',
     '01.00.001',
     'climate-change'
@@ -534,7 +534,7 @@ reset role;
 
 select throws_ok(
   $$
-    update public.lcia_result_packages
+    update private.lcia_result_packages
     set input_manifest_hash = 'mutated'
     where id = (select id from lcia_result_test_ids where label = 'package')
   $$,
@@ -545,7 +545,7 @@ select throws_ok(
 
 select throws_ok(
   $$
-    insert into public.lcia_result_publications (
+    insert into private.lcia_result_publications (
       package_id,
       publication_series_key,
       publication_channel,

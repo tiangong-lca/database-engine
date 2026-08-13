@@ -86,18 +86,18 @@ values
     false
   );
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values
   ('91000000-0000-0000-0000-000000000001', '{"email":"dataset-owner@example.com"}'::jsonb, null),
   ('91000000-0000-0000-0000-000000000002', '{"email":"outsider@example.com"}'::jsonb, null),
   ('91000000-0000-0000-0000-000000000003', '{"email":"system-review-admin@example.com"}'::jsonb, null);
 
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values
   ('92000000-0000-0000-0000-000000000001', '{"name":"Review Team"}'::jsonb, 1, false),
   ('00000000-0000-0000-0000-000000000000', '{"name":"System Team"}'::jsonb, 0, false);
 
-insert into public.roles (user_id, team_id, role)
+insert into private.roles (user_id, team_id, role)
 values
   ('91000000-0000-0000-0000-000000000001', '92000000-0000-0000-0000-000000000001', 'owner'),
   ('91000000-0000-0000-0000-000000000002', '92000000-0000-0000-0000-000000000001', 'review-admin'),
@@ -129,7 +129,7 @@ set local role authenticated;
 select set_config('request.jwt.claim.sub', '91000000-0000-0000-0000-000000000001', true);
 
 select is(
-  public.cmd_dataset_create(
+  api.cmd_dataset_create(
     'contacts',
     '94000000-0000-0000-0000-000000000001',
     '{
@@ -172,7 +172,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_create(
+  api.cmd_dataset_create(
     'sources',
     '94000000-0000-0000-0000-000000000010',
     '{
@@ -198,7 +198,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_create(
+  api.cmd_dataset_create(
     'unitgroups',
     '94000000-0000-0000-0000-000000000011',
     '{
@@ -235,7 +235,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_create(
+  api.cmd_dataset_create(
     'flowproperties',
     '94000000-0000-0000-0000-000000000012',
     '{
@@ -272,7 +272,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_create(
+  api.cmd_dataset_create(
     'processes',
     '94000000-0000-0000-0000-000000000002',
     '{
@@ -301,7 +301,7 @@ select ok(
 );
 
 select is(
-  public.cmd_dataset_create(
+  api.cmd_dataset_create(
     'lifecyclemodels',
     '94000000-0000-0000-0000-000000000003',
     '{}'::jsonb,
@@ -314,7 +314,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_delete(
+  api.cmd_dataset_delete(
     'contacts',
     '94000000-0000-0000-0000-000000000001',
     '01.00.000',
@@ -336,7 +336,7 @@ select is(
 );
 
 select is(
-  public.cmd_dataset_delete(
+  api.cmd_dataset_delete(
     'sources',
     '93000000-0000-0000-0000-000000000001',
     '01.00.000',
@@ -348,8 +348,8 @@ select is(
 
 select is(
   jsonb_build_object(
-    'team_role_review_admin', public.cmd_review_is_review_admin('91000000-0000-0000-0000-000000000002'),
-    'system_review_admin', public.cmd_review_is_review_admin('91000000-0000-0000-0000-000000000003')
+    'team_role_review_admin', api.cmd_review_is_review_admin('91000000-0000-0000-0000-000000000002'),
+    'system_review_admin', api.cmd_review_is_review_admin('91000000-0000-0000-0000-000000000003')
   )::text,
   jsonb_build_object(
     'team_role_review_admin', false,

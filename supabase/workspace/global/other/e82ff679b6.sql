@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "public"."cmd_lcia_scope_closure_check_request_v2"("p_requested_scope" "jsonb", "p_request_idempotency_token" "text", "p_audit" "jsonb") IS 'Creates a release-bound closure preflight when a formal release exists, or a deterministic candidate-public-state preflight for initial release bootstrap.';

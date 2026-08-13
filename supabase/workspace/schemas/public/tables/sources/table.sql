@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS "public"."sources" (
     "extracted_md" "text",
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
+    "search_text" "text"[],
     CONSTRAINT "sources_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100])))
 );
 
@@ -24,8 +25,10 @@ ALTER TABLE ONLY "public"."sources"
 
 ALTER TABLE "public"."sources" ENABLE ROW LEVEL SECURITY;
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."sources" TO "anon";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."sources" TO "anon";
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."sources" TO "authenticated";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."sources" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."sources" TO "service_role";
+
+GRANT SELECT ON TABLE "public"."sources" TO "api_internal_executor";

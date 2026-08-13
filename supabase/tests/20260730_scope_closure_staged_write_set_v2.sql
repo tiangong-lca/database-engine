@@ -5,12 +5,12 @@ set local search_path = extensions, public, auth;
 select no_plan();
 
 select has_table(
-  'public',
+  'private',
   'lcia_scope_closure_artifact_write_set_batches',
   'v2 bounded descriptor batch receipts exist'
 );
 select has_function(
-  'public',
+  'private',
   'svc_lcia_scope_closure_artifact_write_set_create_v2',
   array[
     'uuid', 'uuid', 'uuid', 'uuid', 'text',
@@ -19,31 +19,31 @@ select has_function(
   'versioned v2 header create exists'
 );
 select has_function(
-  'public',
+  'private',
   'svc_lcia_scope_closure_artifact_write_set_register_batch_v2',
   array['uuid', 'uuid', 'uuid', 'uuid', 'uuid', 'jsonb'],
   'bounded v2 batch registration exists'
 );
 select has_function(
-  'public',
+  'private',
   'svc_lcia_scope_closure_artifact_write_set_status_v2',
   array['uuid', 'uuid', 'uuid', 'uuid'],
   'locator-free v2 ambiguous-response status exists'
 );
 select has_function(
-  'public',
+  'private',
   'svc_lcia_scope_closure_artifact_write_set_seal_v2',
   array['uuid', 'uuid', 'uuid', 'uuid'],
   'atomic v2 seal exists'
 );
 select has_function(
-  'public',
+  'private',
   'svc_lcia_scope_closure_artifact_write_set_finalize_v2',
   array['uuid', 'uuid', 'uuid', 'uuid'],
   'lease-fenced v2 finalize exists'
 );
 select has_function(
-  'public',
+  'private',
   'svc_lcia_scope_closure_artifact_write_set_fail_v2',
   array['uuid', 'uuid', 'uuid', 'uuid', 'text'],
   'lease-fenced v2 failure transition exists'
@@ -52,17 +52,17 @@ select has_function(
 select ok(
   has_function_privilege(
     'service_role',
-    'public.svc_lcia_scope_closure_artifact_write_set_create_v2(uuid,uuid,uuid,uuid,text,integer,text,jsonb,integer,uuid)',
+    'private.svc_lcia_scope_closure_artifact_write_set_create_v2(uuid,uuid,uuid,uuid,text,integer,text,jsonb,integer,uuid)',
     'execute'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.svc_lcia_scope_closure_artifact_write_set_create_v2(uuid,uuid,uuid,uuid,text,integer,text,jsonb,integer,uuid)',
+    'private.svc_lcia_scope_closure_artifact_write_set_create_v2(uuid,uuid,uuid,uuid,text,integer,text,jsonb,integer,uuid)',
     'execute'
   )
   and not has_function_privilege(
     'anon',
-    'public.svc_lcia_scope_closure_artifact_write_set_create_v2(uuid,uuid,uuid,uuid,text,integer,text,jsonb,integer,uuid)',
+    'private.svc_lcia_scope_closure_artifact_write_set_create_v2(uuid,uuid,uuid,uuid,text,integer,text,jsonb,integer,uuid)',
     'execute'
   ),
   'v2 staged publication is service-role only'
@@ -70,12 +70,12 @@ select ok(
 select ok(
   not has_table_privilege(
     'service_role',
-    'public.lcia_scope_closure_artifact_write_set_batches',
+    'private.lcia_scope_closure_artifact_write_set_batches',
     'select'
   )
   and not has_table_privilege(
     'service_role',
-    'public.lcia_scope_closure_artifact_write_set_items',
+    'private.lcia_scope_closure_artifact_write_set_items',
     'insert'
   ),
   'service callers cannot bypass RPC fences through registry tables'
@@ -110,7 +110,7 @@ insert into auth.users (
   false,
   false
 );
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values ('31600000-0000-4000-8000-000000000001', '{}', null);
 
 select set_config('request.jwt.claim.role', 'service_role', true);
@@ -293,7 +293,7 @@ declare
   v_digest text;
   v_result jsonb;
 begin
-  insert into public.worker_jobs (
+  insert into private.worker_jobs (
     id,
     job_kind,
     worker_runtime,
@@ -325,7 +325,7 @@ begin
     now()
   );
 
-  insert into public.lcia_scope_closure_checks (
+  insert into private.lcia_scope_closure_checks (
     id,
     worker_job_id,
     requested_by,
@@ -370,7 +370,7 @@ begin
   );
 
   v_result :=
-    public.svc_lcia_scope_closure_artifact_write_set_create_v2(
+    private.svc_lcia_scope_closure_artifact_write_set_create_v2(
       v_check_id,
       v_job_id,
       v_lease_token,
@@ -435,7 +435,7 @@ begin
     where (item.value->>'ordinal')::integer
       between p_first_ordinal and p_last_ordinal
   ));
-  return public.svc_lcia_scope_closure_artifact_write_set_register_batch_v2(
+  return private.svc_lcia_scope_closure_artifact_write_set_register_batch_v2(
     v_context.write_set_id,
     v_context.write_token,
     v_context.job_id,
@@ -451,7 +451,7 @@ create or replace function pg_temp.issue_316_seal(
 ) returns jsonb
 language sql
 as $$
-  select public.svc_lcia_scope_closure_artifact_write_set_seal_v2(
+  select private.svc_lcia_scope_closure_artifact_write_set_seal_v2(
     context.write_set_id,
     context.write_token,
     context.job_id,
@@ -520,7 +520,7 @@ begin
     extract(epoch from clock_timestamp() - v_registration_start) * 1000;
 
   select count(*) into v_registered_rows
-  from public.lcia_scope_closure_artifact_write_set_items
+  from private.lcia_scope_closure_artifact_write_set_items
   where write_set_id = v_context.write_set_id;
 
   v_seal_start := clock_timestamp();
@@ -631,7 +631,7 @@ select is(
 );
 select is(
   (
-    select public.svc_lcia_scope_closure_artifact_write_set_create_v2(
+    select private.svc_lcia_scope_closure_artifact_write_set_create_v2(
       context.check_id,
       context.job_id,
       context.lease_token,
@@ -651,7 +651,7 @@ select is(
 );
 select is(
   (
-    select public.svc_lcia_scope_closure_artifact_write_set_create_v2(
+    select private.svc_lcia_scope_closure_artifact_write_set_create_v2(
       context.check_id,
       context.job_id,
       context.lease_token,
@@ -720,7 +720,7 @@ select is(
 select is(
   (
     select count(*)
-    from public.lcia_scope_closure_artifact_write_set_items item
+    from private.lcia_scope_closure_artifact_write_set_items item
     join issue_316_context context
       on context.write_set_id = item.write_set_id
     where context.label = 'replay-status'
@@ -730,7 +730,7 @@ select is(
 );
 
 create temporary table issue_316_status_before as
-select public.svc_lcia_scope_closure_artifact_write_set_status_v2(
+select private.svc_lcia_scope_closure_artifact_write_set_status_v2(
   context.check_id,
   context.job_id,
   context.lease_token,
@@ -784,7 +784,7 @@ select is(
 );
 select is(
   (
-    select public.svc_lcia_scope_closure_artifact_write_set_status_v2(
+    select private.svc_lcia_scope_closure_artifact_write_set_status_v2(
       context.check_id,
       context.job_id,
       context.lease_token,
@@ -801,7 +801,7 @@ select is(
     select count(*)::integer
     from issue_316_context context
     cross join lateral jsonb_object_keys(
-      public.svc_lcia_scope_closure_artifact_write_set_status_v2(
+      private.svc_lcia_scope_closure_artifact_write_set_status_v2(
         context.check_id,
         context.job_id,
         context.lease_token,
@@ -838,7 +838,7 @@ select is(
 );
 select is(
   (
-    select public.svc_lcia_scope_closure_artifact_write_set_inspect(
+    select private.svc_lcia_scope_closure_artifact_write_set_inspect(
       write_set_id
     ) #>> '{code}'
     from issue_316_context
@@ -849,7 +849,7 @@ select is(
 );
 select is(
   (
-    select public.svc_lcia_scope_closure_artifact_write_set_finalize(
+    select private.svc_lcia_scope_closure_artifact_write_set_finalize(
       write_set_id,
       write_token
     ) #>> '{code}'
@@ -861,7 +861,7 @@ select is(
 );
 select throws_ok(
   format(
-    'update public.lcia_scope_closure_artifact_write_set_items set byte_size = byte_size + 1 where write_set_id = %L::uuid',
+    'update private.lcia_scope_closure_artifact_write_set_items set byte_size = byte_size + 1 where write_set_id = %L::uuid',
     (select write_set_id::text from issue_316_context
      where label = 'replay-status')
   ),
@@ -893,7 +893,7 @@ select is(
 select is(
   (
     select count(*)
-    from public.lcia_scope_closure_artifact_write_set_items item
+    from private.lcia_scope_closure_artifact_write_set_items item
     join issue_316_context context
       on context.write_set_id = item.write_set_id
     where context.label = 'reordered'
@@ -923,11 +923,11 @@ select ok(
   (
     select
       (select count(*)
-       from public.lcia_scope_closure_artifact_write_set_items item
+       from private.lcia_scope_closure_artifact_write_set_items item
        where item.write_set_id = context.write_set_id) = 1
       and
       (select count(*)
-       from public.lcia_scope_closure_artifact_write_set_batches batch
+       from private.lcia_scope_closure_artifact_write_set_batches batch
        where batch.write_set_id = context.write_set_id) = 1
     from issue_316_context context
     where context.label = 'duplicate-cross-batch'
@@ -958,11 +958,11 @@ select ok(
     select status = 'registration_open'
       and not exists (
         select 1
-        from public.worker_job_artifacts artifact
+        from private.worker_job_artifacts artifact
         where artifact.job_id = context.job_id
       )
     from issue_316_context context
-    join public.lcia_scope_closure_artifact_write_sets write_set
+    join private.lcia_scope_closure_artifact_write_sets write_set
       on write_set.id = context.write_set_id
     where context.label = 'missing-ordinal'
   ),
@@ -991,7 +991,7 @@ select is(
 select is(
   (
     select status
-    from public.lcia_scope_closure_artifact_write_sets write_set
+    from private.lcia_scope_closure_artifact_write_sets write_set
     join issue_316_context context
       on context.write_set_id = write_set.id
     where context.label = 'wrong-digest'
@@ -1063,11 +1063,11 @@ select ok(
   (
     select
       (select count(*)
-       from public.lcia_scope_closure_artifact_write_set_items item
+       from private.lcia_scope_closure_artifact_write_set_items item
        where item.write_set_id = context.write_set_id) = 0
       and
       (select count(*)
-       from public.lcia_scope_closure_artifact_write_set_batches batch
+       from private.lcia_scope_closure_artifact_write_set_batches batch
        where batch.write_set_id = context.write_set_id) = 0
     from issue_316_context context
     where context.label = 'locator-conflict'
@@ -1097,7 +1097,7 @@ select is(
 );
 
 select pg_temp.issue_316_create_context('stale-fence', 3);
-update public.worker_jobs
+update private.worker_jobs
 set lease_token = gen_random_uuid(),
     lease_expires_at = now() + interval '1 hour'
 where id = (
@@ -1115,7 +1115,7 @@ select is(
 );
 
 select pg_temp.issue_316_create_context('foreign-job', 3);
-insert into public.worker_jobs (
+insert into private.worker_jobs (
   id,
   job_kind,
   worker_runtime,
@@ -1146,7 +1146,7 @@ insert into public.worker_jobs (
 );
 select is(
   (
-    select public.svc_lcia_scope_closure_artifact_write_set_register_batch_v2(
+    select private.svc_lcia_scope_closure_artifact_write_set_register_batch_v2(
       context.write_set_id,
       context.write_token,
       '31600000-0000-4000-8000-000000000099',
@@ -1163,7 +1163,7 @@ select is(
 
 select is(
   (
-    select public.svc_lcia_scope_closure_artifact_write_set_finalize_v2(
+    select private.svc_lcia_scope_closure_artifact_write_set_finalize_v2(
       context.write_set_id,
       context.write_token,
       context.job_id,
@@ -1177,7 +1177,7 @@ select is(
 );
 
 create temporary table issue_316_v2_finalize as
-select public.svc_lcia_scope_closure_artifact_write_set_finalize_v2(
+select private.svc_lcia_scope_closure_artifact_write_set_finalize_v2(
   context.write_set_id,
   context.write_token,
   context.job_id,
@@ -1194,7 +1194,7 @@ select ok(
   (
     select
       (select count(*)
-       from public.worker_job_artifacts artifact
+       from private.worker_job_artifacts artifact
        where artifact.job_id = context.job_id
          and artifact.lifecycle_state = 'ready') =
         context.descriptor_count
@@ -1202,7 +1202,7 @@ select ok(
       and check_row.complete_machine_result_artifact_id is not null
       and check_row.closure_bundle_artifact_id is not null
     from issue_316_context context
-    join public.lcia_scope_closure_checks check_row
+    join private.lcia_scope_closure_checks check_row
       on check_row.id = context.check_id
     where context.label = 'replay-status'
   ),
@@ -1210,7 +1210,7 @@ select ok(
 );
 select is(
   (
-    select public.svc_lcia_scope_closure_artifact_write_set_finalize_v2(
+    select private.svc_lcia_scope_closure_artifact_write_set_finalize_v2(
       context.write_set_id,
       context.write_token,
       context.job_id,
@@ -1223,7 +1223,7 @@ select is(
   'exact finalize replay is idempotent'
 );
 
-update public.lcia_scope_closure_checks
+update private.lcia_scope_closure_checks
 set status = 'passed',
     scan_completeness = 'complete'
 where id = (
@@ -1256,7 +1256,7 @@ select is(
 );
 select is(
   (
-    select public.svc_lcia_scope_closure_artifact_write_set_finalize_v2(
+    select private.svc_lcia_scope_closure_artifact_write_set_finalize_v2(
       context.write_set_id,
       context.write_token,
       context.job_id,
@@ -1276,7 +1276,7 @@ select pg_temp.issue_316_batch(
   1,
   1
 );
-update public.lcia_scope_closure_artifact_write_sets
+update private.lcia_scope_closure_artifact_write_sets
 set created_at = now() - interval '2 seconds',
     staging_expires_at = now() - interval '1 second'
 where id = (
@@ -1285,7 +1285,7 @@ where id = (
   where label = 'abandoned-open'
 );
 create temporary table issue_316_reconcile as
-select public.svc_lcia_scope_closure_artifact_write_set_reconcile(100, 300)
+select private.svc_lcia_scope_closure_artifact_write_set_reconcile(100, 300)
   value;
 select ok(
   (
@@ -1304,7 +1304,7 @@ select ok(
 
 -- The retained one-shot adapter must still accept and finalize <=500 items.
 select pg_temp.issue_316_create_context('legacy-seed-only', 3);
-update public.lcia_scope_closure_artifact_write_sets
+update private.lcia_scope_closure_artifact_write_sets
 set status = 'cleaned',
     cleaned_at = now(),
     updated_at = now()
@@ -1317,7 +1317,7 @@ create temporary table issue_316_legacy as
 select
   context.job_id,
   context.check_id,
-  public.svc_lcia_scope_closure_artifact_write_set_create(
+  private.svc_lcia_scope_closure_artifact_write_set_create(
     context.check_id,
     'issue-316-legacy-one-shot',
     (
@@ -1337,7 +1337,7 @@ select is(
 );
 select is(
   (
-    select public.svc_lcia_scope_closure_artifact_write_set_finalize(
+    select private.svc_lcia_scope_closure_artifact_write_set_finalize(
       (value #>> '{data,writeSetId}')::uuid,
       (value #>> '{data,writeToken}')::uuid
     ) #>> '{data,status}'

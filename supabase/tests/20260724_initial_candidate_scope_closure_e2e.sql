@@ -63,9 +63,9 @@ insert into auth.users (
   false,
   false
 );
-insert into public.users(id, raw_user_meta_data, contact)
+insert into private.users(id, raw_user_meta_data, contact)
 values ('c7240000-0000-4000-8000-000000000001', '{}', null);
-insert into public.teams(id, json, rank, is_public)
+insert into private.teams(id, json, rank, is_public)
 values (
   '00000000-0000-0000-0000-000000000000',
   '{"name":"System"}',
@@ -73,7 +73,7 @@ values (
   false
 )
 on conflict (id) do nothing;
-insert into public.roles(user_id, team_id, role)
+insert into private.roles(user_id, team_id, role)
 values (
   'c7240000-0000-4000-8000-000000000001',
   '00000000-0000-0000-0000-000000000000',
@@ -124,6 +124,73 @@ set state_code = excluded.state_code,
     json_ordered = excluded.json_ordered,
     user_id = excluded.user_id;
 
+create temporary table candidate_boundary_normalizations as
+select input.label,
+  private.lcia_scope_closure_normalize_request(
+    jsonb_build_object(
+      'coverageMode', 'subset',
+      'processes', jsonb_build_array(jsonb_build_object(
+        'id', 'c7240000-0000-4000-8000-000000000010',
+        'version', '01.00.000'
+      )),
+      'lciaMethods', jsonb_build_array(jsonb_build_object(
+        'id', '503699e0-eca9-4089-8bf8-e0f49c93e578',
+        'version', '01.01.000'
+      )),
+      'linkPolicy', case
+        when input.boundary_policy is null then '{}'::jsonb
+        else jsonb_build_object(
+          'technosphereBoundaryPolicy', input.boundary_policy
+        )
+      end
+    )
+  ) as normalized_scope
+from (values
+  ('omitted', null::text),
+  ('closed', 'closed'),
+  ('open', 'open'),
+  ('cutoff', 'cutoff')
+) as input(label, boundary_policy);
+
+select is(
+  (
+    select count(*)
+    from candidate_boundary_normalizations
+    where normalized_scope->'linkPolicy'->>'technosphereBoundaryPolicy' = 'cutoff'
+  ),
+  4::bigint,
+  'all supported legacy boundary inputs normalize to cutoff'
+);
+select is(
+  (
+    select count(distinct normalized_scope)
+    from candidate_boundary_normalizations
+  ),
+  1::bigint,
+  'legacy boundary inputs produce one canonical requested scope and fingerprint input'
+);
+select throws_ok(
+  $sql$
+    select private.lcia_scope_closure_normalize_request(
+      '{
+        "coverageMode":"subset",
+        "processes":[{
+          "id":"c7240000-0000-4000-8000-000000000010",
+          "version":"01.00.000"
+        }],
+        "lciaMethods":[{
+          "id":"503699e0-eca9-4089-8bf8-e0f49c93e578",
+          "version":"01.01.000"
+        }],
+        "linkPolicy":{"technosphereBoundaryPolicy":"unknown"}
+      }'::jsonb
+    )
+  $sql$,
+  '22023',
+  'invalid_closure_link_policy',
+  'unknown boundary policies remain invalid'
+);
+
 select is(
   (
     select count(*)
@@ -149,7 +216,7 @@ select is(
 select ok(
   not exists (
     select 1
-    from public.lca_release_publications
+    from private.lca_release_publications
     where is_current = true and status = 'current'
   ),
   'fixture has no current formal release'
@@ -170,7 +237,7 @@ create temporary table candidate_closure_responses(
 insert into candidate_closure_responses values
 (
   'candidate-subset-a',
-  public.cmd_lcia_scope_closure_check_request_v2(
+  api.cmd_lcia_scope_closure_check_request_v2(
     '{
       "coverageMode":"subset",
       "processes":[{
@@ -188,7 +255,7 @@ insert into candidate_closure_responses values
 ),
 (
   'candidate-subset-b',
-  public.cmd_lcia_scope_closure_check_request_v2(
+  api.cmd_lcia_scope_closure_check_request_v2(
     '{
       "coverageMode":"subset",
       "processes":[{
@@ -220,7 +287,7 @@ reset role;
 select is(
   (
     select count(distinct data_snapshot_token)
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where request_idempotency_token in ('candidate-subset-a', 'candidate-subset-b')
   ),
   1::bigint,
@@ -229,7 +296,7 @@ select is(
 select is(
   (
     select count(distinct scan_execution_id)
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where request_idempotency_token in ('candidate-subset-a', 'candidate-subset-b')
   ),
   1::bigint,
@@ -238,7 +305,7 @@ select is(
 select is(
   (
     select requested_scope_manifest->'processes'->0->>'version'
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where request_idempotency_token = 'candidate-subset-a'
   ),
   '01.00.000',
@@ -247,7 +314,7 @@ select is(
 select is(
   (
     select requested_scope_manifest->'lciaMethods'->0->>'id'
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where request_idempotency_token = 'candidate-subset-a'
   ),
   '503699e0-eca9-4089-8bf8-e0f49c93e578',
@@ -255,9 +322,18 @@ select is(
 );
 select is(
   (
+    select requested_scope_manifest->'linkPolicy'->>'technosphereBoundaryPolicy'
+    from private.lcia_scope_closure_checks
+    where request_idempotency_token = 'candidate-subset-a'
+  ),
+  'cutoff',
+  'persisted Scope Closure requests freeze the canonical cutoff boundary policy'
+);
+select is(
+  (
     select snapshot.root_manifest->'candidateData'->>'sourceKind'
-    from public.lcia_scope_closure_checks closure_check
-    join public.lcia_scope_closure_data_snapshots snapshot
+    from private.lcia_scope_closure_checks closure_check
+    join private.lcia_scope_closure_data_snapshots snapshot
       using (data_snapshot_token)
     where closure_check.request_idempotency_token = 'candidate-subset-a'
   ),
@@ -268,8 +344,8 @@ select is(
   (
     select snapshot.root_manifest
       ->'currentPublicRelease'->>'releaseRunId'
-    from public.lcia_scope_closure_checks closure_check
-    join public.lcia_scope_closure_data_snapshots snapshot
+    from private.lcia_scope_closure_checks closure_check
+    join private.lcia_scope_closure_data_snapshots snapshot
       using (data_snapshot_token)
     where closure_check.request_idempotency_token = 'candidate-subset-a'
   ),
@@ -279,8 +355,8 @@ select is(
 select is(
   (
     select count(*)
-    from public.lcia_scope_closure_checks closure_check
-    join public.lcia_scope_closure_data_snapshots snapshot
+    from private.lcia_scope_closure_checks closure_check
+    join private.lcia_scope_closure_data_snapshots snapshot
       using (data_snapshot_token)
     cross join lateral jsonb_array_elements(
       snapshot.root_manifest->'datasets'
@@ -298,8 +374,8 @@ select is(
 select is(
   (
     select count(*)
-    from public.lcia_scope_closure_checks closure_check
-    join public.lcia_scope_closure_data_snapshots snapshot
+    from private.lcia_scope_closure_checks closure_check
+    join private.lcia_scope_closure_data_snapshots snapshot
       using (data_snapshot_token)
     cross join lateral jsonb_array_elements(
       snapshot.root_manifest->'datasets'
@@ -325,7 +401,7 @@ select set_config(
 insert into candidate_closure_responses values
 (
   'candidate-global',
-  public.cmd_lcia_scope_closure_check_request_v2(
+  api.cmd_lcia_scope_closure_check_request_v2(
     '{
       "coverageMode":"global_eligible",
       "processes":[],
@@ -348,7 +424,7 @@ select is(
   'zero-release global eligible preflight is accepted'
 );
 select is(
-  public.get_lcia_scope_closure_check(
+  api.get_lcia_scope_closure_check(
     (
       select (result->'data'->>'closureCheckId')::uuid
       from candidate_closure_responses
@@ -359,7 +435,7 @@ select is(
   'queued zero-release checks project unknown scan completeness'
 );
 select is(
-  public.get_lcia_scope_closure_check(
+  api.get_lcia_scope_closure_check(
     (
       select (result->'data'->>'closureCheckId')::uuid
       from candidate_closure_responses
@@ -375,7 +451,7 @@ reset role;
 select is(
   (
     select requested_scope_manifest->'processes'->0->>'version'
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where request_idempotency_token = 'candidate-global'
   ),
   '02.00.000',
@@ -391,7 +467,7 @@ select set_config(
 );
 
 select is(
-  public.cmd_lcia_scope_closure_check_request_v2(
+  api.cmd_lcia_scope_closure_check_request_v2(
     '{
       "coverageMode":"subset",
       "processes":[{
@@ -410,7 +486,7 @@ select is(
   'non-eligible exact process identities remain rejected'
 );
 select is(
-  public.cmd_lcia_scope_closure_check_request_v2(
+  api.cmd_lcia_scope_closure_check_request_v2(
     '{
       "coverageMode":"subset",
       "processes":[{

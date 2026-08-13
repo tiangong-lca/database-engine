@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS "public"."contacts" (
     "extracted_md" "text",
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
+    "search_text" "text"[],
     CONSTRAINT "contacts_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 3, 20, 100])))
 );
 
@@ -24,8 +25,10 @@ ALTER TABLE ONLY "public"."contacts"
 
 ALTER TABLE "public"."contacts" ENABLE ROW LEVEL SECURITY;
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."contacts" TO "anon";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."contacts" TO "anon";
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."contacts" TO "authenticated";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."contacts" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."contacts" TO "service_role";
+
+GRANT SELECT ON TABLE "public"."contacts" TO "api_internal_executor";

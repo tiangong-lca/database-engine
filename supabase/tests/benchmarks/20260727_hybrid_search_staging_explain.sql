@@ -3,7 +3,7 @@
 
 -- Required operator attestation:
 --   -v benchmark_target=staging
---   -v expected_project_ref=fotofiyqnuyvgtotswie
+--   -v expected_project_ref=submidrhbtknjxfympna
 --   -v explain_output=/absolute/private/path/hybrid-search-explain.log
 -- This profile is read-only. Never point it at production.
 -- The lexical parameters mirror the checked-in Edge route regression for the
@@ -18,7 +18,7 @@
 
 \if :{?expected_project_ref}
 \else
-  \echo 'ERROR: pass -v expected_project_ref=fotofiyqnuyvgtotswie'
+  \echo 'ERROR: pass -v expected_project_ref=submidrhbtknjxfympna'
   \quit 3
 \endif
 
@@ -30,13 +30,13 @@
 
 select
   :'benchmark_target' = 'staging'
-  and :'expected_project_ref' = 'fotofiyqnuyvgtotswie'
+  and :'expected_project_ref' = 'submidrhbtknjxfympna'
   as benchmark_attestation_ok
 \gset
 
 \if :benchmark_attestation_ok
 \else
-  \echo 'ERROR: this profile is pinned to staging ref fotofiyqnuyvgtotswie'
+  \echo 'ERROR: this profile is pinned to staging ref submidrhbtknjxfympna'
   \quit 3
 \endif
 
@@ -61,10 +61,10 @@ select
   and to_regclass('public.processes_extracted_md_pgroonga') is not null
   and to_regclass('public.flows_extracted_md_pgroonga') is not null
   and to_regprocedure(
-    'public.hybrid_search_processes_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'
+    'api.hybrid_search_processes_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'
   ) is not null
   and to_regprocedure(
-    'public.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'
+    'api.hybrid_search_flows_v2(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])'
   ) is not null
   and (
     select routine.proconfig @> array[
@@ -314,7 +314,7 @@ with sample as materialized (
 )
 select hybrid_result.*
 from sample
-cross join lateral public.hybrid_search_processes_v2(
+cross join lateral api.hybrid_search_processes_v2(
   sample.query_text,
   sample.query_embedding,
   '{}',
@@ -352,7 +352,7 @@ with sample as materialized (
 )
 select hybrid_result.*
 from sample
-cross join lateral public.hybrid_search_flows_v2(
+cross join lateral api.hybrid_search_flows_v2(
   sample.query_text,
   sample.query_embedding,
   '{"flowType":"Product flow"}',

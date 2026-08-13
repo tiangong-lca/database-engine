@@ -9,6 +9,8 @@ project_id = "database-engine"
 # - Pull requests / feature branches -> ephemeral preview branches inheriting the shared baseline
 # Keep branch-specific overrides under [remotes.<branch>] instead of duplicating the `supabase/`
 # directory per Git branch.
+# Edge Function source and deployment remain in `tiangong-lca-edge-functions`; this project
+# intentionally contains no `supabase/functions/` runtime source.
 
 [api]
 enabled = true
@@ -16,9 +18,9 @@ enabled = true
 port = 55321
 # Schemas to expose in your API. Tables, views and stored procedures in this schema will get API
 # endpoints. `public` and `graphql_public` schemas are included by default.
-schemas = ["public", "graphql_public"]
+schemas = ["public", "api", "graphql_public"]
 # Extra schemas to add to the search_path of every request.
-extra_search_path = ["public", "extensions"]
+extra_search_path = ["public", "api", "extensions"]
 # The maximum number of rows returns from a view, table, or stored procedure. Limits payload size
 # for accidental or malicious requests.
 max_rows = 1000
@@ -422,7 +424,7 @@ s3_secret_key = "env(S3_SECRET_KEY)"
 # Keep this project ref synchronized with the actual persistent `dev` branch returned by
 # `npx supabase --experimental branches list --project-ref qgzvkongdjqiiamzbbts`.
 [remotes.dev]
-project_id = "fotofiyqnuyvgtotswie"
+project_id = "submidrhbtknjxfympna"
 
 [remotes.dev.auth]
 site_url = "http://localhost:8000"

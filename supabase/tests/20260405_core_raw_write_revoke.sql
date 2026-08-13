@@ -84,7 +84,7 @@ values
     false
   );
 
-insert into public.users (id, raw_user_meta_data, contact)
+insert into private.users (id, raw_user_meta_data, contact)
 values
   (
     '81000000-0000-0000-0000-000000000001',
@@ -107,7 +107,7 @@ values
     null
   );
 
-insert into public.teams (id, json, rank, is_public, modified_at)
+insert into private.teams (id, json, rank, is_public, modified_at)
 values (
   '82000000-0000-0000-0000-000000000001',
   '{"title":[{"@xml:lang":"en","#text":"Owned Team"}]}'::jsonb,
@@ -116,13 +116,13 @@ values (
   now()
 );
 
-insert into public.roles (user_id, team_id, role, modified_at)
+insert into private.roles (user_id, team_id, role, modified_at)
 values
   ('81000000-0000-0000-0000-000000000001', '82000000-0000-0000-0000-000000000001', 'owner', now()),
   ('81000000-0000-0000-0000-000000000003', '00000000-0000-0000-0000-000000000000', 'review-admin', now()),
   ('81000000-0000-0000-0000-000000000004', '00000000-0000-0000-0000-000000000000', 'review-member', now());
 
-insert into public.reviews (
+insert into private.reviews (
   id,
   data_id,
   data_version,
@@ -149,7 +149,7 @@ select set_config('request.jwt.claim.sub', '81000000-0000-0000-0000-000000000001
 do $$
 begin
   begin
-    update public.teams
+    update private.teams
     set rank = 99
     where id = '82000000-0000-0000-0000-000000000001';
   exception
@@ -162,7 +162,7 @@ $$;
 reset role;
 
 select is(
-  (select rank::text from public.teams where id = '82000000-0000-0000-0000-000000000001'),
+  (select rank::text from private.teams where id = '82000000-0000-0000-0000-000000000001'),
   '1',
   'team owner cannot directly update teams row after raw write revoke'
 );
@@ -173,7 +173,7 @@ select set_config('request.jwt.claim.sub', '81000000-0000-0000-0000-000000000001
 do $$
 begin
   begin
-    insert into public.roles (user_id, team_id, role, modified_at)
+    insert into private.roles (user_id, team_id, role, modified_at)
     values (
       '81000000-0000-0000-0000-000000000002',
       '82000000-0000-0000-0000-000000000001',
@@ -192,7 +192,7 @@ reset role;
 select is(
   (
     select count(*)::text
-    from public.roles
+    from private.roles
     where user_id = '81000000-0000-0000-0000-000000000002'
       and team_id = '82000000-0000-0000-0000-000000000001'
   ),
@@ -206,7 +206,7 @@ select set_config('request.jwt.claim.sub', '81000000-0000-0000-0000-000000000002
 do $$
 begin
   begin
-    update public.users
+    update private.users
     set contact = '{"phone":"123"}'::jsonb
     where id = '81000000-0000-0000-0000-000000000002';
   exception
@@ -221,7 +221,7 @@ reset role;
 select is(
   (
     select coalesce(contact::text, 'null')
-    from public.users
+    from private.users
     where id = '81000000-0000-0000-0000-000000000002'
   ),
   'null',
@@ -234,7 +234,7 @@ select set_config('request.jwt.claim.sub', '81000000-0000-0000-0000-000000000003
 do $$
 begin
   begin
-    update public.reviews
+    update private.reviews
     set state_code = 2
     where id = '83000000-0000-0000-0000-000000000001';
   exception
@@ -247,7 +247,7 @@ $$;
 reset role;
 
 select is(
-  (select state_code::text from public.reviews where id = '83000000-0000-0000-0000-000000000001'),
+  (select state_code::text from private.reviews where id = '83000000-0000-0000-0000-000000000001'),
   '0',
   'review admin cannot directly update reviews row after raw write revoke'
 );
@@ -258,7 +258,7 @@ select set_config('request.jwt.claim.sub', '81000000-0000-0000-0000-000000000004
 do $$
 begin
   begin
-    insert into public.comments (
+    insert into private.comments (
       review_id,
       reviewer_id,
       json,
@@ -286,7 +286,7 @@ reset role;
 select is(
   (
     select count(*)::text
-    from public.comments
+    from private.comments
     where review_id = '83000000-0000-0000-0000-000000000001'
   ),
   '0',

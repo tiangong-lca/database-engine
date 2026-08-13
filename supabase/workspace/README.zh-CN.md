@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-07-31
-lastReviewedCommit: be5b5db38fd34649524c1b18b2e582ad84b4f6bc
-lastReviewedNote: "已为 Issue #323 与 #329 复核：生成区与稳定人工 overlay 的边界不变；审核 migration、本地切换和 provider 资格验证适配器都不会把生成 workspace 变成真相源。"
+lastReviewedAt: 2026-08-12
+lastReviewedCommit: aca7ed0f1d5894fadb958b940212022048e64f80
+lastReviewedNote: "已为 Issue #478 复核：exact-local 快照现已反映 scope-closure RPC 的超时配置；workspace 生成行为不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -43,11 +43,14 @@ related:
 - `global/`
 - `schemas/`
 
+`database.types.ts` 由 `python scripts/build_database_types.py` 单独生成，只覆盖实际暴露的 `public` 与 `api` schema，并包含 Edge 使用的 service/authenticated 消费者 façade。
+
 ## 刷新行为
 
 每次刷新 `supabase/workspace` 时，会执行以下操作：
 
 - `remote_schema.sql` 会被最新导出的 dump 覆盖。
+- 生成 SQL 的行尾空白会被规范化，使重复刷新产生稳定的审查 diff。
 - `global/` 会被删除并按最新 dump 重新生成。
 - `schemas/` 会被删除并按最新 dump 重新生成。
 - `README.md` 会被保留。
@@ -78,17 +81,27 @@ related:
 
 ## 刷新命令
 
+schema 边界迁移部署到 `dev` 后，应显式刷新仓库拥有的全部应用 schema：
+
 ```bash
-python scripts/build_schema_workspace.py --environment dev
+python scripts/build_schema_workspace.py --environment dev \
+  --schemas public api private util archive
 ```
 
 远程 `dev` 仍是权威目标。无法直接导出远程 schema 时，可通过 CLI 原生 local 连接按本地已应用 migration 精确重建：
 
 ```bash
-python scripts/build_schema_workspace.py --environment local
+python scripts/build_schema_workspace.py --environment local \
+  --schemas public api private util archive
 ```
 
-只有在已应用 migration 版本与目标托管环境一致，且本次合同的托管 catalog 定向检查未发现相关漂移时，才能提交该本地产物。
+Schema 变更 PR 可以把该 exact-local 结果作为审查快照提交，但必须先通过空库 migration 重建、定向合同测试，并再次生成证明无漂移；此时它还不代表托管来源。合并后必须确认数据库专用 Dev 部署到达准确 migration head、托管 catalog 检查通过，并把 remote-Dev 刷新结果与本快照比较；若有漂移，以后续提交收口。
+
+随后应从同一个本地完整 migration 状态生成纳入版本控制的 Data API 类型合同：
+
+```bash
+python scripts/build_database_types.py --environment local
+```
 
 如果目标分支已经应用 `worker_jobs` cutover 和旧 job 表退休 migration，刷新后应确认生成内容不再展示已退休的 legacy job 表：
 

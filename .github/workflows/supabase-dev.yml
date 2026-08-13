@@ -1,13 +1,68 @@
-name: Supabase Dev
+name: Deploy and Verify Supabase Dev
 
 on:
   push:
     branches:
       - dev
+  pull_request:
+    branches:
+      - dev
+  workflow_dispatch:
+
+concurrency:
+  group: supabase-dev-deployment-${{ github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  deploy-supabase-dev:
-    name: Deploy Supabase Migrations to Dev
+  local-contract:
+    name: Rebuild and verify database contract
+    runs-on: ubuntu-latest
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Setup Supabase CLI
+        uses: supabase/setup-cli@v2
+        with:
+          version: 2.98.0
+
+      - name: Verify deployment workflow contract
+        run: |
+          python scripts/test_resolve_migration_head.py
+          python scripts/test_supabase_dev_workflow_contract.py
+
+      - name: Rebuild migration history
+        run: supabase start && supabase db reset --no-seed
+
+      - name: Verify generated schema and Data API types
+        run: |
+          python scripts/build_schema_workspace.py --environment local \
+            --schemas public api private util archive
+          python scripts/build_database_types.py --environment local
+          git diff --exit-code -- supabase/workspace
+          test -z "$(git status --porcelain --untracked-files=all -- supabase/workspace)"
+
+      - name: Verify schema and capability contracts
+        run: |
+          supabase test db supabase/tests/20260805_full_schema_cutover.sql
+          supabase test db supabase/tests/20260806_api_contract_closure.sql
+          supabase test db supabase/tests/20260806_identity_center_facades.sql
+          supabase test db supabase/tests/20260806_lca_package_capability_facades.sql
+          scripts/test_full_schema_cutover_upgrade.sh
+
+      - name: Stop local Supabase
+        if: always()
+        run: supabase stop --no-backup
+
+  deploy-and-verify:
+    name: Deploy and verify persistent Dev
+    if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
+    needs: local-contract
     runs-on: ubuntu-latest
     env:
       FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
@@ -17,15 +72,115 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
 
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v2
         with:
           version: 2.98.0
 
-      - name: Link Supabase dev branch
+      - name: Link Supabase Dev branch
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
 
-      - name: Push migrations to Supabase dev branch
+      - name: Push migrations to Supabase Dev branch
         run: supabase db push --include-all
+
+      - name: Resolve expected migration head
+        id: migration_head
+        shell: bash
+        run: |
+          head="$(python scripts/resolve_migration_head.py)"
+          printf 'head=%s\n' "$head" >> "$GITHUB_OUTPUT"
+
+      - name: Read API credentials
+        shell: bash
+        run: |
+          api_keys="$(supabase projects api-keys --project-ref "$SUPABASE_PROJECT_ID" --output json)"
+          anon_key="$(jq -er '.[] | select(.name == "anon") | .api_key' <<<"$api_keys")"
+          service_role_key="$(jq -er '.[] | select(.name == "service_role") | .api_key' <<<"$api_keys")"
+          echo "::add-mask::$anon_key"
+          echo "::add-mask::$service_role_key"
+          echo "ANON_KEY=$anon_key" >> "$GITHUB_ENV"
+          echo "SERVICE_ROLE_KEY=$service_role_key" >> "$GITHUB_ENV"
+
+      - name: Verify exact deployed migration head
+        shell: bash
+        env:
+          EXPECTED_MIGRATION_HEAD: ${{ steps.migration_head.outputs.head }}
+        run: |
+          rest_url="https://$SUPABASE_PROJECT_ID.supabase.co/rest/v1"
+          for _ in {1..60}; do
+            response="$(
+              curl --fail-with-body --silent --show-error \
+                --request POST \
+                --header "apikey: $SERVICE_ROLE_KEY" \
+                --header "Authorization: Bearer $SERVICE_ROLE_KEY" \
+                --header "Content-Profile: api" \
+                --header "Content-Type: application/json" \
+                --data '{}' \
+                "$rest_url/rpc/svc_schema_contract_status" || true
+            )"
+            if jq -e \
+              --arg head "$EXPECTED_MIGRATION_HEAD" \
+              '.migrationHead == $head and .publicCoreTables == 9 and .publicRoutines == 0' \
+              <<<"$response" >/dev/null 2>&1; then
+              exit 0
+            fi
+            sleep 10
+          done
+          echo "database migration deployment did not reach the expected schema contract" >&2
+          exit 1
+
+      - name: Verify hosted PostgREST boundary
+        shell: bash
+        run: |
+          postgrest_config="$(
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_ID/postgrest"
+          )"
+          jq -e '
+            def csv_list: split(",") | map(gsub("^\\s+|\\s+$"; ""));
+            (.db_schema | csv_list) == ["public", "api", "graphql_public"]
+            and (.db_extra_search_path | csv_list) == ["public", "api", "extensions"]
+          ' <<<"$postgrest_config" >/dev/null
+
+          rest_url="https://$SUPABASE_PROJECT_ID.supabase.co/rest/v1"
+          probe() {
+            local expected="$1"
+            shift
+            local actual
+            actual="$(curl --silent --show-error --output /dev/null --write-out '%{http_code}' "$@")"
+            [[ "$actual" == "$expected" ]] || {
+              echo "expected HTTP $expected, received $actual" >&2
+              return 1
+            }
+          }
+
+          probe 200 \
+            --header "apikey: $ANON_KEY" \
+            --header "Authorization: Bearer $ANON_KEY" \
+            "$rest_url/flows?select=id&limit=1"
+          probe 200 \
+            --request POST \
+            --header "apikey: $SERVICE_ROLE_KEY" \
+            --header "Authorization: Bearer $SERVICE_ROLE_KEY" \
+            --header "Content-Profile: api" \
+            --header "Content-Type: application/json" \
+            --data '{}' \
+            "$rest_url/rpc/svc_schema_contract_status"
+          probe 406 \
+            --header "apikey: $ANON_KEY" \
+            --header "Authorization: Bearer $ANON_KEY" \
+            --header "Accept-Profile: private" \
+            "$rest_url/flows?select=id&limit=1"
+          probe 404 \
+            --request POST \
+            --header "apikey: $SERVICE_ROLE_KEY" \
+            --header "Authorization: Bearer $SERVICE_ROLE_KEY" \
+            --header "Content-Profile: public" \
+            --header "Content-Type: application/json" \
+            --data '{}' \
+            "$rest_url/rpc/svc_schema_contract_status"

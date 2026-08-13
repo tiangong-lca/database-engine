@@ -5,59 +5,59 @@ set local search_path = extensions, public, auth;
 select no_plan();
 
 select has_column(
-  'public', 'worker_job_artifacts', 'artifact_role',
+  'private', 'worker_job_artifacts', 'artifact_role',
   'scope-closure artifacts have an authoritative role'
 );
 select has_column(
-  'public', 'worker_job_artifacts', 'lifecycle_state',
+  'private', 'worker_job_artifacts', 'lifecycle_state',
   'scope-closure artifacts have an authoritative lifecycle'
 );
 select has_column(
-  'public', 'worker_job_artifacts', 'gc_cleanup_state',
+  'private', 'worker_job_artifacts', 'gc_cleanup_state',
   'scope-closure GC has a DB-owned resumable cleanup state'
 );
 select has_column(
-  'public', 'lcia_scope_closure_checks', 'valid_until',
+  'private', 'lcia_scope_closure_checks', 'valid_until',
   'closure certificates have an evidence-bounded validity deadline'
 );
 select has_table(
-  'public', 'lcia_scope_closure_retention_summaries',
+  'private', 'lcia_scope_closure_retention_summaries',
   'detail GC retains a compact audit summary'
 );
 select has_function(
-  'public', 'get_lcia_scope_closure_report_download',
+  'api', 'get_lcia_scope_closure_report_download',
   array['uuid', 'text'],
   'actor-bound closure artifact projection has a strict role selector'
 );
 select has_function(
-  'public', 'get_lcia_scope_closure_report_download',
+  'api', 'get_lcia_scope_closure_report_download',
   array['uuid'],
   'temporary selector-less XLSX compatibility overload remains during rollout'
 );
 select has_function(
-  'public', 'svc_lcia_scope_closure_artifact_gc_claim',
+  'private', 'svc_lcia_scope_closure_artifact_gc_claim',
   array['integer', 'integer'],
   'service GC claim RPC exists'
 );
 select has_function(
-  'public', 'svc_lcia_scope_closure_artifact_gc_complete',
+  'private', 'svc_lcia_scope_closure_artifact_gc_complete',
   array['uuid', 'uuid', 'boolean', 'integer'],
   'service GC completion RPC exists'
 );
 select has_function(
-  'public', 'svc_lcia_scope_closure_artifact_gc_fail',
+  'private', 'svc_lcia_scope_closure_artifact_gc_fail',
   array['uuid', 'uuid', 'text'],
   'service GC failure RPC exists'
 );
 select ok(
   has_function_privilege(
     'service_role',
-    'public.svc_lcia_scope_closure_artifact_gc_claim(integer,integer)',
+    'private.svc_lcia_scope_closure_artifact_gc_claim(integer,integer)',
     'execute'
   )
   and not has_function_privilege(
     'authenticated',
-    'public.svc_lcia_scope_closure_artifact_gc_claim(integer,integer)',
+    'private.svc_lcia_scope_closure_artifact_gc_claim(integer,integer)',
     'execute'
   ),
   'GC coordination is service-only'
@@ -80,15 +80,15 @@ insert into auth.users (
     'authenticated', 'authenticated', 'issue-308-other@example.com', 'x',
     now(), '{}', '{}', now(), now(), false, false
   );
-insert into public.users (id, raw_user_meta_data, contact) values
+insert into private.users (id, raw_user_meta_data, contact) values
   ('30800000-0000-4000-8000-000000000001', '{}', null),
   ('30800000-0000-4000-8000-000000000002', '{}', null);
-insert into public.teams (id, json, rank, is_public)
+insert into private.teams (id, json, rank, is_public)
 values (
   '00000000-0000-0000-0000-000000000000',
   '{"name":"System"}', 0, false
 ) on conflict (id) do nothing;
-insert into public.roles (user_id, team_id, role) values
+insert into private.roles (user_id, team_id, role) values
   (
     '30800000-0000-4000-8000-000000000001',
     '00000000-0000-0000-0000-000000000000',
@@ -100,7 +100,7 @@ insert into public.roles (user_id, team_id, role) values
     'data_product_manager'
   );
 
-insert into public.worker_jobs (
+insert into private.worker_jobs (
   id, job_kind, worker_runtime, worker_queue, requester_type, requested_by,
   visibility, payload_schema_version, payload_json
 ) values
@@ -117,7 +117,7 @@ insert into public.worker_jobs (
     'lcia.scope_closure_check.request.v1', '{}'
   );
 
-insert into public.worker_job_artifacts (
+insert into private.worker_job_artifacts (
   id, job_id, artifact_type, storage_bucket, storage_path, content_type,
   byte_size, checksum_sha256, metadata, created_at
 ) values
@@ -169,12 +169,12 @@ insert into public.worker_job_artifacts (
 select is(
   (
     select expires_at
-    from public.worker_job_artifacts
+    from private.worker_job_artifacts
     where id = '30800000-0000-4000-8000-000000000201'
   ),
   (
     select created_at + interval '7 days'
-    from public.worker_job_artifacts
+    from private.worker_job_artifacts
     where id = '30800000-0000-4000-8000-000000000201'
   ),
   'trusted insertion assigns the exact seven-day expiry'
@@ -182,7 +182,7 @@ select is(
 select is(
   (
     select artifact_role || ':' || lifecycle_state
-    from public.worker_job_artifacts
+    from private.worker_job_artifacts
     where id = '30800000-0000-4000-8000-000000000203'
   ),
   'closure_report:expired',
@@ -190,7 +190,7 @@ select is(
 );
 select throws_ok(
   $$
-    update public.worker_job_artifacts
+    update private.worker_job_artifacts
     set expires_at = expires_at + interval '1 day'
     where id = '30800000-0000-4000-8000-000000000201'
   $$,
@@ -200,7 +200,7 @@ select throws_ok(
 );
 select throws_ok(
   $$
-    update public.worker_job_artifacts
+    update private.worker_job_artifacts
     set lifecycle_state = 'ready'
     where id = '30800000-0000-4000-8000-000000000203'
   $$,
@@ -209,7 +209,7 @@ select throws_ok(
   'expired artifacts cannot transition back to ready'
 );
 
-insert into public.worker_job_artifacts (
+insert into private.worker_job_artifacts (
   id, job_id, artifact_type, storage_bucket, storage_path, content_type,
   byte_size, checksum_sha256, metadata, created_at
 ) values
@@ -226,14 +226,14 @@ insert into public.worker_job_artifacts (
     'ordinary_worker_log', 'private-evidence', 'checks/308/worker.log',
     'text/plain', 68, repeat('8', 64), '{}', now()
   );
-update public.worker_job_artifacts
+update private.worker_job_artifacts
 set lifecycle_state = 'deleted',
     gc_cleanup_state = 'complete'
 where id = '30800000-0000-4000-8000-000000000207';
 
 select throws_ok(
   $$
-    update public.worker_job_artifacts
+    update private.worker_job_artifacts
     set artifact_type = 'ordinary_worker_log'
     where id = '30800000-0000-4000-8000-000000000201'
   $$,
@@ -243,7 +243,7 @@ select throws_ok(
 );
 select throws_ok(
   $$
-    update public.worker_job_artifacts
+    update private.worker_job_artifacts
     set artifact_type = 'closure_bundle',
         artifact_role = 'closure_bundle'
     where id = '30800000-0000-4000-8000-000000000201'
@@ -254,7 +254,7 @@ select throws_ok(
 );
 select throws_ok(
   $$
-    insert into public.worker_job_artifacts (
+    insert into private.worker_job_artifacts (
       job_id, artifact_type, artifact_role, storage_bucket, storage_path,
       content_type, byte_size, checksum_sha256, metadata
     ) values (
@@ -269,7 +269,7 @@ select throws_ok(
 );
 select throws_ok(
   $$
-    update public.worker_job_artifacts
+    update private.worker_job_artifacts
     set artifact_type = 'ordinary_worker_log'
     where id = '30800000-0000-4000-8000-000000000203'
   $$,
@@ -279,7 +279,7 @@ select throws_ok(
 );
 select throws_ok(
   $$
-    update public.worker_job_artifacts
+    update private.worker_job_artifacts
     set artifact_type = 'ordinary_worker_log'
     where id = '30800000-0000-4000-8000-000000000207'
   $$,
@@ -289,14 +289,14 @@ select throws_ok(
 );
 select lives_ok(
   $$
-    update public.worker_job_artifacts
+    update private.worker_job_artifacts
     set metadata = '{"ordinaryUpdate":true}'::jsonb
     where id = '30800000-0000-4000-8000-000000000208'
   $$,
   'legal non-closure artifact updates remain unaffected'
 );
 
-insert into public.lcia_scope_closure_checks (
+insert into private.lcia_scope_closure_checks (
   id, worker_job_id, requested_by, request_idempotency_token, request_key,
   request_fingerprint, requested_scope_hash, effective_scope_hash,
   policy_fingerprint, data_snapshot_token,
@@ -327,7 +327,7 @@ insert into public.lcia_scope_closure_checks (
 select is(
   (
     select valid_until
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where id = '30800000-0000-4000-8000-000000000301'
   ),
   (
@@ -336,22 +336,22 @@ select is(
       machine_result.expires_at,
       bundle.expires_at
     )
-    from public.worker_job_artifacts report
-    cross join public.worker_job_artifacts machine_result
-    cross join public.worker_job_artifacts bundle
+    from private.worker_job_artifacts report
+    cross join private.worker_job_artifacts machine_result
+    cross join private.worker_job_artifacts bundle
     where report.id = '30800000-0000-4000-8000-000000000201'
       and machine_result.id = '30800000-0000-4000-8000-000000000206'
       and bundle.id = '30800000-0000-4000-8000-000000000202'
   ),
   'certificate valid_until is bounded by required evidence expiry'
 );
-update public.lcia_scope_closure_checks
+update private.lcia_scope_closure_checks
 set valid_until = valid_until + interval '1 day'
 where id = '30800000-0000-4000-8000-000000000301';
 select is(
   (
     select valid_until
-    from public.lcia_scope_closure_checks
+    from private.lcia_scope_closure_checks
     where id = '30800000-0000-4000-8000-000000000301'
   ),
   (
@@ -360,9 +360,9 @@ select is(
       machine_result.expires_at,
       bundle.expires_at
     )
-    from public.worker_job_artifacts report
-    cross join public.worker_job_artifacts machine_result
-    cross join public.worker_job_artifacts bundle
+    from private.worker_job_artifacts report
+    cross join private.worker_job_artifacts machine_result
+    cross join private.worker_job_artifacts bundle
     where report.id = '30800000-0000-4000-8000-000000000201'
       and machine_result.id = '30800000-0000-4000-8000-000000000206'
       and bundle.id = '30800000-0000-4000-8000-000000000202'
@@ -370,7 +370,7 @@ select is(
   'certificate validity cannot be extended beyond its evidence'
 );
 
-insert into public.lcia_scope_closure_checks (
+insert into private.lcia_scope_closure_checks (
   id, worker_job_id, requested_by, request_idempotency_token, request_key,
   request_fingerprint, requested_scope_hash, policy_fingerprint,
   data_snapshot_token, expected_validator_scanner_fingerprint, status,
@@ -386,7 +386,7 @@ insert into public.lcia_scope_closure_checks (
   'unavailable', '30800000-0000-4000-8000-000000000203',
   '{"issueCount":1,"occurrenceCount":1,"affectedRootCount":1}', now()
 );
-insert into public.lcia_scope_closure_issues (
+insert into private.lcia_scope_closure_issues (
   id, closure_check_id, issue_key, severity, blocking, issue_code, message,
   occurrence_count, affected_root_count, details
 ) values (
@@ -395,7 +395,7 @@ insert into public.lcia_scope_closure_issues (
   'expired-detail', 'blocker', true, 'missing_reference',
   'detail eligible for retention cleanup', 1, 1, '{"large":"detail"}'
 );
-insert into public.lcia_scope_closure_issue_occurrences (
+insert into private.lcia_scope_closure_issue_occurrences (
   id, closure_issue_id, occurrence_key, details
 ) values
   (
@@ -408,7 +408,7 @@ insert into public.lcia_scope_closure_issue_occurrences (
     '30800000-0000-4000-8000-000000000401',
     'occurrence-2', '{"path":"also-large"}'
   );
-insert into public.lcia_scope_closure_issue_roots (
+insert into private.lcia_scope_closure_issue_roots (
   closure_issue_id, root_dataset_type, root_dataset_id,
   root_dataset_version, impact_role, witness_path
 ) values (
@@ -425,7 +425,7 @@ select set_config(
   true
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30800000-0000-4000-8000-000000000301',
     'closure_report_xlsx'
   ) #>> '{data,artifactRole}',
@@ -433,7 +433,7 @@ select is(
   'owner can select the public XLSX role'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30800000-0000-4000-8000-000000000301',
     'closure_report_xlsx'
   ) #>> '{data,artifactId}',
@@ -441,7 +441,7 @@ select is(
   'XLSX selector resolves only the linked report artifact'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30800000-0000-4000-8000-000000000301',
     'closure_report_xlsx'
   ) #>> '{data,artifactState}',
@@ -450,7 +450,7 @@ select is(
 );
 select is(
   (
-    public.get_lcia_scope_closure_report_download(
+    api.get_lcia_scope_closure_report_download(
       '30800000-0000-4000-8000-000000000301',
       'closure_report_xlsx'
     ) -> 'data'
@@ -474,7 +474,7 @@ select is(
   (
     select count(*)
     from jsonb_object_keys(
-      public.get_lcia_scope_closure_report_download(
+      api.get_lcia_scope_closure_report_download(
         '30800000-0000-4000-8000-000000000301',
         'closure_report_xlsx'
       ) -> 'data'
@@ -484,7 +484,7 @@ select is(
   'public descriptor contains every required shared DTO field'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30800000-0000-4000-8000-000000000301',
     'closure_report_xlsx'
   ) #>> '{data,filename}',
@@ -493,12 +493,12 @@ select is(
 );
 select is(
   (
-    public.get_lcia_scope_closure_report_download(
+    api.get_lcia_scope_closure_report_download(
       '30800000-0000-4000-8000-000000000301',
       'closure_report_xlsx'
     ) #>> '{data,format}'
   ) || ':' || (
-    public.get_lcia_scope_closure_report_download(
+    api.get_lcia_scope_closure_report_download(
       '30800000-0000-4000-8000-000000000301',
       'closure_report_xlsx'
     ) #>> '{data,mediaType}'
@@ -508,12 +508,12 @@ select is(
 );
 select is(
   (
-    public.get_lcia_scope_closure_report_download(
+    api.get_lcia_scope_closure_report_download(
       '30800000-0000-4000-8000-000000000301',
       'closure_report_xlsx'
     ) #>> '{data,bucket}'
   ) || ':' || (
-    public.get_lcia_scope_closure_report_download(
+    api.get_lcia_scope_closure_report_download(
       '30800000-0000-4000-8000-000000000301',
       'closure_report_xlsx'
     ) #>> '{data,objectPath}'
@@ -522,7 +522,7 @@ select is(
   'XLSX locator is projected from the linked artifact without substitution'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30800000-0000-4000-8000-000000000301',
     'closure_issue_manifest'
   ) #>> '{data,artifactId}',
@@ -531,12 +531,12 @@ select is(
 );
 select is(
   (
-    public.get_lcia_scope_closure_report_download(
+    api.get_lcia_scope_closure_report_download(
       '30800000-0000-4000-8000-000000000301',
       'closure_issue_manifest'
     ) #>> '{data,artifactRole}'
   ) || ':' || (
-    public.get_lcia_scope_closure_report_download(
+    api.get_lcia_scope_closure_report_download(
       '30800000-0000-4000-8000-000000000301',
       'closure_issue_manifest'
     ) #>> '{data,filename}'
@@ -546,12 +546,12 @@ select is(
 );
 select is(
   (
-    public.get_lcia_scope_closure_report_download(
+    api.get_lcia_scope_closure_report_download(
       '30800000-0000-4000-8000-000000000301',
       'closure_issue_manifest'
     ) #>> '{data,format}'
   ) || ':' || (
-    public.get_lcia_scope_closure_report_download(
+    api.get_lcia_scope_closure_report_download(
       '30800000-0000-4000-8000-000000000301',
       'closure_issue_manifest'
     ) #>> '{data,mediaType}'
@@ -561,12 +561,12 @@ select is(
 );
 select is(
   (
-    public.get_lcia_scope_closure_report_download(
+    api.get_lcia_scope_closure_report_download(
       '30800000-0000-4000-8000-000000000301',
       'closure_issue_manifest'
     ) #>> '{data,bucket}'
   ) || ':' || (
-    public.get_lcia_scope_closure_report_download(
+    api.get_lcia_scope_closure_report_download(
       '30800000-0000-4000-8000-000000000301',
       'closure_issue_manifest'
     ) #>> '{data,objectPath}'
@@ -576,7 +576,7 @@ select is(
 );
 select ok(
   (
-    public.get_lcia_scope_closure_report_download(
+    api.get_lcia_scope_closure_report_download(
       '30800000-0000-4000-8000-000000000301',
       'closure_issue_manifest'
     ) #> '{data,artifactExpiresAt}'
@@ -584,7 +584,7 @@ select ok(
   'public manifest descriptor includes artifactExpiresAt'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30800000-0000-4000-8000-000000000301',
     'closure_bundle'
   ) ->> 'code',
@@ -592,7 +592,7 @@ select is(
   'owner receives a stable error for an unsupported selector'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30800000-0000-4000-8000-000000000302',
     'closure_issue_manifest'
   ) ->> 'code',
@@ -600,7 +600,7 @@ select is(
   'owner cannot receive a descriptor for an unready or unlinked artifact'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30800000-0000-4000-8000-000000000302',
     'closure_report_xlsx'
   ) ->> 'code',
@@ -609,7 +609,7 @@ select is(
 );
 select is(
   (
-    public.get_lcia_scope_closure_report_download(
+    api.get_lcia_scope_closure_report_download(
       '30800000-0000-4000-8000-000000000302',
       'closure_report_xlsx'
     ) ->> 'status'
@@ -623,7 +623,7 @@ select set_config(
   true
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30800000-0000-4000-8000-000000000301',
     'closure_report_xlsx'
   ) ->> 'code',
@@ -631,7 +631,7 @@ select is(
   'cross-user ready artifact remains opaque'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30800000-0000-4000-8000-000000000302',
     'closure_report_xlsx'
   ) ->> 'code',
@@ -639,7 +639,7 @@ select is(
   'cross-user expired artifact remains opaque'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30800000-0000-4000-8000-000000000301',
     'closure_issue_manifest'
   ) ->> 'code',
@@ -647,7 +647,7 @@ select is(
   'cross-user manifest selection remains opaque'
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30800000-0000-4000-8000-000000000301',
     'closure_bundle'
   ) ->> 'code',
@@ -656,7 +656,7 @@ select is(
 );
 reset role;
 
-update public.worker_job_artifacts
+update private.worker_job_artifacts
 set lifecycle_state = 'expired'
 where id in (
   '30800000-0000-4000-8000-000000000201',
@@ -671,7 +671,7 @@ select set_config(
   true
 );
 select is(
-  public.cmd_lcia_result_build_request_v2(
+  api.cmd_lcia_result_build_request_v2(
     'expired build', '[]', 'subset', null, '[]', 'issue-308-build',
     '30800000-0000-4000-8000-000000000301',
     repeat('2', 64), repeat('4', 64), '{}'
@@ -688,7 +688,7 @@ create temporary table issue_308_gc_claims (
   value jsonb
 );
 with response as (
-  select public.svc_lcia_scope_closure_artifact_gc_claim(1, 300) value
+  select private.svc_lcia_scope_closure_artifact_gc_claim(1, 300) value
 )
 insert into issue_308_gc_claims
 select
@@ -718,7 +718,7 @@ select is(
 
 create temporary table issue_308_first_completion (value jsonb);
 insert into issue_308_first_completion
-select public.svc_lcia_scope_closure_artifact_gc_complete(
+select private.svc_lcia_scope_closure_artifact_gc_complete(
   (select artifact_id from issue_308_gc_claims),
   (select claim_token from issue_308_gc_claims),
   true,
@@ -744,7 +744,7 @@ select ok(
       and storage_path is null
       and checksum_sha256 = repeat('c', 64)
       and byte_size = 64
-    from public.worker_job_artifacts
+    from private.worker_job_artifacts
     where id = '30800000-0000-4000-8000-000000000203'
   ),
   'GC removes object location but retains compact artifact evidence'
@@ -752,7 +752,7 @@ select ok(
 select is(
   (
     select lifecycle_state || ':' || gc_cleanup_state
-    from public.worker_job_artifacts
+    from private.worker_job_artifacts
     where id = '30800000-0000-4000-8000-000000000203'
   ),
   'deleted:pending',
@@ -760,7 +760,7 @@ select is(
 );
 
 -- Simulate the first Worker process exiting without retaining its token.
-update public.worker_job_artifacts
+update private.worker_job_artifacts
 set gc_claim_expires_at = now() - interval '1 second'
 where id = '30800000-0000-4000-8000-000000000203';
 
@@ -770,7 +770,7 @@ create temporary table issue_308_recovery_claim (
   value jsonb
 );
 with response as (
-  select public.svc_lcia_scope_closure_artifact_gc_claim(1, 300) value
+  select private.svc_lcia_scope_closure_artifact_gc_claim(1, 300) value
 )
 insert into issue_308_recovery_claim
 select
@@ -803,7 +803,7 @@ select ok(
 
 create temporary table issue_308_final_completion (value jsonb);
 insert into issue_308_final_completion
-select public.svc_lcia_scope_closure_artifact_gc_complete(
+select private.svc_lcia_scope_closure_artifact_gc_complete(
   (select artifact_id from issue_308_recovery_claim),
   (select claim_token from issue_308_recovery_claim),
   false,
@@ -820,7 +820,7 @@ select ok(
   'fresh-process completion finishes bounded detail cleanup without object deletion'
 );
 select is(
-  public.svc_lcia_scope_closure_artifact_gc_complete(
+  private.svc_lcia_scope_closure_artifact_gc_complete(
     (select artifact_id from issue_308_recovery_claim),
     (select claim_token from issue_308_recovery_claim),
     false,
@@ -832,7 +832,7 @@ select is(
 select is(
   (
     select lifecycle_state || ':' || gc_cleanup_state
-    from public.worker_job_artifacts
+    from private.worker_job_artifacts
     where id = '30800000-0000-4000-8000-000000000203'
   ),
   'deleted:complete',
@@ -846,7 +846,7 @@ select set_config(
   true
 );
 select is(
-  public.get_lcia_scope_closure_report_download(
+  api.get_lcia_scope_closure_report_download(
     '30800000-0000-4000-8000-000000000302',
     'closure_report_xlsx'
   ) ->> 'code',
@@ -858,7 +858,7 @@ select set_config('request.jwt.claim.role', 'service_role', true);
 select is(
   (
     select issue_count || ':' || occurrence_count || ':' || affected_root_count
-    from public.lcia_scope_closure_retention_summaries
+    from private.lcia_scope_closure_retention_summaries
     where closure_check_id = '30800000-0000-4000-8000-000000000302'
   ),
   '1:2:1',
@@ -868,7 +868,7 @@ select ok(
   (
     select issue_content_hash ~ '^[a-f0-9]{64}$'
       and compact_result_summary->>'issueCount' = '1'
-    from public.lcia_scope_closure_retention_summaries
+    from private.lcia_scope_closure_retention_summaries
     where closure_check_id = '30800000-0000-4000-8000-000000000302'
   ),
   'retention summary preserves a content hash and compact run summary'
@@ -876,7 +876,7 @@ select ok(
 select is(
   (
     select count(*)
-    from public.lcia_scope_closure_issues
+    from private.lcia_scope_closure_issues
     where closure_check_id = '30800000-0000-4000-8000-000000000302'
   ),
   0::bigint,
@@ -889,7 +889,7 @@ create temporary table issue_308_concurrent_claims (
   artifact_id uuid
 );
 with response as (
-  select public.svc_lcia_scope_closure_artifact_gc_claim(1, 300) value
+  select private.svc_lcia_scope_closure_artifact_gc_claim(1, 300) value
 )
 insert into issue_308_concurrent_claims
 select
@@ -898,7 +898,7 @@ select
   (value #>> '{data,items,0,artifactId}')::uuid
 from response;
 with response as (
-  select public.svc_lcia_scope_closure_artifact_gc_claim(1, 300) value
+  select private.svc_lcia_scope_closure_artifact_gc_claim(1, 300) value
 )
 insert into issue_308_concurrent_claims
 select
@@ -912,7 +912,7 @@ select isnt(
   'independent active claims cannot select the same artifact'
 );
 select is(
-  public.svc_lcia_scope_closure_artifact_gc_fail(
+  private.svc_lcia_scope_closure_artifact_gc_fail(
     (select artifact_id from issue_308_concurrent_claims where ordinal = 1),
     (select claim_token from issue_308_concurrent_claims where ordinal = 1),
     'temporary object-store failure'
@@ -921,7 +921,7 @@ select is(
   'GC failure releases the lease and records the retry count'
 );
 with response as (
-  select public.svc_lcia_scope_closure_artifact_gc_claim(1, 300) value
+  select private.svc_lcia_scope_closure_artifact_gc_claim(1, 300) value
 )
 select is(
   (value #>> '{data,items,0,artifactId}')::uuid,

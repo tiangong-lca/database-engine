@@ -33,7 +33,7 @@ select ok(
   'service_role can execute package retention dry-run function'
 );
 
-insert into public.worker_jobs (
+insert into private.worker_jobs (
   id,
   job_kind,
   worker_runtime,
@@ -160,7 +160,7 @@ insert into public.worker_jobs (
     '2026-01-25 00:00:00+00'
   );
 
-insert into public.lca_package_artifacts (
+insert into private.lca_package_artifacts (
   id,
   job_id,
   worker_job_id,
@@ -263,7 +263,7 @@ insert into public.lca_package_artifacts (
     '2025-12-01 00:00:00+00'
   );
 
-insert into public.lca_package_export_items (
+insert into private.lca_package_export_items (
   id,
   job_id,
   worker_job_id,
@@ -372,7 +372,7 @@ insert into public.lca_package_export_items (
     '2026-01-25 00:00:00+00'
   );
 
-insert into public.lca_package_request_cache (
+insert into private.lca_package_request_cache (
   id,
   requested_by,
   operation,

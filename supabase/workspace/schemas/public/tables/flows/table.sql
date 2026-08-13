@@ -14,6 +14,7 @@ CREATE TABLE IF NOT EXISTS "public"."flows" (
     "embedding_ft_at" timestamp with time zone,
     "extracted_md" "text",
     "embedding_ft" "extensions"."vector"(1024),
+    "search_text" "text"[],
     CONSTRAINT "flows_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
 );
 
@@ -24,8 +25,10 @@ ALTER TABLE ONLY "public"."flows"
 
 ALTER TABLE "public"."flows" ENABLE ROW LEVEL SECURITY;
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."flows" TO "anon";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."flows" TO "anon";
 
-GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE,MAINTAIN ON TABLE "public"."flows" TO "authenticated";
+GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."flows" TO "authenticated";
 
 GRANT ALL ON TABLE "public"."flows" TO "service_role";
+
+GRANT SELECT ON TABLE "public"."flows" TO "api_internal_executor";

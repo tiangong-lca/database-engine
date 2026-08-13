@@ -1,0 +1,42 @@
+CREATE TABLE IF NOT EXISTS "private"."lca_latest_all_unit_results" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "snapshot_id" "uuid" NOT NULL,
+    "job_id" "uuid" NOT NULL,
+    "result_id" "uuid" NOT NULL,
+    "query_artifact_url" "text" NOT NULL,
+    "query_artifact_sha256" "text" NOT NULL,
+    "query_artifact_byte_size" bigint NOT NULL,
+    "query_artifact_format" "text" NOT NULL,
+    "status" "text" DEFAULT 'ready'::"text" NOT NULL,
+    "computed_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "worker_job_id" "uuid",
+    CONSTRAINT "lca_latest_all_unit_results_size_chk" CHECK (("query_artifact_byte_size" >= 0)),
+    CONSTRAINT "lca_latest_all_unit_results_status_chk" CHECK (("status" = ANY (ARRAY['ready'::"text", 'stale'::"text", 'failed'::"text"])))
+);
+
+ALTER TABLE "private"."lca_latest_all_unit_results" OWNER TO "postgres";
+
+COMMENT ON TABLE "private"."lca_latest_all_unit_results" IS 'Latest all-unit LCA result pointer and query artifact metadata. This is domain projection state, not a task lifecycle/job table.';
+
+ALTER TABLE ONLY "private"."lca_latest_all_unit_results"
+    ADD CONSTRAINT "lca_latest_all_unit_results_pkey" PRIMARY KEY ("id");
+
+ALTER TABLE ONLY "private"."lca_latest_all_unit_results"
+    ADD CONSTRAINT "lca_latest_all_unit_results_snapshot_uk" UNIQUE ("snapshot_id");
+
+ALTER TABLE ONLY "private"."lca_latest_all_unit_results"
+    ADD CONSTRAINT "lca_latest_all_unit_results_result_fk" FOREIGN KEY ("result_id") REFERENCES "private"."lca_results"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "private"."lca_latest_all_unit_results"
+    ADD CONSTRAINT "lca_latest_all_unit_results_snapshot_fk" FOREIGN KEY ("snapshot_id") REFERENCES "private"."lca_network_snapshots"("id") ON DELETE CASCADE;
+
+ALTER TABLE ONLY "private"."lca_latest_all_unit_results"
+    ADD CONSTRAINT "lca_latest_all_unit_results_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "private"."worker_jobs"("id") ON DELETE SET NULL;
+
+ALTER TABLE "private"."lca_latest_all_unit_results" ENABLE ROW LEVEL SECURITY;
+
+GRANT ALL ON TABLE "private"."lca_latest_all_unit_results" TO "service_role";
+
+GRANT SELECT ON TABLE "private"."lca_latest_all_unit_results" TO "api_internal_executor";
