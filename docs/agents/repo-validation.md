@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: 628ecbb1702bcd9bccad418e03048bdcb0e4b58c
-lastReviewedNote: "Reviewed for Issue #422: search_text proof now verifies heap identity preservation and fail-closed handling of any populated scalar precursor."
+lastReviewedCommit: 36a6fa2ff64947046bba2f07fd9ce96fd92608c0
+lastReviewedNote: "Reviewed for Issue #490: the exact migration-head assertion remains covered by the existing SQL-test proof and PR validation guidance."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
