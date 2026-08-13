@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(18);
+select plan(19);
 
 select is(
   (
@@ -251,15 +251,43 @@ select ok(
     pg_get_functiondef(
       'private.search_processes_latest_v2_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'::regprocedure
     ),
-    'p.state_code = 0 and p.team_id is null and p.review_id is null'
+    'p.state_code = 0'
   ) > 0
   and strpos(
     pg_get_functiondef(
       'private.search_processes_latest_v2_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'::regprocedure
     ),
-    'p2.state_code = 0 and p2.team_id is null and p2.review_id is null'
+    'p2.state_code = 0'
   ) > 0,
-  'strict owner-draft search constrains both candidate and latest rows'
+  'owner-draft search constrains both candidate and latest rows by actor and state'
+);
+
+select ok(
+  strpos(
+    pg_get_functiondef(
+      'private.search_processes_latest_v2_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'::regprocedure
+    ),
+    'p.team_id is null'
+  ) = 0
+  and strpos(
+    pg_get_functiondef(
+      'private.search_processes_latest_v2_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'::regprocedure
+    ),
+    'p.review_id is null'
+  ) = 0
+  and strpos(
+    pg_get_functiondef(
+      'private.search_processes_latest_v2_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'::regprocedure
+    ),
+    'p2.team_id is null'
+  ) = 0
+  and strpos(
+    pg_get_functiondef(
+      'private.search_processes_latest_v2_impl(text,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean)'::regprocedure
+    ),
+    'p2.review_id is null'
+  ) = 0,
+  'owner-draft search does not reinterpret team or review workflow metadata as ownership'
 );
 
 insert into private.users (id, raw_user_meta_data, contact)
@@ -279,6 +307,7 @@ insert into public.processes (
   user_id,
   state_code,
   team_id,
+  review_id,
   extracted_md,
   search_text,
   rule_verification,
@@ -293,7 +322,8 @@ values
     '{"search":"strict-owner-draft-token"}'::json,
     'a7290000-0000-0000-0000-000000000001',
     0,
-    null,
+    'c7290000-0000-0000-0000-000000000001',
+    'd7290000-0000-0000-0000-000000000001',
     'strict-owner-draft-token',
     array['strict-owner-draft-token'],
     true,
@@ -307,6 +337,7 @@ values
     '{"search":"strict-owner-draft-token"}'::json,
     'a7290000-0000-0000-0000-000000000001',
     20,
+    null,
     null,
     'strict-owner-draft-token',
     array['strict-owner-draft-token'],
@@ -334,7 +365,7 @@ select is(
     )
   ),
   array['b7290000-0000-0000-0000-000000000001']::text[],
-  'strict owner-draft v2 returns only an unsubmitted personal draft'
+  'owner-draft v2 returns an actor-owned state-zero draft with team and review metadata'
 );
 
 select is(
@@ -356,7 +387,7 @@ select is(
     )
   ),
   0,
-  'strict owner-draft mode fails closed outside my-data scope'
+  'owner-draft mode fails closed outside my-data scope'
 );
 
 select * from finish();
