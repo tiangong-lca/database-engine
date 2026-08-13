@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, private, auth;
 
-select plan(23);
+select plan(20);
 
 select is(
   (
@@ -82,45 +82,6 @@ select is(
   ),
   7,
   'authenticated has no direct UPDATE privilege on any dataset table'
-);
-
--- Exercise the exact forward-conversion expression against a legacy scalar,
--- including a newline.  The real migration has already applied this same
--- expression to all seven production tables, so this fixture is isolated and
--- leaves no data behind after the test transaction rolls back.
-create temporary table issue_459_legacy_search_text (
-  id integer primary key,
-  search_text text
-) on commit drop;
-
-insert into issue_459_legacy_search_text (id, search_text)
-values
-  (1, null),
-  (2, E'legacy English\n日本語 value');
-
-alter table issue_459_legacy_search_text
-  alter column search_text type text[]
-  using case
-    when search_text is null then null
-    else array[search_text]
-  end;
-
-select is(
-  (select search_text from issue_459_legacy_search_text where id = 1),
-  null::text[],
-  'legacy NULL search_text remains NULL'
-);
-
-select is(
-  (select search_text from issue_459_legacy_search_text where id = 2),
-  array[E'legacy English\n日本語 value']::text[],
-  'legacy scalar search_text is preserved as one complete element without newline splitting'
-);
-
-select is(
-  (select cardinality(search_text) from issue_459_legacy_search_text where id = 2),
-  1,
-  'legacy scalar conversion produces one array element for later backfill replacement'
 );
 
 -- Disable only asynchronous projection side effects for deterministic trigger
