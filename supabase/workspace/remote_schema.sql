@@ -16670,14 +16670,45 @@ ALTER FUNCTION "api"."get_lca_release_run"("p_release_run_id" "uuid") OWNER TO "
 CREATE OR REPLACE FUNCTION "api"."get_lcia_result_calculation_bundle"("p_package_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
-    AS $$
+    AS $_$
 declare
   v_package private.lcia_result_packages%rowtype;
   v_result private.lca_results%rowtype;
   v_bundle jsonb;
+  v_downloads jsonb;
+  v_download jsonb;
+  v_expected jsonb := jsonb_build_object(
+    'lcia_results_xlsx', jsonb_build_object(
+      'group', 'results',
+      'fileName', 'lcia-results.xlsx',
+      'mediaType', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'
+    ),
+    'lcia_results_csv_zip', jsonb_build_object(
+      'group', 'results',
+      'fileName', 'lcia-results.csv.zip',
+      'mediaType', 'application/zip'
+    ),
+    'lci_inventory_parquet', jsonb_build_object(
+      'group', 'advanced_data',
+      'fileName', 'lci-inventory.parquet',
+      'mediaType', 'application/vnd.apache.parquet'
+    ),
+    'lci_inventory_csv_zip', jsonb_build_object(
+      'group', 'advanced_data',
+      'fileName', 'lci-inventory-csv.zip',
+      'mediaType', 'application/zip'
+    ),
+    'calculation_evidence_bundle', jsonb_build_object(
+      'group', 'audit_evidence',
+      'fileName', 'calculation-evidence-bundle.zip',
+      'mediaType', 'application/zip'
+    )
+  );
 begin
   if not api.lcia_result_is_manager() then
-    return api.lcia_result_error('not_data_product_manager', 403, 'Data product manager role is required');
+    return api.lcia_result_error(
+      'not_data_product_manager', 403, 'Data product manager role is required'
+    );
   end if;
 
   select * into v_package
@@ -16696,7 +16727,53 @@ begin
     v_result.diagnostics->'calculation_bundle'
   );
   if v_bundle is null then
-    return api.lcia_result_error('calculation_bundle_not_available', 404, 'Calculation Bundle is not available for this legacy package');
+    return api.lcia_result_error(
+      'calculation_bundle_not_available', 404,
+      'Calculation Bundle is not available for this legacy package'
+    );
+  end if;
+
+  v_downloads := coalesce(v_bundle->'downloads', '[]'::jsonb);
+  if jsonb_typeof(v_downloads) <> 'array' then
+    return api.lcia_result_error(
+      'calculation_downloads_invalid', 409,
+      'Calculation product downloads must be a role-bound array'
+    );
+  end if;
+  if jsonb_array_length(v_downloads) not in (0, 5) then
+    return api.lcia_result_error(
+      'calculation_downloads_incomplete', 409,
+      'Calculation product downloads must contain all five semantic artifacts'
+    );
+  end if;
+
+  for v_download in select value from jsonb_array_elements(v_downloads)
+  loop
+    if jsonb_typeof(v_download) <> 'object'
+       or not v_expected ? coalesce(v_download->>'role', '')
+       or v_download->>'group' is distinct from v_expected->(v_download->>'role')->>'group'
+       or v_download->>'fileName' is distinct from v_expected->(v_download->>'role')->>'fileName'
+       or v_download->>'mediaType' is distinct from v_expected->(v_download->>'role')->>'mediaType'
+       or v_download->>'schemaVersion' is distinct from 'tiangong.calculation-download.v1'
+       or coalesce(v_download->>'artifactUrl', '') = ''
+       or coalesce(v_download->>'sha256', '') !~ '^[0-9a-f]{64}$'
+       or coalesce(v_download->>'byteSize', '') !~ '^[1-9][0-9]*$'
+       or coalesce(v_download->>'recordCount', '') !~ '^[0-9]+$' then
+      return api.lcia_result_error(
+        'calculation_download_ref_invalid', 409,
+        'Calculation product download metadata is incomplete or invalid'
+      );
+    end if;
+  end loop;
+
+  if jsonb_array_length(v_downloads) = 5 and (
+    select count(distinct item->>'role')
+    from jsonb_array_elements(v_downloads) as item
+  ) <> 5 then
+    return api.lcia_result_error(
+      'calculation_download_role_conflict', 409,
+      'Calculation product download roles must be unique'
+    );
   end if;
 
   return jsonb_build_object(
@@ -16706,15 +16783,20 @@ begin
       'packageVersion', v_package.package_version,
       'snapshotId', v_package.snapshot_id,
       'resultId', v_package.result_id,
-      'calculationBundle', v_bundle,
+      'calculationBundle', v_bundle - 'downloads',
+      'productDownloads', v_downloads,
       'availableImpactCategories', v_package.available_impact_categories
     )
   );
 end;
-$$;
+$_$;
 
 
 ALTER FUNCTION "api"."get_lcia_result_calculation_bundle"("p_package_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "api"."get_lcia_result_calculation_bundle"("p_package_id" "uuid") IS 'Projects a verified Calculation Bundle plus five role-bound semantic downloads; canonical shards remain internal preview and audit evidence.';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."get_lcia_result_package_preview"("p_package_id" "uuid") RETURNS "jsonb"
@@ -41968,7 +42050,7 @@ begin
           and (
             (normalized_data_source = 'tg' and p.state_code = 100 and (team_id_filter is null or p.team_id = team_id_filter))
             or (normalized_data_source = 'co' and p.state_code = 200 and (team_id_filter is null or p.team_id = team_id_filter))
-            or (normalized_data_source = 'my' and effective_user_id is not null and p.user_id = effective_user_id and (state_code_filter is null or p.state_code = state_code_filter) and (not owner_draft_only or (p.state_code = 0 and p.team_id is null and p.review_id is null)))
+            or (normalized_data_source = 'my' and effective_user_id is not null and p.user_id = effective_user_id and (state_code_filter is null or p.state_code = state_code_filter) and (not owner_draft_only or (p.state_code = 0)))
             or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and p.team_id = team_id_filter and (state_code_filter is null or p.state_code = state_code_filter))
           )
           and (
@@ -41987,7 +42069,7 @@ begin
             and (
               (normalized_data_source = 'tg' and p2.state_code = 100 and (team_id_filter is null or p2.team_id = team_id_filter))
               or (normalized_data_source = 'co' and p2.state_code = 200 and (team_id_filter is null or p2.team_id = team_id_filter))
-              or (normalized_data_source = 'my' and effective_user_id is not null and p2.user_id = effective_user_id and (state_code_filter is null or p2.state_code = state_code_filter) and (not owner_draft_only or (p2.state_code = 0 and p2.team_id is null and p2.review_id is null)))
+              or (normalized_data_source = 'my' and effective_user_id is not null and p2.user_id = effective_user_id and (state_code_filter is null or p2.state_code = state_code_filter) and (not owner_draft_only or (p2.state_code = 0)))
               or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and p2.team_id = team_id_filter and (state_code_filter is null or p2.state_code = state_code_filter))
             )
           order by p2.version desc, p2.modified_at desc
@@ -42030,7 +42112,7 @@ begin
       where (
           ($5 = 'tg' and p.state_code = 100 and ($7 is null or p.team_id = $7))
           or ($5 = 'co' and p.state_code = 200 and ($7 is null or p.team_id = $7))
-          or ($5 = 'my' and $6 is not null and p.user_id = $6 and ($8 is null or p.state_code = $8) and (not $12 or (p.state_code = 0 and p.team_id is null and p.review_id is null)))
+          or ($5 = 'my' and $6 is not null and p.user_id = $6 and ($8 is null or p.state_code = $8) and (not $12 or (p.state_code = 0)))
           or ($5 = 'te' and $7 is not null and $9 and p.team_id = $7 and ($8 is null or p.state_code = $8))
         )
         %s
@@ -42050,7 +42132,7 @@ begin
           and (
             ($5 = 'tg' and p2.state_code = 100 and ($7 is null or p2.team_id = $7))
             or ($5 = 'co' and p2.state_code = 200 and ($7 is null or p2.team_id = $7))
-            or ($5 = 'my' and $6 is not null and p2.user_id = $6 and ($8 is null or p2.state_code = $8) and (not $12 or (p2.state_code = 0 and p2.team_id is null and p2.review_id is null)))
+            or ($5 = 'my' and $6 is not null and p2.user_id = $6 and ($8 is null or p2.state_code = $8) and (not $12 or (p2.state_code = 0)))
             or ($5 = 'te' and $7 is not null and $9 and p2.team_id = $7 and ($8 is null or p2.state_code = $8))
           )
         order by p2.version desc, p2.modified_at desc
@@ -42083,6 +42165,10 @@ $_$;
 
 
 ALTER FUNCTION "private"."search_processes_latest_v2_impl"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "private"."search_processes_latest_v2_impl"("query_text" "text", "filter_condition" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) IS 'Canonical Process search implementation. owner_draft_only admits actor-owned state_code=0 rows regardless of team_id or review_id workflow metadata and fails closed outside my-data scope.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."search_text_cutover_gate_v1"() RETURNS "jsonb"

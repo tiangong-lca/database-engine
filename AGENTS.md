@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: 1ba35c273ee51c47a25a055fdd8f7db84d22a4c5
-lastReviewedNote: "Reviewed for Issue #422: the metadata-only search_text repair remains database-owned migration behavior under the existing hotfix, validation, and delivery boundaries."
+lastReviewedCommit: 36a6fa2ff64947046bba2f07fd9ce96fd92608c0
+lastReviewedNote: "Reviewed for Issue #490: the exact migration-head assertion remains database-owned validation under the existing delivery boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

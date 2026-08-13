@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: 1ba35c273ee51c47a25a055fdd8f7db84d22a4c5
+lastReviewedCommit: 7222920fcc107afc14746b2c459681f137a03feb
 lastReviewedNote: "Reviewed for Issue #422: generated search_text comment updates do not change exact-local workspace generation or refresh behavior."
 related:
   - ../../AGENTS.md

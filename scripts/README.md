@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: c7accd945a60747c14910d7b63ea9951512e099f
+lastReviewedCommit: 7222920fcc107afc14746b2c459681f137a03feb
 lastReviewedNote: "Reviewed for Issue #422: the script catalog now includes exact metadata-only and populated-scalar failure proof for the search_text production hotfix."
 related:
   - ../AGENTS.md
