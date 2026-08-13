@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: c7accd945a60747c14910d7b63ea9951512e099f
+lastReviewedCommit: 628ecbb1702bcd9bccad418e03048bdcb0e4b58c
 lastReviewedNote: "Reviewed for Issue #422: search_text proof now verifies heap identity preservation and fail-closed handling of any populated scalar precursor."
 related:
   - ../../AGENTS.md
