@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: 8f68826e2c18e623e11faff46ff90b2486dfe828
-lastReviewedNote: "Reviewed for Issue #422: generated search_text comment updates do not change exact-local workspace generation or refresh behavior."
+lastReviewedCommit: 86df2a9fe68cdf6455908ccf7957cbbe9a0653cd
+lastReviewedNote: "Reviewed for Issue #484 on the current Issue #422/#487 baseline: the exact-local snapshot includes the quality-diagnostic contract without changing current search-text or semantic-artifact generation behavior."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

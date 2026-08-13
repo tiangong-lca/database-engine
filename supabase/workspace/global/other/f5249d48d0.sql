@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."cmd_review_quality_diagnostic_start"() IS 'Manually starts or reuses the active pending-review quality diagnostic. Review Admin only; the run is informational and cannot block review workflow actions.';

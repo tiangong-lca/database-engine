@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."cmd_review_submit_from_job"("p_job_id" "uuid", "p_audit" "jsonb") IS 'Temporary service-only compatibility adapter. It submits through the stable command as the original requester and never inspects or requires legacy Gate results.';

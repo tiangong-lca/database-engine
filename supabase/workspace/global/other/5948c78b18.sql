@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."cmd_review_submit"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_audit" "jsonb") IS 'Stable review-submission command. It enforces authentication, ownership, lifecycle, optimistic target, and transactional review invariants but does not run or require upstream completeness or numerical-quality diagnostics.';

@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "api"."cmd_review_submit_v2"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_gate_context" "jsonb", "p_audit" "jsonb") IS 'Unified seven-type Open Data review submission. The database alone resolves Root Review versus rejected Reference Review repair.';

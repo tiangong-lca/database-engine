@@ -12248,6 +12248,170 @@ $_$;
 ALTER FUNCTION "api"."cmd_review_normalize_reviewer_ids"("p_reviewer_ids" "jsonb") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "api"."cmd_review_quality_diagnostic_start"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  v_actor uuid := auth.uid();
+  v_job private.worker_jobs%rowtype;
+  v_concurrency_key constant text := 'review.quality_diagnostic.pending_review';
+begin
+  if v_actor is null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'AUTH_REQUIRED',
+      'status', 401,
+      'message', 'Authentication required'
+    );
+  end if;
+
+  if not api.cmd_review_is_review_admin(v_actor) then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'REVIEW_ADMIN_REQUIRED',
+      'status', 403,
+      'message', 'Review Admin role is required'
+    );
+  end if;
+
+  select job.*
+  into v_job
+  from private.worker_jobs as job
+  where job.job_kind = 'review.quality_diagnostic'
+    and job.concurrency_key = v_concurrency_key
+    and job.status in ('queued', 'running', 'waiting', 'stale')
+  order by job.created_at desc, job.id desc
+  limit 1;
+
+  if found then
+    return jsonb_build_object(
+      'ok', true,
+      'data', private.review_quality_diagnostic_projection(v_job),
+      'reused', true
+    );
+  end if;
+
+  insert into private.worker_jobs (
+    job_kind,
+    worker_runtime,
+    worker_queue,
+    priority,
+    queue_key,
+    subject_type,
+    requester_type,
+    requested_by,
+    concurrency_key,
+    status,
+    phase,
+    progress,
+    visibility,
+    max_attempts,
+    payload_schema_version,
+    payload_json,
+    result_schema_version
+  ) values (
+    'review.quality_diagnostic',
+    'calculator',
+    'review_quality',
+    20,
+    'review-admin',
+    'pending_review',
+    'user',
+    v_actor,
+    v_concurrency_key,
+    'queued',
+    'pending_review_snapshot',
+    0,
+    'operator',
+    3,
+    'review.quality_diagnostic.request.v1',
+    jsonb_build_object(
+      'scope', jsonb_build_object(
+        'kind', 'pending_review',
+        'reviewStates', jsonb_build_array(0, 1)
+      ),
+      'requestedAt', now()
+    ),
+    'review.quality_diagnostic.report.v1'
+  )
+  returning * into v_job;
+
+  insert into private.worker_job_events (
+    job_id,
+    event_type,
+    status,
+    phase,
+    progress,
+    details
+  ) values (
+    v_job.id,
+    'enqueued',
+    v_job.status,
+    v_job.phase,
+    v_job.progress,
+    jsonb_build_object(
+      'jobKind', v_job.job_kind,
+      'scopeKind', 'pending_review',
+      'requestedByReviewAdmin', true
+    )
+  );
+
+  insert into private.command_audit_log (
+    command,
+    actor_user_id,
+    target_table,
+    target_id,
+    target_version,
+    payload
+  ) values (
+    'cmd_review_quality_diagnostic_start',
+    v_actor,
+    'reviews',
+    null,
+    null,
+    jsonb_build_object(
+      'run_id', v_job.id,
+      'scope_kind', 'pending_review'
+    )
+  );
+
+  return jsonb_build_object(
+    'ok', true,
+    'data', private.review_quality_diagnostic_projection(v_job),
+    'reused', false
+  );
+exception
+  when unique_violation then
+    select job.*
+    into v_job
+    from private.worker_jobs as job
+    where job.job_kind = 'review.quality_diagnostic'
+      and job.concurrency_key = v_concurrency_key
+      and job.status in ('queued', 'running', 'waiting', 'stale')
+    order by job.created_at desc, job.id desc
+    limit 1;
+
+    if found then
+      return jsonb_build_object(
+        'ok', true,
+        'data', private.review_quality_diagnostic_projection(v_job),
+        'reused', true
+      );
+    end if;
+
+    raise;
+end;
+$$;
+
+
+ALTER FUNCTION "api"."cmd_review_quality_diagnostic_start"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "api"."cmd_review_quality_diagnostic_start"() IS 'Manually starts or reuses the active pending-review quality diagnostic. Review Admin only; the run is informational and cannot block review workflow actions.';
+
+
+
 CREATE OR REPLACE FUNCTION "api"."cmd_review_ref_type_to_table"("p_ref_type" "text") RETURNS "text"
     LANGUAGE "sql" IMMUTABLE
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
@@ -13127,43 +13291,423 @@ COMMENT ON FUNCTION "api"."cmd_review_save_comment_draft"("p_review_id" "uuid", 
 
 
 
-CREATE OR REPLACE FUNCTION "api"."cmd_review_submit"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_audit" "jsonb" DEFAULT '{}'::"jsonb", "p_review_submit_gate_run_id" "uuid" DEFAULT NULL::"uuid", "p_review_submit_revision_checksum" "text" DEFAULT NULL::"text", "p_review_submit_policy_profile" "text" DEFAULT 'review_submit_fast.v1'::"text", "p_review_submit_report_schema_version" "text" DEFAULT 'review_submit_gate_report.v1'::"text") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "api"."cmd_review_submit"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
-    AS $$
+    AS $_$
 declare
-  v_gate_assertion jsonb;
+  v_actor uuid := auth.uid();
+  v_table text := lower(coalesce(p_target_table, ''));
+  v_root_row jsonb;
+  v_checksum text;
+  v_root_review_id uuid := gen_random_uuid();
+  v_root_review private.reviews%rowtype;
+  v_reference private.reviews%rowtype;
+  v_target record;
+  v_target_checksum text;
+  v_affected jsonb := '[]'::jsonb;
+  v_conflict_version text;
+  v_event_key text;
 begin
-  v_gate_assertion := api.cmd_dataset_assert_review_submit_gate_passed(
-    p_table,
-    p_id,
-    p_version,
-    p_review_submit_gate_run_id,
-    p_review_submit_revision_checksum,
-    p_review_submit_policy_profile,
-    p_review_submit_report_schema_version
-  );
-
-  if coalesce((v_gate_assertion->>'ok')::boolean, false) is false then
-    return v_gate_assertion;
+  if v_actor is null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'AUTH_REQUIRED',
+      'status', 401,
+      'message', 'Authentication required'
+    );
   end if;
 
-  return api.cmd_review_submit_without_gate(
-    p_table,
-    p_id,
-    p_version,
+  if v_table not in (
+    'contacts',
+    'sources',
+    'unitgroups',
+    'flowproperties',
+    'flows',
+    'processes',
+    'lifecyclemodels'
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'INVALID_DATASET_TABLE',
+      'status', 400,
+      'message', 'Unsupported dataset table for review submission'
+    );
+  end if;
+
+  v_root_row := api.cmd_review_get_dataset_row(
+    v_table,
+    p_target_id,
+    p_target_version,
+    true
+  );
+
+  if v_root_row is null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'DATASET_NOT_FOUND',
+      'status', 404,
+      'message', 'Dataset not found'
+    );
+  end if;
+
+  if nullif(v_root_row->>'user_id', '')::uuid is distinct from v_actor then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'ROOT_DATASET_NOT_OWNED',
+      'status', 403,
+      'message', 'Only the dataset owner can submit review'
+    );
+  end if;
+
+  if coalesce((v_root_row->>'state_code')::integer, 0) <> 0 then
+    return jsonb_build_object(
+      'ok', false,
+      'code', case
+        when coalesce((v_root_row->>'state_code')::integer, 0) = 100
+          then 'APPROVED_DATASET_IMMUTABLE'
+        else 'DATA_UNDER_REVIEW'
+      end,
+      'status', 409,
+      'message', 'Only a Draft dataset can be submitted'
+    );
+  end if;
+
+  v_checksum := private.review_revision_fingerprint_v1(v_table, v_root_row);
+
+  if exists (
+    select 1
+    from private.review_candidate_root_ids_v1(
+      v_table,
+      p_target_id,
+      p_target_version
+    ) as candidate
+    where private.review_root_currently_references_target_v1(
+      candidate.root_review_id,
+      v_table,
+      p_target_id,
+      p_target_version
+    )
+  ) then
+    v_reference := private.review_get_or_create_reference_v1(
+      v_table,
+      v_root_row,
+      v_checksum,
+      v_actor
+    );
+
+    perform set_config('app.review_controlled_write', 'on', true);
+    execute format(
+      'update public.%I
+          set state_code = 20,
+              modified_at = now()
+        where id = $1
+          and version = $2
+          and state_code = 0',
+      v_table
+    ) using p_target_id, p_target_version;
+    perform set_config('app.review_controlled_write', 'off', true);
+
+    insert into private.command_audit_log (
+      command, actor_user_id, target_table, target_id, target_version, payload
+    ) values (
+      'cmd_review_submit', v_actor, v_table, p_target_id, p_target_version,
+      coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
+        'review_id', v_reference.id,
+        'review_kind', 'reference',
+        'submission_mode', 'reference_repair'
+      )
+    );
+
+    return jsonb_build_object(
+      'ok', true,
+      'data', jsonb_build_object(
+        'reviewId', v_reference.id,
+        'reviewKind', 'reference',
+        'submissionMode', 'reference_repair'
+      )
+    );
+  end if;
+
+  if exists (
+    select 1
+    from private.reviews as active_root
+    where active_root.review_kind = 'root'
+      and active_root.target_table = v_table
+      and active_root.data_id = p_target_id
+      and btrim(active_root.data_version::text) = p_target_version
+      and active_root.state_code in (0, 1)
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'DATA_UNDER_REVIEW',
+      'status', 409,
+      'message', 'An active Root Review already exists'
+    );
+  end if;
+
+  create temporary table if not exists review_submit_targets (
+    table_name text not null,
+    dataset_id uuid not null,
+    dataset_version text not null,
+    state_code integer not null,
+    reviews jsonb,
+    dataset_row jsonb not null,
+    is_root boolean not null default false,
+    primary key (table_name, dataset_id, dataset_version)
+  ) on commit drop;
+  truncate table review_submit_targets;
+
+  insert into review_submit_targets
+  select *
+  from api.cmd_review_collect_dataset_targets(
+    jsonb_build_array(jsonb_build_object(
+      'table', v_table,
+      'id', p_target_id,
+      'version', p_target_version,
+      'is_root', true
+    )),
+    true
+  );
+
+  if not exists (
+    select 1
+    from review_submit_targets
+    where is_root
+      and table_name = v_table
+      and dataset_id = p_target_id
+      and dataset_version = p_target_version
+  ) then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'DATASET_NOT_FOUND',
+      'status', 404,
+      'message', 'Dataset not found'
+    );
+  end if;
+
+  for v_target in
+    select *
+    from review_submit_targets
+    order by is_root desc, table_name, dataset_id, dataset_version
+  loop
+    if nullif(v_target.dataset_row->>'user_id', '') is null then
+      return jsonb_build_object(
+        'ok', false,
+        'code', case when v_target.is_root
+          then 'ROOT_OWNER_UNRESOLVED'
+          else 'REFERENCE_OWNER_UNRESOLVED'
+        end,
+        'status', 409,
+        'message', 'Dataset owner could not be resolved'
+      );
+    end if;
+
+    if not v_target.is_root
+      and nullif(v_target.dataset_row->>'user_id', '')::uuid <> v_actor
+      and not private.review_dataset_can_read_v1(
+        v_actor,
+        v_target.table_name,
+        v_target.dataset_row
+      ) then
+      return jsonb_build_object(
+        'ok', false,
+        'code', 'REFERENCE_ACCESS_DENIED',
+        'status', 403,
+        'message', 'A referenced dataset is not accessible'
+      );
+    end if;
+
+    select btrim(active_reference.data_version::text)
+    into v_conflict_version
+    from private.reviews as active_reference
+    where active_reference.review_kind = 'reference'
+      and active_reference.target_table = v_target.table_name
+      and active_reference.data_id = v_target.dataset_id
+      and btrim(active_reference.data_version::text)
+        <> v_target.dataset_version
+      and active_reference.state_code in (0, 1)
+    order by active_reference.created_at desc
+    limit 1;
+
+    if v_conflict_version is not null then
+      return jsonb_build_object(
+        'ok', false,
+        'code', 'REFERENCE_REVISION_CONFLICT',
+        'status', 409,
+        'message', 'Another version of a referenced dataset is under review'
+      );
+    end if;
+
+    v_target_checksum := private.review_revision_fingerprint_v1(
+      v_target.table_name,
+      v_target.dataset_row
+    );
+
+    if not v_target.is_root then
+      v_reference := private.review_get_or_create_reference_v1(
+        v_target.table_name,
+        v_target.dataset_row,
+        v_target_checksum,
+        v_actor
+      );
+    end if;
+  end loop;
+
+  insert into private.reviews (
+    id,
+    data_id,
+    data_version,
+    state_code,
+    reviewer_id,
+    json,
+    review_kind,
+    target_table,
+    submitted_revision_checksum,
+    target_owner_id,
+    target_team_id
+  )
+  values (
+    v_root_review_id,
+    p_target_id,
+    p_target_version,
+    0,
+    '[]'::jsonb,
+    private.review_build_json_v1(
+      v_table,
+      v_root_row,
+      v_actor,
+      'submit_review',
+      v_actor
+    ),
+    'root',
+    v_table,
+    v_checksum,
+    v_actor,
+    nullif(v_root_row->>'team_id', '')::uuid
+  )
+  returning * into v_root_review;
+
+  perform set_config('app.review_controlled_write', 'on', true);
+  for v_target in
+    select *
+    from review_submit_targets
+    order by is_root desc, table_name, dataset_id, dataset_version
+  loop
+    execute format(
+      'update public.%I
+          set state_code = case when state_code < 20 then 20 else state_code end,
+              reviews = case
+                when state_code < 100
+                  then api.cmd_review_append_review_ref(reviews, $1)
+                else reviews
+              end,
+              modified_at = now()
+        where id = $2
+          and version = $3',
+      v_target.table_name
+    ) using v_root_review_id, v_target.dataset_id, v_target.dataset_version;
+
+    if not v_target.is_root
+      and v_target.state_code < 20
+      and nullif(v_target.dataset_row->>'user_id', '')::uuid <> v_actor then
+      v_event_key := private.review_notify_event_v1(
+        'reference_entered_review',
+        (
+          select reference_review.id
+          from private.reviews as reference_review
+          where reference_review.review_kind = 'reference'
+            and reference_review.target_table = v_target.table_name
+            and reference_review.data_id = v_target.dataset_id
+            and btrim(reference_review.data_version::text) = v_target.dataset_version
+            and reference_review.submitted_revision_checksum =
+              private.review_revision_fingerprint_v1(
+                v_target.table_name,
+                v_target.dataset_row
+              )
+            and reference_review.state_code in (-1, 0, 1, 2)
+          order by case when reference_review.state_code in (0, 1, 2) then 0 else 1 end,
+                   reference_review.modified_at desc,
+                   reference_review.id
+          limit 1
+        ),
+        nullif(v_target.dataset_row->>'user_id', '')::uuid,
+        v_actor,
+        v_target.table_name,
+        v_target.dataset_id,
+        v_target.dataset_version,
+        null,
+        null,
+        null
+      );
+    end if;
+
+    v_affected := v_affected || jsonb_build_array(jsonb_build_object(
+      'table', v_target.table_name,
+      'id', v_target.dataset_id,
+      'version', v_target.dataset_version,
+      'previous_state_code', v_target.state_code,
+      'state_code', case
+        when v_target.state_code < 20 then 20
+        else v_target.state_code
+      end
+    ));
+  end loop;
+  perform set_config('app.review_controlled_write', 'off', true);
+
+  insert into private.command_audit_log (
+    command,
+    actor_user_id,
+    target_table,
+    target_id,
+    target_version,
+    payload
+  )
+  values (
+    'cmd_review_submit',
+    v_actor,
+    v_table,
+    p_target_id,
+    p_target_version,
     coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
-      'review_submit_gate_run_id', p_review_submit_gate_run_id,
-      'review_submit_revision_checksum', p_review_submit_revision_checksum,
-      'review_submit_policy_profile', p_review_submit_policy_profile,
-      'review_submit_report_schema_version', p_review_submit_report_schema_version
+      'review_id', v_root_review_id,
+      'review_kind', 'root',
+      'submission_mode', 'root',
+      'affected_datasets', v_affected
     )
   );
+
+  return jsonb_build_object(
+    'ok', true,
+    'data', jsonb_build_object(
+      'reviewId', v_root_review_id,
+      'reviewKind', 'root',
+      'submissionMode', 'root',
+      'review', to_jsonb(v_root_review),
+      'affectedDatasets', v_affected
+    )
+  );
+exception
+  when others then
+    perform set_config('app.review_controlled_write', 'off', true);
+    if sqlerrm = 'REFERENCE_OWNER_UNRESOLVED' then
+      return jsonb_build_object(
+        'ok', false,
+        'code', sqlerrm,
+        'status', 409,
+        'message', 'Review submission could not be completed'
+      );
+    end if;
+    raise;
 end;
-$$;
+$_$;
 
 
-ALTER FUNCTION "api"."cmd_review_submit"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_audit" "jsonb", "p_review_submit_gate_run_id" "uuid", "p_review_submit_revision_checksum" "text", "p_review_submit_policy_profile" "text", "p_review_submit_report_schema_version" "text") OWNER TO "postgres";
+ALTER FUNCTION "api"."cmd_review_submit"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_audit" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "api"."cmd_review_submit"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_audit" "jsonb") IS 'Stable review-submission command. It enforces authentication, ownership, lifecycle, optimistic target, and transactional review invariants but does not run or require upstream completeness or numerical-quality diagnostics.';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."cmd_review_submit_comment"("p_review_id" "uuid", "p_json" "jsonb", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
@@ -13472,523 +14016,23 @@ ALTER FUNCTION "api"."cmd_review_submit_comment"("p_review_id" "uuid", "p_json" 
 
 
 CREATE OR REPLACE FUNCTION "api"."cmd_review_submit_v2"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_gate_context" "jsonb" DEFAULT NULL::"jsonb", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
-    AS $_$
-declare
-  v_actor uuid := auth.uid();
-  v_table text := lower(coalesce(p_target_table, ''));
-  v_root_row jsonb;
-  v_checksum text;
-  v_gate_assertion jsonb;
-  v_root_review_id uuid := gen_random_uuid();
-  v_root_review private.reviews%rowtype;
-  v_reference private.reviews%rowtype;
-  v_target record;
-  v_target_checksum text;
-  v_affected jsonb := '[]'::jsonb;
-  v_conflict_version text;
-  v_event_key text;
-begin
-  if v_actor is null then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'AUTH_REQUIRED',
-      'status', 401,
-      'message', 'Authentication required'
-    );
-  end if;
-
-  if v_table not in (
-    'contacts',
-    'sources',
-    'unitgroups',
-    'flowproperties',
-    'flows',
-    'processes',
-    'lifecyclemodels'
-  ) then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'INVALID_DATASET_TABLE',
-      'status', 400,
-      'message', 'Unsupported dataset table for review submission'
-    );
-  end if;
-
-  v_root_row := api.cmd_review_get_dataset_row(
-    v_table,
+    LANGUAGE "sql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select api.cmd_review_submit(
+    p_target_table,
     p_target_id,
     p_target_version,
-    true
-  );
-
-  if v_root_row is null then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'DATASET_NOT_FOUND',
-      'status', 404,
-      'message', 'Dataset not found'
-    );
-  end if;
-
-  if nullif(v_root_row->>'user_id', '')::uuid is distinct from v_actor then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'ROOT_DATASET_NOT_OWNED',
-      'status', 403,
-      'message', 'Only the dataset owner can submit review'
-    );
-  end if;
-
-  if coalesce((v_root_row->>'state_code')::integer, 0) <> 0 then
-    return jsonb_build_object(
-      'ok', false,
-      'code', case
-        when coalesce((v_root_row->>'state_code')::integer, 0) = 100
-          then 'APPROVED_DATASET_IMMUTABLE'
-        else 'DATA_UNDER_REVIEW'
-      end,
-      'status', 409,
-      'message', 'Only a Draft dataset can be submitted'
-    );
-  end if;
-
-  v_checksum := private.review_revision_fingerprint_v1(v_table, v_root_row);
-
-  if v_table = 'processes' then
-    if nullif(p_gate_context->>'reviewSubmitJobId', '') is not null then
-      if not exists (
-        select 1
-        from private.dataset_review_submit_requests as submit_job
-        left join private.worker_jobs as gate_job
-          on gate_job.id = submit_job.gate_worker_job_id
-        where submit_job.id =
-            (p_gate_context->>'reviewSubmitJobId')::uuid
-          and submit_job.requested_by = v_actor
-          and submit_job.dataset_table = v_table
-          and submit_job.dataset_id = p_target_id
-          and submit_job.dataset_version = p_target_version
-          and submit_job.revision_checksum = v_checksum
-          and submit_job.status in ('submitting', 'submitted')
-          and (
-            (
-              submit_job.gate_worker_job_id is not null
-              and gate_job.status = 'completed'
-              and gate_job.result_json->>'status' = 'passed'
-              and gate_job.result_json
-                #>> '{datasetRevision,revisionChecksum}' = v_checksum
-            )
-            or submit_job.gate_run_id is not null
-          )
-      ) then
-        return jsonb_build_object(
-          'ok', false,
-          'code', 'REVIEW_SUBMIT_JOB_GATE_INVALID',
-          'status', 409,
-          'message', 'Review-submit job does not prove a passed Process Gate'
-        );
-      end if;
-    else
-      if p_gate_context is null
-        or nullif(p_gate_context->>'reviewSubmitGateRunId', '') is null
-        or nullif(p_gate_context->>'revisionChecksum', '') is null then
-        return jsonb_build_object(
-          'ok', false,
-          'code', 'REVIEW_GATE_REQUIRED',
-          'status', 409,
-          'message', 'Process review submission requires a passed Gate'
-        );
-      end if;
-
-      if p_gate_context->>'revisionChecksum' <> v_checksum then
-        return jsonb_build_object(
-          'ok', false,
-          'code', 'REVIEW_GATE_CHECKSUM_MISMATCH',
-          'status', 409,
-          'message', 'Gate checksum does not match the current Process revision'
-        );
-      end if;
-
-      v_gate_assertion := api.cmd_dataset_assert_review_submit_gate_passed(
-        v_table,
-        p_target_id,
-        p_target_version,
-        (p_gate_context->>'reviewSubmitGateRunId')::uuid,
-        p_gate_context->>'revisionChecksum',
-        coalesce(
-          nullif(p_gate_context->>'policyProfile', ''),
-          'review_submit_fast.v1'
-        ),
-        coalesce(
-          nullif(p_gate_context->>'reportSchemaVersion', ''),
-          'review_submit_gate_report.v1'
-        )
-      );
-
-      if coalesce((v_gate_assertion->>'ok')::boolean, false) is false then
-        return v_gate_assertion;
-      end if;
-    end if;
-  elsif p_gate_context is not null
-    and p_gate_context <> '{}'::jsonb
-    and p_gate_context <> 'null'::jsonb then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'REVIEW_GATE_NOT_APPLICABLE',
-      'status', 400,
-      'message', 'Gate context is only accepted for Process datasets'
-    );
-  end if;
-
-
-  if exists (
-    select 1
-    from private.review_candidate_root_ids_v1(
-      v_table,
-      p_target_id,
-      p_target_version
-    ) as candidate
-    where private.review_root_currently_references_target_v1(
-      candidate.root_review_id,
-      v_table,
-      p_target_id,
-      p_target_version
-    )
-  ) then
-    v_reference := private.review_get_or_create_reference_v1(
-      v_table,
-      v_root_row,
-      v_checksum,
-      v_actor
-    );
-
-    perform set_config('app.review_controlled_write', 'on', true);
-    execute format(
-      'update public.%I
-          set state_code = 20,
-              modified_at = now()
-        where id = $1
-          and version = $2
-          and state_code = 0',
-      v_table
-    ) using p_target_id, p_target_version;
-    perform set_config('app.review_controlled_write', 'off', true);
-
-    insert into private.command_audit_log (
-      command, actor_user_id, target_table, target_id, target_version, payload
-    ) values (
-      'cmd_review_submit_v2', v_actor, v_table, p_target_id, p_target_version,
-      coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
-        'review_id', v_reference.id,
-        'review_kind', 'reference',
-        'submission_mode', 'reference_repair'
-      )
-    );
-
-    return jsonb_build_object(
-      'ok', true,
-      'data', jsonb_build_object(
-        'reviewId', v_reference.id,
-        'reviewKind', 'reference',
-        'submissionMode', 'reference_repair'
-      )
-    );
-  end if;
-
-  if exists (
-    select 1
-    from private.reviews as active_root
-    where active_root.review_kind = 'root'
-      and active_root.target_table = v_table
-      and active_root.data_id = p_target_id
-      and btrim(active_root.data_version::text) = p_target_version
-      and active_root.state_code in (0, 1)
-  ) then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'DATA_UNDER_REVIEW',
-      'status', 409,
-      'message', 'An active Root Review already exists'
-    );
-  end if;
-
-  create temporary table if not exists review_submit_v2_targets (
-    table_name text not null,
-    dataset_id uuid not null,
-    dataset_version text not null,
-    state_code integer not null,
-    reviews jsonb,
-    dataset_row jsonb not null,
-    is_root boolean not null default false,
-    primary key (table_name, dataset_id, dataset_version)
-  ) on commit drop;
-  truncate table review_submit_v2_targets;
-
-  insert into review_submit_v2_targets
-  select *
-  from api.cmd_review_collect_dataset_targets(
-    jsonb_build_array(jsonb_build_object(
-      'table', v_table,
-      'id', p_target_id,
-      'version', p_target_version,
-      'is_root', true
-    )),
-    true
-  );
-
-  if not exists (
-    select 1
-    from review_submit_v2_targets
-    where is_root
-      and table_name = v_table
-      and dataset_id = p_target_id
-      and dataset_version = p_target_version
-  ) then
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'DATASET_NOT_FOUND',
-      'status', 404,
-      'message', 'Dataset not found'
-    );
-  end if;
-
-  if v_table in ('processes', 'lifecyclemodels') then
-    v_gate_assertion := private.cmd_review_assert_lifecycle_closure(
-      jsonb_build_array(jsonb_build_object(
-        'table', v_table,
-        'id', p_target_id,
-        'version', p_target_version
-      )),
-      'submit',
-      v_actor
-    );
-    if v_gate_assertion is not null then
-      return v_gate_assertion;
-    end if;
-  end if;
-
-  for v_target in
-    select *
-    from review_submit_v2_targets
-    order by is_root desc, table_name, dataset_id, dataset_version
-  loop
-    if nullif(v_target.dataset_row->>'user_id', '') is null then
-      return jsonb_build_object(
-        'ok', false,
-        'code', case when v_target.is_root
-          then 'ROOT_OWNER_UNRESOLVED'
-          else 'REFERENCE_OWNER_UNRESOLVED'
-        end,
-        'status', 409,
-        'message', 'Dataset owner could not be resolved'
-      );
-    end if;
-
-    if not v_target.is_root
-      and nullif(v_target.dataset_row->>'user_id', '')::uuid <> v_actor
-      and not private.review_dataset_can_read_v1(
-        v_actor,
-        v_target.table_name,
-        v_target.dataset_row
-      ) then
-      return jsonb_build_object(
-        'ok', false,
-        'code', 'REFERENCE_ACCESS_DENIED',
-        'status', 403,
-        'message', 'A referenced dataset is not accessible'
-      );
-    end if;
-
-    select btrim(active_reference.data_version::text)
-    into v_conflict_version
-    from private.reviews as active_reference
-    where active_reference.review_kind = 'reference'
-      and active_reference.target_table = v_target.table_name
-      and active_reference.data_id = v_target.dataset_id
-      and btrim(active_reference.data_version::text)
-        <> v_target.dataset_version
-      and active_reference.state_code in (0, 1)
-    order by active_reference.created_at desc
-    limit 1;
-
-    if v_conflict_version is not null then
-      return jsonb_build_object(
-        'ok', false,
-        'code', 'REFERENCE_REVISION_CONFLICT',
-        'status', 409,
-        'message', 'Another version of a referenced dataset is under review'
-      );
-    end if;
-
-    v_target_checksum := private.review_revision_fingerprint_v1(
-      v_target.table_name,
-      v_target.dataset_row
-    );
-
-    if not v_target.is_root then
-      v_reference := private.review_get_or_create_reference_v1(
-        v_target.table_name,
-        v_target.dataset_row,
-        v_target_checksum,
-        v_actor
-      );
-    end if;
-  end loop;
-
-  insert into private.reviews (
-    id,
-    data_id,
-    data_version,
-    state_code,
-    reviewer_id,
-    json,
-    review_kind,
-    target_table,
-    submitted_revision_checksum,
-    target_owner_id,
-    target_team_id
+    coalesce(p_audit, '{}'::jsonb)
+      || jsonb_build_object('compatibility_entrypoint', 'cmd_review_submit_v2')
   )
-  values (
-    v_root_review_id,
-    p_target_id,
-    p_target_version,
-    0,
-    '[]'::jsonb,
-    private.review_build_json_v1(
-      v_table,
-      v_root_row,
-      v_actor,
-      'submit_review',
-      v_actor
-    ),
-    'root',
-    v_table,
-    v_checksum,
-    v_actor,
-    nullif(v_root_row->>'team_id', '')::uuid
-  )
-  returning * into v_root_review;
-
-  perform set_config('app.review_controlled_write', 'on', true);
-  for v_target in
-    select *
-    from review_submit_v2_targets
-    order by is_root desc, table_name, dataset_id, dataset_version
-  loop
-    execute format(
-      'update public.%I
-          set state_code = case when state_code < 20 then 20 else state_code end,
-              reviews = case
-                when state_code < 100
-                  then api.cmd_review_append_review_ref(reviews, $1)
-                else reviews
-              end,
-              modified_at = now()
-        where id = $2
-          and version = $3',
-      v_target.table_name
-    ) using v_root_review_id, v_target.dataset_id, v_target.dataset_version;
-
-    if not v_target.is_root
-      and v_target.state_code < 20
-      and nullif(v_target.dataset_row->>'user_id', '')::uuid <> v_actor then
-      v_event_key := private.review_notify_event_v1(
-        'reference_entered_review',
-        (
-          select reference_review.id
-          from private.reviews as reference_review
-          where reference_review.review_kind = 'reference'
-            and reference_review.target_table = v_target.table_name
-            and reference_review.data_id = v_target.dataset_id
-            and btrim(reference_review.data_version::text) = v_target.dataset_version
-            and reference_review.submitted_revision_checksum =
-              private.review_revision_fingerprint_v1(
-                v_target.table_name,
-                v_target.dataset_row
-              )
-            and reference_review.state_code in (-1, 0, 1, 2)
-          order by case when reference_review.state_code in (0, 1, 2) then 0 else 1 end,
-                   reference_review.modified_at desc,
-                   reference_review.id
-          limit 1
-        ),
-        nullif(v_target.dataset_row->>'user_id', '')::uuid,
-        v_actor,
-        v_target.table_name,
-        v_target.dataset_id,
-        v_target.dataset_version,
-        null,
-        null,
-        null
-      );
-    end if;
-
-    v_affected := v_affected || jsonb_build_array(jsonb_build_object(
-      'table', v_target.table_name,
-      'id', v_target.dataset_id,
-      'version', v_target.dataset_version,
-      'previous_state_code', v_target.state_code,
-      'state_code', case
-        when v_target.state_code < 20 then 20
-        else v_target.state_code
-      end
-    ));
-  end loop;
-  perform set_config('app.review_controlled_write', 'off', true);
-
-  insert into private.command_audit_log (
-    command,
-    actor_user_id,
-    target_table,
-    target_id,
-    target_version,
-    payload
-  )
-  values (
-    'cmd_review_submit_v2',
-    v_actor,
-    v_table,
-    p_target_id,
-    p_target_version,
-    coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
-      'review_id', v_root_review_id,
-      'review_kind', 'root',
-      'submission_mode', 'root',
-      'affected_datasets', v_affected
-    )
-  );
-
-  return jsonb_build_object(
-    'ok', true,
-    'data', jsonb_build_object(
-      'reviewId', v_root_review_id,
-      'reviewKind', 'root',
-      'submissionMode', 'root',
-      'review', to_jsonb(v_root_review),
-      'affectedDatasets', v_affected
-    )
-  );
-exception
-  when others then
-    perform set_config('app.review_controlled_write', 'off', true);
-    if sqlerrm = 'REFERENCE_OWNER_UNRESOLVED' then
-      return jsonb_build_object(
-        'ok', false,
-        'code', sqlerrm,
-        'status', 409,
-        'message', 'Review submission could not be completed'
-      );
-    end if;
-    raise;
-end;
-$_$;
+$$;
 
 
 ALTER FUNCTION "api"."cmd_review_submit_v2"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_gate_context" "jsonb", "p_audit" "jsonb") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "api"."cmd_review_submit_v2"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_gate_context" "jsonb", "p_audit" "jsonb") IS 'Unified seven-type Open Data review submission. The database alone resolves Root Review versus rejected Reference Review repair.';
+COMMENT ON FUNCTION "api"."cmd_review_submit_v2"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_gate_context" "jsonb", "p_audit" "jsonb") IS 'Temporary compatibility wrapper for api.cmd_review_submit. Legacy Gate context is accepted but ignored and is not persisted as review authority.';
 
 
 
@@ -20767,6 +20811,68 @@ $$;
 
 
 ALTER FUNCTION "api"."qry_review_member_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer) OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "api"."qry_review_quality_diagnostic"("p_run_id" "uuid" DEFAULT NULL::"uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  v_actor uuid := auth.uid();
+  v_job private.worker_jobs%rowtype;
+begin
+  if v_actor is null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'AUTH_REQUIRED',
+      'status', 401,
+      'message', 'Authentication required'
+    );
+  end if;
+
+  if not api.cmd_review_is_review_admin(v_actor) then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'REVIEW_ADMIN_REQUIRED',
+      'status', 403,
+      'message', 'Review Admin role is required'
+    );
+  end if;
+
+  select job.*
+  into v_job
+  from private.worker_jobs as job
+  where job.job_kind = 'review.quality_diagnostic'
+    and (p_run_id is null or job.id = p_run_id)
+  order by job.updated_at desc, job.id desc
+  limit 1;
+
+  if not found then
+    if p_run_id is null then
+      return jsonb_build_object('ok', true, 'data', null);
+    end if;
+
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'REVIEW_QUALITY_DIAGNOSTIC_NOT_FOUND',
+      'status', 404,
+      'message', 'Review quality diagnostic run not found'
+    );
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'data', private.review_quality_diagnostic_projection(v_job)
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "api"."qry_review_quality_diagnostic"("p_run_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "api"."qry_review_quality_diagnostic"("p_run_id" "uuid") IS 'Returns one or the latest Review Admin quality diagnostic report. Findings, not-evaluable outcomes, and failures are informational only.';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."qry_root_review_reference_progress"("p_root_review_id" "uuid") RETURNS TABLE("reference_review_id" "uuid", "target_table" "text", "data_id" "uuid", "data_version" "text", "submitted_revision_checksum" "text", "state_code" integer, "reviewer_count" integer, "completed_reviewer_count" integer, "relation_paths" "jsonb")
@@ -30854,25 +30960,17 @@ ALTER FUNCTION "private"."cmd_review_submit_comment_pre_v2"("p_review_id" "uuid"
 
 CREATE OR REPLACE FUNCTION "private"."cmd_review_submit_from_job"("p_job_id" "uuid", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO 'private', 'api', 'public', 'util', 'extensions', 'pg_temp'
-    AS $_$
+    SET "search_path" TO ''
+    AS $$
 declare
   v_job private.dataset_review_submit_requests%rowtype;
-  v_worker_job private.worker_jobs%rowtype;
-  v_worker_result_checksum text;
-  v_dataset_found boolean;
-  v_owner_id uuid;
-  v_state_code integer;
-  v_modified_at timestamptz;
   v_submit_result jsonb;
   v_error_code text;
   v_error_status integer;
   v_error_message text;
-  v_job_status text;
   v_prev_sub text;
   v_prev_role text;
   v_prev_claims text;
-  v_submit_audit jsonb;
 begin
   if not coalesce(util.is_service_request(), false) then
     return jsonb_build_object(
@@ -30883,10 +30981,10 @@ begin
     );
   end if;
 
-  select *
-    into v_job
-  from private.dataset_review_submit_requests
-  where id = p_job_id
+  select request.*
+  into v_job
+  from private.dataset_review_submit_requests as request
+  where request.id = p_job_id
   for update;
 
   if v_job.id is null then
@@ -30905,366 +31003,22 @@ begin
     );
   end if;
 
-  if v_job.status in ('blocked', 'stale', 'error', 'cancelled') then
+  if v_job.status = 'cancelled' then
     return jsonb_build_object(
       'ok', false,
-      'code', coalesce(v_job.last_error_code, 'REVIEW_SUBMIT_JOB_NOT_ACTIVE'),
+      'code', 'REVIEW_SUBMIT_JOB_CANCELLED',
       'status', 409,
-      'message', coalesce(v_job.last_error_message, 'Review-submit job is not active'),
+      'message', 'Review-submit job was cancelled',
       'details', private.cmd_dataset_review_submit_job_payload(v_job)
     );
   end if;
 
-  if v_job.gate_worker_job_id is null and v_job.gate_run_id is null then
-    update private.dataset_review_submit_requests
-      set status = 'error',
-          last_error_code = 'REVIEW_SUBMIT_JOB_GATE_REQUIRED',
-          last_error_message = 'Review-submit job is missing a gate job',
-          modified_at = now(),
-          completed_at = now()
-    where id = v_job.id
-    returning *
-      into v_job;
-
+  if v_job.requested_by is null then
     return jsonb_build_object(
       'ok', false,
-      'code', 'REVIEW_SUBMIT_JOB_GATE_REQUIRED',
+      'code', 'REVIEW_SUBMIT_JOB_REQUESTER_REQUIRED',
       'status', 409,
-      'message', 'Review-submit job is missing a gate job',
-      'details', private.cmd_dataset_review_submit_job_payload(v_job)
-    );
-  end if;
-
-  if v_job.gate_worker_job_id is not null then
-    select *
-      into v_worker_job
-    from private.worker_jobs
-    where id = v_job.gate_worker_job_id
-    for update;
-
-    if v_worker_job.id is null then
-      update private.dataset_review_submit_requests
-        set status = 'error',
-            last_error_code = 'REVIEW_SUBMIT_GATE_NOT_FOUND',
-            last_error_message = 'Review-submit gate worker job not found',
-            modified_at = now(),
-            completed_at = now()
-      where id = v_job.id
-      returning *
-        into v_job;
-
-      return jsonb_build_object(
-        'ok', false,
-        'code', 'REVIEW_SUBMIT_GATE_NOT_FOUND',
-        'status', 404,
-        'message', 'Review-submit gate worker job not found',
-        'details', private.cmd_dataset_review_submit_job_payload(v_job)
-      );
-    end if;
-
-    if v_worker_job.job_kind <> 'review_submit.gate'
-      or v_worker_job.subject_type <> v_job.dataset_table
-      or v_worker_job.subject_id <> v_job.dataset_id
-      or v_worker_job.subject_version <> v_job.dataset_version
-      or v_worker_job.requested_by is distinct from v_job.requested_by
-      or v_worker_job.payload_json #>> '{policy,profile}' is distinct from v_job.policy_profile
-      or v_worker_job.payload_json #>> '{policy,reportSchemaVersion}' is distinct from v_job.report_schema_version then
-      update private.dataset_review_submit_requests
-        set status = 'stale',
-            last_error_code = 'REVIEW_SUBMIT_GATE_DATASET_MISMATCH',
-            last_error_message = 'Review-submit gate worker job does not match this review-submit job',
-            last_error_details = jsonb_build_object(
-              'gateWorkerJobId', v_worker_job.id,
-              'jobKind', v_worker_job.job_kind,
-              'subjectType', v_worker_job.subject_type,
-              'subjectId', v_worker_job.subject_id,
-              'subjectVersion', v_worker_job.subject_version,
-              'requestedBy', v_worker_job.requested_by,
-              'policyProfile', v_worker_job.payload_json #>> '{policy,profile}',
-              'reportSchemaVersion', v_worker_job.payload_json #>> '{policy,reportSchemaVersion}'
-            ),
-            modified_at = now(),
-            completed_at = now()
-      where id = v_job.id
-      returning *
-        into v_job;
-
-      return jsonb_build_object(
-        'ok', false,
-        'code', 'REVIEW_SUBMIT_GATE_DATASET_MISMATCH',
-        'status', 409,
-        'message', 'Review-submit gate worker job does not match this review-submit job',
-        'details', private.cmd_dataset_review_submit_job_payload(v_job)
-      );
-    end if;
-
-    if v_worker_job.status in ('queued', 'running', 'waiting', 'stale') then
-      update private.dataset_review_submit_requests
-        set status = 'waiting_gate',
-            last_error_code = null,
-            last_error_message = null,
-            last_error_details = null,
-            modified_at = now(),
-            completed_at = null
-      where id = v_job.id
-      returning *
-        into v_job;
-
-      return jsonb_build_object(
-        'ok', false,
-        'code', 'REVIEW_SUBMIT_GATE_NOT_READY',
-        'status', 409,
-        'message', 'Review-submit gate has not passed yet',
-        'details', private.cmd_dataset_review_submit_job_payload(v_job)
-      );
-    end if;
-
-    if v_worker_job.status = 'blocked' then
-      update private.dataset_review_submit_requests
-        set status = 'blocked',
-            last_error_code = 'REVIEW_SUBMIT_GATE_BLOCKED',
-            last_error_message = 'Review-submit gate blocked this dataset revision',
-            last_error_details = private.worker_job_payload(v_worker_job, false),
-            modified_at = now(),
-            completed_at = now()
-      where id = v_job.id
-      returning *
-        into v_job;
-
-      return jsonb_build_object(
-        'ok', false,
-        'code', 'REVIEW_SUBMIT_GATE_BLOCKED',
-        'status', 409,
-        'message', 'Review-submit gate blocked this dataset revision',
-        'details', private.cmd_dataset_review_submit_job_payload(v_job)
-      );
-    end if;
-
-    if v_worker_job.status = 'cancelled' then
-      update private.dataset_review_submit_requests
-        set status = 'cancelled',
-            last_error_code = 'REVIEW_SUBMIT_JOB_CANCELLED',
-            last_error_message = 'Review-submit gate worker job was cancelled',
-            last_error_details = private.worker_job_payload(v_worker_job, false),
-            modified_at = now(),
-            completed_at = now()
-      where id = v_job.id
-      returning *
-        into v_job;
-
-      return jsonb_build_object(
-        'ok', false,
-        'code', 'REVIEW_SUBMIT_JOB_CANCELLED',
-        'status', 409,
-        'message', 'Review-submit gate worker job was cancelled',
-        'details', private.cmd_dataset_review_submit_job_payload(v_job)
-      );
-    end if;
-
-    if v_worker_job.status <> 'completed' then
-      update private.dataset_review_submit_requests
-        set status = 'error',
-            last_error_code = coalesce(v_worker_job.error_code, 'REVIEW_SUBMIT_GATE_ERROR'),
-            last_error_message = coalesce(v_worker_job.error_message, 'Review-submit gate failed before review submission'),
-            last_error_details = private.worker_job_payload(v_worker_job, false),
-            modified_at = now(),
-            completed_at = now()
-      where id = v_job.id
-      returning *
-        into v_job;
-
-      return jsonb_build_object(
-        'ok', false,
-        'code', coalesce(v_worker_job.error_code, 'REVIEW_SUBMIT_GATE_ERROR'),
-        'status', 502,
-        'message', coalesce(v_worker_job.error_message, 'Review-submit gate failed before review submission'),
-        'details', private.cmd_dataset_review_submit_job_payload(v_job)
-      );
-    end if;
-
-    if coalesce(v_worker_job.result_json->>'status', '') <> 'passed' then
-      update private.dataset_review_submit_requests
-        set status = 'error',
-            last_error_code = 'REVIEW_SUBMIT_GATE_ERROR',
-            last_error_message = 'Review-submit gate worker job completed without a passed result',
-            last_error_details = private.worker_job_payload(v_worker_job, false),
-            modified_at = now(),
-            completed_at = now()
-      where id = v_job.id
-      returning *
-        into v_job;
-
-      return jsonb_build_object(
-        'ok', false,
-        'code', 'REVIEW_SUBMIT_GATE_ERROR',
-        'status', 502,
-        'message', 'Review-submit gate worker job completed without a passed result',
-        'details', private.cmd_dataset_review_submit_job_payload(v_job)
-      );
-    end if;
-
-    if v_worker_job.result_json #>> '{datasetRevision,table}' is distinct from v_job.dataset_table
-      or v_worker_job.result_json #>> '{datasetRevision,id}' is distinct from v_job.dataset_id::text
-      or v_worker_job.result_json #>> '{datasetRevision,version}' is distinct from v_job.dataset_version then
-      update private.dataset_review_submit_requests
-        set status = 'stale',
-            last_error_code = 'REVIEW_SUBMIT_GATE_DATASET_MISMATCH',
-            last_error_message = 'Review-submit gate worker result does not match this review-submit job',
-            last_error_details = jsonb_build_object(
-              'gateWorkerJobId', v_worker_job.id,
-              'resultDatasetRevision', v_worker_job.result_json->'datasetRevision'
-            ),
-            modified_at = now(),
-            completed_at = now()
-      where id = v_job.id
-      returning *
-        into v_job;
-
-      return jsonb_build_object(
-        'ok', false,
-        'code', 'REVIEW_SUBMIT_GATE_DATASET_MISMATCH',
-        'status', 409,
-        'message', 'Review-submit gate worker result does not match this review-submit job',
-        'details', private.cmd_dataset_review_submit_job_payload(v_job)
-      );
-    end if;
-
-    v_worker_result_checksum := v_worker_job.result_json #>> '{datasetRevision,revisionChecksum}';
-
-    if v_worker_result_checksum is distinct from v_job.revision_checksum then
-      update private.dataset_review_submit_requests
-        set status = 'stale',
-            last_error_code = 'REVIEW_SUBMIT_GATE_STALE',
-            last_error_message = 'Review-submit gate worker job is stale for the submitted dataset revision',
-            last_error_details = jsonb_build_object(
-              'gateWorkerJobId', v_worker_job.id,
-              'expectedRevisionChecksum', v_job.revision_checksum,
-              'actualRevisionChecksum', v_worker_result_checksum
-            ),
-            modified_at = now(),
-            completed_at = now()
-      where id = v_job.id
-      returning *
-        into v_job;
-
-      return jsonb_build_object(
-        'ok', false,
-        'code', 'REVIEW_SUBMIT_GATE_STALE',
-        'status', 409,
-        'message', 'Review-submit gate worker job is stale for the submitted dataset revision',
-        'details', private.cmd_dataset_review_submit_job_payload(v_job)
-      );
-    end if;
-  end if;
-
-  execute format(
-    'select true, user_id, state_code, modified_at from public.%I where id = $1 and version = $2',
-    v_job.dataset_table
-  )
-    into v_dataset_found, v_owner_id, v_state_code, v_modified_at
-    using v_job.dataset_id, v_job.dataset_version;
-
-  if coalesce(v_dataset_found, false) is false then
-    update private.dataset_review_submit_requests
-      set status = 'error',
-          last_error_code = 'DATASET_NOT_FOUND',
-          last_error_message = 'Dataset not found',
-          modified_at = now(),
-          completed_at = now()
-    where id = v_job.id
-    returning *
-      into v_job;
-
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'DATASET_NOT_FOUND',
-      'status', 404,
-      'message', 'Dataset not found',
-      'details', private.cmd_dataset_review_submit_job_payload(v_job)
-    );
-  end if;
-
-  if v_owner_id is distinct from v_job.requested_by then
-    update private.dataset_review_submit_requests
-      set status = 'error',
-          last_error_code = 'DATASET_OWNER_REQUIRED',
-          last_error_message = 'Only the job requester can submit this dataset for review',
-          modified_at = now(),
-          completed_at = now()
-    where id = v_job.id
-    returning *
-      into v_job;
-
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'DATASET_OWNER_REQUIRED',
-      'status', 403,
-      'message', 'Only the job requester can submit this dataset for review',
-      'details', private.cmd_dataset_review_submit_job_payload(v_job)
-    );
-  end if;
-
-  if coalesce(v_state_code, 0) >= 100 then
-    update private.dataset_review_submit_requests
-      set status = 'error',
-          last_error_code = 'DATA_ALREADY_PUBLISHED',
-          last_error_message = 'Published datasets cannot be submitted for review again',
-          modified_at = now(),
-          completed_at = now()
-    where id = v_job.id
-    returning *
-      into v_job;
-
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'DATA_ALREADY_PUBLISHED',
-      'status', 409,
-      'message', 'Published datasets cannot be submitted for review again',
-      'details', private.cmd_dataset_review_submit_job_payload(v_job)
-    );
-  end if;
-
-  if coalesce(v_state_code, 0) >= 20 then
-    update private.dataset_review_submit_requests
-      set status = 'error',
-          last_error_code = 'DATA_UNDER_REVIEW',
-          last_error_message = 'Dataset is already under review',
-          modified_at = now(),
-          completed_at = now()
-    where id = v_job.id
-    returning *
-      into v_job;
-
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'DATA_UNDER_REVIEW',
-      'status', 409,
-      'message', 'Dataset is already under review',
-      'details', private.cmd_dataset_review_submit_job_payload(v_job)
-    );
-  end if;
-
-  if v_modified_at > v_job.created_at then
-    update private.dataset_review_submit_requests
-      set status = 'stale',
-          last_error_code = 'REVIEW_SUBMIT_JOB_STALE',
-          last_error_message = 'Dataset changed after this review-submit job was created',
-          last_error_details = jsonb_build_object(
-            'jobCreatedAt', to_jsonb(v_job.created_at),
-            'datasetModifiedAt', to_jsonb(v_modified_at)
-          ),
-          modified_at = now(),
-          completed_at = now()
-    where id = v_job.id
-    returning *
-      into v_job;
-
-    return jsonb_build_object(
-      'ok', false,
-      'code', 'REVIEW_SUBMIT_JOB_STALE',
-      'status', 409,
-      'message', 'Dataset changed after this review-submit job was created',
-      'details', private.cmd_dataset_review_submit_job_payload(v_job)
+      'message', 'Review-submit job has no requester'
     );
   end if;
 
@@ -31272,7 +31026,11 @@ begin
   v_prev_role := current_setting('request.jwt.claim.role', true);
   v_prev_claims := current_setting('request.jwt.claims', true);
 
-  perform set_config('request.jwt.claim.sub', v_job.requested_by::text, true);
+  perform set_config(
+    'request.jwt.claim.sub',
+    v_job.requested_by::text,
+    true
+  );
   perform set_config('request.jwt.claim.role', 'authenticated', true);
   perform set_config(
     'request.jwt.claims',
@@ -31283,53 +31041,44 @@ begin
     true
   );
 
-  v_submit_audit := coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
-    'source', 'cmd_review_submit_from_job',
-    'review_submit_job_id', v_job.id,
-    'review_submit_request_id', v_job.id,
-    'review_submit_gate_worker_job_id', v_job.gate_worker_job_id
+  v_submit_result := api.cmd_review_submit(
+    v_job.dataset_table,
+    v_job.dataset_id,
+    v_job.dataset_version,
+    coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
+      'source', 'cmd_review_submit_from_job',
+      'compatibility_entrypoint', true,
+      'review_submit_job_id', v_job.id
+    )
   );
 
-  if v_job.gate_worker_job_id is not null then
-    v_submit_result := api.cmd_review_submit_without_gate(
-      v_job.dataset_table,
-      v_job.dataset_id,
-      v_job.dataset_version,
-      v_submit_audit || jsonb_build_object(
-        'review_submit_revision_checksum', v_job.revision_checksum,
-        'review_submit_policy_profile', v_job.policy_profile,
-        'review_submit_report_schema_version', v_job.report_schema_version
-      )
-    );
-  else
-    v_submit_result := api.cmd_review_submit(
-      p_table => v_job.dataset_table,
-      p_id => v_job.dataset_id,
-      p_version => v_job.dataset_version,
-      p_audit => v_submit_audit,
-      p_review_submit_gate_run_id => v_job.gate_run_id,
-      p_review_submit_revision_checksum => v_job.revision_checksum,
-      p_review_submit_policy_profile => v_job.policy_profile,
-      p_review_submit_report_schema_version => v_job.report_schema_version
-    );
-  end if;
-
-  perform set_config('request.jwt.claim.sub', coalesce(v_prev_sub, ''), true);
-  perform set_config('request.jwt.claim.role', coalesce(v_prev_role, ''), true);
-  perform set_config('request.jwt.claims', coalesce(v_prev_claims, ''), true);
+  perform set_config(
+    'request.jwt.claim.sub',
+    coalesce(v_prev_sub, ''),
+    true
+  );
+  perform set_config(
+    'request.jwt.claim.role',
+    coalesce(v_prev_role, ''),
+    true
+  );
+  perform set_config(
+    'request.jwt.claims',
+    coalesce(v_prev_claims, ''),
+    true
+  );
 
   if coalesce((v_submit_result->>'ok')::boolean, false) then
     update private.dataset_review_submit_requests
-      set status = 'submitted',
-          result = v_submit_result->'data',
-          last_error_code = null,
-          last_error_message = null,
-          last_error_details = null,
-          modified_at = now(),
-          completed_at = now()
+    set status = 'submitted',
+        result = v_submit_result->'data',
+        last_error_code = null,
+        last_error_message = null,
+        last_error_details = null,
+        modified_at = now(),
+        completed_at = now()
     where id = v_job.id
-    returning *
-      into v_job;
+    returning * into v_job;
 
     insert into private.command_audit_log (
       command,
@@ -31338,8 +31087,7 @@ begin
       target_id,
       target_version,
       payload
-    )
-    values (
+    ) values (
       'cmd_review_submit_from_job',
       v_job.requested_by,
       v_job.dataset_table,
@@ -31347,9 +31095,7 @@ begin
       v_job.dataset_version,
       coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
         'review_submit_job_id', v_job.id,
-        'review_submit_request_id', v_job.id,
-        'gate_run_id', v_job.gate_run_id,
-        'gate_worker_job_id', v_job.gate_worker_job_id
+        'compatibility_entrypoint', true
       )
     );
 
@@ -31359,32 +31105,30 @@ begin
     );
   end if;
 
-  v_error_code := coalesce(v_submit_result->>'code', 'REVIEW_SUBMIT_JOB_ERROR');
-  v_error_status := coalesce(nullif(v_submit_result->>'status', '')::integer, 500);
-  v_error_message := coalesce(v_submit_result->>'message', 'Review-submit job failed');
-  v_job_status := case
-    when v_error_code = 'REVIEW_SUBMIT_GATE_NOT_READY' then 'waiting_gate'
-    when v_error_code = 'REVIEW_SUBMIT_GATE_BLOCKED' then 'blocked'
-    when v_error_code in ('REVIEW_SUBMIT_GATE_STALE', 'REVIEW_SUBMIT_JOB_STALE') then 'stale'
-    else 'error'
-  end;
+  v_error_code := coalesce(
+    v_submit_result->>'code',
+    'REVIEW_SUBMIT_JOB_ERROR'
+  );
+  v_error_status := coalesce(
+    nullif(v_submit_result->>'status', '')::integer,
+    500
+  );
+  v_error_message := coalesce(
+    v_submit_result->>'message',
+    'Review-submit job failed'
+  );
 
   update private.dataset_review_submit_requests
-    set status = v_job_status,
-        last_error_code = case when v_job_status = 'waiting_gate' then null else v_error_code end,
-        last_error_message = case when v_job_status = 'waiting_gate' then null else v_error_message end,
-        last_error_details = case
-          when v_job_status = 'waiting_gate' then null
-          else jsonb_build_object('submitResult', v_submit_result)
-        end,
-        modified_at = now(),
-        completed_at = case
-          when v_job_status = 'waiting_gate' then null
-          else now()
-        end
+  set status = 'error',
+      last_error_code = v_error_code,
+      last_error_message = v_error_message,
+      last_error_details = jsonb_build_object(
+        'submitResult', v_submit_result
+      ),
+      modified_at = now(),
+      completed_at = now()
   where id = v_job.id
-  returning *
-    into v_job;
+  returning * into v_job;
 
   return jsonb_build_object(
     'ok', false,
@@ -31395,15 +31139,31 @@ begin
   );
 exception
   when others then
-    perform set_config('request.jwt.claim.sub', coalesce(v_prev_sub, ''), true);
-    perform set_config('request.jwt.claim.role', coalesce(v_prev_role, ''), true);
-    perform set_config('request.jwt.claims', coalesce(v_prev_claims, ''), true);
+    perform set_config(
+      'request.jwt.claim.sub',
+      coalesce(v_prev_sub, ''),
+      true
+    );
+    perform set_config(
+      'request.jwt.claim.role',
+      coalesce(v_prev_role, ''),
+      true
+    );
+    perform set_config(
+      'request.jwt.claims',
+      coalesce(v_prev_claims, ''),
+      true
+    );
     raise;
 end;
-$_$;
+$$;
 
 
 ALTER FUNCTION "private"."cmd_review_submit_from_job"("p_job_id" "uuid", "p_audit" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "private"."cmd_review_submit_from_job"("p_job_id" "uuid", "p_audit" "jsonb") IS 'Temporary service-only compatibility adapter. It submits through the stable command as the original requester and never inspects or requires legacy Gate results.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."cmd_review_submit_without_gate_issue304_legacy"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
@@ -40399,6 +40159,144 @@ $$;
 ALTER FUNCTION "private"."review_notify_impacted_roots_v1"("p_reference_review" "private"."reviews", "p_event_type" "text", "p_actor" "uuid", "p_reason_code" "text") OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "private"."worker_jobs" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "job_kind" "text" NOT NULL,
+    "worker_runtime" "text" DEFAULT 'calculator'::"text" NOT NULL,
+    "worker_queue" "text" NOT NULL,
+    "priority" integer DEFAULT 0 NOT NULL,
+    "queue_key" "text",
+    "root_job_id" "uuid",
+    "parent_job_id" "uuid",
+    "subject_type" "text",
+    "subject_id" "uuid",
+    "subject_version" "text",
+    "requester_type" "text" DEFAULT 'user'::"text" NOT NULL,
+    "requested_by" "uuid",
+    "team_id" "uuid",
+    "idempotency_key" "text",
+    "request_hash" "text",
+    "concurrency_key" "text",
+    "status" "text" DEFAULT 'queued'::"text" NOT NULL,
+    "phase" "text",
+    "progress" numeric,
+    "visibility" "text" DEFAULT 'user'::"text" NOT NULL,
+    "run_after" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "attempt_count" integer DEFAULT 0 NOT NULL,
+    "max_attempts" integer DEFAULT 3 NOT NULL,
+    "leased_by" "text",
+    "lease_token" "uuid",
+    "lease_expires_at" timestamp with time zone,
+    "heartbeat_at" timestamp with time zone,
+    "timeout_at" timestamp with time zone,
+    "payload_schema_version" "text" NOT NULL,
+    "payload_json" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "payload_ref" "jsonb",
+    "result_schema_version" "text",
+    "result_json" "jsonb",
+    "result_ref" "jsonb",
+    "diagnostics" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
+    "error_code" "text",
+    "error_message" "text",
+    "error_details" "jsonb",
+    "blocker_codes" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
+    "resolution_scope" "text",
+    "retryable" boolean,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    "started_at" timestamp with time zone,
+    "finished_at" timestamp with time zone,
+    "expires_at" timestamp with time zone,
+    "cancelled_at" timestamp with time zone,
+    "cancelled_by" "uuid",
+    CONSTRAINT "worker_jobs_attempt_check" CHECK ((("attempt_count" >= 0) AND ("max_attempts" >= 0) AND ("attempt_count" <= "max_attempts"))),
+    CONSTRAINT "worker_jobs_blocked_explanation_check" CHECK ((("status" <> 'blocked'::"text") OR (("cardinality"("blocker_codes") > 0) AND ("resolution_scope" IS NOT NULL)))),
+    CONSTRAINT "worker_jobs_diagnostics_object_check" CHECK (("jsonb_typeof"("diagnostics") = 'object'::"text")),
+    CONSTRAINT "worker_jobs_error_details_object_check" CHECK ((("error_details" IS NULL) OR ("jsonb_typeof"("error_details") = 'object'::"text"))),
+    CONSTRAINT "worker_jobs_payload_object_check" CHECK (("jsonb_typeof"("payload_json") = 'object'::"text")),
+    CONSTRAINT "worker_jobs_payload_ref_object_check" CHECK ((("payload_ref" IS NULL) OR ("jsonb_typeof"("payload_ref") = 'object'::"text"))),
+    CONSTRAINT "worker_jobs_progress_check" CHECK ((("progress" IS NULL) OR (("progress" >= (0)::numeric) AND ("progress" <= (1)::numeric)))),
+    CONSTRAINT "worker_jobs_queue_check" CHECK (("worker_queue" = ANY (ARRAY['solver'::"text", 'review_submit'::"text", 'review_submit_gate'::"text", 'review_quality'::"text", 'package'::"text", 'maintenance'::"text"]))),
+    CONSTRAINT "worker_jobs_requester_check" CHECK (((("requester_type" = 'user'::"text") AND ("requested_by" IS NOT NULL)) OR ("requester_type" = ANY (ARRAY['system'::"text", 'service'::"text", 'operator'::"text"])))),
+    CONSTRAINT "worker_jobs_resolution_scope_check" CHECK ((("resolution_scope" IS NULL) OR ("resolution_scope" = ANY (ARRAY['user'::"text", 'operator'::"text", 'system'::"text"])))),
+    CONSTRAINT "worker_jobs_result_object_check" CHECK ((("result_json" IS NULL) OR ("jsonb_typeof"("result_json") = 'object'::"text"))),
+    CONSTRAINT "worker_jobs_result_ref_object_check" CHECK ((("result_ref" IS NULL) OR ("jsonb_typeof"("result_ref") = 'object'::"text"))),
+    CONSTRAINT "worker_jobs_review_quality_diagnostic_semantics_check" CHECK ((("job_kind" <> 'review.quality_diagnostic'::"text") OR (("worker_queue" = 'review_quality'::"text") AND ("visibility" = 'operator'::"text") AND ("status" <> 'blocked'::"text") AND ("cardinality"("blocker_codes") = 0) AND ("resolution_scope" IS NULL) AND (("status" <> 'completed'::"text") OR (("result_schema_version" = 'review.quality_diagnostic.report.v1'::"text") AND ("jsonb_typeof"("result_json") = 'object'::"text") AND (("result_json" ->> 'outcome'::"text") = ANY (ARRAY['clear'::"text", 'findings'::"text", 'not_evaluable'::"text"]))))))),
+    CONSTRAINT "worker_jobs_runtime_check" CHECK (("worker_runtime" = 'calculator'::"text")),
+    CONSTRAINT "worker_jobs_status_check" CHECK (("status" = ANY (ARRAY['queued'::"text", 'running'::"text", 'waiting'::"text", 'completed'::"text", 'blocked'::"text", 'stale'::"text", 'failed'::"text", 'cancelled'::"text"]))),
+    CONSTRAINT "worker_jobs_visibility_check" CHECK (("visibility" = ANY (ARRAY['user'::"text", 'operator'::"text", 'system'::"text"])))
+);
+
+
+ALTER TABLE "private"."worker_jobs" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "private"."worker_jobs" IS 'Canonical task fact table for work executed or coordinated by tiangong-lca-worker. Legacy job tables may remain only as domain artifact/cache/history compatibility surfaces.';
+
+
+
+COMMENT ON COLUMN "private"."worker_jobs"."worker_runtime" IS 'Compatibility runtime discriminator; calculator is the existing compute-runtime key, not the repository identity.';
+
+
+
+COMMENT ON COLUMN "private"."worker_jobs"."root_job_id" IS 'Optional root worker job for multi-step flows such as review_submit.submit -> review_submit.gate.';
+
+
+
+COMMENT ON COLUMN "private"."worker_jobs"."parent_job_id" IS 'Immediate parent worker job for child execution records.';
+
+
+
+COMMENT ON COLUMN "private"."worker_jobs"."subject_type" IS 'Domain subject table or logical entity name used for latest/read/list projections.';
+
+
+
+COMMENT ON COLUMN "private"."worker_jobs"."subject_id" IS 'Domain subject UUID used with subject_type and subject_version.';
+
+
+
+COMMENT ON COLUMN "private"."worker_jobs"."subject_version" IS 'Domain subject version used with subject_type and subject_id.';
+
+
+
+COMMENT ON COLUMN "private"."worker_jobs"."payload_ref" IS 'Internal reference to request payload artifacts or legacy compatibility rows. Exposed only through internal worker projections.';
+
+
+
+COMMENT ON COLUMN "private"."worker_jobs"."result_ref" IS 'Internal reference to result/artifact/cache rows. Exposed only through internal worker projections.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."review_quality_diagnostic_projection"("p_job" "private"."worker_jobs") RETURNS "jsonb"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select jsonb_strip_nulls(jsonb_build_object(
+    'runId', (p_job).id,
+    'status', (p_job).status,
+    'outcome', (p_job).result_json->>'outcome',
+    'requestedBy', (p_job).requested_by,
+    'requestedAt', (p_job).created_at,
+    'startedAt', (p_job).started_at,
+    'finishedAt', (p_job).finished_at,
+    'updatedAt', (p_job).updated_at,
+    'reportSchemaVersion', (p_job).result_schema_version,
+    'report', (p_job).result_json,
+    'error', case
+      when (p_job).error_code is null and (p_job).error_message is null
+        then null
+      else jsonb_strip_nulls(jsonb_build_object(
+        'code', (p_job).error_code,
+        'message', (p_job).error_message
+      ))
+    end
+  ))
+$$;
+
+
+ALTER FUNCTION "private"."review_quality_diagnostic_projection"("p_job" "private"."worker_jobs") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) RETURNS TABLE("root_review_id" "uuid", "target_table" "text", "data_id" "uuid", "data_version" "text", "revision_checksum" "text", "provenance" "jsonb")
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -46953,12 +46851,12 @@ begin
     );
   end if;
 
-  if v_worker_queue not in ('solver', 'review_submit', 'review_submit_gate', 'package', 'maintenance') then
+  if v_worker_queue not in ('solver', 'review_submit', 'review_submit_gate', 'review_quality', 'package', 'maintenance') then
     return jsonb_build_object(
       'ok', false,
       'code', 'INVALID_WORKER_QUEUE',
       'status', 400,
-      'message', 'workerQueue must be solver, review_submit, review_submit_gate, package, or maintenance'
+      'message', 'workerQueue must be solver, review_submit, review_submit_gate, review_quality, package, or maintenance'
     );
   end if;
 
@@ -47439,113 +47337,6 @@ $$;
 
 
 ALTER FUNCTION "private"."worker_heartbeat_job"("p_job_id" "uuid", "p_lease_token" "uuid", "p_phase" "text", "p_progress" numeric, "p_diagnostics" "jsonb", "p_lease_seconds" integer) OWNER TO "postgres";
-
-
-CREATE TABLE IF NOT EXISTS "private"."worker_jobs" (
-    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
-    "job_kind" "text" NOT NULL,
-    "worker_runtime" "text" DEFAULT 'calculator'::"text" NOT NULL,
-    "worker_queue" "text" NOT NULL,
-    "priority" integer DEFAULT 0 NOT NULL,
-    "queue_key" "text",
-    "root_job_id" "uuid",
-    "parent_job_id" "uuid",
-    "subject_type" "text",
-    "subject_id" "uuid",
-    "subject_version" "text",
-    "requester_type" "text" DEFAULT 'user'::"text" NOT NULL,
-    "requested_by" "uuid",
-    "team_id" "uuid",
-    "idempotency_key" "text",
-    "request_hash" "text",
-    "concurrency_key" "text",
-    "status" "text" DEFAULT 'queued'::"text" NOT NULL,
-    "phase" "text",
-    "progress" numeric,
-    "visibility" "text" DEFAULT 'user'::"text" NOT NULL,
-    "run_after" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "attempt_count" integer DEFAULT 0 NOT NULL,
-    "max_attempts" integer DEFAULT 3 NOT NULL,
-    "leased_by" "text",
-    "lease_token" "uuid",
-    "lease_expires_at" timestamp with time zone,
-    "heartbeat_at" timestamp with time zone,
-    "timeout_at" timestamp with time zone,
-    "payload_schema_version" "text" NOT NULL,
-    "payload_json" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
-    "payload_ref" "jsonb",
-    "result_schema_version" "text",
-    "result_json" "jsonb",
-    "result_ref" "jsonb",
-    "diagnostics" "jsonb" DEFAULT '{}'::"jsonb" NOT NULL,
-    "error_code" "text",
-    "error_message" "text",
-    "error_details" "jsonb",
-    "blocker_codes" "text"[] DEFAULT '{}'::"text"[] NOT NULL,
-    "resolution_scope" "text",
-    "retryable" boolean,
-    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
-    "started_at" timestamp with time zone,
-    "finished_at" timestamp with time zone,
-    "expires_at" timestamp with time zone,
-    "cancelled_at" timestamp with time zone,
-    "cancelled_by" "uuid",
-    CONSTRAINT "worker_jobs_attempt_check" CHECK ((("attempt_count" >= 0) AND ("max_attempts" >= 0) AND ("attempt_count" <= "max_attempts"))),
-    CONSTRAINT "worker_jobs_blocked_explanation_check" CHECK ((("status" <> 'blocked'::"text") OR (("cardinality"("blocker_codes") > 0) AND ("resolution_scope" IS NOT NULL)))),
-    CONSTRAINT "worker_jobs_diagnostics_object_check" CHECK (("jsonb_typeof"("diagnostics") = 'object'::"text")),
-    CONSTRAINT "worker_jobs_error_details_object_check" CHECK ((("error_details" IS NULL) OR ("jsonb_typeof"("error_details") = 'object'::"text"))),
-    CONSTRAINT "worker_jobs_payload_object_check" CHECK (("jsonb_typeof"("payload_json") = 'object'::"text")),
-    CONSTRAINT "worker_jobs_payload_ref_object_check" CHECK ((("payload_ref" IS NULL) OR ("jsonb_typeof"("payload_ref") = 'object'::"text"))),
-    CONSTRAINT "worker_jobs_progress_check" CHECK ((("progress" IS NULL) OR (("progress" >= (0)::numeric) AND ("progress" <= (1)::numeric)))),
-    CONSTRAINT "worker_jobs_queue_check" CHECK (("worker_queue" = ANY (ARRAY['solver'::"text", 'review_submit'::"text", 'review_submit_gate'::"text", 'package'::"text", 'maintenance'::"text"]))),
-    CONSTRAINT "worker_jobs_requester_check" CHECK (((("requester_type" = 'user'::"text") AND ("requested_by" IS NOT NULL)) OR ("requester_type" = ANY (ARRAY['system'::"text", 'service'::"text", 'operator'::"text"])))),
-    CONSTRAINT "worker_jobs_resolution_scope_check" CHECK ((("resolution_scope" IS NULL) OR ("resolution_scope" = ANY (ARRAY['user'::"text", 'operator'::"text", 'system'::"text"])))),
-    CONSTRAINT "worker_jobs_result_object_check" CHECK ((("result_json" IS NULL) OR ("jsonb_typeof"("result_json") = 'object'::"text"))),
-    CONSTRAINT "worker_jobs_result_ref_object_check" CHECK ((("result_ref" IS NULL) OR ("jsonb_typeof"("result_ref") = 'object'::"text"))),
-    CONSTRAINT "worker_jobs_runtime_check" CHECK (("worker_runtime" = 'calculator'::"text")),
-    CONSTRAINT "worker_jobs_status_check" CHECK (("status" = ANY (ARRAY['queued'::"text", 'running'::"text", 'waiting'::"text", 'completed'::"text", 'blocked'::"text", 'stale'::"text", 'failed'::"text", 'cancelled'::"text"]))),
-    CONSTRAINT "worker_jobs_visibility_check" CHECK (("visibility" = ANY (ARRAY['user'::"text", 'operator'::"text", 'system'::"text"])))
-);
-
-
-ALTER TABLE "private"."worker_jobs" OWNER TO "postgres";
-
-
-COMMENT ON TABLE "private"."worker_jobs" IS 'Canonical task fact table for work executed or coordinated by tiangong-lca-worker. Legacy job tables may remain only as domain artifact/cache/history compatibility surfaces.';
-
-
-
-COMMENT ON COLUMN "private"."worker_jobs"."worker_runtime" IS 'Compatibility runtime discriminator; calculator is the existing compute-runtime key, not the repository identity.';
-
-
-
-COMMENT ON COLUMN "private"."worker_jobs"."root_job_id" IS 'Optional root worker job for multi-step flows such as review_submit.submit -> review_submit.gate.';
-
-
-
-COMMENT ON COLUMN "private"."worker_jobs"."parent_job_id" IS 'Immediate parent worker job for child execution records.';
-
-
-
-COMMENT ON COLUMN "private"."worker_jobs"."subject_type" IS 'Domain subject table or logical entity name used for latest/read/list projections.';
-
-
-
-COMMENT ON COLUMN "private"."worker_jobs"."subject_id" IS 'Domain subject UUID used with subject_type and subject_version.';
-
-
-
-COMMENT ON COLUMN "private"."worker_jobs"."subject_version" IS 'Domain subject version used with subject_type and subject_id.';
-
-
-
-COMMENT ON COLUMN "private"."worker_jobs"."payload_ref" IS 'Internal reference to request payload artifacts or legacy compatibility rows. Exposed only through internal worker projections.';
-
-
-
-COMMENT ON COLUMN "private"."worker_jobs"."result_ref" IS 'Internal reference to result/artifact/cache rows. Exposed only through internal worker projections.';
-
 
 
 CREATE OR REPLACE FUNCTION "private"."worker_job_payload"("p_job" "private"."worker_jobs", "p_include_internal" boolean DEFAULT false) RETURNS "jsonb"
@@ -56866,7 +56657,7 @@ CREATE TABLE IF NOT EXISTS "private"."worker_job_kinds" (
     "presenter_key" "text",
     CONSTRAINT "worker_job_kinds_default_attempts_check" CHECK (("default_max_attempts" >= 0)),
     CONSTRAINT "worker_job_kinds_default_lease_check" CHECK ((("default_lease_seconds" >= 1) AND ("default_lease_seconds" <= 86400))),
-    CONSTRAINT "worker_job_kinds_queue_check" CHECK (("worker_queue" = ANY (ARRAY['solver'::"text", 'review_submit'::"text", 'review_submit_gate'::"text", 'package'::"text", 'maintenance'::"text"]))),
+    CONSTRAINT "worker_job_kinds_queue_check" CHECK (("worker_queue" = ANY (ARRAY['solver'::"text", 'review_submit'::"text", 'review_submit_gate'::"text", 'review_quality'::"text", 'package'::"text", 'maintenance'::"text"]))),
     CONSTRAINT "worker_job_kinds_runtime_check" CHECK (("worker_runtime" = 'calculator'::"text")),
     CONSTRAINT "worker_job_kinds_task_center_surface_check" CHECK ((("task_center_surface" IS NULL) OR ("task_center_surface" = ANY (ARRAY['global'::"text", 'inline'::"text"])))),
     CONSTRAINT "worker_job_kinds_visibility_check" CHECK (("default_visibility" = ANY (ARRAY['user'::"text", 'operator'::"text", 'system'::"text"])))
@@ -59016,6 +58807,10 @@ CREATE INDEX "worker_jobs_requested_by_updated_idx" ON "private"."worker_jobs" U
 
 
 CREATE INDEX "worker_jobs_requested_kind_updated_idx" ON "private"."worker_jobs" USING "btree" ("requested_by", "job_kind", "updated_at" DESC) WHERE ("requested_by" IS NOT NULL);
+
+
+
+CREATE INDEX "worker_jobs_review_quality_diagnostic_updated_idx" ON "private"."worker_jobs" USING "btree" ("updated_at" DESC, "id" DESC) WHERE ("job_kind" = 'review.quality_diagnostic'::"text");
 
 
 
@@ -61374,6 +61169,12 @@ GRANT ALL ON FUNCTION "api"."cmd_review_normalize_reviewer_ids"("p_reviewer_ids"
 
 
 
+REVOKE ALL ON FUNCTION "api"."cmd_review_quality_diagnostic_start"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."cmd_review_quality_diagnostic_start"() TO "api_internal_executor";
+GRANT ALL ON FUNCTION "api"."cmd_review_quality_diagnostic_start"() TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "api"."cmd_review_ref_type_to_table"("p_ref_type" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."cmd_review_ref_type_to_table"("p_ref_type" "text") TO "api_internal_executor";
 
@@ -61407,8 +61208,9 @@ GRANT ALL ON FUNCTION "api"."cmd_review_save_comment_draft"("p_review_id" "uuid"
 
 
 
-REVOKE ALL ON FUNCTION "api"."cmd_review_submit"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_audit" "jsonb", "p_review_submit_gate_run_id" "uuid", "p_review_submit_revision_checksum" "text", "p_review_submit_policy_profile" "text", "p_review_submit_report_schema_version" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "api"."cmd_review_submit"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_audit" "jsonb", "p_review_submit_gate_run_id" "uuid", "p_review_submit_revision_checksum" "text", "p_review_submit_policy_profile" "text", "p_review_submit_report_schema_version" "text") TO "api_internal_executor";
+REVOKE ALL ON FUNCTION "api"."cmd_review_submit"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_audit" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."cmd_review_submit"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_audit" "jsonb") TO "api_internal_executor";
+GRANT ALL ON FUNCTION "api"."cmd_review_submit"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_audit" "jsonb") TO "authenticated";
 
 
 
@@ -62062,6 +61864,12 @@ GRANT ALL ON FUNCTION "api"."qry_review_get_member_workload"("p_page" integer, "
 
 REVOKE ALL ON FUNCTION "api"."qry_review_member_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."qry_review_member_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer) TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "api"."qry_review_quality_diagnostic"("p_run_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."qry_review_quality_diagnostic"("p_run_id" "uuid") TO "api_internal_executor";
+GRANT ALL ON FUNCTION "api"."qry_review_quality_diagnostic"("p_run_id" "uuid") TO "authenticated";
 
 
 
@@ -63153,6 +62961,16 @@ GRANT ALL ON FUNCTION "private"."review_notify_impacted_roots_v1"("p_reference_r
 
 
 
+GRANT ALL ON TABLE "private"."worker_jobs" TO "service_role";
+GRANT SELECT ON TABLE "private"."worker_jobs" TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."review_quality_diagnostic_projection"("p_job" "private"."worker_jobs") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."review_quality_diagnostic_projection"("p_job" "private"."worker_jobs") TO "api_internal_executor";
+
+
+
 REVOKE ALL ON FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) TO "api_internal_executor";
 
@@ -63491,11 +63309,6 @@ GRANT ALL ON FUNCTION "private"."worker_enqueue_job"("p_job_kind" "text", "p_pay
 REVOKE ALL ON FUNCTION "private"."worker_heartbeat_job"("p_job_id" "uuid", "p_lease_token" "uuid", "p_phase" "text", "p_progress" numeric, "p_diagnostics" "jsonb", "p_lease_seconds" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."worker_heartbeat_job"("p_job_id" "uuid", "p_lease_token" "uuid", "p_phase" "text", "p_progress" numeric, "p_diagnostics" "jsonb", "p_lease_seconds" integer) TO "service_role";
 GRANT ALL ON FUNCTION "private"."worker_heartbeat_job"("p_job_id" "uuid", "p_lease_token" "uuid", "p_phase" "text", "p_progress" numeric, "p_diagnostics" "jsonb", "p_lease_seconds" integer) TO "api_internal_executor";
-
-
-
-GRANT ALL ON TABLE "private"."worker_jobs" TO "service_role";
-GRANT SELECT ON TABLE "private"."worker_jobs" TO "api_internal_executor";
 
 
 

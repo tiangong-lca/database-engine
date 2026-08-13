@@ -35,8 +35,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: 628ecbb1702bcd9bccad418e03048bdcb0e4b58c
-lastReviewedNote: "Reviewed for Issue #422: the metadata-only search_text repair remains database-owned migration behavior under the existing hotfix, validation, and delivery boundaries."
+lastReviewedCommit: 86df2a9fe68cdf6455908ccf7957cbbe9a0653cd
+lastReviewedNote: "Reviewed for Issue #484 on the current Issue #422/#487 baseline: the database owns non-blocking Review Admin diagnostic admission/readback, while existing search-text and semantic-artifact ownership remains unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -144,16 +144,16 @@ At a human-readable level, this repo owns:
 
 This repo does not own:
 
-- worker numeric-stability heuristics or report generation
+- worker completeness/numerical diagnostic logic or report generation
 - frontend runtime env selection or app-side Supabase clients
 - Edge Function runtime code
 - workspace submodule pointer bumps or delivery completion
 
 Route those tasks to:
 
-- `tiangong-lca-worker` for numeric-stability checks and calculator report payload semantics
+- `tiangong-lca-worker` for the combined completeness/numerical diagnostic and its report payload semantics
 - `tiangong-lca-next` for frontend envs and app-side Supabase integration
-- `tiangong-lca-edge-functions` for Edge Function runtime behavior
+- `tiangong-lca-edge-functions` for Review Admin-only diagnostic orchestration and other Edge Function runtime behavior
 - `lca-workspace` for root integration after merge
 
 ## Branch And Delivery Facts

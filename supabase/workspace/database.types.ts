@@ -537,6 +537,7 @@ export type Database = {
         Args: { p_reviewer_ids: Json }
         Returns: Json
       }
+      cmd_review_quality_diagnostic_start: { Args: never; Returns: Json }
       cmd_review_ref_type_to_table: {
         Args: { p_ref_type: string }
         Returns: string
@@ -569,13 +570,9 @@ export type Database = {
       cmd_review_submit: {
         Args: {
           p_audit?: Json
-          p_id: string
-          p_review_submit_gate_run_id?: string
-          p_review_submit_policy_profile?: string
-          p_review_submit_report_schema_version?: string
-          p_review_submit_revision_checksum?: string
-          p_table: string
-          p_version: string
+          p_target_id: string
+          p_target_table: string
+          p_target_version: string
         }
         Returns: Json
       }
@@ -1954,6 +1951,10 @@ export type Database = {
           target_table: string
           total_count: number
         }[]
+      }
+      qry_review_quality_diagnostic: {
+        Args: { p_run_id?: string }
+        Returns: Json
       }
       qry_root_review_reference_progress: {
         Args: { p_root_review_id: string }

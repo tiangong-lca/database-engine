@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: 8f68826e2c18e623e11faff46ff90b2486dfe828
-lastReviewedNote: "已为 Issue #422 复核：脚本目录现包含 search_text 生产 hotfix 的精确 metadata-only 与非空 scalar fail-closed 证明。"
+lastReviewedCommit: 86df2a9fe68cdf6455908ccf7957cbbe9a0653cd
+lastReviewedNote: "已基于当前 Issue #422/#487 基线为 Issue #484 复核：质量诊断 schema 继续使用现有 exact-local 刷新命令，现有 hotfix 与制品脚本不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
