@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-12
-lastReviewedCommit: aca7ed0f1d5894fadb958b940212022048e64f80
-lastReviewedNote: "已为 Issue #478 复核：现有 exact-local 刷新命令会捕获 RPC 级 statement timeout；脚本行为不变。"
+lastReviewedAt: 2026-08-13
+lastReviewedCommit: c7accd945a60747c14910d7b63ea9951512e099f
+lastReviewedNote: "已为 Issue #422 复核：有数据切换测试现会复现生产 ledger、验证 bridge，并证明切换后重放严格 no-op。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -50,11 +50,12 @@ related:
 ### `test_full_schema_cutover_upgrade.sh`
 
 把本地数据库重建到全量 Schema 切换前的最后一个 migration，写入一条代表性业务数据，
-快照关系与函数身份、触发器、RLS 策略、约束及精确行数，再应用切换与契约收口
+快照关系与函数身份、触发器、RLS 策略、约束及精确行数，复现生产已先执行较晚
+reuse-binding hotfix 的 ledger 顺序，运行 fail-closed bridge，再应用切换与契约收口
 migration，验证对象和数据完整保留、能力清单、幂等索引及 Data Product 消费者 façade
 已安装，并确认 API 函数不再向 PostgreSQL `PUBLIC` 角色开放执行权限。脚本还会应用
 Issue #422 运行时 ACL 修复，并在有数据升级后校验 authenticated RLS helper 与 Edge
-release façade 的精确授权。
+release façade 的精确授权，最后证明 bridge 在已完成切换的数据库上严格 no-op。
 
 用法：
 

@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-12
-lastReviewedCommit: aca7ed0f1d5894fadb958b940212022048e64f80
-lastReviewedNote: "已为 Issue #478 复核：exact-local 快照现已反映 scope-closure RPC 的超时配置；workspace 生成行为不变。"
+lastReviewedAt: 2026-08-13
+lastReviewedCommit: c7accd945a60747c14910d7b63ea9951512e099f
+lastReviewedNote: "已为 Issue #422 复核：生产 cutover bridge 不改变 exact-local workspace 的生成或刷新行为。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

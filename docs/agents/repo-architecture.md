@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-12
-lastReviewedCommit: aca7ed0f1d5894fadb958b940212022048e64f80
-lastReviewedNote: "Reviewed for Issue #478: the bounded scope-closure RPC timeout does not change candidate snapshot ownership, manifest semantics, or Edge/Worker boundaries."
+lastReviewedAt: 2026-08-13
+lastReviewedCommit: c7accd945a60747c14910d7b63ea9951512e099f
+lastReviewedNote: "Reviewed for Issue #422: the production cutover bridge does not change schema ownership, API boundaries, or migration source-of-truth rules."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

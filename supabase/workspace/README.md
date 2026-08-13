@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-12
-lastReviewedCommit: aca7ed0f1d5894fadb958b940212022048e64f80
-lastReviewedNote: "Reviewed for Issue #478: the exact-local snapshot now reflects the scope-closure RPC timeout; workspace generation behavior is unchanged."
+lastReviewedAt: 2026-08-13
+lastReviewedCommit: c7accd945a60747c14910d7b63ea9951512e099f
+lastReviewedNote: "Reviewed for Issue #422: the production cutover bridge does not change exact-local workspace generation or refresh behavior."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
