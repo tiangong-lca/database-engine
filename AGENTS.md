@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-13
-lastReviewedCommit: 36a6fa2ff64947046bba2f07fd9ce96fd92608c0
-lastReviewedNote: "Reviewed for Issue #490: the exact migration-head assertion remains database-owned validation under the existing delivery boundaries."
+lastReviewedAt: 2026-08-14
+lastReviewedCommit: 45bb93dd783c53f4884d9d6012db2b4a6083a00b
+lastReviewedNote: "Reviewed after restoring the CI-authoritative five-schema generated workspace; repository ownership, bootstrap guidance, and cross-repository boundaries remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -144,16 +144,16 @@ At a human-readable level, this repo owns:
 
 This repo does not own:
 
-- worker numeric-stability heuristics or report generation
+- worker completeness/numerical diagnostic logic or report generation
 - frontend runtime env selection or app-side Supabase clients
 - Edge Function runtime code
 - workspace submodule pointer bumps or delivery completion
 
 Route those tasks to:
 
-- `tiangong-lca-worker` for numeric-stability checks and calculator report payload semantics
+- `tiangong-lca-worker` for the combined completeness/numerical diagnostic and its report payload semantics
 - `tiangong-lca-next` for frontend envs and app-side Supabase integration
-- `tiangong-lca-edge-functions` for Edge Function runtime behavior
+- `tiangong-lca-edge-functions` for Review Admin-only diagnostic orchestration and other Edge Function runtime behavior
 - `lca-workspace` for root integration after merge
 
 ## Branch And Delivery Facts

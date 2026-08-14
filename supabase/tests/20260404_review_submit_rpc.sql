@@ -601,17 +601,13 @@ select set_config('request.jwt.claim.sub', '12000000-0000-0000-0000-000000000001
 
 select is(
   api.cmd_review_submit(
-    p_table => 'processes',
-    p_id => '32000000-0000-0000-0000-000000000003',
-    p_version => '01.00.000',
-    p_audit => '{"command":"review_submit"}'::jsonb,
-    p_review_submit_gate_run_id => (select gate_run_id from review_submit_gate_ids where label = 'draft_process'),
-    p_review_submit_revision_checksum => repeat('a', 64),
-    p_review_submit_policy_profile => 'review_submit_fast.v1',
-    p_review_submit_report_schema_version => 'review_submit_gate_report.v1'
+    p_target_table => 'processes',
+    p_target_id => '32000000-0000-0000-0000-000000000003',
+    p_target_version => '01.00.000',
+    p_audit => '{"command":"review_submit"}'::jsonb
   )->>'ok',
   'true',
-  'dataset owner can submit a draft process for review through cmd_review_submit'
+  'dataset owner can submit a draft process without Gate metadata'
 );
 
 select is(
@@ -733,7 +729,7 @@ select is(
     '01.00.000',
     '{}'::jsonb
   )->>'code',
-  'DATASET_OWNER_REQUIRED',
+  'ROOT_DATASET_NOT_OWNED',
   'non-owners cannot submit another user''s dataset for review'
 );
 
@@ -888,14 +884,10 @@ select set_config('request.jwt.claim.sub', '12000000-0000-0000-0000-000000000001
 
 select is(
   api.cmd_review_submit(
-    p_table => 'processes',
-    p_id => '32000000-0000-0000-0000-000000000022',
-    p_version => '01.00.000',
-    p_audit => '{}'::jsonb,
-    p_review_submit_gate_run_id => (select gate_run_id from review_submit_gate_ids where label = 'shared_reference_process'),
-    p_review_submit_revision_checksum => repeat('b', 64),
-    p_review_submit_policy_profile => 'review_submit_fast.v1',
-    p_review_submit_report_schema_version => 'review_submit_gate_report.v1'
+    p_target_table => 'processes',
+    p_target_id => '32000000-0000-0000-0000-000000000022',
+    p_target_version => '01.00.000',
+    p_audit => '{}'::jsonb
   )->>'ok',
   'true',
   'review submission succeeds when a referenced dataset is already under review'

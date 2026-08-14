@@ -55,11 +55,12 @@ CREATE TABLE IF NOT EXISTS "private"."worker_jobs" (
     CONSTRAINT "worker_jobs_payload_object_check" CHECK (("jsonb_typeof"("payload_json") = 'object'::"text")),
     CONSTRAINT "worker_jobs_payload_ref_object_check" CHECK ((("payload_ref" IS NULL) OR ("jsonb_typeof"("payload_ref") = 'object'::"text"))),
     CONSTRAINT "worker_jobs_progress_check" CHECK ((("progress" IS NULL) OR (("progress" >= (0)::numeric) AND ("progress" <= (1)::numeric)))),
-    CONSTRAINT "worker_jobs_queue_check" CHECK (("worker_queue" = ANY (ARRAY['solver'::"text", 'review_submit'::"text", 'review_submit_gate'::"text", 'package'::"text", 'maintenance'::"text"]))),
+    CONSTRAINT "worker_jobs_queue_check" CHECK (("worker_queue" = ANY (ARRAY['solver'::"text", 'review_submit'::"text", 'review_submit_gate'::"text", 'review_quality'::"text", 'package'::"text", 'maintenance'::"text"]))),
     CONSTRAINT "worker_jobs_requester_check" CHECK (((("requester_type" = 'user'::"text") AND ("requested_by" IS NOT NULL)) OR ("requester_type" = ANY (ARRAY['system'::"text", 'service'::"text", 'operator'::"text"])))),
     CONSTRAINT "worker_jobs_resolution_scope_check" CHECK ((("resolution_scope" IS NULL) OR ("resolution_scope" = ANY (ARRAY['user'::"text", 'operator'::"text", 'system'::"text"])))),
     CONSTRAINT "worker_jobs_result_object_check" CHECK ((("result_json" IS NULL) OR ("jsonb_typeof"("result_json") = 'object'::"text"))),
     CONSTRAINT "worker_jobs_result_ref_object_check" CHECK ((("result_ref" IS NULL) OR ("jsonb_typeof"("result_ref") = 'object'::"text"))),
+    CONSTRAINT "worker_jobs_review_quality_diagnostic_semantics_check" CHECK ((("job_kind" <> 'review.quality_diagnostic'::"text") OR (("worker_queue" = 'review_quality'::"text") AND ("visibility" = 'operator'::"text") AND ("status" <> 'blocked'::"text") AND ("cardinality"("blocker_codes") = 0) AND ("resolution_scope" IS NULL) AND (("status" <> 'completed'::"text") OR (("result_schema_version" = 'review.quality_diagnostic.report.v1'::"text") AND ("jsonb_typeof"("result_json") = 'object'::"text") AND (("result_json" ->> 'outcome'::"text") = ANY (ARRAY['clear'::"text", 'findings'::"text", 'not_evaluable'::"text"]))))))),
     CONSTRAINT "worker_jobs_runtime_check" CHECK (("worker_runtime" = 'calculator'::"text")),
     CONSTRAINT "worker_jobs_status_check" CHECK (("status" = ANY (ARRAY['queued'::"text", 'running'::"text", 'waiting'::"text", 'completed'::"text", 'blocked'::"text", 'stale'::"text", 'failed'::"text", 'cancelled'::"text"]))),
     CONSTRAINT "worker_jobs_visibility_check" CHECK (("visibility" = ANY (ARRAY['user'::"text", 'operator'::"text", 'system'::"text"])))

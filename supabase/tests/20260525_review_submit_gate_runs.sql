@@ -278,54 +278,49 @@ select is(
     '33000000-0000-0000-0000-000000000001',
     '01.00.000',
     '{}'::jsonb
-  )->>'code',
-  'REVIEW_SUBMIT_GATE_REQUIRED',
-  'process review submission without gate metadata is rejected'
-);
-
-select is(
-  api.cmd_review_submit(
-    p_table => 'processes',
-    p_id => '33000000-0000-0000-0000-000000000001',
-    p_version => '01.00.000',
-    p_audit => '{}'::jsonb,
-    p_review_submit_gate_run_id => (select gate_run_id from review_submit_gate_ids where label = 'passed_process'),
-    p_review_submit_revision_checksum => repeat('b', 64),
-    p_review_submit_policy_profile => 'review_submit_fast.v1',
-    p_review_submit_report_schema_version => 'review_submit_gate_report.v1'
-  )->>'code',
-  'REVIEW_SUBMIT_GATE_STALE',
-  'stale gate run cannot authorize review submission'
-);
-
-select is(
-  api.cmd_review_submit(
-    p_table => 'processes',
-    p_id => '33000000-0000-0000-0000-000000000001',
-    p_version => '01.00.000',
-    p_audit => '{}'::jsonb,
-    p_review_submit_gate_run_id => (select gate_run_id from review_submit_gate_ids where label = 'passed_process'),
-    p_review_submit_revision_checksum => repeat('a', 64),
-    p_review_submit_policy_profile => 'wrong_policy.v1',
-    p_review_submit_report_schema_version => 'review_submit_gate_report.v1'
-  )->>'code',
-  'REVIEW_SUBMIT_GATE_POLICY_MISMATCH',
-  'wrong policy profile cannot authorize review submission'
-);
-
-select is(
-  api.cmd_review_submit(
-    p_table => 'processes',
-    p_id => '33000000-0000-0000-0000-000000000001',
-    p_version => '01.00.000',
-    p_audit => '{"command":"review_submit"}'::jsonb,
-    p_review_submit_gate_run_id => (select gate_run_id from review_submit_gate_ids where label = 'passed_process'),
-    p_review_submit_revision_checksum => repeat('a', 64),
-    p_review_submit_policy_profile => 'review_submit_fast.v1',
-    p_review_submit_report_schema_version => 'review_submit_gate_report.v1'
   )->>'ok',
   'true',
-  'passed gate run authorizes process review submission'
+  'process review submission no longer requires Gate metadata'
+);
+
+select is(
+  pg_catalog.strpos(
+    pg_catalog.pg_get_functiondef(
+      'api.cmd_review_submit(text,uuid,text,jsonb)'::pg_catalog.regprocedure
+    ),
+    'cmd_dataset_assert_review_submit_gate_passed'
+  ),
+  0,
+  'the stable submit command no longer contains a Gate assertion'
+);
+
+select is(
+  pg_catalog.strpos(
+    pg_catalog.pg_get_functiondef(
+      'api.cmd_review_submit_v2(text,uuid,text,jsonb,jsonb)'
+        ::pg_catalog.regprocedure
+    ),
+    'cmd_dataset_assert_review_submit_gate_passed'
+  ),
+  0,
+  'the compatibility wrapper no longer evaluates legacy Gate context'
+);
+
+select is(
+  api.cmd_review_submit_v2(
+    'processes',
+    '33000000-0000-0000-0000-000000000001',
+    '01.00.000',
+    jsonb_build_object(
+      'reviewSubmitGateRunId',
+      (select gate_run_id from review_submit_gate_ids where label = 'passed_process'),
+      'revisionChecksum', repeat('b', 64),
+      'policyProfile', 'wrong_policy.v1'
+    ),
+    '{}'::jsonb
+  )->>'code',
+  'DATA_UNDER_REVIEW',
+  'legacy Gate context cannot override ordinary review lifecycle state'
 );
 
 select is(
@@ -336,7 +331,7 @@ select is(
       and version = '01.00.000'
   ),
   '20',
-  'authorized process review submission marks the dataset under review'
+  'Gate-free process review submission marks the dataset under review'
 );
 
 reset role;
@@ -347,13 +342,10 @@ select ok(
     from private.command_audit_log
     where command = 'cmd_review_submit'
       and target_id = '33000000-0000-0000-0000-000000000001'
-      and payload->>'review_submit_gate_run_id' = (
-        select gate_run_id::text
-        from review_submit_gate_ids
-        where label = 'passed_process'
-      )
+      and not payload ? 'review_submit_gate_run_id'
+      and not payload ? 'review_submit_revision_checksum'
   ),
-  'cmd_review_submit audit payload records gate assertion metadata'
+  'cmd_review_submit audit payload contains no Gate authority metadata'
 );
 
 set local role authenticated;
@@ -394,34 +386,24 @@ select set_config('request.jwt.claim.sub', '13000000-0000-0000-0000-000000000001
 
 select is(
   api.cmd_review_submit(
-    p_table => 'processes',
-    p_id => '33000000-0000-0000-0000-000000000002',
-    p_version => '01.00.000',
-    p_audit => '{}'::jsonb,
-    p_review_submit_gate_run_id => (select gate_run_id from review_submit_gate_ids where label = 'blocked_process'),
-    p_review_submit_revision_checksum => repeat('c', 64),
-    p_review_submit_policy_profile => 'review_submit_fast.v1',
-    p_review_submit_report_schema_version => 'review_submit_gate_report.v1'
-  )->>'code',
-  'REVIEW_SUBMIT_GATE_BLOCKED',
-  'blocked gate run cannot authorize review submission'
+    'processes',
+    '33000000-0000-0000-0000-000000000002',
+    '01.00.000',
+    '{}'::jsonb
+  )->>'ok',
+  'true',
+  'a historical blocked Gate result does not block review submission'
 );
 
 select is(
   (
-    api.cmd_review_submit(
-      p_table => 'processes',
-      p_id => '33000000-0000-0000-0000-000000000002',
-      p_version => '01.00.000',
-      p_audit => '{}'::jsonb,
-      p_review_submit_gate_run_id => (select gate_run_id from review_submit_gate_ids where label = 'blocked_process'),
-      p_review_submit_revision_checksum => repeat('c', 64),
-      p_review_submit_policy_profile => 'review_submit_fast.v1',
-      p_review_submit_report_schema_version => 'review_submit_gate_report.v1'
-    )->'details'->'blockingReasons'->0->>'code'
+    select state_code::text
+    from public.processes
+    where id = '33000000-0000-0000-0000-000000000002'
+      and version = '01.00.000'
   ),
-  'provider_unresolved',
-  'blocked review submission returns persisted worker blocking reasons'
+  '20',
+  'the formerly blocked Process enters review normally'
 );
 
 select is(
@@ -431,8 +413,8 @@ select is(
     where data_id = '33000000-0000-0000-0000-000000000002'
       and data_version = '01.00.000'
   ),
-  '0',
-  'blocked gate run does not create a review row'
+  '1',
+  'historical blocked Gate state does not suppress review creation'
 );
 
 select is(

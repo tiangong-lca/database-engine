@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-13
-lastReviewedCommit: 7222920fcc107afc14746b2c459681f137a03feb
-lastReviewedNote: "已为 Issue #422 复核：生成的 search_text 注释更新不改变 exact-local workspace 的生成或刷新行为。"
+lastReviewedAt: 2026-08-14
+lastReviewedCommit: 45bb93dd783c53f4884d9d6012db2b4a6083a00b
+lastReviewedNote: "已恢复并复核 CI 权威的 public、api、private、util、archive 五 schema exact-local workspace；确定性生成行为不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
