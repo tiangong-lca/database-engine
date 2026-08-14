@@ -68,7 +68,7 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  257::bigint,
+  259::bigint,
   'api contains the cutover functions, reviewed consumer facades, and Database A Search RPCs'
 );
 
@@ -80,7 +80,7 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  198::bigint,
+  199::bigint,
   'private contains existing helpers, the Database B cutover gate, the reused-certificate binding helper, and all reviewed internal functions'
 );
 
@@ -136,7 +136,7 @@ select is(
       'util'::regnamespace
     )
   ),
-  446::bigint,
+  447::bigint,
   'all application constraints remain present'
 );
 

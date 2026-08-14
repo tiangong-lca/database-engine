@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-13
-lastReviewedCommit: 36a6fa2ff64947046bba2f07fd9ce96fd92608c0
-lastReviewedNote: "Reviewed for Issue #490: the exact migration-head assertion does not change schema ownership, API boundaries, or migration source-of-truth rules."
+lastReviewedAt: 2026-08-14
+lastReviewedCommit: 45bb93dd783c53f4884d9d6012db2b4a6083a00b
+lastReviewedNote: "Reviewed after restoring the generated workspace with the complete CI schema set; schema ownership, API boundaries, and migration source-of-truth rules remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -247,7 +247,9 @@ or duplicate indexes.
 
 Claim must remain non-blocking under concurrent recovery: expired max-attempt rows are selected in bounded `FOR UPDATE SKIP LOCKED` batches before they are marked failed, while claimable queued/stale or expired-retry rows use their own skip-locked candidate set. Terminal result recording is lease-fenced; an exact repeat with the same lease token, status, and normalized result content is an idempotent acknowledgement, while any conflicting replay remains rejected. This permits a Worker to retry an ambiguous database/transport failure without leaving completed compute stranded in `running`.
 
-Retained domain tables such as `lca_package_artifacts`, `lca_package_export_items`, `lca_package_request_cache`, `lca_results`, `lca_result_cache`, `lca_latest_all_unit_results`, `lca_network_snapshots`, `dataset_review_submit_requests`, and `dataset_review_submit_gate_runs` are not replacement job tables. They store worker-produced artifacts, caches, projections, reports, or coordinator domain state. The package request cache deduplicates active work for mutable scopes (`current_user`, `open_data`, and `current_user_and_open_data`), but a new intent after completion must advance to a fresh Worker/package job; only `selected_roots`, whose exact root IDs and versions are request content, retains terminal artifact reuse. Post-cutover rows should be traceable back to `worker_jobs` through the appropriate worker job reference columns, except for explicitly documented exceptions such as snapshot identity rows that are traced through downstream worker-linked records.
+Review submission itself never enqueues or waits for Worker computation. A Review Admin may manually start a global `review.quality_diagnostic` job that evaluates completeness and numerical quality together. The report is read-only and informational: findings, inability to evaluate, and execution failure do not mutate review state or block assignment, approval, or rejection. Review Members cannot start or read this administrative report, and the job does not enter the ordinary task-center feed.
+
+Retained domain tables such as `lca_package_artifacts`, `lca_package_export_items`, `lca_package_request_cache`, `lca_results`, `lca_result_cache`, `lca_latest_all_unit_results`, and `lca_network_snapshots` are not replacement job tables. They store worker-produced artifacts, caches, projections, reports, or coordinator domain state. `dataset_review_submit_requests` and `dataset_review_submit_gate_runs` are legacy compatibility/audit history only; they no longer authorize or reject review submission. The package request cache deduplicates active work for mutable scopes (`current_user`, `open_data`, and `current_user_and_open_data`), but a new intent after completion must advance to a fresh Worker/package job; only `selected_roots`, whose exact root IDs and versions are request content, retains terminal artifact reuse. Post-cutover rows should be traceable back to `worker_jobs` through the appropriate worker job reference columns, except for explicitly documented exceptions such as snapshot identity rows that are traced through downstream worker-linked records.
 
 Use `private.worker_domain_traceability_cutoffs` and
 `util.worker_domain_traceability_violations` for DB-side audit checks when
@@ -323,9 +325,9 @@ This repo owns database truth, but not every runtime consequence:
 - `database-engine` owns persisted database state, API façades, authorization, transaction boundaries, queue/control-plane state, audit facts, and final database assertions
 - protected mutation workflows are authoritative here only for database admission, fencing, atomic effects, and readback; semantic planning, approval-artifact construction, and client-side authority custody remain with their owning consumers
 - durable release and scope-closure facts live here, while generated TIDAS/ILCD bytes and Storage object operations remain outside SQL
-- `tiangong-lca-worker` owns numeric-stability checks and the calculator report payload semantics
+- `tiangong-lca-worker` owns the combined completeness/numerical diagnostic and its versioned report payload semantics
 - `tiangong-lca-next` owns frontend env selection and app-side Supabase clients
-- `tiangong-lca-edge-functions` owns Edge Function runtime orchestration, worker invocation, API response shape, deterministic Markdown generation for the four foundation datasets, and the exact table/column embedding allowlist
+- `tiangong-lca-edge-functions` owns Review Admin-only diagnostic orchestration, Worker invocation, API response shape, deterministic Markdown generation for the four foundation datasets, and the exact table/column embedding allowlist
 - `lca-workspace` owns root delivery completion after a child PR merges
 
 If a task changes both schema and app behavior, the SQL truth still starts here.
@@ -336,7 +338,7 @@ If a task changes both schema and app behavior, the SQL truth still starts here.
 - GitHub default branch does not define the daily trunk
 - a merged child PR does not finish workspace delivery
 - `public.lca_jobs`, `public.lca_package_jobs`, and `public.dataset_review_submit_jobs` are not active or retained task surfaces after the `worker_jobs` cutover; use `worker_jobs`, retained domain result/artifact tables, and the archive table instead
-- `lca_package_*`, LCA result/cache, and review-submit gate/coordinator tables are retained domain state, not leftover legacy job tables; clean them through domain retention contracts instead of dropping them as lifecycle tables
+- `lca_package_*` and LCA result/cache tables are retained domain state; review-submit Gate/coordinator tables are legacy compatibility/audit history and have no submission authority
 
 ## Local Docpact Push Gate
 

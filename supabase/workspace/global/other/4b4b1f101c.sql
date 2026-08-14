@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."cmd_review_submit_v2"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_gate_context" "jsonb", "p_audit" "jsonb") IS 'Temporary compatibility wrapper for api.cmd_review_submit. Legacy Gate context is accepted but ignored and is not persisted as review authority.';

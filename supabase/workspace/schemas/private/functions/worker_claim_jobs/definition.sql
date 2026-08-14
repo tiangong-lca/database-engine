@@ -18,12 +18,12 @@ begin
     );
   end if;
 
-  if v_worker_queue not in ('solver', 'review_submit', 'review_submit_gate', 'package', 'maintenance') then
+  if v_worker_queue not in ('solver', 'review_submit', 'review_submit_gate', 'review_quality', 'package', 'maintenance') then
     return jsonb_build_object(
       'ok', false,
       'code', 'INVALID_WORKER_QUEUE',
       'status', 400,
-      'message', 'workerQueue must be solver, review_submit, review_submit_gate, package, or maintenance'
+      'message', 'workerQueue must be solver, review_submit, review_submit_gate, review_quality, package, or maintenance'
     );
   end if;
 

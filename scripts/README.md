@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-13
-lastReviewedCommit: 7222920fcc107afc14746b2c459681f137a03feb
-lastReviewedNote: "Reviewed for Issue #422: the script catalog now includes exact metadata-only and populated-scalar failure proof for the search_text production hotfix."
+lastReviewedAt: 2026-08-14
+lastReviewedCommit: 45bb93dd783c53f4884d9d6012db2b4a6083a00b
+lastReviewedNote: "Reviewed after an exact CI-equivalent five-schema workspace rebuild; the script catalog and invocation contract remain unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
