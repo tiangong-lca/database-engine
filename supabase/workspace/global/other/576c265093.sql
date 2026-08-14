@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "private"."search_text_cutover_gate_v1"() IS 'Database B gate: an empty new/test database is allowed; an existing environment must have non-NULL search_text for every row in all seven dataset tables before lexical source switch.';

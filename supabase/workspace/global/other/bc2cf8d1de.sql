@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "private"."review_dataset_content_guard_v1"() IS 'State 20/100 authored content is immutable; uncontrolled writes may change only extracted_md, search_text, embedding_ft, and embedding_ft_at. Review-controlled commands retain their existing bypass context.';

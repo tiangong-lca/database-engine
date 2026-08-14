@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: 86df2a9fe68cdf6455908ccf7957cbbe9a0653cd
-lastReviewedNote: "Reviewed for Issue #484 on the current Issue #422/#487 baseline: quality-diagnostic schema generation uses the existing exact-local refresh commands, and current hotfix/artifact scripts remain unchanged."
+lastReviewedCommit: cea442f1a3c45c6552cedd5877ccbe0584da723c
+lastReviewedNote: "The script catalog supports exact-local quality-diagnostic schema refresh plus current search-text metadata-only and populated-scalar fail-closed proof."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

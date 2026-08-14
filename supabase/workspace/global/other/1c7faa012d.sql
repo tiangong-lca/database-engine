@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "private"."svc_lcia_scope_closure_artifact_write_set_finalize_v2"("p_write_set_id" "uuid", "p_write_token" "uuid", "p_worker_job_id" "uuid", "p_worker_lease_token" "uuid") IS 'Service-only current-lease atomic finalize after object upload. Inserts every registered artifact as ready and updates the closure projection in the same transaction.';

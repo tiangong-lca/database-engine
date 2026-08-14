@@ -1,1 +1,0 @@
-CREATE INDEX "dataset_flow_identity_scopes_final_invocation_idx" ON "util"."dataset_flow_identity_scopes" USING "btree" ("final_wrapper_invocation_id") WHERE ("final_wrapper_invocation_id" IS NOT NULL);

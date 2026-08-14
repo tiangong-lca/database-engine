@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX "command_audit_log_flow_identity_process_uidx" ON "private"."command_audit_log" USING "btree" ("actor_user_id", (("payload" ->> 'scope_id'::"text")), (("payload" ->> 'process_request_sha256'::"text"))) WHERE (("command" = 'cmd_dataset_flow_identity_process_rewrite_guarded'::"text") AND ("target_table" = 'processes'::"text"));

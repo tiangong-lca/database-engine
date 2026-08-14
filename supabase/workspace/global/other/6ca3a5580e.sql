@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "private"."dataset_flow_identity_scope_finalize_core_v1"("p_scope_id" "uuid", "p_request" "jsonb") IS 'Actor-only set-based Step 3 terminal verifier. It aggregates all primary and derivative proof rows once, requires exact source/support/protected closure, and never invokes a per-child reader or builds arrays by repeated concatenation.';

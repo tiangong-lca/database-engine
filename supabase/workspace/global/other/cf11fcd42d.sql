@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "private"."svc_lcia_scope_closure_artifact_write_set_fail_v2"("p_write_set_id" "uuid", "p_write_token" "uuid", "p_worker_job_id" "uuid", "p_worker_lease_token" "uuid", "p_error" "text") IS 'Service-only current-lease failure transition from registration_open or sealed staging into the existing fenced reconciliation/GC lifecycle.';

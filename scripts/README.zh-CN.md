@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: 86df2a9fe68cdf6455908ccf7957cbbe9a0653cd
-lastReviewedNote: "已基于当前 Issue #422/#487 基线为 Issue #484 复核：质量诊断 schema 继续使用现有 exact-local 刷新命令，现有 hotfix 与制品脚本不变。"
+lastReviewedCommit: cea442f1a3c45c6552cedd5877ccbe0584da723c
+lastReviewedNote: "脚本目录支持质量诊断 schema 的 exact-local 刷新，以及当前 search_text 的 metadata-only 与非空 scalar fail-closed 证明。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

@@ -1,1 +1,0 @@
-CREATE INDEX "dataset_derivative_rebuild_batch_read_idx" ON "util"."dataset_derivative_rebuild_requests" USING "btree" ("actor_user_id", "batch_id", "batch_ordinal") INCLUDE ("target_table", "target_id", "target_version", "status", "completed_snapshot_sha256") WHERE ("batch_id" IS NOT NULL);

@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "private"."dataset_alias_canonical_jsonb_v1"("p_value" "jsonb") IS 'Serializes JSON with recursively stableJsonText-compatible object key order and compact separators for guarded alias exchange evidence hashing.';

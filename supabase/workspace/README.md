@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: 86df2a9fe68cdf6455908ccf7957cbbe9a0653cd
-lastReviewedNote: "Reviewed for Issue #484 on the current Issue #422/#487 baseline: the exact-local snapshot includes the quality-diagnostic contract without changing current search-text or semantic-artifact generation behavior."
+lastReviewedCommit: cea442f1a3c45c6552cedd5877ccbe0584da723c
+lastReviewedNote: "The exact-local workspace includes the quality-diagnostic and current search-text contracts without changing deterministic generation or refresh behavior."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "api"."cmd_reviewer_submit_decision"("p_review_id" "uuid", "p_decision" "text", "p_reason" "text", "p_audit" "jsonb") IS 'Submits one assigned reviewer opinion without performing review-admin finalization. Approve records Comment state 1; reject records Comment state -3.';

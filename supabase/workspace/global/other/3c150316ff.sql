@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "api"."qry_review_get_admin_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") IS 'Current-state Admin queue grouped by candidate Root Review. Direct or candidate-hinted child matches can include a parent; unrelated roots are not derived.';

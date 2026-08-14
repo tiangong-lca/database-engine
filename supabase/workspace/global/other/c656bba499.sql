@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "private"."svc_lcia_scope_closure_artifact_write_set_finalize"("p_write_set_id" "uuid", "p_write_token" "uuid") IS 'Service-only fenced atomic finalize. Fresh mode resolves completeMachineResultClientKey to completeMachineResultArtifactId and publishes all items; reused mode publishes only the new report and preserves source evidence bindings.';

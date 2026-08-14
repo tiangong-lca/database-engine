@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "util"."preview_cron_job_run_details_retention"("p_retention_window" interval) IS 'Operator dry-run helper for pg_cron run-detail retention; reports rows older than the retention window while protecting open or running records.';

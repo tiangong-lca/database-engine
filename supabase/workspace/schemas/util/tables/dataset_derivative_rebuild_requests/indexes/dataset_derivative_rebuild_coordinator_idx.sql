@@ -1,1 +1,0 @@
-CREATE INDEX "dataset_derivative_rebuild_coordinator_idx" ON "util"."dataset_derivative_rebuild_requests" USING "btree" ("status", "updated_at", "admitted_at") WHERE ("status" <> ALL (ARRAY['completed'::"text", 'stale'::"text", 'failed'::"text"]));

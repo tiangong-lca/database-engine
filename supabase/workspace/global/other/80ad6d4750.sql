@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "private"."cmd_dataset_semantic_backfill"("p_table" "text", "p_batch_size" integer, "p_after_id" "uuid", "p_after_version" "text", "p_force_extraction" boolean) IS 'Service-only bounded cursor RPC that enqueues missing foundation-dataset derivatives and skips rows without a stable nonblank id/version worker identity.';

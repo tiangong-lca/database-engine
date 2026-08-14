@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: 86df2a9fe68cdf6455908ccf7957cbbe9a0653cd
-lastReviewedNote: "已基于当前 Issue #422/#487 基线为 Issue #484 复核：exact-local 快照包含质量诊断合同，且不改变现有 search-text 或语义制品的生成行为。"
+lastReviewedCommit: cea442f1a3c45c6552cedd5877ccbe0584da723c
+lastReviewedNote: "exact-local workspace 包含质量诊断与当前 search_text 合同，且不改变确定性的生成或刷新行为。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

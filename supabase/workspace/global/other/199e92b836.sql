@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "util"."enqueue_pending_embeddings"("p_limit" integer, "p_schema_name" "text", "p_table_name" "text", "p_edge_function" "text", "p_embedding_column" "text") IS 'Enqueues pending embedding jobs in bounded batches; paused policies are not enqueued.';

@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX "reviews_reference_revision_active_uidx" ON "private"."reviews" USING "btree" ("target_table", "data_id", "data_version", "submitted_revision_checksum") WHERE (("review_kind" = 'reference'::"text") AND ("state_code" = ANY (ARRAY[0, 1, 2])));

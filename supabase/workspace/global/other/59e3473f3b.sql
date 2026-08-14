@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "util"."queue_dataset_extraction_jobs"() IS 'Queues compact dataset extraction jobs for asynchronous extracted_md generation without carrying json/json_ordered in the transaction payload.';

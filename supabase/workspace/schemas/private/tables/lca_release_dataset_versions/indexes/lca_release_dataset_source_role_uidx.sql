@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX "lca_release_dataset_source_role_uidx" ON "private"."lca_release_dataset_versions" USING "btree" ("release_run_id", "source_process_uuid", "source_process_version", "dataset_role") WHERE ("source_process_uuid" IS NOT NULL);

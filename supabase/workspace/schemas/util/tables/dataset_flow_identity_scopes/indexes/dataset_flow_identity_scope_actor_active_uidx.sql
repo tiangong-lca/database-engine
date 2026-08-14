@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX "dataset_flow_identity_scope_actor_active_uidx" ON "util"."dataset_flow_identity_scopes" USING "btree" ("actor_user_id") WHERE ("status" = ANY (ARRAY['sealed'::"text", 'running'::"text", 'primary_complete'::"text", 'derivatives_pending'::"text"]));

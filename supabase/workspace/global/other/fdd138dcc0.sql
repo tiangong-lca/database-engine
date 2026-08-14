@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "private"."review_derive_current_references_v1"("p_root_review_ids" "uuid"[]) IS 'Derives current Root/Reference Review pairs from dataset JSON, non-revoked Reviewer comments, target identity, and revision checksum; persists no pair.';

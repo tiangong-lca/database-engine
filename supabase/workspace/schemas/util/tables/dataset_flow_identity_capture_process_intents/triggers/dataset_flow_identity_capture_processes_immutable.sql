@@ -1,1 +1,0 @@
-CREATE OR REPLACE TRIGGER "dataset_flow_identity_capture_processes_immutable" BEFORE DELETE OR UPDATE ON "util"."dataset_flow_identity_capture_process_intents" FOR EACH ROW EXECUTE FUNCTION "private"."dataset_flow_identity_receipt_immutable_v2"();

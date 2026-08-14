@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "private"."review_candidate_root_ids_v1"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text") IS 'Reads append-only business reviews[].id Root candidates. Callers must validate every candidate against current JSON/comments.';

@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "util"."process_embeddings"("batch_size" integer, "max_requests" integer, "timeout_milliseconds" integer) IS 'Claims embedding work under per-scope backpressure using one active-count aggregation per queue snapshot rather than one full queue scan per visible job.';

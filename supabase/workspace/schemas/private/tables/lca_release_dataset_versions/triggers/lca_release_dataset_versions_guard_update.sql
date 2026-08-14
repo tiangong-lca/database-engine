@@ -1,1 +1,0 @@
-CREATE OR REPLACE TRIGGER "lca_release_dataset_versions_guard_update" BEFORE UPDATE ON "private"."lca_release_dataset_versions" FOR EACH ROW EXECUTE FUNCTION "private"."lca_release_guard_dataset_update"();

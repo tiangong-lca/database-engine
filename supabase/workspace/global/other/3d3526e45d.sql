@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "api"."get_lcia_scope_closure_report_download"("p_closure_check_id" "uuid", "p_artifact_role" "text") IS 'Actor-bound strict projection for closure_report_xlsx and closure_issue_manifest download descriptors.';

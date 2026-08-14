@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "api"."svc_dataset_search_text_backfill_enqueue"("p_entity_kind" "text", "p_after_id" "uuid", "p_after_version" "text", "p_limit" integer) IS 'Service-role-only, bounded, cursor-based and queue-deduplicated search_text replay enqueue. It never writes projections or embeds data.';

@@ -1,1 +1,0 @@
-CREATE INDEX "lcia_document_validation_evidence_source_worker_job_idx" ON "private"."lcia_document_validation_evidence" USING "btree" ("source_worker_job_id") WHERE ("source_worker_job_id" IS NOT NULL);

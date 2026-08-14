@@ -1,1 +1,0 @@
-COMMENT ON COLUMN "private"."lcia_scope_closure_checks"."complete_machine_result_artifact_id" IS 'Soft immutable link to the complete machine-readable closure result whose expiry bounds certificate admission.';

@@ -1,1 +1,0 @@
-COMMENT ON COLUMN "private"."lcia_scope_closure_checks"."snapshot_artifact_id" IS 'Ready numerical snapshot artifact UUID verified by record_result_v3 before signing and retained as a soft audit reference after stale or revoked evidence is garbage-collected.';

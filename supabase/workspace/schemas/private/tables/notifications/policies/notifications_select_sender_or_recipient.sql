@@ -1,1 +1,0 @@
-CREATE POLICY "notifications_select_sender_or_recipient" ON "private"."notifications" FOR SELECT TO "authenticated" USING (((( SELECT "auth"."uid"() AS "uid") = "sender_user_id") OR (( SELECT "auth"."uid"() AS "uid") = "recipient_user_id")));

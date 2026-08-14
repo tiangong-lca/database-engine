@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "util"."dataset_alias_execution_artifact_sha256"("p_value" "jsonb") IS 'Hashes parsed JSON with the same recursive key ordering and compact serialization as CLI stableJsonText. Private protected-execution artifact verifier only.';

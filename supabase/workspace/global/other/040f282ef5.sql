@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "api"."cmd_dataset_withdraw"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_reason" "text", "p_audit" "jsonb") IS 'Owner-authenticated, audited withdrawal of public source, flow, or process datasets to draft state without changing dataset JSON.';

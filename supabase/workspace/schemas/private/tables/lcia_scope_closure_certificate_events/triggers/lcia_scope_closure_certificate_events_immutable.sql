@@ -1,1 +1,0 @@
-CREATE OR REPLACE TRIGGER "lcia_scope_closure_certificate_events_immutable" BEFORE DELETE OR UPDATE ON "private"."lcia_scope_closure_certificate_events" FOR EACH ROW EXECUTE FUNCTION "private"."lcia_scope_closure_certificate_event_immutable"();

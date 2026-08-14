@@ -1,1 +1,0 @@
-COMMENT ON VIEW "util"."worker_legacy_table_retirement_blockers" IS 'Service-role audit view for DROP TABLE RESTRICT blockers. It returns no target rows after public.lca_jobs, public.lca_package_jobs, and public.dataset_review_submit_jobs are physically retired.';

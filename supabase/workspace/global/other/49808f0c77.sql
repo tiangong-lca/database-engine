@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "private"."dataset_alias_js_object_key_sort_key_v1"("p_value" "text") IS 'Builds a binary sort key matching stableJsonText object enumeration: canonical array indexes first, then JavaScript UTF-16 string order.';

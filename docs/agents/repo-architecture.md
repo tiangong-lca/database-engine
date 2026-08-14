@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-13
-lastReviewedCommit: 86df2a9fe68cdf6455908ccf7957cbbe9a0653cd
-lastReviewedNote: "Reviewed for Issue #484 on the current Issue #422/#487 baseline: Review Admin diagnostics add reviewed API/private routines and a worker_jobs constraint without changing existing schema ownership, search-text behavior, or artifact boundaries."
+lastReviewedCommit: cea442f1a3c45c6552cedd5877ccbe0584da723c
+lastReviewedNote: "Review Admin diagnostics, owner-draft search scope, and exact migration-head assertions preserve current schema ownership, API boundaries, search-text behavior, and migration source-of-truth rules."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

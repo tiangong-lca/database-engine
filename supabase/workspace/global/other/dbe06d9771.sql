@@ -1,1 +1,0 @@
-COMMENT ON VIEW "private"."worker_domain_traceability_cutoffs" IS 'Service-role audit contract listing when new worker-produced domain rows must carry a worker_jobs reference. Historical pre-cutover rows are allowed to remain nullable.';

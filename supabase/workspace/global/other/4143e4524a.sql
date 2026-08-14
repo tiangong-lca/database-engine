@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "private"."review_revision_fingerprint_v1"("p_target_table" "text", "p_target_row" "jsonb") IS 'Returns the unprefixed 64-character lowercase SHA-256 revision checksum shared with the Process review-submit Gate.';

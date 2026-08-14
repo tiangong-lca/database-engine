@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "private"."lcia_scope_closure_worker_canonical_json_text"("p_value" "jsonb") IS 'Serializes JSON exactly as the scope-closure Worker canonical JSON writer: recursively sorted object keys, preserved array order, and compact separators.';

@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "private"."dataset_flow_identity_scope_cancel_core_v1"("p_scope_id" "uuid", "p_request" "jsonb") IS 'Actor-only Step 3 cancellation. It releases private active-scope fences only while zero process primaries are committed; any partial scope is non-cancellable and must continue under its sealed order.';

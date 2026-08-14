@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "util"."preview_supabase_functions_hooks_retention"("p_retention_window" interval, "p_as_of" timestamp with time zone) IS 'Operator dry-run helper for Supabase Functions webhook audit retention; reports rows older than the retention window while protecting recent rows and rows still linked to live pg_net responses.';

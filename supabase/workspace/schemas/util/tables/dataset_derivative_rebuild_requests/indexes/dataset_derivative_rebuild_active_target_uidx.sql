@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX "dataset_derivative_rebuild_active_target_uidx" ON "util"."dataset_derivative_rebuild_requests" USING "btree" ("target_table", "target_id", "target_version") WHERE ("status" <> ALL (ARRAY['completed'::"text", 'stale'::"text", 'failed'::"text"]));

@@ -1,1 +1,0 @@
-CREATE INDEX "lcia_scope_closure_checks_closure_bundle_artifact_idx" ON "private"."lcia_scope_closure_checks" USING "btree" ("closure_bundle_artifact_id") WHERE ("closure_bundle_artifact_id" IS NOT NULL);

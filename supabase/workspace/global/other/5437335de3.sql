@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "util"."read_dataset_alias_execution_primary_closure"("p_actor" "uuid", "p_plan" "jsonb") IS 'Private live readback for the exact 52 desired owner-draft rows and all six unchanged support-snapshot occurrences. Full desired payload equality causally proves the frozen 59 exchange rewrites; malformed or drifting state fails closed.';

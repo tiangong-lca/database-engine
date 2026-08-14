@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX "dataset_flow_identity_process_invocation_generation_uidx" ON "util"."dataset_flow_identity_process_ledger" USING "btree" ("wrapper_invocation_id", "permit_generation_before") WHERE ("wrapper_invocation_id" IS NOT NULL);

@@ -1,1 +1,0 @@
-CREATE INDEX "worker_jobs_requested_by_updated_idx" ON "private"."worker_jobs" USING "btree" ("requested_by", "updated_at" DESC) WHERE (("visibility" = 'user'::"text") AND ("requested_by" IS NOT NULL));

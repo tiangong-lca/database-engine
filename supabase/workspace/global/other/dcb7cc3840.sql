@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "api"."get_lcia_result_calculation_bundle"("p_package_id" "uuid") IS 'Projects a verified Calculation Bundle plus five role-bound semantic downloads; canonical shards remain internal preview and audit evidence.';

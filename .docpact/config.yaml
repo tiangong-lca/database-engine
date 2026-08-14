@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-13"
-lastReviewedCommit: "86df2a9fe68cdf6455908ccf7957cbbe9a0653cd"
-lastReviewedNote: "Reviewed for Issue #484 on the current Issue #422/#487 baseline: the Review Admin diagnostic migration and schema-inventory assertions remain covered by existing migration, SQL-test, workspace-generation, documentation, and integration ownership rules."
+lastReviewedCommit: "cea442f1a3c45c6552cedd5877ccbe0584da723c"
+lastReviewedNote: "Database routing covers the manual non-blocking Review Admin diagnostic, owner-draft scope, exact migration-head validation, and current generated-contract workflows."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

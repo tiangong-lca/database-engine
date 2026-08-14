@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "util"."purge_supabase_functions_hooks"("p_retention_window" interval, "p_batch_size" integer) IS 'Deletes Supabase Functions webhook audit rows older than the retention window in bounded batches while protecting rows still linked to live pg_net responses.';

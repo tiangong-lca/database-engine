@@ -1,1 +1,0 @@
-CREATE UNIQUE INDEX "lcia_scope_closure_artifact_write_sets_active_uidx" ON "private"."lcia_scope_closure_artifact_write_sets" USING "btree" ("closure_check_id") WHERE ("status" = ANY (ARRAY['registration_open'::"text", 'staging'::"text", 'ready'::"text"]));

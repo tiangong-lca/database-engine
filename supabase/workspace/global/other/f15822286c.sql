@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "api"."qry_root_review_reference_progress_v2"("p_root_review_id" "uuid") IS 'Current Reference Review child rows for Review Management; intentionally excludes relation paths and aggregate overview fields.';

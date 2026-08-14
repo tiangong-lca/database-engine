@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "private"."dataset_flow_identity_scope_preflight_core_v1"("p_request" "jsonb") IS 'Actor-only Step 3 scope seal. It performs a no-business-write full validation of exact owner-draft process baselines, exact non-owner public Elementary targets, compatibility evidence, and pending/blocker occurrence closure, then persists only private scope/ledger metadata.';
