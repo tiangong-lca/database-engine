@@ -2012,6 +2012,7 @@ export type Database = {
           user_id: string
         }[]
       }
+      qry_system_status: { Args: never; Returns: Json }
       qry_team_find_invitable_user_by_email: {
         Args: { p_email: string; p_team_id: string }
         Returns: Json
