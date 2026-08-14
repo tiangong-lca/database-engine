@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-13
-lastReviewedCommit: cea442f1a3c45c6552cedd5877ccbe0584da723c
-lastReviewedNote: "The database owns non-blocking Review Admin diagnostic admission and readback, owner-draft scope, schema inventory, and exact migration-head validation; Worker and Edge retain computation and orchestration ownership."
+lastReviewedAt: 2026-08-14
+lastReviewedCommit: 45bb93dd783c53f4884d9d6012db2b4a6083a00b
+lastReviewedNote: "Reviewed after restoring the CI-authoritative five-schema generated workspace; repository ownership, bootstrap guidance, and cross-repository boundaries remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

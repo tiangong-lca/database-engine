@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-13
-lastReviewedCommit: cea442f1a3c45c6552cedd5877ccbe0584da723c
-lastReviewedNote: "Review Admin diagnostics, owner-draft search scope, and exact migration-head assertions preserve current schema ownership, API boundaries, search-text behavior, and migration source-of-truth rules."
+lastReviewedAt: 2026-08-14
+lastReviewedCommit: 45bb93dd783c53f4884d9d6012db2b4a6083a00b
+lastReviewedNote: "Reviewed after restoring the generated workspace with the complete CI schema set; schema ownership, API boundaries, and migration source-of-truth rules remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

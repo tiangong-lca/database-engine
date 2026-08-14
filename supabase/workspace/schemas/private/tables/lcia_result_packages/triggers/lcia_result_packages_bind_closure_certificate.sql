@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "lcia_result_packages_bind_closure_certificate" BEFORE INSERT ON "private"."lcia_result_packages" FOR EACH ROW EXECUTE FUNCTION "private"."lcia_result_package_bind_closure_certificate"();

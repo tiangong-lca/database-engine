@@ -1,0 +1,52 @@
+CREATE OR REPLACE FUNCTION "api"."get_lca_release_artifact_download"("p_artifact_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
+    AS $$
+declare
+  v_artifact private.lca_release_artifacts%rowtype;
+  v_is_public boolean;
+begin
+  select * into v_artifact
+  from private.lca_release_artifacts
+  where id = p_artifact_id;
+
+  if v_artifact.id is null then
+    return private.lca_release_error('artifact_not_found', 404, 'Release artifact not found');
+  end if;
+  select exists (
+    select 1 from private.lca_release_publications
+    where release_run_id = v_artifact.release_run_id
+      and status in ('current', 'superseded')
+  ) into v_is_public;
+
+  if not v_is_public and not private.lca_release_is_manager() then
+    return private.lca_release_error('not_data_product_manager', 403, 'Data product manager role is required for private artifacts');
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'data', jsonb_build_object(
+      'artifactId', v_artifact.id,
+      'releaseRunId', v_artifact.release_run_id,
+      'profileId', v_artifact.profile_id,
+      'format', v_artifact.artifact_format,
+      'storageBucket', v_artifact.storage_bucket,
+      'objectKey', v_artifact.object_key,
+      'sha256', v_artifact.sha256,
+      'byteSize', v_artifact.byte_size,
+      'mediaType', v_artifact.media_type,
+      'public', v_is_public
+    )
+  );
+end;
+$$;
+
+ALTER FUNCTION "api"."get_lca_release_artifact_download"("p_artifact_id" "uuid") OWNER TO "postgres";
+
+REVOKE ALL ON FUNCTION "api"."get_lca_release_artifact_download"("p_artifact_id" "uuid") FROM PUBLIC;
+
+GRANT ALL ON FUNCTION "api"."get_lca_release_artifact_download"("p_artifact_id" "uuid") TO "api_internal_executor";
+
+GRANT ALL ON FUNCTION "api"."get_lca_release_artifact_download"("p_artifact_id" "uuid") TO "authenticated";
+
+GRANT ALL ON FUNCTION "api"."get_lca_release_artifact_download"("p_artifact_id" "uuid") TO "service_role";

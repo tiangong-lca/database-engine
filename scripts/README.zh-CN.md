@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-13
-lastReviewedCommit: cea442f1a3c45c6552cedd5877ccbe0584da723c
-lastReviewedNote: "脚本目录支持质量诊断 schema 的 exact-local 刷新，以及当前 search_text 的 metadata-only 与非空 scalar fail-closed 证明。"
+lastReviewedAt: 2026-08-14
+lastReviewedCommit: 45bb93dd783c53f4884d9d6012db2b4a6083a00b
+lastReviewedNote: "已按 CI 的五 schema 参数完成等价重建复核；脚本目录及调用契约无需改变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "command_audit_log_derivative_rebuild_plan_uidx" ON "private"."command_audit_log" USING "btree" ("actor_user_id", (("payload" ->> 'plan_request_sha256'::"text"))) WHERE (("command" = 'cmd_dataset_derivative_rebuild_plan_guarded'::"text") AND ("target_table" IS NULL) AND (("payload" ->> 'record_type'::"text") = 'plan_summary'::"text"));

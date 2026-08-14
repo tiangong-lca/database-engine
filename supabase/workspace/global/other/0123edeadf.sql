@@ -1,0 +1,1 @@
+COMMENT ON COLUMN "archive"."worker_legacy_job_table_rows"."archived_at" IS 'Timestamp when the legacy row payload was archived before physical DROP TABLE. Retention is manual/signoff based, not time-based automatic deletion.';

@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-13"
-lastReviewedCommit: "cea442f1a3c45c6552cedd5877ccbe0584da723c"
-lastReviewedNote: "Database routing covers the manual non-blocking Review Admin diagnostic, owner-draft scope, exact migration-head validation, and current generated-contract workflows."
+lastReviewedAt: "2026-08-14"
+lastReviewedCommit: "45bb93dd783c53f4884d9d6012db2b4a6083a00b"
+lastReviewedNote: "Reviewed after restoring the generated workspace with the CI-authoritative public, api, private, util, and archive schema set; routing and ownership rules remain unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

@@ -1,0 +1,1 @@
+COMMENT ON COLUMN "archive"."worker_legacy_job_table_rows"."row_payload" IS 'Full to_jsonb(row) payload captured before public.lca_jobs, public.lca_package_jobs, and public.dataset_review_submit_jobs were dropped.';

@@ -1,0 +1,1 @@
+CREATE UNIQUE INDEX "lcia_result_publications_current_uidx" ON "private"."lcia_result_publications" USING "btree" ("publication_series_key", "publication_channel", "visibility_scope") WHERE ("is_current" = true);

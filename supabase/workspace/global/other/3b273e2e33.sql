@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "util"."preview_lca_snapshot_retention"("p_snapshot_retention_window" interval, "p_orphan_retention_window" interval, "p_as_of" timestamp with time zone) IS 'Operator dry-run helper for lca-results/snapshots retention. Job references are counted from worker_jobs after public.lca_jobs retirement.';

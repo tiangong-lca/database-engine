@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."qry_review_quality_diagnostic"("p_run_id" "uuid") IS 'Returns one or the latest Review Admin quality diagnostic report. Findings, not-evaluable outcomes, and failures are informational only.';

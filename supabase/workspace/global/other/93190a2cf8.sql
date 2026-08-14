@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."cmd_dataset_derivative_rebuild_snapshot"("p_table" "text", "p_id" "uuid", "p_version" "text") IS 'Returns one current-actor state_code=0 flow or process primary/derivative fingerprint. The original one-process v1 request remains compatible.';

@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "lcia_result_packages_prevent_ready_update" BEFORE UPDATE ON "private"."lcia_result_packages" FOR EACH ROW EXECUTE FUNCTION "private"."lcia_result_prevent_ready_package_content_update"();

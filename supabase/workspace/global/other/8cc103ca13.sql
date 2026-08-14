@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."lcia_scope_closure_candidate_dataset_manifest"() IS 'Freezes every exact state_code 100..199 document readable by the deployed closure Worker for first-release candidate preflight.';
