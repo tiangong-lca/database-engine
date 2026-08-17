@@ -8,8 +8,8 @@ select is(
   (select expected_validator_scanner_fingerprint
    from private.lcia_scope_closure_config
    where singleton),
-  'scope-closure-validator-scanner.v1+cutoff-readiness-r2',
-  'new closure requests use the lineage-aware scanner cache revision'
+  'scope-closure-validator-scanner.v1+cutoff-readiness-r3',
+  'new closure requests use the digital-file-aware scanner cache revision'
 );
 
 -- A minimal immutable current release.  The closure request must use this
@@ -265,7 +265,7 @@ select is((select status from private.lcia_scope_closure_scan_executions limit 1
 -- rollout may still have old requests in flight, but new requests must not
 -- select their completed evidence after the configured revision changes.
 update private.lcia_scope_closure_config
-set expected_validator_scanner_fingerprint='scope-closure-validator-scanner.v1+cutoff-readiness-r1',
+set expected_validator_scanner_fingerprint='scope-closure-validator-scanner.v1+cutoff-readiness-r2',
     updated_at=now()
 where singleton;
 select set_config('request.jwt.claim.role','authenticated',true);
@@ -274,18 +274,18 @@ select is(api.cmd_lcia_scope_closure_check_request_v2(
   'closure-e2e-old-scanner','{}'
 )->>'ok','true','previous scanner revision request fixture is accepted by the database command');
 update private.lcia_scope_closure_config
-set expected_validator_scanner_fingerprint='scope-closure-validator-scanner.v1+cutoff-readiness-r2',
+set expected_validator_scanner_fingerprint='scope-closure-validator-scanner.v1+cutoff-readiness-r3',
     updated_at=now()
 where singleton;
 select is(api.cmd_lcia_scope_closure_check_request_v2(
   '{"coverageMode":"subset","processes":[{"id":"c7220000-0000-4000-8000-000000000020","version":"01.00.000"}],"lciaMethods":[{"id":"c7220000-0000-4000-8000-000000000021","version":"01.00.000"}]}'::jsonb,
   'closure-e2e-new-scanner','{}'
-)->>'ok','true','lineage-aware scanner request fixture is accepted');
+)->>'ok','true','digital-file-aware scanner request fixture is accepted');
 select ok((
   select old_scan.scan_execution_id <> new_scan.scan_execution_id
      and old_scan.request_fingerprint <> new_scan.request_fingerprint
-     and old_scan.expected_validator_scanner_fingerprint='scope-closure-validator-scanner.v1+cutoff-readiness-r1'
-     and new_scan.expected_validator_scanner_fingerprint='scope-closure-validator-scanner.v1+cutoff-readiness-r2'
+     and old_scan.expected_validator_scanner_fingerprint='scope-closure-validator-scanner.v1+cutoff-readiness-r2'
+     and new_scan.expected_validator_scanner_fingerprint='scope-closure-validator-scanner.v1+cutoff-readiness-r3'
   from private.lcia_scope_closure_checks old_scan
   join private.lcia_scope_closure_checks new_scan on true
   where old_scan.request_idempotency_token='closure-e2e-old-scanner'
