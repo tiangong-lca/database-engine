@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."cmd_lcia_scope_closure_check_request_v3"("p_result_set_id" "uuid", "p_requested_scope" "jsonb", "p_request_idempotency_token" "text", "p_audit" "jsonb") IS 'Creates or reuses a Scope Closure check and atomically binds it to one persistent ResultSet.';

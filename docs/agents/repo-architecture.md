@@ -28,7 +28,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-17
-lastReviewedCommit: eefc003b41eee76d473b0746fb375106a3a18d0b
+lastReviewedCommit: 3dade01ce537ee948f565f2881668c6e5c8554a7
 lastReviewedNote: "Reviewed after integrating the scope-closure scanner revision and approved ownerless-reference review handling; schema ownership, API boundaries, and migration source-of-truth rules remain unchanged."
 related:
   - ../../AGENTS.md
