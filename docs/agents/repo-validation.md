@@ -31,7 +31,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-17
 lastReviewedCommit: 8c81e3fa501d708fd0bee999debbab2408c91a3c
-lastReviewedNote: "Reviewed after reproducing CI generation with public, api, private, util, and archive; deterministic rebuild and generated-artifact verification remain the required proof."
+lastReviewedNote: "Reviewed after validating the scope-closure scanner revision and approved ownerless-reference review handling; deterministic rebuild, generated-artifact verification, and pgTAP contracts remain the required proof."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
