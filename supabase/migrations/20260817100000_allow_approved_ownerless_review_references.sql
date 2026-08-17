@@ -1,3 +1,4 @@
+-- Allow approved references without an owner while preserving owner checks for mutable data.
 CREATE OR REPLACE FUNCTION "private"."review_get_or_create_reference_v1"("p_target_table" "text", "p_target_row" "jsonb", "p_checksum" "text", "p_actor" "uuid") RETURNS "private"."reviews"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
