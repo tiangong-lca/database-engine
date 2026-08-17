@@ -28,7 +28,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-17
-lastReviewedCommit: 801a9f2c16376e20884c5269069f0847a273ab0b
+lastReviewedCommit: eefc003b41eee76d473b0746fb375106a3a18d0b
 lastReviewedNote: "Reviewed after integrating the scope-closure scanner revision and approved ownerless-reference review handling; schema ownership, API boundaries, and migration source-of-truth rules remain unchanged."
 related:
   - ../../AGENTS.md
@@ -273,7 +273,7 @@ Certificate-grade Scope Closure normalization canonicalizes omitted and supporte
 
 A passed reused Scope Closure certificate owns a new target report while retaining the direct source check's immutable numerical snapshot and Closure Bundle. Calculation admission, Worker binding, and package publication validate that single-hop source through `reused_from_check_id`; they never relabel or copy the source Bundle. The target and source must retain exact scope, policy, data-snapshot, numerical-snapshot, Bundle identity, and checksum parity. Independently, `worker_jobs.status = completed` implies canonical `progress = 1`; blocked and failed terminal states retain their actual partial progress.
 
-The current internal scanner cache identity is `scope-closure-validator-scanner.v1+cutoff-readiness-r3`; changing it creates a distinct request fingerprint and scan execution without changing any public V1 DTO or artifact schema. The r2 revision separates exact-identity Process lineage traversal from numerical provider-universe enforcement; r3 additionally excludes Source `referenceToDigitalFile` attachment locators from dataset-reference scanning. Historical requests retain their recorded revision for in-flight compatibility. A completed `blocked` scan has complete reusable administrative evidence but deliberately no numerical snapshot, even though its scan-execution row retains a preallocated `numerical_snapshot_id`. Reuse therefore compares that ID with the source check snapshot only for `passed` certificate evidence; all immutable scope, policy, data-snapshot, completion, and source-status fences still apply to both terminal outcomes.
+The current internal scanner cache identity is `scope-closure-validator-scanner.v1+cutoff-readiness-r4`; changing it creates a distinct request fingerprint and scan execution without changing any public V1 DTO or artifact schema. The r2 revision separates exact-identity Process lineage traversal from numerical provider-universe enforcement; r3 excludes Source `referenceToDigitalFile` attachment locators from dataset-reference scanning; r4 prevents reuse of an r3 completed blocked scan after Worker changes certificate-grade medium singular risk from blocker to warning. The database does not interpret readiness severity. Historical requests retain their recorded revision for in-flight compatibility. A completed `blocked` scan has complete reusable administrative evidence but deliberately no numerical snapshot, even though its scan-execution row retains a preallocated `numerical_snapshot_id`. Reuse therefore compares that ID with the source check snapshot only for `passed` certificate evidence; all immutable scope, policy, data-snapshot, completion, and source-status fences still apply to both terminal outcomes.
 
 ## Scope-Closure Evidence Retention
 
