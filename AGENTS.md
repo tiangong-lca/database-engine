@@ -34,8 +34,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-14
-lastReviewedCommit: 45bb93dd783c53f4884d9d6012db2b4a6083a00b
+lastReviewedAt: 2026-08-17
+lastReviewedCommit: 42ab3ea04d15deb72fd0ec03114a067730dcba1c
 lastReviewedNote: "Reviewed after restoring the CI-authoritative five-schema generated workspace; repository ownership, bootstrap guidance, and cross-repository boundaries remain unchanged."
 related:
   - .docpact/config.yaml

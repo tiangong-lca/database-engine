@@ -21093,6 +21093,36 @@ $_$;
 ALTER FUNCTION "api"."qry_system_get_member_list"("p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "api"."qry_system_status"() RETURNS "jsonb"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select coalesce(
+    (
+      select config.config_value || jsonb_build_object('updatedAt', config.updated_at)
+      from util.app_runtime_config as config
+      where config.config_key = 'tiangong-lca-next.production.system-status'
+    ),
+    jsonb_build_object(
+      'schemaVersion', 1,
+      'phase', 'normal',
+      'reason', null,
+      'targetVersion', null,
+      'estimatedEndAt', null,
+      'releaseId', null,
+      'updatedAt', null
+    )
+  );
+$$;
+
+
+ALTER FUNCTION "api"."qry_system_status"() OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "api"."qry_system_status"() IS 'Returns the public browser startup status for tiangong-lca-next without exposing the operational config table.';
+
+
+
 CREATE OR REPLACE FUNCTION "api"."qry_team_find_invitable_user_by_email"("p_team_id" "uuid", "p_email" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
@@ -56704,6 +56734,37 @@ CREATE TABLE IF NOT EXISTS "public"."lciamethods" (
 ALTER TABLE "public"."lciamethods" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "util"."app_runtime_config" (
+    "config_key" "text" NOT NULL,
+    "config_value" "jsonb" NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "statement_timestamp"() NOT NULL,
+    CONSTRAINT "app_runtime_config_active_reason_check" CHECK (COALESCE(((("config_value" ->> 'phase'::"text") = 'normal'::"text") OR (("config_value" ->> 'reason'::"text") = ANY (ARRAY['release_upgrade'::"text", 'emergency'::"text"]))), false)),
+    CONSTRAINT "app_runtime_config_estimated_end_at_check" CHECK (((NOT ("config_value" ? 'estimatedEndAt'::"text")) OR (("config_value" -> 'estimatedEndAt'::"text") = 'null'::"jsonb") OR (("jsonb_typeof"(("config_value" -> 'estimatedEndAt'::"text")) = 'string'::"text") AND (("config_value" ->> 'estimatedEndAt'::"text") ~ '^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}([.]\d+)?(Z|[+-]\d{2}:\d{2})$'::"text")))),
+    CONSTRAINT "app_runtime_config_key_not_blank_check" CHECK (("btrim"("config_key") <> ''::"text")),
+    CONSTRAINT "app_runtime_config_phase_check" CHECK (COALESCE((("config_value" ->> 'phase'::"text") = ANY (ARRAY['normal'::"text", 'maintenance'::"text", 'verifying'::"text"])), false)),
+    CONSTRAINT "app_runtime_config_reason_check" CHECK (((NOT ("config_value" ? 'reason'::"text")) OR (("config_value" -> 'reason'::"text") = 'null'::"jsonb") OR (("config_value" ->> 'reason'::"text") = ANY (ARRAY['release_upgrade'::"text", 'emergency'::"text"])))),
+    CONSTRAINT "app_runtime_config_release_id_check" CHECK (((NOT ("config_value" ? 'releaseId'::"text")) OR (("config_value" -> 'releaseId'::"text") = 'null'::"jsonb") OR ("jsonb_typeof"(("config_value" -> 'releaseId'::"text")) = 'string'::"text"))),
+    CONSTRAINT "app_runtime_config_schema_version_check" CHECK (COALESCE((("config_value" -> 'schemaVersion'::"text") = '1'::"jsonb"), false)),
+    CONSTRAINT "app_runtime_config_target_version_check" CHECK (((NOT ("config_value" ? 'targetVersion'::"text")) OR (("config_value" -> 'targetVersion'::"text") = 'null'::"jsonb") OR ("jsonb_typeof"(("config_value" -> 'targetVersion'::"text")) = 'string'::"text"))),
+    CONSTRAINT "app_runtime_config_value_object_check" CHECK (("jsonb_typeof"("config_value") = 'object'::"text"))
+);
+
+
+ALTER TABLE "util"."app_runtime_config" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "util"."app_runtime_config" IS 'Operational runtime configuration. Values are not Data API relations and are exposed only by fixed api facades.';
+
+
+
+COMMENT ON COLUMN "util"."app_runtime_config"."config_key" IS 'Stable application/environment/config identity.';
+
+
+
+COMMENT ON COLUMN "util"."app_runtime_config"."config_value" IS 'Versioned JSON payload validated by database constraints.';
+
+
+
 CREATE TABLE IF NOT EXISTS "util"."dataset_alias_execution_gate_receipts" (
     "preflight_id" "uuid" NOT NULL,
     "actor_user_id" "uuid" NOT NULL,
@@ -58084,6 +58145,11 @@ ALTER TABLE ONLY "public"."sources"
 
 ALTER TABLE ONLY "public"."unitgroups"
     ADD CONSTRAINT "unitgroups_pkey" PRIMARY KEY ("id", "version");
+
+
+
+ALTER TABLE ONLY "util"."app_runtime_config"
+    ADD CONSTRAINT "app_runtime_config_pkey" PRIMARY KEY ("config_key");
 
 
 
@@ -61896,6 +61962,12 @@ GRANT ALL ON FUNCTION "api"."qry_system_find_member_candidate_by_email"("p_email
 REVOKE ALL ON FUNCTION "api"."qry_system_get_member_list"("p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."qry_system_get_member_list"("p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") TO "api_internal_executor";
 GRANT ALL ON FUNCTION "api"."qry_system_get_member_list"("p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "api"."qry_system_status"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."qry_system_status"() TO "anon";
+GRANT ALL ON FUNCTION "api"."qry_system_status"() TO "authenticated";
 
 
 
