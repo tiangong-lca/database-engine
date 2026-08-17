@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(21);
+select plan(22);
 
 create or replace function pg_temp.disable_trigger_if_exists(
   p_table regclass,
@@ -125,7 +125,7 @@ values (
   '01.01.000',
   '{"sourceDataSet":{"sourceInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"zh","#text":"审核员-来源"}]}}}}'::jsonb,
   '{"sourceDataSet":{"sourceInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"zh","#text":"审核员-来源"}]}}}}'::json,
-  '19800000-0000-0000-0000-000000000001',
+  null,
   100,
   null,
   true,
@@ -158,7 +158,7 @@ values (
   '01.01.000',
   '{"contactDataSet":{"contactInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"zh","#text":"审核员-联系人"}]}}}}'::jsonb,
   '{"contactDataSet":{"contactInformation":{"dataSetInformation":{"common:shortName":[{"@xml:lang":"zh","#text":"审核员-联系人"}]}}}}'::json,
-  '19800000-0000-0000-0000-000000000001',
+  null,
   100,
   null,
   true,
@@ -474,6 +474,22 @@ select is(
   ),
   2,
   'Source and Contact each receive a reusable Reference Review'
+);
+
+select is(
+  (
+    select count(*)::integer
+    from private.reviews
+    where review_kind = 'reference'
+      and data_id in (
+        '39800000-0000-0000-0000-000000000001',
+        '39800000-0000-0000-0000-000000000002'
+      )
+      and state_code = 2
+      and target_owner_id is null
+  ),
+  2,
+  'approved ownerless metadata references are represented by approved Reference Reviews'
 );
 
 select is(

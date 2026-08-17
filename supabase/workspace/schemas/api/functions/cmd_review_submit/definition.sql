@@ -198,7 +198,8 @@ begin
     from review_submit_targets
     order by is_root desc, table_name, dataset_id, dataset_version
   loop
-    if nullif(v_target.dataset_row->>'user_id', '') is null then
+    if nullif(v_target.dataset_row->>'user_id', '') is null
+      and (v_target.is_root or v_target.state_code < 100) then
       return jsonb_build_object(
         'ok', false,
         'code', case when v_target.is_root

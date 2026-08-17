@@ -8,7 +8,7 @@ declare
   v_team_id uuid := nullif(p_target_row->>'team_id', '')::uuid;
   v_state integer := coalesce((p_target_row->>'state_code')::integer, 0);
 begin
-  if v_owner_id is null then
+  if v_owner_id is null and v_state < 100 then
     raise exception using
       errcode = '23502',
       message = 'REFERENCE_OWNER_UNRESOLVED';
