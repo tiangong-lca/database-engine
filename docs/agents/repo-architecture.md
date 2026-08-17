@@ -28,8 +28,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-17
-lastReviewedCommit: 33b0bdcab65ef3ca5a712ac771774d5e22826378
-lastReviewedNote: "Advanced the internal Scope Closure scanner cache identity to cutoff-readiness-r2 so lineage-aware Worker semantics cannot reuse earlier completed scans; public contracts and schema ownership remain unchanged."
+lastReviewedCommit: 8c81e3fa501d708fd0bee999debbab2408c91a3c
+lastReviewedNote: "Reviewed after integrating the scope-closure scanner revision and approved ownerless-reference review handling; schema ownership, API boundaries, and migration source-of-truth rules remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

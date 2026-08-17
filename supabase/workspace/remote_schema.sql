@@ -13491,7 +13491,8 @@ begin
     from review_submit_targets
     order by is_root desc, table_name, dataset_id, dataset_version
   loop
-    if nullif(v_target.dataset_row->>'user_id', '') is null then
+    if nullif(v_target.dataset_row->>'user_id', '') is null
+      and (v_target.is_root or v_target.state_code < 100) then
       return jsonb_build_object(
         'ok', false,
         'code', case when v_target.is_root
@@ -13863,7 +13864,8 @@ begin
       from review_comment_v2_targets
       order by table_name, dataset_id, dataset_version
     loop
-      if nullif(v_target.dataset_row->>'user_id', '') is null then
+      if nullif(v_target.dataset_row->>'user_id', '') is null
+        and v_target.state_code < 100 then
         return jsonb_build_object(
           'ok', false,
           'code', 'REFERENCE_OWNER_UNRESOLVED',
@@ -40010,7 +40012,7 @@ declare
   v_team_id uuid := nullif(p_target_row->>'team_id', '')::uuid;
   v_state integer := coalesce((p_target_row->>'state_code')::integer, 0);
 begin
-  if v_owner_id is null then
+  if v_owner_id is null and v_state < 100 then
     raise exception using
       errcode = '23502',
       message = 'REFERENCE_OWNER_UNRESOLVED';

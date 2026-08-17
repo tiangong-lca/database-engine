@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-17"
-lastReviewedCommit: "42ab3ea04d15deb72fd0ec03114a067730dcba1c"
-lastReviewedNote: "Reviewed after restoring the generated workspace with the CI-authoritative public, api, private, util, and archive schema set; routing and ownership rules remain unchanged."
+lastReviewedCommit: "8c81e3fa501d708fd0bee999debbab2408c91a3c"
+lastReviewedNote: "Reviewed after integrating the scope-closure scanner revision and approved ownerless-reference review handling; routing and ownership rules remain unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

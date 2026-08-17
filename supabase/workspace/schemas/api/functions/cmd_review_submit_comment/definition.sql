@@ -149,7 +149,8 @@ begin
       from review_comment_v2_targets
       order by table_name, dataset_id, dataset_version
     loop
-      if nullif(v_target.dataset_row->>'user_id', '') is null then
+      if nullif(v_target.dataset_row->>'user_id', '') is null
+        and v_target.state_code < 100 then
         return jsonb_build_object(
           'ok', false,
           'code', 'REFERENCE_OWNER_UNRESOLVED',
