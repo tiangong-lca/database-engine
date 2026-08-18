@@ -475,7 +475,7 @@ select is(
 
 select is(
   api.svc_schema_contract_status() ->> 'migrationHead',
-  '20260817190000'::text,
+  '20260817234000'::text,
   'service-only schema readback reports the exact migration head'
 );
 
