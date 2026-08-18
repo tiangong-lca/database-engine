@@ -252,12 +252,16 @@ update private.worker_jobs set status='running', lease_token='c7220000-0000-4000
 where id=(select worker_job_id from private.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b');
 insert into private.worker_job_artifacts(id,job_id,artifact_type,storage_bucket,storage_path,content_type,byte_size,checksum_sha256)
 values ('c7220000-0000-4000-8000-000000000202',(select worker_job_id from private.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),'closure_report_xlsx','test','reports/b.xlsx','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',11,repeat('b',64));
-select is(private.svc_lcia_scope_closure_reuse_completed_scan(
+create temporary table closure_e2e_reuse_response(result jsonb);
+insert into closure_e2e_reuse_response
+select private.svc_lcia_scope_closure_reuse_completed_scan(
   (select id from private.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),
   (select worker_job_id from private.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),
   'c7220000-0000-4000-8000-000000000102',
   (select id from private.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-a')
-)->'data'->>'reuseAvailable','true','second run can reuse completed scan facts');
+);
+select is((select result->'data'->>'reuseAvailable' from closure_e2e_reuse_response),'true','second run can reuse completed scan facts');
+select is((select result->'data'->'evidence'->>'artifactFormat' from closure_e2e_reuse_response),'snapshot-hdf5:v1','passed reuse returns the validated snapshot artifact format required by Worker');
 select is(private.svc_lcia_scope_closure_finalize_reused_scan(
   (select id from private.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),
   (select worker_job_id from private.lcia_scope_closure_checks where request_idempotency_token='closure-e2e-b'),

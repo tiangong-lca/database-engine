@@ -1,3 +1,10 @@
+-- Restore the complete numerical evidence projection consumed by Worker when
+-- a passed Scope Closure scan is reused. The RPC already validates the stored
+-- artifact format before this response is built; return that validated fact.
+
+set lock_timeout = '5s';
+set statement_timeout = '120s';
+
 CREATE OR REPLACE FUNCTION "private"."svc_lcia_scope_closure_reuse_completed_scan"("p_closure_check_id" "uuid", "p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_completed_check_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'private', 'api', 'public', 'util', 'extensions', 'pg_temp'
