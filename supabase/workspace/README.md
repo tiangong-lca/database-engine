@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-17
-lastReviewedCommit: 8c81e3fa501d708fd0bee999debbab2408c91a3c
+lastReviewedCommit: 3dade01ce537ee948f565f2881668c6e5c8554a7
 lastReviewedNote: "Restored and reviewed the exact-local workspace for the CI-authoritative public, api, private, util, and archive schemas; deterministic generation behavior is unchanged."
 related:
   - ../../AGENTS.md
