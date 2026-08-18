@@ -47052,6 +47052,7 @@ begin
       'snapshotArtifactId', v_source.snapshot_artifact_id,
       'snapshotIndexSha256', v_source.snapshot_index_sha256,
       'snapshotBuildContractHash', v_source.snapshot_build_contract_hash,
+      'artifactFormat', v_artifact.artifact_format,
       'evidenceHash', v_source.evidence_hash
     )),
     'blockerCodes', to_jsonb(v_source.blocker_codes)
