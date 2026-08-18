@@ -39,14 +39,82 @@ set local role authenticated;
 select set_config('request.jwt.claim.role','authenticated',true);
 select set_config('request.jwt.claim.sub','c7220000-0000-4000-8000-000000000001',true);
 
+create temporary table closure_result_set_response(result jsonb);
+insert into closure_result_set_response
+values (api.cmd_lcia_result_set_create('Closure E2E result set'));
+
 create temporary table closure_e2e_responses(result jsonb);
 insert into closure_e2e_responses values
-(api.cmd_lcia_scope_closure_check_request_v2('{"coverageMode":"subset","processes":[{"id":"c7220000-0000-4000-8000-000000000020","version":"01.00.000"}],"lciaMethods":[{"id":"c7220000-0000-4000-8000-000000000021","version":"01.00.000"}]}'::jsonb,'closure-e2e-a','{}')),
+(api.cmd_lcia_scope_closure_check_request_v3(
+  (select (result->'data'->>'resultSetId')::uuid from closure_result_set_response),
+  '{"coverageMode":"subset","processes":[{"id":"c7220000-0000-4000-8000-000000000020","version":"01.00.000"}],"lciaMethods":[{"id":"c7220000-0000-4000-8000-000000000021","version":"01.00.000"}]}'::jsonb,
+  'closure-e2e-a',
+  '{}'
+)),
 (api.cmd_lcia_scope_closure_check_request_v2('{"coverageMode":"subset","processes":[{"id":"c7220000-0000-4000-8000-000000000020","version":"01.00.000"}],"lciaMethods":[{"id":"c7220000-0000-4000-8000-000000000021","version":"01.00.000"}]}'::jsonb,'closure-e2e-b','{}'));
+
+create temporary table closure_result_set_task_feed(result jsonb);
+insert into closure_result_set_task_feed
+values (api.get_task_summary_v2_feed(
+  p_category => 'data_product',
+  p_limit => 50
+));
 
 reset role;
 
 select is((select count(*) from closure_e2e_responses where result->>'ok'='true'),2::bigint,'two explicit runs are accepted against the release');
+select is(
+  (
+    select result_set_id
+    from private.lcia_scope_closure_checks
+    where request_idempotency_token = 'closure-e2e-a'
+  ),
+  (
+    select (result->'data'->>'resultSetId')::uuid
+    from closure_result_set_response
+  ),
+  'ResultSet-aware closure request persists the container binding'
+);
+select is(
+  (
+    select result_set_id
+    from private.lcia_scope_closure_checks
+    where request_idempotency_token = 'closure-e2e-b'
+  ),
+  null::uuid,
+  'legacy closure requests remain valid without a ResultSet binding'
+);
+select is(
+  (
+    select item->>'resultSetName'
+    from closure_result_set_task_feed,
+      lateral jsonb_array_elements(result->'data'->'items') item
+    where item->>'closureCheckId' = (
+      select id::text
+      from private.lcia_scope_closure_checks
+      where request_idempotency_token = 'closure-e2e-a'
+    )
+  ),
+  'Closure E2E result set',
+  'TaskSummary projects the ResultSet name for recovery'
+);
+select is(
+  (
+    select item->'deepLink'->'params'->>'resultSetId'
+    from closure_result_set_task_feed,
+      lateral jsonb_array_elements(result->'data'->'items') item
+    where item->>'closureCheckId' = (
+      select id::text
+      from private.lcia_scope_closure_checks
+      where request_idempotency_token = 'closure-e2e-a'
+    )
+  ),
+  (
+    select result->'data'->>'resultSetId'
+    from closure_result_set_response
+  ),
+  'TaskSummary deep link carries the stable ResultSet identity'
+);
 select is((select count(distinct scan_execution_id) from private.lcia_scope_closure_checks where request_idempotency_token in ('closure-e2e-a','closure-e2e-b')),1::bigint,'two runs share one release-bound scan execution');
 select is((select count(distinct data_snapshot_token) from private.lcia_scope_closure_checks where request_idempotency_token in ('closure-e2e-a','closure-e2e-b')),1::bigint,'two runs freeze the same exact release snapshot');
 select is((select provider_matching_rule from private.lca_network_snapshots where id=(select numerical_snapshot_id from private.lcia_scope_closure_scan_executions limit 1)),'split_by_process_volume','preallocated snapshot records the actual fixed closure builder provider rule');

@@ -38,6 +38,7 @@ CREATE TABLE IF NOT EXISTS "private"."lcia_scope_closure_checks" (
     "snapshot_build_contract_hash" "text",
     "complete_machine_result_artifact_id" "uuid",
     "valid_until" timestamp with time zone,
+    "result_set_id" "uuid",
     CONSTRAINT "lcia_scope_closure_checks_certificate_check" CHECK (("certificate_status" = ANY (ARRAY['pending'::"text", 'valid'::"text", 'stale'::"text", 'revoked'::"text", 'unavailable'::"text"]))),
     CONSTRAINT "lcia_scope_closure_checks_completeness_check" CHECK ((("scan_completeness" IS NULL) OR ("scan_completeness" = ANY (ARRAY['complete'::"text", 'incomplete'::"text", 'unknown'::"text"])))),
     CONSTRAINT "lcia_scope_closure_checks_effective_scope_manifest_check" CHECK ((("effective_scope_manifest" IS NULL) OR ("jsonb_typeof"("effective_scope_manifest") = 'object'::"text"))),
@@ -67,6 +68,9 @@ ALTER TABLE ONLY "private"."lcia_scope_closure_checks"
 
 ALTER TABLE ONLY "private"."lcia_scope_closure_checks"
     ADD CONSTRAINT "lcia_scope_closure_checks_report_artifact_id_fkey" FOREIGN KEY ("report_artifact_id") REFERENCES "private"."worker_job_artifacts"("id") ON DELETE RESTRICT;
+
+ALTER TABLE ONLY "private"."lcia_scope_closure_checks"
+    ADD CONSTRAINT "lcia_scope_closure_checks_result_set_id_fkey" FOREIGN KEY ("result_set_id") REFERENCES "private"."lcia_result_sets"("id") ON DELETE RESTRICT;
 
 ALTER TABLE ONLY "private"."lcia_scope_closure_checks"
     ADD CONSTRAINT "lcia_scope_closure_checks_reused_from_check_id_fkey" FOREIGN KEY ("reused_from_check_id") REFERENCES "private"."lcia_scope_closure_checks"("id") ON DELETE RESTRICT;
