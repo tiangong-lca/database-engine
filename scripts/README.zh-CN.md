@@ -20,8 +20,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-17
-lastReviewedCommit: 3dade01ce537ee948f565f2881668c6e5c8554a7
+lastReviewedAt: 2026-08-18
+lastReviewedCommit: 88eee3b
 lastReviewedNote: "已按 CI 的五 schema 参数完成等价重建复核；脚本目录及调用契约无需改变。"
 related:
   - ../AGENTS.md
