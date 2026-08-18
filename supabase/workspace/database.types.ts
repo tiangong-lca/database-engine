@@ -353,11 +353,21 @@ export type Database = {
         Args: { p_audit?: Json; p_publication_id: string; p_reason?: string }
         Returns: Json
       }
+      cmd_lcia_result_set_create: { Args: { p_name: string }; Returns: Json }
       cmd_lcia_scope_closure_check_request_v2: {
         Args: {
           p_audit?: Json
           p_request_idempotency_token: string
           p_requested_scope: Json
+        }
+        Returns: Json
+      }
+      cmd_lcia_scope_closure_check_request_v3: {
+        Args: {
+          p_audit?: Json
+          p_request_idempotency_token: string
+          p_requested_scope: Json
+          p_result_set_id: string
         }
         Returns: Json
       }
@@ -858,6 +868,7 @@ export type Database = {
         Args: { p_package_id: string }
         Returns: Json
       }
+      get_lcia_result_set: { Args: { p_result_set_id: string }; Returns: Json }
       get_lcia_scope_closure_check: {
         Args: { p_closure_check_id: string }
         Returns: Json
@@ -1275,6 +1286,7 @@ export type Database = {
         Args: { proc: Database["public"]["Tables"]["lifecyclemodels"]["Row"] }
         Returns: string
       }
+      list_lcia_result_sets: { Args: { p_limit?: number }; Returns: Json }
       list_lcia_scope_closure_issues: {
         Args: {
           p_after_issue_id?: string

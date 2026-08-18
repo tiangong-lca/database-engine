@@ -9720,6 +9720,51 @@ $$;
 ALTER FUNCTION "api"."cmd_lcia_result_publication_unpublish"("p_publication_id" "uuid", "p_reason" "text", "p_audit" "jsonb") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "api"."cmd_lcia_result_set_create"("p_name" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
+    AS $$
+declare
+  v_actor uuid := auth.uid();
+  v_result_set private.lcia_result_sets%rowtype;
+begin
+  if v_actor is null then
+    return api.lcia_scope_closure_error(
+      'auth_required', 401, 'Authentication required'
+    );
+  end if;
+  if not api.lcia_scope_closure_is_manager() then
+    return api.lcia_scope_closure_error(
+      'not_data_product_manager', 403,
+      'Data product manager role is required'
+    );
+  end if;
+  if coalesce(length(btrim(p_name)), 0) = 0 then
+    return api.lcia_scope_closure_error(
+      'invalid_result_set_name', 400, 'Result set name is required'
+    );
+  end if;
+
+  insert into private.lcia_result_sets (name)
+  values (btrim(p_name))
+  returning * into v_result_set;
+
+  return jsonb_build_object(
+    'ok', true,
+    'data', jsonb_build_object(
+      'schemaVersion', 'lcia.result-set.v1',
+      'resultSetId', v_result_set.id,
+      'name', v_result_set.name,
+      'createdAt', v_result_set.created_at
+    )
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "api"."cmd_lcia_result_set_create"("p_name" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "api"."cmd_lcia_scope_closure_check_request_v2"("p_requested_scope" "jsonb", "p_request_idempotency_token" "text", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
@@ -10089,6 +10134,80 @@ ALTER FUNCTION "api"."cmd_lcia_scope_closure_check_request_v2"("p_requested_scop
 
 
 COMMENT ON FUNCTION "api"."cmd_lcia_scope_closure_check_request_v2"("p_requested_scope" "jsonb", "p_request_idempotency_token" "text", "p_audit" "jsonb") IS 'Creates a release-bound closure preflight when a formal release exists, or a deterministic candidate-public-state preflight for initial release bootstrap.';
+
+
+
+CREATE OR REPLACE FUNCTION "api"."cmd_lcia_scope_closure_check_request_v3"("p_result_set_id" "uuid", "p_requested_scope" "jsonb", "p_request_idempotency_token" "text", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
+    SET "statement_timeout" TO '60s'
+    AS $$
+declare
+  v_actor uuid := auth.uid();
+  v_result jsonb;
+  v_closure_check_id uuid;
+begin
+  if v_actor is null then
+    return api.lcia_scope_closure_error(
+      'auth_required', 401, 'Authentication required'
+    );
+  end if;
+  if not api.lcia_scope_closure_is_manager() then
+    return api.lcia_scope_closure_error(
+      'not_data_product_manager', 403,
+      'Data product manager role is required'
+    );
+  end if;
+  if not exists (
+    select 1 from private.lcia_result_sets where id = p_result_set_id
+  ) then
+    return api.lcia_scope_closure_error(
+      'result_set_not_found', 404, 'Result set not found'
+    );
+  end if;
+
+  v_result := api.cmd_lcia_scope_closure_check_request_v2(
+    p_requested_scope,
+    p_request_idempotency_token,
+    coalesce(p_audit, '{}'::jsonb)
+      || jsonb_build_object('resultSetId', p_result_set_id)
+  );
+  if coalesce((v_result->>'ok')::boolean, false) is not true then
+    return v_result;
+  end if;
+
+  v_closure_check_id := nullif(
+    v_result->'data'->>'closureCheckId', ''
+  )::uuid;
+
+  update private.lcia_scope_closure_checks
+  set result_set_id = p_result_set_id,
+      updated_at = now()
+  where id = v_closure_check_id
+    and requested_by = v_actor
+    and (result_set_id is null or result_set_id = p_result_set_id);
+
+  if not found then
+    return api.lcia_scope_closure_error(
+      'closure_check_result_set_conflict', 409,
+      'Closure check is already bound to another result set'
+    );
+  end if;
+
+  return jsonb_set(
+    v_result,
+    '{data,resultSetId}',
+    to_jsonb(p_result_set_id),
+    true
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "api"."cmd_lcia_scope_closure_check_request_v3"("p_result_set_id" "uuid", "p_requested_scope" "jsonb", "p_request_idempotency_token" "text", "p_audit" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "api"."cmd_lcia_scope_closure_check_request_v3"("p_result_set_id" "uuid", "p_requested_scope" "jsonb", "p_request_idempotency_token" "text", "p_audit" "jsonb") IS 'Creates or reuses a Scope Closure check and atomically binds it to one persistent ResultSet.';
 
 
 
@@ -16895,6 +17014,52 @@ $$;
 ALTER FUNCTION "api"."get_lcia_result_package_preview"("p_package_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "api"."get_lcia_result_set"("p_result_set_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
+    AS $$
+declare
+  v_actor uuid := auth.uid();
+  v_result_set private.lcia_result_sets%rowtype;
+begin
+  if v_actor is null then
+    return api.lcia_scope_closure_error(
+      'auth_required', 401, 'Authentication required'
+    );
+  end if;
+  if not api.lcia_scope_closure_is_manager() then
+    return api.lcia_scope_closure_error(
+      'result_set_not_found', 404, 'Result set not found'
+    );
+  end if;
+
+  select *
+  into v_result_set
+  from private.lcia_result_sets
+  where id = p_result_set_id;
+
+  if v_result_set.id is null then
+    return api.lcia_scope_closure_error(
+      'result_set_not_found', 404, 'Result set not found'
+    );
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'data', jsonb_build_object(
+      'schemaVersion', 'lcia.result-set.v1',
+      'resultSetId', v_result_set.id,
+      'name', v_result_set.name,
+      'createdAt', v_result_set.created_at
+    )
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "api"."get_lcia_result_set"("p_result_set_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "api"."get_lcia_scope_closure_check"("p_closure_check_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
@@ -18004,6 +18169,55 @@ $$;
 
 
 ALTER FUNCTION "api"."lifecyclemodels_embedding_ft_input"("proc" "public"."lifecyclemodels") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "api"."list_lcia_result_sets"("p_limit" integer DEFAULT 100) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
+    AS $$
+declare
+  v_actor uuid := auth.uid();
+  v_limit integer := greatest(1, least(coalesce(p_limit, 100), 200));
+begin
+  if v_actor is null then
+    return api.lcia_scope_closure_error(
+      'auth_required', 401, 'Authentication required'
+    );
+  end if;
+  if not api.lcia_scope_closure_is_manager() then
+    return api.lcia_scope_closure_error(
+      'not_data_product_manager', 403,
+      'Data product manager role is required'
+    );
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'data', jsonb_build_object(
+      'items', coalesce((
+        select jsonb_agg(
+          jsonb_build_object(
+            'schemaVersion', 'lcia.result-set.v1',
+            'resultSetId', result_set.id,
+            'name', result_set.name,
+            'createdAt', result_set.created_at
+          )
+          order by result_set.created_at desc, result_set.id desc
+        )
+        from (
+          select id, name, created_at
+          from private.lcia_result_sets
+          order by created_at desc, id desc
+          limit v_limit
+        ) result_set
+      ), '[]'::jsonb)
+    )
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "api"."list_lcia_result_sets"("p_limit" integer) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "api"."list_lcia_scope_closure_issues"("p_closure_check_id" "uuid", "p_after_issue_id" "uuid" DEFAULT NULL::"uuid", "p_limit" integer DEFAULT 100) RETURNS "jsonb"
@@ -36839,21 +37053,171 @@ CREATE OR REPLACE FUNCTION "private"."get_task_summary_v2_feed_unversioned"("p_c
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'private', 'api', 'public', 'util', 'extensions', 'pg_temp'
     AS $_$
-declare a uuid:=auth.uid(); lim integer:=greatest(1,least(coalesce(p_limit,50),200)); mgr boolean;
+declare
+  a uuid := auth.uid();
+  lim integer := greatest(1, least(coalesce(p_limit, 50), 200));
+  mgr boolean;
 begin
-  if a is null then return api.lcia_scope_closure_error('auth_required',401,'Authentication required'); end if;
-  if (p_cursor_updated_at is null)<>(p_cursor_job_id is null) then return api.lcia_scope_closure_error('invalid_task_cursor',400,'Task cursor fields must be supplied together'); end if;
-  mgr:=api.lcia_scope_closure_is_manager();
-  return jsonb_build_object('ok',true,'serverTime',now(),'data',coalesce((with x as (
-    select j.*,k.task_center_category,p.id package_id,coalesce(cd.id,cp.id,ck.id) closure_id,coalesce(cd.status,cp.status,ck.status) closure_status,coalesce(cd.certificate_status,cp.certificate_status,ck.certificate_status) certificate_status,greatest(j.updated_at,coalesce(cd.updated_at,'-infinity'::timestamptz),coalesce(cp.updated_at,'-infinity'::timestamptz),coalesce(ck.updated_at,'-infinity'::timestamptz),coalesce(p.updated_at,'-infinity'::timestamptz)) pu
-    from private.worker_jobs j join private.worker_job_kinds k on k.job_kind=j.job_kind
-      left join private.lcia_scope_closure_checks cd on cd.worker_job_id=j.id
-      left join private.lcia_result_packages p on p.build_worker_job_id=j.id
-      left join private.lcia_scope_closure_checks cp on cp.id=case when (j.payload_json->>'closure_check_id')~'^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then (j.payload_json->>'closure_check_id')::uuid else null end
-      left join private.lcia_scope_closure_checks ck on ck.id=p.closure_check_id
-    where j.requested_by=a and (j.visibility='user' or (mgr and j.visibility='operator' and j.job_kind=any(array['lcia.scope_closure_check','lcia_result.package_build']))) and (p_category is null or k.task_center_category=p_category) and (p_job_kinds is null or j.job_kind=any(p_job_kinds)) and (p_statuses is null or j.status=any(p_statuses)) and (p_updated_since is null or greatest(j.updated_at,coalesce(cd.updated_at,'-infinity'::timestamptz),coalesce(cp.updated_at,'-infinity'::timestamptz),coalesce(ck.updated_at,'-infinity'::timestamptz),coalesce(p.updated_at,'-infinity'::timestamptz))>=p_updated_since) and (not p_root_only or j.root_job_id is null or j.root_job_id=j.id)
-  ), pg as (select * from x where p_cursor_updated_at is null or (pu,id)<(p_cursor_updated_at,p_cursor_job_id) order by pu desc,id desc limit lim+1), sh as (select * from pg order by pu desc,id desc limit lim)
-  select jsonb_build_object('items',coalesce(jsonb_agg(jsonb_strip_nulls(jsonb_build_object('jobId',id,'jobKind',job_kind,'category',task_center_category,'requestedBy',requested_by,'workerStatus',status,'phase',phase,'progressFraction',case when progress is null then null else greatest(0::numeric,least(progress,1::numeric)) end,'progressCounters',diagnostics->'progressCounters','domainStatus',coalesce(closure_status,result_json->>'status'),'domainValidity',certificate_status,'projectionUpdatedAt',pu,'title',coalesce(payload_json->>'name',job_kind),'blockerCodes',blocker_codes,'errorSummary',error_code,'capabilities',jsonb_build_object('canCancel',status in ('queued','running','waiting'),'canDownloadReport',closure_id is not null and closure_status in ('passed','blocked'),'canOpenWorkbench',task_center_category='data_product','canPreviewResult',package_id is not null),'deepLink',case when package_id is not null then jsonb_build_object('routeKey','data_product.package','params',jsonb_strip_nulls(jsonb_build_object('packageId',package_id,'closureCheckId',closure_id))) when closure_id is not null then jsonb_build_object('routeKey','data_product.closure_check','params',jsonb_build_object('closureCheckId',closure_id)) end,'closureCheckId',closure_id,'resultPackageId',package_id)) order by pu desc,id desc),'[]'::jsonb),'nextCursor',case when exists(select 1 from pg offset lim) then (select jsonb_build_object('updatedAt',pu,'jobId',id) from sh order by pu asc,id asc limit 1) else null end) from sh),jsonb_build_object('items','[]'::jsonb,'nextCursor',null)));
+  if a is null then
+    return api.lcia_scope_closure_error(
+      'auth_required', 401, 'Authentication required'
+    );
+  end if;
+  if (p_cursor_updated_at is null) <> (p_cursor_job_id is null) then
+    return api.lcia_scope_closure_error(
+      'invalid_task_cursor', 400,
+      'Task cursor fields must be supplied together'
+    );
+  end if;
+  mgr := api.lcia_scope_closure_is_manager();
+
+  return jsonb_build_object(
+    'ok', true,
+    'serverTime', now(),
+    'data', coalesce((
+      with x as (
+        select
+          j.*,
+          k.task_center_category,
+          p.id as package_id,
+          coalesce(cd.id, cp.id, ck.id) as closure_id,
+          coalesce(cd.status, cp.status, ck.status) as closure_status,
+          coalesce(
+            cd.certificate_status,
+            cp.certificate_status,
+            ck.certificate_status
+          ) as certificate_status,
+          result_set.id as result_set_id,
+          result_set.name as result_set_name,
+          greatest(
+            j.updated_at,
+            coalesce(cd.updated_at, '-infinity'::timestamptz),
+            coalesce(cp.updated_at, '-infinity'::timestamptz),
+            coalesce(ck.updated_at, '-infinity'::timestamptz),
+            coalesce(p.updated_at, '-infinity'::timestamptz)
+          ) as pu
+        from private.worker_jobs j
+        join private.worker_job_kinds k on k.job_kind = j.job_kind
+        left join private.lcia_scope_closure_checks cd
+          on cd.worker_job_id = j.id
+        left join private.lcia_result_packages p
+          on p.build_worker_job_id = j.id
+        left join private.lcia_scope_closure_checks cp
+          on cp.id = case
+            when (j.payload_json->>'closure_check_id')
+              ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+              then (j.payload_json->>'closure_check_id')::uuid
+            else null
+          end
+        left join private.lcia_scope_closure_checks ck
+          on ck.id = p.closure_check_id
+        left join private.lcia_result_sets result_set
+          on result_set.id = coalesce(
+            cd.result_set_id,
+            cp.result_set_id,
+            ck.result_set_id
+          )
+        where j.requested_by = a
+          and (
+            j.visibility = 'user'
+            or (
+              mgr
+              and j.visibility = 'operator'
+              and j.job_kind = any(array[
+                'lcia.scope_closure_check',
+                'lcia_result.package_build'
+              ])
+            )
+          )
+          and (p_category is null or k.task_center_category = p_category)
+          and (p_job_kinds is null or j.job_kind = any(p_job_kinds))
+          and (p_statuses is null or j.status = any(p_statuses))
+          and (
+            p_updated_since is null
+            or greatest(
+              j.updated_at,
+              coalesce(cd.updated_at, '-infinity'::timestamptz),
+              coalesce(cp.updated_at, '-infinity'::timestamptz),
+              coalesce(ck.updated_at, '-infinity'::timestamptz),
+              coalesce(p.updated_at, '-infinity'::timestamptz)
+            ) >= p_updated_since
+          )
+          and (
+            not p_root_only
+            or j.root_job_id is null
+            or j.root_job_id = j.id
+          )
+      ), pg as (
+        select *
+        from x
+        where p_cursor_updated_at is null
+          or (pu, id) < (p_cursor_updated_at, p_cursor_job_id)
+        order by pu desc, id desc
+        limit lim + 1
+      ), sh as (
+        select * from pg order by pu desc, id desc limit lim
+      )
+      select jsonb_build_object(
+        'items', coalesce(jsonb_agg(jsonb_strip_nulls(jsonb_build_object(
+          'jobId', id,
+          'jobKind', job_kind,
+          'category', task_center_category,
+          'requestedBy', requested_by,
+          'workerStatus', status,
+          'phase', phase,
+          'progressFraction', case
+            when progress is null then null
+            else greatest(0::numeric, least(progress, 1::numeric))
+          end,
+          'progressCounters', diagnostics->'progressCounters',
+          'domainStatus', coalesce(closure_status, result_json->>'status'),
+          'domainValidity', certificate_status,
+          'projectionUpdatedAt', pu,
+          'title', coalesce(result_set_name, payload_json->>'name', job_kind),
+          'blockerCodes', blocker_codes,
+          'errorSummary', error_code,
+          'capabilities', jsonb_build_object(
+            'canCancel', status in ('queued', 'running', 'waiting'),
+            'canDownloadReport', closure_id is not null
+              and closure_status in ('passed', 'blocked'),
+            'canOpenWorkbench', task_center_category = 'data_product',
+            'canPreviewResult', package_id is not null
+          ),
+          'deepLink', case
+            when package_id is not null then jsonb_build_object(
+              'routeKey', 'data_product.package',
+              'params', jsonb_strip_nulls(jsonb_build_object(
+                'packageId', package_id,
+                'closureCheckId', closure_id,
+                'resultSetId', result_set_id
+              ))
+            )
+            when closure_id is not null then jsonb_build_object(
+              'routeKey', 'data_product.closure_check',
+              'params', jsonb_strip_nulls(jsonb_build_object(
+                'closureCheckId', closure_id,
+                'resultSetId', result_set_id
+              ))
+            )
+          end,
+          'closureCheckId', closure_id,
+          'resultPackageId', package_id,
+          'resultSetId', result_set_id,
+          'resultSetName', result_set_name
+        )) order by pu desc, id desc), '[]'::jsonb),
+        'nextCursor', case
+          when exists(select 1 from pg offset lim) then (
+            select jsonb_build_object('updatedAt', pu, 'jobId', id)
+            from sh
+            order by pu asc, id asc
+            limit 1
+          )
+          else null
+        end
+      )
+      from sh
+    ), jsonb_build_object('items', '[]'::jsonb, 'nextCursor', null))
+  );
 end;
 $_$;
 
@@ -38382,6 +38746,7 @@ CREATE TABLE IF NOT EXISTS "private"."lcia_scope_closure_checks" (
     "snapshot_build_contract_hash" "text",
     "complete_machine_result_artifact_id" "uuid",
     "valid_until" timestamp with time zone,
+    "result_set_id" "uuid",
     CONSTRAINT "lcia_scope_closure_checks_certificate_check" CHECK (("certificate_status" = ANY (ARRAY['pending'::"text", 'valid'::"text", 'stale'::"text", 'revoked'::"text", 'unavailable'::"text"]))),
     CONSTRAINT "lcia_scope_closure_checks_completeness_check" CHECK ((("scan_completeness" IS NULL) OR ("scan_completeness" = ANY (ARRAY['complete'::"text", 'incomplete'::"text", 'unknown'::"text"])))),
     CONSTRAINT "lcia_scope_closure_checks_effective_scope_manifest_check" CHECK ((("effective_scope_manifest" IS NULL) OR ("jsonb_typeof"("effective_scope_manifest") = 'object'::"text"))),
@@ -38409,6 +38774,10 @@ COMMENT ON COLUMN "private"."lcia_scope_closure_checks"."complete_machine_result
 
 
 COMMENT ON COLUMN "private"."lcia_scope_closure_checks"."valid_until" IS 'Certificate admission deadline, bounded by every required closure evidence artifact.';
+
+
+
+COMMENT ON COLUMN "private"."lcia_scope_closure_checks"."result_set_id" IS 'Optional ResultSet container binding. NULL preserves legacy closure checks.';
 
 
 
@@ -46683,6 +47052,7 @@ begin
       'snapshotArtifactId', v_source.snapshot_artifact_id,
       'snapshotIndexSha256', v_source.snapshot_index_sha256,
       'snapshotBuildContractHash', v_source.snapshot_build_contract_hash,
+      'artifactFormat', v_artifact.artifact_format,
       'evidenceHash', v_source.evidence_hash
     )),
     'blockerCodes', to_jsonb(v_source.blocker_codes)
@@ -56282,6 +56652,21 @@ CREATE TABLE IF NOT EXISTS "private"."lcia_result_publications" (
 ALTER TABLE "private"."lcia_result_publications" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "private"."lcia_result_sets" (
+    "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
+    "name" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "lcia_result_sets_name_check" CHECK (("length"("btrim"("name")) > 0))
+);
+
+
+ALTER TABLE "private"."lcia_result_sets" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "private"."lcia_result_sets" IS 'Named persistent containers for resuming the Data Processing workflow.';
+
+
+
 CREATE TABLE IF NOT EXISTS "private"."lcia_scope_closure_artifact_write_set_batches" (
     "write_set_id" "uuid" NOT NULL,
     "batch_id" "uuid" NOT NULL,
@@ -57915,6 +58300,11 @@ ALTER TABLE ONLY "private"."lcia_result_publications"
 
 
 
+ALTER TABLE ONLY "private"."lcia_result_sets"
+    ADD CONSTRAINT "lcia_result_sets_pkey" PRIMARY KEY ("id");
+
+
+
 ALTER TABLE ONLY "private"."lcia_scope_closure_artifact_write_set_batches"
     ADD CONSTRAINT "lcia_scope_closure_artifact_write_set_batches_pkey" PRIMARY KEY ("write_set_id", "batch_id");
 
@@ -58714,6 +59104,10 @@ CREATE INDEX "lcia_result_publications_package_idx" ON "private"."lcia_result_pu
 
 
 
+CREATE INDEX "lcia_result_sets_created_idx" ON "private"."lcia_result_sets" USING "btree" ("created_at" DESC, "id" DESC);
+
+
+
 CREATE INDEX "lcia_scope_closure_artifact_write_set_batches_range_idx" ON "private"."lcia_scope_closure_artifact_write_set_batches" USING "btree" ("write_set_id", "first_ordinal", "last_ordinal", "batch_id");
 
 
@@ -58755,6 +59149,10 @@ CREATE UNIQUE INDEX "lcia_scope_closure_checks_request_key_uidx" ON "private"."l
 
 
 CREATE INDEX "lcia_scope_closure_checks_requested_updated_idx" ON "private"."lcia_scope_closure_checks" USING "btree" ("requested_by", "updated_at" DESC, "id" DESC);
+
+
+
+CREATE INDEX "lcia_scope_closure_checks_result_set_idx" ON "private"."lcia_scope_closure_checks" USING "btree" ("result_set_id") WHERE ("result_set_id" IS NOT NULL);
 
 
 
@@ -60126,6 +60524,11 @@ ALTER TABLE ONLY "private"."lcia_scope_closure_checks"
 
 
 ALTER TABLE ONLY "private"."lcia_scope_closure_checks"
+    ADD CONSTRAINT "lcia_scope_closure_checks_result_set_id_fkey" FOREIGN KEY ("result_set_id") REFERENCES "private"."lcia_result_sets"("id") ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "private"."lcia_scope_closure_checks"
     ADD CONSTRAINT "lcia_scope_closure_checks_reused_from_check_id_fkey" FOREIGN KEY ("reused_from_check_id") REFERENCES "private"."lcia_scope_closure_checks"("id") ON DELETE RESTRICT;
 
 
@@ -60463,6 +60866,9 @@ ALTER TABLE "private"."lcia_result_packages" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "private"."lcia_result_publications" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "private"."lcia_result_sets" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "private"."lcia_scope_closure_artifact_write_set_batches" ENABLE ROW LEVEL SECURITY;
@@ -61065,9 +61471,21 @@ GRANT ALL ON FUNCTION "api"."cmd_lcia_result_publication_unpublish"("p_publicati
 
 
 
+REVOKE ALL ON FUNCTION "api"."cmd_lcia_result_set_create"("p_name" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."cmd_lcia_result_set_create"("p_name" "text") TO "api_internal_executor";
+GRANT ALL ON FUNCTION "api"."cmd_lcia_result_set_create"("p_name" "text") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "api"."cmd_lcia_scope_closure_check_request_v2"("p_requested_scope" "jsonb", "p_request_idempotency_token" "text", "p_audit" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."cmd_lcia_scope_closure_check_request_v2"("p_requested_scope" "jsonb", "p_request_idempotency_token" "text", "p_audit" "jsonb") TO "api_internal_executor";
 GRANT ALL ON FUNCTION "api"."cmd_lcia_scope_closure_check_request_v2"("p_requested_scope" "jsonb", "p_request_idempotency_token" "text", "p_audit" "jsonb") TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "api"."cmd_lcia_scope_closure_check_request_v3"("p_result_set_id" "uuid", "p_requested_scope" "jsonb", "p_request_idempotency_token" "text", "p_audit" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."cmd_lcia_scope_closure_check_request_v3"("p_result_set_id" "uuid", "p_requested_scope" "jsonb", "p_request_idempotency_token" "text", "p_audit" "jsonb") TO "api_internal_executor";
+GRANT ALL ON FUNCTION "api"."cmd_lcia_scope_closure_check_request_v3"("p_result_set_id" "uuid", "p_requested_scope" "jsonb", "p_request_idempotency_token" "text", "p_audit" "jsonb") TO "authenticated";
 
 
 
@@ -61502,6 +61920,12 @@ GRANT ALL ON FUNCTION "api"."get_lcia_result_package_preview"("p_package_id" "uu
 
 
 
+REVOKE ALL ON FUNCTION "api"."get_lcia_result_set"("p_result_set_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."get_lcia_result_set"("p_result_set_id" "uuid") TO "api_internal_executor";
+GRANT ALL ON FUNCTION "api"."get_lcia_result_set"("p_result_set_id" "uuid") TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "api"."get_lcia_scope_closure_check"("p_closure_check_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."get_lcia_scope_closure_check"("p_closure_check_id" "uuid") TO "api_internal_executor";
 GRANT ALL ON FUNCTION "api"."get_lcia_scope_closure_check"("p_closure_check_id" "uuid") TO "authenticated";
@@ -61671,6 +62095,12 @@ GRANT SELECT ON TABLE "public"."lifecyclemodels" TO "api_internal_executor";
 
 REVOKE ALL ON FUNCTION "api"."lifecyclemodels_embedding_ft_input"("proc" "public"."lifecyclemodels") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."lifecyclemodels_embedding_ft_input"("proc" "public"."lifecyclemodels") TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "api"."list_lcia_result_sets"("p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."list_lcia_result_sets"("p_limit" integer) TO "api_internal_executor";
+GRANT ALL ON FUNCTION "api"."list_lcia_result_sets"("p_limit" integer) TO "authenticated";
 
 
 

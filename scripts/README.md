@@ -20,8 +20,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-17
-lastReviewedCommit: 8c81e3fa501d708fd0bee999debbab2408c91a3c
+lastReviewedAt: 2026-08-18
+lastReviewedCommit: 88eee3b
 lastReviewedNote: "Reviewed after an exact CI-equivalent five-schema workspace rebuild; the script catalog and invocation contract remain unchanged."
 related:
   - ../AGENTS.md

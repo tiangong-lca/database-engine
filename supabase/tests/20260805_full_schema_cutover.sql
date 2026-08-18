@@ -68,7 +68,7 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  260::bigint,
+  264::bigint,
   'api contains the cutover functions, reviewed consumer facades, and Database A Search RPCs'
 );
 
@@ -136,7 +136,7 @@ select is(
       'util'::regnamespace
     )
   ),
-  457::bigint,
+  460::bigint,
   'all application constraints remain present'
 );
 
@@ -165,7 +165,7 @@ select is(
       and class.relkind in ('r', 'p')
       and class.relrowsecurity
   ),
-  55::bigint,
+  56::bigint,
   'RLS enablement is preserved across moved tables'
 );
 
