@@ -1515,7 +1515,7 @@ select pg_temp.is_deeply(
 insert into path_role_results (label, result)
 values (
   'submit_lineage_and_support',
-  api.cmd_review_submit_without_gate(
+  api.cmd_review_submit(
     'processes',
     '33800000-0000-0000-0000-000000000002',
     '01.00.000',
@@ -1583,7 +1583,7 @@ select is(
 insert into path_role_results (label, result)
 values (
   'submit_unknown_path',
-  api.cmd_review_submit_without_gate(
+  api.cmd_review_submit(
     'processes',
     '33800000-0000-0000-0000-000000000003',
     '01.00.000',
@@ -1629,7 +1629,7 @@ insert into path_role_results (label, result)
 values
   (
     'submit_bad_composition_version',
-    api.cmd_review_submit_without_gate(
+    api.cmd_review_submit(
       'processes',
       '33800000-0000-0000-0000-000000000017',
       '01.00.000',
@@ -1638,7 +1638,7 @@ values
   ),
   (
     'submit_private_paired_model',
-    api.cmd_review_submit_without_gate(
+    api.cmd_review_submit(
       'processes',
       '33800000-0000-0000-0000-000000000018',
       '01.00.000',
@@ -1714,7 +1714,7 @@ insert into path_role_results (label, result)
 values
   (
     'submit_mismatched_composition',
-    api.cmd_review_submit_without_gate(
+    api.cmd_review_submit(
       'lifecyclemodels',
       '34800000-0000-0000-0000-000000000012',
       '01.00.000',
@@ -1723,7 +1723,7 @@ values
   ),
   (
     'submit_foreign_composition',
-    api.cmd_review_submit_without_gate(
+    api.cmd_review_submit(
       'lifecyclemodels',
       '34800000-0000-0000-0000-000000000001',
       '01.00.000',
@@ -1732,7 +1732,7 @@ values
   ),
   (
     'submit_missing_composition',
-    api.cmd_review_submit_without_gate(
+    api.cmd_review_submit(
       'lifecyclemodels',
       '34800000-0000-0000-0000-000000000002',
       '01.00.000',

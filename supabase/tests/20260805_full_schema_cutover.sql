@@ -68,8 +68,8 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  264::bigint,
-  'api contains the cutover functions, reviewed consumer facades, and Database A Search RPCs'
+  254::bigint,
+  'api contains the active cutover functions, reviewed consumer facades, and Database A Search RPCs'
 );
 
 select is(
@@ -80,8 +80,8 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  199::bigint,
-  'private contains existing helpers, the Database B cutover gate, the reused-certificate binding helper, and all reviewed internal functions'
+  187::bigint,
+  'private contains the active helpers, the Database B cutover gate, the reused-certificate binding helper, and reviewed internal functions'
 );
 
 select ok(
@@ -112,8 +112,8 @@ select is(
     from pg_trigger trigger_record
     where not trigger_record.tgisinternal
   ),
-  106::bigint,
-  'all application triggers remain present'
+  104::bigint,
+  'all active application triggers remain present'
 );
 
 select is(

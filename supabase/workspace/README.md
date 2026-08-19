@@ -20,8 +20,8 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-18
-lastReviewedCommit: 88eee3b
+lastReviewedAt: 2026-08-19
+lastReviewedCommit: fb17729e9a57196977aee60d552af934fbfdcc55
 lastReviewedNote: "Restored and reviewed the exact-local workspace for the CI-authoritative public, api, private, util, and archive schemas; deterministic generation behavior is unchanged."
 related:
   - ../../AGENTS.md

@@ -70,18 +70,6 @@ export type Database = {
         Args: { p_request_id: string }
         Returns: Json
       }
-      cmd_dataset_assert_review_submit_gate_passed: {
-        Args: {
-          p_gate_run_id?: string
-          p_id: string
-          p_policy_profile?: string
-          p_report_schema_version?: string
-          p_revision_checksum?: string
-          p_table: string
-          p_version: string
-        }
-        Returns: Json
-      }
       cmd_dataset_assign_team: {
         Args: {
           p_audit?: Json
@@ -195,45 +183,6 @@ export type Database = {
         Args: {
           p_audit?: Json
           p_id: string
-          p_table: string
-          p_version: string
-        }
-        Returns: Json
-      }
-      cmd_dataset_review_submit_gate: {
-        Args: {
-          p_action?: string
-          p_audit?: Json
-          p_gate_run_id?: string
-          p_id: string
-          p_policy_profile?: string
-          p_report_schema_version?: string
-          p_revision_checksum: string
-          p_table: string
-          p_version: string
-        }
-        Returns: Json
-      }
-      cmd_dataset_review_submit_job_enqueue: {
-        Args: {
-          p_audit?: Json
-          p_id: string
-          p_policy_profile?: string
-          p_report_schema_version?: string
-          p_revision_checksum: string
-          p_table: string
-          p_version: string
-        }
-        Returns: Json
-      }
-      cmd_dataset_review_submit_job_read: {
-        Args: { p_job_id: string }
-        Returns: Json
-      }
-      cmd_dataset_review_submit_job_read_latest: {
-        Args: {
-          p_id: string
-          p_revision_checksum?: string
           p_table: string
           p_version: string
         }
@@ -600,25 +549,6 @@ export type Database = {
             }
             Returns: Json
           }
-      cmd_review_submit_v2: {
-        Args: {
-          p_audit?: Json
-          p_gate_context?: Json
-          p_target_id: string
-          p_target_table: string
-          p_target_version: string
-        }
-        Returns: Json
-      }
-      cmd_review_submit_without_gate: {
-        Args: {
-          p_audit?: Json
-          p_id: string
-          p_table: string
-          p_version: string
-        }
-        Returns: Json
-      }
       cmd_reviewer_submit_decision: {
         Args: {
           p_audit?: Json
@@ -2638,23 +2568,6 @@ export type Database = {
         Args: { p_worker_job_ids: string[] }
         Returns: Json
       }
-      svc_dataset_review_submit_job_claim: {
-        Args: { p_qty?: number; p_stale_submitting_seconds?: number }
-        Returns: Json
-      }
-      svc_dataset_review_submit_job_record_result: {
-        Args: {
-          p_audit?: Json
-          p_error_code?: string
-          p_error_details?: Json
-          p_error_message?: string
-          p_gate_run_id?: string
-          p_job_id: string
-          p_result?: Json
-          p_status: string
-        }
-        Returns: Json
-      }
       svc_dataset_search_text_backfill_enqueue: {
         Args: {
           p_after_id?: string
@@ -2764,10 +2677,6 @@ export type Database = {
       }
       svc_membership_is_review_admin: {
         Args: { p_user_id: string }
-        Returns: Json
-      }
-      svc_review_submit_from_job: {
-        Args: { p_audit?: Json; p_job_id: string }
         Returns: Json
       }
       svc_schema_contract_status: { Args: never; Returns: Json }
