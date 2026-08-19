@@ -1,7 +1,7 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-18"
-lastReviewedCommit: "46804986c366c73a2ce6ab7296ce742780ce6d01"
+lastReviewedAt: "2026-08-19"
+lastReviewedCommit: "e24b5ab61e27f8085106f9e675961fcf506f8b5f"
 lastReviewedNote: "Reviewed after integrating the scope-closure scanner revision and approved ownerless-reference review handling; routing and ownership rules remain unchanged."
 
 # Keep deterministic governance facts here.
