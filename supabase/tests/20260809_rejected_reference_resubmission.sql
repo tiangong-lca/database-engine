@@ -19,7 +19,7 @@ select ok(
 select ok(
   pg_catalog.strpos(
     pg_catalog.pg_get_functiondef(
-      'api.cmd_review_submit_v2(text,uuid,text,jsonb,jsonb)'
+      'api.cmd_review_submit(text,uuid,text,jsonb)'
         ::pg_catalog.regprocedure
     ),
     'REFERENCE_REVISION_REJECTED_UNCHANGED'
@@ -275,11 +275,10 @@ select set_config(
 
 set local role authenticated;
 create temporary table issue439_owner_root_result as
-select api.cmd_review_submit_v2(
+select api.cmd_review_submit(
   'flows',
   '43920000-0000-4000-8000-000000000001',
   '01.00.000',
-  null,
   '{}'::jsonb
 ) as result;
 reset role;
@@ -339,11 +338,10 @@ select set_config(
 );
 set local role authenticated;
 create temporary table issue439_owner_resubmit_result as
-select api.cmd_review_submit_v2(
+select api.cmd_review_submit(
   'flowproperties',
   '43910000-0000-4000-8000-000000000001',
   '01.00.000',
-  null,
   '{}'::jsonb
 ) as result;
 reset role;
@@ -408,11 +406,10 @@ select ok(
 
 set local role authenticated;
 create temporary table issue439_dependency_root_one_result as
-select api.cmd_review_submit_v2(
+select api.cmd_review_submit(
   'flows',
   '43920000-0000-4000-8000-000000000002',
   '01.00.000',
-  null,
   '{}'::jsonb
 ) as result;
 reset role;
@@ -461,11 +458,10 @@ select set_config(
 );
 set local role authenticated;
 create temporary table issue439_dependency_root_two_result as
-select api.cmd_review_submit_v2(
+select api.cmd_review_submit(
   'flows',
   '43920000-0000-4000-8000-000000000003',
   '01.00.000',
-  null,
   '{}'::jsonb
 ) as result;
 reset role;
@@ -515,11 +511,10 @@ select ok(
 
 set local role authenticated;
 create temporary table issue439_dependency_root_three_result as
-select api.cmd_review_submit_v2(
+select api.cmd_review_submit(
   'flows',
   '43920000-0000-4000-8000-000000000004',
   '01.00.000',
-  null,
   '{}'::jsonb
 ) as result;
 reset role;

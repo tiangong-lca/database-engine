@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS "private"."dataset_review_submit_gate_runs" (
 
 ALTER TABLE "private"."dataset_review_submit_gate_runs" OWNER TO "postgres";
 
-COMMENT ON TABLE "private"."dataset_review_submit_gate_runs" IS 'Review-submit gate report/history table. This is retained domain report state; canonical gate execution lifecycle is public.worker_jobs.';
+COMMENT ON TABLE "private"."dataset_review_submit_gate_runs" IS 'Retained numerical Gate history from the retired review-submit coordinator. No runtime Gate execution remains.';
 
 ALTER TABLE ONLY "private"."dataset_review_submit_gate_runs"
     ADD CONSTRAINT "dataset_review_submit_gate_runs_pkey" PRIMARY KEY ("id");

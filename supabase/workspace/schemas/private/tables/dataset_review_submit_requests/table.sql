@@ -29,7 +29,7 @@ CREATE TABLE IF NOT EXISTS "private"."dataset_review_submit_requests" (
 
 ALTER TABLE "private"."dataset_review_submit_requests" OWNER TO "postgres";
 
-COMMENT ON TABLE "private"."dataset_review_submit_requests" IS 'Review-submit coordinator domain state that replaces dataset_review_submit_jobs. The root submit and child gate lifecycles are canonicalized in public.worker_jobs.';
+COMMENT ON TABLE "private"."dataset_review_submit_requests" IS 'Retained terminal review-submit coordinator history. No runtime enqueues, claims, retries, or state-sync triggers remain.';
 
 ALTER TABLE ONLY "private"."dataset_review_submit_requests"
     ADD CONSTRAINT "dataset_review_submit_requests_pkey" PRIMARY KEY ("id");

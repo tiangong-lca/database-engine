@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "util"."process_dataset_review_submit_jobs"("batch_size" integer, "stale_submitting_seconds" integer, "timeout_milliseconds" integer) IS 'Invokes the Edge review-submit coordinator that advances retained review-submit request rows after worker gate results are available. The function name is kept for scheduling compatibility.';

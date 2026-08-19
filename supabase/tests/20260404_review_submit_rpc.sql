@@ -559,43 +559,6 @@ values (
   true
 );
 
-create temporary table review_submit_gate_ids (
-  label text primary key,
-  gate_run_id uuid not null
-) on commit drop;
-
-grant all on review_submit_gate_ids to public;
-
-set local role authenticated;
-select set_config('request.jwt.claim.sub', '12000000-0000-0000-0000-000000000001', true);
-
-insert into review_submit_gate_ids (label, gate_run_id)
-select
-  'draft_process',
-  (
-    api.cmd_dataset_review_submit_gate(
-      p_table => 'processes',
-      p_id => '32000000-0000-0000-0000-000000000003',
-      p_version => '01.00.000',
-      p_revision_checksum => repeat('a', 64),
-      p_action => 'ensure',
-      p_audit => '{"command":"dataset_review_submit_gate"}'::jsonb
-    )->'data'->>'gateRunId'
-  )::uuid;
-
-reset role;
-
-set local role service_role;
-
-select private.cmd_dataset_review_submit_gate_record_result(
-  p_gate_run_id => (select gate_run_id from review_submit_gate_ids where label = 'draft_process'),
-  p_status => 'passed',
-  p_calculator_report => '{"reportId":"review-submit-gate-test","generatedAt":"2026-05-25T00:00:00Z"}'::jsonb,
-  p_audit => '{"command":"dataset_review_submit_gate_record_result"}'::jsonb
-);
-
-reset role;
-
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '12000000-0000-0000-0000-000000000001', true);
 
@@ -867,36 +830,6 @@ values (
   '42000000-0000-0000-0000-000000000004',
   true
 );
-
-set local role authenticated;
-select set_config('request.jwt.claim.sub', '12000000-0000-0000-0000-000000000001', true);
-
-insert into review_submit_gate_ids (label, gate_run_id)
-select
-  'shared_reference_process',
-  (
-    api.cmd_dataset_review_submit_gate(
-      p_table => 'processes',
-      p_id => '32000000-0000-0000-0000-000000000022',
-      p_version => '01.00.000',
-      p_revision_checksum => repeat('b', 64),
-      p_action => 'ensure',
-      p_audit => '{"command":"dataset_review_submit_gate"}'::jsonb
-    )->'data'->>'gateRunId'
-  )::uuid;
-
-reset role;
-
-set local role service_role;
-
-select private.cmd_dataset_review_submit_gate_record_result(
-  p_gate_run_id => (select gate_run_id from review_submit_gate_ids where label = 'shared_reference_process'),
-  p_status => 'passed',
-  p_calculator_report => '{"reportId":"shared-reference-process-gate-test","generatedAt":"2026-05-25T00:00:00Z"}'::jsonb,
-  p_audit => '{"command":"dataset_review_submit_gate_record_result"}'::jsonb
-);
-
-reset role;
 
 set local role authenticated;
 select set_config('request.jwt.claim.sub', '12000000-0000-0000-0000-000000000001', true);
