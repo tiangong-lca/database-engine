@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(32);
+select plan(29);
 
 select ok(
   pg_catalog.to_regprocedure(
@@ -28,17 +28,6 @@ select ok(
   'authenticated callers can execute the stable submit command'
 );
 
-select ok(
-  pg_catalog.strpos(
-    pg_catalog.pg_get_functiondef(
-      'api.cmd_review_submit_v2(text,uuid,text,jsonb,jsonb)'
-        ::pg_catalog.regprocedure
-    ),
-    'api.cmd_review_submit('
-  ) > 0,
-  'cmd_review_submit_v2 is only a compatibility path to the stable command'
-);
-
 select is(
   pg_catalog.strpos(
     pg_catalog.pg_get_functiondef(
@@ -61,29 +50,6 @@ select is(
   ),
   0,
   'the stable submit command has no upstream lifecycle-completeness Gate'
-);
-
-select ok(
-  pg_catalog.strpos(
-    pg_catalog.pg_get_functiondef(
-      'private.cmd_review_submit_from_job(uuid,jsonb)'
-        ::pg_catalog.regprocedure
-    ),
-    'api.cmd_review_submit('
-  ) > 0,
-  'the legacy job adapter delegates to the stable submit command'
-);
-
-select is(
-  pg_catalog.strpos(
-    pg_catalog.pg_get_functiondef(
-      'private.cmd_review_submit_from_job(uuid,jsonb)'
-        ::pg_catalog.regprocedure
-    ),
-    'REVIEW_SUBMIT_GATE_NOT_READY'
-  ),
-  0,
-  'the legacy job adapter no longer waits for or evaluates a Gate'
 );
 
 insert into auth.users (

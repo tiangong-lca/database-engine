@@ -120,18 +120,17 @@ select set_config(
   true
 );
 
-create temporary table review_v2_result as
-select api.cmd_review_submit_v2(
+create temporary table review_submit_result as
+select api.cmd_review_submit(
   'contacts',
   '39000000-0000-0000-0000-000000000001',
   '01.00.000',
-  null,
   '{}'::jsonb
 ) as result;
 
-select ok((select (result->>'ok')::boolean from review_v2_result),
-  'Contact uses the unified v2 submit command');
-select is((select result #>> '{data,reviewKind}' from review_v2_result),
+select ok((select (result->>'ok')::boolean from review_submit_result),
+  'Contact uses the stable direct submit command');
+select is((select result #>> '{data,reviewKind}' from review_submit_result),
   'root', 'normal submission creates a Root Review');
 select is((select state_code from public.contacts
   where id = '39000000-0000-0000-0000-000000000001'), 20,
@@ -250,11 +249,10 @@ select set_config(
   true
 );
 
-select api.cmd_review_submit_v2(
+select api.cmd_review_submit(
   'contacts',
   '39000000-0000-0000-0000-000000000002',
   '01.00.000',
-  null,
   '{}'::jsonb
 );
 

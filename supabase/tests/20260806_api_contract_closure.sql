@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, api, private, auth;
 
-select plan(49);
+select plan(46);
 
 select is(
   (
@@ -17,15 +17,6 @@ select is(
   ),
   0::bigint,
   'api has no function executable through the PostgreSQL PUBLIC role'
-);
-
-select ok(
-  not has_function_privilege(
-    'anon',
-    'api.cmd_review_submit_without_gate(text,uuid,text,jsonb)',
-    'EXECUTE'
-  ),
-  'legacy review submit helper is no longer anonymous'
 );
 
 select is(
@@ -106,9 +97,6 @@ select is(
         'qry_identity_get_visible_users',
         'qry_system_find_member_candidate_by_email',
         'qry_review_find_member_candidate_by_email',
-        'svc_dataset_review_submit_job_claim',
-        'svc_dataset_review_submit_job_record_result',
-        'svc_review_submit_from_job',
         'svc_worker_enqueue_job',
         'svc_worker_read_job',
         'svc_worker_list_jobs',
@@ -123,7 +111,7 @@ select is(
       and routine.prosecdef
       and routine.proconfig = array['search_path=""']::text[]
   ),
-  20::bigint,
+  17::bigint,
   'all new facades are SECURITY DEFINER with an empty fixed search_path'
 );
 
@@ -165,16 +153,13 @@ select ok(
 
 select ok(
   has_function_privilege('service_role', 'api.svc_worker_read_job(uuid,boolean)', 'EXECUTE')
-    and has_function_privilege('service_role', 'api.svc_dataset_review_submit_job_claim(integer,integer)', 'EXECUTE')
     and has_function_privilege('service_role', 'api.svc_lca_read_result_projection(uuid,uuid,text,boolean)', 'EXECUTE'),
   'service role receives the service facade family'
 );
 
 select ok(
   not has_function_privilege('anon', 'api.svc_worker_read_job(uuid,boolean)', 'EXECUTE')
-    and not has_function_privilege('authenticated', 'api.svc_worker_read_job(uuid,boolean)', 'EXECUTE')
-    and not has_function_privilege('anon', 'api.svc_review_submit_from_job(uuid,jsonb)', 'EXECUTE')
-    and not has_function_privilege('authenticated', 'api.svc_review_submit_from_job(uuid,jsonb)', 'EXECUTE'),
+    and not has_function_privilege('authenticated', 'api.svc_worker_read_job(uuid,boolean)', 'EXECUTE'),
   'service facades reject browser roles at the ACL boundary'
 );
 
@@ -412,15 +397,6 @@ select set_config('request.jwt.claims', '{"role":"authenticated"}', true);
 select ok(
   not has_function_privilege(
     'authenticated',
-    'api.svc_dataset_review_submit_job_claim(integer,integer)',
-    'EXECUTE'
-  ),
-  'authenticated cannot execute service review facade'
-);
-
-select ok(
-  not has_function_privilege(
-    'authenticated',
     'api.svc_lca_read_job_projection(uuid,uuid,uuid,boolean)',
     'EXECUTE'
   ),
@@ -457,12 +433,6 @@ select is(
 );
 
 select is(
-  api.svc_dataset_review_submit_job_claim(1, 30) ->> 'ok',
-  'true'::text,
-  'service review facade traverses the private implementation boundary'
-);
-
-select is(
   api.svc_lca_read_result_projection(
     '42200000-0000-4000-8000-000000000001',
     '42230000-0000-4000-8000-000000000001',
@@ -475,7 +445,7 @@ select is(
 
 select is(
   api.svc_schema_contract_status() ->> 'migrationHead',
-  '20260817234000'::text,
+  '20260819090000'::text,
   'service-only schema readback reports the exact migration head'
 );
 
