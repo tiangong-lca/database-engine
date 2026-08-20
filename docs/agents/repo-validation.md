@@ -29,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-19
-lastReviewedCommit: e24b5ab61e27f8085106f9e675961fcf506f8b5f
-lastReviewedNote: "Reviewed after validating the scope-closure scanner revision and approved ownerless-reference review handling; deterministic rebuild, generated-artifact verification, and pgTAP contracts remain the required proof."
+lastReviewedAt: 2026-08-20
+lastReviewedCommit: c9cfa90dc541b3ac1bd33690dedce65b55fb79d2
+lastReviewedNote: "Reviewed for Issue #327 canonical active-fence naming: deterministic rebuild, generated-artifact verification, and pgTAP contracts remain the required proof."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

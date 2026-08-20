@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-19
-lastReviewedCommit: e24b5ab61e27f8085106f9e675961fcf506f8b5f
-lastReviewedNote: "Reviewed after integrating the scope-closure scanner revision and approved ownerless-reference review handling; repository ownership, bootstrap guidance, and cross-repository boundaries remain unchanged."
+lastReviewedAt: 2026-08-20
+lastReviewedCommit: c9cfa90dc541b3ac1bd33690dedce65b55fb79d2
+lastReviewedNote: "Reviewed for Issue #327 canonical active-fence naming: current dev-first delivery, repository ownership, and later workspace-integration requirements remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
