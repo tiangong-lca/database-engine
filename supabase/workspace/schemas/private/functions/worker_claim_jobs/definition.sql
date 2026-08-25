@@ -18,12 +18,15 @@ begin
     );
   end if;
 
-  if v_worker_queue not in ('solver', 'review_submit', 'review_submit_gate', 'review_quality', 'package', 'maintenance') then
+  if v_worker_queue not in (
+    'solver', 'review_submit', 'review_submit_gate', 'review_quality',
+    'package', 'maintenance', 'ai'
+  ) then
     return jsonb_build_object(
       'ok', false,
       'code', 'INVALID_WORKER_QUEUE',
       'status', 400,
-      'message', 'workerQueue must be solver, review_submit, review_submit_gate, review_quality, package, or maintenance'
+      'message', 'Unsupported worker queue'
     );
   end if;
 
@@ -43,13 +46,17 @@ begin
     update private.worker_jobs as j
       set status = 'failed',
           error_code = coalesce(j.error_code, 'lease_expired_max_attempts'),
-          error_message = coalesce(j.error_message, 'Worker job lease expired after the maximum attempt count'),
-          error_details = coalesce(j.error_details, '{}'::jsonb) || jsonb_build_object(
-            'leasedBy', j.leased_by,
-            'leaseExpiresAt', j.lease_expires_at,
-            'attemptCount', j.attempt_count,
-            'maxAttempts', j.max_attempts
+          error_message = coalesce(
+            j.error_message,
+            'Worker job lease expired after the maximum attempt count'
           ),
+          error_details = coalesce(j.error_details, '{}'::jsonb)
+            || jsonb_build_object(
+              'leasedBy', j.leased_by,
+              'leaseExpiresAt', j.lease_expires_at,
+              'attemptCount', j.attempt_count,
+              'maxAttempts', j.max_attempts
+            ),
           leased_by = null,
           lease_token = null,
           lease_expires_at = null,
@@ -62,12 +69,7 @@ begin
   ),
   expired_events as (
     insert into private.worker_job_events (
-      job_id,
-      event_type,
-      status,
-      worker_id,
-      message,
-      details
+      job_id, event_type, status, worker_id, message, details
     )
     select
       expired.id,
@@ -121,14 +123,7 @@ begin
   ),
   claim_events as (
     insert into private.worker_job_events (
-      job_id,
-      event_type,
-      status,
-      phase,
-      progress,
-      worker_id,
-      lease_token,
-      details
+      job_id, event_type, status, phase, progress, worker_id, lease_token, details
     )
     select
       updated.id,
@@ -145,14 +140,13 @@ begin
     from updated
     returning id
   )
-  select coalesce(jsonb_agg(private.worker_job_payload(updated, true)), '[]'::jsonb)
-    into v_jobs
+  select coalesce(
+    jsonb_agg(private.worker_job_payload(updated, true)),
+    '[]'::jsonb
+  ) into v_jobs
   from updated;
 
-  return jsonb_build_object(
-    'ok', true,
-    'data', v_jobs
-  );
+  return jsonb_build_object('ok', true, 'data', v_jobs);
 end;
 $$;
 

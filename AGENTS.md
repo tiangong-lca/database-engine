@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-19
-lastReviewedCommit: e24b5ab61e27f8085106f9e675961fcf506f8b5f
-lastReviewedNote: "Reviewed after integrating the scope-closure scanner revision and approved ownerless-reference review handling; repository ownership, bootstrap guidance, and cross-repository boundaries remain unchanged."
+lastReviewedAt: 2026-08-25
+lastReviewedCommit: 98d3a6ceeaaf12f124d4effcb9b5fc3e1462fabc
+lastReviewedNote: "Reviewed for Issue #520 AI worker queue contract: dev-first delivery, database ownership of queue/RPC contracts, and later workspace integration remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

@@ -1,0 +1,1 @@
+COMMENT ON TRIGGER "dataset_flow_identity_flowproperty_active_fence" ON "public"."flowproperties" IS 'Fail-closed Step 3 actor fence for FlowProperty updates that change any support-guard-relevant or future non-derivative column; extracted_md, embedding_ft, embedding_ft_at, and search_text updates bypass the actor fence.';

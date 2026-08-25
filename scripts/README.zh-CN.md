@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-19
-lastReviewedCommit: fb17729e9a57196977aee60d552af934fbfdcc55
-lastReviewedNote: "已按 CI 的五 schema 参数完成等价重建复核；脚本目录及调用契约无需改变。"
+lastReviewedAt: 2026-08-25
+lastReviewedCommit: 98d3a6ceeaaf12f124d4effcb9b5fc3e1462fabc
+lastReviewedNote: "已为 Issue #327 规范 active-fence 命名复核；exact-local workspace 重建命令和脚本调用契约无需改变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
