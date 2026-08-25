@@ -28,6 +28,7 @@
     },
     "rows": {
       "type": "array",
+      "maxItems": 50,
       "items": {
         "$ref": "#/$defs/PublishedLciaRow"
       }

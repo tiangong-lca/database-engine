@@ -15,7 +15,13 @@
       "const": "portal.public-facets.v1"
     },
     "kind": {
-      "$ref": "./portal.common-types.v1.schema.json#/$defs/DatasetKind"
+      "description": "The selected data-set kind, or all when the response contains the backend-computed object-type facet.",
+      "type": "string",
+      "enum": [
+        "all",
+        "process",
+        "flow"
+      ]
     },
     "queryFingerprint": {
       "description": "Lowercase hexadecimal SHA-256 over the UTF-8 canonical JSON object {kind,query,filters,sort}.",
@@ -35,7 +41,8 @@
       "required": [
         "id",
         "label",
-        "values"
+        "values",
+        "hasMore"
       ],
       "properties": {
         "id": {
@@ -46,9 +53,14 @@
         },
         "values": {
           "type": "array",
+          "maxItems": 100,
           "items": {
             "$ref": "#/$defs/FacetValue"
           }
+        },
+        "hasMore": {
+          "description": "True when more canonical values exist beyond the deterministic first 100.",
+          "type": "boolean"
         }
       }
     },
@@ -62,7 +74,9 @@
       ],
       "properties": {
         "value": {
-          "$ref": "./portal.common-types.v1.schema.json#/$defs/NonEmptyString"
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NonEmptyString",
+          "type": "string",
+          "maxLength": 128
         },
         "label": {
           "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"

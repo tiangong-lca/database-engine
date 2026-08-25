@@ -32,8 +32,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: f1cc2bbf5bf0674e6595b9654ad1ef324884cd2a
-lastReviewedNote: "Reviewed for Issue #527: added the Portal public catalog, capability, Exchange, and LCIA projection proof matrix."
+lastReviewedCommit: 3accde1f78dde7aa70131ece5dadd1093de7d1d0
+lastReviewedNote: "Reviewed for Issue #527 catalog implementation: Portal proof now covers exact ACL/manifest closure, legacy byte stability, malformed-data opacity, bounded cursors/facets, and Exchange support chains."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

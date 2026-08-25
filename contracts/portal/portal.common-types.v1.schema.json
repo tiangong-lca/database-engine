@@ -23,6 +23,12 @@
       "type": "string",
       "pattern": "^[0-9a-f]{64}$"
     },
+    "PublicHttpsUri": {
+      "description": "Lexically safe HTTPS URI without credentials, query, or fragment. Producers must separately prove the origin/path is public; this syntax never authorizes an object or service locator.",
+      "type": "string",
+      "format": "uri",
+      "pattern": "^https://[^/?#@\\s]+(?:/[^?#\\s]*)?$"
+    },
     "NonEmptyString": {
       "type": "string",
       "minLength": 1
@@ -344,12 +350,14 @@
           "$ref": "#/$defs/NullableNonEmptyString"
         },
         "licenseUrl": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "format": "uri",
-          "minLength": 1
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicHttpsUri"
+            },
+            {
+              "type": "null"
+            }
+          ]
         }
       }
     },
@@ -502,14 +510,17 @@
           ]
         },
         "permanentDataSetUri": {
-          "type": [
-            "string",
-            "null"
-          ],
-          "format": "uri",
-          "minLength": 1
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicHttpsUri"
+            },
+            {
+              "type": "null"
+            }
+          ]
         },
         "precedingVersion": {
+          "description": "The exact sole preceding version. Missing, malformed, or multiple source references fail closed to an all-null named reference.",
           "$ref": "#/$defs/PublicNamedReference"
         }
       }

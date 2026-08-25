@@ -23,6 +23,7 @@
     },
     "rows": {
       "type": "array",
+      "maxItems": 50,
       "items": {
         "$ref": "#/$defs/PublicExchangeRow"
       }
@@ -67,7 +68,7 @@
         "internalId": {
           "description": "Public TIDAS Exchange identity within the exact Process version; this is not a database or operational internal field.",
           "type": "string",
-          "pattern": "^\\d{1,6}$"
+          "pattern": "^(0|[1-9]\\d{0,5})$"
         },
         "kind": {
           "type": "string",

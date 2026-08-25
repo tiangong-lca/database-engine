@@ -24,6 +24,7 @@
     },
     "items": {
       "type": "array",
+      "maxItems": 50,
       "items": {
         "$ref": "#/$defs/SearchItem"
       }

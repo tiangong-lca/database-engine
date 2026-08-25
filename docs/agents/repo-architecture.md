@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: f1cc2bbf5bf0674e6595b9654ad1ef324884cd2a
-lastReviewedNote: "Reviewed for Issue #527: documented the additive, locator-free Portal public read boundary and its fail-closed capability model."
+lastReviewedCommit: 3accde1f78dde7aa70131ece5dadd1093de7d1d0
+lastReviewedNote: "Reviewed for Issue #527 catalog implementation: documented the constrained executor, exact public scope, bounded cursor/facet contracts, and fail-closed Exchange support chain."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -79,6 +79,8 @@ therefore denied until their exact signature is deliberately classified.
 `contracts/portal/**` owns the exhaustive versioned JSON Schemas for the anonymous Portal DTOs. The matching `api.portal_*_v1` functions are additive façades: they fix visibility to public states 100/200, use stable keyset cursors, return canonical decimal strings, and recursively exclude actor/team/review fields, embeddings, credentials, private artifact locators, and database error detail. They do not replace or change legacy Search, raw-table RLS, Data Product, or Release consumers.
 
 Portal capability policy is fail closed. State 200 and unknown, missing, exclusive, or conflicting license evidence remain metadata-only. Exchange values require an exact public Process/Flow/FlowProperty/UnitGroup support chain plus an explicitly open capability. LCIA values come only from an immutable publication-bound numeric projection reconciled to package/artifact evidence; the public RPC is bounded and locator-free, while artifact storage remains private.
+
+For Exchange support types whose TIDAS schemas do not carry a Process-style license field, `portal-capability-policy.v1` treats exact state-100 Flow, FlowProperty, and UnitGroup rows as the explicit support capability only after the containing Process passes the full-free license policy. State 200 never supplies numeric support. Public search matches only the projected allowlist, never `search_text`, `extracted_md`, URI, or stripped raw fields. Facet values use the same bounded normalization as filters and return at most 100 values per group with `hasMore` evidence.
 
 The Portal executor is NOLOGIN/NOBYPASSRLS and receives only the minimum object privileges required by the façades. External wrapper ACLs are revoked from `PUBLIC` and classified by exact signature in `private.api_capability_grants`; raw core tables receive no new anon policy.
 

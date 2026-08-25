@@ -37,8 +37,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: f1cc2bbf5bf0674e6595b9654ad1ef324884cd2a
-lastReviewedNote: "Reviewed for Issue #527: database-engine owns the exhaustive Portal public DTO schemas, additive RPC façade, capability policy, and database-side contract tests; dev-first delivery and workspace integration remain unchanged."
+lastReviewedCommit: 3accde1f78dde7aa70131ece5dadd1093de7d1d0
+lastReviewedNote: "Reviewed for Issue #527 catalog implementation: the additive Portal RPCs use a dedicated constrained executor, exact capability manifest, closed DTOs, and database-side security/compatibility tests; dev-first delivery and workspace integration remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
