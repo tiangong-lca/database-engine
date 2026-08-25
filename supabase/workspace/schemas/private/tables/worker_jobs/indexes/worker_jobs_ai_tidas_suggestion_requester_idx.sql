@@ -1,0 +1,1 @@
+CREATE INDEX "worker_jobs_ai_tidas_suggestion_requester_idx" ON "private"."worker_jobs" USING "btree" ("requested_by", "updated_at" DESC, "id" DESC) WHERE ("job_kind" = 'ai.tidas_suggestion'::"text");

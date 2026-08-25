@@ -20,8 +20,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-20
-lastReviewedCommit: c9cfa90dc541b3ac1bd33690dedce65b55fb79d2
+lastReviewedAt: 2026-08-25
+lastReviewedCommit: 98d3a6ceeaaf12f124d4effcb9b5fc3e1462fabc
 lastReviewedNote: "已为 Issue #327 规范 active-fence 命名复核；exact-local workspace 重建命令和脚本调用契约无需改变。"
 related:
   - ../AGENTS.md

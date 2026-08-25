@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(30);
+select plan(32);
 
 select has_function(
   'api',
@@ -60,6 +60,34 @@ select ok(
     'EXECUTE'
   ),
   'authenticated callers cannot read AI jobs directly'
+);
+
+select is(
+  (
+    select capability_id
+    from private.api_capability_grants
+    where routine_identity =
+      'api.svc_ai_tidas_suggestion_enqueue(uuid, text, jsonb)'
+      and not allow_anon
+      and not allow_authenticated
+      and allow_service_role
+  ),
+  'EDGE-AI-WORKER-01'::text,
+  'the enqueue facade has an exact service-only capability manifest entry'
+);
+
+select is(
+  (
+    select capability_id
+    from private.api_capability_grants
+    where routine_identity =
+      'api.svc_ai_tidas_suggestion_read(uuid, uuid)'
+      and not allow_anon
+      and not allow_authenticated
+      and allow_service_role
+  ),
+  'EDGE-AI-WORKER-01'::text,
+  'the read facade has an exact service-only capability manifest entry'
 );
 
 select is(

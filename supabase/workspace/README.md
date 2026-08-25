@@ -20,8 +20,8 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-20
-lastReviewedCommit: c9cfa90dc541b3ac1bd33690dedce65b55fb79d2
+lastReviewedAt: 2026-08-25
+lastReviewedCommit: 98d3a6ceeaaf12f124d4effcb9b5fc3e1462fabc
 lastReviewedNote: "Reviewed for Issue #327 canonical active-fence naming; the CI-authoritative five-schema exact-local generation behavior remains unchanged."
 related:
   - ../../AGENTS.md

@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: d0b6fe5d7e384b7499c659ca36a52f2829ff1e68
+lastReviewedCommit: 98d3a6ceeaaf12f124d4effcb9b5fc3e1462fabc
 lastReviewedNote: "Validation now covers the reusable ai queue and requester-scoped AI suggestion service contract introduced for Database Issue #520."
 related:
   - ../../AGENTS.md

@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."svc_ai_tidas_suggestion_read"("p_requested_by" "uuid", "p_job_id" "uuid") IS 'Service-only requester-scoped AI TIDAS suggestion projection; payload and internal diagnostics remain hidden.';
