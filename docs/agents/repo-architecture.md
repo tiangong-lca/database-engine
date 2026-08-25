@@ -27,9 +27,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-20
-lastReviewedCommit: c9cfa90dc541b3ac1bd33690dedce65b55fb79d2
-lastReviewedNote: "Reviewed for Issue #327 canonical active-fence naming: schema ownership, API boundaries, and migration source-of-truth rules remain unchanged."
+lastReviewedAt: 2026-08-25
+lastReviewedCommit: d0b6fe5d7e384b7499c659ca36a52f2829ff1e68
+lastReviewedNote: "Added the dedicated ai queue, versioned ai.tidas_suggestion registry entry, and requester-scoped service facades for Database Issue #520."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -244,6 +244,8 @@ or duplicate indexes.
 ## Worker Jobs And Domain State
 
 `worker_jobs` is the canonical lifecycle and queue-control table for work that cannot be safely carried by Edge Function request/response execution.
+
+The reusable AI runtime uses `worker_queue=ai`; `ai.tidas_suggestion` is only its first versioned job kind. `api.svc_ai_tidas_suggestion_enqueue` validates the exact Process/Flow v1 envelope, computes the canonical request hash, and reuses only identical active requests. `api.svc_ai_tidas_suggestion_read` requires the original requester and exposes the non-internal Worker projection. Both facades are service-only: Edge owns user authentication, while authenticated clients never enqueue or read `private.worker_jobs` directly. AI results remain advisory and create no Process/Flow domain mutation.
 
 Claim must remain non-blocking under concurrent recovery: expired max-attempt rows are selected in bounded `FOR UPDATE SKIP LOCKED` batches before they are marked failed, while claimable queued/stale or expired-retry rows use their own skip-locked candidate set. Terminal result recording is lease-fenced; an exact repeat with the same lease token, status, and normalized result content is an idempotent acknowledgement, while any conflicting replay remains rejected. This permits a Worker to retry an ambiguous database/transport failure without leaving completed compute stranded in `running`.
 
