@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-25"
-lastReviewedCommit: "98d3a6ceeaaf12f124d4effcb9b5fc3e1462fabc"
+lastReviewedCommit: "525382dc5e5183f0ede0d745717dec66a08398be"
 lastReviewedNote: "Reviewed for Issue #520 AI worker queue contract: existing migration, SQL-test, and service-RPC routing already covers the new AI job contract."
 
 # Keep deterministic governance facts here.

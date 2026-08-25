@@ -20,7 +20,7 @@ begin
 end;
 $$;
 
-select plan(20);
+select plan(24);
 
 select set_config('request.jwt.claim.role', 'authenticated', true);
 
@@ -864,6 +864,174 @@ select is(
 );
 
 reset role;
+
+insert into public.flows (
+  id,
+  version,
+  json,
+  json_ordered,
+  user_id,
+  state_code,
+  team_id,
+  rule_verification
+)
+values (
+  '32000000-0000-0000-0000-000000000021',
+  '02.00.000',
+  '{
+    "flowDataSet": {
+      "flowInformation": {
+        "dataSetInformation": {
+          "name": {
+            "baseName": [
+              { "@xml:lang": "en", "#text": "Parallel Review Flow" }
+            ]
+          }
+        }
+      }
+    }
+  }'::jsonb,
+  '{
+    "flowDataSet": {
+      "flowInformation": {
+        "dataSetInformation": {
+          "name": {
+            "baseName": [
+              { "@xml:lang": "en", "#text": "Parallel Review Flow" }
+            ]
+          }
+        }
+      }
+    }
+  }'::json,
+  '12000000-0000-0000-0000-000000000001',
+  0,
+  '22000000-0000-0000-0000-000000000001',
+  true
+);
+
+insert into public.processes (
+  id,
+  version,
+  json,
+  json_ordered,
+  user_id,
+  state_code,
+  team_id,
+  model_id,
+  rule_verification
+)
+values (
+  '32000000-0000-0000-0000-000000000023',
+  '01.00.000',
+  '{
+    "processDataSet": {
+      "processInformation": {
+        "dataSetInformation": {
+          "name": {
+            "baseName": [
+              { "@xml:lang": "en", "#text": "Parallel Version Reference Process" }
+            ]
+          }
+        }
+      },
+      "exchanges": {
+        "exchange": [
+          {
+            "referenceToFlowDataSet": {
+              "@type": "flow data set",
+              "@refObjectId": "32000000-0000-0000-0000-000000000021",
+              "@version": "02.00.000"
+            }
+          }
+        ]
+      }
+    }
+  }'::jsonb,
+  '{
+    "processDataSet": {
+      "processInformation": {
+        "dataSetInformation": {
+          "name": {
+            "baseName": [
+              { "@xml:lang": "en", "#text": "Parallel Version Reference Process" }
+            ]
+          }
+        }
+      },
+      "exchanges": {
+        "exchange": [
+          {
+            "referenceToFlowDataSet": {
+              "@type": "flow data set",
+              "@refObjectId": "32000000-0000-0000-0000-000000000021",
+              "@version": "02.00.000"
+            }
+          }
+        ]
+      }
+    }
+  }'::json,
+  '12000000-0000-0000-0000-000000000001',
+  0,
+  '22000000-0000-0000-0000-000000000001',
+  '42000000-0000-0000-0000-000000000004',
+  true
+);
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '12000000-0000-0000-0000-000000000001', true);
+
+select is(
+  api.cmd_review_submit(
+    p_target_table => 'processes',
+    p_target_id => '32000000-0000-0000-0000-000000000023',
+    p_target_version => '01.00.000',
+    p_audit => '{}'::jsonb
+  )->>'ok',
+  'true',
+  'review submission succeeds while another referenced dataset version is under review'
+);
+
+reset role;
+
+select is(
+  (select count(*)::text
+   from private.reviews
+   where review_kind = 'reference'
+     and target_table = 'flows'
+     and data_id = '32000000-0000-0000-0000-000000000021'
+     and state_code in (0, 1)),
+  '2',
+  'different versions keep distinct active Reference Reviews'
+);
+
+select is(
+  (select count(*)::text
+   from private.review_derive_current_references_v1(array[
+     (select id
+      from private.reviews
+      where review_kind = 'root'
+        and target_table = 'processes'
+        and data_id = '32000000-0000-0000-0000-000000000023'
+        and data_version = '01.00.000')
+   ])
+   where target_table = 'flows'
+     and data_id = '32000000-0000-0000-0000-000000000021'
+     and data_version = '02.00.000'),
+  '1',
+  'the new Root derives only its exact referenced version'
+);
+
+select is(
+  (select count(*)::text
+   from public.flows
+   where id = '32000000-0000-0000-0000-000000000021'
+     and version in ('01.00.000', '02.00.000')
+     and state_code = 20),
+  '2',
+  'parallel reviewed versions keep independent dataset rows'
+);
 
 insert into public.flowproperties (
   id,

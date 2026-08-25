@@ -1,3 +1,6 @@
+-- Allow active reviews for different versions of the same dataset identity.
+-- Exact revision reuse remains enforced by reviews_reference_revision_active_uidx.
+
 CREATE OR REPLACE FUNCTION "api"."cmd_review_submit"("p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'

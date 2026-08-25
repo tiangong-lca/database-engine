@@ -35,7 +35,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: 98d3a6ceeaaf12f124d4effcb9b5fc3e1462fabc
+lastReviewedCommit: 525382dc5e5183f0ede0d745717dec66a08398be
 lastReviewedNote: "Reviewed for Issue #520 AI worker queue contract: dev-first delivery, database ownership of queue/RPC contracts, and later workspace integration remain unchanged."
 related:
   - .docpact/config.yaml
