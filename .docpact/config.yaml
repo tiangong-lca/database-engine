@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-26"
-lastReviewedCommit: "08d45c7eef3a8b3efd5c893cc75ca446e7376c84"
-lastReviewedNote: "Reviewed for Issue #527 Portal LCIA projection/publication: migrations, pgTAP, public DTOs, generated workspace, and TypeScript contracts remain covered by the existing Portal and schema-workspace routes."
+lastReviewedCommit: "a9e5859e882bb2d0902abd72d859aa6a58bfef15"
+lastReviewedNote: "Reviewed after Issue #527 expands the existing PR local-contract job with Portal pgTAP, legacy regressions, and strict Schema compilation; routing and deployment ownership are unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

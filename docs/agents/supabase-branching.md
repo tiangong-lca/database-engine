@@ -20,9 +20,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-12
-lastReviewedCommit: f9973d9b16c5b4a7391fd0d5aa5e8695fd9a5da3
-lastReviewedNote: "Reviewed for Issue #474: document the one-time persistent Dev migration-ledger repair for the duplicate 20260810170000 version."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: a9e5859e882bb2d0902abd72d859aa6a58bfef15
+lastReviewedNote: "Reviewed after Issue #527 broadens only the pre-deploy PR contract tests; persistent Dev's single migration deployer and Edge-owned Function handoff remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

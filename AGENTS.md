@@ -37,8 +37,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 08d45c7eef3a8b3efd5c893cc75ca446e7376c84
-lastReviewedNote: "Reviewed for Issue #527 Portal LCIA projection/publication: Database ownership, branch policy, exact-local generation, and cross-repository delivery boundaries remain explicit."
+lastReviewedCommit: a9e5859e882bb2d0902abd72d859aa6a58bfef15
+lastReviewedNote: "Reviewed after adding Portal pgTAP and Schema compilation to the existing PR local-contract gate; deployment and cross-repository ownership remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

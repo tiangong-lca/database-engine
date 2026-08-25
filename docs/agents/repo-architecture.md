@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 08d45c7eef3a8b3efd5c893cc75ca446e7376c84
-lastReviewedNote: "Reviewed for Issue #527: the architecture map now includes V3 projection staging, exact package publish plans, publication-bound visibility, and generated contract output."
+lastReviewedCommit: a9e5859e882bb2d0902abd72d859aa6a58bfef15
+lastReviewedNote: "Reviewed after the PR workflow begins enforcing the Issue #527 Portal pgTAP/Schema contracts; repository shape and deployment boundaries are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

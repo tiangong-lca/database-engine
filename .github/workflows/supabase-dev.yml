@@ -53,7 +53,19 @@ jobs:
           supabase test db supabase/tests/20260806_api_contract_closure.sql
           supabase test db supabase/tests/20260806_identity_center_facades.sql
           supabase test db supabase/tests/20260806_lca_package_capability_facades.sql
+          supabase test db supabase/tests/20260825_portal_public_catalog_v1.sql
+          supabase test db supabase/tests/20260825_portal_public_lcia_projection_v1.sql
+          supabase test db supabase/tests/20260623_data_product_publication_mvp.sql
+          supabase test db supabase/tests/20260716_lci_lcia_release_control_plane.sql
           scripts/test_full_schema_cutover_upgrade.sh
+
+      - name: Verify Portal JSON Schemas
+        run: |
+          npx --yes \
+            --package ajv-cli@5.0.0 \
+            --package ajv-formats@3.0.1 \
+            ajv compile --spec=draft2020 -c ajv-formats \
+            -s 'contracts/portal/*.schema.json'
 
       - name: Stop local Supabase
         if: always()

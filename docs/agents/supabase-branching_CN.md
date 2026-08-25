@@ -20,9 +20,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-12
-lastReviewedCommit: f9973d9b16c5b4a7391fd0d5aa5e8695fd9a5da3
-lastReviewedNote: "已为 Issue #474 复核：记录重复 20260810170000 版本的一次性持久化 Dev migration 账本修复。"
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: a9e5859e882bb2d0902abd72d859aa6a58bfef15
+lastReviewedNote: "已在 Issue #527 仅扩展 PR 部署前合同测试后复核；持久化 Dev 的唯一 migration 部署者与 Edge Function 交接不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
