@@ -2559,6 +2559,14 @@ export type Database = {
         Args: { proc: Database["public"]["Tables"]["sources"]["Row"] }
         Returns: string
       }
+      svc_ai_tidas_suggestion_enqueue: {
+        Args: { p_data: Json; p_data_type: string; p_requested_by: string }
+        Returns: Json
+      }
+      svc_ai_tidas_suggestion_read: {
+        Args: { p_job_id: string; p_requested_by: string }
+        Returns: Json
+      }
       svc_data_product_current_public_package: { Args: never; Returns: Json }
       svc_data_product_publication_list: {
         Args: { p_limit?: number }

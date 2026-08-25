@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."svc_ai_tidas_suggestion_enqueue"("p_requested_by" "uuid", "p_data_type" "text", "p_data" "jsonb") IS 'Service-only AI TIDAS suggestion enqueue facade with exact v1 payload validation and active-request idempotency.';

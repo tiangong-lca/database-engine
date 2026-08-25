@@ -21387,6 +21387,159 @@ $$;
 ALTER FUNCTION "api"."sources_embedding_ft_input"("proc" "public"."sources") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "api"."svc_ai_tidas_suggestion_enqueue"("p_requested_by" "uuid", "p_data_type" "text", "p_data" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  v_data_type text := lower(trim(coalesce(p_data_type, '')));
+  v_payload jsonb;
+  v_request_hash text;
+begin
+  if not coalesce(util.is_service_request(), false) then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'SERVICE_ROLE_REQUIRED',
+      'status', 403,
+      'message', 'Service role is required to enqueue AI jobs'
+    );
+  end if;
+
+  if p_requested_by is null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'AI_REQUESTED_BY_REQUIRED',
+      'status', 400,
+      'message', 'requestedBy is required'
+    );
+  end if;
+
+  if v_data_type not in ('process', 'flow') then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'AI_DATA_TYPE_INVALID',
+      'status', 400,
+      'message', 'dataType must be process or flow'
+    );
+  end if;
+
+  if jsonb_typeof(p_data) is distinct from 'object'
+    or (
+      v_data_type = 'process'
+      and jsonb_typeof(p_data->'processDataSet') is distinct from 'object'
+    )
+    or (
+      v_data_type = 'flow'
+      and jsonb_typeof(p_data->'flowDataSet') is distinct from 'object'
+    ) then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'AI_DATA_INVALID',
+      'status', 400,
+      'message', 'data must contain the matching TIDAS dataset root object'
+    );
+  end if;
+
+  v_payload := jsonb_build_object(
+    'dataType', v_data_type,
+    'data', p_data
+  );
+
+  if pg_catalog.octet_length(v_payload::text) > 16777216 then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'AI_DATA_TOO_LARGE',
+      'status', 413,
+      'message', 'AI request exceeds the 16 MiB absolute contract limit'
+    );
+  end if;
+
+  v_request_hash := pg_catalog.encode(
+    extensions.digest(
+      pg_catalog.convert_to(v_payload::text, 'UTF8'),
+      'sha256'
+    ),
+    'hex'
+  );
+
+  return private.worker_enqueue_job(
+    p_job_kind => 'ai.tidas_suggestion',
+    p_payload_json => v_payload,
+    p_payload_schema_version => 'ai.tidas_suggestion.request.v1',
+    p_requested_by => p_requested_by,
+    p_requester_type => 'user',
+    p_idempotency_key => 'ai.tidas_suggestion:' || v_request_hash,
+    p_request_hash => v_request_hash,
+    p_visibility => 'user',
+    p_max_attempts => 3,
+    p_timeout_at => now() + interval '30 minutes'
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "api"."svc_ai_tidas_suggestion_enqueue"("p_requested_by" "uuid", "p_data_type" "text", "p_data" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "api"."svc_ai_tidas_suggestion_enqueue"("p_requested_by" "uuid", "p_data_type" "text", "p_data" "jsonb") IS 'Service-only AI TIDAS suggestion enqueue facade with exact v1 payload validation and active-request idempotency.';
+
+
+
+CREATE OR REPLACE FUNCTION "api"."svc_ai_tidas_suggestion_read"("p_requested_by" "uuid", "p_job_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  v_job private.worker_jobs%rowtype;
+begin
+  if not coalesce(util.is_service_request(), false) then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'SERVICE_ROLE_REQUIRED',
+      'status', 403,
+      'message', 'Service role is required to read AI jobs'
+    );
+  end if;
+
+  if p_requested_by is null or p_job_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'AI_JOB_NOT_FOUND',
+      'status', 404,
+      'message', 'AI job was not found'
+    );
+  end if;
+
+  select * into v_job
+  from private.worker_jobs
+  where id = p_job_id
+    and requested_by = p_requested_by
+    and job_kind = 'ai.tidas_suggestion';
+
+  if v_job.id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'AI_JOB_NOT_FOUND',
+      'status', 404,
+      'message', 'AI job was not found'
+    );
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'data', private.worker_job_payload(v_job, false)
+  );
+end;
+$$;
+
+
+ALTER FUNCTION "api"."svc_ai_tidas_suggestion_read"("p_requested_by" "uuid", "p_job_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "api"."svc_ai_tidas_suggestion_read"("p_requested_by" "uuid", "p_job_id" "uuid") IS 'Service-only requester-scoped AI TIDAS suggestion projection; payload and internal diagnostics remain hidden.';
+
+
+
 CREATE OR REPLACE FUNCTION "api"."svc_data_product_current_public_package"() RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
@@ -37342,6 +37495,7 @@ CREATE TABLE IF NOT EXISTS "private"."worker_jobs" (
     "expires_at" timestamp with time zone,
     "cancelled_at" timestamp with time zone,
     "cancelled_by" "uuid",
+    CONSTRAINT "worker_jobs_ai_tidas_suggestion_semantics_check" CHECK ((("job_kind" <> 'ai.tidas_suggestion'::"text") OR (("worker_queue" = 'ai'::"text") AND ("visibility" = 'user'::"text") AND ("payload_schema_version" = 'ai.tidas_suggestion.request.v1'::"text") AND (COALESCE("jsonb_typeof"("payload_json"), ''::"text") = 'object'::"text") AND (COALESCE(("payload_json" ->> 'dataType'::"text"), ''::"text") = ANY (ARRAY['process'::"text", 'flow'::"text"])) AND (COALESCE("jsonb_typeof"(("payload_json" -> 'data'::"text")), ''::"text") = 'object'::"text") AND (((("payload_json" ->> 'dataType'::"text") = 'process'::"text") AND (COALESCE("jsonb_typeof"((("payload_json" -> 'data'::"text") -> 'processDataSet'::"text")), ''::"text") = 'object'::"text")) OR ((("payload_json" ->> 'dataType'::"text") = 'flow'::"text") AND (COALESCE("jsonb_typeof"((("payload_json" -> 'data'::"text") -> 'flowDataSet'::"text")), ''::"text") = 'object'::"text"))) AND ("status" <> 'blocked'::"text") AND ("cardinality"("blocker_codes") = 0) AND ("resolution_scope" IS NULL) AND (("status" <> 'completed'::"text") OR (("result_schema_version" = 'ai.tidas_suggestion.result.v1'::"text") AND (COALESCE("jsonb_typeof"("result_json"), ''::"text") = 'object'::"text") AND (COALESCE(("result_json" ->> 'status'::"text"), ''::"text") = ANY (ARRAY['complete'::"text", 'partial'::"text"])))) AND (("status" <> 'failed'::"text") OR ("result_json" IS NULL) OR (("result_schema_version" = 'ai.tidas_suggestion.result.v1'::"text") AND (COALESCE("jsonb_typeof"("result_json"), ''::"text") = 'object'::"text") AND (COALESCE(("result_json" ->> 'status'::"text"), ''::"text") = 'failed'::"text")))))),
     CONSTRAINT "worker_jobs_attempt_check" CHECK ((("attempt_count" >= 0) AND ("max_attempts" >= 0) AND ("attempt_count" <= "max_attempts"))),
     CONSTRAINT "worker_jobs_blocked_explanation_check" CHECK ((("status" <> 'blocked'::"text") OR (("cardinality"("blocker_codes") > 0) AND ("resolution_scope" IS NOT NULL)))),
     CONSTRAINT "worker_jobs_diagnostics_object_check" CHECK (("jsonb_typeof"("diagnostics") = 'object'::"text")),
@@ -37349,7 +37503,7 @@ CREATE TABLE IF NOT EXISTS "private"."worker_jobs" (
     CONSTRAINT "worker_jobs_payload_object_check" CHECK (("jsonb_typeof"("payload_json") = 'object'::"text")),
     CONSTRAINT "worker_jobs_payload_ref_object_check" CHECK ((("payload_ref" IS NULL) OR ("jsonb_typeof"("payload_ref") = 'object'::"text"))),
     CONSTRAINT "worker_jobs_progress_check" CHECK ((("progress" IS NULL) OR (("progress" >= (0)::numeric) AND ("progress" <= (1)::numeric)))),
-    CONSTRAINT "worker_jobs_queue_check" CHECK (("worker_queue" = ANY (ARRAY['solver'::"text", 'review_submit'::"text", 'review_submit_gate'::"text", 'review_quality'::"text", 'package'::"text", 'maintenance'::"text"]))),
+    CONSTRAINT "worker_jobs_queue_check" CHECK (("worker_queue" = ANY (ARRAY['solver'::"text", 'review_submit'::"text", 'review_submit_gate'::"text", 'review_quality'::"text", 'package'::"text", 'maintenance'::"text", 'ai'::"text"]))),
     CONSTRAINT "worker_jobs_requester_check" CHECK (((("requester_type" = 'user'::"text") AND ("requested_by" IS NOT NULL)) OR ("requester_type" = ANY (ARRAY['system'::"text", 'service'::"text", 'operator'::"text"])))),
     CONSTRAINT "worker_jobs_resolution_scope_check" CHECK ((("resolution_scope" IS NULL) OR ("resolution_scope" = ANY (ARRAY['user'::"text", 'operator'::"text", 'system'::"text"])))),
     CONSTRAINT "worker_jobs_result_object_check" CHECK ((("result_json" IS NULL) OR ("jsonb_typeof"("result_json") = 'object'::"text"))),
@@ -43989,12 +44143,15 @@ begin
     );
   end if;
 
-  if v_worker_queue not in ('solver', 'review_submit', 'review_submit_gate', 'review_quality', 'package', 'maintenance') then
+  if v_worker_queue not in (
+    'solver', 'review_submit', 'review_submit_gate', 'review_quality',
+    'package', 'maintenance', 'ai'
+  ) then
     return jsonb_build_object(
       'ok', false,
       'code', 'INVALID_WORKER_QUEUE',
       'status', 400,
-      'message', 'workerQueue must be solver, review_submit, review_submit_gate, review_quality, package, or maintenance'
+      'message', 'Unsupported worker queue'
     );
   end if;
 
@@ -44014,13 +44171,17 @@ begin
     update private.worker_jobs as j
       set status = 'failed',
           error_code = coalesce(j.error_code, 'lease_expired_max_attempts'),
-          error_message = coalesce(j.error_message, 'Worker job lease expired after the maximum attempt count'),
-          error_details = coalesce(j.error_details, '{}'::jsonb) || jsonb_build_object(
-            'leasedBy', j.leased_by,
-            'leaseExpiresAt', j.lease_expires_at,
-            'attemptCount', j.attempt_count,
-            'maxAttempts', j.max_attempts
+          error_message = coalesce(
+            j.error_message,
+            'Worker job lease expired after the maximum attempt count'
           ),
+          error_details = coalesce(j.error_details, '{}'::jsonb)
+            || jsonb_build_object(
+              'leasedBy', j.leased_by,
+              'leaseExpiresAt', j.lease_expires_at,
+              'attemptCount', j.attempt_count,
+              'maxAttempts', j.max_attempts
+            ),
           leased_by = null,
           lease_token = null,
           lease_expires_at = null,
@@ -44033,12 +44194,7 @@ begin
   ),
   expired_events as (
     insert into private.worker_job_events (
-      job_id,
-      event_type,
-      status,
-      worker_id,
-      message,
-      details
+      job_id, event_type, status, worker_id, message, details
     )
     select
       expired.id,
@@ -44092,14 +44248,7 @@ begin
   ),
   claim_events as (
     insert into private.worker_job_events (
-      job_id,
-      event_type,
-      status,
-      phase,
-      progress,
-      worker_id,
-      lease_token,
-      details
+      job_id, event_type, status, phase, progress, worker_id, lease_token, details
     )
     select
       updated.id,
@@ -44116,14 +44265,13 @@ begin
     from updated
     returning id
   )
-  select coalesce(jsonb_agg(private.worker_job_payload(updated, true)), '[]'::jsonb)
-    into v_jobs
+  select coalesce(
+    jsonb_agg(private.worker_job_payload(updated, true)),
+    '[]'::jsonb
+  ) into v_jobs
   from updated;
 
-  return jsonb_build_object(
-    'ok', true,
-    'data', v_jobs
-  );
+  return jsonb_build_object('ok', true, 'data', v_jobs);
 end;
 $$;
 
@@ -53814,7 +53962,7 @@ CREATE TABLE IF NOT EXISTS "private"."worker_job_kinds" (
     "presenter_key" "text",
     CONSTRAINT "worker_job_kinds_default_attempts_check" CHECK (("default_max_attempts" >= 0)),
     CONSTRAINT "worker_job_kinds_default_lease_check" CHECK ((("default_lease_seconds" >= 1) AND ("default_lease_seconds" <= 86400))),
-    CONSTRAINT "worker_job_kinds_queue_check" CHECK (("worker_queue" = ANY (ARRAY['solver'::"text", 'review_submit'::"text", 'review_submit_gate'::"text", 'review_quality'::"text", 'package'::"text", 'maintenance'::"text"]))),
+    CONSTRAINT "worker_job_kinds_queue_check" CHECK (("worker_queue" = ANY (ARRAY['solver'::"text", 'review_submit'::"text", 'review_submit_gate'::"text", 'review_quality'::"text", 'package'::"text", 'maintenance'::"text", 'ai'::"text"]))),
     CONSTRAINT "worker_job_kinds_runtime_check" CHECK (("worker_runtime" = 'calculator'::"text")),
     CONSTRAINT "worker_job_kinds_task_center_surface_check" CHECK ((("task_center_surface" IS NULL) OR ("task_center_surface" = ANY (ARRAY['global'::"text", 'inline'::"text"])))),
     CONSTRAINT "worker_job_kinds_visibility_check" CHECK (("default_visibility" = ANY (ARRAY['user'::"text", 'operator'::"text", 'system'::"text"])))
@@ -55981,6 +56129,10 @@ CREATE INDEX "worker_job_artifacts_scope_closure_gc_idx" ON "private"."worker_jo
 
 
 CREATE INDEX "worker_job_events_job_created_idx" ON "private"."worker_job_events" USING "btree" ("job_id", "created_at" DESC);
+
+
+
+CREATE INDEX "worker_jobs_ai_tidas_suggestion_requester_idx" ON "private"."worker_jobs" USING "btree" ("requested_by", "updated_at" DESC, "id" DESC) WHERE ("job_kind" = 'ai.tidas_suggestion'::"text");
 
 
 
@@ -59293,6 +59445,16 @@ GRANT SELECT ON TABLE "public"."sources" TO "api_internal_executor";
 
 REVOKE ALL ON FUNCTION "api"."sources_embedding_ft_input"("proc" "public"."sources") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."sources_embedding_ft_input"("proc" "public"."sources") TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "api"."svc_ai_tidas_suggestion_enqueue"("p_requested_by" "uuid", "p_data_type" "text", "p_data" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."svc_ai_tidas_suggestion_enqueue"("p_requested_by" "uuid", "p_data_type" "text", "p_data" "jsonb") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "api"."svc_ai_tidas_suggestion_read"("p_requested_by" "uuid", "p_job_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."svc_ai_tidas_suggestion_read"("p_requested_by" "uuid", "p_job_id" "uuid") TO "service_role";
 
 
 

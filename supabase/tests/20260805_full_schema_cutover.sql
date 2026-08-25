@@ -68,7 +68,7 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  254::bigint,
+  256::bigint,
   'api contains the active cutover functions, reviewed consumer facades, and Database A Search RPCs'
 );
 
@@ -136,7 +136,7 @@ select is(
       'util'::regnamespace
     )
   ),
-  460::bigint,
+  461::bigint,
   'all application constraints remain present'
 );
 
