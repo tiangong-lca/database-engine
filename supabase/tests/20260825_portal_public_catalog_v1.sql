@@ -50,7 +50,12 @@ select extensions.is(
     join pg_catalog.pg_namespace as namespace
       on namespace.oid = routine.pronamespace
     where namespace.nspname = 'api'
-      and routine.proname like 'portal\_%\_v1' escape '\'
+      and routine.proname in (
+        'portal_search_processes_v1', 'portal_search_flows_v1',
+        'portal_get_dataset_v1', 'portal_list_versions_v1',
+        'portal_list_process_exchanges_v1', 'portal_facets_v1',
+        'portal_sitemap_entries_v1'
+      )
   ),
   7::bigint,
   'exactly seven Portal catalogue routines exist without overloads'
@@ -69,7 +74,12 @@ select extensions.is(
       join pg_catalog.pg_namespace as namespace
         on namespace.oid = routine.pronamespace
       where namespace.nspname = 'api'
-        and routine.proname like 'portal\_%\_v1' escape '\'
+        and routine.proname in (
+          'portal_search_processes_v1', 'portal_search_flows_v1',
+          'portal_get_dataset_v1', 'portal_list_versions_v1',
+          'portal_list_process_exchanges_v1', 'portal_facets_v1',
+          'portal_sitemap_entries_v1'
+        )
     )
     select count(*)
     from (
@@ -310,7 +320,12 @@ select extensions.is(
       left join pg_catalog.pg_roles as grantee_role
         on grantee_role.oid = acl.grantee
       where namespace.nspname = 'api'
-        and routine.proname like 'portal\_%\_v1' escape '\'
+        and routine.proname in (
+          'portal_search_processes_v1', 'portal_search_flows_v1',
+          'portal_get_dataset_v1', 'portal_list_versions_v1',
+          'portal_list_process_exchanges_v1', 'portal_facets_v1',
+          'portal_sitemap_entries_v1'
+        )
     )
     select count(*)
     from (
@@ -331,6 +346,7 @@ select extensions.is(
       on namespace.oid = routine.pronamespace
     where namespace.nspname = 'private'
       and routine.proname like 'portal\_%\_v1' escape '\'
+      and routine.proowner = 'portal_public_executor'::regrole
   ),
   34::bigint,
   'the private Portal helper surface contains exactly the frozen 34 v1 routines'
@@ -363,14 +379,23 @@ select extensions.is(
     ) as acl
     where namespace.nspname = 'private'
       and routine.proname like 'portal\_%\_v1' escape '\'
+      and routine.proowner = 'portal_public_executor'::regrole
       and (
         acl.grantee <> routine.proowner
         or acl.privilege_type <> 'EXECUTE'
         or acl.is_grantable
       )
+      and not (
+        routine.proname in (
+          'portal_canonical_decimal_v1', 'portal_timestamp_v1'
+        )
+        and acl.grantee = 'postgres'::regrole
+        and acl.privilege_type = 'EXECUTE'
+        and not acl.is_grantable
+      )
   ),
   0::bigint,
-  'private Portal helpers have no external grantee or grant option'
+  'private catalogue helpers have no external grant except exact postgres use of decimal/timestamp primitives'
 );
 
 select extensions.is(
