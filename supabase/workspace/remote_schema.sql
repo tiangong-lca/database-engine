@@ -12338,7 +12338,6 @@ declare
   v_target record;
   v_target_checksum text;
   v_affected jsonb := '[]'::jsonb;
-  v_conflict_version text;
   v_event_key text;
 begin
   if v_actor is null then
@@ -12548,27 +12547,6 @@ begin
         'code', 'REFERENCE_ACCESS_DENIED',
         'status', 403,
         'message', 'A referenced dataset is not accessible'
-      );
-    end if;
-
-    select btrim(active_reference.data_version::text)
-    into v_conflict_version
-    from private.reviews as active_reference
-    where active_reference.review_kind = 'reference'
-      and active_reference.target_table = v_target.table_name
-      and active_reference.data_id = v_target.dataset_id
-      and btrim(active_reference.data_version::text)
-        <> v_target.dataset_version
-      and active_reference.state_code in (0, 1)
-    order by active_reference.created_at desc
-    limit 1;
-
-    if v_conflict_version is not null then
-      return jsonb_build_object(
-        'ok', false,
-        'code', 'REFERENCE_REVISION_CONFLICT',
-        'status', 409,
-        'message', 'Another version of a referenced dataset is under review'
       );
     end if;
 

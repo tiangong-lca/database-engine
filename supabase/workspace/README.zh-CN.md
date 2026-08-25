@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-25
-lastReviewedCommit: 98d3a6ceeaaf12f124d4effcb9b5fc3e1462fabc
+lastReviewedCommit: 525382dc5e5183f0ede0d745717dec66a08398be
 lastReviewedNote: "已为 Issue #327 规范 active-fence 命名复核；CI 权威的五 schema exact-local 生成行为不变。"
 related:
   - ../../AGENTS.md
