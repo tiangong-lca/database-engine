@@ -289,6 +289,21 @@ export type Database = {
         }
         Returns: Json
       }
+      cmd_lcia_result_build_request_v3: {
+        Args: {
+          p_audit?: Json
+          p_closure_check_id: string
+          p_coverage_mode: string
+          p_default_impact_category: string
+          p_idempotency_key: string
+          p_lcia_method_set: Json
+          p_name: string
+          p_policy_fingerprint: string
+          p_processes: Json
+          p_requested_scope_hash: string
+        }
+        Returns: Json
+      }
       cmd_lcia_result_package_publish: {
         Args: {
           p_audit?: Json
@@ -368,6 +383,37 @@ export type Database = {
           p_link?: string
           p_recipient_user_id: string
           p_tab_names?: string[]
+        }
+        Returns: Json
+      }
+      cmd_portal_lcia_projection_finalize_publication_v1: {
+        Args: {
+          p_audit?: Json
+          p_idempotency_key: string
+          p_lcia_result_publication_id: string
+          p_package_result_hash: string
+          p_package_version: string
+          p_projection_content_hash: string
+          p_projection_id: string
+        }
+        Returns: Json
+      }
+      cmd_portal_lcia_projection_revoke_publication_v1: {
+        Args: {
+          p_audit?: Json
+          p_lcia_result_publication_id: string
+          p_projection_content_hash: string
+          p_reason: string
+        }
+        Returns: Json
+      }
+      cmd_portal_lcia_result_package_publish_v1: {
+        Args: {
+          p_audit?: Json
+          p_display_default_impact_category: string
+          p_expected_publish_plan_hash: string
+          p_package_id: string
+          p_reason?: string
         }
         Returns: Json
       }
@@ -1539,6 +1585,16 @@ export type Database = {
         Args: { p_id: string; p_kind: string; p_version: string }
         Returns: Json
       }
+      portal_get_published_lcia_values_v1: {
+        Args: {
+          p_cursor: string
+          p_impact_ref: string
+          p_limit: number
+          p_mode: string
+          p_process_refs: Json
+        }
+        Returns: Json
+      }
       portal_list_process_exchanges_v1: {
         Args: {
           p_cursor?: string
@@ -1657,6 +1713,24 @@ export type Database = {
           team_title: Json
           user_id: string
         }[]
+      }
+      qry_portal_lcia_projection_prepare_v1: {
+        Args: { p_lcia_result_publication_id: string; p_package_id: string }
+        Returns: Json
+      }
+      qry_portal_lcia_projection_publication_readback_v1: {
+        Args: {
+          p_lcia_result_publication_id: string
+          p_projection_content_hash: string
+        }
+        Returns: Json
+      }
+      qry_portal_lcia_result_package_publish_prepare_v1: {
+        Args: {
+          p_display_default_impact_category?: string
+          p_package_id: string
+        }
+        Returns: Json
       }
       qry_reference_review_impacted_roots: {
         Args: { p_include_history?: boolean; p_reference_review_id: string }

@@ -62,3 +62,5 @@ $_$;
 ALTER FUNCTION "private"."portal_canonical_decimal_v1"("p_value" "text") OWNER TO "portal_public_executor";
 
 REVOKE ALL ON FUNCTION "private"."portal_canonical_decimal_v1"("p_value" "text") FROM PUBLIC;
+
+GRANT ALL ON FUNCTION "private"."portal_canonical_decimal_v1"("p_value" "text") TO "postgres";

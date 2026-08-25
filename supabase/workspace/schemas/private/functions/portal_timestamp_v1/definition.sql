@@ -8,3 +8,5 @@ $$;
 ALTER FUNCTION "private"."portal_timestamp_v1"("p_value" timestamp with time zone) OWNER TO "portal_public_executor";
 
 REVOKE ALL ON FUNCTION "private"."portal_timestamp_v1"("p_value" timestamp with time zone) FROM PUBLIC;
+
+GRANT ALL ON FUNCTION "private"."portal_timestamp_v1"("p_value" timestamp with time zone) TO "postgres";
