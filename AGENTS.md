@@ -37,8 +37,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 708fecae802f1799db3b1570c54d92dffd76eded
-lastReviewedNote: "Reviewed for Issue #527 generated contract synchronization: generated schema workspace and public/api TypeScript types reflect the validated additive Portal catalog migration; ownership and delivery boundaries remain unchanged."
+lastReviewedCommit: 08d45c7eef3a8b3efd5c893cc75ca446e7376c84
+lastReviewedNote: "Reviewed for Issue #527 Portal LCIA projection/publication: Database ownership, branch policy, exact-local generation, and cross-repository delivery boundaries remain explicit."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -114,6 +114,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - local baseline: `supabase start`, `supabase db reset`, `supabase migration list`
 - schema boundary: `public` contains only `processes`, `flows`, `contacts`, `sources`, `unitgroups`, `flowproperties`, `lciamethods`, `lifecyclemodels`, and `ilcd`; client RPCs live in the exposed `api` schema, internal state and service helpers live in `private`, operational tooling lives in `util`, and retired rollback evidence lives in `archive`
 - PostgREST exposes `public` and `api`; entity access keeps `public` as the default profile, while RPC callers must select the `api` profile explicitly
+- anonymous Portal numerics come only from immutable publication-bound typed projections; V3 Worker staging is service-only and lease-fenced, package publication/finalization is authenticated-manager-only with exact plan/hash confirmation, and raw projection/artifact tables never gain browser access
 - `supabase/seed.sql` must remain an executable SQL batch even when it seeds no rows; retain a data-neutral no-op rather than comments only
 - hosted mutation E2E assets under `supabase/tests/preview/**` are exact-Preview, disposable test paths; their complete actor, credential, recovery, and cleanup proof requirements live in `docs/agents/repo-validation.md`
 - migration authoring starts from Git `dev`, not GitHub default-branch UI

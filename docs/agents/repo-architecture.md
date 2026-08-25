@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 708fecae802f1799db3b1570c54d92dffd76eded
-lastReviewedNote: "Reviewed for Issue #527 generated contract synchronization: generated inspection paths now expose the exact Portal helpers, façades, policies, grants, and Data API types without changing source-of-truth boundaries."
+lastReviewedCommit: 08d45c7eef3a8b3efd5c893cc75ca446e7376c84
+lastReviewedNote: "Reviewed for Issue #527: the architecture map now includes V3 projection staging, exact package publish plans, publication-bound visibility, and generated contract output."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -78,7 +78,9 @@ therefore denied until their exact signature is deliberately classified.
 
 `contracts/portal/**` owns the exhaustive versioned JSON Schemas for the anonymous Portal DTOs. The matching `api.portal_*_v1` functions are additive façades: they fix visibility to public states 100/200, use stable keyset cursors, return canonical decimal strings, and recursively exclude actor/team/review fields, embeddings, credentials, private artifact locators, and database error detail. They do not replace or change legacy Search, raw-table RLS, Data Product, or Release consumers.
 
-Portal capability policy is fail closed. State 200 and unknown, missing, exclusive, or conflicting license evidence remain metadata-only. Exchange values require an exact public Process/Flow/FlowProperty/UnitGroup support chain plus an explicitly open capability. LCIA values come only from an immutable publication-bound numeric projection reconciled to package/artifact evidence; the public RPC is bounded and locator-free, while artifact storage remains private.
+Portal capability policy is fail closed. State 200 and unknown, missing, exclusive, or conflicting license evidence remain metadata-only. Exchange values require an exact public Process/Flow/FlowProperty/UnitGroup support chain plus an explicitly open capability. LCIA values come only from typed Process/Impact/Value rows staged by an exact V3 Worker job under its active lease. Database independently binds the ordered certificate Process/Method axes, dense Cartesian grid, canonical decimals, int32be UTF-8 record/relation/content hashes, source artifact hashes, and the package's exact `portalProjectionId`/`portalProjectionContentHash`. Batches are capped at 500 records and 1 MiB serialized UTF-8 JSON; terminal rows are immutable and raw tables remain private.
+
+Package publication is a separate authenticated-manager plan/command pair. The read-only prepare result freezes the V3 package, projection axes/counts/hashes, current eligible Process-set hash, selected display default, and current-publication predecessor into `publishPlanHash`; the command locks publication state, recomputes and requires that exact hash, then records it for response-loss reconciliation. Projection finalization independently recomputes typed evidence and binds the exact current package publication. Anonymous visibility uses the same full predicate returned by manager readback as `isPubliclyVisible`; supersede, unpublish, or projection revoke makes the public RPC return unavailable rather than a synthetic zero. The public RPC is bounded and locator-free, while Calculation Bundle/result artifact storage remains private.
 
 For Exchange support types whose TIDAS schemas do not carry a Process-style license field, `portal-capability-policy.v1` treats exact state-100 Flow, FlowProperty, and UnitGroup rows as the explicit support capability only after the containing Process passes the full-free license policy. State 200 never supplies numeric support. Public search matches only the projected allowlist, never `search_text`, `extracted_md`, URI, or stripped raw fields. Facet values use the same bounded normalization as filters and return at most 100 values per group with `hasMore` evidence.
 

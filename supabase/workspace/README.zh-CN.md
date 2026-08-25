@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 708fecae802f1799db3b1570c54d92dffd76eded
-lastReviewedNote: "已为 Issue #527 的 Portal catalog 生成契约复核；CI 权威的五 schema exact-local 生成行为不变。"
+lastReviewedCommit: 08d45c7eef3a8b3efd5c893cc75ca446e7376c84
+lastReviewedNote: "已从精确本地 migration head 生成 Issue #527 Portal LCIA 表、函数、ACL 与 Data API 类型；生成行为不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

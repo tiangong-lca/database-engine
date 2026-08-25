@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 708fecae802f1799db3b1570c54d92dffd76eded
-lastReviewedNote: "Reviewed for Issue #527 generated Portal catalog contracts; the exact-local workspace rebuild commands and script invocation contract remain unchanged."
+lastReviewedCommit: 08d45c7eef3a8b3efd5c893cc75ca446e7376c84
+lastReviewedNote: "Reviewed after the Issue #527 Portal LCIA exact-local regeneration; the five-schema command and script behavior remain unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
