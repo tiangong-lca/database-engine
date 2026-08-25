@@ -32,8 +32,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 3accde1f78dde7aa70131ece5dadd1093de7d1d0
-lastReviewedNote: "Reviewed for Issue #527 catalog implementation: Portal proof now covers exact ACL/manifest closure, legacy byte stability, malformed-data opacity, bounded cursors/facets, and Exchange support chains."
+lastReviewedCommit: 708fecae802f1799db3b1570c54d92dffd76eded
+lastReviewedNote: "Reviewed for Issue #527 generated contract synchronization: local generation from the isolated validated database produced deterministic schema workspace and public/api TypeScript contracts."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

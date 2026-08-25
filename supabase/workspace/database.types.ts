@@ -1531,6 +1531,57 @@ export type Database = {
         Returns: boolean
       }
       policy_user_has_team: { Args: { _user_id: string }; Returns: boolean }
+      portal_facets_v1: {
+        Args: { p_filters?: Json; p_kind: string; p_query: string }
+        Returns: Json
+      }
+      portal_get_dataset_v1: {
+        Args: { p_id: string; p_kind: string; p_version: string }
+        Returns: Json
+      }
+      portal_list_process_exchanges_v1: {
+        Args: {
+          p_cursor?: string
+          p_exchange_kind?: string
+          p_limit?: number
+          p_process_id: string
+          p_process_version: string
+        }
+        Returns: Json
+      }
+      portal_list_versions_v1: {
+        Args: {
+          p_cursor?: string
+          p_id: string
+          p_kind: string
+          p_limit?: number
+        }
+        Returns: Json
+      }
+      portal_search_flows_v1: {
+        Args: {
+          p_cursor?: string
+          p_filters?: Json
+          p_limit?: number
+          p_query: string
+          p_sort?: string
+        }
+        Returns: Json
+      }
+      portal_search_processes_v1: {
+        Args: {
+          p_cursor?: string
+          p_filters?: Json
+          p_limit?: number
+          p_query: string
+          p_sort?: string
+        }
+        Returns: Json
+      }
+      portal_sitemap_entries_v1: {
+        Args: { p_cursor?: string; p_kind: string; p_limit?: number }
+        Returns: Json
+      }
       processes_embedding_ft_input: {
         Args: { proc: Database["public"]["Tables"]["processes"]["Row"] }
         Returns: string

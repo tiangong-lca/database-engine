@@ -37,8 +37,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 3accde1f78dde7aa70131ece5dadd1093de7d1d0
-lastReviewedNote: "Reviewed for Issue #527 catalog implementation: the additive Portal RPCs use a dedicated constrained executor, exact capability manifest, closed DTOs, and database-side security/compatibility tests; dev-first delivery and workspace integration remain unchanged."
+lastReviewedCommit: 708fecae802f1799db3b1570c54d92dffd76eded
+lastReviewedNote: "Reviewed for Issue #527 generated contract synchronization: generated schema workspace and public/api TypeScript types reflect the validated additive Portal catalog migration; ownership and delivery boundaries remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

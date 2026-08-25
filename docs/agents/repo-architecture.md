@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 3accde1f78dde7aa70131ece5dadd1093de7d1d0
-lastReviewedNote: "Reviewed for Issue #527 catalog implementation: documented the constrained executor, exact public scope, bounded cursor/facet contracts, and fail-closed Exchange support chain."
+lastReviewedCommit: 708fecae802f1799db3b1570c54d92dffd76eded
+lastReviewedNote: "Reviewed for Issue #527 generated contract synchronization: generated inspection paths now expose the exact Portal helpers, façades, policies, grants, and Data API types without changing source-of-truth boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

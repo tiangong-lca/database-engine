@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-26"
-lastReviewedCommit: "3accde1f78dde7aa70131ece5dadd1093de7d1d0"
-lastReviewedNote: "Reviewed for Issue #527 catalog implementation: Portal contract, migration, test, generated-workspace, and governed-document routing remain complete and owner-local."
+lastReviewedCommit: "708fecae802f1799db3b1570c54d92dffd76eded"
+lastReviewedNote: "Reviewed for Issue #527 generated contract synchronization: Portal generated-workspace and TypeScript paths remain covered by existing schema-workspace ownership and routing."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

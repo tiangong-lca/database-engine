@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 525382dc5e5183f0ede0d745717dec66a08398be
-lastReviewedNote: "已为 Issue #327 规范 active-fence 命名复核；CI 权威的五 schema exact-local 生成行为不变。"
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: 708fecae802f1799db3b1570c54d92dffd76eded
+lastReviewedNote: "已为 Issue #527 的 Portal catalog 生成契约复核；CI 权威的五 schema exact-local 生成行为不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

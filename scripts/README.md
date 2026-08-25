@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 525382dc5e5183f0ede0d745717dec66a08398be
-lastReviewedNote: "Reviewed for Issue #327 canonical active-fence naming; the exact-local workspace rebuild command and script invocation contract remain unchanged."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: 708fecae802f1799db3b1570c54d92dffd76eded
+lastReviewedNote: "Reviewed for Issue #527 generated Portal catalog contracts; the exact-local workspace rebuild commands and script invocation contract remain unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
