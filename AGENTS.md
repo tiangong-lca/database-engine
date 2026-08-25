@@ -34,9 +34,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-20
-lastReviewedCommit: c9cfa90dc541b3ac1bd33690dedce65b55fb79d2
-lastReviewedNote: "Reviewed for Issue #327 canonical active-fence naming: current dev-first delivery, repository ownership, and later workspace-integration requirements remain unchanged."
+lastReviewedAt: 2026-08-25
+lastReviewedCommit: d0b6fe5d7e384b7499c659ca36a52f2829ff1e68
+lastReviewedNote: "Reviewed for Issue #520 AI worker queue contract: dev-first delivery, database ownership of queue/RPC contracts, and later workspace integration remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
