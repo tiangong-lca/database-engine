@@ -1,0 +1,544 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "portal.common-types.v1.schema.json",
+  "title": "TianGong Portal common public DTO types v1",
+  "$defs": {
+    "UUID": {
+      "description": "TIDAS UUID: a lowercase 16-byte hexadecimal identifier.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$"
+    },
+    "Version": {
+      "description": "Exact database data-set version in the fixed NN.NN.NNN form.",
+      "type": "string",
+      "pattern": "^\\d{2}\\.\\d{2}\\.\\d{3}$"
+    },
+    "Real": {
+      "description": "Canonical non-exponent decimal string derived from TIDAS Real. Producers must remove a leading plus sign, leading integer zeroes, trailing fractional zeroes, and negative zero before emitting it. The value contains 1 to 38 total digits and consumers must not coerce it to a binary floating-point number.",
+      "type": "string",
+      "pattern": "^(?=(?:[^0-9]*[0-9]){1,38}[^0-9]*$)(?:0|-?(?:[1-9]\\d*(?:\\.\\d*[1-9])?|0\\.\\d*[1-9]))$"
+    },
+    "Sha256": {
+      "description": "Lowercase hexadecimal SHA-256 digest.",
+      "type": "string",
+      "pattern": "^[0-9a-f]{64}$"
+    },
+    "NonEmptyString": {
+      "type": "string",
+      "minLength": 1
+    },
+    "NullableNonEmptyString": {
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1
+    },
+    "DatasetKind": {
+      "type": "string",
+      "enum": [
+        "process",
+        "flow"
+      ]
+    },
+    "AccessLevel": {
+      "type": "string",
+      "enum": [
+        "open",
+        "metadata_only"
+      ]
+    },
+    "GeographyPrecision": {
+      "type": "string",
+      "enum": [
+        "country",
+        "province",
+        "city",
+        "other",
+        "unknown"
+      ]
+    },
+    "LocalizedTextItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "language",
+        "value"
+      ],
+      "properties": {
+        "language": {
+          "type": "string",
+          "minLength": 2,
+          "maxLength": 35,
+          "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
+        },
+        "value": {
+          "type": "string"
+        }
+      }
+    },
+    "LocalizedText": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/LocalizedTextItem"
+      }
+    },
+    "PublicDatasetKey": {
+      "description": "Exact public data-set identity. An ID is never accepted without its version.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id",
+        "version"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "#/$defs/DatasetKind"
+        },
+        "id": {
+          "$ref": "#/$defs/UUID"
+        },
+        "version": {
+          "$ref": "#/$defs/Version"
+        }
+      }
+    },
+    "ExactDatasetIdentity": {
+      "description": "Exact data-set identity for a context whose kind is already known.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/UUID"
+        },
+        "version": {
+          "$ref": "#/$defs/Version"
+        }
+      }
+    },
+    "ExactNamedDatasetIdentity": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "version",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "#/$defs/UUID"
+        },
+        "version": {
+          "$ref": "#/$defs/Version"
+        },
+        "name": {
+          "$ref": "#/$defs/LocalizedText"
+        }
+      }
+    },
+    "Classification": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "system",
+        "code",
+        "label"
+      ],
+      "properties": {
+        "system": {
+          "$ref": "#/$defs/NonEmptyString"
+        },
+        "code": {
+          "$ref": "#/$defs/NonEmptyString"
+        },
+        "label": {
+          "$ref": "#/$defs/LocalizedText"
+        }
+      }
+    },
+    "Geography": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "label",
+        "precision"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        },
+        "label": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "precision": {
+          "$ref": "#/$defs/GeographyPrecision"
+        }
+      }
+    },
+    "FunctionalUnit": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amount",
+        "unit",
+        "description"
+      ],
+      "properties": {
+        "amount": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "unit": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        },
+        "description": {
+          "$ref": "#/$defs/LocalizedText"
+        }
+      }
+    },
+    "CompleteFunctionalUnit": {
+      "description": "Functional-unit context required before a public numeric value may be emitted.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "amount",
+        "unit",
+        "description"
+      ],
+      "properties": {
+        "amount": {
+          "$ref": "#/$defs/Real"
+        },
+        "unit": {
+          "$ref": "#/$defs/NonEmptyString"
+        },
+        "description": {
+          "$ref": "#/$defs/LocalizedText"
+        }
+      }
+    },
+    "PublicCapabilities": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "metadataVisible",
+        "exchangesVisible",
+        "lciaVisible",
+        "publicArtifactVisible",
+        "citationVisible",
+        "policyVersion",
+        "reasonCodes"
+      ],
+      "properties": {
+        "metadataVisible": {
+          "const": true
+        },
+        "exchangesVisible": {
+          "type": "boolean"
+        },
+        "lciaVisible": {
+          "type": "boolean"
+        },
+        "publicArtifactVisible": {
+          "type": "boolean"
+        },
+        "citationVisible": {
+          "const": true
+        },
+        "policyVersion": {
+          "$ref": "#/$defs/NonEmptyString"
+        },
+        "reasonCodes": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/NonEmptyString"
+          },
+          "uniqueItems": true
+        }
+      }
+    },
+    "FieldOrigin": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "path",
+        "kind",
+        "ruleId",
+        "ruleVersion",
+        "confidence",
+        "reason"
+      ],
+      "properties": {
+        "path": {
+          "$ref": "#/$defs/NonEmptyString"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "original",
+            "normalized",
+            "derived",
+            "ai_inferred"
+          ]
+        },
+        "ruleId": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        },
+        "ruleVersion": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        },
+        "confidence": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "enum": [
+            "high",
+            "medium",
+            "low",
+            null
+          ]
+        },
+        "reason": {
+          "$ref": "#/$defs/LocalizedText"
+        }
+      }
+    },
+    "PublicSource": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "databaseId",
+        "databaseVersion",
+        "sourceRecordId",
+        "providerName",
+        "licenseId",
+        "licenseUrl"
+      ],
+      "properties": {
+        "databaseId": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        },
+        "databaseVersion": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        },
+        "sourceRecordId": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        },
+        "providerName": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "licenseId": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        },
+        "licenseUrl": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri",
+          "minLength": 1
+        }
+      }
+    },
+    "PublicNamedReference": {
+      "description": "Public named data-set reference without any URI or object locator. The exact ID and version are either both present or both null.",
+      "oneOf": [
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "version",
+            "name"
+          ],
+          "properties": {
+            "id": {
+              "$ref": "#/$defs/UUID"
+            },
+            "version": {
+              "$ref": "#/$defs/Version"
+            },
+            "name": {
+              "$ref": "#/$defs/LocalizedText"
+            }
+          }
+        },
+        {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "id",
+            "version",
+            "name"
+          ],
+          "properties": {
+            "id": {
+              "type": "null"
+            },
+            "version": {
+              "type": "null"
+            },
+            "name": {
+              "$ref": "#/$defs/LocalizedText"
+            }
+          }
+        }
+      ]
+    },
+    "PublicComplianceDeclaration": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "system",
+        "overall",
+        "nomenclature",
+        "methodological",
+        "review",
+        "documentation",
+        "quality"
+      ],
+      "properties": {
+        "system": {
+          "$ref": "#/$defs/PublicNamedReference"
+        },
+        "overall": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        },
+        "nomenclature": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        },
+        "methodological": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        },
+        "review": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        },
+        "documentation": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        },
+        "quality": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        }
+      }
+    },
+    "PublicAdministration": {
+      "description": "Locator-free public administration, publication, and ownership metadata. Unknown scalar values are null and unknown localized text is an empty array.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "workflowStatus",
+        "copyright",
+        "owner",
+        "commissioner",
+        "dataGenerator",
+        "dataEntryBy",
+        "project",
+        "intendedApplications",
+        "accessRestrictions",
+        "licenseType",
+        "registrationNumber",
+        "lastRevisionAt",
+        "permanentDataSetUri",
+        "precedingVersion"
+      ],
+      "properties": {
+        "workflowStatus": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        },
+        "copyright": {
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "owner": {
+          "$ref": "#/$defs/PublicNamedReference"
+        },
+        "commissioner": {
+          "$ref": "#/$defs/PublicNamedReference"
+        },
+        "dataGenerator": {
+          "$ref": "#/$defs/PublicNamedReference"
+        },
+        "dataEntryBy": {
+          "$ref": "#/$defs/PublicNamedReference"
+        },
+        "project": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "intendedApplications": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "accessRestrictions": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "licenseType": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        },
+        "registrationNumber": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        },
+        "lastRevisionAt": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/DateTime"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "permanentDataSetUri": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "format": "uri",
+          "minLength": 1
+        },
+        "precedingVersion": {
+          "$ref": "#/$defs/PublicNamedReference"
+        }
+      }
+    },
+    "NullableCursor": {
+      "description": "Opaque, bounded continuation cursor. It contains no object or service locator.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 4096
+    },
+    "NullableYear": {
+      "type": [
+        "integer",
+        "null"
+      ],
+      "minimum": 0,
+      "maximum": 9999
+    },
+    "Year": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9999
+    },
+    "DateTime": {
+      "type": "string",
+      "format": "date-time"
+    }
+  }
+}

@@ -10,6 +10,7 @@ whenToUse:
   - when you need a compact mental model before editing SQL, config, or schema-workspace tooling
   - when deciding whether a path is stable source of truth or generated inspection output
   - when the task mentions workspace-based migration authoring, remote schema export, or branch-specific database behavior
+  - when adding or consuming the anonymous Portal public DTO boundary
 whenToUpdate:
   - when major repo paths or authoring workflows change
   - when the generated schema workspace contract changes
@@ -17,6 +18,7 @@ whenToUpdate:
 checkPaths:
   - docs/agents/repo-architecture.md
   - .docpact/config.yaml
+  - contracts/portal/**
   - supabase/config.toml
   - supabase/migrations/**
   - supabase/tests/**
@@ -27,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 525382dc5e5183f0ede0d745717dec66a08398be
-lastReviewedNote: "Added the dedicated ai queue, versioned ai.tidas_suggestion registry entry, and requester-scoped service facades for Database Issue #520."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: f1cc2bbf5bf0674e6595b9654ad1ef324884cd2a
+lastReviewedNote: "Reviewed for Issue #527: documented the additive, locator-free Portal public read boundary and its fail-closed capability model."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -71,6 +73,14 @@ in `private.api_capability_grants`. That table records the owning capability ID
 and admitted caller roles; migrations first remove inherited grants and then
 rebuild the external ACL from this closed manifest. New or overloaded RPCs are
 therefore denied until their exact signature is deliberately classified.
+
+## Portal Public Read Boundary
+
+`contracts/portal/**` owns the exhaustive versioned JSON Schemas for the anonymous Portal DTOs. The matching `api.portal_*_v1` functions are additive façades: they fix visibility to public states 100/200, use stable keyset cursors, return canonical decimal strings, and recursively exclude actor/team/review fields, embeddings, credentials, private artifact locators, and database error detail. They do not replace or change legacy Search, raw-table RLS, Data Product, or Release consumers.
+
+Portal capability policy is fail closed. State 200 and unknown, missing, exclusive, or conflicting license evidence remain metadata-only. Exchange values require an exact public Process/Flow/FlowProperty/UnitGroup support chain plus an explicitly open capability. LCIA values come only from an immutable publication-bound numeric projection reconciled to package/artifact evidence; the public RPC is bounded and locator-free, while artifact storage remains private.
+
+The Portal executor is NOLOGIN/NOBYPASSRLS and receives only the minimum object privileges required by the façades. External wrapper ACLs are revoked from `PUBLIC` and classified by exact signature in `private.api_capability_grants`; raw core tables receive no new anon policy.
 
 Edge consumers must obtain Data Product publication, package, and worker
 metadata through bounded `api.svc_data_product_*` projections rather than

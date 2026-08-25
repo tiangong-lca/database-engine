@@ -1,0 +1,162 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "portal.public-exchange-page.v1.schema.json",
+  "title": "TianGong Portal public Process exchange page v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "process",
+    "processContext",
+    "rows",
+    "nextCursor"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "portal.public-exchange-page.v1"
+    },
+    "process": {
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/ExactDatasetIdentity"
+    },
+    "processContext": {
+      "$ref": "#/$defs/ProcessContext"
+    },
+    "rows": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/PublicExchangeRow"
+      }
+    },
+    "nextCursor": {
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableCursor"
+    }
+  },
+  "$defs": {
+    "ProcessContext": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "functionalUnit",
+        "capabilityPolicyVersion"
+      ],
+      "properties": {
+        "functionalUnit": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/FunctionalUnit"
+        },
+        "capabilityPolicyVersion": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NonEmptyString"
+        }
+      }
+    },
+    "PublicExchangeRow": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "internalId",
+        "kind",
+        "direction",
+        "flow",
+        "classification",
+        "amount",
+        "unit",
+        "isQuantitativeReference",
+        "uncertainty",
+        "origin"
+      ],
+      "properties": {
+        "internalId": {
+          "description": "Public TIDAS Exchange identity within the exact Process version; this is not a database or operational internal field.",
+          "type": "string",
+          "pattern": "^\\d{1,6}$"
+        },
+        "kind": {
+          "type": "string",
+          "enum": [
+            "technosphere",
+            "elementary",
+            "waste"
+          ]
+        },
+        "direction": {
+          "type": "string",
+          "enum": [
+            "input",
+            "output"
+          ]
+        },
+        "flow": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/ExactNamedDatasetIdentity"
+        },
+        "classification": {
+          "anyOf": [
+            {
+              "$ref": "./portal.common-types.v1.schema.json#/$defs/Classification"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "amount": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/Real"
+        },
+        "unit": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NonEmptyString"
+        },
+        "isQuantitativeReference": {
+          "type": "boolean"
+        },
+        "uncertainty": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/PublicUncertainty"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "origin": {
+          "type": "array",
+          "items": {
+            "$ref": "./portal.common-types.v1.schema.json#/$defs/FieldOrigin"
+          }
+        }
+      }
+    },
+    "PublicUncertainty": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "type",
+        "minimum",
+        "maximum"
+      ],
+      "properties": {
+        "type": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NonEmptyString"
+        },
+        "minimum": {
+          "anyOf": [
+            {
+              "$ref": "./portal.common-types.v1.schema.json#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "maximum": {
+          "anyOf": [
+            {
+              "$ref": "./portal.common-types.v1.schema.json#/$defs/Real"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      }
+    }
+  }
+}

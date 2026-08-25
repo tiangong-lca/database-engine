@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "portal.public-facets.v1.schema.json",
+  "title": "TianGong Portal public facets v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "queryFingerprint",
+    "groups"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "portal.public-facets.v1"
+    },
+    "kind": {
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/DatasetKind"
+    },
+    "queryFingerprint": {
+      "description": "Lowercase hexadecimal SHA-256 over the UTF-8 canonical JSON object {kind,query,filters,sort}.",
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/Sha256"
+    },
+    "groups": {
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/FacetGroup"
+      }
+    }
+  },
+  "$defs": {
+    "FacetGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "label",
+        "values"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NonEmptyString"
+        },
+        "label": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "values": {
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/FacetValue"
+          }
+        }
+      }
+    },
+    "FacetValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "value",
+        "label",
+        "count"
+      ],
+      "properties": {
+        "value": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NonEmptyString"
+        },
+        "label": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "count": {
+          "type": "integer",
+          "minimum": 0
+        }
+      }
+    }
+  }
+}

@@ -10,6 +10,7 @@ whenToUse:
   - when a task may change database schema, migrations, seeds, Supabase branch config, or database-side SQL tests
   - when routing work from the workspace root into the database-engine repo
   - when deciding which document owns a rule, command, or path boundary in this repo
+  - when defining or changing the anonymous Portal public DTO contract
 whenToUpdate:
   - when repo ownership or source-of-truth paths change
   - when branch policy or workspace integration rules change
@@ -19,6 +20,7 @@ checkPaths:
   - README.md
   - README.zh-CN.md
   - .docpact/**/*.yaml
+  - contracts/portal/**
   - docs/agents/**
   - supabase/config.toml
   - supabase/migrations/**
@@ -34,9 +36,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 525382dc5e5183f0ede0d745717dec66a08398be
-lastReviewedNote: "Reviewed for Issue #520 AI worker queue contract: dev-first delivery, database ownership of queue/RPC contracts, and later workspace integration remain unchanged."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: f1cc2bbf5bf0674e6595b9654ad1ef324884cd2a
+lastReviewedNote: "Reviewed for Issue #527: database-engine owns the exhaustive Portal public DTO schemas, additive RPC façade, capability policy, and database-side contract tests; dev-first delivery and workspace integration remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -46,7 +48,7 @@ related:
 
 ## Repo Contract
 
-`database-engine` owns the checked-in Supabase database contract for the TianGong LCA workspace: schema truth, migration history, operator branch bindings, database-side tests, the automation that deploys committed migrations to the persistent Supabase `dev` branch, and the production Supabase GitHub integration contract that applies Git `main` migrations.
+`database-engine` owns the checked-in Supabase database contract for the TianGong LCA workspace: schema truth, versioned public DTO schemas under `contracts/portal/**`, migration history, operator branch bindings, database-side tests, the automation that deploys committed migrations to the persistent Supabase `dev` branch, and the production Supabase GitHub integration contract that applies Git `main` migrations.
 
 Start here when the task may change schema truth, branch bindings, generated schema-workspace tooling, repo validation rules, or documentation ownership inside this repo.
 
