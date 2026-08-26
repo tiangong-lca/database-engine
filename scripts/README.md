@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 9d7485f
+lastReviewedCommit: 61fca95
 lastReviewedNote: "Reviewed for dual Portal manifests, populated facet upgrade and recovery runners, and named performance profiles."
 related:
   - ../AGENTS.md

@@ -93,7 +93,35 @@ begin
       on facet.dataset_kind = projection.dataset_kind
      and facet.id = projection.id
      and facet.version = projection.version
-    where projection.id >= 'c0000000-0000-0000-0000-000000000000'::uuid
+    where projection.dataset_kind = 'process'
+      and projection.id >= 'c0000000-0000-0000-0000-000000000000'::uuid
+      and (
+        facet.id is null
+        or facet.state_code is distinct from projection.state_code
+        or facet.modified_at is distinct from projection.modified_at
+        or facet.facet_access_level is distinct from
+          facts.facet_access_level
+        or facet.facet_geography is distinct from facts.facet_geography
+        or facet.facet_reference_year is distinct from
+          facts.facet_reference_year
+        or facet.facet_process_subtype is distinct from
+          facts.facet_process_subtype
+        or facet.facet_source is distinct from facts.facet_source
+        or facet.facet_contract_version is distinct from 1
+      )
+  ) or exists (
+    select 1
+    from private.portal_catalog_search_rows_v1 as projection
+    cross join lateral private.portal_catalog_facet_facts_v1(
+      projection.dataset_kind,
+      projection.card
+    ) as facts
+    left join private.portal_catalog_facet_rows_v1 as facet
+      on facet.dataset_kind = projection.dataset_kind
+     and facet.id = projection.id
+     and facet.version = projection.version
+    where projection.dataset_kind = 'flow'
+      and projection.id >= 'c0000000-0000-0000-0000-000000000000'::uuid
       and (
         facet.id is null
         or facet.state_code is distinct from projection.state_code
@@ -111,7 +139,20 @@ begin
   ) or exists (
     select 1
     from private.portal_catalog_facet_rows_v1 as facet
-    where facet.id >= 'c0000000-0000-0000-0000-000000000000'::uuid
+    where facet.dataset_kind = 'process'
+      and facet.id >= 'c0000000-0000-0000-0000-000000000000'::uuid
+      and not exists (
+        select 1
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = facet.dataset_kind
+          and projection.id = facet.id
+          and projection.version = facet.version
+      )
+  ) or exists (
+    select 1
+    from private.portal_catalog_facet_rows_v1 as facet
+    where facet.dataset_kind = 'flow'
+      and facet.id >= 'c0000000-0000-0000-0000-000000000000'::uuid
       and not exists (
         select 1
         from private.portal_catalog_search_rows_v1 as projection

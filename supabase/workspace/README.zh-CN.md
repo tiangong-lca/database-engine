@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 9d7485f
+lastReviewedCommit: 61fca95
 lastReviewedNote: "已在既有数据 upgrade 证明后复核；确定性的 266-migration 快照与 public/api 类型所有权不变。"
 related:
   - ../../AGENTS.md
