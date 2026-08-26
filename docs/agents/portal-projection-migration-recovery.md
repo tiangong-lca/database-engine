@@ -1,6 +1,6 @@
 ---
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 5b15c95
+lastReviewedCommit: 10059c6
 lastReviewedNote: "Reviewed for immutable v1 manifest diagnosis, fail-closed drift handling, and the required shadow-v2 semantic-change path."
 title: Portal Projection Migration Recovery
 docType: runbook
@@ -51,7 +51,9 @@ The rollout has four observable boundaries:
 2. `20260826080257` through `20260826080342` backfill bounded UUID ranges. Old
    Search, Hybrid, and Facets wrappers remain authoritative throughout this
    state. A failed or paused rollout therefore adds write-only projection work
-   but does not expose partial projection reads.
+   but does not expose partial projection reads. Every batch sets an outer
+   five-second lock timeout and 120-second statement timeout before invoking
+   the private helper; function proconfig alone is not the statement timer.
 3. `20260826080345` acquires a five-second source-write fence in one explicit
    transaction, inserts genuinely missing rows, removes stale rows, verifies
    key/state/modified parity, and removes the backfill helper.
@@ -289,6 +291,11 @@ index, trigger, and wrapper evidence.
 The checked-in recovery regression requires an explicitly attested, isolated
 Issue 531 Supabase project. It resets that local project and must never target a
 shared checkout, Preview, persistent Dev, or production.
+
+Formal recovery evidence requires clean HEAD, the reviewed Supabase CLI
+`2.109.1`, and byte equality plus one aggregate SHA-256 across all 257 migration
+files in the repository and isolated project. Comparing only Issue 531 files is
+not sufficient because an earlier baseline change can alter recovery behavior.
 
 ```bash
 PORTAL_PROJECTION_RECOVERY_TARGET=local-isolated \

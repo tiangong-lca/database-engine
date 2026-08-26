@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 5b15c95
+lastReviewedCommit: 10059c6
 lastReviewedNote: "已复核 Portal projection manifest 检查器与命名 release/sparse benchmark profile；schema-workspace helper 行为不变。"
 related:
   - ../AGENTS.md
@@ -83,7 +83,9 @@ scripts/test_search_text_array_upgrade.sh
 更新竞态；主动制造 reconcile 锁超时与 cutover guard 失败；并证明相同 migration
 history 下可重试、同名 concurrent index 可受控清理，以及已记录迁移重复执行不会重建
 索引。所需环境变量与恢复边界见
-`docs/agents/portal-projection-migration-recovery.md`。
+`docs/agents/portal-projection-migration-recovery.md`。正式证据还要求干净 HEAD、
+Supabase CLI `2.109.1`，以及完整 257-file migration tree 的逐字相等和 aggregate
+SHA-256。
 
 ### `run_portal_projection_benchmark.sh`
 

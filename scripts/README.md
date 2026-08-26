@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 5b15c95
+lastReviewedCommit: 10059c6
 lastReviewedNote: "Reviewed for the Portal projection manifest checker and named release/sparse benchmark profiles; schema-workspace helper behavior is unchanged."
 related:
   - ../AGENTS.md
@@ -92,7 +92,9 @@ embedding-only races; forces reconcile lock-timeout and cutover-guard failures;
 and verifies same-history retry, controlled same-name concurrent-index cleanup,
 and no-op repeat without index rebuild. See
 `docs/agents/portal-projection-migration-recovery.md` for the required
-environment and recovery boundaries.
+environment and recovery boundaries. Formal evidence additionally requires
+clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
+the complete 257-file migration tree.
 
 ### `run_portal_projection_benchmark.sh`
 
