@@ -94,7 +94,7 @@ create function private.portal_public_hybrid_input_v1(
 )
 returns jsonb
 language plpgsql
-immutable
+stable
 parallel safe
 set search_path = ''
 as $function$
