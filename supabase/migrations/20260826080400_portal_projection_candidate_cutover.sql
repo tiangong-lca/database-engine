@@ -886,10 +886,22 @@ begin
   -- cards are hydrated.
   if p_query = ''
      and p_filters = '{}'::jsonb
-     and p_sort in ('relevance', 'modified_desc') then
+     and p_sort in ('relevance', 'modified_desc', 'name_asc') then
     with portal_prefilter as materialized (
       select p_kind as dataset_kind,
-        candidate.*
+        candidate.*,
+        case when p_sort = 'name_asc' then case
+          when nullif(candidate.card #>> '{names,0,value}', '') is not null
+            and pg_catalog.length(
+              candidate.card #>> '{names,0,value}'
+            ) <= 500
+            and pg_catalog.octet_length(
+              candidate.card #>> '{names,0,value}'
+            ) <= 2000
+            and candidate.card #>> '{names,0,value}' !~ '[[:cntrl:]]'
+            then candidate.card #>> '{names,0,value}'
+          else '~unnamed:' || candidate.id::text
+        end end as name_key
       from private.catalog_portal_candidate_rows_v1(
         p_kind,
         p_query,
@@ -913,10 +925,24 @@ begin
                 )
               )
             )
-          else
+          when 'modified_desc' then
             portal_prefilter.modified_at < p_cursor_rank::timestamptz
             or (
               portal_prefilter.modified_at = p_cursor_rank::timestamptz
+              and (
+                portal_prefilter.id > p_cursor_id
+                or (
+                  portal_prefilter.id = p_cursor_id
+                  and portal_prefilter.version < p_cursor_version
+                )
+              )
+            )
+          else
+            pg_catalog.lower(portal_prefilter.name_key)
+              > pg_catalog.lower(p_cursor_rank)
+            or (
+              pg_catalog.lower(portal_prefilter.name_key)
+                = pg_catalog.lower(p_cursor_rank)
               and (
                 portal_prefilter.id > p_cursor_id
                 or (
@@ -932,6 +958,8 @@ begin
           order by
             case when p_sort = 'modified_desc'
               then portal_after_cursor.modified_at end desc,
+            case when p_sort = 'name_asc'
+              then pg_catalog.lower(portal_after_cursor.name_key) end asc,
             portal_after_cursor.id asc,
             portal_after_cursor.version desc
         ) as page_rank
@@ -939,6 +967,8 @@ begin
       order by
         case when p_sort = 'modified_desc'
           then portal_after_cursor.modified_at end desc,
+        case when p_sort = 'name_asc'
+          then pg_catalog.lower(portal_after_cursor.name_key) end asc,
         portal_after_cursor.id asc,
         portal_after_cursor.version desc
       limit p_limit + 1
@@ -977,10 +1007,11 @@ begin
           'fp', p_query_fingerprint,
           'rankKey', case p_sort
             when 'relevance' then '0'
-            else pg_catalog.to_char(
+            when 'modified_desc' then pg_catalog.to_char(
               portal_decorated.modified_at at time zone 'UTC',
               'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
             )
+            else pg_catalog.lower(portal_decorated.name_key)
           end,
           'kind', p_kind,
           'id', portal_decorated.id::text,
