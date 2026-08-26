@@ -358,10 +358,15 @@ begin
            'portal_catalog_search_rows_contract_version_v1_chk'
          and contract_check.contype = 'c'
          and contract_check.convalidated
-         and pg_catalog.pg_get_expr(
-           contract_check.conbin,
-           contract_check.conrelid
-         ) ~ 'projection_contract_version = 1'
+         and pg_catalog.regexp_replace(
+           pg_catalog.pg_get_expr(
+             contract_check.conbin,
+             contract_check.conrelid
+           ),
+           '[[:space:]]',
+           '',
+           'g'
+         ) = '(projection_contract_version=1)'
      )
      or not exists (
        select 1
