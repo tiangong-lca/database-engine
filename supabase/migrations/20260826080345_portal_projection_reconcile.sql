@@ -31,7 +31,7 @@ with missing as materialized (
 )
 insert into private.portal_catalog_search_rows_v1 (
   dataset_kind, id, version, state_code, modified_at,
-  source_fingerprint, card, document, embedding_ft
+  card, document, embedding_ft
 )
 select
   'process',
@@ -39,7 +39,6 @@ select
   missing.version,
   missing.state_code,
   missing.modified_at,
-  pg_catalog.md5(missing.json::text),
   payload.value -> 'card',
   payload.value ->> 'document',
   missing.embedding_ft
@@ -74,7 +73,7 @@ with missing as materialized (
 )
 insert into private.portal_catalog_search_rows_v1 (
   dataset_kind, id, version, state_code, modified_at,
-  source_fingerprint, card, document, embedding_ft
+  card, document, embedding_ft
 )
 select
   'flow',
@@ -82,7 +81,6 @@ select
   missing.version,
   missing.state_code,
   missing.modified_at,
-  pg_catalog.md5(missing.json::text),
   payload.value -> 'card',
   payload.value ->> 'document',
   missing.embedding_ft
@@ -162,7 +160,6 @@ begin
         process.id is null
         or process.state_code <> projection.state_code
         or process.modified_at <> projection.modified_at
-        or pg_catalog.md5(process.json::text) <> projection.source_fingerprint
         or process.embedding_ft is distinct from projection.embedding_ft
       )
   ) or exists (
@@ -177,7 +174,6 @@ begin
         flow.id is null
         or flow.state_code <> projection.state_code
         or flow.modified_at <> projection.modified_at
-        or pg_catalog.md5(flow.json::text) <> projection.source_fingerprint
         or flow.embedding_ft is distinct from projection.embedding_ft
       )
   ) then

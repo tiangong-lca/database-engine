@@ -222,8 +222,6 @@ create table private.portal_catalog_search_rows_v1 (
   state_code integer not null
     check (state_code in (100, 200)),
   modified_at timestamptz not null,
-  source_fingerprint text not null
-    check (source_fingerprint ~ '^[0-9a-f]{32}$'),
   card jsonb not null
     check (pg_catalog.jsonb_typeof(card) = 'object'),
   document text not null,
@@ -336,7 +334,6 @@ begin
         version,
         state_code,
         modified_at,
-        source_fingerprint,
         card,
         document,
         embedding_ft
@@ -346,7 +343,6 @@ begin
         new.version::text,
         new.state_code,
         new.modified_at,
-        pg_catalog.md5(new.json::text),
         v_payload -> 'card',
         v_payload ->> 'document',
         new.embedding_ft
@@ -376,7 +372,6 @@ begin
       version,
       state_code,
       modified_at,
-      source_fingerprint,
       card,
       document,
       embedding_ft
@@ -386,7 +381,6 @@ begin
       new.version::text,
       new.state_code,
       new.modified_at,
-      pg_catalog.md5(new.json::text),
       v_payload -> 'card',
       v_payload ->> 'document',
       new.embedding_ft
@@ -394,7 +388,6 @@ begin
     on conflict (dataset_kind, id, version) do update
     set state_code = excluded.state_code,
         modified_at = excluded.modified_at,
-        source_fingerprint = excluded.source_fingerprint,
         card = excluded.card,
         document = excluded.document,
         embedding_ft = excluded.embedding_ft;
@@ -470,7 +463,7 @@ begin
 
   insert into private.portal_catalog_search_rows_v1 (
     dataset_kind, id, version, state_code, modified_at,
-    source_fingerprint, card, document, embedding_ft
+    card, document, embedding_ft
   )
   select
     'process',
@@ -478,7 +471,6 @@ begin
     process.version::text,
     process.state_code,
     process.modified_at,
-    pg_catalog.md5(process.json::text),
     payload.value -> 'card',
     payload.value ->> 'document',
     process.embedding_ft
@@ -500,7 +492,7 @@ begin
 
   insert into private.portal_catalog_search_rows_v1 (
     dataset_kind, id, version, state_code, modified_at,
-    source_fingerprint, card, document, embedding_ft
+    card, document, embedding_ft
   )
   select
     'flow',
@@ -508,7 +500,6 @@ begin
     flow.version::text,
     flow.state_code,
     flow.modified_at,
-    pg_catalog.md5(flow.json::text),
     payload.value -> 'card',
     payload.value ->> 'document',
     flow.embedding_ft
