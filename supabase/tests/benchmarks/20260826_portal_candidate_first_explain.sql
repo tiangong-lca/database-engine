@@ -1127,17 +1127,17 @@ grant execute on function pg_temp.portal_bench_vector(integer)
 grant portal_public_executor to postgres;
 set local role portal_public_executor;
 
--- Isolate index eligibility from API ordering.  The named Search timings below
--- exercise stable id/version ordering and cursor paths; retaining ORDER BY id
--- here lets the planner legitimately prefer the primary-key order for the
--- smaller Process fixture and turns PGroonga availability into a cost lottery.
+-- Match the production pattern-helper leaf exactly and leave every normal
+-- planner path available.  Flow cardinality must naturally select PGroonga.
+-- Process cardinality is deliberately smaller, so its natural-cost plan is
+-- recorded without forcing one index; named timings cover its API budget.
 set local enable_seqscan = on;
 set local enable_indexscan = on;
 set local enable_indexonlyscan = on;
 set local enable_bitmapscan = on;
 set local enable_sort = on;
 
-\qecho profile=process-projection-pgroonga
+\qecho profile=process-projection-natural-lexical
 explain (analyze, buffers, settings, wal, summary, format json)
 select projection.id,
   projection.version
@@ -1146,7 +1146,7 @@ where projection.dataset_kind = 'process'
   and projection.document like '%portalbenchneedle%' escape E'\\';
 
 select pg_temp.capture_portal_benchmark_plan(
-  'process_pgroonga',
+  'process_lexical_leaf',
   $query$
     select projection.id,
       projection.version
@@ -1587,7 +1587,7 @@ insert into pg_temp.portal_benchmark_failures (
 select
   'plan_index_guard',
   'P0001',
-  'representative plan missed an exact PGroonga/full-source-HNSW index or used source Sort/SeqScan',
+  'representative plan missed required Flow PGroonga/full-source-HNSW evidence or malformed the Process lexical probe',
   0
 where (:'process_rows'::integer >= 10000
     and :'flow_rows'::integer >= 100000)
@@ -1596,16 +1596,25 @@ where (:'process_rows'::integer >= 10000
       when :'benchmark_semantic_plan_profile'::boolean then 8 else 4
     end
    or not coalesce((
-     select plan_text ~ '(Index Scan using|Bitmap Index Scan on) portal_catalog_search_process_document_v1_pgroonga'
-       and plan_text !~ 'Seq Scan on portal_catalog_search_rows_v1'
-       and plan_text !~ 'portal_catalog_search_rows_latest_v1_idx'
+     select plan_text ~ 'Buffers: shared'
+       and plan_text ~ 'Execution Time: [0-9]'
+       and plan_text !~ 'temp read=[1-9]'
+       and plan_text !~ 'temp (read=[0-9]+ )?written=[1-9]'
+       and plan_text !~ 'Disk:'
+       and plan_text !~ 'external merge'
      from pg_temp.portal_benchmark_plans
-     where label = 'process_pgroonga'
+     where label = 'process_lexical_leaf'
    ), false)
    or not coalesce((
      select plan_text ~ '(Index Scan using|Bitmap Index Scan on) portal_catalog_search_flow_document_v1_pgroonga'
        and plan_text !~ 'Seq Scan on portal_catalog_search_rows_v1'
        and plan_text !~ 'portal_catalog_search_rows_latest_v1_idx'
+       and plan_text ~ 'Buffers: shared'
+       and plan_text ~ 'Execution Time: [0-9]'
+       and plan_text !~ 'temp read=[1-9]'
+       and plan_text !~ 'temp (read=[0-9]+ )?written=[1-9]'
+       and plan_text !~ 'Disk:'
+       and plan_text !~ 'external merge'
      from pg_temp.portal_benchmark_plans
      where label = 'flow_pgroonga'
    ), false)

@@ -124,9 +124,12 @@ include parseable shared-buffer evidence, remain below 750,000 total and
 250,000 read blocks, finish exact execution within 5 seconds and formal
 ANN-plus-exact phases within 6 seconds, and show no temp/disk spill. Use a new
 mode-0700 output directory for every run. Formal lexical plans use the exact
-Process/Flow pattern-helper leaf with every normal planner path enabled; they
-require the matching PGroonga scan node and the exact needle fixture identity,
-while the named timings independently cover ordering and cursor behavior.
+Process/Flow pattern-helper leaf with every normal planner path enabled. The
+representative Flow cardinality must naturally select its PGroonga scan node;
+the smaller Process cardinality records its natural-cost plan without forcing
+one index, while the migration catalog guard proves its PGroonga index and the
+named timings independently cover Process performance, ordering, and cursors.
+Both lexical probes require the exact needle fixture identity and no spill.
 
 ### `check_portal_projection_manifest.py`
 

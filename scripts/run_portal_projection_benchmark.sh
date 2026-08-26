@@ -312,8 +312,10 @@ fi
 docker cp "$container_name:$container_explain" "$explain_log" >/dev/null
 chmod 600 "$explain_log"
 
+# The ~17k-row Process lexical leaf has two valid natural-cost plans.  SQL
+# records and bounds whichever the planner selects; the fresh migration guard
+# separately validates its PGroonga catalog.  Flow must name PGroonga here.
 for expected_index in \
-  portal_catalog_search_process_document_v1_pgroonga \
   portal_catalog_search_flow_document_v1_pgroonga \
   processes_embedding_ft_hnsw_idx \
   flows_embedding_ft_hnsw_idx

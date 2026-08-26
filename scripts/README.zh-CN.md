@@ -111,8 +111,10 @@ semantic plan 必须含可解析的 shared-buffer 证据、低于 750,000 total 
 read blocks、exact 在 5 秒内完成、formal ANN+exact 合计不超过 6 秒，且没有
 temp/disk spill。每次运行必须使用新的 mode-0700 输出目录。正式 lexical plan
 使用与 Process/Flow pattern helper 完全一致的 leaf，并保持所有常规 planner
-路径开启；它必须命中对应 PGroonga scan node 和精确 needle fixture identity，
-排序与 cursor 行为则由命名 timing 独立覆盖。
+路径开启。代表性 Flow 基数必须自然命中其 PGroonga scan node；Process 基数较小，
+因此记录自然成本计划而不强制某个索引，迁移期 catalog guard 负责证明其 PGroonga
+索引，命名 timing 独立覆盖 Process 性能、排序和 cursor。两类 lexical probe 都
+必须满足精确 needle fixture identity 且无 spill。
 
 ### `check_portal_projection_manifest.py`
 
