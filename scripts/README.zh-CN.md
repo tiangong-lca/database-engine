@@ -109,7 +109,10 @@ reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合�
 Search/Facets p95 <= 2 秒、Hybrid p95 <= 6 秒、每次 Hybrid < 8 秒。正式
 semantic plan 必须含可解析的 shared-buffer 证据、低于 750,000 total / 250,000
 read blocks、exact 在 5 秒内完成、formal ANN+exact 合计不超过 6 秒，且没有
-temp/disk spill。每次运行必须使用新的 mode-0700 输出目录。
+temp/disk spill。每次运行必须使用新的 mode-0700 输出目录。正式 lexical plan
+使用与 Process/Flow pattern helper 完全一致的 leaf，并保持所有常规 planner
+路径开启；它必须命中对应 PGroonga scan node 和精确 needle fixture identity，
+排序与 cursor 行为则由命名 timing 独立覆盖。
 
 ### `check_portal_projection_manifest.py`
 

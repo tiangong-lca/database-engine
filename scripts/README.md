@@ -123,7 +123,10 @@ seconds with every Hybrid call below 8 seconds. Formal semantic plans must
 include parseable shared-buffer evidence, remain below 750,000 total and
 250,000 read blocks, finish exact execution within 5 seconds and formal
 ANN-plus-exact phases within 6 seconds, and show no temp/disk spill. Use a new
-mode-0700 output directory for every run.
+mode-0700 output directory for every run. Formal lexical plans use the exact
+Process/Flow pattern-helper leaf with every normal planner path enabled; they
+require the matching PGroonga scan node and the exact needle fixture identity,
+while the named timings independently cover ordering and cursor behavior.
 
 ### `check_portal_projection_manifest.py`
 
