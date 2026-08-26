@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "api"."portal_search_processes_v1"("p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor" "text", "p_limit" integer) IS 'Locator-free public Process lexical/identifier search over one fixed 100/200 scope with query-bound keyset cursors.';

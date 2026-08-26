@@ -31,7 +31,9 @@ begin
   with all_versions as materialized (
     select source.*,
       row_number() over (order by source.version desc) = 1 as is_latest,
-      private.portal_capabilities_v1(p_kind, source.state_code, source.json_data) as capabilities
+      private.portal_capabilities_v1(
+        p_kind, source.state_code, source.json_data
+      ) as capabilities
     from private.portal_dataset_rows_v1(p_kind, p_id) as source
   ), ordered as materialized (
     select all_versions.*,
@@ -43,25 +45,43 @@ begin
   )
   select
     coalesce(jsonb_agg(jsonb_build_object(
-      'key', jsonb_build_object('kind', p_kind, 'id', ordered.id::text, 'version', ordered.version),
-      'accessLevel', case when (ordered.capabilities ->> 'exchangesVisible')::boolean then 'open' else 'metadata_only' end,
+      'key', jsonb_build_object(
+        'kind', p_kind,
+        'id', ordered.id::text,
+        'version', ordered.version
+      ),
+      'accessLevel', case
+        when (ordered.capabilities ->> 'exchangesVisible')::boolean
+          then 'open'
+        else 'metadata_only'
+      end,
       'capabilities', ordered.capabilities,
       'modifiedAt', private.portal_timestamp_v1(ordered.modified_at),
       'isLatest', ordered.is_latest
-    ) order by ordered.page_rank) filter (where ordered.page_rank <= p_limit), '[]'::jsonb),
-    case when max(ordered.page_rank) > p_limit then private.portal_cursor_encode_v1(
-      (jsonb_agg(jsonb_build_object(
-        'v', 1, 'kind', p_kind, 'id', p_id::text, 'version', ordered.version
-      ) order by ordered.page_rank) filter (where ordered.page_rank = p_limit)) -> 0
-    ) else null end
+    ) order by ordered.page_rank)
+      filter (where ordered.page_rank <= p_limit), '[]'::jsonb),
+    case when max(ordered.page_rank) > p_limit
+      then private.portal_cursor_encode_v1(
+        (jsonb_agg(jsonb_build_object(
+          'v', 1,
+          'kind', p_kind,
+          'id', p_id::text,
+          'version', ordered.version
+        ) order by ordered.page_rank)
+          filter (where ordered.page_rank = p_limit)) -> 0
+      )
+      else null
+    end
   into v_items, v_next_cursor
   from ordered;
 
-  return jsonb_build_object(
-    'schemaVersion', 'portal.public-version-page.v1',
-    'dataset', jsonb_build_object('kind', p_kind, 'id', p_id::text),
-    'items', v_items,
-    'nextCursor', v_next_cursor
+  return private.portal_lcia_decorate_item_page_v1(
+    jsonb_build_object(
+      'schemaVersion', 'portal.public-version-page.v1',
+      'dataset', jsonb_build_object('kind', p_kind, 'id', p_id::text),
+      'items', v_items,
+      'nextCursor', v_next_cursor
+    )
   );
 exception
   when sqlstate '22023' then

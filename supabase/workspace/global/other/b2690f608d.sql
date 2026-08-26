@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."portal_process_open_capability_bridge_v1"("p_state_code" integer, "p_json" "jsonb") IS 'Executor-owned boolean bridge that reuses the fail-closed Process numeric capability policy without widening its helper ACL graph.';

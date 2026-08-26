@@ -1,1 +1,0 @@
-COMMENT ON FUNCTION "api"."portal_get_dataset_v1"("p_kind" "text", "p_id" "uuid", "p_version" "text") IS 'Exact locator-free public Process/Flow metadata envelope. Missing and non-public identities return SQL NULL.';

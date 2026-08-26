@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."portal_lcia_decorate_item_page_v1"("p_page" "jsonb") IS 'Preserves strict item-page order and cursor while projecting authoritative lciaVisible onto Process Search or Versions items.';

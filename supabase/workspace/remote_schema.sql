@@ -19354,7 +19354,9 @@ begin
      or p_version !~ '^\d{2}\.\d{2}\.\d{3}$' then
     raise exception using errcode = '22023', message = 'invalid portal request';
   end if;
-  return private.portal_dataset_projection_v1(p_kind, p_id, p_version);
+  return private.portal_lcia_decorate_dataset_v1(
+    private.portal_dataset_projection_v1(p_kind, p_id, p_version)
+  );
 exception
   when sqlstate '22023' then
     raise exception using errcode = '22023', message = 'invalid portal request';
@@ -19369,7 +19371,7 @@ $_$;
 ALTER FUNCTION "api"."portal_get_dataset_v1"("p_kind" "text", "p_id" "uuid", "p_version" "text") OWNER TO "portal_public_executor";
 
 
-COMMENT ON FUNCTION "api"."portal_get_dataset_v1"("p_kind" "text", "p_id" "uuid", "p_version" "text") IS 'Exact locator-free public Process/Flow metadata envelope. Missing and non-public identities return SQL NULL.';
+COMMENT ON FUNCTION "api"."portal_get_dataset_v1"("p_kind" "text", "p_id" "uuid", "p_version" "text") IS 'Exact locator-free public Process/Flow metadata envelope with authoritative publication-bound LCIA context.';
 
 
 
@@ -19879,7 +19881,9 @@ begin
   with all_versions as materialized (
     select source.*,
       row_number() over (order by source.version desc) = 1 as is_latest,
-      private.portal_capabilities_v1(p_kind, source.state_code, source.json_data) as capabilities
+      private.portal_capabilities_v1(
+        p_kind, source.state_code, source.json_data
+      ) as capabilities
     from private.portal_dataset_rows_v1(p_kind, p_id) as source
   ), ordered as materialized (
     select all_versions.*,
@@ -19891,25 +19895,43 @@ begin
   )
   select
     coalesce(jsonb_agg(jsonb_build_object(
-      'key', jsonb_build_object('kind', p_kind, 'id', ordered.id::text, 'version', ordered.version),
-      'accessLevel', case when (ordered.capabilities ->> 'exchangesVisible')::boolean then 'open' else 'metadata_only' end,
+      'key', jsonb_build_object(
+        'kind', p_kind,
+        'id', ordered.id::text,
+        'version', ordered.version
+      ),
+      'accessLevel', case
+        when (ordered.capabilities ->> 'exchangesVisible')::boolean
+          then 'open'
+        else 'metadata_only'
+      end,
       'capabilities', ordered.capabilities,
       'modifiedAt', private.portal_timestamp_v1(ordered.modified_at),
       'isLatest', ordered.is_latest
-    ) order by ordered.page_rank) filter (where ordered.page_rank <= p_limit), '[]'::jsonb),
-    case when max(ordered.page_rank) > p_limit then private.portal_cursor_encode_v1(
-      (jsonb_agg(jsonb_build_object(
-        'v', 1, 'kind', p_kind, 'id', p_id::text, 'version', ordered.version
-      ) order by ordered.page_rank) filter (where ordered.page_rank = p_limit)) -> 0
-    ) else null end
+    ) order by ordered.page_rank)
+      filter (where ordered.page_rank <= p_limit), '[]'::jsonb),
+    case when max(ordered.page_rank) > p_limit
+      then private.portal_cursor_encode_v1(
+        (jsonb_agg(jsonb_build_object(
+          'v', 1,
+          'kind', p_kind,
+          'id', p_id::text,
+          'version', ordered.version
+        ) order by ordered.page_rank)
+          filter (where ordered.page_rank = p_limit)) -> 0
+      )
+      else null
+    end
   into v_items, v_next_cursor
   from ordered;
 
-  return jsonb_build_object(
-    'schemaVersion', 'portal.public-version-page.v1',
-    'dataset', jsonb_build_object('kind', p_kind, 'id', p_id::text),
-    'items', v_items,
-    'nextCursor', v_next_cursor
+  return private.portal_lcia_decorate_item_page_v1(
+    jsonb_build_object(
+      'schemaVersion', 'portal.public-version-page.v1',
+      'dataset', jsonb_build_object('kind', p_kind, 'id', p_id::text),
+      'items', v_items,
+      'nextCursor', v_next_cursor
+    )
   );
 exception
   when sqlstate '22023' then
@@ -19925,7 +19947,7 @@ $_$;
 ALTER FUNCTION "api"."portal_list_versions_v1"("p_kind" "text", "p_id" "uuid", "p_cursor" "text", "p_limit" integer) OWNER TO "portal_public_executor";
 
 
-COMMENT ON FUNCTION "api"."portal_list_versions_v1"("p_kind" "text", "p_id" "uuid", "p_cursor" "text", "p_limit" integer) IS 'Keyset page of exact visible versions for one public Process/Flow identity.';
+COMMENT ON FUNCTION "api"."portal_list_versions_v1"("p_kind" "text", "p_id" "uuid", "p_cursor" "text", "p_limit" integer) IS 'Keyset page of exact visible versions with authoritative publication-bound Process LCIA capability.';
 
 
 
@@ -19960,7 +19982,11 @@ CREATE OR REPLACE FUNCTION "api"."portal_search_processes_v1"("p_query" "text", 
     SET "statement_timeout" TO '8s'
     AS $$
 begin
-  return private.portal_search_v1('process', p_query, p_filters, p_sort, p_cursor, p_limit);
+  return private.portal_lcia_decorate_item_page_v1(
+    private.portal_search_v1(
+      'process', p_query, p_filters, p_sort, p_cursor, p_limit
+    )
+  );
 exception
   when sqlstate '22023' then
     raise exception using errcode = '22023', message = 'invalid portal request';
@@ -19975,7 +20001,7 @@ $$;
 ALTER FUNCTION "api"."portal_search_processes_v1"("p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor" "text", "p_limit" integer) OWNER TO "portal_public_executor";
 
 
-COMMENT ON FUNCTION "api"."portal_search_processes_v1"("p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor" "text", "p_limit" integer) IS 'Locator-free public Process lexical/identifier search over one fixed 100/200 scope with query-bound keyset cursors.';
+COMMENT ON FUNCTION "api"."portal_search_processes_v1"("p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor" "text", "p_limit" integer) IS 'Locator-free public Process lexical/identifier search with authoritative publication-bound LCIA capability.';
 
 
 
@@ -39362,6 +39388,93 @@ $$;
 ALTER FUNCTION "private"."portal_compliance_v1"("p_kind" "text", "p_json" "jsonb") OWNER TO "portal_public_executor";
 
 
+CREATE OR REPLACE FUNCTION "private"."portal_current_lcia_publication_for_process_v1"("p_process_id" "uuid", "p_process_version" "text") RETURNS "jsonb"
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+  with visible as materialized (
+    select
+      binding.projection_id,
+      binding.lcia_result_publication_id,
+      binding.package_id,
+      binding.package_version,
+      binding.source_published_at
+    from private.portal_lcia_projection_publications as binding
+    join private.portal_lcia_projection_headers as projection
+      on projection.id = binding.projection_id
+    join private.portal_lcia_projection_process_axis as process_axis
+      on process_axis.projection_id = binding.projection_id
+     and process_axis.process_id = p_process_id
+     and process_axis.process_version = p_process_version
+    join private.lcia_result_publications as publication
+      on publication.id = binding.lcia_result_publication_id
+     and publication.package_id = binding.package_id
+    join private.lcia_result_packages as package
+      on package.id = binding.package_id
+    join public.processes as process
+      on process.id = process_axis.process_id
+     and process.version::text = process_axis.process_version
+    where p_process_id is not null
+      and p_process_version ~ '^\d{2}\.\d{2}\.\d{3}$'
+      and binding.status = 'finalized'
+      and binding.revoked_at is null
+      and projection.status = 'prepared'
+      and projection.content_hash = binding.projection_content_hash
+      and publication.is_current
+      and publication.status = 'current'
+      and publication.publication_series_key = 'global'
+      and publication.publication_channel = 'public'
+      and publication.visibility_scope = 'public'
+      and publication.published_at = binding.source_published_at
+      and package.status = 'preview_ready'
+      and package.package_version = binding.package_version
+      and package.package_result_hash = binding.package_result_hash
+      and process.state_code = 100
+      and jsonb_typeof(process.json) = 'object'
+      and private.portal_process_open_capability_bridge_v1(
+        process.state_code, process.json
+      )
+      and private.portal_lcia_projection_is_public_v1(binding.projection_id)
+    order by binding.source_published_at desc, binding.id
+    limit 1
+  ), methods as materialized (
+    select
+      visible.projection_id,
+      jsonb_agg(
+        jsonb_build_object(
+          'id', method.method_id::text,
+          'version', method.method_version
+        )
+        order by method.method_id, method.method_version
+      ) as lcia_methods
+    from visible
+    cross join lateral (
+      select distinct impact.method_id, impact.method_version
+      from private.portal_lcia_projection_impact_axis as impact
+      where impact.projection_id = visible.projection_id
+    ) as method
+    group by visible.projection_id
+  )
+  select jsonb_build_object(
+    'publicationId', visible.lcia_result_publication_id::text,
+    'packageId', visible.package_id::text,
+    'packageVersion', visible.package_version,
+    'publishedAt', private.portal_timestamp_v1(visible.source_published_at),
+    'lciaMethods', methods.lcia_methods
+  )
+  from visible
+  join methods using (projection_id)
+  where jsonb_array_length(methods.lcia_methods) > 0
+$_$;
+
+
+ALTER FUNCTION "private"."portal_current_lcia_publication_for_process_v1"("p_process_id" "uuid", "p_process_version" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "private"."portal_current_lcia_publication_for_process_v1"("p_process_id" "uuid", "p_process_version" "text") IS 'Returns locator-free current finalized non-revoked publication context for one exact open Process by reusing portal_lcia_projection_is_public_v1.';
+
+
+
 CREATE OR REPLACE FUNCTION "private"."portal_cursor_decode_v1"("p_cursor" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE PARALLEL SAFE
     SET "search_path" TO ''
@@ -39952,6 +40065,100 @@ $$;
 
 
 ALTER FUNCTION "private"."portal_json_items_v1"("p_value" "jsonb") OWNER TO "portal_public_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_lcia_decorate_dataset_v1"("p_envelope" "jsonb") RETURNS "jsonb"
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO ''
+    AS $$
+  select case
+    when p_envelope is null then null
+    when jsonb_typeof(p_envelope) <> 'object'
+      or jsonb_typeof(p_envelope -> 'key') <> 'object'
+      or jsonb_typeof(p_envelope -> 'capabilities') <> 'object'
+      then null
+    else jsonb_set(
+      jsonb_set(
+        p_envelope,
+        '{capabilities,lciaVisible}',
+        to_jsonb(evidence.publication is not null),
+        false
+      ),
+      '{publication}',
+      coalesce(evidence.publication, 'null'::jsonb),
+      false
+    )
+  end
+  from lateral (
+    select case
+      when p_envelope #>> '{key,kind}' = 'process'
+        and p_envelope ->> 'accessLevel' = 'open'
+        then private.portal_current_lcia_publication_for_process_v1(
+          (p_envelope #>> '{key,id}')::uuid,
+          p_envelope #>> '{key,version}'
+        )
+      else null
+    end as publication
+  ) as evidence
+$$;
+
+
+ALTER FUNCTION "private"."portal_lcia_decorate_dataset_v1"("p_envelope" "jsonb") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."portal_lcia_decorate_dataset_v1"("p_envelope" "jsonb") IS 'Preserves the strict dataset envelope while projecting authoritative LCIA capability and publication context.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_lcia_decorate_item_page_v1"("p_page" "jsonb") RETURNS "jsonb"
+    LANGUAGE "sql" STABLE
+    SET "search_path" TO ''
+    AS $$
+  select case
+    when jsonb_typeof(p_page) <> 'object'
+      or jsonb_typeof(p_page -> 'items') <> 'array'
+      then null
+    else jsonb_set(
+      p_page,
+      '{items}',
+      coalesce((
+        select jsonb_agg(
+          item.value || jsonb_build_object(
+            'capabilities',
+            jsonb_set(
+              item.value -> 'capabilities',
+              '{lciaVisible}',
+              to_jsonb(evidence.publication is not null),
+              false
+            )
+          )
+          order by item.ordinality
+        )
+        from jsonb_array_elements(p_page -> 'items')
+          with ordinality as item(value, ordinality)
+        cross join lateral (
+          select case
+            when item.value #>> '{key,kind}' = 'process'
+              and item.value ->> 'accessLevel' = 'open'
+              then private.portal_current_lcia_publication_for_process_v1(
+                (item.value #>> '{key,id}')::uuid,
+                item.value #>> '{key,version}'
+              )
+            else null
+          end as publication
+        ) as evidence
+      ), '[]'::jsonb),
+      false
+    )
+  end
+$$;
+
+
+ALTER FUNCTION "private"."portal_lcia_decorate_item_page_v1"("p_page" "jsonb") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."portal_lcia_decorate_item_page_v1"("p_page" "jsonb") IS 'Preserves strict item-page order and cursor while projecting authoritative lciaVisible onto Process Search or Versions items.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."portal_lcia_json_object_has_keys_v1"("p_value" "jsonb", "p_keys" "text"[]) RETURNS boolean
@@ -41036,6 +41243,24 @@ $$;
 
 
 ALTER FUNCTION "private"."portal_process_functional_unit_v1"("p_state_code" integer, "p_json" "jsonb") OWNER TO "portal_public_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_process_open_capability_bridge_v1"("p_state_code" integer, "p_json" "jsonb") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select coalesce((
+    private.portal_capabilities_v1('process', p_state_code, p_json)
+      ->> 'exchangesVisible'
+  )::boolean, false)
+$$;
+
+
+ALTER FUNCTION "private"."portal_process_open_capability_bridge_v1"("p_state_code" integer, "p_json" "jsonb") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."portal_process_open_capability_bridge_v1"("p_state_code" integer, "p_json" "jsonb") IS 'Executor-owned boolean bridge that reuses the fail-closed Process numeric capability policy without widening its helper ACL graph.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."portal_process_reference_product_v1"("p_json" "jsonb") RETURNS "jsonb"
@@ -66880,6 +67105,11 @@ REVOKE ALL ON FUNCTION "private"."portal_compliance_v1"("p_kind" "text", "p_json
 
 
 
+REVOKE ALL ON FUNCTION "private"."portal_current_lcia_publication_for_process_v1"("p_process_id" "uuid", "p_process_version" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."portal_current_lcia_publication_for_process_v1"("p_process_id" "uuid", "p_process_version" "text") TO "portal_public_executor";
+
+
+
 REVOKE ALL ON FUNCTION "private"."portal_cursor_decode_v1"("p_cursor" "text") FROM PUBLIC;
 
 
@@ -66921,6 +67151,14 @@ REVOKE ALL ON FUNCTION "private"."portal_geography_precision_v1"("p_code" "text"
 
 
 REVOKE ALL ON FUNCTION "private"."portal_json_items_v1"("p_value" "jsonb") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_lcia_decorate_dataset_v1"("p_envelope" "jsonb") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_lcia_decorate_item_page_v1"("p_page" "jsonb") FROM PUBLIC;
 
 
 
@@ -66997,6 +67235,11 @@ REVOKE ALL ON FUNCTION "private"."portal_normalize_filters_v1"("p_filters" "json
 
 
 REVOKE ALL ON FUNCTION "private"."portal_process_functional_unit_v1"("p_state_code" integer, "p_json" "jsonb") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_process_open_capability_bridge_v1"("p_state_code" integer, "p_json" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."portal_process_open_capability_bridge_v1"("p_state_code" integer, "p_json" "jsonb") TO "postgres";
 
 
 

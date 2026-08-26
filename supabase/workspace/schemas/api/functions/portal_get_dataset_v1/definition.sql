@@ -10,7 +10,9 @@ begin
      or p_version !~ '^\d{2}\.\d{2}\.\d{3}$' then
     raise exception using errcode = '22023', message = 'invalid portal request';
   end if;
-  return private.portal_dataset_projection_v1(p_kind, p_id, p_version);
+  return private.portal_lcia_decorate_dataset_v1(
+    private.portal_dataset_projection_v1(p_kind, p_id, p_version)
+  );
 exception
   when sqlstate '22023' then
     raise exception using errcode = '22023', message = 'invalid portal request';
