@@ -1553,6 +1553,7 @@ begin
           'statement_timeout=8s',
           'plan_cache_mode=force_custom_plan',
           'work_mem=32MB',
+          'enable_hashjoin=on',
           'enable_nestloop=off',
           'enable_mergejoin=off',
           'enable_sort=on',

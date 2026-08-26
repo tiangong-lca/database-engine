@@ -553,6 +553,7 @@ select extensions.ok(
           'statement_timeout=8s',
           'plan_cache_mode=force_custom_plan',
           'work_mem=32MB',
+          'enable_hashjoin=on',
           'enable_nestloop=off',
           'enable_mergejoin=off',
           'enable_sort=on',
@@ -1991,6 +1992,7 @@ grant insert, select on pg_temp.portal_semantic_streaming_actual,
 to api_internal_executor;
 
 set local work_mem = '5MB';
+set local enable_hashjoin = off;
 set local enable_nestloop = on;
 set local enable_mergejoin = on;
 
@@ -2115,6 +2117,7 @@ revoke api_internal_executor from postgres;
 
 select extensions.ok(
   pg_catalog.current_setting('work_mem') = '5MB'
+  and pg_catalog.current_setting('enable_hashjoin') = 'off'
   and pg_catalog.current_setting('enable_nestloop') = 'on'
   and pg_catalog.current_setting('enable_mergejoin') = 'on',
   'exact helpers restore caller work_mem and join planner settings'
