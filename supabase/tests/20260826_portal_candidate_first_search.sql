@@ -1810,14 +1810,14 @@ select extensions.is(
         'from pg_catalog.generate_subscripts(v_ids, 1)'
       ) < pg_catalog.strpos(
         routine.prosrc,
-        'select distinct on (projection.id)'
+        ') as eligible\n  where eligible.semantic_distance'
       )
       and pg_catalog.strpos(
         routine.prosrc,
         E'    return;\n  end if;'
       ) < pg_catalog.strpos(
         routine.prosrc,
-        'select distinct on (projection.id)'
+        ') as eligible\n  where eligible.semantic_distance'
       )
   ),
   2::bigint,

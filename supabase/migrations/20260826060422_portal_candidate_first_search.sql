@@ -819,36 +819,51 @@ begin
   end if;
 
   return query
-  select latest.id,
-    latest.version,
-    source.semantic_distance
+  select eligible.id,
+    eligible.version,
+    eligible.semantic_distance
   from (
-    select distinct on (projection.id)
-      projection.id,
-      projection.version
-    from private.portal_catalog_search_rows_v1 as projection
-    where projection.dataset_kind = 'process'
-    order by projection.id,
-      projection.version desc,
-      projection.modified_at desc,
-      projection.state_code desc
-  ) as latest
-  cross join lateral (
-    select process.embedding_ft
-        operator(extensions.<=>) p_query_embedding as semantic_distance
+    select process.id,
+      process.version::text as version,
+      process.embedding_ft operator(extensions.<=>) p_query_embedding
+        as semantic_distance
     from public.processes as process
-    where process.id = latest.id
-      and process.version = latest.version::character(9)
-      and process.state_code in (100, 200)
+    where process.state_code in (100, 200)
       and process.embedding_ft is not null
+      and exists (
+        select 1
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'process'
+          and projection.id = process.id
+          and projection.version = process.version::text
+          and not exists (
+            select 1
+            from private.portal_catalog_search_rows_v1 as newer
+            where newer.dataset_kind = projection.dataset_kind
+              and newer.id = projection.id
+              and (
+                newer.version > projection.version
+                or (
+                  newer.version = projection.version
+                  and newer.modified_at > projection.modified_at
+                )
+                or (
+                  newer.version = projection.version
+                  and newer.modified_at = projection.modified_at
+                  and newer.state_code > projection.state_code
+                )
+              )
+          )
+        offset 0
+      )
     offset 0
-  ) as source
-  where source.semantic_distance is not null
-    and source.semantic_distance >= 0::double precision
-    and source.semantic_distance <= 0.5::double precision
-  order by source.semantic_distance,
-    latest.id,
-    latest.version desc
+  ) as eligible
+  where eligible.semantic_distance is not null
+    and eligible.semantic_distance >= 0::double precision
+    and eligible.semantic_distance <= 0.5::double precision
+  order by eligible.semantic_distance,
+    eligible.id,
+    eligible.version desc
   limit 200;
 end
 $function$;
@@ -1032,36 +1047,51 @@ begin
   end if;
 
   return query
-  select latest.id,
-    latest.version,
-    source.semantic_distance
+  select eligible.id,
+    eligible.version,
+    eligible.semantic_distance
   from (
-    select distinct on (projection.id)
-      projection.id,
-      projection.version
-    from private.portal_catalog_search_rows_v1 as projection
-    where projection.dataset_kind = 'flow'
-    order by projection.id,
-      projection.version desc,
-      projection.modified_at desc,
-      projection.state_code desc
-  ) as latest
-  cross join lateral (
-    select flow.embedding_ft
-        operator(extensions.<=>) p_query_embedding as semantic_distance
+    select flow.id,
+      flow.version::text as version,
+      flow.embedding_ft operator(extensions.<=>) p_query_embedding
+        as semantic_distance
     from public.flows as flow
-    where flow.id = latest.id
-      and flow.version = latest.version::character(9)
-      and flow.state_code in (100, 200)
+    where flow.state_code in (100, 200)
       and flow.embedding_ft is not null
+      and exists (
+        select 1
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'flow'
+          and projection.id = flow.id
+          and projection.version = flow.version::text
+          and not exists (
+            select 1
+            from private.portal_catalog_search_rows_v1 as newer
+            where newer.dataset_kind = projection.dataset_kind
+              and newer.id = projection.id
+              and (
+                newer.version > projection.version
+                or (
+                  newer.version = projection.version
+                  and newer.modified_at > projection.modified_at
+                )
+                or (
+                  newer.version = projection.version
+                  and newer.modified_at = projection.modified_at
+                  and newer.state_code > projection.state_code
+                )
+              )
+          )
+        offset 0
+      )
     offset 0
-  ) as source
-  where source.semantic_distance is not null
-    and source.semantic_distance >= 0::double precision
-    and source.semantic_distance <= 0.5::double precision
-  order by source.semantic_distance,
-    latest.id,
-    latest.version desc
+  ) as eligible
+  where eligible.semantic_distance is not null
+    and eligible.semantic_distance >= 0::double precision
+    and eligible.semantic_distance <= 0.5::double precision
+  order by eligible.semantic_distance,
+    eligible.id,
+    eligible.version desc
   limit 200;
 end
 $function$;
