@@ -76,6 +76,15 @@ migration，并证明七张表的 OID 与 heap relfilenode 都不变，同时代
 scripts/test_search_text_array_upgrade.sh
 ```
 
+### `test_portal_projection_upgrade_recovery.sh`
+
+在显式确认且隔离的本地 Supabase 项目中验证 Issue 531 Portal projection
+上线。脚本使用真实并发连接覆盖有效更新、删除、状态失效、主键变更以及仅 embedding
+更新竞态；主动制造 reconcile 锁超时与 cutover guard 失败；并证明相同 migration
+history 下可重试、同名 concurrent index 可受控清理，以及已记录迁移重复执行不会重建
+索引。所需环境变量与恢复边界见
+`docs/agents/portal-projection-migration-recovery.md`。
+
 ### `resolve_migration_head.py`
 
 从当前 checkout 的 `supabase/migrations` 目录输出最新的有效 migration 版本。

@@ -83,6 +83,17 @@ script finishes with a clean reset to the checked-out migration head.
 scripts/test_search_text_array_upgrade.sh
 ```
 
+### `test_portal_projection_upgrade_recovery.sh`
+
+Exercises the Issue 531 Portal projection rollout against an explicitly
+attested, isolated local Supabase project. It uses live concurrent connections
+to prove valid-update, delete, state-invalidation, key-change, and
+embedding-only races; forces reconcile lock-timeout and cutover-guard failures;
+and verifies same-history retry, controlled same-name concurrent-index cleanup,
+and no-op repeat without index rebuild. See
+`docs/agents/portal-projection-migration-recovery.md` for the required
+environment and recovery boundaries.
+
 ### `resolve_migration_head.py`
 
 Prints the latest valid migration version from the checked-out
