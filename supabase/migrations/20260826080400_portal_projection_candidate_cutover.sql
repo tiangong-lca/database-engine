@@ -290,7 +290,6 @@ set plan_cache_mode = 'force_custom_plan'
 set row_security = 'on'
 as $function$
 declare
-  v_ordinal integer;
   v_pattern text;
 begin
   for v_ordinal in 1..pg_catalog.cardinality(p_query_terms)

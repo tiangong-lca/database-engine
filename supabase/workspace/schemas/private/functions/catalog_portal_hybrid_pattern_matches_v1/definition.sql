@@ -6,7 +6,6 @@ CREATE OR REPLACE FUNCTION "private"."catalog_portal_hybrid_pattern_matches_v1"(
     SET "row_security" TO 'on'
     AS $$
 declare
-  v_ordinal integer;
   v_pattern text;
 begin
   for v_ordinal in 1..pg_catalog.cardinality(p_query_terms)
