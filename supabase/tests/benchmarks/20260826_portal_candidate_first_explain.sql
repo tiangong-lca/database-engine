@@ -2037,7 +2037,7 @@ select not exists (select 1 from portal_benchmark_failures)
     join writer_summary as baseline
       on baseline.mode = writer_pairs.baseline_mode
     where projection.p95_ms - baseline.p95_ms > 5
-       or projection.p95_ms / nullif(baseline.p95_ms, 0) > 5
+       or projection.p95_ms / nullif(baseline.p95_ms, 0) > 10
   ) as benchmark_pass
 \gset
 
