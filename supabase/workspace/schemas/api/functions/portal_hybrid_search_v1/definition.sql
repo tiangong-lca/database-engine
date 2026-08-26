@@ -15,7 +15,7 @@ begin
     p_limit
   );
   v_page := private.portal_lcia_decorate_item_page_v1(
-    private.portal_public_hybrid_search_v1_impl(
+    private.portal_projection_hybrid_search_v1_impl(
       v_input ->> 'kind',
       array(
         select term.value
@@ -30,8 +30,12 @@ begin
     )
   );
   if v_page is null
-     or pg_catalog.octet_length(pg_catalog.convert_to(v_page::text, 'UTF8')) > 524288 then
-    raise exception using errcode = '54000', message = 'portal hybrid response too large';
+     or pg_catalog.octet_length(
+       pg_catalog.convert_to(v_page::text, 'UTF8')
+     ) > 524288 then
+    raise exception using
+      errcode = '54000',
+      message = 'portal hybrid response too large';
   end if;
   return v_page;
 exception
