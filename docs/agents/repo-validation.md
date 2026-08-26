@@ -32,8 +32,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 5a831d4
-lastReviewedNote: "Reviewed for the complete Portal request shape, dual immutable manifests, narrow-facet performance, recovery, and promotion proof matrix."
+lastReviewedCommit: f9fe033
+lastReviewedNote: "Reviewed for dual Portal manifests, migration-equivalent reconcile timing, populated-upgrade evidence, and promotion proof."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -101,6 +101,13 @@ need Git provenance still check out full history (`fetch-depth: 0`).
 | `scripts/**` | run the touched script with `--help` when possible, or execute the narrowest safe non-destructive path | if a script changes generated workspace behavior, refresh the workspace in a safe environment and inspect git diff | Avoid remote-destructive script runs unless the task explicitly requires them. |
 | `supabase/workspace/**` | prove whether the touched file is generated or stable | if stable manual overlay files changed, explain how they feed migration generation | Generated files alone are not sufficient evidence of a durable schema change. |
 | repo docs only | `scripts/docpact lint --root . --files "<csv>" --mode enforce` | `scripts/docpact validate-config --root . --strict` when `.docpact/config.yaml` changes | Refresh review metadata even when prose stays unchanged. |
+
+For the narrow Portal facet projection, run both
+`scripts/test_portal_projection_upgrade_recovery.sh` and
+`scripts/test_portal_facet_projection_populated_upgrade.sh`. The latter must
+exercise 126,246 pre-existing parent cards, retain 2x per-shard timeout
+headroom, and prove a sub-five-second successful reconcile plus exact DTO
+parity.
 
 For the Portal Flow embedding-eligibility hotfix, sparse-zero and sparse-199
 profiles must naturally name `flows_portal_embedding_eligible_v1_idx` for the

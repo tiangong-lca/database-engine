@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 5a831d4
-lastReviewedNote: "Refreshed from the exact local 266-migration state for the narrow Portal facet contract; generated paths and public/api type ownership are unchanged."
+lastReviewedCommit: f9fe033
+lastReviewedNote: "Reviewed after populated-upgrade proof; the deterministic 266-migration snapshot and public/api type ownership are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

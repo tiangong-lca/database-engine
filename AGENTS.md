@@ -37,8 +37,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 5a831d4
-lastReviewedNote: "Reviewed for the independent narrow Portal facet projection, strict empty-request dispatch, and online recovery gates; repository ownership and delivery boundaries are unchanged."
+lastReviewedCommit: f9fe033
+lastReviewedNote: "Reviewed for the narrow Portal facet projection and populated-upgrade proof; repository ownership and delivery boundaries are unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

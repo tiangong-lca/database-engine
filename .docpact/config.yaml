@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-27"
-lastReviewedCommit: "5a831d4"
-lastReviewedNote: "Reviewed for the seven-stage narrow Portal facet projection rollout, recovery coverage, and exact-head validation evidence."
+lastReviewedCommit: "f9fe033"
+lastReviewedNote: "Reviewed for the seven-migration narrow Portal facet sub-rollout, recovery coverage, and exact-head validation evidence."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -496,6 +496,8 @@ rules:
       - path: supabase/tests/benchmarks/20260826_portal_candidate_first_explain.sql
         kind: database-benchmark
       - path: scripts/test_portal_projection_upgrade_recovery.sh
+        kind: migration-recovery
+      - path: scripts/test_portal_facet_projection_populated_upgrade.sh
         kind: migration-recovery
       - path: scripts/check_portal_projection_manifest.py
         kind: contract-check

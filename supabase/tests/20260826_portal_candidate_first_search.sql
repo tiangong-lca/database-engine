@@ -2662,6 +2662,105 @@ select extensions.ok(
 reset role;
 revoke portal_public_executor from postgres;
 
+grant api_internal_executor to postgres;
+grant create on schema private to api_internal_executor;
+set local role api_internal_executor;
+
+create or replace function private.portal_catalog_facet_facts_v1(
+  p_kind text,
+  p_card jsonb
+)
+returns table(
+  facet_access_level text,
+  facet_geography text,
+  facet_reference_year text,
+  facet_process_subtype text,
+  facet_source text
+)
+language sql
+immutable
+parallel safe
+set search_path = ''
+as $function$
+  select
+    nullif(p_card ->> 'accessLevel', '__portal_facet_manifest_drift__'),
+    pg_catalog.lower(pg_catalog.btrim(
+      p_card #>> '{geography,code}'
+    )),
+    pg_catalog.btrim(p_card ->> 'referenceYear'),
+    case when p_kind = 'process' then
+      pg_catalog.lower(pg_catalog.btrim(
+        p_card ->> 'processSubtype'
+      ))
+    else null::text end,
+    pg_catalog.lower(pg_catalog.btrim(p_card ->> 'source'))
+$function$;
+
+select extensions.throws_ok(
+  $$select private.assert_portal_catalog_facet_contract_v1()$$,
+  '55000',
+  'Portal facet derivation contract drifted',
+  'a rollback-only facet fact drift fails the independent live manifest guard'
+);
+
+reset role;
+revoke create on schema private from api_internal_executor;
+revoke api_internal_executor from postgres;
+
+set local role anon;
+
+select extensions.throws_ok(
+  $$select api.portal_facets_v1('process', '', '{}'::jsonb)$$,
+  'P0001',
+  'portal catalog unavailable',
+  'empty Facets fails closed through its public error contract on facet-manifest drift'
+);
+
+reset role;
+
+grant api_internal_executor to postgres;
+grant create on schema private to api_internal_executor;
+set local role api_internal_executor;
+
+create or replace function private.portal_catalog_facet_facts_v1(
+  p_kind text,
+  p_card jsonb
+)
+returns table(
+  facet_access_level text,
+  facet_geography text,
+  facet_reference_year text,
+  facet_process_subtype text,
+  facet_source text
+)
+language sql
+immutable
+parallel safe
+set search_path = ''
+as $function$
+  select
+    p_card ->> 'accessLevel',
+    pg_catalog.lower(pg_catalog.btrim(
+      p_card #>> '{geography,code}'
+    )),
+    pg_catalog.btrim(p_card ->> 'referenceYear'),
+    case when p_kind = 'process' then
+      pg_catalog.lower(pg_catalog.btrim(
+        p_card ->> 'processSubtype'
+      ))
+    else null::text end,
+    pg_catalog.lower(pg_catalog.btrim(p_card ->> 'source'))
+$function$;
+
+select extensions.lives_ok(
+  $$select private.assert_portal_catalog_facet_contract_v1()$$,
+  'restoring exact facet fact bytes restores the independent manifest guard'
+);
+
+reset role;
+revoke create on schema private from api_internal_executor;
+revoke api_internal_executor from postgres;
+
 grant portal_public_executor to postgres;
 grant create on schema private to portal_public_executor;
 set local role portal_public_executor;

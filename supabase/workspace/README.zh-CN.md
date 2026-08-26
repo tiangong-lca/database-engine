@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 5a831d4
-lastReviewedNote: "已从精确的本地 266-migration 状态刷新窄 Portal Facet contract；生成路径与 public/api 类型所有权不变。"
+lastReviewedCommit: f9fe033
+lastReviewedNote: "已在既有数据 upgrade 证明后复核；确定性的 266-migration 快照与 public/api 类型所有权不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 5a831d4
-lastReviewedNote: "已复核 Portal 双 manifest、窄 Facet 恢复阶段与命名性能 profile；schema-workspace helper 行为不变。"
+lastReviewedCommit: f9fe033
+lastReviewedNote: "已复核 Portal 双 manifest、既有数据 Facet upgrade/recovery runner 与命名性能 profile。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -87,11 +87,18 @@ eligibility guard 回滚，以及已记录迁移重复执行不会重建七个�
 Supabase CLI `2.109.1`，以及完整 266-file migration tree 的逐字相等和 aggregate
 SHA-256。
 
+### `test_portal_facet_projection_populated_upgrade.sh`
+
+在同一类显式隔离的 Issue-531 项目中，对 126,246 条既有 parent card 逐字执行七个
+Facet migration。四个 UUID-quarter backfill 必须在 120 秒门下保留至少 2 倍余量，
+成功 reconcile fence 必须在 5 秒内完成，并要求最终 facts 与 DTO 精确一致。runner
+退出时总会把隔离项目重置到完整 HEAD。
+
 ### `run_portal_projection_benchmark.sh`
 
 仅在显式确认的 Issue 531 隔离本地 Supabase 项目中运行代表性 Process/Flow
-Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把全部
-Issue 531 migration 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
+Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把完整
+266-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
 reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合同与 recovery runner
 一致，另要求 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`。
 

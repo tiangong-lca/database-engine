@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 5a831d4
-lastReviewedNote: "Reviewed for the dual Portal manifests, narrow-facet recovery stages, and named performance profiles; schema-workspace helper behavior is unchanged."
+lastReviewedCommit: f9fe033
+lastReviewedNote: "Reviewed for dual Portal manifests, populated facet upgrade and recovery runners, and named performance profiles."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -98,12 +98,21 @@ environment and recovery boundaries. Formal evidence additionally requires
 clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
 the complete 266-file migration tree.
 
+### `test_portal_facet_projection_populated_upgrade.sh`
+
+Rehearses the seven facet migrations verbatim over 126,246 pre-existing parent
+cards in the same explicitly isolated Issue-531 project. It requires every
+UUID-quarter backfill to retain at least 2x headroom under 120 seconds, the
+successful reconcile fence to finish within five seconds, and exact final fact
+and DTO parity. The runner always resets the isolated project to full HEAD on
+exit.
+
 ### `run_portal_projection_benchmark.sh`
 
 Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
 fence, plan, and ANN-recall benchmark only against an explicitly attested
-Issue-531 local Supabase project. The runner byte-compares every Issue 531
-migration with the repository, writes into a new operator-selected private
+Issue-531 local Supabase project. The runner byte-compares the complete
+266-file migration tree with the repository, writes into a new operator-selected private
 directory, and resets the isolated database before and after the run so rolled
 back HNSW pages cannot accumulate. Its environment contract mirrors the
 recovery runner and additionally requires

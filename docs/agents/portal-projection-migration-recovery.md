@@ -1,7 +1,7 @@
 ---
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 5a831d4
-lastReviewedNote: "Reviewed for immutable card/facet manifests, seven-stage narrow-facet rollout recovery, and fail-closed retry boundaries."
+lastReviewedCommit: f9fe033
+lastReviewedNote: "Reviewed for immutable card/facet manifests, the seven-migration narrow-facet sub-rollout, and fail-closed retry boundaries."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -18,6 +18,7 @@ whenToUpdate:
 checkPaths:
   - docs/agents/portal-projection-migration-recovery.md
   - scripts/test_portal_projection_upgrade_recovery.sh
+  - scripts/test_portal_facet_projection_populated_upgrade.sh
   - scripts/check_portal_projection_manifest.py
   - supabase/migrations/20260826060422_portal_candidate_first_search.sql
   - supabase/migrations/20260826080257_portal_projection_backfill_0.sql
@@ -161,7 +162,9 @@ where (
     namespace.nspname = 'private'
     and index_relation.relname in (
       'portal_catalog_search_process_document_v1_pgroonga',
-      'portal_catalog_search_flow_document_v1_pgroonga'
+      'portal_catalog_search_flow_document_v1_pgroonga',
+      'portal_catalog_facet_rows_v1_pkey',
+      'portal_catalog_facet_rows_latest_v1_idx'
     )
   ) or (
     namespace.nspname = 'public'
@@ -175,14 +178,19 @@ order by index_relation.relname;
 
 select trigger.tgrelid::regclass as source_table,
   trigger.tgname,
-  trigger.tgenabled
+  trigger.tgenabled,
+  trigger.tgtype,
+  trigger.tgattr,
+  pg_catalog.pg_get_triggerdef(trigger.oid) as definition
 from pg_catalog.pg_trigger as trigger
 where trigger.tgrelid in (
     'public.processes'::regclass,
-    'public.flows'::regclass
+    'public.flows'::regclass,
+    'private.portal_catalog_search_rows_v1'::regclass
   )
   and trigger.tgname in (
-    'portal_catalog_projection_content_sync_v1'
+    'portal_catalog_projection_content_sync_v1',
+    'portal_catalog_facet_sync_v1'
   )
 order by source_table, trigger.tgname;
 
@@ -203,6 +211,27 @@ where routine.oid in (
   ),
   pg_catalog.to_regprocedure(
     'private.portal_public_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'
+  ),
+  pg_catalog.to_regprocedure(
+    'api.portal_facets_v1(text,text,jsonb)'
+  ),
+  pg_catalog.to_regprocedure(
+    'private.catalog_portal_facets_v1_impl(text,text,uuid,text,jsonb,text)'
+  ),
+  pg_catalog.to_regprocedure(
+    'private.catalog_portal_facets_empty_v1_impl(text,text)'
+  ),
+  pg_catalog.to_regprocedure(
+    'private.portal_catalog_facet_facts_v1(text,jsonb)'
+  ),
+  pg_catalog.to_regprocedure(
+    'private.portal_catalog_facet_manifest_sha256_v1()'
+  ),
+  pg_catalog.to_regprocedure(
+    'private.assert_portal_catalog_facet_contract_v1()'
+  ),
+  pg_catalog.to_regprocedure(
+    'private.sync_portal_catalog_facet_row_v1()'
   )
 );
 
@@ -218,6 +247,15 @@ where dependency.objid = any (array_remove(array[
     )::oid,
     pg_catalog.to_regprocedure(
       'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'
+    )::oid,
+    pg_catalog.to_regprocedure(
+      'api.portal_facets_v1(text,text,jsonb)'
+    )::oid,
+    pg_catalog.to_regprocedure(
+      'private.catalog_portal_facets_empty_v1_impl(text,text)'
+    )::oid,
+    pg_catalog.to_regprocedure(
+      'private.catalog_portal_facets_v1_impl(text,text,uuid,text,jsonb,text)'
     )::oid
   ], null))
    or dependency.refobjid = any (array_remove(array[
@@ -226,6 +264,15 @@ where dependency.objid = any (array_remove(array[
      )::oid,
      pg_catalog.to_regprocedure(
        'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'
+     )::oid,
+     pg_catalog.to_regprocedure(
+       'api.portal_facets_v1(text,text,jsonb)'
+     )::oid,
+     pg_catalog.to_regprocedure(
+       'private.catalog_portal_facets_empty_v1_impl(text,text)'
+     )::oid,
+     pg_catalog.to_regprocedure(
+       'private.catalog_portal_facets_v1_impl(text,text,uuid,text,jsonb,text)'
      )::oid
    ], null));
 ```
@@ -352,11 +399,11 @@ index, trigger, and wrapper evidence.
 The facet expand is transactional but intentionally not blind-idempotent. If
 its database COMMIT succeeds before the migration ledger is recorded, normal
 retry fails on the existing function/table. Stop and obtain operator review;
-do not edit history or drop only a subset of the contract. Cleanup is safe only
-after read-only proof that `20260827020000` and every later facet migration are
-absent, the public Facets wrapper still has its pre-facet definition, and no
-request reads the narrow table. An isolated reset is the recovery regression's
-preferred path.
+do not edit history or drop any subset of the contract. This runbook authorizes
+only a full reset of the explicitly disposable isolated recovery project. It
+does not authorize cleanup on Preview, persistent Dev, or production. For any
+hosted COMMIT/history gap, retain the ledger/object/wrapper evidence and
+escalate for a separately reviewed forward-repair migration.
 
 Each of the four facet backfills is idempotent. It uses `ON CONFLICT DO NOTHING`
 and verifies exact key, state, timestamp, five derived facts, contract version,
@@ -400,6 +447,20 @@ post-cutover Flow eligibility build/guard recovery, facet expand COMMIT/history
 failure, facet shard idempotent retry, facet reconcile lock rollback, facet
 cutover parity rollback, parent-trigger/FK-cascade convergence, successful
 retry, and no-op repeat without rebuilding the seven recorded indexes.
+
+The separate populated-upgrade runner resets the same kind of isolated project
+to `20260827010003`, inserts 17,299 Process plus 108,947 Flow parent cards, and
+executes the seven facet files verbatim. Each UUID-quarter backfill must finish
+within 60 seconds, preserving at least 2x headroom under its authored 120-second
+timeout; reconcile must complete within five seconds, and final row/DTO parity
+must be exact.
+
+```bash
+PORTAL_FACET_UPGRADE_TARGET=local-isolated \
+PORTAL_FACET_UPGRADE_SUPABASE_WORKDIR=/absolute/path/to/database-engine-531-project \
+SUPABASE_CLI=/absolute/path/to/supabase \
+scripts/test_portal_facet_projection_populated_upgrade.sh
+```
 
 The pre-cutover raw-source
 `private.portal_public_hybrid_search_v1_impl(...)` is a rollback asset only

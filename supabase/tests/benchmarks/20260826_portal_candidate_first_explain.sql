@@ -917,6 +917,48 @@ begin
   lock table private.portal_catalog_facet_rows_v1
     in share row exclusive mode;
 
+  perform private.assert_portal_catalog_projection_contract_v1();
+  perform private.assert_portal_catalog_facet_contract_v1();
+
+  insert into private.portal_catalog_facet_rows_v1 (
+    dataset_kind,
+    id,
+    version,
+    state_code,
+    modified_at,
+    facet_access_level,
+    facet_geography,
+    facet_reference_year,
+    facet_process_subtype,
+    facet_source,
+    facet_contract_version
+  )
+  select
+    projection.dataset_kind,
+    projection.id,
+    projection.version,
+    projection.state_code,
+    projection.modified_at,
+    facts.facet_access_level,
+    facts.facet_geography,
+    facts.facet_reference_year,
+    facts.facet_process_subtype,
+    facts.facet_source,
+    1
+  from private.portal_catalog_search_rows_v1 as projection
+  cross join lateral private.portal_catalog_facet_facts_v1(
+    projection.dataset_kind,
+    projection.card
+  ) as facts
+  where not exists (
+    select 1
+    from private.portal_catalog_facet_rows_v1 as facet
+    where facet.dataset_kind = projection.dataset_kind
+      and facet.id = projection.id
+      and facet.version = projection.version
+  )
+  on conflict (dataset_kind, id, version) do nothing;
+
   select count(*) into v_probe
   from private.portal_catalog_search_rows_v1 as projection
   cross join lateral private.portal_catalog_facet_facts_v1(
@@ -938,6 +980,17 @@ begin
        facts.facet_process_subtype
      or facet.facet_source is distinct from facts.facet_source
      or facet.facet_contract_version is distinct from 1;
+
+  if v_probe <> 0
+     or (
+       select count(*)
+       from private.portal_catalog_facet_rows_v1
+     ) <> (
+       select count(*)
+       from private.portal_catalog_search_rows_v1
+     ) then
+    raise exception 'representative facet reconcile parity failed';
+  end if;
 
   insert into pg_temp.portal_benchmark_fence_metrics values (
     'facet_reconcile_fence_work',

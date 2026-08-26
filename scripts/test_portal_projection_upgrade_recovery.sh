@@ -331,6 +331,31 @@ cross join lateral (
 SQL
 
 race_log_dir="$(mktemp -d /tmp/database-engine-531-race.XXXXXX)"
+facet_reconcile_holder_pid=""
+successful_fence_pid=""
+
+cleanup_recovery() {
+  local exit_code=$?
+  trap - EXIT INT TERM
+  set +e
+  terminate_application portal_projection_reconcile_lock_holder
+  terminate_application portal_facet_reconcile_lock_holder
+  terminate_application portal_projection_successful_fence_holder
+  for holder_pid in \
+    "${facet_reconcile_holder_pid:-}" \
+    "${successful_fence_pid:-}"; do
+    if [[ "$holder_pid" =~ ^[1-9][0-9]*$ ]]; then
+      wait "$holder_pid" >/dev/null 2>&1 || true
+    fi
+  done
+  if [[ "$exit_code" -eq 0 ]]; then
+    rm -rf "$race_log_dir"
+  else
+    echo "retained recovery diagnostics: $race_log_dir" >&2
+  fi
+  exit "$exit_code"
+}
+trap cleanup_recovery EXIT INT TERM
 
 run_stale_snapshot \
   portal_projection_race_valid \
@@ -1028,32 +1053,18 @@ terminate_application portal_facet_reconcile_lock_holder
 wait "$facet_reconcile_holder_pid" || true
 apply_pending
 
-# Breakpoint 8: cutover refuses any narrow-fact drift and preserves the old
-# wrapper definition when its parity guard rolls back.
+# Breakpoint 8: a post-DDL metadata guard failure rolls back both the newly
+# created fast helper and the replaced wrapper. The pre-cutover wrapper keeps
+# one deliberate extra GUC so the final metadata comparison fails only after
+# CREATE FUNCTION / CREATE OR REPLACE FUNCTION have executed.
 reset_to 20260827020005
 run_psql <<'SQL'
-grant api_internal_executor to postgres;
-set role api_internal_executor;
-insert into private.portal_catalog_search_rows_v1 (
-  dataset_kind, id, version, state_code, modified_at,
-  card, document, projection_contract_version
-) values (
-  'flow',
-  '53190000-0000-4000-8000-000000000088',
-  '01.00.000',
-  100,
-  '2026-08-27 02:10:00+00',
-  '{"document":"facet cutover guard","accessLevel":"open","geography":{"code":"CN"},"referenceYear":2024,"source":"Recovery"}'::jsonb,
-  'facet cutover guard',
-  1
-);
-update private.portal_catalog_facet_rows_v1
-set facet_source = 'drift'
-where dataset_kind = 'flow'
-  and id = '53190000-0000-4000-8000-000000000088'
-  and version = '01.00.000';
+grant portal_public_executor to postgres;
+set role portal_public_executor;
+alter function api.portal_facets_v1(text, text, jsonb)
+  set work_mem = '64MB';
 reset role;
-revoke api_internal_executor from postgres;
+revoke portal_public_executor from postgres;
 SQL
 facet_wrapper_before_cutover_failure="$(scalar_sql "
   select pg_catalog.md5(pg_catalog.pg_get_functiondef(
@@ -1062,15 +1073,15 @@ facet_wrapper_before_cutover_failure="$(scalar_sql "
 ")"
 facet_cutover_log_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 if apply_pending >"$race_log_dir/expected-facet-cutover-failure.log" 2>&1; then
-  echo "facet cutover unexpectedly accepted narrow-fact drift" >&2
+  echo "facet cutover unexpectedly accepted external metadata drift" >&2
   exit 1
 fi
 docker logs --since "$facet_cutover_log_since" "$container_name" \
   >>"$race_log_dir/expected-facet-cutover-failure.log" 2>&1
 assert_log_contains \
   "$race_log_dir/expected-facet-cutover-failure.log" \
-  'Portal facet cutover parity guard failed|55000' \
-  'facet cutover parity failure'
+  'Portal facet cutover contract drifted|55000' \
+  'facet cutover post-DDL metadata failure'
 facet_wrapper_after_cutover_failure="$(scalar_sql "
   select pg_catalog.md5(pg_catalog.pg_get_functiondef(
     'api.portal_facets_v1(text,text,jsonb)'::regprocedure
@@ -1085,6 +1096,9 @@ assert_sql "
     select 1 from supabase_migrations.schema_migrations
     where version = '20260827020006'
   )
+  and pg_catalog.to_regprocedure(
+    'private.catalog_portal_facets_empty_v1_impl(text,text)'
+  ) is null
 " "failed facet cutover unexpectedly recorded migration history"
 
 reset_to 20260827020005
@@ -1316,5 +1330,4 @@ assert_sql "
   )
 " "facet child survived parent/source deletion"
 
-rm -rf "$race_log_dir"
 echo "Portal projection race and partial-upgrade recovery validation passed"
