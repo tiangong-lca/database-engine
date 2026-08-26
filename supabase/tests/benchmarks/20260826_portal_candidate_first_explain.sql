@@ -1,0 +1,1285 @@
+\set ON_ERROR_STOP on
+\timing on
+
+-- Required operator attestation:
+--   -v benchmark_target=local
+--   -v explain_output=/absolute/private/path/portal-candidate-first.log
+-- This fixture writes only inside one rollback-only local transaction.  Never
+-- point it at Preview, persistent Dev, or production.
+\if :{?benchmark_target}
+\else
+  \echo 'ERROR: pass -v benchmark_target=local'
+  \quit 3
+\endif
+
+\if :{?explain_output}
+\else
+  \echo 'ERROR: pass a private absolute path with -v explain_output=...'
+  \quit 3
+\endif
+
+\if :{?benchmark_samples}
+\else
+  \set benchmark_samples 20
+\endif
+
+\if :{?process_rows}
+\else
+  \set process_rows 17240
+\endif
+
+\if :{?flow_rows}
+\else
+  \set flow_rows 108886
+\endif
+
+\if :{?process_vector_rows}
+\else
+  \set process_vector_rows 5000
+\endif
+
+\if :{?flow_vector_rows}
+\else
+  \set flow_vector_rows 20000
+\endif
+
+\if :{?writer_samples}
+\else
+  \set writer_samples 50
+\endif
+
+select :'benchmark_target' = 'local' as benchmark_attestation_ok \gset
+\if :benchmark_attestation_ok
+\else
+  \echo 'ERROR: this rollback-only profile is local-only'
+  \quit 3
+\endif
+
+begin;
+set local search_path = public, extensions, pg_temp;
+set local statement_timeout = '15min';
+set local jit = off;
+set local track_io_timing = on;
+set local hnsw.iterative_scan = 'strict_order';
+select pg_catalog.set_config(
+  'application_name',
+  'database-engine-531-portal-candidate-first-local',
+  true
+);
+select pg_catalog.set_config(
+  'portal.benchmark_writer_samples',
+  :'writer_samples',
+  true
+);
+
+select
+  pg_catalog.to_regclass(
+    'private.portal_catalog_search_process_document_v1_pgroonga'
+  ) is not null
+  and pg_catalog.to_regclass(
+    'private.portal_catalog_search_flow_document_v1_pgroonga'
+  ) is not null
+  and pg_catalog.to_regclass(
+    'private.portal_catalog_search_process_embedding_v1_hnsw'
+  ) is not null
+  and pg_catalog.to_regclass(
+    'private.portal_catalog_search_flow_embedding_v1_hnsw'
+  ) is not null
+  and pg_catalog.to_regprocedure(
+    'private.catalog_portal_search_v1_impl(text,text,jsonb,text,text,uuid,text,integer,text)'
+  ) is not null
+  and (
+    select routine.prosrc ~ 'portal_catalog_search_rows_v1'
+      and routine.prosrc ~ 'portal_fused_decorated'
+      and routine.prosrc !~ 'public\.processes|public\.flows'
+    from pg_catalog.pg_proc as routine
+    where routine.oid =
+      'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'::regprocedure
+  ) as optimized_migration_installed
+\gset
+
+\if :optimized_migration_installed
+\else
+  \echo 'ERROR: Issue #531 migrations are not installed'
+  \quit 4
+\endif
+
+create or replace function pg_temp.portal_bench_uuid(
+  p_prefix text,
+  p_ordinal integer
+)
+returns uuid
+language sql
+immutable
+set search_path = ''
+as $function$
+  select (
+    pg_catalog.substr(hash.value, 1, 8) || '-' ||
+    pg_catalog.substr(hash.value, 9, 4) || '-' ||
+    '4' || pg_catalog.substr(hash.value, 14, 3) || '-' ||
+    '8' || pg_catalog.substr(hash.value, 18, 3) || '-' ||
+    pg_catalog.substr(hash.value, 21, 12)
+  )::uuid
+  from (
+    select pg_catalog.md5(p_prefix || ':' || p_ordinal::text) as value
+  ) as hash
+$function$;
+
+create or replace function pg_temp.portal_bench_localized(p_text text)
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    '@xml:lang', 'en',
+    '#text', p_text
+  )
+$function$;
+
+create or replace function pg_temp.portal_bench_vector(p_ordinal integer)
+returns extensions.vector(1024)
+language sql
+immutable
+set search_path = ''
+as $function$
+  select (
+    '[1,0.' || pg_catalog.lpad(((p_ordinal % 97) + 1)::text, 4, '0') || ',' ||
+    pg_catalog.array_to_string(
+      pg_catalog.array_fill('0'::text, array[1022]),
+      ','
+    ) || ']'
+  )::extensions.vector(1024)
+$function$;
+
+create or replace function pg_temp.portal_bench_far_vector()
+returns extensions.vector(1024)
+language sql
+immutable
+set search_path = ''
+as $function$
+  select (
+    '[0,1,' || pg_catalog.array_to_string(
+      pg_catalog.array_fill('0'::text, array[1022]),
+      ','
+    ) || ']'
+  )::extensions.vector(1024)
+$function$;
+
+create or replace function pg_temp.portal_bench_publication(p_version text)
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'common:dataSetVersion', p_version,
+    'common:licenseType', 'Free of charge for all users and uses',
+    'common:referenceToOwnershipOfDataSet', pg_catalog.jsonb_build_object(
+      '@refObjectId', '53100000-0000-4000-8000-000000009999',
+      '@version', '01.00.000',
+      'common:shortDescription', pg_temp.portal_bench_localized(
+        'Synthetic benchmark provider'
+      )
+    )
+  )
+$function$;
+
+create or replace function pg_temp.portal_bench_process_payload(p_ordinal integer)
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'processDataSet', pg_catalog.jsonb_build_object(
+      'processInformation', pg_catalog.jsonb_build_object(
+        'dataSetInformation', pg_catalog.jsonb_build_object(
+          'name', pg_catalog.jsonb_build_object(
+            'baseName', pg_temp.portal_bench_localized(case
+              when p_ordinal = 1 then 'portalbenchneedle process'
+              when p_ordinal % 10 = 0
+                then 'portalbenchcommon electricity process ' || p_ordinal::text
+              else 'portalbenchnoise process ' || p_ordinal::text
+            end)
+          ),
+          'common:generalComment', pg_temp.portal_bench_localized(
+            'synthetic benchmark summary'
+          ),
+          'classificationInformation', pg_catalog.jsonb_build_object(
+            'common:classification', pg_catalog.jsonb_build_object(
+              'common:class', pg_catalog.jsonb_build_object(
+                '@classId', 'PORTAL-BENCH', '#text', 'Synthetic benchmark'
+              )
+            )
+          )
+        ),
+        'time', pg_catalog.jsonb_build_object('common:referenceYear', '2024'),
+        'geography', pg_catalog.jsonb_build_object(
+          'locationOfOperationSupplyOrProduction',
+          pg_catalog.jsonb_build_object('@location', 'CN')
+        ),
+        'technology', pg_catalog.jsonb_build_object(
+          'technologyDescriptionAndIncludedProcesses',
+          pg_temp.portal_bench_localized('synthetic benchmark technology')
+        )
+      ),
+      'modellingAndValidation', pg_catalog.jsonb_build_object(
+        'LCIMethodAndAllocation', pg_catalog.jsonb_build_object(
+          'typeOfDataSet', 'Unit process, single operation'
+        )
+      ),
+      'administrativeInformation', pg_catalog.jsonb_build_object(
+        'publicationAndOwnership', pg_temp.portal_bench_publication('01.00.000')
+      )
+    )
+  )
+$function$;
+
+create or replace function pg_temp.portal_bench_flow_payload(p_ordinal integer)
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'flowDataSet', pg_catalog.jsonb_build_object(
+      'flowInformation', pg_catalog.jsonb_build_object(
+        'dataSetInformation', pg_catalog.jsonb_build_object(
+          'name', pg_catalog.jsonb_build_object(
+            'baseName', pg_temp.portal_bench_localized(case
+              when p_ordinal = 1 then 'portalbenchneedle flow'
+              when p_ordinal % 10 = 0
+                then 'portalbenchcommon electricity flow ' || p_ordinal::text
+              else 'portalbenchnoise flow ' || p_ordinal::text
+            end)
+          ),
+          'common:generalComment', pg_temp.portal_bench_localized(
+            'synthetic benchmark summary'
+          ),
+          'classificationInformation', pg_catalog.jsonb_build_object(
+            'common:classification', pg_catalog.jsonb_build_object(
+              'common:class', pg_catalog.jsonb_build_object(
+                '@classId', 'PORTAL-BENCH', '#text', 'Synthetic benchmark'
+              )
+            )
+          ),
+          'CASNumber', '50-00-0'
+        ),
+        'geography', pg_catalog.jsonb_build_object(
+          'locationOfSupply', pg_catalog.jsonb_build_object('@location', 'CN')
+        )
+      ),
+      'administrativeInformation', pg_catalog.jsonb_build_object(
+        'publicationAndOwnership', pg_temp.portal_bench_publication('01.00.000')
+      )
+    )
+  )
+$function$;
+
+alter table public.processes disable trigger user;
+alter table public.flows disable trigger user;
+
+create temporary table portal_benchmark_writer_timings (
+  mode text not null,
+  elapsed_ms double precision not null
+) on commit drop;
+
+do $measure_portal_writer_baseline$
+declare
+  v_ordinal integer;
+  v_samples integer := pg_catalog.current_setting(
+    'portal.benchmark_writer_samples'
+  )::integer;
+  v_payload jsonb;
+  v_started timestamptz;
+begin
+  for v_ordinal in 1..v_samples loop
+    v_payload := pg_temp.portal_bench_process_payload(v_ordinal);
+    v_started := pg_catalog.clock_timestamp();
+    insert into public.processes (
+      id, version, json, json_ordered, user_id, state_code,
+      rule_verification, modified_at, search_text, embedding_ft, model_id
+    ) values (
+      pg_temp.portal_bench_uuid('writer-process-baseline', v_ordinal),
+      '01.00.000', v_payload, v_payload::json,
+      '53100000-0000-4000-8000-000000000001', 100, true,
+      '2026-08-26 00:00:00+00', null, null, null
+    );
+    insert into pg_temp.portal_benchmark_writer_timings values (
+      'process_insert_baseline',
+      1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+    );
+
+    v_payload := pg_temp.portal_bench_flow_payload(v_ordinal);
+    v_started := pg_catalog.clock_timestamp();
+    insert into public.flows (
+      id, version, json, json_ordered, user_id, state_code,
+      rule_verification, modified_at, search_text, embedding_ft
+    ) values (
+      pg_temp.portal_bench_uuid('writer-flow-baseline', v_ordinal),
+      '01.00.000', v_payload, v_payload::json,
+      '53100000-0000-4000-8000-000000000001', 100, true,
+      '2026-08-26 00:00:00+00', null, null
+    );
+    insert into pg_temp.portal_benchmark_writer_timings values (
+      'flow_insert_baseline',
+      1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+    );
+  end loop;
+
+  delete from public.processes
+  where id in (
+    select pg_temp.portal_bench_uuid(
+      'writer-process-baseline', series.ordinal
+    )
+    from pg_catalog.generate_series(1, v_samples) as series(ordinal)
+  );
+  delete from public.flows
+  where id in (
+    select pg_temp.portal_bench_uuid(
+      'writer-flow-baseline', series.ordinal
+    )
+    from pg_catalog.generate_series(1, v_samples) as series(ordinal)
+  );
+end
+$measure_portal_writer_baseline$;
+
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.processes
+  enable trigger portal_catalog_projection_embedding_sync_v1;
+alter table public.flows
+  enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.flows
+  enable trigger portal_catalog_projection_embedding_sync_v1;
+
+do $measure_portal_projection_writes$
+declare
+  v_ordinal integer;
+  v_samples integer := pg_catalog.current_setting(
+    'portal.benchmark_writer_samples'
+  )::integer;
+  v_payload jsonb;
+  v_started timestamptz;
+begin
+  for v_ordinal in 1..v_samples loop
+    v_payload := pg_temp.portal_bench_process_payload(v_ordinal);
+    v_started := pg_catalog.clock_timestamp();
+    insert into public.processes (
+      id, version, json, json_ordered, user_id, state_code,
+      rule_verification, modified_at, search_text, embedding_ft, model_id
+    ) values (
+      pg_temp.portal_bench_uuid('writer-process-projection', v_ordinal),
+      '01.00.000', v_payload, v_payload::json,
+      '53100000-0000-4000-8000-000000000001', 100, true,
+      '2026-08-26 00:00:00+00', null, null, null
+    );
+    insert into pg_temp.portal_benchmark_writer_timings values (
+      'process_insert_projection',
+      1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+    );
+
+    v_payload := pg_temp.portal_bench_flow_payload(v_ordinal);
+    v_started := pg_catalog.clock_timestamp();
+    insert into public.flows (
+      id, version, json, json_ordered, user_id, state_code,
+      rule_verification, modified_at, search_text, embedding_ft
+    ) values (
+      pg_temp.portal_bench_uuid('writer-flow-projection', v_ordinal),
+      '01.00.000', v_payload, v_payload::json,
+      '53100000-0000-4000-8000-000000000001', 100, true,
+      '2026-08-26 00:00:00+00', null, null
+    );
+    insert into pg_temp.portal_benchmark_writer_timings values (
+      'flow_insert_projection',
+      1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+    );
+  end loop;
+
+  for v_ordinal in 1..v_samples loop
+    v_started := pg_catalog.clock_timestamp();
+    update public.processes
+    set json = json,
+        modified_at = modified_at
+    where id = pg_temp.portal_bench_uuid(
+        'writer-process-projection', v_ordinal
+      )
+      and version = '01.00.000';
+    insert into pg_temp.portal_benchmark_writer_timings values (
+      'process_content_update_projection',
+      1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+    );
+
+    v_started := pg_catalog.clock_timestamp();
+    update public.flows
+    set json = json,
+        modified_at = modified_at
+    where id = pg_temp.portal_bench_uuid(
+        'writer-flow-projection', v_ordinal
+      )
+      and version = '01.00.000';
+    insert into pg_temp.portal_benchmark_writer_timings values (
+      'flow_content_update_projection',
+      1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+    );
+
+    v_started := pg_catalog.clock_timestamp();
+    update public.processes
+    set embedding_ft = pg_temp.portal_bench_vector(v_ordinal)
+    where id = pg_temp.portal_bench_uuid(
+        'writer-process-projection', v_ordinal
+      )
+      and version = '01.00.000';
+    insert into pg_temp.portal_benchmark_writer_timings values (
+      'process_embedding_update_projection',
+      1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+    );
+
+    v_started := pg_catalog.clock_timestamp();
+    update public.flows
+    set embedding_ft = pg_temp.portal_bench_vector(v_ordinal)
+    where id = pg_temp.portal_bench_uuid(
+        'writer-flow-projection', v_ordinal
+      )
+      and version = '01.00.000';
+    insert into pg_temp.portal_benchmark_writer_timings values (
+      'flow_embedding_update_projection',
+      1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+    );
+  end loop;
+
+  delete from public.processes
+  where id in (
+    select pg_temp.portal_bench_uuid(
+      'writer-process-projection', series.ordinal
+    )
+    from pg_catalog.generate_series(1, v_samples) as series(ordinal)
+  );
+  delete from public.flows
+  where id in (
+    select pg_temp.portal_bench_uuid(
+      'writer-flow-projection', series.ordinal
+    )
+    from pg_catalog.generate_series(1, v_samples) as series(ordinal)
+  );
+end
+$measure_portal_projection_writes$;
+
+select mode,
+  count(*) as samples,
+  pg_catalog.round(
+    pg_catalog.percentile_cont(0.95)
+      within group (order by elapsed_ms)::numeric,
+    3
+  ) as p95_ms
+from pg_temp.portal_benchmark_writer_timings
+group by mode
+order by mode;
+
+insert into public.processes (
+  id,
+  version,
+  json,
+  json_ordered,
+  user_id,
+  state_code,
+  rule_verification,
+  modified_at,
+  search_text,
+  embedding_ft,
+  model_id
+)
+select
+  pg_temp.portal_bench_uuid('process', series.ordinal),
+  '01.00.000',
+  payload.value,
+  payload.value::json,
+  '53100000-0000-4000-8000-000000000001'::uuid,
+  case when series.ordinal % 5 = 0 then 200 else 100 end,
+  true,
+  '2026-08-26 00:00:00+00'::timestamptz
+    + pg_catalog.make_interval(secs => series.ordinal::double precision / 1000),
+  null,
+  case when series.ordinal <= :process_vector_rows
+    then pg_temp.portal_bench_vector(series.ordinal)
+    else null
+  end,
+  null
+from pg_catalog.generate_series(1, :process_rows) as series(ordinal)
+cross join lateral (
+  select pg_temp.portal_bench_process_payload(series.ordinal) as value
+) as payload;
+
+insert into public.flows (
+  id,
+  version,
+  json,
+  json_ordered,
+  user_id,
+  state_code,
+  rule_verification,
+  modified_at,
+  search_text,
+  embedding_ft
+)
+select
+  pg_temp.portal_bench_uuid('flow', series.ordinal),
+  '01.00.000',
+  payload.value,
+  payload.value::json,
+  '53100000-0000-4000-8000-000000000001'::uuid,
+  case when series.ordinal % 5 = 0 then 200 else 100 end,
+  true,
+  '2026-08-26 00:00:00+00'::timestamptz
+    + pg_catalog.make_interval(secs => series.ordinal::double precision / 1000),
+  null,
+  case when series.ordinal <= :flow_vector_rows
+    then pg_temp.portal_bench_vector(series.ordinal)
+    else null
+  end
+from pg_catalog.generate_series(1, :flow_rows) as series(ordinal)
+cross join lateral (
+  select pg_temp.portal_bench_flow_payload(series.ordinal) as value
+) as payload;
+
+insert into public.processes (
+  id, version, json, json_ordered, user_id, state_code,
+  rule_verification, modified_at, search_text, embedding_ft, model_id
+)
+select
+  pg_temp.portal_bench_uuid('process', series.ordinal),
+  '00.99.999',
+  payload.value,
+  payload.value::json,
+  '53100000-0000-4000-8000-000000000001'::uuid,
+  100,
+  true,
+  '2026-08-25 00:00:00+00'::timestamptz,
+  null,
+  pg_temp.portal_bench_vector(1),
+  null
+from pg_catalog.generate_series(1, least(:process_rows, 100)) as series(ordinal)
+cross join lateral (
+  select pg_temp.portal_bench_process_payload(series.ordinal) as value
+) as payload;
+
+insert into public.flows (
+  id, version, json, json_ordered, user_id, state_code,
+  rule_verification, modified_at, search_text, embedding_ft
+)
+select
+  pg_temp.portal_bench_uuid('flow', series.ordinal),
+  '00.99.999',
+  payload.value,
+  payload.value::json,
+  '53100000-0000-4000-8000-000000000001'::uuid,
+  100,
+  true,
+  '2026-08-25 00:00:00+00'::timestamptz,
+  null,
+  pg_temp.portal_bench_vector(1)
+from pg_catalog.generate_series(1, least(:flow_rows, 100)) as series(ordinal)
+cross join lateral (
+  select pg_temp.portal_bench_flow_payload(series.ordinal) as value
+) as payload;
+
+alter table public.processes enable trigger user;
+alter table public.flows enable trigger user;
+
+analyze public.processes;
+analyze public.flows;
+analyze private.portal_catalog_search_rows_v1;
+
+create temporary table portal_benchmark_fence_metrics (
+  metric text primary key,
+  elapsed_ms double precision not null
+) on commit drop;
+
+do $measure_portal_projection_fence$
+declare
+  v_started timestamptz := pg_catalog.clock_timestamp();
+  v_probe bigint;
+begin
+  lock table public.processes, public.flows in share row exclusive mode;
+
+  select count(*) into v_probe
+  from public.processes as process
+  where process.state_code in (100, 200)
+    and process.modified_at is not null
+    and pg_catalog.jsonb_typeof(process.json) = 'object'
+    and pg_catalog.jsonb_typeof(process.json -> 'processDataSet') = 'object'
+    and not exists (
+      select 1
+      from private.portal_catalog_search_rows_v1 as projection
+      where projection.dataset_kind = 'process'
+        and projection.id = process.id
+        and projection.version = process.version::text
+    );
+
+  select count(*) into v_probe
+  from public.flows as flow
+  where flow.state_code in (100, 200)
+    and flow.modified_at is not null
+    and pg_catalog.jsonb_typeof(flow.json) = 'object'
+    and pg_catalog.jsonb_typeof(flow.json -> 'flowDataSet') = 'object'
+    and not exists (
+      select 1
+      from private.portal_catalog_search_rows_v1 as projection
+      where projection.dataset_kind = 'flow'
+        and projection.id = flow.id
+        and projection.version = flow.version::text
+    );
+
+  select count(*) into v_probe
+  from private.portal_catalog_search_rows_v1 as projection
+  left join public.processes as process
+    on projection.dataset_kind = 'process'
+   and process.id = projection.id
+   and process.version::text = projection.version
+  where projection.dataset_kind = 'process'
+    and (
+      process.id is null
+      or process.state_code <> projection.state_code
+      or process.modified_at <> projection.modified_at
+      or (process.embedding_ft is null) <> (projection.embedding_ft is null)
+    );
+
+  select count(*) into v_probe
+  from private.portal_catalog_search_rows_v1 as projection
+  left join public.flows as flow
+    on projection.dataset_kind = 'flow'
+   and flow.id = projection.id
+   and flow.version::text = projection.version
+  where projection.dataset_kind = 'flow'
+    and (
+      flow.id is null
+      or flow.state_code <> projection.state_code
+      or flow.modified_at <> projection.modified_at
+      or (flow.embedding_ft is null) <> (projection.embedding_ft is null)
+    );
+
+  insert into pg_temp.portal_benchmark_fence_metrics values (
+    'representative_fence_work',
+    1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+  );
+end
+$measure_portal_projection_fence$;
+
+select metric,
+  pg_catalog.round(elapsed_ms::numeric, 3) as elapsed_ms
+from pg_temp.portal_benchmark_fence_metrics;
+
+select pg_catalog.jsonb_build_object(
+  'profile', 'portal-candidate-first-local-v1',
+  'process_rows', (select count(*) from public.processes),
+  'flow_rows', (select count(*) from public.flows),
+  'process_vectors', (
+    select count(*) from public.processes where embedding_ft is not null
+  ),
+  'flow_vectors', (
+    select count(*) from public.flows where embedding_ft is not null
+  ),
+  'projection_rows', (
+    select count(*) from private.portal_catalog_search_rows_v1
+  ),
+  'process_latest_cards', (
+    select count(distinct id)
+    from private.portal_catalog_search_rows_v1
+    where dataset_kind = 'process'
+  ),
+  'flow_latest_cards', (
+    select count(distinct id)
+    from private.portal_catalog_search_rows_v1
+    where dataset_kind = 'flow'
+  ),
+  'process_common_candidates', (
+    select count(*)
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'process'
+      and projection.version = '01.00.000'
+      and projection.document
+        like '%portalbenchcommon electricity%' escape E'\\'
+  ),
+  'flow_common_candidates', (
+    select count(*)
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'flow'
+      and projection.version = '01.00.000'
+      and projection.document
+        like '%portalbenchcommon electricity%' escape E'\\'
+  ),
+  'process_index_bytes', pg_catalog.pg_relation_size(
+    'private.portal_catalog_search_process_document_v1_pgroonga'
+  ),
+  'flow_index_bytes', pg_catalog.pg_relation_size(
+    'private.portal_catalog_search_flow_document_v1_pgroonga'
+  ),
+  'process_hnsw_bytes', pg_catalog.pg_relation_size(
+    'private.portal_catalog_search_process_embedding_v1_hnsw'
+  ),
+  'flow_hnsw_bytes', pg_catalog.pg_relation_size(
+    'private.portal_catalog_search_flow_embedding_v1_hnsw'
+  ),
+  'projection_total_bytes', pg_catalog.pg_total_relation_size(
+    'private.portal_catalog_search_rows_v1'
+  )
+) as redacted_benchmark_metadata;
+
+\pset format unaligned
+\pset tuples_only on
+\o :explain_output
+
+grant execute on function pg_temp.portal_bench_vector(integer)
+  to portal_public_executor, api_internal_executor;
+
+grant portal_public_executor to postgres;
+set local role portal_public_executor;
+
+\qecho profile=process-projection-pgroonga
+explain (analyze, buffers, settings, wal, summary, format json)
+select projection.id
+from private.portal_catalog_search_rows_v1 as projection
+where projection.dataset_kind = 'process'
+  and projection.document like '%portalbenchneedle%' escape E'\\'
+order by projection.id
+limit 200;
+
+\qecho profile=flow-projection-pgroonga
+explain (analyze, buffers, settings, wal, summary, format json)
+select projection.id
+from private.portal_catalog_search_rows_v1 as projection
+where projection.dataset_kind = 'flow'
+  and projection.document like '%portalbenchneedle%' escape E'\\'
+order by projection.id
+limit 200;
+
+reset role;
+revoke portal_public_executor from postgres;
+
+grant api_internal_executor to postgres;
+set local role api_internal_executor;
+
+\qecho profile=process-projection-hnsw
+explain (analyze, buffers, settings, wal, summary, format json)
+select projection.id
+from private.portal_catalog_search_rows_v1 as projection
+where projection.dataset_kind = 'process'
+  and projection.embedding_ft is not null
+order by projection.embedding_ft
+  operator(extensions.<=>) pg_temp.portal_bench_vector(1)
+limit 200;
+
+\qecho profile=flow-projection-hnsw
+explain (analyze, buffers, settings, wal, summary, format json)
+select projection.id
+from private.portal_catalog_search_rows_v1 as projection
+where projection.dataset_kind = 'flow'
+  and projection.embedding_ft is not null
+order by projection.embedding_ft
+  operator(extensions.<=>) pg_temp.portal_bench_vector(1)
+limit 200;
+
+reset role;
+revoke api_internal_executor from postgres;
+
+\o
+\pset format aligned
+\pset tuples_only off
+
+create temporary table portal_benchmark_timings (
+  label text not null,
+  elapsed_ms double precision not null
+) on commit drop;
+
+create temporary table portal_benchmark_failures (
+  label text primary key,
+  sqlstate text not null,
+  message text not null,
+  elapsed_ms double precision not null
+) on commit drop;
+
+create or replace function pg_temp.record_portal_search_timing(
+  p_label text,
+  p_kind text,
+  p_query text
+)
+returns void
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  v_started timestamptz := pg_catalog.clock_timestamp();
+  v_result jsonb;
+begin
+  if exists (
+    select 1 from pg_temp.portal_benchmark_failures where label = p_label
+  ) then
+    return;
+  end if;
+  begin
+    if p_kind = 'process' then
+      v_result := api.portal_search_processes_v1(
+        p_query, '{}'::jsonb, 'relevance', null, 50
+      );
+    elsif p_kind = 'flow' then
+      v_result := api.portal_search_flows_v1(
+        p_query, '{}'::jsonb, 'relevance', null, 50
+      );
+    else
+      raise exception 'unsupported benchmark kind';
+    end if;
+    insert into pg_temp.portal_benchmark_timings values (
+      p_label,
+      1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+    );
+  exception
+    when others then
+      insert into pg_temp.portal_benchmark_failures values (
+        p_label,
+        sqlstate,
+        sqlerrm,
+        1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+      ) on conflict (label) do nothing;
+  end;
+end
+$function$;
+
+create or replace function pg_temp.record_portal_facet_timing(
+  p_label text,
+  p_kind text,
+  p_query text,
+  p_filters jsonb
+)
+returns void
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  v_started timestamptz := pg_catalog.clock_timestamp();
+  v_result jsonb;
+begin
+  if exists (
+    select 1 from pg_temp.portal_benchmark_failures where label = p_label
+  ) then
+    return;
+  end if;
+  begin
+    v_result := api.portal_facets_v1(p_kind, p_query, p_filters);
+    if v_result is null or v_result ->> 'schemaVersion'
+       <> 'portal.public-facets.v1' then
+      raise exception 'invalid facet result';
+    end if;
+    insert into pg_temp.portal_benchmark_timings values (
+      p_label,
+      1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+    );
+  exception
+    when others then
+      insert into pg_temp.portal_benchmark_failures values (
+        p_label,
+        sqlstate,
+        sqlerrm,
+        1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+      ) on conflict (label) do nothing;
+  end;
+end
+$function$;
+
+create or replace function pg_temp.record_portal_hybrid_timing(
+  p_label text,
+  p_kind text,
+  p_query_term text,
+  p_query_vector text
+)
+returns void
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  v_started timestamptz := pg_catalog.clock_timestamp();
+  v_result jsonb;
+begin
+  if exists (
+    select 1 from pg_temp.portal_benchmark_failures where label = p_label
+  ) then
+    return;
+  end if;
+  begin
+    v_result := api.portal_hybrid_search_v1(
+      p_kind,
+      array[p_query_term],
+      p_query_vector,
+      '{}'::jsonb,
+      20
+    );
+    insert into pg_temp.portal_benchmark_timings values (
+      p_label,
+      1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+    );
+  exception
+    when others then
+      insert into pg_temp.portal_benchmark_failures values (
+        p_label,
+        sqlstate,
+        sqlerrm,
+        1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+      ) on conflict (label) do nothing;
+  end;
+end
+$function$;
+
+create or replace function pg_temp.run_portal_candidate_timing(p_samples integer)
+returns void
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  v_iteration integer;
+  v_query_vector text := pg_temp.portal_bench_vector(1)::text;
+  v_far_vector text := pg_temp.portal_bench_far_vector()::text;
+  v_zero_vector text := '[' || pg_catalog.array_to_string(
+    pg_catalog.array_fill('0'::text, array[1024]),
+    ','
+  ) || ']';
+begin
+  if p_samples not between 1 and 100 then
+    raise exception 'benchmark_samples must be between 1 and 100';
+  end if;
+  for v_iteration in 1..p_samples loop
+    perform pg_temp.record_portal_search_timing(
+      'process_exact', 'process', 'portalbenchneedle'
+    );
+    perform pg_temp.record_portal_search_timing(
+      'process_common', 'process', 'portalbenchcommon electricity'
+    );
+    perform pg_temp.record_portal_search_timing(
+      'process_no_hit', 'process', 'portalbench-no-hit-531'
+    );
+    perform pg_temp.record_portal_search_timing(
+      'process_identifier',
+      'process',
+      pg_temp.portal_bench_uuid('process', 1)::text
+    );
+    perform pg_temp.record_portal_search_timing(
+      'process_empty', 'process', ''
+    );
+    perform pg_temp.record_portal_search_timing(
+      'flow_exact', 'flow', 'portalbenchneedle'
+    );
+    perform pg_temp.record_portal_search_timing(
+      'flow_common', 'flow', 'portalbenchcommon electricity'
+    );
+    perform pg_temp.record_portal_search_timing(
+      'flow_no_hit', 'flow', 'portalbench-no-hit-531'
+    );
+    perform pg_temp.record_portal_search_timing(
+      'flow_identifier',
+      'flow',
+      pg_temp.portal_bench_uuid('flow', 1)::text
+    );
+    perform pg_temp.record_portal_search_timing(
+      'flow_empty', 'flow', ''
+    );
+    perform pg_temp.record_portal_hybrid_timing(
+      'process_hybrid_fused',
+      'process',
+      'portalbenchcommon electricity',
+      v_query_vector
+    );
+    perform pg_temp.record_portal_hybrid_timing(
+      'flow_hybrid_fused',
+      'flow',
+      'portalbenchcommon electricity',
+      v_query_vector
+    );
+    perform pg_temp.record_portal_hybrid_timing(
+      'process_hybrid_semantic_only',
+      'process',
+      'portalbench-semantic-only-no-lexical-hit',
+      v_query_vector
+    );
+    perform pg_temp.record_portal_hybrid_timing(
+      'flow_hybrid_semantic_only',
+      'flow',
+      'portalbench-semantic-only-no-lexical-hit',
+      v_query_vector
+    );
+    perform pg_temp.record_portal_hybrid_timing(
+      'process_hybrid_lexical_only',
+      'process',
+      'portalbenchcommon electricity',
+      v_far_vector
+    );
+    perform pg_temp.record_portal_hybrid_timing(
+      'flow_hybrid_lexical_only',
+      'flow',
+      'portalbenchcommon electricity',
+      v_far_vector
+    );
+    perform pg_temp.record_portal_hybrid_timing(
+      'process_hybrid_zero_boundary',
+      'process',
+      'portalbenchcommon electricity',
+      v_zero_vector
+    );
+    perform pg_temp.record_portal_hybrid_timing(
+      'flow_hybrid_zero_boundary',
+      'flow',
+      'portalbenchcommon electricity',
+      v_zero_vector
+    );
+    perform pg_temp.record_portal_facet_timing(
+      'process_facets_empty', 'process', '', '{}'::jsonb
+    );
+    perform pg_temp.record_portal_facet_timing(
+      'process_facets_common',
+      'process',
+      'portalbenchcommon electricity',
+      '{}'::jsonb
+    );
+    perform pg_temp.record_portal_facet_timing(
+      'process_facets_filtered',
+      'process',
+      '',
+      '{"accessLevel":"metadata_only"}'::jsonb
+    );
+    perform pg_temp.record_portal_facet_timing(
+      'process_facets_no_hit',
+      'process',
+      'portalbench-no-hit-531',
+      '{}'::jsonb
+    );
+    perform pg_temp.record_portal_facet_timing(
+      'flow_facets_empty', 'flow', '', '{}'::jsonb
+    );
+    perform pg_temp.record_portal_facet_timing(
+      'flow_facets_common',
+      'flow',
+      'portalbenchcommon electricity',
+      '{}'::jsonb
+    );
+    perform pg_temp.record_portal_facet_timing(
+      'flow_facets_filtered',
+      'flow',
+      '',
+      '{"accessLevel":"metadata_only"}'::jsonb
+    );
+    perform pg_temp.record_portal_facet_timing(
+      'flow_facets_no_hit',
+      'flow',
+      'portalbench-no-hit-531',
+      '{}'::jsonb
+    );
+    perform pg_temp.record_portal_facet_timing(
+      'all_facets_empty', 'all', '', '{}'::jsonb
+    );
+    perform pg_temp.record_portal_facet_timing(
+      'all_facets_filtered',
+      'all',
+      '',
+      '{"accessLevel":"metadata_only"}'::jsonb
+    );
+    perform pg_temp.record_portal_facet_timing(
+      'all_facets_common',
+      'all',
+      'portalbenchcommon electricity',
+      '{}'::jsonb
+    );
+    perform pg_temp.record_portal_facet_timing(
+      'all_facets_no_hit',
+      'all',
+      'portalbench-no-hit-531',
+      '{}'::jsonb
+    );
+  end loop;
+end
+$function$;
+
+grant select, insert on pg_temp.portal_benchmark_timings,
+  pg_temp.portal_benchmark_failures
+  to anon;
+grant execute on function pg_temp.record_portal_search_timing(text, text, text)
+  to anon;
+grant execute on function pg_temp.record_portal_facet_timing(
+  text, text, text, jsonb
+) to anon;
+grant execute on function pg_temp.record_portal_hybrid_timing(
+  text, text, text, text
+)
+  to anon;
+grant execute on function pg_temp.run_portal_candidate_timing(integer)
+  to anon;
+grant execute on function pg_temp.portal_bench_uuid(text, integer),
+  pg_temp.portal_bench_vector(integer),
+  pg_temp.portal_bench_far_vector()
+  to anon;
+set local role anon;
+select pg_temp.run_portal_candidate_timing(1);
+reset role;
+truncate table pg_temp.portal_benchmark_timings;
+set local role anon;
+select pg_temp.run_portal_candidate_timing(:benchmark_samples);
+reset role;
+
+create temporary table portal_benchmark_semantic_probe (
+  dataset_kind text primary key,
+  payload jsonb not null
+) on commit drop;
+grant insert, select on pg_temp.portal_benchmark_semantic_probe to anon;
+set local role anon;
+insert into pg_temp.portal_benchmark_semantic_probe (dataset_kind, payload)
+values
+  (
+    'process',
+    api.portal_hybrid_search_v1(
+      'process',
+      array['portalbench-semantic-only-no-lexical-hit'],
+      pg_temp.portal_bench_vector(1)::text,
+      '{}'::jsonb,
+      20
+    )
+  ),
+  (
+    'flow',
+    api.portal_hybrid_search_v1(
+      'flow',
+      array['portalbench-semantic-only-no-lexical-hit'],
+      pg_temp.portal_bench_vector(1)::text,
+      '{}'::jsonb,
+      20
+    )
+  );
+reset role;
+
+insert into pg_temp.portal_benchmark_failures (
+  label, sqlstate, message, elapsed_ms
+)
+select
+  'semantic_latest_version_probe',
+  'P0001',
+  'semantic-only Hybrid returned no evidence or an older visible version',
+  0
+where exists (
+    select 1
+    from pg_temp.portal_benchmark_semantic_probe as probe
+    where pg_catalog.jsonb_array_length(probe.payload -> 'items') = 0
+       or exists (
+         select 1
+         from pg_catalog.jsonb_array_elements(
+           probe.payload -> 'items'
+         ) as item(value)
+         where item.value #>> '{key,version}' = '00.99.999'
+       )
+);
+
+select label,
+  count(*) as samples,
+  pg_catalog.round(min(elapsed_ms)::numeric, 3) as min_ms,
+  pg_catalog.round(
+    pg_catalog.percentile_cont(0.50) within group (order by elapsed_ms)::numeric,
+    3
+  ) as p50_ms,
+  pg_catalog.round(
+    pg_catalog.percentile_cont(0.95) within group (order by elapsed_ms)::numeric,
+    3
+  ) as p95_ms,
+  pg_catalog.round(max(elapsed_ms)::numeric, 3) as max_ms
+from portal_benchmark_timings
+group by label
+order by label;
+
+select label,
+  sqlstate,
+  message,
+  pg_catalog.round(elapsed_ms::numeric, 3) as elapsed_ms
+from portal_benchmark_failures
+order by label;
+
+with expected(label) as (
+  values
+    ('process_exact'), ('process_common'), ('process_no_hit'),
+    ('process_identifier'), ('process_empty'),
+    ('flow_exact'), ('flow_common'), ('flow_no_hit'),
+    ('flow_identifier'), ('flow_empty'),
+    ('process_hybrid_fused'), ('flow_hybrid_fused'),
+    ('process_hybrid_semantic_only'), ('flow_hybrid_semantic_only'),
+    ('process_hybrid_lexical_only'), ('flow_hybrid_lexical_only'),
+    ('process_hybrid_zero_boundary'), ('flow_hybrid_zero_boundary'),
+    ('process_facets_empty'), ('process_facets_common'),
+    ('process_facets_filtered'), ('process_facets_no_hit'),
+    ('flow_facets_empty'), ('flow_facets_common'),
+    ('flow_facets_filtered'), ('flow_facets_no_hit'),
+    ('all_facets_empty'), ('all_facets_filtered'),
+    ('all_facets_common'), ('all_facets_no_hit')
+), summary as (
+  select label,
+    count(*) as samples,
+    pg_catalog.percentile_cont(0.95)
+      within group (order by elapsed_ms) as p95_ms
+  from portal_benchmark_timings
+  group by label
+), expected_writer(mode) as (
+  values
+    ('process_insert_baseline'),
+    ('flow_insert_baseline'),
+    ('process_insert_projection'),
+    ('flow_insert_projection'),
+    ('process_content_update_projection'),
+    ('flow_content_update_projection'),
+    ('process_embedding_update_projection'),
+    ('flow_embedding_update_projection')
+), writer_summary as (
+  select mode,
+    count(*) as samples,
+    pg_catalog.percentile_cont(0.95)
+      within group (order by elapsed_ms) as p95_ms
+  from pg_temp.portal_benchmark_writer_timings
+  group by mode
+)
+select not exists (select 1 from portal_benchmark_failures)
+  and coalesce((
+    select elapsed_ms <= 5000
+    from pg_temp.portal_benchmark_fence_metrics
+    where metric = 'representative_fence_work'
+  ), false)
+  and not exists (
+    select 1
+    from expected
+    left join summary using (label)
+    where summary.label is null
+       or summary.samples <> :benchmark_samples
+       or summary.p95_ms > 2000
+  )
+  and not exists (
+    select 1
+    from summary
+    left join expected using (label)
+    where expected.label is null
+  )
+  and not exists (
+    select 1
+    from expected_writer
+    left join writer_summary using (mode)
+    where writer_summary.mode is null
+       or writer_summary.samples <> :writer_samples
+       or (
+         expected_writer.mode not like '%_baseline'
+         and writer_summary.p95_ms > 25
+       )
+  ) as benchmark_pass
+\gset
+
+rollback;
+
+-- ANALYZE statistics are not transactional.  Restore the real local table
+-- statistics after the rollback removes every synthetic row.
+analyze public.processes;
+analyze public.flows;
+analyze private.portal_catalog_search_rows_v1;
+
+\if :benchmark_pass
+\else
+  \echo 'ERROR: Portal projection benchmark failed or exceeded 2000ms p95'
+  \quit 5
+\endif
