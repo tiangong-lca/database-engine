@@ -109,7 +109,8 @@ declare
   v_embedding_sha256 text;
   v_fingerprint text;
 begin
-  if p_kind not in ('process', 'flow')
+  if p_kind is null
+     or p_kind not in ('process', 'flow')
      or p_limit is null
      or p_limit not between 1 and 20
      or p_query_terms is null
