@@ -682,6 +682,8 @@ values (
 -- state 200 and draft fixtures prove that a caller cannot bypass visibility by
 -- naming an exact publication.
 alter table public.processes disable trigger user;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v1;
 
 insert into public.processes (id, version, json, user_id, state_code)
 values
@@ -709,6 +711,8 @@ values
 alter table public.processes enable trigger user;
 
 alter table public.flows disable trigger user;
+alter table public.flows
+  enable trigger portal_catalog_projection_content_sync_v1;
 insert into public.flows (id, version, json, user_id, state_code)
 values (
   '52710000-0000-4000-8000-000000000106',
@@ -3695,6 +3699,8 @@ reset role;
 -- been frozen.  It is deliberately absent from the prepared projection and
 -- proves that open license alone cannot synthesize LCIA capability.
 alter table public.processes disable trigger user;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v1;
 insert into public.processes (id, version, json, user_id, state_code)
 values (
   '52710000-0000-4000-8000-000000000105', '01.00.000',
