@@ -1813,6 +1813,199 @@ select extensions.is(
   'both semantic helpers structurally return the healthy ANN arrays before exact fallback'
 );
 
+-- The empty/unfiltered name_asc fast path must preserve the general kernel's
+-- validated name key, unnamed fallback, tuple order, and cursor semantics.
+create or replace function pg_temp.portal_candidate_flow_payload(p_name text)
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'flowDataSet', pg_catalog.jsonb_build_object(
+      'flowInformation', pg_catalog.jsonb_build_object(
+        'dataSetInformation', pg_catalog.jsonb_build_object(
+          'name', pg_catalog.jsonb_build_object(
+            'baseName', pg_catalog.jsonb_build_object(
+              '@xml:lang', 'en',
+              '#text', p_name
+            )
+          )
+        )
+      ),
+      'administrativeInformation', pg_catalog.jsonb_build_object(
+        'publicationAndOwnership', pg_catalog.jsonb_build_object(
+          'common:dataSetVersion', '01.00.000',
+          'common:licenseType', 'Free of charge for all users and uses'
+        )
+      )
+    )
+  )
+$function$;
+
+grant execute on function pg_temp.portal_candidate_flow_payload(text)
+  to service_role;
+
+alter table public.processes disable trigger user;
+alter table public.flows disable trigger user;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.flows
+  enable trigger portal_catalog_projection_content_sync_v1;
+
+set local role service_role;
+
+insert into public.processes (
+  id, version, json, json_ordered, user_id, state_code,
+  rule_verification, modified_at, search_text, embedding_ft, model_id
+)
+values
+  (
+    '53100000-0000-4000-8000-000000000310',
+    '01.00.000',
+    pg_temp.portal_candidate_process_payload('!fast alpha'),
+    pg_temp.portal_candidate_process_payload('!fast alpha')::json,
+    '53100000-0000-4000-8000-000000000001',
+    100,
+    true,
+    '2026-08-26 07:10:00+00',
+    null,
+    null,
+    null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000311',
+    '01.00.000',
+    pg_temp.portal_candidate_process_payload('!fast beta'),
+    pg_temp.portal_candidate_process_payload('!fast beta')::json,
+    '53100000-0000-4000-8000-000000000001',
+    100,
+    true,
+    '2026-08-26 07:10:01+00',
+    null,
+    null,
+    null
+  );
+
+insert into public.flows (
+  id, version, json, json_ordered, user_id, state_code,
+  rule_verification, modified_at, search_text, embedding_ft
+)
+values
+  (
+    '53100000-0000-4000-8000-000000000300',
+    '01.00.000',
+    pg_temp.portal_candidate_flow_payload(''),
+    pg_temp.portal_candidate_flow_payload('')::json,
+    '53100000-0000-4000-8000-000000000001',
+    100,
+    true,
+    '2026-08-26 07:11:00+00',
+    null,
+    null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000301',
+    '01.00.000',
+    pg_temp.portal_candidate_flow_payload(pg_catalog.repeat('x', 501)),
+    pg_temp.portal_candidate_flow_payload(pg_catalog.repeat('x', 501))::json,
+    '53100000-0000-4000-8000-000000000001',
+    100,
+    true,
+    '2026-08-26 07:11:01+00',
+    null,
+    null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000302',
+    '01.00.000',
+    pg_temp.portal_candidate_flow_payload(E'bad\nname'),
+    pg_temp.portal_candidate_flow_payload(E'bad\nname')::json,
+    '53100000-0000-4000-8000-000000000001',
+    100,
+    true,
+    '2026-08-26 07:11:02+00',
+    null,
+    null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000303',
+    '01.00.000',
+    pg_temp.portal_candidate_flow_payload(null),
+    pg_temp.portal_candidate_flow_payload(null)::json,
+    '53100000-0000-4000-8000-000000000001',
+    100,
+    true,
+    '2026-08-26 07:11:03+00',
+    null,
+    null
+  );
+
+reset role;
+
+alter table public.processes enable trigger user;
+alter table public.flows enable trigger user;
+
+set local role anon;
+
+select extensions.ok(
+  (
+    with first_page as (
+      select api.portal_search_processes_v1(
+        '', '{}'::jsonb, 'name_asc', null, 1
+      ) as payload
+    ), second_page as (
+      select api.portal_search_processes_v1(
+        '',
+        '{}'::jsonb,
+        'name_asc',
+        first_page.payload ->> 'nextCursor',
+        1
+      ) as payload
+      from first_page
+    )
+    select first_page.payload #>> '{items,0,key,id}'
+        = '53100000-0000-4000-8000-000000000310'
+      and second_page.payload #>> '{items,0,key,id}'
+        = '53100000-0000-4000-8000-000000000311'
+      and first_page.payload #>> '{items,0,key,id}'
+        <> second_page.payload #>> '{items,0,key,id}'
+      and first_page.payload ->> 'nextCursor' is not null
+    from first_page
+    cross join second_page
+  ),
+  'empty name-ascending fast-path pages preserve exact tuple order without overlap'
+);
+
+select extensions.is(
+  (
+    with response as (
+      select api.portal_search_flows_v1(
+        '', '{}'::jsonb, 'name_asc', null, 50
+      ) as payload
+    )
+    select pg_catalog.array_agg(
+      item.value #>> '{key,id}' order by item.ordinality
+    ) filter (
+      where item.value #>> '{key,id}' like
+        '53100000-0000-4000-8000-0000000003%'
+    )
+    from response
+    cross join lateral pg_catalog.jsonb_array_elements(
+      response.payload -> 'items'
+    ) with ordinality as item(value, ordinality)
+  ),
+  array[
+    '53100000-0000-4000-8000-000000000300',
+    '53100000-0000-4000-8000-000000000301',
+    '53100000-0000-4000-8000-000000000302',
+    '53100000-0000-4000-8000-000000000303'
+  ]::text[],
+  'empty, overlong, control, and missing names use stable unnamed-id ordering'
+);
+
+reset role;
+
 select extensions.ok(
   exists (
     select 1
