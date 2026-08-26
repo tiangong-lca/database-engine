@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."portal_list_versions_v1"("p_kind" "text", "p_id" "uuid", "p_cursor" "text", "p_limit" integer) IS 'Keyset page of exact visible versions with authoritative publication-bound Process LCIA capability.';

@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 525382dc5e5183f0ede0d745717dec66a08398be
-lastReviewedNote: "Reviewed for Issue #327 canonical active-fence naming; the exact-local workspace rebuild command and script invocation contract remain unchanged."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: 510f70feec823f5cb519d662e4e0085807ef4601
+lastReviewedNote: "Reviewed after the persistent-Dev workflow contract gained one exact three-field PostgREST runtime PATCH; schema-workspace helper behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -104,9 +104,11 @@ python scripts/test_resolve_migration_head.py
 
 Fails closed unless the persistent-Dev workflow performs exactly one database
 deployment with `supabase db push --include-all` after linking the configured
-project. It rejects Functions deploy/delete, `config push`, Management API
-mutation, and a manually pinned migration head, then requires exact-head
-readback from the same checkout.
+project. It rejects Functions deploy/delete, `config push`, a manually pinned
+migration head, more than one PostgREST PATCH, or any PATCH body other than the
+exact `db_schema`, `db_extra_search_path`, and `max_rows` runtime contract. It
+then requires that targeted PATCH to precede exact-head and profile probes from
+the same checkout.
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py

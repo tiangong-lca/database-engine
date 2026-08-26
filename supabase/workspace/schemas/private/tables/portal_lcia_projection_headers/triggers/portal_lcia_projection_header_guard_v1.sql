@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "portal_lcia_projection_header_guard_v1" BEFORE DELETE OR UPDATE ON "private"."portal_lcia_projection_headers" FOR EACH ROW EXECUTE FUNCTION "private"."portal_lcia_projection_header_guard_v1"();

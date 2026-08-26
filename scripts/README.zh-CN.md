@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 525382dc5e5183f0ede0d745717dec66a08398be
-lastReviewedNote: "已为 Issue #327 规范 active-fence 命名复核；exact-local workspace 重建命令和脚本调用契约无需改变。"
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: 510f70feec823f5cb519d662e4e0085807ef4601
+lastReviewedNote: "已在持久化 Dev workflow 合同加入准确三字段 PostgREST 运行时 PATCH 后复核；schema-workspace helper 行为不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -96,8 +96,9 @@ python scripts/test_resolve_migration_head.py
 
 除非持久化 Dev workflow 在绑定目标项目后准确执行一次
 `supabase db push --include-all`，否则立即失败。该契约同时拒绝 Functions
-deploy/delete、`config push`、Management API 写操作和手工固定 migration head，
-并要求 Hosted job 使用同一 checkout 完成 exact-head readback。
+deploy/delete、`config push`、手工固定 migration head、多个 PostgREST PATCH，
+以及任何不完全等于 `db_schema`、`db_extra_search_path`、`max_rows` 三字段合同的
+PATCH body；并要求该定向 PATCH 在同一 checkout 的 exact-head 与 profile 探测前完成。
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py

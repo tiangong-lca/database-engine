@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."svc_portal_lcia_projection_stage_register_batch_v1"("p_projection_id" "uuid", "p_stage_lease_token" "uuid", "p_batch" "jsonb") IS 'Registers at most 500 typed records and 1 MiB per exact-replay-safe batch.';

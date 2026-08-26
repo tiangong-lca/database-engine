@@ -7,3 +7,5 @@ COMMENT ON SCHEMA "private" IS 'Internal application state and implementation ro
 GRANT USAGE ON SCHEMA "private" TO "service_role";
 
 GRANT USAGE ON SCHEMA "private" TO "authenticated";
+
+GRANT USAGE ON SCHEMA "private" TO "portal_public_executor";

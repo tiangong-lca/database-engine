@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-25"
-lastReviewedCommit: "525382dc5e5183f0ede0d745717dec66a08398be"
-lastReviewedNote: "Reviewed for Issue #520 AI worker queue contract: existing migration, SQL-test, and service-RPC routing already covers the new AI job contract."
+lastReviewedAt: "2026-08-26"
+lastReviewedCommit: "510f70feec823f5cb519d662e4e0085807ef4601"
+lastReviewedNote: "Reviewed after Portal LCIA package readiness gained transactional rollback and all V3 publication advancement paths gained the shared authoritative binding guard; routing and ownership are unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -49,6 +49,11 @@ ownership:
           - scripts/**
           - supabase/workspace/**
       ownerRepo: database-engine
+    - id: portal-public-contracts
+      paths:
+        include:
+          - contracts/portal/**
+      ownerRepo: database-engine
 
     - id: local-docpact-push-gate
       paths:
@@ -88,6 +93,7 @@ coverage:
     - .env.supabase.main.local.example
     - .github/workflows/ai-doc-lint.yml
     - .github/workflows/supabase-dev.yml
+    - contracts/portal/**
   exclude:
     - .git/**
     - .github/scripts/**
@@ -122,6 +128,13 @@ routing:
         - supabase/seed.sql
         - supabase/seeds/**
         - supabase/tests/**
+    portal-public-contract:
+      paths:
+        - contracts/portal/**
+        - supabase/migrations/*portal_*.sql
+        - supabase/tests/*portal_*.sql
+        - docs/agents/repo-architecture.md
+        - docs/agents/repo-validation.md
     hybrid-search-performance:
       paths:
         - supabase/migrations/*hybrid_search*.sql
@@ -422,3 +435,21 @@ rules:
       - path: docs/agents/repo-validation.md
         mode: review_or_update
     reason: Local push documentation governance gates must stay aligned with repo validation guidance and docpact configuration.
+  - id: database-engine-portal-public-contracts
+    scope: repo
+    repo: database-engine
+    triggers:
+      - path: contracts/portal/**
+        kind: public-api-contract
+      - path: supabase/migrations/*portal_*.sql
+        kind: database-migration
+      - path: supabase/tests/*portal_*.sql
+        kind: database-contract-test
+    requiredDocs:
+      - path: .docpact/config.yaml
+        mode: review_or_update
+      - path: docs/agents/repo-validation.md
+        mode: review_or_update
+      - path: docs/agents/repo-architecture.md
+        mode: review_or_update
+    reason: Portal schemas are the exhaustive locator-free public DTO boundary shared by Database, Edge, and the anonymous Portal consumer.

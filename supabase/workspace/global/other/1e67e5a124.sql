@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."portal_get_published_lcia_values_v1"("p_mode" "text", "p_process_refs" "jsonb", "p_impact_ref" "text", "p_cursor" "text", "p_limit" integer) IS 'Bounded, query-bound-keyset, locator-free public LCIA rows from only the exact current finalized V3 projection. Missing publication or unavailable rows never synthesize zero.';

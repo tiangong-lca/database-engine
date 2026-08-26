@@ -53,7 +53,20 @@ jobs:
           supabase test db supabase/tests/20260806_api_contract_closure.sql
           supabase test db supabase/tests/20260806_identity_center_facades.sql
           supabase test db supabase/tests/20260806_lca_package_capability_facades.sql
+          supabase test db supabase/tests/20260825_portal_public_catalog_v1.sql
+          supabase test db supabase/tests/20260825_portal_public_lcia_projection_v1.sql
+          supabase test db supabase/tests/20260826_portal_lcia_catalog_visibility_v1.sql
+          supabase test db supabase/tests/20260623_data_product_publication_mvp.sql
+          supabase test db supabase/tests/20260716_lci_lcia_release_control_plane.sql
           scripts/test_full_schema_cutover_upgrade.sh
+
+      - name: Verify Portal JSON Schemas
+        run: |
+          npx --yes \
+            --package ajv-cli@5.0.0 \
+            --package ajv-formats@3.0.1 \
+            ajv compile --spec=draft2020 -c ajv-formats \
+            -s 'contracts/portal/*.schema.json'
 
       - name: Stop local Supabase
         if: always()
@@ -86,6 +99,25 @@ jobs:
 
       - name: Push migrations to Supabase Dev branch
         run: supabase db push --include-all
+
+      - name: Apply exact PostgREST runtime contract
+        shell: bash
+        run: |
+          patch_payload='{"db_schema":"public,api,graphql_public","db_extra_search_path":"public,api,extensions","max_rows":1000}'
+          postgrest_config="$(
+            curl --fail-with-body --silent --show-error \
+              --request PATCH \
+              --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data "$patch_payload" \
+              "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_ID/postgrest"
+          )"
+          jq -e '
+            def csv_list: split(",") | map(gsub("^\\s+|\\s+$"; ""));
+            (.db_schema | csv_list) == ["public", "api", "graphql_public"]
+            and (.db_extra_search_path | csv_list) == ["public", "api", "extensions"]
+            and .max_rows == 1000
+          ' <<<"$postgrest_config" >/dev/null
 
       - name: Resolve expected migration head
         id: migration_head
@@ -145,6 +177,7 @@ jobs:
             def csv_list: split(",") | map(gsub("^\\s+|\\s+$"; ""));
             (.db_schema | csv_list) == ["public", "api", "graphql_public"]
             and (.db_extra_search_path | csv_list) == ["public", "api", "extensions"]
+            and .max_rows == 1000
           ' <<<"$postgrest_config" >/dev/null
 
           rest_url="https://$SUPABASE_PROJECT_ID.supabase.co/rest/v1"

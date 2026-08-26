@@ -20,9 +20,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-12
-lastReviewedCommit: f9973d9b16c5b4a7391fd0d5aa5e8695fd9a5da3
-lastReviewedNote: "Reviewed for Issue #474: document the one-time persistent Dev migration-ledger repair for the duplicate 20260810170000 version."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: 3a59878d82adb1291d82feec55038c28cffc139a
+lastReviewedNote: "Reviewed after persistent Dev gained one exact PostgREST runtime PATCH for stale-runtime recovery; the single migration deployer and Edge-owned Function handoff remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -77,7 +77,7 @@ When review changes an already-applied PR migration, add a later migration that 
 - Treat committed files in `supabase/migrations/` as the schema source of truth for production, `dev`, and preview branches.
 - Keep branch-specific overrides in `[remotes.<branch>]` inside `supabase/config.toml`.
 - Do not create a separate `supabase/` directory per Git branch.
-- Keep `.github/workflows/supabase-dev.yml` as the sole persistent-`dev` migration deployer. It may run `supabase link` and exactly one `supabase db push --include-all`, but must not deploy/delete Edge Functions or push project configuration.
+- Keep `.github/workflows/supabase-dev.yml` as the sole persistent-`dev` migration deployer. It may run `supabase link`, exactly one `supabase db push --include-all`, and one Management API PATCH limited to `db_schema`, `db_extra_search_path`, and `max_rows` so the running PostgREST instance matches the checked-in contract; it must not deploy/delete Edge Functions, run `supabase config push`, or mutate any other project setting.
 - After the database workflow succeeds, deploy and validate the intended persistent-Dev Functions through `tiangong-lca-edge-functions`. Function source, function selection, deployment commands, and runtime validation remain owned by that repository.
 - Do not add a checked-in GitHub Actions production deploy for Git `main`; the production project is migrated by the Supabase GitHub integration bound to this repository.
 - Do not author normal schema changes by editing the remote database first and reconstructing migrations later.
@@ -153,9 +153,11 @@ Normal PR path:
 6. The workflow derives the expected head from the checked-out migration
    directory and waits until a service-only readback reports that exact head;
    it never carries a manually pinned head.
-7. The workflow reads `public,api,graphql_public` and
-   `public,api,extensions` through the Management API and probes the hosted
-   Data API boundary. After `db push`, these checks are read-only.
+7. The workflow applies one targeted Management API PATCH containing only
+   `db_schema=public,api,graphql_public`,
+   `db_extra_search_path=public,api,extensions`, and `max_rows=1000` before
+   the first hosted RPC probe. It then reads all three values back and probes
+   the hosted Data API boundary; the remaining verification is read-only.
 8. After the database workflow succeeds, deploy and validate the intended Dev
    Functions through `tiangong-lca-edge-functions`.
 
@@ -269,11 +271,14 @@ Rules:
 - The workflow first rebuilds and verifies the complete migration history
   locally. The hosted job depends on that success, links the configured Dev
   project, and runs exactly one `supabase db push --include-all`.
-- It then derives the expected head from its checkout and fails unless the
-  exact-head readback, Management API readback, and REST profile probes match
-  the checked-in contract.
-- The workflow owns database migrations only. It must not run `supabase
-  functions deploy`, `supabase functions delete`, or `supabase config push`.
+- It then applies the exact three-field PostgREST runtime PATCH, derives the
+  expected head from its checkout, and fails unless the exact-head readback,
+  Management API readback, and REST profile probes match the checked-in
+  contract.
+- The workflow owns database migrations and the narrow PostgREST runtime
+  refresh only. It must not run `supabase functions deploy`, `supabase
+  functions delete`, `supabase config push`, or any other Management API
+  mutation.
 - After the database workflow succeeds, use the Edge repository's current Dev
   deployment and validation procedure. Do not reproduce its function inventory
   or deployment flags in this repository.

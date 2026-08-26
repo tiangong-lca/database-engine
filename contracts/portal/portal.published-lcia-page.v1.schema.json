@@ -1,0 +1,147 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "portal.published-lcia-page.v1.schema.json",
+  "title": "TianGong Portal published LCIA page v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "mode",
+    "publication",
+    "rows",
+    "nextCursor"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "portal.published-lcia-page.v1"
+    },
+    "mode": {
+      "type": "string",
+      "enum": [
+        "process_all_impacts",
+        "processes_one_impact",
+        "ranked_processes_one_impact"
+      ]
+    },
+    "publication": {
+      "$ref": "#/$defs/PublishedLciaPublication"
+    },
+    "rows": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "$ref": "#/$defs/PublishedLciaRow"
+      }
+    },
+    "nextCursor": {
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableCursor"
+    }
+  },
+  "$defs": {
+    "PublishedLciaPublication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publicationId",
+        "packageId",
+        "packageVersion",
+        "publishedAt",
+        "evidenceHash"
+      ],
+      "properties": {
+        "publicationId": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/UUID"
+        },
+        "packageId": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/UUID"
+        },
+        "packageVersion": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NonEmptyString"
+        },
+        "publishedAt": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/DateTime"
+        },
+        "evidenceHash": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/Sha256"
+        }
+      }
+    },
+    "PublishedLciaRow": {
+      "description": "A complete, locator-free published LCIA value. Rows with incomplete numeric context are not emitted.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "process",
+        "functionalUnit",
+        "geography",
+        "referenceYear",
+        "method",
+        "impact",
+        "value",
+        "unit",
+        "evidenceStatus"
+      ],
+      "properties": {
+        "process": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/ExactDatasetIdentity"
+        },
+        "functionalUnit": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/CompleteFunctionalUnit"
+        },
+        "geography": {
+          "$ref": "#/$defs/LciaGeography"
+        },
+        "referenceYear": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/Year"
+        },
+        "method": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/ExactDatasetIdentity"
+        },
+        "impact": {
+          "$ref": "#/$defs/LciaImpact"
+        },
+        "value": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/Real"
+        },
+        "unit": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NonEmptyString"
+        },
+        "evidenceStatus": {
+          "const": "verified"
+        }
+      }
+    },
+    "LciaGeography": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "precision"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NonEmptyString"
+        },
+        "precision": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/GeographyPrecision"
+        }
+      }
+    },
+    "LciaImpact": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "name"
+      ],
+      "properties": {
+        "id": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NonEmptyString"
+        },
+        "name": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."portal_facets_v1"("p_kind" "text", "p_query" "text", "p_filters" "jsonb") IS 'Full-result public catalog facet counts for process, flow, or all; never derived from a result-page sample.';

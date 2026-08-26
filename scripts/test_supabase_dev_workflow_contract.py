@@ -21,7 +21,6 @@ def main() -> int:
     forbidden = {
         "Edge Functions command": "supabase functions",
         "project configuration deploy": "supabase config push",
-        "Management API mutation": "--request patch",
     }
     failures = [label for label, token in forbidden.items() if token in lowered]
 
@@ -49,13 +48,27 @@ def main() -> int:
     if lowered.count("supabase db push --include-all") != 1:
         failures.append("workflow must contain exactly one database-only db push")
 
+    exact_postgrest_patch = (
+        '{"db_schema":"public,api,graphql_public",'
+        '"db_extra_search_path":"public,api,extensions","max_rows":1000}'
+    )
+    if text.count("--request PATCH") != 1:
+        failures.append("workflow must contain exactly one targeted PostgREST PATCH")
+    if exact_postgrest_patch not in text:
+        failures.append("PostgREST PATCH must contain only the exact runtime contract")
+
     deployment_order = (
         hosted_workflow.find('supabase link --project-ref "$SUPABASE_PROJECT_ID"'),
         hosted_workflow.find("supabase db push --include-all"),
+        hosted_workflow.find("- name: Apply exact PostgREST runtime contract"),
         hosted_workflow.find("id: migration_head"),
+        hosted_workflow.find("- name: Verify exact deployed migration head"),
+        hosted_workflow.find("- name: Verify hosted PostgREST boundary"),
     )
     if -1 not in deployment_order and deployment_order != tuple(sorted(deployment_order)):
-        failures.append("link, migration push, and exact-head verification are out of order")
+        failures.append(
+            "link, migration push, PostgREST runtime PATCH, and hosted probes are out of order"
+        )
 
     required = (
         "pull_request:",
@@ -74,6 +87,8 @@ def main() -> int:
         "supabase db reset --no-seed",
         '"public", "api", "graphql_public"',
         '"public", "api", "extensions"',
+        '"max_rows":1000',
+        "and .max_rows == 1000",
         "Accept-Profile: private",
         "Content-Profile: public",
     )
@@ -85,7 +100,8 @@ def main() -> int:
         return 1
 
     print(
-        "PASS: Supabase Dev workflow deploys migrations only and verifies exact head "
+        "PASS: Supabase Dev workflow deploys migrations, applies only the exact "
+        "PostgREST runtime contract, and verifies exact head "
         f"{expected_head}"
     )
     return 0

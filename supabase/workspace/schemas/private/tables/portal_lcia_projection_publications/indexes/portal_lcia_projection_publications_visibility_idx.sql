@@ -1,0 +1,1 @@
+CREATE INDEX "portal_lcia_projection_publications_visibility_idx" ON "private"."portal_lcia_projection_publications" USING "btree" ("status", "lcia_result_publication_id", "projection_id") WHERE ("status" = 'finalized'::"text");

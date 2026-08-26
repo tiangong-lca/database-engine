@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 525382dc5e5183f0ede0d745717dec66a08398be
-lastReviewedNote: "Reviewed for Issue #327 canonical active-fence naming; the CI-authoritative five-schema exact-local generation behavior remains unchanged."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: 510f70feec823f5cb519d662e4e0085807ef4601
+lastReviewedNote: "Reviewed after the persistent-Dev workflow contract gained a targeted PostgREST runtime refresh; generated-workspace paths, refresh behavior, and type ownership are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

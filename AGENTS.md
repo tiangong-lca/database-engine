@@ -10,6 +10,7 @@ whenToUse:
   - when a task may change database schema, migrations, seeds, Supabase branch config, or database-side SQL tests
   - when routing work from the workspace root into the database-engine repo
   - when deciding which document owns a rule, command, or path boundary in this repo
+  - when defining or changing the anonymous Portal public DTO contract
 whenToUpdate:
   - when repo ownership or source-of-truth paths change
   - when branch policy or workspace integration rules change
@@ -19,6 +20,7 @@ checkPaths:
   - README.md
   - README.zh-CN.md
   - .docpact/**/*.yaml
+  - contracts/portal/**
   - docs/agents/**
   - supabase/config.toml
   - supabase/migrations/**
@@ -34,9 +36,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 525382dc5e5183f0ede0d745717dec66a08398be
-lastReviewedNote: "Reviewed for Issue #520 AI worker queue contract: dev-first delivery, database ownership of queue/RPC contracts, and later workspace integration remain unchanged."
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: 510f70feec823f5cb519d662e4e0085807ef4601
+lastReviewedNote: "Reviewed after Portal LCIA package readiness gained write-before-mutation preflight, transactional post-insert rollback, restart readback, and publication advancement guards; ownership boundaries are unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -46,7 +48,7 @@ related:
 
 ## Repo Contract
 
-`database-engine` owns the checked-in Supabase database contract for the TianGong LCA workspace: schema truth, migration history, operator branch bindings, database-side tests, the automation that deploys committed migrations to the persistent Supabase `dev` branch, and the production Supabase GitHub integration contract that applies Git `main` migrations.
+`database-engine` owns the checked-in Supabase database contract for the TianGong LCA workspace: schema truth, versioned public DTO schemas under `contracts/portal/**`, migration history, operator branch bindings, database-side tests, the automation that deploys committed migrations to the persistent Supabase `dev` branch, and the production Supabase GitHub integration contract that applies Git `main` migrations.
 
 Start here when the task may change schema truth, branch bindings, generated schema-workspace tooling, repo validation rules, or documentation ownership inside this repo.
 
@@ -112,11 +114,12 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - local baseline: `supabase start`, `supabase db reset`, `supabase migration list`
 - schema boundary: `public` contains only `processes`, `flows`, `contacts`, `sources`, `unitgroups`, `flowproperties`, `lciamethods`, `lifecyclemodels`, and `ilcd`; client RPCs live in the exposed `api` schema, internal state and service helpers live in `private`, operational tooling lives in `util`, and retired rollback evidence lives in `archive`
 - PostgREST exposes `public` and `api`; entity access keeps `public` as the default profile, while RPC callers must select the `api` profile explicitly
+- anonymous Portal numerics come only from immutable publication-bound typed projections; Search, Detail, and Versions derive `lciaVisible` and Detail publication context from the same current finalized non-revoked predicate as the numeric reader; V3 Worker staging and package readiness are service-only and lease-fenced, predictable package/result/projection drift is rejected before insert, every unexpected post-insert validation failure rolls back the insert and temporary job-schema mutation, an immediate exact retry may recover only a fully matching committed package, and a reclaimed Worker may use the current job lease for locator-free readback of the immutable package/old prepared projection without reusing the old projection lease; package publish prepare/command and projection prepare/finalize re-run the same authoritative binding guard before advancement, while raw projection/artifact tables never gain browser access
 - `supabase/seed.sql` must remain an executable SQL batch even when it seeds no rows; retain a data-neutral no-op rather than comments only
 - hosted mutation E2E assets under `supabase/tests/preview/**` are exact-Preview, disposable test paths; their complete actor, credential, recovery, and cleanup proof requirements live in `docs/agents/repo-validation.md`
 - migration authoring starts from Git `dev`, not GitHub default-branch UI
 - preview-branch proof belongs to the repo PR
-- persistent `dev` migration deployment belongs to `.github/workflows/supabase-dev.yml`; after the local contract passes, it links the configured Dev project, runs exactly one `supabase db push --include-all`, derives the expected head from the checkout, reads back the ordered hosted PostgREST schema/search-path lists, and probes the default `public`, explicit `api`, rejected `private`, and retired `public` RPC routes; it must never deploy or delete Edge Functions or push project configuration
+- persistent `dev` migration deployment belongs to `.github/workflows/supabase-dev.yml`; after the local contract passes, it links the configured Dev project, runs exactly one `supabase db push --include-all`, applies only the exact `db_schema`, `db_extra_search_path`, and `max_rows` PostgREST runtime contract through one targeted Management API PATCH, derives the expected head from the checkout, reads the settings back, and probes the default `public`, explicit `api`, rejected `private`, and retired `public` RPC routes; it must never deploy or delete Edge Functions or run a broad project-configuration push
 - after the persistent `dev` database workflow succeeds, deploy and validate the intended Dev Functions through `tiangong-lca-edge-functions`; this repo does not own the Function source, function selection, or deploy command
 - production `main` proof belongs after `dev -> main` promote and should confirm Supabase GitHub integration applied migrations automatically; when `supabase/config.toml` changes, the operator must also push and verify that configuration against the production project
 - production-volume administrative backfills must fit the platform statement timeout or use a bounded session override that is restored immediately after the statement; Preview row counts alone are not sufficient volume proof
