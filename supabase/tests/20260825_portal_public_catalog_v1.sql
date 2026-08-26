@@ -1204,8 +1204,9 @@ as $$
   );
 $$;
 
--- Fixture writes bypass production side-effect/fence triggers only inside this
--- rollback-only transaction. Portal reads must not depend on trigger products.
+-- Fixture writes bypass every other production side-effect/fence trigger only
+-- inside this rollback-only transaction, while retaining the synchronized
+-- Portal projection trigger that the candidate-first readers intentionally use.
 alter table public.processes disable trigger user;
 alter table public.flows disable trigger user;
 alter table public.processes

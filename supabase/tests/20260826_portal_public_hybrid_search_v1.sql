@@ -449,9 +449,9 @@ grant execute on function pg_temp.portal_hybrid_vector_text(real, real)
 grant execute on function pg_temp.portal_hybrid_has_forbidden_key(jsonb)
   to anon, authenticated;
 
--- Fixture writes bypass production derivative hooks only inside this
--- rollback-only transaction. Hybrid retrieval must depend on the exact stored
--- public row and embedding, never on a trigger side effect or legacy RPC.
+-- Fixture writes bypass every other production derivative hook only inside
+-- this rollback-only transaction, while retaining the synchronized Portal
+-- projection trigger. Hybrid never depends on a legacy RPC side effect.
 alter table public.processes disable trigger user;
 alter table public.flows disable trigger user;
 alter table public.processes
