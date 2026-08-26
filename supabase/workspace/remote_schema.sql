@@ -19317,6 +19317,60 @@ COMMENT ON FUNCTION "api"."portal_get_published_lcia_values_v1"("p_mode" "text",
 
 
 
+CREATE OR REPLACE FUNCTION "api"."portal_hybrid_search_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    AS $$
+declare
+  v_input jsonb;
+  v_page jsonb;
+begin
+  v_input := private.portal_public_hybrid_input_v1(
+    p_kind,
+    p_query_terms,
+    p_query_embedding,
+    p_filters,
+    p_limit
+  );
+  v_page := private.portal_lcia_decorate_item_page_v1(
+    private.portal_public_hybrid_search_v1_impl(
+      v_input ->> 'kind',
+      array(
+        select term.value
+        from pg_catalog.jsonb_array_elements_text(v_input -> 'queryTerms')
+          with ordinality as term(value, ordinality)
+        order by term.ordinality
+      ),
+      (v_input ->> 'queryEmbedding')::extensions.vector(1024),
+      v_input -> 'filters',
+      (v_input ->> 'limit')::integer,
+      v_input ->> 'queryFingerprint'
+    )
+  );
+  if v_page is null
+     or pg_catalog.octet_length(pg_catalog.convert_to(v_page::text, 'UTF8')) > 524288 then
+    raise exception using errcode = '54000', message = 'portal hybrid response too large';
+  end if;
+  return v_page;
+exception
+  when sqlstate '22023' then
+    raise exception using errcode = '22023', message = 'invalid portal request';
+  when query_canceled then
+    raise exception using errcode = 'P0001', message = 'portal hybrid unavailable';
+  when others then
+    raise exception using errcode = 'P0001', message = 'portal hybrid unavailable';
+end
+$$;
+
+
+ALTER FUNCTION "api"."portal_hybrid_search_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "api"."portal_hybrid_search_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) IS 'Bounded locator-free Process/Flow Hybrid candidate page over fixed public 100/200 scope and portal-hybrid-rank-v1.';
+
+
+
 CREATE OR REPLACE FUNCTION "api"."portal_list_process_exchanges_v1"("p_process_id" "uuid", "p_process_version" "text", "p_exchange_kind" "text" DEFAULT 'all'::"text", "p_cursor" "text" DEFAULT NULL::"text", "p_limit" integer DEFAULT 20) RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
@@ -41778,6 +41832,504 @@ $_$;
 
 
 ALTER FUNCTION "private"."portal_process_reference_product_v1"("p_json" "jsonb") OWNER TO "portal_public_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_public_hybrid_card_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") RETURNS "jsonb"
+    LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    AS $$
+  select private.portal_catalog_card_v1(p_kind, p_state_code, p_json)
+$$;
+
+
+ALTER FUNCTION "private"."portal_public_hybrid_card_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."portal_public_hybrid_card_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") IS 'Constrained bridge to the existing Portal public-card projector; callable only by api_internal_executor.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_public_hybrid_input_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) RETURNS "jsonb"
+    LANGUAGE "plpgsql" IMMUTABLE PARALLEL SAFE
+    SET "search_path" TO ''
+    AS $_$
+declare
+  v_terms text[];
+  v_term text;
+  v_filters jsonb;
+  v_key text;
+  v_year numeric;
+  v_embedding extensions.vector(1024);
+  v_embedding_components text[];
+  v_embedding_text text;
+  v_embedding_sha256 text;
+  v_fingerprint text;
+begin
+  if p_kind is null
+     or p_kind not in ('process', 'flow')
+     or p_limit is null
+     or p_limit not between 1 and 20
+     or p_query_terms is null
+     or pg_catalog.array_ndims(p_query_terms) <> 1
+     or pg_catalog.cardinality(p_query_terms) not between 1 and 12
+     or exists (
+       select 1
+       from pg_catalog.unnest(p_query_terms) as supplied(term)
+       where supplied.term is null
+     ) then
+    raise exception using errcode = '22023', message = 'invalid portal request';
+  end if;
+
+  select pg_catalog.array_agg(
+    pg_catalog.lower(
+      pg_catalog.btrim(supplied.term) collate pg_catalog."und-x-icu"
+    )
+    order by supplied.ordinality
+  )
+  into v_terms
+  from pg_catalog.unnest(p_query_terms) with ordinality as supplied(term, ordinality);
+
+  foreach v_term in array v_terms
+  loop
+    if pg_catalog.char_length(v_term) not between 1 and 512
+       or pg_catalog.octet_length(v_term) > 2048
+       or exists (
+         select 1
+         from pg_catalog.generate_series(1, pg_catalog.char_length(v_term)) as position(value)
+         where pg_catalog.ascii(pg_catalog.substr(v_term, position.value, 1))
+           between 0 and 31
+            or pg_catalog.ascii(pg_catalog.substr(v_term, position.value, 1))
+              between 127 and 159
+       ) then
+      raise exception using errcode = '22023', message = 'invalid portal request';
+    end if;
+  end loop;
+  if (
+    select count(distinct supplied.term)
+    from pg_catalog.unnest(v_terms) as supplied(term)
+  ) <> pg_catalog.cardinality(v_terms) then
+    raise exception using errcode = '22023', message = 'invalid portal request';
+  end if;
+
+  if p_query_embedding is null
+     or pg_catalog.octet_length(p_query_embedding) > 65536
+     or pg_catalog.left(p_query_embedding, 1) <> '['
+     or pg_catalog.right(p_query_embedding, 1) <> ']' then
+    raise exception using errcode = '22023', message = 'invalid portal request';
+  end if;
+  v_embedding_components := pg_catalog.string_to_array(
+    pg_catalog.substr(p_query_embedding, 2, pg_catalog.char_length(p_query_embedding) - 2),
+    ','
+  );
+  if pg_catalog.cardinality(v_embedding_components) <> 1024
+     or exists (
+       select 1
+       from pg_catalog.unnest(v_embedding_components) as component(value)
+       where component.value
+         !~ '^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$'
+     ) then
+    raise exception using errcode = '22023', message = 'invalid portal request';
+  end if;
+  begin
+    v_embedding := p_query_embedding::extensions.vector(1024);
+  exception
+    when others then
+      raise exception using errcode = '22023', message = 'invalid portal request';
+  end;
+  if extensions.vector_dims(v_embedding) <> 1024 then
+    raise exception using errcode = '22023', message = 'invalid portal request';
+  end if;
+  v_embedding_text := v_embedding::text;
+  v_embedding_sha256 := pg_catalog.encode(
+    extensions.digest(pg_catalog.convert_to(v_embedding_text, 'UTF8'), 'sha256'),
+    'hex'
+  );
+
+  if p_filters is null or pg_catalog.jsonb_typeof(p_filters) <> 'object' then
+    raise exception using errcode = '22023', message = 'invalid portal request';
+  end if;
+  if exists (
+    select 1
+    from pg_catalog.jsonb_object_keys(p_filters) as supplied(key)
+    where supplied.key not in (
+      'accessLevel', 'geography', 'classification', 'referenceYearFrom',
+      'referenceYearTo', 'processSubtype', 'source'
+    )
+  ) then
+    raise exception using errcode = '22023', message = 'invalid portal request';
+  end if;
+  select coalesce(
+    pg_catalog.jsonb_object_agg(
+      supplied.key,
+      case
+        when supplied.key in (
+          'geography', 'classification', 'processSubtype', 'source'
+        ) and pg_catalog.jsonb_typeof(supplied.value) = 'string'
+          then pg_catalog.to_jsonb(pg_catalog.lower(
+            pg_catalog.btrim(supplied.value #>> '{}') collate pg_catalog."und-x-icu"
+          ))
+        else supplied.value
+      end
+      order by supplied.key
+    ),
+    '{}'::jsonb
+  )
+  into v_filters
+  from pg_catalog.jsonb_each(p_filters) as supplied(key, value);
+  if pg_catalog.octet_length(pg_catalog.convert_to(v_filters::text, 'UTF8')) > 4096
+     or (p_kind = 'flow' and v_filters ? 'processSubtype')
+     or (
+       v_filters ? 'accessLevel'
+       and (
+         pg_catalog.jsonb_typeof(v_filters -> 'accessLevel') <> 'string'
+         or v_filters ->> 'accessLevel' not in ('open', 'metadata_only')
+       )
+     ) then
+    raise exception using errcode = '22023', message = 'invalid portal request';
+  end if;
+
+  foreach v_key in array array['geography', 'classification', 'processSubtype', 'source']
+  loop
+    if v_filters ? v_key
+       and (
+         pg_catalog.jsonb_typeof(v_filters -> v_key) <> 'string'
+         or pg_catalog.char_length(v_filters ->> v_key) not between 1 and 128
+         or pg_catalog.octet_length(v_filters ->> v_key) > 1024
+         or exists (
+           select 1
+           from pg_catalog.generate_series(
+             1,
+             pg_catalog.char_length(v_filters ->> v_key)
+           ) as position(value)
+           where pg_catalog.ascii(
+             pg_catalog.substr(v_filters ->> v_key, position.value, 1)
+           ) between 0 and 31
+              or pg_catalog.ascii(
+                pg_catalog.substr(v_filters ->> v_key, position.value, 1)
+              ) between 127 and 159
+         )
+       ) then
+      raise exception using errcode = '22023', message = 'invalid portal request';
+    end if;
+  end loop;
+
+  foreach v_key in array array['referenceYearFrom', 'referenceYearTo']
+  loop
+    if v_filters ? v_key then
+      if pg_catalog.jsonb_typeof(v_filters -> v_key) <> 'number' then
+        raise exception using errcode = '22023', message = 'invalid portal request';
+      end if;
+      v_year := (v_filters ->> v_key)::numeric;
+      if v_year <> pg_catalog.trunc(v_year) or v_year not between 0 and 9999 then
+        raise exception using errcode = '22023', message = 'invalid portal request';
+      end if;
+    end if;
+  end loop;
+  if v_filters ? 'referenceYearFrom'
+     and v_filters ? 'referenceYearTo'
+     and (v_filters ->> 'referenceYearFrom')::numeric
+       > (v_filters ->> 'referenceYearTo')::numeric then
+    raise exception using errcode = '22023', message = 'invalid portal request';
+  end if;
+
+  v_fingerprint := pg_catalog.encode(
+    extensions.digest(
+      pg_catalog.convert_to(
+        pg_catalog.jsonb_build_object(
+          'algorithmVersion', 'portal-hybrid-rank-v1',
+          'kind', p_kind,
+          'queryTerms', pg_catalog.to_jsonb(v_terms),
+          'queryEmbeddingSha256', v_embedding_sha256,
+          'filters', v_filters,
+          'limit', p_limit
+        )::text,
+        'UTF8'
+      ),
+      'sha256'
+    ),
+    'hex'
+  );
+
+  return pg_catalog.jsonb_build_object(
+    'kind', p_kind,
+    'queryTerms', pg_catalog.to_jsonb(v_terms),
+    'queryEmbedding', v_embedding_text,
+    'filters', v_filters,
+    'limit', p_limit,
+    'queryFingerprint', v_fingerprint
+  );
+end
+$_$;
+
+
+ALTER FUNCTION "private"."portal_public_hybrid_input_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."portal_public_hybrid_input_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) IS 'Owner-only normalization and fingerprinting for the fixed Portal Database Hybrid request.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_public_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    SET "hnsw.iterative_scan" TO 'strict_order'
+    AS $$
+declare
+  v_items jsonb;
+  v_result jsonb;
+begin
+  with source_rows as materialized (
+    select
+      process.id,
+      process.version::text as version,
+      process.json as json_data,
+      process.state_code,
+      process.modified_at,
+      process.embedding_ft
+    from public.processes as process
+    where p_kind = 'process'
+      and process.state_code in (100, 200)
+      and process.modified_at is not null
+      and pg_catalog.jsonb_typeof(process.json) = 'object'
+      and pg_catalog.jsonb_typeof(process.json -> 'processDataSet') = 'object'
+    union all
+    select
+      flow.id,
+      flow.version::text as version,
+      flow.json as json_data,
+      flow.state_code,
+      flow.modified_at,
+      flow.embedding_ft
+    from public.flows as flow
+    where p_kind = 'flow'
+      and flow.state_code in (100, 200)
+      and flow.modified_at is not null
+      and pg_catalog.jsonb_typeof(flow.json) = 'object'
+      and pg_catalog.jsonb_typeof(flow.json -> 'flowDataSet') = 'object'
+  ), latest_ranked as materialized (
+    select source_rows.*,
+      pg_catalog.row_number() over (
+        partition by source_rows.id
+        order by source_rows.version desc, source_rows.modified_at desc, source_rows.state_code desc
+      ) as latest_rank
+    from source_rows
+  ), latest as materialized (
+    select latest_ranked.*
+    from latest_ranked
+    where latest_ranked.latest_rank = 1
+  ), decorated as materialized (
+    select latest.*,
+      private.portal_public_hybrid_card_v1(
+        p_kind,
+        latest.state_code,
+        latest.json_data
+      ) as card
+    from latest
+  ), lexical_counts as materialized (
+    select decorated.*,
+      (
+        select count(*)::integer
+        from pg_catalog.unnest(p_query_terms) as query_term(term)
+        where pg_catalog.strpos(
+          lower(coalesce(decorated.card ->> 'document', '')),
+          query_term.term
+        ) > 0
+      ) as lexical_hit_count
+    from decorated
+    where decorated.card is not null
+  ), lexical_candidates as materialized (
+    select lexical_counts.*
+    from lexical_counts
+    where lexical_counts.lexical_hit_count > 0
+    order by lexical_counts.lexical_hit_count desc,
+      lexical_counts.id asc,
+      lexical_counts.version desc
+    limit 200
+  ), lexical_ranked as materialized (
+    select lexical_candidates.id,
+      lexical_candidates.version,
+      pg_catalog.row_number() over (
+        order by lexical_candidates.lexical_hit_count desc,
+          lexical_candidates.id asc,
+          lexical_candidates.version desc
+      )::integer as lexical_rank
+    from lexical_candidates
+  ), semantic_distances as materialized (
+    select latest.id,
+      latest.version,
+      (
+        latest.embedding_ft operator(extensions.<=>) p_query_embedding
+      ) as semantic_distance
+    from latest
+    where latest.embedding_ft is not null
+  ), semantic_candidates as materialized (
+    select semantic_distances.*
+    from semantic_distances
+    where semantic_distances.semantic_distance is not null
+      and semantic_distances.semantic_distance >= 0::double precision
+      and semantic_distances.semantic_distance <= 0.5::double precision
+    order by semantic_distances.semantic_distance asc,
+      semantic_distances.id asc,
+      semantic_distances.version desc
+    limit 200
+  ), semantic_ranked as materialized (
+    select semantic_candidates.id,
+      semantic_candidates.version,
+      semantic_candidates.semantic_distance,
+      pg_catalog.row_number() over (
+        order by semantic_candidates.semantic_distance asc,
+          semantic_candidates.id asc,
+          semantic_candidates.version desc
+      )::integer as semantic_rank
+    from semantic_candidates
+  ), fused as materialized (
+    select
+      coalesce(lexical_ranked.id, semantic_ranked.id) as id,
+      coalesce(lexical_ranked.version, semantic_ranked.version) as version,
+      lexical_ranked.lexical_rank,
+      semantic_ranked.semantic_rank,
+      semantic_ranked.semantic_distance,
+      pg_catalog.round(
+        least(
+          1::numeric,
+          greatest(
+            0::numeric,
+            (
+              coalesce(0.5::numeric / (60 + lexical_ranked.lexical_rank), 0::numeric)
+              + coalesce(0.5::numeric / (60 + semantic_ranked.semantic_rank), 0::numeric)
+            ) * 61::numeric
+          )
+        ),
+        12
+      ) as normalized_score
+    from lexical_ranked
+    full outer join semantic_ranked
+      on semantic_ranked.id = lexical_ranked.id
+     and semantic_ranked.version = lexical_ranked.version
+  ), filtered as materialized (
+    select fused.*,
+      decorated.card,
+      decorated.modified_at
+    from fused
+    join decorated
+      on decorated.id = fused.id
+     and decorated.version = fused.version
+    where (
+        not (p_filters ? 'accessLevel')
+        or decorated.card ->> 'accessLevel' = p_filters ->> 'accessLevel'
+      )
+      and (
+        not (p_filters ? 'geography')
+        or lower(btrim(coalesce(decorated.card #>> '{geography,code}', '')))
+          = p_filters ->> 'geography'
+      )
+      and (
+        not (p_filters ? 'classification')
+        or exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(
+            coalesce(decorated.card -> 'classifications', '[]'::jsonb)
+          ) as classification(item)
+          where lower(btrim(classification.item ->> 'code'))
+            = p_filters ->> 'classification'
+        )
+      )
+      and (
+        not (p_filters ? 'referenceYearFrom')
+        or (decorated.card ->> 'referenceYear')::integer
+          >= (p_filters ->> 'referenceYearFrom')::integer
+      )
+      and (
+        not (p_filters ? 'referenceYearTo')
+        or (decorated.card ->> 'referenceYear')::integer
+          <= (p_filters ->> 'referenceYearTo')::integer
+      )
+      and (
+        not (p_filters ? 'processSubtype')
+        or lower(btrim(coalesce(decorated.card ->> 'processSubtype', '')))
+          = p_filters ->> 'processSubtype'
+      )
+      and (
+        not (p_filters ? 'source')
+        or lower(btrim(coalesce(decorated.card ->> 'source', '')))
+          = p_filters ->> 'source'
+      )
+  ), ordered as materialized (
+    select filtered.*
+    from filtered
+    order by filtered.normalized_score desc,
+      filtered.id asc,
+      filtered.version desc
+    limit p_limit
+  )
+  select coalesce(
+    pg_catalog.jsonb_agg(
+      pg_catalog.jsonb_build_object(
+        'key', pg_catalog.jsonb_build_object(
+          'kind', p_kind,
+          'id', ordered.id::text,
+          'version', ordered.version
+        ),
+        'accessLevel', ordered.card -> 'accessLevel',
+        'capabilities', ordered.card -> 'capabilities',
+        'names', ordered.card -> 'names',
+        'summary', ordered.card -> 'summary',
+        'geography', ordered.card -> 'geography',
+        'referenceYear', ordered.card -> 'referenceYear',
+        'modifiedAt', pg_catalog.to_char(
+          ordered.modified_at at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+        ),
+        'match', pg_catalog.jsonb_build_object(
+          'kind', 'hybrid',
+          'algorithmVersion', 'portal-hybrid-rank-v1',
+          'score', ordered.normalized_score,
+          'reasonCodes', pg_catalog.to_jsonb(pg_catalog.array_remove(array[
+            case when ordered.lexical_rank is not null
+              then 'lexical_public_projection'::text end,
+            case when ordered.semantic_rank is not null
+              then 'semantic_public_projection'::text end
+          ], null)),
+          'evidence', pg_catalog.jsonb_build_object(
+            'lexicalRank', ordered.lexical_rank,
+            'semanticRank', ordered.semantic_rank,
+            'semanticDistance', case
+              when ordered.semantic_distance is null then null
+              else pg_catalog.trim_scale(ordered.semantic_distance::numeric)::text
+            end
+          )
+        )
+      )
+      order by ordered.normalized_score desc,
+        ordered.id asc,
+        ordered.version desc
+    ),
+    '[]'::jsonb
+  )
+  into v_items
+  from ordered;
+
+  v_result := pg_catalog.jsonb_build_object(
+    'schemaVersion', 'portal.public-hybrid-candidate-page.v1',
+    'kind', p_kind,
+    'queryFingerprint', p_query_fingerprint,
+    'items', v_items
+  );
+  if pg_catalog.octet_length(pg_catalog.convert_to(v_result::text, 'UTF8')) > 524288 then
+    raise exception using errcode = '54000', message = 'portal hybrid response too large';
+  end if;
+  return v_result;
+end
+$$;
+
+
+ALTER FUNCTION "private"."portal_public_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "private"."portal_public_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") IS 'Fixed portal-hybrid-rank-v1 exact-version candidate kernel over one 100/200 public scope.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."portal_publication_root_v1"("p_kind" "text", "p_json" "jsonb") RETURNS "jsonb"
@@ -66676,6 +67228,12 @@ GRANT ALL ON FUNCTION "api"."portal_get_published_lcia_values_v1"("p_mode" "text
 
 
 
+REVOKE ALL ON FUNCTION "api"."portal_hybrid_search_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."portal_hybrid_search_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) TO "anon";
+GRANT ALL ON FUNCTION "api"."portal_hybrid_search_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "api"."portal_list_process_exchanges_v1"("p_process_id" "uuid", "p_process_version" "text", "p_exchange_kind" "text", "p_cursor" "text", "p_limit" integer) FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."portal_list_process_exchanges_v1"("p_process_id" "uuid", "p_process_version" "text", "p_exchange_kind" "text", "p_cursor" "text", "p_limit" integer) TO "anon";
 GRANT ALL ON FUNCTION "api"."portal_list_process_exchanges_v1"("p_process_id" "uuid", "p_process_version" "text", "p_exchange_kind" "text", "p_cursor" "text", "p_limit" integer) TO "authenticated";
@@ -68048,6 +68606,20 @@ GRANT ALL ON FUNCTION "private"."portal_process_open_capability_bridge_v1"("p_st
 
 
 REVOKE ALL ON FUNCTION "private"."portal_process_reference_product_v1"("p_json" "jsonb") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_public_hybrid_card_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."portal_public_hybrid_card_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_public_hybrid_input_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_public_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."portal_public_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") TO "portal_public_executor";
 
 
 

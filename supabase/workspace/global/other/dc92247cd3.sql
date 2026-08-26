@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."portal_public_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") IS 'Fixed portal-hybrid-rank-v1 exact-version candidate kernel over one 100/200 public scope.';
