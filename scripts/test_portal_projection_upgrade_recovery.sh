@@ -910,10 +910,13 @@ assert_sql "
     'private.assert_portal_catalog_facet_contract_v1()'
   ) is not null
 " "facet expand commit-gap fixture is not exact"
+facet_expand_gap_log_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 if apply_pending >"$race_log_dir/expected-facet-expand-gap-failure.log" 2>&1; then
   echo "facet expand unexpectedly ignored an unrecorded committed copy" >&2
   exit 1
 fi
+docker logs --since "$facet_expand_gap_log_since" "$container_name" \
+  >>"$race_log_dir/expected-facet-expand-gap-failure.log" 2>&1
 assert_log_contains \
   "$race_log_dir/expected-facet-expand-gap-failure.log" \
   'already exists|duplicate_(table|function|object)|42P07|42723' \
