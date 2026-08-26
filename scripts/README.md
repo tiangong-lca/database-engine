@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 81b42263272696dc015bbd3701564bcde4d1e539
-lastReviewedNote: "Reviewed after the persistent-Dev workflow contract gained one exact three-field PostgREST runtime PATCH; schema-workspace helper behavior is unchanged."
+lastReviewedCommit: 12f54fe1188223d434a40799466167d5dd83c48e
+lastReviewedNote: "Reviewed after the workflow contract separated persistent-Dev deployment from a fail-closed, minimum-authority PR Preview runtime gate; schema-workspace helper behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -102,13 +102,25 @@ python scripts/test_resolve_migration_head.py
 
 ### `test_supabase_dev_workflow_contract.py`
 
-Fails closed unless the persistent-Dev workflow performs exactly one database
-deployment with `supabase db push --include-all` after linking the configured
-project. It rejects Functions deploy/delete, `config push`, a manually pinned
-migration head, more than one PostgREST PATCH, or any PATCH body other than the
-exact `db_schema`, `db_extra_search_path`, and `max_rows` runtime contract. It
-then requires that targeted PATCH to precede exact-head and profile probes from
-the same checkout.
+Fails closed unless `.github/workflows/supabase-dev.yml` keeps two isolated
+hosted paths. The push-only persistent-Dev job must link the configured Dev
+project, run exactly one `supabase db push --include-all`, derive its migration
+head, and apply exactly one three-field PostgREST PATCH. The pull-request-only
+Preview job must skip forks but fail a same-repository PR when its access token,
+main-parent ref, or persistent-Dev ref is absent. It binds one successful check
+from the exact official Supabase App/head to a unique non-default,
+non-persistent `branches list` row for the same Git branch, PR number, and
+parent; the check ref and BranchResponse ref must match and differ from both
+main and Dev before the Preview's one identical PATCH/readback.
+
+The contract also requires one separate no-reveal Management API key read using
+the raw `disabled` state and exact public-key shape. Only a masked enabled
+publishable or legacy anon key crosses into the next step; raw JSON and PAT are
+cleared first. The anonymous Hybrid step itself may contain no PAT,
+`Authorization`, `Cookie`, or service credential. Across the workflow, the only
+Management API mutations are the one persistent-Dev and one Preview PostgREST
+PATCH; Functions commands, broad `config push`, pinned migration heads, and any
+other mutation remain rejected.
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 81b42263272696dc015bbd3701564bcde4d1e539
-lastReviewedNote: "已在持久化 Dev workflow 合同加入定向 PostgREST 运行时刷新后复核；生成 workspace 路径、刷新行为与类型所有权不变。"
+lastReviewedCommit: 12f54fe1188223d434a40799466167d5dd83c48e
+lastReviewedNote: "已在 workflow 合同加入隔离且最小权限的 PR Preview 运行态门后复核；生成 workspace 路径、刷新行为与类型所有权不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

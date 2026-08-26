@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 81b42263272696dc015bbd3701564bcde4d1e539
-lastReviewedNote: "已在持久化 Dev workflow 合同加入准确三字段 PostgREST 运行时 PATCH 后复核；schema-workspace helper 行为不变。"
+lastReviewedCommit: 12f54fe1188223d434a40799466167d5dd83c48e
+lastReviewedNote: "已在 workflow 合同隔离持久化 Dev 部署与 fail-closed、最小权限 PR Preview 运行态门后复核；schema-workspace helper 行为不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -94,11 +94,21 @@ python scripts/test_resolve_migration_head.py
 
 ### `test_supabase_dev_workflow_contract.py`
 
-除非持久化 Dev workflow 在绑定目标项目后准确执行一次
-`supabase db push --include-all`，否则立即失败。该契约同时拒绝 Functions
-deploy/delete、`config push`、手工固定 migration head、多个 PostgREST PATCH，
-以及任何不完全等于 `db_schema`、`db_extra_search_path`、`max_rows` 三字段合同的
-PATCH body；并要求该定向 PATCH 在同一 checkout 的 exact-head 与 profile 探测前完成。
+除非 `.github/workflows/supabase-dev.yml` 保持两条相互隔离的托管路径，否则立即
+失败。push-only 持久化 Dev job 必须绑定配置的 Dev 项目，准确执行一次
+`supabase db push --include-all`，从 checkout 推导 migration head，并执行准确一次
+三字段 PostgREST PATCH。pull-request-only Preview job 对 fork 跳过，但同仓 PR 缺少
+access token、main-parent ref 或 persistent-Dev ref 任一项时 fail closed。它必须把
+准确 head 上来自官方 Supabase App 的唯一成功 check，与 `branches list` 中按 Git
+branch、PR number、parent 匹配的唯一 non-default/non-persistent BranchResponse 绑定；
+两个 ref 必须相等且都不同于 main/Dev，才能执行 Preview 的一次相同 PATCH 与回读。
+
+合同还要求通过独立且不带 `reveal` 的 Management API key 读取，使用原始
+`disabled` 状态与准确公共 key 形态筛选。只有已 mask 的启用 publishable 或 legacy
+anon key 能进入下一 step；此前必须清除原始 JSON 与 PAT。匿名 Hybrid step 本身不得
+包含 PAT、`Authorization`、`Cookie` 或 service credential。整个 workflow 唯一允许的
+Management API 修改，是持久化 Dev 与 Preview 各一次 PostgREST PATCH；Functions
+命令、广义 `config push`、手工固定 migration head 及其他修改仍全部拒绝。
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py
