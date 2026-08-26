@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 5d8e7dd
+lastReviewedCommit: 1962ab1
 lastReviewedNote: "Reviewed for the Portal projection manifest checker and named release/sparse benchmark profiles; schema-workspace helper behavior is unchanged."
 related:
   - ../AGENTS.md
