@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: f17d467
+lastReviewedCommit: e1f6638
 lastReviewedNote: "已复核 Portal projection manifest 检查器与命名 release/sparse benchmark profile；schema-workspace helper 行为不变。"
 related:
   - ../AGENTS.md
@@ -105,7 +105,8 @@ reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合�
 所有命名 gate 都要求干净且精确的 HEAD，覆盖完整公开请求形态，保持
 Search/Facets p95 <= 2 秒、Hybrid p95 <= 6 秒、每次 Hybrid < 8 秒。正式
 semantic plan 必须含可解析的 shared-buffer 证据、低于 750,000 total / 250,000
-read blocks，且没有 temp/disk spill。每次运行必须使用新的 mode-0700 输出目录。
+read blocks、在 6 秒内完成，且没有 temp/disk spill。每次运行必须使用新的
+mode-0700 输出目录。
 
 ### `check_portal_projection_manifest.py`
 
