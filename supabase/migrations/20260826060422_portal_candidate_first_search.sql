@@ -792,7 +792,7 @@ begin
         operator(extensions.<=>) p_query_embedding as semantic_distance
     from public.processes as process
     where process.id = latest.id
-      and process.version::text = latest.version
+      and process.version = latest.version::character(9)
       and process.state_code in (100, 200)
       and process.embedding_ft is not null
     offset 0
@@ -959,7 +959,7 @@ begin
         operator(extensions.<=>) p_query_embedding as semantic_distance
     from public.flows as flow
     where flow.id = latest.id
-      and flow.version::text = latest.version
+      and flow.version = latest.version::character(9)
       and flow.state_code in (100, 200)
       and flow.embedding_ft is not null
     offset 0
