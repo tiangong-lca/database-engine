@@ -130,6 +130,27 @@ def main() -> int:
                 f"found {actual_count}"
             )
 
+    backfill_migrations = sorted(
+        MIGRATIONS_DIR.glob("2026082608*_portal_projection_backfill_*.sql")
+    )
+    if len(backfill_migrations) != 16:
+        violations.append(
+            "expected exactly 16 Portal projection backfill migrations, "
+            f"found {len(backfill_migrations)}"
+        )
+    backfill_timeout_pattern = re.compile(
+        r"\bbegin\s*;\s*"
+        r"set\s+local\s+lock_timeout\s*=\s*'5s'\s*;\s*"
+        r"set\s+local\s+statement_timeout\s*=\s*'120s'\s*;",
+        flags=re.IGNORECASE,
+    )
+    for migration in backfill_migrations:
+        executable_sql = sql_without_comments(migration.read_text(encoding="utf-8"))
+        if not backfill_timeout_pattern.search(executable_sql):
+            violations.append(
+                f"{migration.name}: missing outer 5s lock / 120s statement timeout"
+            )
+
     if violations:
         print(
             "Portal projection-v1 manifest governance failed:\n- "
