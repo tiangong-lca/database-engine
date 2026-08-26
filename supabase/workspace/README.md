@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 12f54fe1188223d434a40799466167d5dd83c48e
-lastReviewedNote: "Reviewed after the workflow contract gained an isolated minimum-authority PR Preview runtime gate; generated-workspace paths, refresh behavior, and type ownership are unchanged."
+lastReviewedCommit: e7cbf5f
+lastReviewedNote: "Reviewed for the Portal manifest and sparse benchmark tooling; generated-workspace paths, refresh behavior, and type ownership are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

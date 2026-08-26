@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 12f54fe1188223d434a40799466167d5dd83c48e
-lastReviewedNote: "Reviewed after the workflow contract separated persistent-Dev deployment from a fail-closed, minimum-authority PR Preview runtime gate; schema-workspace helper behavior is unchanged."
+lastReviewedCommit: e7cbf5f
+lastReviewedNote: "Reviewed for the Portal projection manifest checker and named release/sparse benchmark profiles; schema-workspace helper behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -104,6 +104,30 @@ directory, and resets the isolated database before and after the run so rolled
 back HNSW pages cannot accumulate. Its environment contract mirrors the
 recovery runner and additionally requires
 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`.
+
+`PORTAL_PROJECTION_BENCHMARK_PROFILE` selects a fail-closed named profile:
+
+- `release` uses representative rows/vectors plus the 21,000-old-Flow filtered
+  underfill pressure;
+- `sparse-zero` uses representative rows with zero embeddings;
+- `sparse-199` uses representative rows with 199 embeddings per dataset;
+- `diagnostic` permits explicitly supplied smaller counts and is not release
+  evidence; `auto` recognizes an exact named profile from its counts.
+
+All named gates require a clean exact HEAD. They cover the complete public
+request shapes, retain Search/Facets p95 <= 2 seconds and Hybrid p95 <= 6
+seconds with every Hybrid call below 8 seconds, and reject sparse fallback temp
+spill. Use a new mode-0700 output directory for every run.
+
+### `check_portal_projection_manifest.py`
+
+Checks that the committed Portal projection-v1 digest and exact eleven-function
+closure remain present, that no later migration replaces a v1 closure member,
+and that reconcile/Search-Hybrid/Facets retain their required runtime guards.
+
+```bash
+python3 scripts/check_portal_projection_manifest.py
+```
 
 ### `resolve_migration_head.py`
 

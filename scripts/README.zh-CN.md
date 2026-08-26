@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 12f54fe1188223d434a40799466167d5dd83c48e
-lastReviewedNote: "已在 workflow 合同隔离持久化 Dev 部署与 fail-closed、最小权限 PR Preview 运行态门后复核；schema-workspace helper 行为不变。"
+lastReviewedCommit: e7cbf5f
+lastReviewedNote: "已复核 Portal projection manifest 检查器与命名 release/sparse benchmark profile；schema-workspace helper 行为不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -92,6 +92,29 @@ Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runn
 Issue 531 migration 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
 reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合同与 recovery runner
 一致，另要求 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`。
+
+`PORTAL_PROJECTION_BENCHMARK_PROFILE` 用于选择 fail-closed 命名 profile：
+
+- `release` 使用代表性行数/向量数，并加入 21,000 条旧 Flow 版本的过滤
+  underfill 压力；
+- `sparse-zero` 使用代表性行数但不写 embedding；
+- `sparse-199` 为每类数据只写 199 条 embedding；
+- `diagnostic` 允许显式传入较小规模，不能作为发布证据；`auto` 会根据
+  精确参数识别命名 profile。
+
+所有命名 gate 都要求干净且精确的 HEAD，覆盖完整公开请求形态，保持
+Search/Facets p95 <= 2 秒、Hybrid p95 <= 6 秒、每次 Hybrid < 8 秒，并拒绝
+sparse fallback 临时文件 spill。每次运行必须使用新的 mode-0700 输出目录。
+
+### `check_portal_projection_manifest.py`
+
+验证已提交的 Portal projection-v1 digest 与十一函数闭包仍完整，禁止后续
+migration 原地替换 v1 闭包成员，并确认 reconcile、Search/Hybrid 与 Facets
+保留所需 runtime guard。
+
+```bash
+python3 scripts/check_portal_projection_manifest.py
+```
 
 ### `resolve_migration_head.py`
 

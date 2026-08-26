@@ -1,4 +1,7 @@
 ---
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: e7cbf5f
+lastReviewedNote: "Reviewed for immutable v1 manifest diagnosis, fail-closed drift handling, and the required shadow-v2 semantic-change path."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -15,6 +18,7 @@ whenToUpdate:
 checkPaths:
   - docs/agents/portal-projection-migration-recovery.md
   - scripts/test_portal_projection_upgrade_recovery.sh
+  - scripts/check_portal_projection_manifest.py
   - supabase/migrations/20260826060422_portal_candidate_first_search.sql
   - supabase/migrations/20260826080257_portal_projection_backfill_0.sql
   - supabase/migrations/20260826080342_portal_projection_backfill_f.sql
@@ -41,8 +45,9 @@ branch controls before any hosted action.
 
 The rollout has four observable boundaries:
 
-1. `20260826060422` installs the private projection, dormant projection Hybrid
-   kernel, and source-table sync triggers in one explicit transaction.
+1. `20260826060422` installs the immutable v1 derivation-contract registry,
+   private projection, dormant projection Hybrid kernel, and source-table sync
+   triggers in one explicit transaction. Every row binds contract version 1.
 2. `20260826080257` through `20260826080342` backfill bounded UUID ranges. Old
    Search, Hybrid, and Facets wrappers remain authoritative throughout this
    state. A failed or paused rollout therefore adds write-only projection work
@@ -61,6 +66,12 @@ file. Each concurrent index file contains exactly one non-transactional
 `CREATE INDEX CONCURRENTLY` statement. Source vectors, embedding triggers, and
 duplicate projection HNSW indexes are intentionally absent.
 
+Search, Hybrid, and Facets call the v1 manifest guard once per request. The
+guard compares the committed registry SHA-256 with the live definitions,
+owners, language, volatility, parallel/security settings, and function config
+of the exact eleven-function card/document closure. Contract drift fails closed
+before projection rows are read.
+
 ## Read-only diagnosis
 
 First identify the exact ledger and object state. Do not infer it from a CLI
@@ -71,6 +82,24 @@ select version
 from supabase_migrations.schema_migrations
 where version between '20260826060422' and '20260826080403'
 order by version;
+
+select contract_version,
+  manifest_schema,
+  function_identities,
+  manifest_sha256,
+  created_by_migration
+from private.portal_catalog_projection_contract_v1;
+
+select private.portal_catalog_projection_manifest_sha256_v1()
+  as live_manifest_sha256;
+
+select projection_contract_version,
+  count(*)
+from private.portal_catalog_search_rows_v1
+group by projection_contract_version
+order by projection_contract_version;
+
+select private.assert_portal_catalog_projection_contract_v1();
 
 select index_relation.oid::regclass as index_name,
   index_catalog.indisvalid,
@@ -158,6 +187,11 @@ If the failed migration has no ledger row and its explicit transaction rolled
 back, repeat the normal migration command. A reconcile lock timeout is expected
 to recover this way after the conflicting writer finishes.
 
+If the registry row, live digest, child version, FK/check, or assertion differs,
+do not retry, clean up a concurrent index, edit migration history, update the
+registry digest, or rebuild v1 rows in place. Preserve the evidence and repair
+the helper change through a new versioned migration path.
+
 ```bash
 supabase db push --include-all
 ```
@@ -172,6 +206,7 @@ closed on retry. Confirm all of the following before cleanup:
 
 - the exact index migration version is absent from migration history;
 - `20260826080400` and `20260826080403` are absent;
+- the v1 derivation-contract assertion succeeds;
 - the same-name relation is one of the two private projection PGroonga indexes;
 - it is INVALID, definition-drifted, or a canonical-valid build whose COMMIT
   preceded its missing migration-history row.
@@ -268,6 +303,19 @@ until `20260826080400` replaces the API wrapper. The same cutover transaction
 drops it with `IF EXISTS`; a failed transaction restores it, while a committed
 or commit/history-gap retry leaves it absent. The final guard requires the API
 wrapper to call only `private.portal_projection_hybrid_search_v1_impl(...)`.
+
+## Derived-semantics changes
+
+The registry row, its digest, the eleven-function v1 closure, and every v1 row
+label are immutable. A card/document semantic change must create a new helper
+closure and shadow projection, then use bounded backfill, a short source-write
+reconcile fence, concurrent lexical indexes, and an atomic read cutover. Never
+update the v1 registry row or perform a long in-place mixed-semantics backfill.
+
+Even a claimed output-equivalent bug fix requires full source-card byte
+equivalence proof. Without that proof, treat it as v2. The static manifest check
+rejects later migrations that replace a v1 closure member; the runtime guard is
+the fail-closed defense if live catalog definitions drift.
 
 Supabase CLI `2.109.1` was used for the local Issue 531 evidence. A real
 five-second reconcile lock timeout returned after eight wall-clock seconds
