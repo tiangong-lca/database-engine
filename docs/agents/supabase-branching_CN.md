@@ -21,7 +21,7 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 3a59878d82adb1291d82feec55038c28cffc139a
+lastReviewedCommit: bc40b40910209b0b7e8ab6bf25f7506f547e8f22
 lastReviewedNote: "已在持久化 Dev 增加用于恢复 PostgREST 旧运行态的准确三字段 PATCH 后复核；唯一 migration 部署者与 Edge Function 交接不变。"
 related:
   - ../../AGENTS.md

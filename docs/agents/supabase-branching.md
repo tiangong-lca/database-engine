@@ -21,7 +21,7 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 3a59878d82adb1291d82feec55038c28cffc139a
+lastReviewedCommit: bc40b40910209b0b7e8ab6bf25f7506f547e8f22
 lastReviewedNote: "Reviewed after persistent Dev gained one exact PostgREST runtime PATCH for stale-runtime recovery; the single migration deployer and Edge-owned Function handoff remain unchanged."
 related:
   - ../../AGENTS.md
