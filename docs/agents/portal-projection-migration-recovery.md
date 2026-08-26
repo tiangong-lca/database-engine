@@ -1,6 +1,6 @@
 ---
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: c5f34b3
+lastReviewedCommit: 8ca5fba
 lastReviewedNote: "Reviewed for immutable card/facet manifests, the seven-migration narrow-facet sub-rollout, and fail-closed retry boundaries."
 title: Portal Projection Migration Recovery
 docType: runbook
@@ -463,7 +463,8 @@ executes the seven facet files verbatim. Every statement in a UUID-quarter file
 must finish within 60 seconds, preserving at least 2x headroom under its
 authored 120-second statement timeout, and each complete file must finish
 within 120 seconds. Reconcile must complete within five seconds, and final
-row/DTO parity must be exact.
+key coverage, deterministic sampled fact parity, and aggregate DTO counts must
+be exact. The pgTAP suite remains the exhaustive semantic equality oracle.
 
 ```bash
 PORTAL_FACET_UPGRADE_TARGET=local-isolated \

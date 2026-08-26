@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: c5f34b3
+lastReviewedCommit: 8ca5fba
 lastReviewedNote: "Reviewed after populated-upgrade proof; the deterministic 266-migration snapshot and public/api type ownership are unchanged."
 related:
   - ../../AGENTS.md

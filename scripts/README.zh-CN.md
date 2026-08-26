@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: c5f34b3
+lastReviewedCommit: 8ca5fba
 lastReviewedNote: "已复核 Portal 双 manifest、既有数据 Facet upgrade/recovery runner 与命名性能 profile。"
 related:
   - ../AGENTS.md
@@ -92,7 +92,8 @@ SHA-256。
 在同一类显式隔离的 Issue-531 项目中，对 126,246 条既有 parent card 逐字执行七个
 Facet migration。每条 backfill statement 必须在 120 秒门下保留至少 2 倍余量，
 每个完整 UUID-quarter 文件必须低于 120 秒；成功 reconcile fence 必须在 5 秒内
-完成，并要求最终 facts 与 DTO 精确一致。runner 退出时总会把隔离项目重置到完整 HEAD。
+完成，并要求 key coverage、确定性抽样 facts 与 DTO 聚合计数精确一致。runner
+退出时总会把隔离项目重置到完整 HEAD。
 
 ### `run_portal_projection_benchmark.sh`
 

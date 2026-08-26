@@ -37,7 +37,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: c5f34b3
+lastReviewedCommit: 8ca5fba
 lastReviewedNote: "Reviewed for the narrow Portal facet projection and populated-upgrade proof; repository ownership and delivery boundaries are unchanged."
 related:
   - .docpact/config.yaml

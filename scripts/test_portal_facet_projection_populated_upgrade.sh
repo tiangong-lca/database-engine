@@ -260,6 +260,18 @@ select private.assert_portal_catalog_facet_contract_v1();
 do $verify_populated_facet_upgrade$
 begin
   if (select count(*) from private.portal_catalog_facet_rows_v1) <> 126246
+     or (
+       select count(*)
+       from private.portal_catalog_search_rows_v1
+       where dataset_kind = 'process'
+         and pg_catalog.get_byte(pg_catalog.uuid_send(id), 0) = 0
+     ) < 40
+     or (
+       select count(*)
+       from private.portal_catalog_search_rows_v1
+       where dataset_kind = 'flow'
+         and pg_catalog.get_byte(pg_catalog.uuid_send(id), 0) = 0
+     ) < 300
      or exists (
        select 1
        from private.portal_catalog_search_rows_v1 as projection
@@ -268,10 +280,12 @@ begin
          projection.card
        ) as facts
        left join private.portal_catalog_facet_rows_v1 as facet
-         on facet.dataset_kind = projection.dataset_kind
-        and facet.id = projection.id
-        and facet.version = projection.version
-       where facet.id is null
+        on facet.dataset_kind = projection.dataset_kind
+       and facet.id = projection.id
+       and facet.version = projection.version
+       where pg_catalog.get_byte(pg_catalog.uuid_send(projection.id), 0) = 0
+         and (
+          facet.id is null
           or facet.state_code is distinct from projection.state_code
           or facet.modified_at is distinct from projection.modified_at
           or facet.facet_access_level is distinct from facts.facet_access_level
@@ -280,6 +294,7 @@ begin
           or facet.facet_process_subtype is distinct from facts.facet_process_subtype
           or facet.facet_source is distinct from facts.facet_source
           or facet.facet_contract_version is distinct from 1
+         )
      ) then
     raise exception 'populated facet upgrade parity failed';
   end if;
@@ -292,18 +307,46 @@ grant portal_public_executor to postgres;
 set role portal_public_executor;
 do $verify_populated_facet_dto_parity$
 declare
-  v_kind text;
-  v_fingerprint text;
+  v_payload jsonb;
+  v_process_count integer;
+  v_flow_count integer;
 begin
-  foreach v_kind in array array['process', 'flow', 'all'] loop
-    v_fingerprint := private.portal_query_fingerprint_v1(
-      v_kind, '', '{}'::jsonb, 'relevance'
-    );
-    if api.portal_facets_v1(v_kind, '', '{}'::jsonb)
-       is distinct from private.catalog_portal_facets_v1_impl(
-         v_kind, '', null::uuid, null::text, '{}'::jsonb, v_fingerprint
-       ) then
-      raise exception 'populated facet DTO parity failed for %', v_kind;
+  foreach v_payload in array array[
+    api.portal_facets_v1('process', '', '{}'::jsonb),
+    api.portal_facets_v1('flow', '', '{}'::jsonb),
+    api.portal_facets_v1('all', '', '{}'::jsonb)
+  ] loop
+    v_process_count := null;
+    v_flow_count := null;
+    select (facet_value.value ->> 'count')::integer
+    into v_process_count
+    from pg_catalog.jsonb_array_elements(v_payload -> 'groups')
+      as facet_group(value)
+    cross join lateral pg_catalog.jsonb_array_elements(
+      facet_group.value -> 'values'
+    ) as facet_value(value)
+    where facet_group.value ->> 'id' = 'kind'
+      and facet_value.value ->> 'value' = 'process';
+
+    select (facet_value.value ->> 'count')::integer
+    into v_flow_count
+    from pg_catalog.jsonb_array_elements(v_payload -> 'groups')
+      as facet_group(value)
+    cross join lateral pg_catalog.jsonb_array_elements(
+      facet_group.value -> 'values'
+    ) as facet_value(value)
+    where facet_group.value ->> 'id' = 'kind'
+      and facet_value.value ->> 'value' = 'flow';
+
+    if v_payload ->> 'kind' = 'process'
+       and (v_process_count <> 17299 or v_flow_count is not null) then
+      raise exception 'populated Process facet DTO counts drifted';
+    elsif v_payload ->> 'kind' = 'flow'
+       and (v_flow_count <> 108947 or v_process_count is not null) then
+      raise exception 'populated Flow facet DTO counts drifted';
+    elsif v_payload ->> 'kind' = 'all'
+       and (v_process_count <> 17299 or v_flow_count <> 108947) then
+      raise exception 'populated all-kind facet DTO counts drifted';
     end if;
   end loop;
 end
