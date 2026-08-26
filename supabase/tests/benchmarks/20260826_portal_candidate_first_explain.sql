@@ -1570,6 +1570,7 @@ where (:'process_rows'::integer >= 10000
            )
            and (
              plan_text !~ 'Buffers: shared'
+             or plan_text !~ 'Execution Time: [0-9]'
              or plan_text ~ 'temp read=[1-9]'
              or plan_text ~ 'temp (read=[0-9]+ )?written=[1-9]'
              or plan_text ~ 'Disk:'
@@ -1602,7 +1603,13 @@ select label,
       'shared[^\n]*read=([0-9]+)'
     ))[1]::bigint,
     0
-  ) as shared_read_blocks
+  ) as shared_read_blocks,
+  (
+    pg_catalog.regexp_match(
+      plan_text,
+      'Execution Time: ([0-9]+[.][0-9]+|[0-9]+) ms'
+    )
+  )[1]::numeric as execution_ms
 from pg_temp.portal_benchmark_plans
 order by label;
 
@@ -1644,6 +1651,38 @@ where :'benchmark_semantic_plan_profile'::boolean
     from semantic_buffers
     where hit_blocks + read_blocks > 750000
        or read_blocks > 250000
+  );
+
+insert into pg_temp.portal_benchmark_failures (
+  label, sqlstate, message, elapsed_ms
+)
+with semantic_times as (
+  select label,
+    (
+      pg_catalog.regexp_match(
+        plan_text,
+        'Execution Time: ([0-9]+[.][0-9]+|[0-9]+) ms'
+      )
+    )[1]::numeric as execution_ms
+  from pg_temp.portal_benchmark_plans
+  where label in (
+    'process_semantic_candidate_path',
+    'flow_semantic_candidate_path'
+  )
+)
+select
+  'semantic_execution_time_guard',
+  'P0001',
+  'formal exact semantic helper exceeded the 6000ms execution budget',
+  coalesce((select max(execution_ms) from semantic_times), 0)::double precision
+where :'benchmark_semantic_plan_profile'::boolean
+  and (
+    (select count(*) from semantic_times where execution_ms is not null) <> 2
+    or exists (
+      select 1
+      from semantic_times
+      where execution_ms > 6000
+    )
   );
 
 create or replace function pg_temp.record_portal_search_timing(
