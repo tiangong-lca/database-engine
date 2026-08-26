@@ -9751,348 +9751,74 @@ ALTER FUNCTION "api"."cmd_notification_send_validation_issue"("p_recipient_user_
 CREATE OR REPLACE FUNCTION "api"."cmd_portal_lcia_projection_finalize_publication_v1"("p_projection_id" "uuid", "p_lcia_result_publication_id" "uuid", "p_package_version" "text", "p_package_result_hash" "text", "p_projection_content_hash" "text", "p_idempotency_key" "text", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
-    AS $_$
+    AS $$
 declare
-  v_actor uuid := auth.uid();
   v_projection private.portal_lcia_projection_headers%rowtype;
   v_publication private.lcia_result_publications%rowtype;
   v_package private.lcia_result_packages%rowtype;
-  v_job private.worker_jobs%rowtype;
-  v_existing private.portal_lcia_projection_publications%rowtype;
-  v_binding private.portal_lcia_projection_publications%rowtype;
-  v_now timestamptz := clock_timestamp();
-  v_evidence_hash text;
-  v_recomputed jsonb;
-  v_projection_impacts jsonb;
-  v_idempotency_key text := btrim(coalesce(p_idempotency_key, ''));
 begin
-  if v_actor is null then
-    return api.lcia_result_error(
-      'auth_required', 401, 'Authentication required'
+  if auth.uid() is null or not api.lcia_result_is_manager() then
+    return private.portal_lcia_projection_finalize_unchecked_v1(
+      p_projection_id, p_lcia_result_publication_id, p_package_version,
+      p_package_result_hash, p_projection_content_hash, p_idempotency_key,
+      p_audit
     );
   end if;
-  if not api.lcia_result_is_manager() then
-    return api.lcia_result_error(
-      'not_data_product_manager', 403,
-      'Data product manager role is required'
-    );
-  end if;
-  if p_projection_id is null
-     or p_lcia_result_publication_id is null
-     or coalesce(p_package_result_hash, '') !~ '^[0-9a-f]{64}$'
-     or coalesce(p_projection_content_hash, '') !~ '^[0-9a-f]{64}$'
-     or private.portal_lcia_public_text_valid_v1(p_package_version, 256)
-          is not true
-     or length(v_idempotency_key) not between 1 and 256
-     or private.portal_lcia_safe_audit_v1(p_audit) is not true then
-    return api.lcia_result_error(
-      'invalid_projection_request', 400,
-      'Invalid Portal LCIA projection finalization request'
-    );
-  end if;
-
   select projection.* into v_projection
   from private.portal_lcia_projection_headers as projection
-  where projection.id = p_projection_id
-  for share;
-  if v_projection.id is null then
-    return api.lcia_result_error(
-      'projection_not_found', 404, 'Projection was not found'
-    );
-  end if;
-  if v_projection.status <> 'prepared'
-     or v_projection.content_hash <> p_projection_content_hash then
-    return api.lcia_result_error(
-      'projection_not_prepared', 409,
-      'Projection is not prepared with the requested content hash'
-    );
-  end if;
-
+  where projection.id = p_projection_id;
   select publication.* into v_publication
   from private.lcia_result_publications as publication
-  where publication.id = p_lcia_result_publication_id
-  for update;
-  if v_publication.id is null then
-    return api.lcia_result_error(
-      'publication_not_found', 404, 'LCIA result publication was not found'
-    );
-  end if;
-  if not v_publication.is_current
-     or v_publication.status <> 'current'
-     or v_publication.publication_series_key <> 'global'
-     or v_publication.publication_channel <> 'public'
-     or v_publication.visibility_scope <> 'public'
-     or v_publication.published_at is null then
-    return api.lcia_result_error(
-      'publication_not_current', 409,
-      'Only the exact current public LCIA result publication can finalize'
-    );
-  end if;
-
+  where publication.id = p_lcia_result_publication_id;
   select package.* into v_package
   from private.lcia_result_packages as package
-  where package.id = v_publication.package_id
-  for share;
-  if v_package.id is null
-     or v_package.status <> 'preview_ready'
-     or v_package.package_version <> p_package_version
-     or v_package.package_result_hash <> p_package_result_hash
-     or v_package.build_worker_job_id <> v_projection.build_worker_job_id
-     or v_package.input_manifest_hash <> v_projection.input_manifest_hash
-     or v_package.closure_certificate_hash
-          <> v_projection.closure_certificate_hash
-     or v_package.closure_snapshot_hash <> v_projection.snapshot_hash
-     or v_package.result_artifact_ref ->> 'artifactSha256'
-          <> v_projection.result_artifact_sha256
-     or v_package.query_artifact_ref ->> 'artifactSha256'
-          <> v_projection.query_artifact_sha256
-     or v_package.artifact_manifest ->> 'bundleContentHash'
-          <> v_projection.bundle_content_hash
-     or v_package.artifact_manifest ->> 'bundleManifestSha256'
-          <> v_projection.bundle_manifest_sha256
-     or v_package.artifact_manifest ->> 'lciaChunkSetSha256'
-          <> v_projection.lcia_chunk_set_sha256
-     or v_package.artifact_manifest ->> 'portalProjectionId'
-          <> v_projection.id::text
-     or v_package.artifact_manifest ->> 'portalProjectionContentHash'
-          <> v_projection.content_hash
-     or v_package.included_input_count <> v_projection.process_count
-     or jsonb_array_length(v_package.available_impact_categories)
-          <> v_projection.impact_count then
-    return api.lcia_result_error(
-      'projection_evidence_mismatch', 409,
-      'Projection and package evidence do not exactly match'
-    );
-  end if;
-  select coalesce(
-    jsonb_agg(to_jsonb(impact.method_id::text) order by impact.impact_index),
-    '[]'::jsonb
-  ) into v_projection_impacts
-  from private.portal_lcia_projection_impact_axis as impact
-  where impact.projection_id = v_projection.id;
-  if v_package.available_impact_categories is distinct from v_projection_impacts
-     or exists (
-       select 1
-       from private.portal_lcia_projection_process_axis as process_row
-       where process_row.projection_id = v_projection.id
-         and (
-           v_package.input_manifest -> 'processes' -> process_row.process_index
-             ->> 'id' is distinct from process_row.process_id::text
-           or v_package.input_manifest -> 'processes' -> process_row.process_index
-             ->> 'version' is distinct from process_row.process_version
-         )
-     ) then
-    return api.lcia_result_error(
-      'projection_evidence_mismatch', 409,
-      'Projection axes do not match the exact package manifest identities'
-    );
-  end if;
-
-  select job.* into v_job
-  from private.worker_jobs as job
-  where job.id = v_projection.build_worker_job_id;
-  if v_job.id is null
-     or v_job.job_kind <> 'lcia_result.package_build'
-     or v_job.payload_schema_version <> 'lcia_result.package_build.request.v3'
-     or v_job.payload_json ->> 'portalProjectionContractVersion'
-          <> 'portal.lcia-projection.v1'
-     or v_job.payload_json ->> 'input_manifest_hash'
-          <> v_projection.input_manifest_hash
-     or v_job.payload_json ->> 'closure_certificate_hash'
-          <> v_projection.closure_certificate_hash
-     or v_job.payload_json ->> 'snapshot_hash'
-          <> v_projection.snapshot_hash
-     or v_job.payload_json ->> 'closure_bundle_hash'
-          <> v_projection.closure_bundle_hash
-     or v_job.payload_json ->> 'snapshot_index_sha256'
-          <> v_projection.snapshot_index_sha256
-     or v_job.payload_json ->> 'snapshot_build_contract_hash'
-          <> v_projection.snapshot_build_contract_hash then
-    return api.lcia_result_error(
-      'projection_job_contract_invalid', 409,
-      'Projection source job is not the exact Portal LCIA V3 contract'
-    );
-  end if;
-  if jsonb_typeof(v_job.payload_json -> 'lcia_method_set') <> 'array'
-     or jsonb_array_length(v_job.payload_json -> 'lcia_method_set')
-          <> v_projection.impact_count
-     or exists (
-       select 1
-       from private.portal_lcia_projection_impact_axis as impact_row
-       where impact_row.projection_id = v_projection.id
-         and (
-           v_job.payload_json -> 'lcia_method_set' -> impact_row.impact_index
-             ->> 'id' is distinct from impact_row.method_id::text
-           or v_job.payload_json -> 'lcia_method_set' -> impact_row.impact_index
-             ->> 'version' is distinct from impact_row.method_version
-         )
-     ) then
-    return api.lcia_result_error(
-      'projection_evidence_mismatch', 409,
-      'Projection Method axis does not match the certified V3 request'
-    );
-  end if;
-
-  if (select count(*) from private.portal_lcia_projection_process_axis
-      where projection_id = v_projection.id) <> v_projection.process_count
-     or (select count(*) from private.portal_lcia_projection_impact_axis
-         where projection_id = v_projection.id) <> v_projection.impact_count
-     or (select count(*) from private.portal_lcia_projection_values
-         where projection_id = v_projection.id)
-          <> v_projection.expected_value_count then
-    return api.lcia_result_error(
-      'projection_evidence_mismatch', 409,
-      'Projection record counts changed after preparation'
-    );
-  end if;
-  v_recomputed := private.portal_lcia_projection_recompute_evidence_v1(
-    v_projection.id
-  );
-  if coalesce((v_recomputed ->> 'ok')::boolean, false) is not true
-     or v_recomputed -> 'data' ->> 'processAxisHash'
-          is distinct from v_projection.process_axis_hash
-     or v_recomputed -> 'data' ->> 'impactAxisHash'
-          is distinct from v_projection.impact_axis_hash
-     or v_recomputed -> 'data' ->> 'valueGridHash'
-          is distinct from v_projection.value_grid_hash
-     or v_recomputed -> 'data' ->> 'relationHash'
-          is distinct from v_projection.relation_hash
-     or v_recomputed -> 'data' ->> 'contentHash'
-          is distinct from v_projection.content_hash then
-    return api.lcia_result_error(
-      'projection_evidence_mismatch', 409,
-      'Projection hashes no longer match the typed persisted rows'
-    );
-  end if;
-
-  select binding.* into v_existing
-  from private.portal_lcia_projection_publications as binding
-  where binding.lcia_result_publication_id = v_publication.id
-  for update;
-  if v_existing.id is not null then
-    if v_existing.status = 'finalized'
-       and v_existing.revoked_at is null
-       and v_existing.projection_id = v_projection.id
-       and v_existing.package_id = v_package.id
-       and v_existing.package_version = p_package_version
-       and v_existing.package_result_hash = p_package_result_hash
-       and v_existing.projection_content_hash = p_projection_content_hash
-       and v_existing.idempotency_key = v_idempotency_key then
-      return jsonb_build_object(
-        'ok', true,
-        'reused', true,
-        'data', jsonb_build_object(
-          'projectionPublicationId', v_existing.id,
-          'projectionId', v_existing.projection_id,
-          'lciaResultPublicationId', v_existing.lcia_result_publication_id,
-          'packageId', v_existing.package_id,
-          'status', v_existing.status,
-          'contentHash', v_existing.projection_content_hash,
-          'evidenceHash', v_existing.evidence_hash,
-          'finalizedAt', private.portal_timestamp_v1(v_existing.finalized_at)
-        )
+  where package.id = v_publication.package_id;
+  if v_projection.id is not null
+     and v_publication.id is not null
+     and v_package.id is not null
+     and v_package.build_worker_job_id = v_projection.build_worker_job_id
+     and v_package.package_version = p_package_version
+     and v_package.package_result_hash = p_package_result_hash
+     and v_projection.content_hash = p_projection_content_hash
+     and v_package.artifact_manifest ->> 'portalProjectionId'
+           = v_projection.id::text then
+    perform 1
+    from private.worker_jobs as job
+    where job.id = v_package.build_worker_job_id
+    for share;
+    perform 1
+    from private.lca_results as result
+    where result.id = v_package.result_id
+    for share;
+    if v_package.latest_all_unit_result_id is not null then
+      perform 1
+      from private.lca_latest_all_unit_results as latest
+      where latest.id = v_package.latest_all_unit_result_id
+      for share;
+    end if;
+    if private.portal_lcia_projection_package_binding_valid_v1(
+         v_package.id, v_package.build_worker_job_id, v_projection.id
+       ) is not true then
+      return api.lcia_result_error(
+        'projection_package_binding_invalid', 409,
+        'Portal LCIA package binding is no longer authoritative'
       );
     end if;
-    return api.lcia_result_error(
-      'projection_conflict', 409,
-      'LCIA result publication is bound to different projection content'
-    );
   end if;
-
-  v_evidence_hash := private.portal_lcia_projection_sha256_fields_v1(
-    'portal.lcia-projection.publication-evidence.v1',
-    'portal.lcia-projection.int32be-frame-sha256.v1',
-    v_projection.id::text,
-    v_projection.content_hash,
-    v_publication.id::text,
-    v_package.id::text,
-    v_package.package_version,
-    v_package.package_result_hash,
-    private.portal_timestamp_v1(v_publication.published_at),
-    v_projection.input_manifest_hash,
-    v_projection.closure_certificate_hash,
-    v_projection.snapshot_hash,
-    v_projection.closure_bundle_hash,
-    v_projection.bundle_content_hash,
-    v_projection.bundle_manifest_sha256,
-    v_projection.lcia_chunk_set_sha256,
-    v_projection.result_artifact_sha256,
-    v_projection.query_artifact_sha256,
-    v_projection.process_count::text,
-    v_projection.impact_count::text,
-    v_projection.expected_value_count::text
+  return private.portal_lcia_projection_finalize_unchecked_v1(
+    p_projection_id, p_lcia_result_publication_id, p_package_version,
+    p_package_result_hash, p_projection_content_hash, p_idempotency_key,
+    p_audit
   );
-
-  insert into private.portal_lcia_projection_publications (
-    projection_id,
-    lcia_result_publication_id,
-    package_id,
-    package_version,
-    package_result_hash,
-    projection_content_hash,
-    evidence_hash,
-    source_published_at,
-    idempotency_key,
-    status,
-    finalized_by,
-    finalized_at
-  ) values (
-    v_projection.id,
-    v_publication.id,
-    v_package.id,
-    v_package.package_version,
-    v_package.package_result_hash,
-    v_projection.content_hash,
-    v_evidence_hash,
-    v_publication.published_at,
-    v_idempotency_key,
-    'finalized',
-    v_actor,
-    v_now
-  ) returning * into v_binding;
-
-  insert into private.command_audit_log (
-    command, actor_user_id, target_table, target_id, target_version, payload
-  ) values (
-    'cmd_portal_lcia_projection_finalize_publication_v1',
-    v_actor,
-    'portal_lcia_projection_publications',
-    v_binding.id,
-    v_binding.package_version,
-    coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
-      'projectionId', v_projection.id,
-      'lciaResultPublicationId', v_publication.id,
-      'packageId', v_package.id,
-      'contentHash', v_projection.content_hash,
-      'evidenceHash', v_evidence_hash
-    )
-  );
-
-  return jsonb_build_object(
-    'ok', true,
-    'reused', false,
-    'data', jsonb_build_object(
-      'projectionPublicationId', v_binding.id,
-      'projectionId', v_binding.projection_id,
-      'lciaResultPublicationId', v_binding.lcia_result_publication_id,
-      'packageId', v_binding.package_id,
-      'status', v_binding.status,
-      'contentHash', v_binding.projection_content_hash,
-      'evidenceHash', v_binding.evidence_hash,
-      'finalizedAt', private.portal_timestamp_v1(v_binding.finalized_at)
-    )
-  );
-exception
-  when unique_violation then
-    return api.lcia_result_error(
-      'projection_conflict', 409,
-      'A conflicting projection publication binding already exists'
-    );
 end
-$_$;
+$$;
 
 
 ALTER FUNCTION "api"."cmd_portal_lcia_projection_finalize_publication_v1"("p_projection_id" "uuid", "p_lcia_result_publication_id" "uuid", "p_package_version" "text", "p_package_result_hash" "text", "p_projection_content_hash" "text", "p_idempotency_key" "text", "p_audit" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "api"."cmd_portal_lcia_projection_finalize_publication_v1"("p_projection_id" "uuid", "p_lcia_result_publication_id" "uuid", "p_package_version" "text", "p_package_result_hash" "text", "p_projection_content_hash" "text", "p_idempotency_key" "text", "p_audit" "jsonb") IS 'Finalizes only an exact authoritative package/result/projection binding for the current LCIA result publication.';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."cmd_portal_lcia_projection_revoke_publication_v1"("p_lcia_result_publication_id" "uuid", "p_projection_content_hash" "text", "p_reason" "text", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
@@ -10197,184 +9923,61 @@ ALTER FUNCTION "api"."cmd_portal_lcia_projection_revoke_publication_v1"("p_lcia_
 CREATE OR REPLACE FUNCTION "api"."cmd_portal_lcia_result_package_publish_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text", "p_expected_publish_plan_hash" "text", "p_reason" "text" DEFAULT NULL::"text", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
-    AS $_$
+    AS $$
 declare
-  v_actor uuid := auth.uid();
-  v_prepared jsonb;
   v_package private.lcia_result_packages%rowtype;
   v_projection private.portal_lcia_projection_headers%rowtype;
-  v_existing private.lcia_result_publications%rowtype;
-  v_retry_audit jsonb;
-  v_previous_id uuid;
-  v_publication private.lcia_result_publications%rowtype;
-  v_reason text := nullif(btrim(coalesce(p_reason, '')), '');
-  v_default_impact text;
-  v_now timestamptz := clock_timestamp();
 begin
-  if v_actor is null then
-    return api.lcia_result_error(
-      'auth_required', 401, 'Authentication required'
-    );
-  end if;
-  if not api.lcia_result_is_manager() then
-    return api.lcia_result_error(
-      'not_data_product_manager', 403,
-      'Data product manager role is required'
-    );
-  end if;
-  if p_package_id is null
-     or coalesce(p_expected_publish_plan_hash, '') !~ '^[0-9a-f]{64}$'
-     or private.portal_lcia_safe_audit_v1(p_audit) is not true
-     or (
-       v_reason is not null
-       and private.portal_lcia_public_text_valid_v1(v_reason, 2000) is not true
-     ) then
-    return api.lcia_result_error(
-      'invalid_projection_request', 400,
-      'Invalid Portal LCIA package publication request'
-    );
-  end if;
-
-  lock table private.lcia_result_publications in exclusive mode;
-  select publication.* into v_existing
-  from private.lcia_result_publications as publication
-  where publication.package_id = p_package_id
-  order by publication.published_at desc nulls last, publication.id
-  limit 1;
-  if v_existing.id is not null then
-    select audit.payload into v_retry_audit
-    from private.command_audit_log as audit
-    where audit.command = 'cmd_portal_lcia_result_package_publish_v1'
-      and audit.target_table = 'lcia_result_publications'
-      and audit.target_id = v_existing.id
-      and audit.payload ->> 'publishPlanHash'
-            = p_expected_publish_plan_hash
-    order by audit.created_at desc
-    limit 1;
-    if v_existing.is_current
-       and v_existing.status = 'current'
-       and v_retry_audit is not null then
-      select package.* into v_package
-      from private.lcia_result_packages as package
-      where package.id = p_package_id;
-      select projection.* into v_projection
-      from private.portal_lcia_projection_headers as projection
-      where projection.id::text =
-        v_package.artifact_manifest ->> 'portalProjectionId';
-      return jsonb_build_object(
-        'ok', true,
-        'reused', true,
-        'data', jsonb_build_object(
-          'publicationId', v_existing.id,
-          'packageId', v_package.id,
-          'previousPublicationId', v_retry_audit -> 'previousPublicationId',
-          'isCurrent', true,
-          'packageVersion', v_package.package_version,
-          'projectionId', v_projection.id,
-          'projectionContentHash', v_projection.content_hash,
-          'publishPlanHash', p_expected_publish_plan_hash,
-          'publishedAt', private.portal_timestamp_v1(v_existing.published_at)
-        )
-      );
-    end if;
-    return api.lcia_result_error(
-      'package_publication_conflict', 409,
-      'Package already has a different or non-current publication history'
-    );
-  end if;
-
-  v_prepared := private.portal_lcia_v3_package_publish_prepare_v1(
-    p_package_id, p_display_default_impact_category
-  );
-  if coalesce((v_prepared ->> 'ok')::boolean, false) is not true then
-    return v_prepared;
-  end if;
-  if v_prepared #>> '{data,publishPlanHash}'
-       <> p_expected_publish_plan_hash then
-    return api.lcia_result_error(
-      'publish_plan_drift', 409,
-      'Portal LCIA package publication evidence changed after approval'
+  if auth.uid() is null or not api.lcia_result_is_manager() then
+    return private.portal_lcia_package_publish_unchecked_v1(
+      p_package_id, p_display_default_impact_category,
+      p_expected_publish_plan_hash, p_reason, p_audit
     );
   end if;
   select package.* into v_package
   from private.lcia_result_packages as package
-  where package.id = p_package_id
-  for share;
+  where package.id = p_package_id;
   select projection.* into v_projection
   from private.portal_lcia_projection_headers as projection
-  where projection.id::text = v_prepared #>> '{data,projection,id}';
-  v_default_impact := v_prepared #>> '{data,displayDefaultImpactCategory}';
-
-  update private.lcia_result_publications
-  set is_current = false,
-      status = 'superseded',
-      updated_at = v_now
-  where publication_series_key = 'global'
-    and publication_channel = 'public'
-    and visibility_scope = 'public'
-    and is_current
-  returning id into v_previous_id;
-
-  insert into private.lcia_result_publications (
-    package_id, publication_series_key, publication_channel,
-    visibility_scope, is_current, status,
-    display_default_impact_category, published_by, published_at, reason
-  ) values (
-    v_package.id, 'global', 'public', 'public', true, 'current',
-    v_default_impact, v_actor, v_now, v_reason
-  ) returning * into v_publication;
-
-  update private.lca_results
-  set is_pinned = true
-  where id = v_package.result_id;
-
-  insert into private.command_audit_log (
-    command, actor_user_id, target_table, target_id, target_version, payload
-  ) values (
-    'cmd_portal_lcia_result_package_publish_v1',
-    v_actor,
-    'lcia_result_publications',
-    v_publication.id,
-    v_package.package_version,
-    coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
-      'packageId', v_package.id,
-      'projectionId', v_projection.id,
-      'projectionContentHash', v_projection.content_hash,
-      'publishPlanHash', p_expected_publish_plan_hash,
-      'previousPublicationId', v_previous_id,
-      'displayDefaultImpactCategory', v_default_impact
-    )
+  where projection.id::text =
+    v_package.artifact_manifest ->> 'portalProjectionId'
+    and projection.build_worker_job_id = v_package.build_worker_job_id;
+  if v_package.id is not null and v_projection.id is not null then
+    perform 1
+    from private.worker_jobs as job
+    where job.id = v_package.build_worker_job_id
+    for share;
+    perform 1
+    from private.lca_results as result
+    where result.id = v_package.result_id
+    for share;
+    if v_package.latest_all_unit_result_id is not null then
+      perform 1
+      from private.lca_latest_all_unit_results as latest
+      where latest.id = v_package.latest_all_unit_result_id
+      for share;
+    end if;
+    if private.portal_lcia_projection_package_binding_valid_v1(
+         v_package.id, v_package.build_worker_job_id, v_projection.id
+       ) is not true then
+      return api.lcia_result_error(
+        'projection_package_binding_invalid', 409,
+        'Portal LCIA package binding is no longer authoritative'
+      );
+    end if;
+  end if;
+  return private.portal_lcia_package_publish_unchecked_v1(
+    p_package_id, p_display_default_impact_category,
+    p_expected_publish_plan_hash, p_reason, p_audit
   );
-
-  return jsonb_build_object(
-    'ok', true,
-    'reused', false,
-    'data', jsonb_build_object(
-      'publicationId', v_publication.id,
-      'packageId', v_package.id,
-      'previousPublicationId', v_previous_id,
-      'isCurrent', true,
-      'packageVersion', v_package.package_version,
-      'projectionId', v_projection.id,
-      'projectionContentHash', v_projection.content_hash,
-      'publishPlanHash', p_expected_publish_plan_hash,
-      'publishedAt', private.portal_timestamp_v1(v_publication.published_at)
-    )
-  );
-exception
-  when unique_violation then
-    return api.lcia_result_error(
-      'latest_conflict', 409,
-      'Another current publication already exists'
-    );
 end
-$_$;
+$$;
 
 
 ALTER FUNCTION "api"."cmd_portal_lcia_result_package_publish_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text", "p_expected_publish_plan_hash" "text", "p_reason" "text", "p_audit" "jsonb") OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "api"."cmd_portal_lcia_result_package_publish_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text", "p_expected_publish_plan_hash" "text", "p_reason" "text", "p_audit" "jsonb") IS 'Publishes only the exact approved Portal LCIA V3 package plan and reconciles response-loss retries from durable audit evidence.';
+COMMENT ON FUNCTION "api"."cmd_portal_lcia_result_package_publish_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text", "p_expected_publish_plan_hash" "text", "p_reason" "text", "p_audit" "jsonb") IS 'Publishes only an exact authoritative Portal LCIA V3 package/projection plan and reconciles response-loss retries.';
 
 
 
@@ -20458,191 +20061,52 @@ ALTER FUNCTION "api"."qry_notification_get_my_team_items"("p_days" integer) OWNE
 CREATE OR REPLACE FUNCTION "api"."qry_portal_lcia_projection_prepare_v1"("p_package_id" "uuid", "p_lcia_result_publication_id" "uuid") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
-    AS $_$
+    AS $$
 declare
-  v_actor uuid := auth.uid();
-  v_job private.worker_jobs%rowtype;
+  v_result jsonb;
   v_package private.lcia_result_packages%rowtype;
-  v_publication private.lcia_result_publications%rowtype;
-  v_projection private.portal_lcia_projection_headers%rowtype;
-  v_match_count integer;
-  v_projection_methods jsonb;
+  v_projection_id uuid;
 begin
-  if v_actor is null then
-    return api.lcia_result_error(
-      'auth_required', 401, 'Authentication required'
+  v_result :=
+    private.portal_lcia_projection_prepare_unchecked_v1(
+      p_package_id, p_lcia_result_publication_id
     );
+  if coalesce((v_result ->> 'ok')::boolean, false) is not true then
+    return v_result;
   end if;
-  if not api.lcia_result_is_manager() then
+  begin
+    v_projection_id := nullif(
+      v_result #>> '{data,projectionId}', ''
+    )::uuid;
+  exception when invalid_text_representation then
     return api.lcia_result_error(
-      'not_data_product_manager', 403,
-      'Data product manager role is required'
+      'projection_package_binding_invalid', 409,
+      'Portal LCIA package binding is no longer authoritative'
     );
-  end if;
-  if p_package_id is null or p_lcia_result_publication_id is null then
-    return api.lcia_result_error(
-      'invalid_projection_request', 400,
-      'Package and LCIA result publication identities are required'
-    );
-  end if;
-
+  end;
   select package.* into v_package
   from private.lcia_result_packages as package
   where package.id = p_package_id;
-  select publication.* into v_publication
-  from private.lcia_result_publications as publication
-  where publication.id = p_lcia_result_publication_id;
   if v_package.id is null
-     or v_publication.id is null
-     or v_publication.package_id <> v_package.id then
+     or v_result #>> '{data,packageId}' is distinct from v_package.id::text
+     or private.portal_lcia_projection_package_binding_valid_v1(
+       v_package.id, v_package.build_worker_job_id, v_projection_id
+     ) is not true then
     return api.lcia_result_error(
-      'projection_package_not_found', 404,
-      'Matching LCIA package and publication were not found'
+      'projection_package_binding_invalid', 409,
+      'Portal LCIA package binding is no longer authoritative'
     );
   end if;
-  if not v_publication.is_current
-     or v_publication.status <> 'current'
-     or v_publication.publication_series_key <> 'global'
-     or v_publication.publication_channel <> 'public'
-     or v_publication.visibility_scope <> 'public'
-     or v_publication.published_at is null then
-    return api.lcia_result_error(
-      'publication_not_current', 409,
-      'Only the exact current public LCIA result publication can prepare'
-    );
-  end if;
-  select job.* into v_job
-  from private.worker_jobs as job
-  where job.id = v_package.build_worker_job_id;
-  if v_job.job_kind <> 'lcia_result.package_build'
-     or v_job.payload_schema_version <> 'lcia_result.package_build.request.v3'
-     or v_job.payload_json ->> 'portalProjectionContractVersion'
-          <> 'portal.lcia-projection.v1'
-     or v_package.status <> 'preview_ready'
-     or coalesce(v_package.package_result_hash, '') !~ '^[0-9a-f]{64}$' then
-    return api.lcia_result_error(
-      'projection_package_not_ready', 409,
-      'Package is not a ready Portal LCIA V3 package'
-    );
-  end if;
-
-  select count(*)
-  into v_match_count
-  from private.portal_lcia_projection_headers as projection
-  where projection.build_worker_job_id = v_job.id
-    and projection.status = 'prepared'
-    and projection.input_manifest_hash = v_package.input_manifest_hash
-    and projection.closure_certificate_hash = v_package.closure_certificate_hash
-    and projection.snapshot_hash = v_package.closure_snapshot_hash
-    and projection.result_artifact_sha256
-          = v_package.result_artifact_ref ->> 'artifactSha256'
-    and projection.query_artifact_sha256
-          = v_package.query_artifact_ref ->> 'artifactSha256'
-    and projection.bundle_content_hash
-          = v_package.artifact_manifest ->> 'bundleContentHash'
-    and projection.bundle_manifest_sha256
-          = v_package.artifact_manifest ->> 'bundleManifestSha256'
-    and projection.lcia_chunk_set_sha256
-          = v_package.artifact_manifest ->> 'lciaChunkSetSha256'
-    and projection.id::text
-          = v_package.artifact_manifest ->> 'portalProjectionId'
-    and projection.content_hash
-          = v_package.artifact_manifest ->> 'portalProjectionContentHash'
-    and projection.process_count = v_package.included_input_count
-    and projection.impact_count = jsonb_array_length(
-      v_package.available_impact_categories
-    );
-
-  if v_match_count = 0 then
-    return api.lcia_result_error(
-      'projection_not_prepared', 409,
-      'No prepared projection exactly matches the package evidence'
-    );
-  end if;
-  if v_match_count > 1 then
-    return api.lcia_result_error(
-      'projection_conflict', 409,
-      'More than one prepared projection matches the package evidence'
-    );
-  end if;
-  select projection.* into v_projection
-  from private.portal_lcia_projection_headers as projection
-  where projection.build_worker_job_id = v_job.id
-    and projection.status = 'prepared'
-    and projection.input_manifest_hash = v_package.input_manifest_hash
-    and projection.closure_certificate_hash = v_package.closure_certificate_hash
-    and projection.snapshot_hash = v_package.closure_snapshot_hash
-    and projection.result_artifact_sha256
-          = v_package.result_artifact_ref ->> 'artifactSha256'
-    and projection.query_artifact_sha256
-          = v_package.query_artifact_ref ->> 'artifactSha256'
-    and projection.bundle_content_hash
-          = v_package.artifact_manifest ->> 'bundleContentHash'
-    and projection.bundle_manifest_sha256
-          = v_package.artifact_manifest ->> 'bundleManifestSha256'
-    and projection.lcia_chunk_set_sha256
-          = v_package.artifact_manifest ->> 'lciaChunkSetSha256'
-    and projection.id::text
-          = v_package.artifact_manifest ->> 'portalProjectionId'
-    and projection.content_hash
-          = v_package.artifact_manifest ->> 'portalProjectionContentHash'
-    and projection.process_count = v_package.included_input_count
-    and projection.impact_count = jsonb_array_length(
-      v_package.available_impact_categories
-    );
-  select coalesce(
-    jsonb_agg(to_jsonb(impact.method_id::text) order by impact.impact_index),
-    '[]'::jsonb
-  ) into v_projection_methods
-  from private.portal_lcia_projection_impact_axis as impact
-  where impact.projection_id = v_projection.id;
-  if v_package.available_impact_categories is distinct from v_projection_methods
-     or exists (
-       select 1
-       from private.portal_lcia_projection_process_axis as process_row
-       where process_row.projection_id = v_projection.id
-         and (
-           v_package.input_manifest -> 'processes' -> process_row.process_index
-             ->> 'id' is distinct from process_row.process_id::text
-           or v_package.input_manifest -> 'processes' -> process_row.process_index
-             ->> 'version' is distinct from process_row.process_version
-         )
-     ) then
-    return api.lcia_result_error(
-      'projection_evidence_mismatch', 409,
-      'Projection axes do not match the exact package manifest identities'
-    );
-  end if;
-
-  return jsonb_build_object(
-    'ok', true,
-    'data', jsonb_build_object(
-      'projectionId', v_projection.id,
-      'buildWorkerJobId', v_projection.build_worker_job_id,
-      'packageId', v_package.id,
-      'lciaResultPublicationId', v_publication.id,
-      'packageVersion', v_package.package_version,
-      'packageResultHash', v_package.package_result_hash,
-      'status', v_projection.status,
-      'projectionContractVersion', v_projection.projection_contract_version,
-      'hashContractVersion',
-        'portal.lcia-projection.int32be-frame-sha256.v1',
-      'processCount', v_projection.process_count,
-      'impactCount', v_projection.impact_count,
-      'valueCount', v_projection.expected_value_count,
-      'processAxisHash', v_projection.process_axis_hash,
-      'impactAxisHash', v_projection.impact_axis_hash,
-      'valueGridHash', v_projection.value_grid_hash,
-      'relationHash', v_projection.relation_hash,
-      'contentHash', v_projection.content_hash,
-      'publishedAt', private.portal_timestamp_v1(v_publication.published_at)
-    )
-  );
+  return v_result;
 end
-$_$;
+$$;
 
 
 ALTER FUNCTION "api"."qry_portal_lcia_projection_prepare_v1"("p_package_id" "uuid", "p_lcia_result_publication_id" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "api"."qry_portal_lcia_projection_prepare_v1"("p_package_id" "uuid", "p_lcia_result_publication_id" "uuid") IS 'Prepares only the exact current authoritative package/projection/publication binding for finalization.';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."qry_portal_lcia_projection_publication_readback_v1"("p_lcia_result_publication_id" "uuid", "p_projection_content_hash" "text") RETURNS "jsonb"
@@ -40244,6 +39708,537 @@ $_$;
 ALTER FUNCTION "private"."portal_lcia_localized_text_valid_v1"("p_value" "jsonb") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "private"."portal_lcia_package_publish_unchecked_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text", "p_expected_publish_plan_hash" "text", "p_reason" "text" DEFAULT NULL::"text", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+declare
+  v_actor uuid := auth.uid();
+  v_prepared jsonb;
+  v_package private.lcia_result_packages%rowtype;
+  v_projection private.portal_lcia_projection_headers%rowtype;
+  v_existing private.lcia_result_publications%rowtype;
+  v_retry_audit jsonb;
+  v_previous_id uuid;
+  v_publication private.lcia_result_publications%rowtype;
+  v_reason text := nullif(btrim(coalesce(p_reason, '')), '');
+  v_default_impact text;
+  v_now timestamptz := clock_timestamp();
+begin
+  if v_actor is null then
+    return api.lcia_result_error(
+      'auth_required', 401, 'Authentication required'
+    );
+  end if;
+  if not api.lcia_result_is_manager() then
+    return api.lcia_result_error(
+      'not_data_product_manager', 403,
+      'Data product manager role is required'
+    );
+  end if;
+  if p_package_id is null
+     or coalesce(p_expected_publish_plan_hash, '') !~ '^[0-9a-f]{64}$'
+     or private.portal_lcia_safe_audit_v1(p_audit) is not true
+     or (
+       v_reason is not null
+       and private.portal_lcia_public_text_valid_v1(v_reason, 2000) is not true
+     ) then
+    return api.lcia_result_error(
+      'invalid_projection_request', 400,
+      'Invalid Portal LCIA package publication request'
+    );
+  end if;
+
+  lock table private.lcia_result_publications in exclusive mode;
+  select publication.* into v_existing
+  from private.lcia_result_publications as publication
+  where publication.package_id = p_package_id
+  order by publication.published_at desc nulls last, publication.id
+  limit 1;
+  if v_existing.id is not null then
+    select audit.payload into v_retry_audit
+    from private.command_audit_log as audit
+    where audit.command = 'cmd_portal_lcia_result_package_publish_v1'
+      and audit.target_table = 'lcia_result_publications'
+      and audit.target_id = v_existing.id
+      and audit.payload ->> 'publishPlanHash'
+            = p_expected_publish_plan_hash
+    order by audit.created_at desc
+    limit 1;
+    if v_existing.is_current
+       and v_existing.status = 'current'
+       and v_retry_audit is not null then
+      select package.* into v_package
+      from private.lcia_result_packages as package
+      where package.id = p_package_id;
+      select projection.* into v_projection
+      from private.portal_lcia_projection_headers as projection
+      where projection.id::text =
+        v_package.artifact_manifest ->> 'portalProjectionId';
+      return jsonb_build_object(
+        'ok', true,
+        'reused', true,
+        'data', jsonb_build_object(
+          'publicationId', v_existing.id,
+          'packageId', v_package.id,
+          'previousPublicationId', v_retry_audit -> 'previousPublicationId',
+          'isCurrent', true,
+          'packageVersion', v_package.package_version,
+          'projectionId', v_projection.id,
+          'projectionContentHash', v_projection.content_hash,
+          'publishPlanHash', p_expected_publish_plan_hash,
+          'publishedAt', private.portal_timestamp_v1(v_existing.published_at)
+        )
+      );
+    end if;
+    return api.lcia_result_error(
+      'package_publication_conflict', 409,
+      'Package already has a different or non-current publication history'
+    );
+  end if;
+
+  v_prepared := private.portal_lcia_v3_package_publish_prepare_v1(
+    p_package_id, p_display_default_impact_category
+  );
+  if coalesce((v_prepared ->> 'ok')::boolean, false) is not true then
+    return v_prepared;
+  end if;
+  if v_prepared #>> '{data,publishPlanHash}'
+       <> p_expected_publish_plan_hash then
+    return api.lcia_result_error(
+      'publish_plan_drift', 409,
+      'Portal LCIA package publication evidence changed after approval'
+    );
+  end if;
+  select package.* into v_package
+  from private.lcia_result_packages as package
+  where package.id = p_package_id
+  for share;
+  select projection.* into v_projection
+  from private.portal_lcia_projection_headers as projection
+  where projection.id::text = v_prepared #>> '{data,projection,id}';
+  v_default_impact := v_prepared #>> '{data,displayDefaultImpactCategory}';
+
+  update private.lcia_result_publications
+  set is_current = false,
+      status = 'superseded',
+      updated_at = v_now
+  where publication_series_key = 'global'
+    and publication_channel = 'public'
+    and visibility_scope = 'public'
+    and is_current
+  returning id into v_previous_id;
+
+  insert into private.lcia_result_publications (
+    package_id, publication_series_key, publication_channel,
+    visibility_scope, is_current, status,
+    display_default_impact_category, published_by, published_at, reason
+  ) values (
+    v_package.id, 'global', 'public', 'public', true, 'current',
+    v_default_impact, v_actor, v_now, v_reason
+  ) returning * into v_publication;
+
+  update private.lca_results
+  set is_pinned = true
+  where id = v_package.result_id;
+
+  insert into private.command_audit_log (
+    command, actor_user_id, target_table, target_id, target_version, payload
+  ) values (
+    'cmd_portal_lcia_result_package_publish_v1',
+    v_actor,
+    'lcia_result_publications',
+    v_publication.id,
+    v_package.package_version,
+    coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
+      'packageId', v_package.id,
+      'projectionId', v_projection.id,
+      'projectionContentHash', v_projection.content_hash,
+      'publishPlanHash', p_expected_publish_plan_hash,
+      'previousPublicationId', v_previous_id,
+      'displayDefaultImpactCategory', v_default_impact
+    )
+  );
+
+  return jsonb_build_object(
+    'ok', true,
+    'reused', false,
+    'data', jsonb_build_object(
+      'publicationId', v_publication.id,
+      'packageId', v_package.id,
+      'previousPublicationId', v_previous_id,
+      'isCurrent', true,
+      'packageVersion', v_package.package_version,
+      'projectionId', v_projection.id,
+      'projectionContentHash', v_projection.content_hash,
+      'publishPlanHash', p_expected_publish_plan_hash,
+      'publishedAt', private.portal_timestamp_v1(v_publication.published_at)
+    )
+  );
+exception
+  when unique_violation then
+    return api.lcia_result_error(
+      'latest_conflict', 409,
+      'Another current publication already exists'
+    );
+end
+$_$;
+
+
+ALTER FUNCTION "private"."portal_lcia_package_publish_unchecked_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text", "p_expected_publish_plan_hash" "text", "p_reason" "text", "p_audit" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "private"."portal_lcia_package_publish_unchecked_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text", "p_expected_publish_plan_hash" "text", "p_reason" "text", "p_audit" "jsonb") IS 'Publishes only the exact approved Portal LCIA V3 package plan and reconciles response-loss retries from durable audit evidence.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_lcia_projection_finalize_unchecked_v1"("p_projection_id" "uuid", "p_lcia_result_publication_id" "uuid", "p_package_version" "text", "p_package_result_hash" "text", "p_projection_content_hash" "text", "p_idempotency_key" "text", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+declare
+  v_actor uuid := auth.uid();
+  v_projection private.portal_lcia_projection_headers%rowtype;
+  v_publication private.lcia_result_publications%rowtype;
+  v_package private.lcia_result_packages%rowtype;
+  v_job private.worker_jobs%rowtype;
+  v_existing private.portal_lcia_projection_publications%rowtype;
+  v_binding private.portal_lcia_projection_publications%rowtype;
+  v_now timestamptz := clock_timestamp();
+  v_evidence_hash text;
+  v_recomputed jsonb;
+  v_projection_impacts jsonb;
+  v_idempotency_key text := btrim(coalesce(p_idempotency_key, ''));
+begin
+  if v_actor is null then
+    return api.lcia_result_error(
+      'auth_required', 401, 'Authentication required'
+    );
+  end if;
+  if not api.lcia_result_is_manager() then
+    return api.lcia_result_error(
+      'not_data_product_manager', 403,
+      'Data product manager role is required'
+    );
+  end if;
+  if p_projection_id is null
+     or p_lcia_result_publication_id is null
+     or coalesce(p_package_result_hash, '') !~ '^[0-9a-f]{64}$'
+     or coalesce(p_projection_content_hash, '') !~ '^[0-9a-f]{64}$'
+     or private.portal_lcia_public_text_valid_v1(p_package_version, 256)
+          is not true
+     or length(v_idempotency_key) not between 1 and 256
+     or private.portal_lcia_safe_audit_v1(p_audit) is not true then
+    return api.lcia_result_error(
+      'invalid_projection_request', 400,
+      'Invalid Portal LCIA projection finalization request'
+    );
+  end if;
+
+  select projection.* into v_projection
+  from private.portal_lcia_projection_headers as projection
+  where projection.id = p_projection_id
+  for share;
+  if v_projection.id is null then
+    return api.lcia_result_error(
+      'projection_not_found', 404, 'Projection was not found'
+    );
+  end if;
+  if v_projection.status <> 'prepared'
+     or v_projection.content_hash <> p_projection_content_hash then
+    return api.lcia_result_error(
+      'projection_not_prepared', 409,
+      'Projection is not prepared with the requested content hash'
+    );
+  end if;
+
+  select publication.* into v_publication
+  from private.lcia_result_publications as publication
+  where publication.id = p_lcia_result_publication_id
+  for update;
+  if v_publication.id is null then
+    return api.lcia_result_error(
+      'publication_not_found', 404, 'LCIA result publication was not found'
+    );
+  end if;
+  if not v_publication.is_current
+     or v_publication.status <> 'current'
+     or v_publication.publication_series_key <> 'global'
+     or v_publication.publication_channel <> 'public'
+     or v_publication.visibility_scope <> 'public'
+     or v_publication.published_at is null then
+    return api.lcia_result_error(
+      'publication_not_current', 409,
+      'Only the exact current public LCIA result publication can finalize'
+    );
+  end if;
+
+  select package.* into v_package
+  from private.lcia_result_packages as package
+  where package.id = v_publication.package_id
+  for share;
+  if v_package.id is null
+     or v_package.status <> 'preview_ready'
+     or v_package.package_version <> p_package_version
+     or v_package.package_result_hash <> p_package_result_hash
+     or v_package.build_worker_job_id <> v_projection.build_worker_job_id
+     or v_package.input_manifest_hash <> v_projection.input_manifest_hash
+     or v_package.closure_certificate_hash
+          <> v_projection.closure_certificate_hash
+     or v_package.closure_snapshot_hash <> v_projection.snapshot_hash
+     or v_package.result_artifact_ref ->> 'artifactSha256'
+          <> v_projection.result_artifact_sha256
+     or v_package.query_artifact_ref ->> 'artifactSha256'
+          <> v_projection.query_artifact_sha256
+     or v_package.artifact_manifest ->> 'bundleContentHash'
+          <> v_projection.bundle_content_hash
+     or v_package.artifact_manifest ->> 'bundleManifestSha256'
+          <> v_projection.bundle_manifest_sha256
+     or v_package.artifact_manifest ->> 'lciaChunkSetSha256'
+          <> v_projection.lcia_chunk_set_sha256
+     or v_package.artifact_manifest ->> 'portalProjectionId'
+          <> v_projection.id::text
+     or v_package.artifact_manifest ->> 'portalProjectionContentHash'
+          <> v_projection.content_hash
+     or v_package.included_input_count <> v_projection.process_count
+     or jsonb_array_length(v_package.available_impact_categories)
+          <> v_projection.impact_count then
+    return api.lcia_result_error(
+      'projection_evidence_mismatch', 409,
+      'Projection and package evidence do not exactly match'
+    );
+  end if;
+  select coalesce(
+    jsonb_agg(to_jsonb(impact.method_id::text) order by impact.impact_index),
+    '[]'::jsonb
+  ) into v_projection_impacts
+  from private.portal_lcia_projection_impact_axis as impact
+  where impact.projection_id = v_projection.id;
+  if v_package.available_impact_categories is distinct from v_projection_impacts
+     or exists (
+       select 1
+       from private.portal_lcia_projection_process_axis as process_row
+       where process_row.projection_id = v_projection.id
+         and (
+           v_package.input_manifest -> 'processes' -> process_row.process_index
+             ->> 'id' is distinct from process_row.process_id::text
+           or v_package.input_manifest -> 'processes' -> process_row.process_index
+             ->> 'version' is distinct from process_row.process_version
+         )
+     ) then
+    return api.lcia_result_error(
+      'projection_evidence_mismatch', 409,
+      'Projection axes do not match the exact package manifest identities'
+    );
+  end if;
+
+  select job.* into v_job
+  from private.worker_jobs as job
+  where job.id = v_projection.build_worker_job_id;
+  if v_job.id is null
+     or v_job.job_kind <> 'lcia_result.package_build'
+     or v_job.payload_schema_version <> 'lcia_result.package_build.request.v3'
+     or v_job.payload_json ->> 'portalProjectionContractVersion'
+          <> 'portal.lcia-projection.v1'
+     or v_job.payload_json ->> 'input_manifest_hash'
+          <> v_projection.input_manifest_hash
+     or v_job.payload_json ->> 'closure_certificate_hash'
+          <> v_projection.closure_certificate_hash
+     or v_job.payload_json ->> 'snapshot_hash'
+          <> v_projection.snapshot_hash
+     or v_job.payload_json ->> 'closure_bundle_hash'
+          <> v_projection.closure_bundle_hash
+     or v_job.payload_json ->> 'snapshot_index_sha256'
+          <> v_projection.snapshot_index_sha256
+     or v_job.payload_json ->> 'snapshot_build_contract_hash'
+          <> v_projection.snapshot_build_contract_hash then
+    return api.lcia_result_error(
+      'projection_job_contract_invalid', 409,
+      'Projection source job is not the exact Portal LCIA V3 contract'
+    );
+  end if;
+  if jsonb_typeof(v_job.payload_json -> 'lcia_method_set') <> 'array'
+     or jsonb_array_length(v_job.payload_json -> 'lcia_method_set')
+          <> v_projection.impact_count
+     or exists (
+       select 1
+       from private.portal_lcia_projection_impact_axis as impact_row
+       where impact_row.projection_id = v_projection.id
+         and (
+           v_job.payload_json -> 'lcia_method_set' -> impact_row.impact_index
+             ->> 'id' is distinct from impact_row.method_id::text
+           or v_job.payload_json -> 'lcia_method_set' -> impact_row.impact_index
+             ->> 'version' is distinct from impact_row.method_version
+         )
+     ) then
+    return api.lcia_result_error(
+      'projection_evidence_mismatch', 409,
+      'Projection Method axis does not match the certified V3 request'
+    );
+  end if;
+
+  if (select count(*) from private.portal_lcia_projection_process_axis
+      where projection_id = v_projection.id) <> v_projection.process_count
+     or (select count(*) from private.portal_lcia_projection_impact_axis
+         where projection_id = v_projection.id) <> v_projection.impact_count
+     or (select count(*) from private.portal_lcia_projection_values
+         where projection_id = v_projection.id)
+          <> v_projection.expected_value_count then
+    return api.lcia_result_error(
+      'projection_evidence_mismatch', 409,
+      'Projection record counts changed after preparation'
+    );
+  end if;
+  v_recomputed := private.portal_lcia_projection_recompute_evidence_v1(
+    v_projection.id
+  );
+  if coalesce((v_recomputed ->> 'ok')::boolean, false) is not true
+     or v_recomputed -> 'data' ->> 'processAxisHash'
+          is distinct from v_projection.process_axis_hash
+     or v_recomputed -> 'data' ->> 'impactAxisHash'
+          is distinct from v_projection.impact_axis_hash
+     or v_recomputed -> 'data' ->> 'valueGridHash'
+          is distinct from v_projection.value_grid_hash
+     or v_recomputed -> 'data' ->> 'relationHash'
+          is distinct from v_projection.relation_hash
+     or v_recomputed -> 'data' ->> 'contentHash'
+          is distinct from v_projection.content_hash then
+    return api.lcia_result_error(
+      'projection_evidence_mismatch', 409,
+      'Projection hashes no longer match the typed persisted rows'
+    );
+  end if;
+
+  select binding.* into v_existing
+  from private.portal_lcia_projection_publications as binding
+  where binding.lcia_result_publication_id = v_publication.id
+  for update;
+  if v_existing.id is not null then
+    if v_existing.status = 'finalized'
+       and v_existing.revoked_at is null
+       and v_existing.projection_id = v_projection.id
+       and v_existing.package_id = v_package.id
+       and v_existing.package_version = p_package_version
+       and v_existing.package_result_hash = p_package_result_hash
+       and v_existing.projection_content_hash = p_projection_content_hash
+       and v_existing.idempotency_key = v_idempotency_key then
+      return jsonb_build_object(
+        'ok', true,
+        'reused', true,
+        'data', jsonb_build_object(
+          'projectionPublicationId', v_existing.id,
+          'projectionId', v_existing.projection_id,
+          'lciaResultPublicationId', v_existing.lcia_result_publication_id,
+          'packageId', v_existing.package_id,
+          'status', v_existing.status,
+          'contentHash', v_existing.projection_content_hash,
+          'evidenceHash', v_existing.evidence_hash,
+          'finalizedAt', private.portal_timestamp_v1(v_existing.finalized_at)
+        )
+      );
+    end if;
+    return api.lcia_result_error(
+      'projection_conflict', 409,
+      'LCIA result publication is bound to different projection content'
+    );
+  end if;
+
+  v_evidence_hash := private.portal_lcia_projection_sha256_fields_v1(
+    'portal.lcia-projection.publication-evidence.v1',
+    'portal.lcia-projection.int32be-frame-sha256.v1',
+    v_projection.id::text,
+    v_projection.content_hash,
+    v_publication.id::text,
+    v_package.id::text,
+    v_package.package_version,
+    v_package.package_result_hash,
+    private.portal_timestamp_v1(v_publication.published_at),
+    v_projection.input_manifest_hash,
+    v_projection.closure_certificate_hash,
+    v_projection.snapshot_hash,
+    v_projection.closure_bundle_hash,
+    v_projection.bundle_content_hash,
+    v_projection.bundle_manifest_sha256,
+    v_projection.lcia_chunk_set_sha256,
+    v_projection.result_artifact_sha256,
+    v_projection.query_artifact_sha256,
+    v_projection.process_count::text,
+    v_projection.impact_count::text,
+    v_projection.expected_value_count::text
+  );
+
+  insert into private.portal_lcia_projection_publications (
+    projection_id,
+    lcia_result_publication_id,
+    package_id,
+    package_version,
+    package_result_hash,
+    projection_content_hash,
+    evidence_hash,
+    source_published_at,
+    idempotency_key,
+    status,
+    finalized_by,
+    finalized_at
+  ) values (
+    v_projection.id,
+    v_publication.id,
+    v_package.id,
+    v_package.package_version,
+    v_package.package_result_hash,
+    v_projection.content_hash,
+    v_evidence_hash,
+    v_publication.published_at,
+    v_idempotency_key,
+    'finalized',
+    v_actor,
+    v_now
+  ) returning * into v_binding;
+
+  insert into private.command_audit_log (
+    command, actor_user_id, target_table, target_id, target_version, payload
+  ) values (
+    'cmd_portal_lcia_projection_finalize_publication_v1',
+    v_actor,
+    'portal_lcia_projection_publications',
+    v_binding.id,
+    v_binding.package_version,
+    coalesce(p_audit, '{}'::jsonb) || jsonb_build_object(
+      'projectionId', v_projection.id,
+      'lciaResultPublicationId', v_publication.id,
+      'packageId', v_package.id,
+      'contentHash', v_projection.content_hash,
+      'evidenceHash', v_evidence_hash
+    )
+  );
+
+  return jsonb_build_object(
+    'ok', true,
+    'reused', false,
+    'data', jsonb_build_object(
+      'projectionPublicationId', v_binding.id,
+      'projectionId', v_binding.projection_id,
+      'lciaResultPublicationId', v_binding.lcia_result_publication_id,
+      'packageId', v_binding.package_id,
+      'status', v_binding.status,
+      'contentHash', v_binding.projection_content_hash,
+      'evidenceHash', v_binding.evidence_hash,
+      'finalizedAt', private.portal_timestamp_v1(v_binding.finalized_at)
+    )
+  );
+exception
+  when unique_violation then
+    return api.lcia_result_error(
+      'projection_conflict', 409,
+      'A conflicting projection publication binding already exists'
+    );
+end
+$_$;
+
+
+ALTER FUNCTION "private"."portal_lcia_projection_finalize_unchecked_v1"("p_projection_id" "uuid", "p_lcia_result_publication_id" "uuid", "p_package_version" "text", "p_package_result_hash" "text", "p_projection_content_hash" "text", "p_idempotency_key" "text", "p_audit" "jsonb") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "private"."portal_lcia_projection_frame_v1"(VARIADIC "p_fields" "text"[]) RETURNS "bytea"
     LANGUAGE "plpgsql" STABLE PARALLEL SAFE
     SET "search_path" TO ''
@@ -40590,6 +40585,196 @@ $_$;
 
 
 ALTER FUNCTION "private"."portal_lcia_projection_package_binding_valid_v1"("p_package_id" "uuid", "p_build_worker_job_id" "uuid", "p_projection_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_lcia_projection_prepare_unchecked_v1"("p_package_id" "uuid", "p_lcia_result_publication_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+declare
+  v_actor uuid := auth.uid();
+  v_job private.worker_jobs%rowtype;
+  v_package private.lcia_result_packages%rowtype;
+  v_publication private.lcia_result_publications%rowtype;
+  v_projection private.portal_lcia_projection_headers%rowtype;
+  v_match_count integer;
+  v_projection_methods jsonb;
+begin
+  if v_actor is null then
+    return api.lcia_result_error(
+      'auth_required', 401, 'Authentication required'
+    );
+  end if;
+  if not api.lcia_result_is_manager() then
+    return api.lcia_result_error(
+      'not_data_product_manager', 403,
+      'Data product manager role is required'
+    );
+  end if;
+  if p_package_id is null or p_lcia_result_publication_id is null then
+    return api.lcia_result_error(
+      'invalid_projection_request', 400,
+      'Package and LCIA result publication identities are required'
+    );
+  end if;
+
+  select package.* into v_package
+  from private.lcia_result_packages as package
+  where package.id = p_package_id;
+  select publication.* into v_publication
+  from private.lcia_result_publications as publication
+  where publication.id = p_lcia_result_publication_id;
+  if v_package.id is null
+     or v_publication.id is null
+     or v_publication.package_id <> v_package.id then
+    return api.lcia_result_error(
+      'projection_package_not_found', 404,
+      'Matching LCIA package and publication were not found'
+    );
+  end if;
+  if not v_publication.is_current
+     or v_publication.status <> 'current'
+     or v_publication.publication_series_key <> 'global'
+     or v_publication.publication_channel <> 'public'
+     or v_publication.visibility_scope <> 'public'
+     or v_publication.published_at is null then
+    return api.lcia_result_error(
+      'publication_not_current', 409,
+      'Only the exact current public LCIA result publication can prepare'
+    );
+  end if;
+  select job.* into v_job
+  from private.worker_jobs as job
+  where job.id = v_package.build_worker_job_id;
+  if v_job.job_kind <> 'lcia_result.package_build'
+     or v_job.payload_schema_version <> 'lcia_result.package_build.request.v3'
+     or v_job.payload_json ->> 'portalProjectionContractVersion'
+          <> 'portal.lcia-projection.v1'
+     or v_package.status <> 'preview_ready'
+     or coalesce(v_package.package_result_hash, '') !~ '^[0-9a-f]{64}$' then
+    return api.lcia_result_error(
+      'projection_package_not_ready', 409,
+      'Package is not a ready Portal LCIA V3 package'
+    );
+  end if;
+
+  select count(*)
+  into v_match_count
+  from private.portal_lcia_projection_headers as projection
+  where projection.build_worker_job_id = v_job.id
+    and projection.status = 'prepared'
+    and projection.input_manifest_hash = v_package.input_manifest_hash
+    and projection.closure_certificate_hash = v_package.closure_certificate_hash
+    and projection.snapshot_hash = v_package.closure_snapshot_hash
+    and projection.result_artifact_sha256
+          = v_package.result_artifact_ref ->> 'artifactSha256'
+    and projection.query_artifact_sha256
+          = v_package.query_artifact_ref ->> 'artifactSha256'
+    and projection.bundle_content_hash
+          = v_package.artifact_manifest ->> 'bundleContentHash'
+    and projection.bundle_manifest_sha256
+          = v_package.artifact_manifest ->> 'bundleManifestSha256'
+    and projection.lcia_chunk_set_sha256
+          = v_package.artifact_manifest ->> 'lciaChunkSetSha256'
+    and projection.id::text
+          = v_package.artifact_manifest ->> 'portalProjectionId'
+    and projection.content_hash
+          = v_package.artifact_manifest ->> 'portalProjectionContentHash'
+    and projection.process_count = v_package.included_input_count
+    and projection.impact_count = jsonb_array_length(
+      v_package.available_impact_categories
+    );
+
+  if v_match_count = 0 then
+    return api.lcia_result_error(
+      'projection_not_prepared', 409,
+      'No prepared projection exactly matches the package evidence'
+    );
+  end if;
+  if v_match_count > 1 then
+    return api.lcia_result_error(
+      'projection_conflict', 409,
+      'More than one prepared projection matches the package evidence'
+    );
+  end if;
+  select projection.* into v_projection
+  from private.portal_lcia_projection_headers as projection
+  where projection.build_worker_job_id = v_job.id
+    and projection.status = 'prepared'
+    and projection.input_manifest_hash = v_package.input_manifest_hash
+    and projection.closure_certificate_hash = v_package.closure_certificate_hash
+    and projection.snapshot_hash = v_package.closure_snapshot_hash
+    and projection.result_artifact_sha256
+          = v_package.result_artifact_ref ->> 'artifactSha256'
+    and projection.query_artifact_sha256
+          = v_package.query_artifact_ref ->> 'artifactSha256'
+    and projection.bundle_content_hash
+          = v_package.artifact_manifest ->> 'bundleContentHash'
+    and projection.bundle_manifest_sha256
+          = v_package.artifact_manifest ->> 'bundleManifestSha256'
+    and projection.lcia_chunk_set_sha256
+          = v_package.artifact_manifest ->> 'lciaChunkSetSha256'
+    and projection.id::text
+          = v_package.artifact_manifest ->> 'portalProjectionId'
+    and projection.content_hash
+          = v_package.artifact_manifest ->> 'portalProjectionContentHash'
+    and projection.process_count = v_package.included_input_count
+    and projection.impact_count = jsonb_array_length(
+      v_package.available_impact_categories
+    );
+  select coalesce(
+    jsonb_agg(to_jsonb(impact.method_id::text) order by impact.impact_index),
+    '[]'::jsonb
+  ) into v_projection_methods
+  from private.portal_lcia_projection_impact_axis as impact
+  where impact.projection_id = v_projection.id;
+  if v_package.available_impact_categories is distinct from v_projection_methods
+     or exists (
+       select 1
+       from private.portal_lcia_projection_process_axis as process_row
+       where process_row.projection_id = v_projection.id
+         and (
+           v_package.input_manifest -> 'processes' -> process_row.process_index
+             ->> 'id' is distinct from process_row.process_id::text
+           or v_package.input_manifest -> 'processes' -> process_row.process_index
+             ->> 'version' is distinct from process_row.process_version
+         )
+     ) then
+    return api.lcia_result_error(
+      'projection_evidence_mismatch', 409,
+      'Projection axes do not match the exact package manifest identities'
+    );
+  end if;
+
+  return jsonb_build_object(
+    'ok', true,
+    'data', jsonb_build_object(
+      'projectionId', v_projection.id,
+      'buildWorkerJobId', v_projection.build_worker_job_id,
+      'packageId', v_package.id,
+      'lciaResultPublicationId', v_publication.id,
+      'packageVersion', v_package.package_version,
+      'packageResultHash', v_package.package_result_hash,
+      'status', v_projection.status,
+      'projectionContractVersion', v_projection.projection_contract_version,
+      'hashContractVersion',
+        'portal.lcia-projection.int32be-frame-sha256.v1',
+      'processCount', v_projection.process_count,
+      'impactCount', v_projection.impact_count,
+      'valueCount', v_projection.expected_value_count,
+      'processAxisHash', v_projection.process_axis_hash,
+      'impactAxisHash', v_projection.impact_axis_hash,
+      'valueGridHash', v_projection.value_grid_hash,
+      'relationHash', v_projection.relation_hash,
+      'contentHash', v_projection.content_hash,
+      'publishedAt', private.portal_timestamp_v1(v_publication.published_at)
+    )
+  );
+end
+$_$;
+
+
+ALTER FUNCTION "private"."portal_lcia_projection_prepare_unchecked_v1"("p_package_id" "uuid", "p_lcia_result_publication_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "private"."portal_lcia_projection_publication_guard_v1"() RETURNS "trigger"
@@ -41024,6 +41209,53 @@ ALTER FUNCTION "private"."portal_lcia_safe_audit_v1"("p_value" "jsonb") OWNER TO
 CREATE OR REPLACE FUNCTION "private"."portal_lcia_v3_package_publish_prepare_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
+    AS $$
+declare
+  v_result jsonb;
+  v_package private.lcia_result_packages%rowtype;
+  v_projection_id uuid;
+begin
+  v_result :=
+    private.portal_lcia_v3_publish_prepare_unchecked_v1(
+      p_package_id, p_display_default_impact_category
+    );
+  if coalesce((v_result ->> 'ok')::boolean, false) is not true then
+    return v_result;
+  end if;
+  begin
+    v_projection_id := nullif(
+      v_result #>> '{data,projection,id}', ''
+    )::uuid;
+  exception when invalid_text_representation then
+    return api.lcia_result_error(
+      'projection_package_binding_invalid', 409,
+      'Portal LCIA package binding is no longer authoritative'
+    );
+  end;
+  select package.* into v_package
+  from private.lcia_result_packages as package
+  where package.id = p_package_id;
+  if v_package.id is null
+     or v_result #>> '{data,package,id}' is distinct from v_package.id::text
+     or private.portal_lcia_projection_package_binding_valid_v1(
+       v_package.id, v_package.build_worker_job_id, v_projection_id
+     ) is not true then
+    return api.lcia_result_error(
+      'projection_package_binding_invalid', 409,
+      'Portal LCIA package binding is no longer authoritative'
+    );
+  end if;
+  return v_result;
+end
+$$;
+
+
+ALTER FUNCTION "private"."portal_lcia_v3_package_publish_prepare_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_lcia_v3_publish_prepare_unchecked_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
     AS $_$
 declare
   v_package private.lcia_result_packages%rowtype;
@@ -41330,7 +41562,7 @@ end
 $_$;
 
 
-ALTER FUNCTION "private"."portal_lcia_v3_package_publish_prepare_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text") OWNER TO "postgres";
+ALTER FUNCTION "private"."portal_lcia_v3_publish_prepare_unchecked_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "private"."portal_localized_text_v1"("p_value" "jsonb") RETURNS "jsonb"
@@ -49165,6 +49397,11 @@ declare
   v_expected_included_input_count integer;
   v_expected_default_impact text;
   v_restart_default_impact text;
+  v_authoritative_result private.lca_results%rowtype;
+  v_authoritative_latest private.lca_latest_all_unit_results%rowtype;
+  v_expected_result_artifact_ref jsonb;
+  v_expected_query_artifact_ref jsonb;
+  v_preexisting_package boolean := false;
 begin
   if not coalesce(util.is_service_request(), false) then
     return jsonb_build_object(
@@ -49262,12 +49499,150 @@ begin
   from private.worker_jobs as job
   where job.id = p_build_worker_job_id
   for update;
+  select exists (
+    select 1
+    from private.lcia_result_packages as package
+    where package.build_worker_job_id = p_build_worker_job_id
+      and package.package_version = p_package_version
+  ) into v_preexisting_package;
   if v_job.payload_json ->> 'snapshot_id' is distinct from p_snapshot_id::text then
     return jsonb_build_object(
       'ok', false, 'code', 'projection_evidence_mismatch', 'status', 409
     );
   end if;
 
+  begin
+    v_expected_build_id := nullif(
+      v_job.payload_json ->> 'build_id', ''
+    )::uuid;
+    v_expected_closure_check_id := nullif(
+      v_job.payload_json ->> 'closure_check_id', ''
+    )::uuid;
+    v_expected_eligibility_resolved_at := nullif(
+      v_job.payload_json ->> 'eligibility_resolved_at', ''
+    )::timestamptz;
+    v_expected_eligible_input_count := coalesce(
+      (v_job.payload_json ->> 'eligible_input_count')::integer, 0
+    );
+    v_expected_included_input_count := coalesce(
+      (v_job.payload_json ->> 'included_input_count')::integer, 0
+    );
+  exception
+    when invalid_text_representation
+      or invalid_datetime_format
+      or datetime_field_overflow
+      or numeric_value_out_of_range then
+      if v_preexisting_package then
+        return api.lcia_result_error(
+          'package_conflict', 409,
+          'LCIA result package already exists for this build or package version'
+        );
+      end if;
+      return jsonb_build_object(
+        'ok', false, 'code', 'projection_package_binding_invalid',
+        'status', 409
+      );
+  end;
+  v_expected_default_impact := coalesce(
+    nullif(btrim(coalesce(p_default_impact_category, '')), ''),
+    nullif(btrim(coalesce(
+      v_job.payload_json ->> 'default_impact_category', ''
+    )), '')
+  );
+  v_restart_default_impact := coalesce(
+    nullif(btrim(coalesce(
+      v_job.payload_json ->> 'default_impact_category', ''
+    )), ''),
+    v_projection_impacts ->> 0
+  );
+
+  select result.* into v_authoritative_result
+  from private.lca_results as result
+  where result.id = p_result_id;
+  v_expected_result_artifact_ref := jsonb_build_object(
+    'artifactUrl', v_authoritative_result.artifact_url,
+    'artifactSha256', v_authoritative_result.artifact_sha256,
+    'artifactByteSize', v_authoritative_result.artifact_byte_size,
+    'artifactFormat', v_authoritative_result.artifact_format
+  );
+  if v_authoritative_result.id is null
+     or v_expected_build_id is distinct from v_job.subject_id
+     or v_job.subject_type <> 'lcia_result_build'
+     or v_authoritative_result.job_id is distinct from v_expected_build_id
+     or v_authoritative_result.worker_job_id is distinct from v_job.id
+     or v_authoritative_result.snapshot_id is distinct from p_snapshot_id
+     or private.portal_lcia_json_object_has_keys_v1(
+       p_result_artifact_ref,
+       array[
+         'artifactUrl', 'artifactSha256', 'artifactByteSize', 'artifactFormat'
+       ]
+     ) is not true
+     or p_result_artifact_ref is distinct from
+          v_expected_result_artifact_ref
+     or p_package_result_hash is distinct from
+          v_authoritative_result.artifact_sha256
+     or p_package_result_hash is distinct from
+          v_projection.result_artifact_sha256
+     or v_expected_default_impact is distinct from
+          v_restart_default_impact then
+    if v_preexisting_package then
+      return api.lcia_result_error(
+        'package_conflict', 409,
+        'LCIA result package already exists for this build or package version'
+      );
+    end if;
+    return jsonb_build_object(
+      'ok', false, 'code', 'projection_evidence_mismatch', 'status', 409
+    );
+  end if;
+
+  if private.portal_lcia_json_object_has_keys_v1(
+       p_query_artifact_ref,
+       array[
+         'artifactUrl', 'artifactSha256', 'artifactByteSize', 'artifactFormat'
+       ]
+     ) is not true then
+    if v_preexisting_package then
+      return api.lcia_result_error(
+        'package_conflict', 409,
+        'LCIA result package already exists for this build or package version'
+      );
+    end if;
+    return jsonb_build_object(
+      'ok', false, 'code', 'projection_evidence_mismatch', 'status', 409
+    );
+  end if;
+  if p_latest_all_unit_result_id is not null then
+    select latest.* into v_authoritative_latest
+    from private.lca_latest_all_unit_results as latest
+    where latest.id = p_latest_all_unit_result_id;
+    v_expected_query_artifact_ref := jsonb_build_object(
+      'artifactUrl', v_authoritative_latest.query_artifact_url,
+      'artifactSha256', v_authoritative_latest.query_artifact_sha256,
+      'artifactByteSize', v_authoritative_latest.query_artifact_byte_size,
+      'artifactFormat', v_authoritative_latest.query_artifact_format
+    );
+    if v_authoritative_latest.id is null
+       or v_authoritative_latest.job_id is distinct from v_expected_build_id
+       or v_authoritative_latest.worker_job_id is distinct from v_job.id
+       or v_authoritative_latest.snapshot_id is distinct from p_snapshot_id
+       or v_authoritative_latest.result_id is distinct from p_result_id
+       or v_authoritative_latest.status <> 'ready'
+       or p_query_artifact_ref is distinct from
+            v_expected_query_artifact_ref then
+      if v_preexisting_package then
+        return api.lcia_result_error(
+          'package_conflict', 409,
+          'LCIA result package already exists for this build or package version'
+        );
+      end if;
+      return jsonb_build_object(
+        'ok', false, 'code', 'projection_evidence_mismatch', 'status', 409
+      );
+    end if;
+  end if;
+
+  begin
   -- The established insert trigger applies its exact certificate binding only
   -- to request.v2.  A row lock and transaction-local compatibility value let
   -- this V3-only wrapper reuse that unchanged trigger and legacy insert helper;
@@ -49305,10 +49680,8 @@ begin
     begin
       v_package_id := nullif(v_result -> 'data' ->> 'packageId', '')::uuid;
     exception when invalid_text_representation then
-      return jsonb_build_object(
-        'ok', false, 'code', 'projection_package_binding_invalid',
-        'status', 409
-      );
+      raise exception 'portal_lcia_package_post_insert_validation_failed'
+        using errcode = 'P5271';
     end;
     select package.* into v_package
     from private.lcia_result_packages as package
@@ -49333,48 +49706,6 @@ begin
   else
     return v_result;
   end if;
-
-  begin
-    v_expected_build_id := nullif(
-      v_job.payload_json ->> 'build_id', ''
-    )::uuid;
-    v_expected_closure_check_id := nullif(
-      v_job.payload_json ->> 'closure_check_id', ''
-    )::uuid;
-    v_expected_eligibility_resolved_at := nullif(
-      v_job.payload_json ->> 'eligibility_resolved_at', ''
-    )::timestamptz;
-    v_expected_eligible_input_count := coalesce(
-      (v_job.payload_json ->> 'eligible_input_count')::integer, 0
-    );
-    v_expected_included_input_count := coalesce(
-      (v_job.payload_json ->> 'included_input_count')::integer, 0
-    );
-  exception
-    when invalid_text_representation
-      or invalid_datetime_format
-      or datetime_field_overflow
-      or numeric_value_out_of_range then
-      if v_reused then
-        return v_result;
-      end if;
-      return jsonb_build_object(
-        'ok', false, 'code', 'projection_package_binding_invalid',
-        'status', 409
-      );
-  end;
-  v_expected_default_impact := coalesce(
-    nullif(btrim(coalesce(p_default_impact_category, '')), ''),
-    nullif(btrim(coalesce(
-      v_job.payload_json ->> 'default_impact_category', ''
-    )), '')
-  );
-  v_restart_default_impact := coalesce(
-    nullif(btrim(coalesce(
-      v_job.payload_json ->> 'default_impact_category', ''
-    )), ''),
-    v_projection_impacts ->> 0
-  );
 
   if private.portal_lcia_projection_package_binding_valid_v1(
        v_package.id, v_job.id, v_projection.id
@@ -49441,9 +49772,8 @@ begin
     if v_reused then
       return v_result;
     end if;
-    return jsonb_build_object(
-      'ok', false, 'code', 'projection_package_binding_invalid', 'status', 409
-    );
+    raise exception 'portal_lcia_package_post_insert_validation_failed'
+      using errcode = 'P5271';
   end if;
 
   return jsonb_build_object(
@@ -49463,6 +49793,11 @@ begin
       )
     )
   );
+  exception when sqlstate 'P5271' then
+    return jsonb_build_object(
+      'ok', false, 'code', 'projection_package_binding_invalid', 'status', 409
+    );
+  end;
 end
 $_$;
 
@@ -67624,6 +67959,14 @@ REVOKE ALL ON FUNCTION "private"."portal_lcia_localized_text_valid_v1"("p_value"
 
 
 
+REVOKE ALL ON FUNCTION "private"."portal_lcia_package_publish_unchecked_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text", "p_expected_publish_plan_hash" "text", "p_reason" "text", "p_audit" "jsonb") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_lcia_projection_finalize_unchecked_v1"("p_projection_id" "uuid", "p_lcia_result_publication_id" "uuid", "p_package_version" "text", "p_package_result_hash" "text", "p_projection_content_hash" "text", "p_idempotency_key" "text", "p_audit" "jsonb") FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "private"."portal_lcia_projection_frame_v1"(VARIADIC "p_fields" "text"[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."portal_lcia_projection_frame_v1"(VARIADIC "p_fields" "text"[]) TO "portal_public_executor";
 
@@ -67639,6 +67982,10 @@ GRANT ALL ON FUNCTION "private"."portal_lcia_projection_is_public_v1"("p_project
 
 
 REVOKE ALL ON FUNCTION "private"."portal_lcia_projection_package_binding_valid_v1"("p_package_id" "uuid", "p_build_worker_job_id" "uuid", "p_projection_id" "uuid") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_lcia_projection_prepare_unchecked_v1"("p_package_id" "uuid", "p_lcia_result_publication_id" "uuid") FROM PUBLIC;
 
 
 
@@ -67672,6 +68019,10 @@ REVOKE ALL ON FUNCTION "private"."portal_lcia_safe_audit_v1"("p_value" "jsonb") 
 
 
 REVOKE ALL ON FUNCTION "private"."portal_lcia_v3_package_publish_prepare_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_lcia_v3_publish_prepare_unchecked_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text") FROM PUBLIC;
 
 
 

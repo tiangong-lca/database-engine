@@ -17,6 +17,11 @@ declare
   v_expected_included_input_count integer;
   v_expected_default_impact text;
   v_restart_default_impact text;
+  v_authoritative_result private.lca_results%rowtype;
+  v_authoritative_latest private.lca_latest_all_unit_results%rowtype;
+  v_expected_result_artifact_ref jsonb;
+  v_expected_query_artifact_ref jsonb;
+  v_preexisting_package boolean := false;
 begin
   if not coalesce(util.is_service_request(), false) then
     return jsonb_build_object(
@@ -114,12 +119,150 @@ begin
   from private.worker_jobs as job
   where job.id = p_build_worker_job_id
   for update;
+  select exists (
+    select 1
+    from private.lcia_result_packages as package
+    where package.build_worker_job_id = p_build_worker_job_id
+      and package.package_version = p_package_version
+  ) into v_preexisting_package;
   if v_job.payload_json ->> 'snapshot_id' is distinct from p_snapshot_id::text then
     return jsonb_build_object(
       'ok', false, 'code', 'projection_evidence_mismatch', 'status', 409
     );
   end if;
 
+  begin
+    v_expected_build_id := nullif(
+      v_job.payload_json ->> 'build_id', ''
+    )::uuid;
+    v_expected_closure_check_id := nullif(
+      v_job.payload_json ->> 'closure_check_id', ''
+    )::uuid;
+    v_expected_eligibility_resolved_at := nullif(
+      v_job.payload_json ->> 'eligibility_resolved_at', ''
+    )::timestamptz;
+    v_expected_eligible_input_count := coalesce(
+      (v_job.payload_json ->> 'eligible_input_count')::integer, 0
+    );
+    v_expected_included_input_count := coalesce(
+      (v_job.payload_json ->> 'included_input_count')::integer, 0
+    );
+  exception
+    when invalid_text_representation
+      or invalid_datetime_format
+      or datetime_field_overflow
+      or numeric_value_out_of_range then
+      if v_preexisting_package then
+        return api.lcia_result_error(
+          'package_conflict', 409,
+          'LCIA result package already exists for this build or package version'
+        );
+      end if;
+      return jsonb_build_object(
+        'ok', false, 'code', 'projection_package_binding_invalid',
+        'status', 409
+      );
+  end;
+  v_expected_default_impact := coalesce(
+    nullif(btrim(coalesce(p_default_impact_category, '')), ''),
+    nullif(btrim(coalesce(
+      v_job.payload_json ->> 'default_impact_category', ''
+    )), '')
+  );
+  v_restart_default_impact := coalesce(
+    nullif(btrim(coalesce(
+      v_job.payload_json ->> 'default_impact_category', ''
+    )), ''),
+    v_projection_impacts ->> 0
+  );
+
+  select result.* into v_authoritative_result
+  from private.lca_results as result
+  where result.id = p_result_id;
+  v_expected_result_artifact_ref := jsonb_build_object(
+    'artifactUrl', v_authoritative_result.artifact_url,
+    'artifactSha256', v_authoritative_result.artifact_sha256,
+    'artifactByteSize', v_authoritative_result.artifact_byte_size,
+    'artifactFormat', v_authoritative_result.artifact_format
+  );
+  if v_authoritative_result.id is null
+     or v_expected_build_id is distinct from v_job.subject_id
+     or v_job.subject_type <> 'lcia_result_build'
+     or v_authoritative_result.job_id is distinct from v_expected_build_id
+     or v_authoritative_result.worker_job_id is distinct from v_job.id
+     or v_authoritative_result.snapshot_id is distinct from p_snapshot_id
+     or private.portal_lcia_json_object_has_keys_v1(
+       p_result_artifact_ref,
+       array[
+         'artifactUrl', 'artifactSha256', 'artifactByteSize', 'artifactFormat'
+       ]
+     ) is not true
+     or p_result_artifact_ref is distinct from
+          v_expected_result_artifact_ref
+     or p_package_result_hash is distinct from
+          v_authoritative_result.artifact_sha256
+     or p_package_result_hash is distinct from
+          v_projection.result_artifact_sha256
+     or v_expected_default_impact is distinct from
+          v_restart_default_impact then
+    if v_preexisting_package then
+      return api.lcia_result_error(
+        'package_conflict', 409,
+        'LCIA result package already exists for this build or package version'
+      );
+    end if;
+    return jsonb_build_object(
+      'ok', false, 'code', 'projection_evidence_mismatch', 'status', 409
+    );
+  end if;
+
+  if private.portal_lcia_json_object_has_keys_v1(
+       p_query_artifact_ref,
+       array[
+         'artifactUrl', 'artifactSha256', 'artifactByteSize', 'artifactFormat'
+       ]
+     ) is not true then
+    if v_preexisting_package then
+      return api.lcia_result_error(
+        'package_conflict', 409,
+        'LCIA result package already exists for this build or package version'
+      );
+    end if;
+    return jsonb_build_object(
+      'ok', false, 'code', 'projection_evidence_mismatch', 'status', 409
+    );
+  end if;
+  if p_latest_all_unit_result_id is not null then
+    select latest.* into v_authoritative_latest
+    from private.lca_latest_all_unit_results as latest
+    where latest.id = p_latest_all_unit_result_id;
+    v_expected_query_artifact_ref := jsonb_build_object(
+      'artifactUrl', v_authoritative_latest.query_artifact_url,
+      'artifactSha256', v_authoritative_latest.query_artifact_sha256,
+      'artifactByteSize', v_authoritative_latest.query_artifact_byte_size,
+      'artifactFormat', v_authoritative_latest.query_artifact_format
+    );
+    if v_authoritative_latest.id is null
+       or v_authoritative_latest.job_id is distinct from v_expected_build_id
+       or v_authoritative_latest.worker_job_id is distinct from v_job.id
+       or v_authoritative_latest.snapshot_id is distinct from p_snapshot_id
+       or v_authoritative_latest.result_id is distinct from p_result_id
+       or v_authoritative_latest.status <> 'ready'
+       or p_query_artifact_ref is distinct from
+            v_expected_query_artifact_ref then
+      if v_preexisting_package then
+        return api.lcia_result_error(
+          'package_conflict', 409,
+          'LCIA result package already exists for this build or package version'
+        );
+      end if;
+      return jsonb_build_object(
+        'ok', false, 'code', 'projection_evidence_mismatch', 'status', 409
+      );
+    end if;
+  end if;
+
+  begin
   -- The established insert trigger applies its exact certificate binding only
   -- to request.v2.  A row lock and transaction-local compatibility value let
   -- this V3-only wrapper reuse that unchanged trigger and legacy insert helper;
@@ -157,10 +300,8 @@ begin
     begin
       v_package_id := nullif(v_result -> 'data' ->> 'packageId', '')::uuid;
     exception when invalid_text_representation then
-      return jsonb_build_object(
-        'ok', false, 'code', 'projection_package_binding_invalid',
-        'status', 409
-      );
+      raise exception 'portal_lcia_package_post_insert_validation_failed'
+        using errcode = 'P5271';
     end;
     select package.* into v_package
     from private.lcia_result_packages as package
@@ -185,48 +326,6 @@ begin
   else
     return v_result;
   end if;
-
-  begin
-    v_expected_build_id := nullif(
-      v_job.payload_json ->> 'build_id', ''
-    )::uuid;
-    v_expected_closure_check_id := nullif(
-      v_job.payload_json ->> 'closure_check_id', ''
-    )::uuid;
-    v_expected_eligibility_resolved_at := nullif(
-      v_job.payload_json ->> 'eligibility_resolved_at', ''
-    )::timestamptz;
-    v_expected_eligible_input_count := coalesce(
-      (v_job.payload_json ->> 'eligible_input_count')::integer, 0
-    );
-    v_expected_included_input_count := coalesce(
-      (v_job.payload_json ->> 'included_input_count')::integer, 0
-    );
-  exception
-    when invalid_text_representation
-      or invalid_datetime_format
-      or datetime_field_overflow
-      or numeric_value_out_of_range then
-      if v_reused then
-        return v_result;
-      end if;
-      return jsonb_build_object(
-        'ok', false, 'code', 'projection_package_binding_invalid',
-        'status', 409
-      );
-  end;
-  v_expected_default_impact := coalesce(
-    nullif(btrim(coalesce(p_default_impact_category, '')), ''),
-    nullif(btrim(coalesce(
-      v_job.payload_json ->> 'default_impact_category', ''
-    )), '')
-  );
-  v_restart_default_impact := coalesce(
-    nullif(btrim(coalesce(
-      v_job.payload_json ->> 'default_impact_category', ''
-    )), ''),
-    v_projection_impacts ->> 0
-  );
 
   if private.portal_lcia_projection_package_binding_valid_v1(
        v_package.id, v_job.id, v_projection.id
@@ -293,9 +392,8 @@ begin
     if v_reused then
       return v_result;
     end if;
-    return jsonb_build_object(
-      'ok', false, 'code', 'projection_package_binding_invalid', 'status', 409
-    );
+    raise exception 'portal_lcia_package_post_insert_validation_failed'
+      using errcode = 'P5271';
   end if;
 
   return jsonb_build_object(
@@ -315,6 +413,11 @@ begin
       )
     )
   );
+  exception when sqlstate 'P5271' then
+    return jsonb_build_object(
+      'ok', false, 'code', 'projection_package_binding_invalid', 'status', 409
+    );
+  end;
 end
 $_$;
 
