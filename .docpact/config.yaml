@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-26"
-lastReviewedCommit: "510f70feec823f5cb519d662e4e0085807ef4601"
+lastReviewedCommit: "169fc156f3915a266c10c645c419d0e75766313c"
 lastReviewedNote: "Reviewed after Portal LCIA package readiness gained transactional rollback and all V3 publication advancement paths gained the shared authoritative binding guard; routing and ownership are unchanged."
 
 # Keep deterministic governance facts here.

@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 510f70feec823f5cb519d662e4e0085807ef4601
-lastReviewedNote: "Reviewed after Portal LCIA package-ready gained transactional rollback and publication advancement gained authoritative binding wrappers; repository ownership is unchanged."
+lastReviewedCommit: 169fc156f3915a266c10c645c419d0e75766313c
+lastReviewedNote: "Reviewed for Issue #529 after the additive anonymous Portal Hybrid facade introduced its fixed public ranking boundary; repository ownership is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -256,6 +256,20 @@ Local seed cardinality is not index-plan evidence;
 after the migration reaches persistent `dev`, real redacted parameters must be
 measured with read-only `EXPLAIN (ANALYZE, BUFFERS)` there before adding partial
 or duplicate indexes.
+
+The anonymous Portal Hybrid facade is a separate additive boundary, not a new
+grant or parameter preset over those actor/team-aware raw Hybrid families.
+`api.portal_hybrid_search_v1` accepts only Process or Flow, one to twelve
+normalized model-generated terms, one exact finite 1024-dimensional embedding,
+the fixed public-card filters, and a limit of 1..20. Its constrained private
+kernel ranks only the latest visible state-100/state-200 exact version, uses the
+fixed `portal-hybrid-rank-v1` pool, threshold, weights, and RRF constant, then
+hydrates only the existing public catalog card before applying the authoritative
+LCIA item-page decorator. The facade never invokes or relaxes the legacy raw
+Hybrid or semantic helpers and exposes no actor, team, state, data-source,
+cursor, model, weight, threshold, raw document, embedding, or locator control.
+Representative-cardinality plans and advisor evidence remain a persistent-Dev
+gate; the additive migration deliberately creates no speculative index.
 
 ## Worker Jobs And Domain State
 
