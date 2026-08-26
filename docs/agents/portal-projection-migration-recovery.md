@@ -1,6 +1,6 @@
 ---
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: c8a8921
+lastReviewedCommit: a9e0c5d
 lastReviewedNote: "Reviewed for immutable card/facet manifests, the seven-migration narrow-facet sub-rollout, and fail-closed retry boundaries."
 title: Portal Projection Migration Recovery
 docType: runbook
@@ -84,7 +84,7 @@ The rollout has six observable boundaries:
    UUID-quarter files through `20260827020004` insert child facts with the old
    Facets implementation still authoritative. `20260827020005` takes a
    five-second parent-first write fence, fills only genuinely missing children,
-   and fails on any value drift. `20260827020006` then dispatches only normalized
+   and fails on key/state/timestamp/contract drift. `20260827020006` then dispatches only normalized
    empty-query/empty-filter requests to the 32-MB bounded narrow helper. Every
    query or filter retains the unchanged card implementation.
 
@@ -406,8 +406,8 @@ hosted COMMIT/history gap, retain the ledger/object/wrapper evidence and
 escalate for a separately reviewed forward-repair migration.
 
 Each of the four facet backfills is idempotent. It uses `ON CONFLICT DO NOTHING`
-and verifies exact key, state, timestamp, five derived facts, contract version,
-and absence of extra children before recording history. A COMMIT/history gap
+and verifies exact key, state, timestamp, contract version, and absence of extra
+children before recording history. A COMMIT/history gap
 may therefore use the normal unchanged migration retry. The shard files never
 update or delete `private.portal_catalog_search_rows_v1`.
 
@@ -418,6 +418,12 @@ existing mismatch as contract drift. The cutover separately rechecks full
 parity before replacing the wrapper. A cutover guard failure must leave
 `20260827020006` absent and the old wrapper byte-identical. Do not repair drift
 by editing the literal facet digest or silently updating child facts.
+
+The migration-time guards deliberately do not detoast every wide parent card a
+second time while holding deployment transactions or the reconcile fence. The
+immutable helper plus the only two governed writers establish fact provenance;
+the pgTAP suite and populated-upgrade runner perform the complete five-fact
+comparison outside the short migration fence.
 
 ## Local recovery regression
 

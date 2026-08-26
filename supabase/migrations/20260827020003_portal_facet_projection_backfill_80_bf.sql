@@ -69,10 +69,6 @@ begin
   if exists (
     select 1
     from private.portal_catalog_search_rows_v1 as projection
-    cross join lateral private.portal_catalog_facet_facts_v1(
-      projection.dataset_kind,
-      projection.card
-    ) as facts
     left join private.portal_catalog_facet_rows_v1 as facet
       on facet.dataset_kind = projection.dataset_kind
      and facet.id = projection.id
@@ -84,11 +80,6 @@ begin
         facet.id is null
         or facet.state_code is distinct from projection.state_code
         or facet.modified_at is distinct from projection.modified_at
-        or facet.facet_access_level is distinct from facts.facet_access_level
-        or facet.facet_geography is distinct from facts.facet_geography
-        or facet.facet_reference_year is distinct from facts.facet_reference_year
-        or facet.facet_process_subtype is distinct from facts.facet_process_subtype
-        or facet.facet_source is distinct from facts.facet_source
         or facet.facet_contract_version is distinct from 1
       )
   ) then
@@ -103,10 +94,6 @@ begin
   if exists (
     select 1
     from private.portal_catalog_search_rows_v1 as projection
-    cross join lateral private.portal_catalog_facet_facts_v1(
-      projection.dataset_kind,
-      projection.card
-    ) as facts
     left join private.portal_catalog_facet_rows_v1 as facet
       on facet.dataset_kind = projection.dataset_kind
      and facet.id = projection.id
@@ -118,11 +105,6 @@ begin
         facet.id is null
         or facet.state_code is distinct from projection.state_code
         or facet.modified_at is distinct from projection.modified_at
-        or facet.facet_access_level is distinct from facts.facet_access_level
-        or facet.facet_geography is distinct from facts.facet_geography
-        or facet.facet_reference_year is distinct from facts.facet_reference_year
-        or facet.facet_process_subtype is distinct from facts.facet_process_subtype
-        or facet.facet_source is distinct from facts.facet_source
         or facet.facet_contract_version is distinct from 1
       )
   ) then
