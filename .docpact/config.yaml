@@ -473,6 +473,10 @@ rules:
         kind: database-migration
       - path: supabase/migrations/20260826080403_portal_projection_facets.sql
         kind: database-migration
+      - path: supabase/migrations/20260827010000_portal_flow_embedding_eligibility_index.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827010003_portal_flow_embedding_eligibility_guard.sql
+        kind: database-migration
       - path: supabase/tests/20260826_portal_candidate_first_search.sql
         kind: database-contract-test
       - path: supabase/tests/benchmarks/20260826_portal_candidate_first_explain.sql

@@ -88,6 +88,13 @@ For Exchange support types whose TIDAS schemas do not carry a Process-style lice
 
 The Portal executor is NOLOGIN/NOBYPASSRLS and receives only the minimum object privileges required by the façades. External wrapper ACLs are revoked from `PUBLIC` and classified by exact signature in `private.api_capability_grants`; raw core tables receive no new anon policy.
 
+Flow semantic sparse-cardinality detection uses one narrow source-side partial
+B-tree on `(id, version)` for state-100/200 rows whose `embedding_ft` is non-null.
+It exists only to prove an exact 0..199 embedding universe without scanning the
+wide Flow heap. It contains no vector payload, does not replace the source HNSW
+ranking index, does not change projection semantics, and has no speculative
+Process counterpart because hosted Process evidence already meets budget.
+
 Edge consumers must obtain Data Product publication, package, and worker
 metadata through bounded `api.svc_data_product_*` projections rather than
 reading private relations. TIDAS package reads and import admission likewise
