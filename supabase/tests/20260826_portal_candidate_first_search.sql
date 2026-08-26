@@ -1808,11 +1808,17 @@ select extensions.is(
       and pg_catalog.strpos(
         routine.prosrc,
         'from pg_catalog.generate_subscripts(v_ids, 1)'
-      ) < pg_catalog.strpos(routine.prosrc, 'with eligible as materialized')
+      ) < pg_catalog.strpos(
+        routine.prosrc,
+        'select distinct on (projection.id)'
+      )
       and pg_catalog.strpos(
         routine.prosrc,
         E'    return;\n  end if;'
-      ) < pg_catalog.strpos(routine.prosrc, 'with eligible as materialized')
+      ) < pg_catalog.strpos(
+        routine.prosrc,
+        'select distinct on (projection.id)'
+      )
   ),
   2::bigint,
   'both semantic helpers structurally return the healthy ANN arrays before exact fallback'
