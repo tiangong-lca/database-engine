@@ -541,12 +541,20 @@ select extensions.ok(
       and not (
         routine.proowner = 'api_internal_executor'::regrole
         and routine.prosecdef
+        and routine.prolang = (
+          select language.oid
+          from pg_catalog.pg_language as language
+          where language.lanname = 'sql'
+        )
+        and routine.provolatile = 's'
+        and routine.proparallel = 'r'
         and coalesce(routine.proconfig, '{}'::text[]) @> array[
           'search_path=""',
           'statement_timeout=8s',
           'plan_cache_mode=force_custom_plan',
           'work_mem=32MB',
           'enable_nestloop=off',
+          'enable_mergejoin=off',
           'enable_sort=on',
           'max_parallel_workers_per_gather=0',
           'jit=off',
@@ -1984,6 +1992,7 @@ to api_internal_executor;
 
 set local work_mem = '5MB';
 set local enable_nestloop = on;
+set local enable_mergejoin = on;
 
 grant api_internal_executor to postgres;
 set local role api_internal_executor;
@@ -2106,8 +2115,9 @@ revoke api_internal_executor from postgres;
 
 select extensions.ok(
   pg_catalog.current_setting('work_mem') = '5MB'
-  and pg_catalog.current_setting('enable_nestloop') = 'on',
-  'streaming exact helpers restore caller work_mem and join planner settings'
+  and pg_catalog.current_setting('enable_nestloop') = 'on'
+  and pg_catalog.current_setting('enable_mergejoin') = 'on',
+  'exact helpers restore caller work_mem and join planner settings'
 );
 
 select extensions.is(
