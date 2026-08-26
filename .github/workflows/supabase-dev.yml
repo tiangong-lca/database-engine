@@ -35,6 +35,7 @@ jobs:
         run: |
           python scripts/test_resolve_migration_head.py
           python scripts/test_supabase_dev_workflow_contract.py
+          python scripts/check_portal_projection_manifest.py
 
       - name: Rebuild migration history
         run: supabase start && supabase db reset --no-seed

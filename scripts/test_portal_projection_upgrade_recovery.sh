@@ -168,6 +168,7 @@ SQL
 }
 
 cd "$repo_root"
+python3 "$repo_root/scripts/check_portal_projection_manifest.py"
 echo "Supabase CLI: $($supabase_cli --version)"
 echo "Recovery target: $project_id"
 
@@ -175,6 +176,41 @@ echo "Recovery target: $project_id"
 # wrappers remain authoritative. Exercise all five write/snapshot races before
 # the final source-write fence.
 reset_to 20260826080342
+
+run_psql <<'SQL'
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+select private.assert_portal_catalog_projection_contract_v1();
+reset role;
+revoke api_internal_executor from postgres;
+SQL
+
+assert_sql "
+  (select count(*) = 1
+   from private.portal_catalog_projection_contract_v1
+   where contract_version = 1
+     and manifest_sha256 =
+       'b5e0aff9abbffcc8d2dacaf559a5d1a8c993c20b647d0c70f0e4fa18eb06d2dc'
+     and pg_catalog.cardinality(function_identities) = 11)
+  and exists (
+    select 1
+    from pg_catalog.pg_constraint
+    where conrelid = 'private.portal_catalog_search_rows_v1'::regclass
+      and confrelid =
+        'private.portal_catalog_projection_contract_v1'::regclass
+      and conname =
+        'portal_catalog_search_rows_contract_version_v1_fk'
+      and contype = 'f'
+      and convalidated
+      and confupdtype = 'r'
+      and confdeltype = 'r'
+  )
+  and not exists (
+    select 1
+    from private.portal_catalog_search_rows_v1
+    where projection_contract_version <> 1
+  )
+" "expand/backfill breakpoint lacks the exact immutable derivation contract"
 
 run_psql <<'SQL'
 alter table public.processes disable trigger user;
@@ -383,6 +419,11 @@ assert_sql "
     where dataset_kind = 'process'
       and id = '53190000-0000-4000-8000-000000000006'::uuid
   )
+  and not exists (
+    select 1
+    from private.portal_catalog_search_rows_v1
+    where projection_contract_version <> 1
+  )
 " "pre-fence race state did not preserve valid/key/source-vector winners and exact missing/stale rows"
 
 # Hold a real writer lock beyond the five-second lock budget. The authored
@@ -462,7 +503,70 @@ assert_sql "
   and pg_catalog.to_regprocedure(
     'private.backfill_portal_catalog_search_range_v1(uuid,uuid)'
   ) is null
+  and not exists (
+    select 1
+    from private.portal_catalog_search_rows_v1
+    where projection_contract_version <> 1
+  )
 " "successful retry did not reconcile delete/state races exactly"
+
+run_psql <<'SQL'
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+select private.assert_portal_catalog_projection_contract_v1();
+reset role;
+revoke api_internal_executor from postgres;
+SQL
+
+# Breakpoint 1a: a leaf projector can drift only outside the governed migration
+# path.  Reconcile must detect that live digest and roll back its whole fence
+# transaction without recording history or dropping its retry helper.
+reset_to 20260826080342
+run_psql <<'SQL'
+grant portal_public_executor to postgres;
+grant create on schema private to portal_public_executor;
+set role portal_public_executor;
+create or replace function private.portal_scalar_text_v1(p_value jsonb)
+returns text
+language sql
+immutable
+parallel safe
+set search_path = ''
+as $function$
+  select case
+    when pg_catalog.jsonb_typeof(p_value) = 'string'
+      then nullif(
+        pg_catalog.btrim(p_value #>> '{}'),
+        '__portal_projection_recovery_drift__'
+      )
+    else null
+  end
+$function$;
+reset role;
+revoke create on schema private from portal_public_executor;
+revoke portal_public_executor from postgres;
+SQL
+
+contract_drift_log_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+if apply_pending >"$race_log_dir/expected-contract-drift-failure.log" 2>&1; then
+  echo "reconcile unexpectedly accepted a drifted projector manifest" >&2
+  exit 1
+fi
+docker logs --since "$contract_drift_log_since" "$container_name" \
+  >>"$race_log_dir/expected-contract-drift-failure.log" 2>&1
+assert_log_contains \
+  "$race_log_dir/expected-contract-drift-failure.log" \
+  '55000|Portal projection derivation contract drifted' \
+  'reconcile derivation-contract failure'
+assert_sql "
+  not exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20260826080345'
+  )
+  and pg_catalog.to_regprocedure(
+    'private.backfill_portal_catalog_search_range_v1(uuid,uuid)'
+  ) is not null
+" "drifted reconcile left a ledger row or partial transaction effects"
 
 # Breakpoint 1b: simulate reconcile COMMIT succeeding immediately before the
 # CLI records migration history. The same file must be safe to apply again with
@@ -619,6 +723,41 @@ alter index private.portal_catalog_search_process_document_v1_pgroonga_held
 rename to portal_catalog_search_process_document_v1_pgroonga;
 SQL
 apply_pending
+
+run_psql <<'SQL'
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+select private.assert_portal_catalog_projection_contract_v1();
+reset role;
+revoke api_internal_executor from postgres;
+SQL
+
+assert_sql "
+  not exists (
+    select 1
+    from private.portal_catalog_search_rows_v1
+    where projection_contract_version <> 1
+  )
+  and (
+    select count(*)
+    from pg_catalog.pg_proc as routine
+    where routine.oid = any (array[
+      'private.portal_search_v1(text,text,jsonb,text,text,integer)'::regprocedure::oid,
+      'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'::regprocedure::oid,
+      'api.portal_facets_v1(text,text,jsonb)'::regprocedure::oid
+    ])
+      and (
+        pg_catalog.length(routine.prosrc)
+        - pg_catalog.length(pg_catalog.replace(
+          routine.prosrc,
+          'assert_portal_catalog_projection_contract_v1',
+          ''
+        ))
+      ) / pg_catalog.length(
+        'assert_portal_catalog_projection_contract_v1'
+      ) = 1
+  ) = 3
+" "completed cutovers lost projection versions or per-request contract guards"
 
 index_oids_before="$(scalar_sql "
   select pg_catalog.string_agg(index_relation.oid::text, ',' order by index_relation.relname)
