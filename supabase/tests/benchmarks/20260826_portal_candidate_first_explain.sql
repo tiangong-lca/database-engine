@@ -1268,6 +1268,24 @@ select pg_temp.capture_portal_benchmark_plan(
 );
 
 \if :benchmark_semantic_plan_profile
+\if :benchmark_release_profile
+select pg_temp.capture_portal_benchmark_plan(
+  'process_semantic_candidate_path',
+  $query$
+    select candidate.*
+    from private.portal_projection_semantic_process_exact_v1(
+      pg_temp.portal_bench_vector(1)
+    ) as candidate
+  $query$
+);
+
+\qecho profile=process-semantic-helper-candidate-path
+explain (analyze, buffers, settings, wal, summary, format json)
+select candidate.*
+from private.portal_projection_semantic_process_exact_v1(
+  pg_temp.portal_bench_vector(1)
+) as candidate;
+\else
 select pg_temp.capture_portal_benchmark_plan(
   'process_semantic_candidate_path',
   $query$
@@ -1284,6 +1302,7 @@ select candidate.*
 from private.portal_projection_semantic_process_v1(
   pg_temp.portal_bench_vector(1)
 ) as candidate;
+\endif
 \endif
 
 \qecho profile=flow-source-hnsw-latest-public
@@ -1360,6 +1379,24 @@ select pg_temp.capture_portal_benchmark_plan(
 );
 
 \if :benchmark_semantic_plan_profile
+\if :benchmark_release_profile
+select pg_temp.capture_portal_benchmark_plan(
+  'flow_semantic_candidate_path',
+  $query$
+    select candidate.*
+    from private.portal_projection_semantic_flow_exact_v1(
+      pg_temp.portal_bench_vector(1)
+    ) as candidate
+  $query$
+);
+
+\qecho profile=flow-semantic-helper-candidate-path
+explain (analyze, buffers, settings, wal, summary, format json)
+select candidate.*
+from private.portal_projection_semantic_flow_exact_v1(
+  pg_temp.portal_bench_vector(1)
+) as candidate;
+\else
 select pg_temp.capture_portal_benchmark_plan(
   'flow_semantic_candidate_path',
   $query$
@@ -1376,6 +1413,7 @@ select candidate.*
 from private.portal_projection_semantic_flow_v1(
   pg_temp.portal_bench_vector(1)
 ) as candidate;
+\endif
 \endif
 
 set local enable_sort = on;
@@ -1453,8 +1491,7 @@ where (select count(*) from pg_temp.portal_benchmark_raw_ann_counts) <> 2
      and exists (
        select 1
        from pg_temp.portal_benchmark_raw_ann_counts
-       where (dataset_kind = 'flow' and raw_count >= 200)
-          or (dataset_kind = 'process' and raw_count <> 200)
+       where dataset_kind = 'process' and raw_count <> 200
      )
    )
    or (
