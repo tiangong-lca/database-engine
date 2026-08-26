@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: a9e5859e882bb2d0902abd72d859aa6a58bfef15
-lastReviewedNote: "Reviewed after the PR workflow begins enforcing the Issue #527 Portal pgTAP/Schema contracts; repository shape and deployment boundaries are unchanged."
+lastReviewedCommit: 85059aa1123d8754450d4fabdcdd9a20476eea71
+lastReviewedNote: "Reviewed after binding Portal catalog LCIA visibility and Detail publication context to the existing anonymous publication predicate; repository shape is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -79,6 +79,8 @@ therefore denied until their exact signature is deliberately classified.
 `contracts/portal/**` owns the exhaustive versioned JSON Schemas for the anonymous Portal DTOs. The matching `api.portal_*_v1` functions are additive façades: they fix visibility to public states 100/200, use stable keyset cursors, return canonical decimal strings, and recursively exclude actor/team/review fields, embeddings, credentials, private artifact locators, and database error detail. They do not replace or change legacy Search, raw-table RLS, Data Product, or Release consumers.
 
 Portal capability policy is fail closed. State 200 and unknown, missing, exclusive, or conflicting license evidence remain metadata-only. Exchange values require an exact public Process/Flow/FlowProperty/UnitGroup support chain plus an explicitly open capability. LCIA values come only from typed Process/Impact/Value rows staged by an exact V3 Worker job under its active lease. Database independently binds the ordered certificate Process/Method axes, dense Cartesian grid, canonical decimals, int32be UTF-8 record/relation/content hashes, source artifact hashes, and the package's exact `portalProjectionId`/`portalProjectionContentHash`. Batches are capped at 500 records and 1 MiB serialized UTF-8 JSON; terminal rows are immutable and raw tables remain private.
+
+Process Search, exact Detail, and Versions do not infer LCIA availability from state or metadata alone. A constrained decorator resolves the exact Process against the same current, finalized, non-revoked projection predicate used by the anonymous numeric reader. Search and Versions change only `capabilities.lciaVisible` while preserving strict item order and cursor; Detail also returns the locator-free publication/package/version/time and distinct sorted Method identities already allowed by `portal.public-dataset.v1`. Flow, state 200, unrelated, unprepared, unpublished, or revoked evidence remains `false`/`null`. One narrow executor-owned boolean definer reuses the existing license capability dependency graph without granting those helpers or raw tables to browser roles or postgres.
 
 Package publication is a separate authenticated-manager plan/command pair. The read-only prepare result freezes the V3 package, projection axes/counts/hashes, current eligible Process-set hash, selected display default, and current-publication predecessor into `publishPlanHash`; the command locks publication state, recomputes and requires that exact hash, then records it for response-loss reconciliation. Projection finalization independently recomputes typed evidence and binds the exact current package publication. Anonymous visibility uses the same full predicate returned by manager readback as `isPubliclyVisible`; supersede, unpublish, or projection revoke makes the public RPC return unavailable rather than a synthetic zero. The public RPC is bounded and locator-free, while Calculation Bundle/result artifact storage remains private.
 

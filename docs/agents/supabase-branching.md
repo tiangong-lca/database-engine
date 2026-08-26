@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: a9e5859e882bb2d0902abd72d859aa6a58bfef15
-lastReviewedNote: "Reviewed after Issue #527 broadens only the pre-deploy PR contract tests; persistent Dev's single migration deployer and Edge-owned Function handoff remain unchanged."
+lastReviewedCommit: 85059aa1123d8754450d4fabdcdd9a20476eea71
+lastReviewedNote: "Reviewed after Issue #527 adds the Portal LCIA catalog-visibility pgTAP to the pre-deploy contract set; persistent Dev's single migration deployer and Edge-owned Function handoff remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

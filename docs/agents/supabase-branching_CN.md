@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: a9e5859e882bb2d0902abd72d859aa6a58bfef15
-lastReviewedNote: "已在 Issue #527 仅扩展 PR 部署前合同测试后复核；持久化 Dev 的唯一 migration 部署者与 Edge Function 交接不变。"
+lastReviewedCommit: 85059aa1123d8754450d4fabdcdd9a20476eea71
+lastReviewedNote: "已在 Issue #527 把 Portal LCIA 目录可见性 pgTAP 加入部署前合同后复核；持久化 Dev 的唯一 migration 部署者与 Edge Function 交接不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
