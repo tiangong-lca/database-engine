@@ -16,6 +16,7 @@ declare
   v_expected_eligible_input_count integer;
   v_expected_included_input_count integer;
   v_expected_default_impact text;
+  v_restart_default_impact text;
 begin
   if not coalesce(util.is_service_request(), false) then
     return jsonb_build_object(
@@ -220,8 +221,18 @@ begin
       v_job.payload_json ->> 'default_impact_category', ''
     )), '')
   );
+  v_restart_default_impact := coalesce(
+    nullif(btrim(coalesce(
+      v_job.payload_json ->> 'default_impact_category', ''
+    )), ''),
+    v_projection_impacts ->> 0
+  );
 
-  if v_package.id is null
+  if private.portal_lcia_projection_package_binding_valid_v1(
+       v_package.id, v_job.id, v_projection.id
+     ) is not true
+     or v_expected_default_impact is distinct from v_restart_default_impact
+     or v_package.id is null
      or v_package.build_id is distinct from v_expected_build_id
      or v_package.build_id is distinct from v_job.subject_id
      or v_job.subject_type <> 'lcia_result_build'
