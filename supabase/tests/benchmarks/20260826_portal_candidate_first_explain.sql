@@ -1363,6 +1363,18 @@ where (:'process_rows'::integer >= 10000
    )
   );
 
+select label,
+  plan_text ~ 'portal_catalog_search_process_document_v1_pgroonga'
+    as process_pgroonga,
+  plan_text ~ 'portal_catalog_search_flow_document_v1_pgroonga'
+    as flow_pgroonga,
+  plan_text ~ 'processes_embedding_ft_hnsw_idx' as process_hnsw,
+  plan_text ~ 'flows_embedding_ft_hnsw_idx' as flow_hnsw,
+  plan_text ~ 'temp (read|written)=[1-9]' as nonzero_temp,
+  plan_text ~ 'Disk:|external merge' as disk_sort
+from pg_temp.portal_benchmark_plans
+order by label;
+
 create or replace function pg_temp.record_portal_search_timing(
   p_label text,
   p_kind text,
