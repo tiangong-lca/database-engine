@@ -98,6 +98,8 @@ begin
   from private.lca_results as result
   where result.id = v_package.result_id;
   if v_result.id is null
+     or v_result.job_id is distinct from v_package.build_id
+     or v_result.worker_job_id is distinct from v_job.id
      or v_result.snapshot_id is distinct from v_package.snapshot_id then
     return false;
   end if;
@@ -113,6 +115,8 @@ begin
     from private.lca_latest_all_unit_results as latest
     where latest.id = v_package.latest_all_unit_result_id;
     if v_latest.id is null
+       or v_latest.job_id is distinct from v_package.build_id
+       or v_latest.worker_job_id is distinct from v_job.id
        or v_latest.snapshot_id is distinct from v_package.snapshot_id
        or v_latest.result_id is distinct from v_package.result_id
        or v_latest.status <> 'ready' then
@@ -176,6 +180,8 @@ begin
     )
     and jsonb_typeof(v_package.artifact_manifest) = 'object'
     and v_package.package_result_hash ~ '^[0-9a-f]{64}$'
+    and v_package.package_result_hash is not distinct from
+      v_result.artifact_sha256
     and v_package.lcia_method_set is not distinct from coalesce(
       v_job.payload_json -> 'lcia_method_set', '[]'::jsonb
     )
@@ -213,6 +219,8 @@ begin
       (v_job.payload_json ->> 'snapshot_build_contract_hash')
     and v_projection.result_artifact_sha256 is not distinct from
       (v_package.result_artifact_ref ->> 'artifactSha256')
+    and v_projection.result_artifact_sha256 is not distinct from
+      v_package.package_result_hash
     and v_projection.query_artifact_sha256 is not distinct from
       (v_package.query_artifact_ref ->> 'artifactSha256')
     and v_projection.bundle_content_hash is not distinct from
