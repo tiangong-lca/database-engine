@@ -1673,7 +1673,7 @@ with semantic_times as (
 select
   'semantic_execution_time_guard',
   'P0001',
-  'formal exact semantic helper exceeded the 6000ms execution budget',
+  'formal exact semantic helper exceeded the 5000ms execution budget',
   coalesce((select max(execution_ms) from semantic_times), 0)::double precision
 where :'benchmark_semantic_plan_profile'::boolean
   and (
@@ -1681,6 +1681,49 @@ where :'benchmark_semantic_plan_profile'::boolean
     or exists (
       select 1
       from semantic_times
+      where execution_ms > 5000
+    )
+  );
+
+insert into pg_temp.portal_benchmark_failures (
+  label, sqlstate, message, elapsed_ms
+)
+with phase_times as (
+  select case
+      when label like 'process_%' then 'process'
+      else 'flow'
+    end as dataset_kind,
+    (
+      pg_catalog.regexp_match(
+        plan_text,
+        'Execution Time: ([0-9]+[.][0-9]+|[0-9]+) ms'
+      )
+    )[1]::numeric as execution_ms
+  from pg_temp.portal_benchmark_plans
+  where label in (
+    'process_source_hnsw',
+    'process_semantic_candidate_path',
+    'flow_source_hnsw',
+    'flow_semantic_candidate_path'
+  )
+), combined as (
+  select dataset_kind,
+    count(execution_ms) as measured_phases,
+    sum(execution_ms) as execution_ms
+  from phase_times
+  group by dataset_kind
+)
+select
+  'semantic_combined_phase_guard',
+  'P0001',
+  'formal ANN plus exact semantic phases exceeded the 6000ms budget',
+  coalesce((select max(execution_ms) from combined), 0)::double precision
+where :'benchmark_semantic_plan_profile'::boolean
+  and (
+    (select count(*) from combined where measured_phases = 2) <> 2
+    or exists (
+      select 1
+      from combined
       where execution_ms > 6000
     )
   );
