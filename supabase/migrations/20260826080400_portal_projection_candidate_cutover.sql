@@ -453,6 +453,56 @@ begin
 end
 $portal_source_hnsw_guard$;
 
+do $portal_source_vector_contract_guard$
+declare
+  v_vector_version text;
+  v_vector_major integer;
+  v_vector_minor integer;
+begin
+  select extension.extversion
+  into v_vector_version
+  from pg_catalog.pg_extension as extension
+  where extension.extname = 'vector';
+
+  v_vector_major := pg_catalog.split_part(v_vector_version, '.', 1)::integer;
+  v_vector_minor := pg_catalog.split_part(v_vector_version, '.', 2)::integer;
+  if v_vector_version is null
+     or (v_vector_major = 0 and v_vector_minor < 8)
+     or exists (
+       select 1
+       from pg_catalog.pg_attribute as attribute
+       where attribute.attrelid in (
+           'public.processes'::regclass,
+           'public.flows'::regclass
+         )
+         and attribute.attname = 'embedding_ft'
+         and not attribute.attisdropped
+         and (
+           attribute.atttypid <> 'extensions.vector'::regtype
+           or attribute.atttypmod <> 1024
+         )
+     )
+     or (
+       select count(*)
+       from pg_catalog.pg_attribute as attribute
+       where attribute.attrelid in (
+           'public.processes'::regclass,
+           'public.flows'::regclass
+         )
+         and attribute.attname = 'embedding_ft'
+         and not attribute.attisdropped
+     ) <> 2
+     or not pg_catalog.has_column_privilege(
+       'api_internal_executor', 'public.processes', 'embedding_ft', 'SELECT'
+     )
+     or not pg_catalog.has_column_privilege(
+       'api_internal_executor', 'public.flows', 'embedding_ft', 'SELECT'
+     ) then
+    raise exception 'Portal source vector version/dimension/ACL prerequisite drifted';
+  end if;
+end
+$portal_source_vector_contract_guard$;
+
 grant api_internal_executor to postgres;
 grant create on schema private to api_internal_executor;
 set role api_internal_executor;
@@ -1289,6 +1339,14 @@ reset role;
 revoke create on schema private, api from portal_public_executor;
 revoke portal_public_executor from postgres;
 
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+drop function if exists private.portal_public_hybrid_search_v1_impl(
+  text, text[], extensions.vector, jsonb, integer, text
+);
+reset role;
+revoke api_internal_executor from postgres;
+
 do $verify_portal_candidate_contract$
 declare
   v_catalog regprocedure := pg_catalog.to_regprocedure(
@@ -1321,6 +1379,9 @@ declare
   v_semantic_flow regprocedure := pg_catalog.to_regprocedure(
     'private.portal_projection_semantic_flow_v1(extensions.vector)'
   );
+  v_semantic_dispatch regprocedure := pg_catalog.to_regprocedure(
+    'private.portal_projection_semantic_candidates_v1(text,extensions.vector)'
+  );
 begin
   if v_catalog is null
      or v_card_facts is null
@@ -1331,8 +1392,14 @@ begin
      or v_search is null
      or v_hybrid is null
      or v_semantic_process is null
-     or v_semantic_flow is null then
+     or v_semantic_flow is null
+     or v_semantic_dispatch is null then
     raise exception 'Portal candidate-first installation is incomplete';
+  end if;
+  if pg_catalog.to_regprocedure(
+       'private.portal_public_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'
+     ) is not null then
+    raise exception 'Superseded raw-source Portal Hybrid kernel remains installed';
   end if;
   if (
     select routine.proowner = 'portal_public_executor'::regrole
@@ -1458,6 +1525,9 @@ begin
           'statement_timeout=8s',
           'plan_cache_mode=force_custom_plan',
           'hnsw.iterative_scan=strict_order',
+          'hnsw.ef_search=200',
+          'hnsw.max_scan_tuples=100000',
+          'hnsw.scan_mem_multiplier=1',
           'enable_sort=off',
           'row_security=on'
         ]::text[]
@@ -1469,6 +1539,25 @@ begin
       )
   ) then
     raise exception 'Portal source semantic helper owner/config/scope mismatch';
+  end if;
+  if (
+    select routine.proowner = 'api_internal_executor'::regrole
+      and routine.prosecdef
+      and coalesce(routine.proconfig, '{}'::text[]) @> array[
+        'search_path=""',
+        'statement_timeout=8s',
+        'row_security=on'
+      ]::text[]
+      and coalesce(routine.proacl::text, '')
+        = '{api_internal_executor=X/api_internal_executor}'
+      and routine.prosrc ~ 'portal_projection_semantic_process_v1'
+      and routine.prosrc ~ 'portal_projection_semantic_flow_v1'
+      and routine.prosrc ~ 'if p_kind = ''process'''
+      and routine.prosrc ~ 'elsif p_kind = ''flow'''
+    from pg_catalog.pg_proc as routine
+    where routine.oid = v_semantic_dispatch
+  ) is not true then
+    raise exception 'Portal semantic kind dispatcher owner/config/scope mismatch';
   end if;
   if (
     select relation.relrowsecurity

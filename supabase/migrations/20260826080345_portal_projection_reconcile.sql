@@ -176,7 +176,8 @@ begin
 end
 $verify_portal_projection_reconciliation$;
 
-drop function private.backfill_portal_catalog_search_range_v1(uuid, uuid);
+drop function if exists
+  private.backfill_portal_catalog_search_range_v1(uuid, uuid);
 
 reset role;
 revoke api_internal_executor from postgres;

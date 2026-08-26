@@ -368,7 +368,7 @@ returns table(
   version text,
   semantic_distance double precision
 )
-language sql
+language plpgsql
 stable
 parallel restricted
 security definer
@@ -376,9 +376,19 @@ set search_path = ''
 set statement_timeout = '8s'
 set plan_cache_mode = 'force_custom_plan'
 set hnsw.iterative_scan = 'strict_order'
+set hnsw.ef_search = '200'
+set hnsw.max_scan_tuples = '100000'
+set hnsw.scan_mem_multiplier = '1'
 set enable_sort = 'off'
 set row_security = 'on'
 as $function$
+begin
+  if p_query_embedding is null then
+    raise exception using
+      errcode = '22023',
+      message = 'invalid portal semantic query';
+  end if;
+  return query
   select candidate.id,
     candidate.version,
     candidate.semantic_distance
@@ -421,7 +431,8 @@ as $function$
   ) as candidate
   where candidate.semantic_distance is not null
     and candidate.semantic_distance >= 0::double precision
-    and candidate.semantic_distance <= 0.5::double precision
+    and candidate.semantic_distance <= 0.5::double precision;
+end
 $function$;
 
 create or replace function private.portal_projection_semantic_flow_v1(
@@ -432,7 +443,7 @@ returns table(
   version text,
   semantic_distance double precision
 )
-language sql
+language plpgsql
 stable
 parallel restricted
 security definer
@@ -440,9 +451,19 @@ set search_path = ''
 set statement_timeout = '8s'
 set plan_cache_mode = 'force_custom_plan'
 set hnsw.iterative_scan = 'strict_order'
+set hnsw.ef_search = '200'
+set hnsw.max_scan_tuples = '100000'
+set hnsw.scan_mem_multiplier = '1'
 set enable_sort = 'off'
 set row_security = 'on'
 as $function$
+begin
+  if p_query_embedding is null then
+    raise exception using
+      errcode = '22023',
+      message = 'invalid portal semantic query';
+  end if;
+  return query
   select candidate.id,
     candidate.version,
     candidate.semantic_distance
@@ -485,7 +506,8 @@ as $function$
   ) as candidate
   where candidate.semantic_distance is not null
     and candidate.semantic_distance >= 0::double precision
-    and candidate.semantic_distance <= 0.5::double precision
+    and candidate.semantic_distance <= 0.5::double precision;
+end
 $function$;
 
 revoke all on function private.portal_projection_semantic_process_v1(
@@ -501,6 +523,48 @@ revoke all on function private.portal_projection_semantic_flow_v1(
   portal_public_executor, api_internal_executor;
 grant execute on function private.portal_projection_semantic_flow_v1(
   extensions.vector
+) to api_internal_executor;
+
+create or replace function private.portal_projection_semantic_candidates_v1(
+  p_kind text,
+  p_query_embedding extensions.vector(1024)
+)
+returns table(
+  id uuid,
+  version text,
+  semantic_distance double precision
+)
+language plpgsql
+stable
+parallel restricted
+security definer
+set search_path = ''
+set statement_timeout = '8s'
+set row_security = 'on'
+as $function$
+begin
+  if p_kind = 'process' then
+    return query
+    select candidate.*
+    from private.portal_projection_semantic_process_v1(
+      p_query_embedding
+    ) as candidate;
+  elsif p_kind = 'flow' then
+    return query
+    select candidate.*
+    from private.portal_projection_semantic_flow_v1(
+      p_query_embedding
+    ) as candidate;
+  end if;
+end
+$function$;
+
+revoke all on function private.portal_projection_semantic_candidates_v1(
+  text, extensions.vector
+) from public, anon, authenticated, service_role,
+  portal_public_executor, api_internal_executor;
+grant execute on function private.portal_projection_semantic_candidates_v1(
+  text, extensions.vector
 ) to api_internal_executor;
 
 create or replace function private.portal_projection_hybrid_search_v1_impl(
@@ -571,22 +635,12 @@ begin
           portal_lexical_candidates.version desc
       )::integer as lexical_rank
     from portal_lexical_candidates
-  ), portal_semantic_process_pool as materialized (
-    select semantic.*
-    from private.portal_projection_semantic_process_v1(
-      p_query_embedding
-    ) as semantic
-    where p_kind = 'process'
-  ), portal_semantic_flow_pool as materialized (
-    select semantic.*
-    from private.portal_projection_semantic_flow_v1(
-      p_query_embedding
-    ) as semantic
-    where p_kind = 'flow'
   ), portal_semantic_candidates as materialized (
-    select * from portal_semantic_process_pool
-    union all
-    select * from portal_semantic_flow_pool
+    select semantic.*
+    from private.portal_projection_semantic_candidates_v1(
+      p_kind,
+      p_query_embedding
+    ) as semantic
   ), portal_semantic_ranked as materialized (
     select portal_semantic_candidates.*,
       pg_catalog.row_number() over (

@@ -282,8 +282,7 @@ select extensions.ok(
   (
     select routine.prosrc ~ 'portal_catalog_search_rows_v1'
       and routine.prosrc !~ 'public\.processes|public\.flows'
-      and routine.prosrc ~ 'portal_projection_semantic_process_v1'
-      and routine.prosrc ~ 'portal_projection_semantic_flow_v1'
+      and routine.prosrc ~ 'portal_projection_semantic_candidates_v1'
       and pg_catalog.strpos(routine.prosrc, 'portal_lexical_matches')
         < pg_catalog.strpos(routine.prosrc, 'portal_fused')
       and pg_catalog.strpos(routine.prosrc, 'portal_fused')
@@ -310,12 +309,24 @@ select extensions.ok(
           'statement_timeout=8s',
           'plan_cache_mode=force_custom_plan',
           'hnsw.iterative_scan=strict_order',
+          'hnsw.ef_search=200',
+          'hnsw.max_scan_tuples=100000',
+          'hnsw.scan_mem_multiplier=1',
           'enable_sort=off',
           'row_security=on'
         ]::text[]
         and routine.prosrc ~ 'portal_catalog_search_rows_v1'
         and routine.prosrc ~ 'embedding_ft'
       )
+  )
+  and (
+    select routine.prosrc ~ 'portal_projection_semantic_process_v1'
+      and routine.prosrc ~ 'portal_projection_semantic_flow_v1'
+      and routine.prosrc ~ 'if p_kind = ''process'''
+      and routine.prosrc ~ 'elsif p_kind = ''flow'''
+    from pg_catalog.pg_proc as routine
+    where routine.oid =
+      'private.portal_projection_semantic_candidates_v1(text,extensions.vector)'::regprocedure
   )
   and not exists (
     select 1
@@ -766,6 +777,49 @@ select extensions.ok(
       and version = '01.00.000'
   ),
   'service-role Flow derivative update retains authored JSON/modified_at and updates only source derivatives'
+);
+
+set local enable_sort = on;
+set local hnsw.iterative_scan = off;
+set local hnsw.ef_search = 41;
+set local hnsw.max_scan_tuples = 12345;
+set local hnsw.scan_mem_multiplier = 2;
+
+grant api_internal_executor to postgres;
+set local role api_internal_executor;
+
+select extensions.lives_ok(
+  $$select count(*)
+    from private.portal_projection_semantic_candidates_v1(
+      'process',
+      ('[1,' || pg_catalog.array_to_string(
+        pg_catalog.array_fill('0'::text, array[1023]),
+        ','
+      ) || ']')::extensions.vector(1024)
+    )$$,
+  'the semantic kind dispatcher executes the requested Process helper'
+);
+
+select extensions.throws_ok(
+  $$select *
+    from private.portal_projection_semantic_process_v1(
+      null::extensions.vector(1024)
+    )$$,
+  '22023',
+  'invalid portal semantic query',
+  'the semantic helper fail-closed path is explicit'
+);
+
+reset role;
+revoke api_internal_executor from postgres;
+
+select extensions.ok(
+  pg_catalog.current_setting('enable_sort') = 'on'
+  and pg_catalog.current_setting('hnsw.iterative_scan') = 'off'
+  and pg_catalog.current_setting('hnsw.ef_search') = '41'
+  and pg_catalog.current_setting('hnsw.max_scan_tuples') = '12345'
+  and pg_catalog.current_setting('hnsw.scan_mem_multiplier') = '2',
+  'normal and error semantic calls restore every caller planner/HNSW GUC'
 );
 
 set local role authenticated;
