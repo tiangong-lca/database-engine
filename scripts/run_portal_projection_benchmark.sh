@@ -153,7 +153,7 @@ echo "Hosted promotion must record pg_database_size before/after migration; PGro
   | tee -a "$results_log"
 
 "$supabase_cli" --workdir "$test_workdir" \
-  db reset --local --no-seed >/dev/null
+  db reset --local --no-seed >/dev/null 2>&1
 
 docker exec -i "$container_name" \
   psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
