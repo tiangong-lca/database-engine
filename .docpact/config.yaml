@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-26"
-lastReviewedCommit: "3a59878d82adb1291d82feec55038c28cffc139a"
-lastReviewedNote: "Reviewed after exact Portal LCIA package-ready replay recovery and the targeted persistent-Dev PostgREST runtime refresh; routing and ownership are unchanged."
+lastReviewedCommit: "137ab6eebfeef199fd36b38115d0b46258f5dc33"
+lastReviewedNote: "Reviewed after Portal LCIA package readiness gained immediate replay plus reclaimed-Worker job-level readback; routing and ownership are unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

@@ -37,8 +37,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 3a59878d82adb1291d82feec55038c28cffc139a
-lastReviewedNote: "Reviewed after adding exact Portal LCIA package-ready replay recovery and the narrowly scoped persistent-Dev PostgREST runtime refresh; ownership boundaries are unchanged."
+lastReviewedCommit: 137ab6eebfeef199fd36b38115d0b46258f5dc33
+lastReviewedNote: "Reviewed after Portal LCIA package readiness gained both immediate response-loss replay and reclaimed-Worker job-level readback; ownership and deployment boundaries are unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -114,7 +114,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - local baseline: `supabase start`, `supabase db reset`, `supabase migration list`
 - schema boundary: `public` contains only `processes`, `flows`, `contacts`, `sources`, `unitgroups`, `flowproperties`, `lciamethods`, `lifecyclemodels`, and `ilcd`; client RPCs live in the exposed `api` schema, internal state and service helpers live in `private`, operational tooling lives in `util`, and retired rollback evidence lives in `archive`
 - PostgREST exposes `public` and `api`; entity access keeps `public` as the default profile, while RPC callers must select the `api` profile explicitly
-- anonymous Portal numerics come only from immutable publication-bound typed projections; Search, Detail, and Versions derive `lciaVisible` and Detail publication context from the same current finalized non-revoked predicate as the numeric reader; V3 Worker staging and package readiness are service-only and lease-fenced, an exact package-ready retry may recover only a fully matching committed package, package publication/finalization is authenticated-manager-only with exact plan/hash confirmation, and raw projection/artifact tables never gain browser access
+- anonymous Portal numerics come only from immutable publication-bound typed projections; Search, Detail, and Versions derive `lciaVisible` and Detail publication context from the same current finalized non-revoked predicate as the numeric reader; V3 Worker staging and package readiness are service-only and lease-fenced, an immediate exact retry may recover only a fully matching committed package, and a reclaimed Worker may use the current job lease for locator-free readback of the immutable package/old prepared projection without reusing the old projection lease; package publication/finalization is authenticated-manager-only with exact plan/hash confirmation, and raw projection/artifact tables never gain browser access
 - `supabase/seed.sql` must remain an executable SQL batch even when it seeds no rows; retain a data-neutral no-op rather than comments only
 - hosted mutation E2E assets under `supabase/tests/preview/**` are exact-Preview, disposable test paths; their complete actor, credential, recovery, and cleanup proof requirements live in `docs/agents/repo-validation.md`
 - migration authoring starts from Git `dev`, not GitHub default-branch UI
