@@ -136,15 +136,26 @@ def main() -> int:
         "PREVIEW_GIT_BRANCH: ${{ github.event.pull_request.head.ref }}",
         "PREVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
         "steps.preview_authority.outputs.available == 'true'",
+        "Supabase Preview runtime verification requires SUPABASE_ACCESS_TOKEN and SUPABASE_MAIN_PROJECT_ID",
+        "exit 1",
         "uses: supabase/setup-cli@v2",
         "version: 2.98.0",
         "Wait for exact Supabase Preview check",
         "check_name=Supabase%20Preview&filter=latest",
         '.name == "Supabase Preview"',
         '.head_sha == $head',
+        ".app.id == 330661",
+        '.app.slug == "supabase"',
+        '.app.owner.login == "supabase"',
         '.conclusion == "success"',
+        'capture("^https://supabase[.]com/dashboard/project/(?<ref>[a-z]{20})$").ref',
+        'EXPECTED_PREVIEW_PROJECT_REF: ${{ steps.supabase_preview_check.outputs.ref }}',
         'supabase branches get "$PREVIEW_GIT_BRANCH"',
         '--project-ref "$SUPABASE_MAIN_PROJECT_ID"',
+        "--output json",
+        ".SUPABASE_URL",
+        'capture("^https://(?<ref>[a-z]{20})[.]supabase[.]co$").ref',
+        '[[ "$preview_project_ref" == "$EXPECTED_PREVIEW_PROJECT_REF" ]]',
         '[[ "$preview_project_ref" != "$SUPABASE_MAIN_PROJECT_ID" ]]',
         '[[ -z "$SUPABASE_DEV_PROJECT_ID" || "$preview_project_ref" != "$SUPABASE_DEV_PROJECT_ID" ]]',
         "Read back exact Preview PostgREST runtime contract",
@@ -164,6 +175,16 @@ def main() -> int:
         for token in preview_required
         if token not in preview_workflow
     )
+    for app_identity_token in (
+        ".app.id == 330661",
+        '.app.slug == "supabase"',
+        '.app.owner.login == "supabase"',
+    ):
+        if preview_workflow.count(app_identity_token) < 3:
+            failures.append(
+                "Preview exact-count, success, and failure checks must all bind "
+                f"the official Supabase App with {app_identity_token}"
+            )
 
     preview_forbidden = (
         "supabase link",
@@ -195,6 +216,10 @@ def main() -> int:
     preview_job_header = preview_workflow.split("    steps:", 1)[0]
     if "secrets.SUPABASE_ACCESS_TOKEN" in preview_job_header:
         failures.append("Supabase access token must be scoped only to steps that require it")
+    if "available=false" in preview_workflow or "verification skipped" in preview_workflow:
+        failures.append(
+            "same-repository Preview verification must fail closed when authority is missing"
+        )
     for forbidden_probe_credential in (
         "Authorization:",
         "Cookie:",
