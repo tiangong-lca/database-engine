@@ -14,8 +14,7 @@ with missing as materialized (
     process.version::text as version,
     process.state_code,
     process.modified_at,
-    process.json,
-    process.embedding_ft
+    process.json
   from public.processes as process
   where process.state_code in (100, 200)
     and process.modified_at is not null
@@ -31,7 +30,7 @@ with missing as materialized (
 )
 insert into private.portal_catalog_search_rows_v1 (
   dataset_kind, id, version, state_code, modified_at,
-  card, document, embedding_ft
+  card, document
 )
 select
   'process',
@@ -40,8 +39,7 @@ select
   missing.state_code,
   missing.modified_at,
   payload.value -> 'card',
-  payload.value ->> 'document',
-  missing.embedding_ft
+  payload.value ->> 'document'
 from missing
 cross join lateral (
   select private.catalog_portal_projection_payload_v1(
@@ -56,8 +54,7 @@ with missing as materialized (
     flow.version::text as version,
     flow.state_code,
     flow.modified_at,
-    flow.json,
-    flow.embedding_ft
+    flow.json
   from public.flows as flow
   where flow.state_code in (100, 200)
     and flow.modified_at is not null
@@ -73,7 +70,7 @@ with missing as materialized (
 )
 insert into private.portal_catalog_search_rows_v1 (
   dataset_kind, id, version, state_code, modified_at,
-  card, document, embedding_ft
+  card, document
 )
 select
   'flow',
@@ -82,8 +79,7 @@ select
   missing.state_code,
   missing.modified_at,
   payload.value -> 'card',
-  payload.value ->> 'document',
-  missing.embedding_ft
+  payload.value ->> 'document'
 from missing
 cross join lateral (
   select private.catalog_portal_projection_payload_v1(
@@ -160,8 +156,6 @@ begin
         process.id is null
         or process.state_code <> projection.state_code
         or process.modified_at <> projection.modified_at
-        or (process.embedding_ft is null)
-          <> (projection.embedding_ft is null)
       )
   ) or exists (
     select 1
@@ -175,8 +169,6 @@ begin
         flow.id is null
         or flow.state_code <> projection.state_code
         or flow.modified_at <> projection.modified_at
-        or (flow.embedding_ft is null)
-          <> (projection.embedding_ft is null)
       )
   ) then
     raise exception 'Portal projection reconciliation key/source parity mismatch';

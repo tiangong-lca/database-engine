@@ -3,7 +3,7 @@
 -- Persistent Dev has production-shaped public cardinality but almost no
 -- search_text/embedding_ft derivatives, so the existing derivative indexes
 -- cannot be the completeness boundary for anonymous Portal reads.  Read the
--- synchronized public-safe card/document/vector projection only after indexed
+-- synchronized public-safe card/document projection only after indexed
 -- candidate and latest-visible-version reduction.  No external
 -- signature, DTO, ACL, RLS policy, owner, function timeout, or legacy Hybrid
 -- routine changes in this migration.
@@ -354,22 +354,6 @@ begin
           'pgroonga_text_full_text_search_ops_v2',
           '(dataset_kind = ''flow''::text)',
           array['tokenizer=TokenBigram', 'normalizer=NormalizerAuto']::text[]
-        ),
-        (
-          'portal_catalog_search_process_embedding_v1_hnsw',
-          'hnsw',
-          'embedding_ft',
-          'vector_cosine_ops',
-          '((dataset_kind = ''process''::text) AND (embedding_ft IS NOT NULL))',
-          '{}'::text[]
-        ),
-        (
-          'portal_catalog_search_flow_embedding_v1_hnsw',
-          'hnsw',
-          'embedding_ft',
-          'vector_cosine_ops',
-          '((dataset_kind = ''flow''::text) AND (embedding_ft IS NOT NULL))',
-          '{}'::text[]
         )
     )
     select 1
@@ -418,6 +402,56 @@ begin
   end if;
 end
 $portal_candidate_index_guard$;
+
+do $portal_source_hnsw_guard$
+begin
+  if exists (
+    with expected(index_name, table_name) as (
+      values
+        ('processes_embedding_ft_hnsw_idx'::text, 'processes'::text),
+        ('flows_embedding_ft_hnsw_idx', 'flows')
+    )
+    select 1
+    from expected
+    left join pg_catalog.pg_namespace as index_namespace
+      on index_namespace.nspname = 'public'
+    left join pg_catalog.pg_class as index_relation
+      on index_relation.relnamespace = index_namespace.oid
+     and index_relation.relname = expected.index_name
+    left join pg_catalog.pg_index as index_catalog
+      on index_catalog.indexrelid = index_relation.oid
+    left join pg_catalog.pg_class as source_relation
+      on source_relation.oid = index_catalog.indrelid
+    left join pg_catalog.pg_namespace as source_namespace
+      on source_namespace.oid = source_relation.relnamespace
+    left join pg_catalog.pg_am as access_method
+      on access_method.oid = index_relation.relam
+    left join pg_catalog.pg_attribute as indexed_column
+      on indexed_column.attrelid = index_catalog.indrelid
+     and indexed_column.attnum = index_catalog.indkey[0]
+    left join pg_catalog.pg_opclass as opclass
+      on opclass.oid = index_catalog.indclass[0]
+    left join pg_catalog.pg_namespace as opclass_namespace
+      on opclass_namespace.oid = opclass.opcnamespace
+    where index_relation.oid is null
+       or source_namespace.nspname <> 'public'
+       or source_relation.relname <> expected.table_name
+       or not index_catalog.indisvalid
+       or not index_catalog.indisready
+       or not index_catalog.indislive
+       or index_catalog.indisunique
+       or index_catalog.indnkeyatts <> 1
+       or index_catalog.indexprs is not null
+       or index_catalog.indpred is not null
+       or access_method.amname <> 'hnsw'
+       or indexed_column.attname <> 'embedding_ft'
+       or opclass_namespace.nspname <> 'extensions'
+       or opclass.opcname <> 'vector_cosine_ops'
+  ) then
+    raise exception 'Portal source HNSW prerequisite drifted';
+  end if;
+end
+$portal_source_hnsw_guard$;
 
 grant api_internal_executor to postgres;
 grant create on schema private to api_internal_executor;
@@ -1281,6 +1315,12 @@ declare
   v_hybrid regprocedure := pg_catalog.to_regprocedure(
     'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'
   );
+  v_semantic_process regprocedure := pg_catalog.to_regprocedure(
+    'private.portal_projection_semantic_process_v1(extensions.vector)'
+  );
+  v_semantic_flow regprocedure := pg_catalog.to_regprocedure(
+    'private.portal_projection_semantic_flow_v1(extensions.vector)'
+  );
 begin
   if v_catalog is null
      or v_card_facts is null
@@ -1289,7 +1329,9 @@ begin
      or v_flow_pattern is null
      or v_hybrid_pattern is null
      or v_search is null
-     or v_hybrid is null then
+     or v_hybrid is null
+     or v_semantic_process is null
+     or v_semantic_flow is null then
     raise exception 'Portal candidate-first installation is incomplete';
   end if;
   if (
@@ -1401,6 +1443,33 @@ begin
   ) is not true then
     raise exception 'Portal Hybrid candidate kernel owner/config mismatch';
   end if;
+  if exists (
+    select 1
+    from pg_catalog.pg_proc as routine
+    where routine.oid = any (array[
+        v_semantic_process::oid,
+        v_semantic_flow::oid
+      ])
+      and not (
+        routine.proowner = 'api_internal_executor'::regrole
+        and routine.prosecdef
+        and coalesce(routine.proconfig, '{}'::text[]) @> array[
+          'search_path=""',
+          'statement_timeout=8s',
+          'plan_cache_mode=force_custom_plan',
+          'hnsw.iterative_scan=strict_order',
+          'enable_sort=off',
+          'row_security=on'
+        ]::text[]
+        and coalesce(routine.proacl::text, '')
+          = '{api_internal_executor=X/api_internal_executor}'
+        and routine.prosrc ~ 'portal_catalog_search_rows_v1'
+        and routine.prosrc ~ 'embedding_ft'
+        and routine.prosrc !~ '\.json|search_text|extracted_md|portal_catalog_card'
+      )
+  ) then
+    raise exception 'Portal source semantic helper owner/config/scope mismatch';
+  end if;
   if (
     select relation.relrowsecurity
       and relation.relforcerowsecurity
@@ -1416,6 +1485,14 @@ begin
      )
      or pg_catalog.has_table_privilege(
        'service_role', 'private.portal_catalog_search_rows_v1', 'SELECT'
+     )
+     or exists (
+       select 1
+       from pg_catalog.pg_attribute as attribute
+       where attribute.attrelid =
+         'private.portal_catalog_search_rows_v1'::regclass
+         and attribute.attname = 'embedding_ft'
+         and not attribute.attisdropped
      )
      or not pg_catalog.has_table_privilege(
        'api_internal_executor',
@@ -1463,12 +1540,11 @@ begin
         'public.flows'::regclass
       )
       and trigger.tgname in (
-        'portal_catalog_projection_content_sync_v1',
-        'portal_catalog_projection_embedding_sync_v1'
+        'portal_catalog_projection_content_sync_v1'
       )
       and not trigger.tgisinternal
       and trigger.tgenabled = 'O'
-  ) <> 4 then
+  ) <> 2 then
     raise exception 'Portal projection trigger set mismatch';
   end if;
   if (

@@ -94,7 +94,6 @@ create table private.portal_catalog_search_rows_v1 (
   card jsonb not null
     check (pg_catalog.jsonb_typeof(card) = 'object'),
   document text not null,
-  embedding_ft extensions.vector(1024),
   primary key (dataset_kind, id, version),
   check (coalesce(card ->> 'document', '') = document)
 );
@@ -181,46 +180,6 @@ begin
       and projection.version = old.version::text;
   end if;
 
-  if tg_argv[0] = 'embedding' then
-    update private.portal_catalog_search_rows_v1 as projection
-    set embedding_ft = new.embedding_ft
-    where projection.dataset_kind = v_kind
-      and projection.id = new.id
-      and projection.version = new.version::text;
-    if not found
-       and new.state_code in (100, 200)
-       and new.modified_at is not null
-       and pg_catalog.jsonb_typeof(new.json) = 'object'
-       and pg_catalog.jsonb_typeof(new.json -> v_root_key) = 'object' then
-      v_payload := private.catalog_portal_projection_payload_v1(
-        v_kind,
-        new.state_code,
-        new.json
-      );
-      insert into private.portal_catalog_search_rows_v1 (
-        dataset_kind,
-        id,
-        version,
-        state_code,
-        modified_at,
-        card,
-        document,
-        embedding_ft
-      ) values (
-        v_kind,
-        new.id,
-        new.version::text,
-        new.state_code,
-        new.modified_at,
-        v_payload -> 'card',
-        v_payload ->> 'document',
-        new.embedding_ft
-      )
-      on conflict (dataset_kind, id, version) do update
-      set embedding_ft = excluded.embedding_ft;
-    end if;
-    return new;
-  end if;
 
   if new.state_code in (100, 200)
      and new.modified_at is not null
@@ -242,8 +201,7 @@ begin
       state_code,
       modified_at,
       card,
-      document,
-      embedding_ft
+      document
     ) values (
       v_kind,
       new.id,
@@ -251,15 +209,13 @@ begin
       new.state_code,
       new.modified_at,
       v_payload -> 'card',
-      v_payload ->> 'document',
-      new.embedding_ft
+      v_payload ->> 'document'
     )
     on conflict (dataset_kind, id, version) do update
     set state_code = excluded.state_code,
         modified_at = excluded.modified_at,
         card = excluded.card,
-        document = excluded.document,
-        embedding_ft = excluded.embedding_ft;
+        document = excluded.document;
   else
     delete from private.portal_catalog_search_rows_v1 as projection
     where projection.dataset_kind = v_kind
@@ -287,24 +243,14 @@ after insert or delete or update of id, version, json, state_code, modified_at
 on public.processes
 for each row execute function private.sync_portal_catalog_search_row_v1('content');
 
-create trigger portal_catalog_projection_embedding_sync_v1
-after update of embedding_ft
-on public.processes
-for each row execute function private.sync_portal_catalog_search_row_v1('embedding');
-
 create trigger portal_catalog_projection_content_sync_v1
 after insert or delete or update of id, version, json, state_code, modified_at
 on public.flows
 for each row execute function private.sync_portal_catalog_search_row_v1('content');
 
-create trigger portal_catalog_projection_embedding_sync_v1
-after update of embedding_ft
-on public.flows
-for each row execute function private.sync_portal_catalog_search_row_v1('embedding');
-
 set role api_internal_executor;
 comment on function private.sync_portal_catalog_search_row_v1() is
-  'NOLOGIN/NOBYPASSRLS writer maintains exact visible public-card rows; derivative-only embedding updates never rebuild cards.';
+  'NOLOGIN/NOBYPASSRLS writer maintains exact visible public-card rows; derivatives remain source-owned and do not touch the projection.';
 revoke execute on function private.sync_portal_catalog_search_row_v1()
   from postgres;
 reset role;
@@ -332,7 +278,7 @@ begin
 
   insert into private.portal_catalog_search_rows_v1 (
     dataset_kind, id, version, state_code, modified_at,
-    card, document, embedding_ft
+    card, document
   )
   select
     'process',
@@ -341,8 +287,7 @@ begin
     process.state_code,
     process.modified_at,
     payload.value -> 'card',
-    payload.value ->> 'document',
-    process.embedding_ft
+    payload.value ->> 'document'
   from public.processes as process
   cross join lateral (
     select private.catalog_portal_projection_payload_v1(
@@ -361,7 +306,7 @@ begin
 
   insert into private.portal_catalog_search_rows_v1 (
     dataset_kind, id, version, state_code, modified_at,
-    card, document, embedding_ft
+    card, document
   )
   select
     'flow',
@@ -370,8 +315,7 @@ begin
     flow.state_code,
     flow.modified_at,
     payload.value -> 'card',
-    payload.value ->> 'document',
-    flow.embedding_ft
+    payload.value ->> 'document'
   from public.flows as flow
   cross join lateral (
     select private.catalog_portal_projection_payload_v1(
@@ -409,12 +353,155 @@ reset role;
 revoke create on schema private from api_internal_executor;
 revoke api_internal_executor from postgres;
 
--- Install the future projection Hybrid kernel before its HNSW indexes load the
--- superuser-scoped pgvector iterative-scan GUC in a later migration session.
--- No existing API wrapper calls this helper before the transactional cutover.
+-- Install isolated source-HNSW semantic helpers and the future projection
+-- Hybrid kernel while no existing API wrapper calls them. The later
+-- transactional cutover changes only the public wrapper's private target.
 grant api_internal_executor to postgres;
 grant create on schema private to api_internal_executor;
 set role api_internal_executor;
+
+create or replace function private.portal_projection_semantic_process_v1(
+  p_query_embedding extensions.vector(1024)
+)
+returns table(
+  id uuid,
+  version text,
+  semantic_distance double precision
+)
+language sql
+stable
+parallel restricted
+security definer
+set search_path = ''
+set statement_timeout = '8s'
+set plan_cache_mode = 'force_custom_plan'
+set hnsw.iterative_scan = 'strict_order'
+set enable_sort = 'off'
+set row_security = 'on'
+as $function$
+  select candidate.id,
+    candidate.version,
+    candidate.semantic_distance
+  from (
+    select process.id,
+      process.version::text as version,
+      process.embedding_ft operator(extensions.<=>) p_query_embedding
+        as semantic_distance
+    from public.processes as process
+    where process.state_code in (100, 200)
+      and process.embedding_ft is not null
+      and exists (
+        select 1
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'process'
+          and projection.id = process.id
+          and projection.version = process.version::text
+          and not exists (
+            select 1
+            from private.portal_catalog_search_rows_v1 as newer
+            where newer.dataset_kind = projection.dataset_kind
+              and newer.id = projection.id
+              and (
+                newer.version > projection.version
+                or (
+                  newer.version = projection.version
+                  and newer.modified_at > projection.modified_at
+                )
+                or (
+                  newer.version = projection.version
+                  and newer.modified_at = projection.modified_at
+                  and newer.state_code > projection.state_code
+                )
+              )
+          )
+      )
+    order by process.embedding_ft
+      operator(extensions.<=>) p_query_embedding
+    limit 200
+  ) as candidate
+  where candidate.semantic_distance is not null
+    and candidate.semantic_distance >= 0::double precision
+    and candidate.semantic_distance <= 0.5::double precision
+$function$;
+
+create or replace function private.portal_projection_semantic_flow_v1(
+  p_query_embedding extensions.vector(1024)
+)
+returns table(
+  id uuid,
+  version text,
+  semantic_distance double precision
+)
+language sql
+stable
+parallel restricted
+security definer
+set search_path = ''
+set statement_timeout = '8s'
+set plan_cache_mode = 'force_custom_plan'
+set hnsw.iterative_scan = 'strict_order'
+set enable_sort = 'off'
+set row_security = 'on'
+as $function$
+  select candidate.id,
+    candidate.version,
+    candidate.semantic_distance
+  from (
+    select flow.id,
+      flow.version::text as version,
+      flow.embedding_ft operator(extensions.<=>) p_query_embedding
+        as semantic_distance
+    from public.flows as flow
+    where flow.state_code in (100, 200)
+      and flow.embedding_ft is not null
+      and exists (
+        select 1
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'flow'
+          and projection.id = flow.id
+          and projection.version = flow.version::text
+          and not exists (
+            select 1
+            from private.portal_catalog_search_rows_v1 as newer
+            where newer.dataset_kind = projection.dataset_kind
+              and newer.id = projection.id
+              and (
+                newer.version > projection.version
+                or (
+                  newer.version = projection.version
+                  and newer.modified_at > projection.modified_at
+                )
+                or (
+                  newer.version = projection.version
+                  and newer.modified_at = projection.modified_at
+                  and newer.state_code > projection.state_code
+                )
+              )
+          )
+      )
+    order by flow.embedding_ft
+      operator(extensions.<=>) p_query_embedding
+    limit 200
+  ) as candidate
+  where candidate.semantic_distance is not null
+    and candidate.semantic_distance >= 0::double precision
+    and candidate.semantic_distance <= 0.5::double precision
+$function$;
+
+revoke all on function private.portal_projection_semantic_process_v1(
+  extensions.vector
+) from public, anon, authenticated, service_role,
+  portal_public_executor, api_internal_executor;
+grant execute on function private.portal_projection_semantic_process_v1(
+  extensions.vector
+) to api_internal_executor;
+revoke all on function private.portal_projection_semantic_flow_v1(
+  extensions.vector
+) from public, anon, authenticated, service_role,
+  portal_public_executor, api_internal_executor;
+grant execute on function private.portal_projection_semantic_flow_v1(
+  extensions.vector
+) to api_internal_executor;
 
 create or replace function private.portal_projection_hybrid_search_v1_impl(
   p_kind text,
@@ -485,81 +572,17 @@ begin
       )::integer as lexical_rank
     from portal_lexical_candidates
   ), portal_semantic_process_pool as materialized (
-    select candidate.id,
-      candidate.version,
-      candidate.semantic_distance
-    from (
-      select projection.id,
-        projection.version,
-        projection.embedding_ft operator(extensions.<=>) p_query_embedding
-          as semantic_distance
-      from private.portal_catalog_search_rows_v1 as projection
-      where p_kind = 'process'
-        and projection.dataset_kind = 'process'
-        and projection.embedding_ft is not null
-        and not exists (
-          select 1
-          from private.portal_catalog_search_rows_v1 as newer
-          where newer.dataset_kind = projection.dataset_kind
-            and newer.id = projection.id
-            and (
-              newer.version > projection.version
-              or (
-                newer.version = projection.version
-                and newer.modified_at > projection.modified_at
-              )
-              or (
-                newer.version = projection.version
-                and newer.modified_at = projection.modified_at
-                and newer.state_code > projection.state_code
-              )
-            )
-        )
-      order by projection.embedding_ft
-        operator(extensions.<=>) p_query_embedding
-      limit 200
-    ) as candidate
-    where candidate.semantic_distance is not null
-      and candidate.semantic_distance >= 0::double precision
-      and candidate.semantic_distance <= 0.5::double precision
+    select semantic.*
+    from private.portal_projection_semantic_process_v1(
+      p_query_embedding
+    ) as semantic
+    where p_kind = 'process'
   ), portal_semantic_flow_pool as materialized (
-    select candidate.id,
-      candidate.version,
-      candidate.semantic_distance
-    from (
-      select projection.id,
-        projection.version,
-        projection.embedding_ft operator(extensions.<=>) p_query_embedding
-          as semantic_distance
-      from private.portal_catalog_search_rows_v1 as projection
-      where p_kind = 'flow'
-        and projection.dataset_kind = 'flow'
-        and projection.embedding_ft is not null
-        and not exists (
-          select 1
-          from private.portal_catalog_search_rows_v1 as newer
-          where newer.dataset_kind = projection.dataset_kind
-            and newer.id = projection.id
-            and (
-              newer.version > projection.version
-              or (
-                newer.version = projection.version
-                and newer.modified_at > projection.modified_at
-              )
-              or (
-                newer.version = projection.version
-                and newer.modified_at = projection.modified_at
-                and newer.state_code > projection.state_code
-              )
-            )
-        )
-      order by projection.embedding_ft
-        operator(extensions.<=>) p_query_embedding
-      limit 200
-    ) as candidate
-    where candidate.semantic_distance is not null
-      and candidate.semantic_distance >= 0::double precision
-      and candidate.semantic_distance <= 0.5::double precision
+    select semantic.*
+    from private.portal_projection_semantic_flow_v1(
+      p_query_embedding
+    ) as semantic
+    where p_kind = 'flow'
   ), portal_semantic_candidates as materialized (
     select * from portal_semantic_process_pool
     union all
@@ -741,7 +764,7 @@ $function$;
 comment on function private.portal_projection_hybrid_search_v1_impl(
   text, text[], extensions.vector, jsonb, integer, text
 ) is
-  'Projection-backed portal-hybrid-rank-v1: exact literal lexical matches and latest-only semantic candidates use private PGroonga/HNSW indexes before fusion/card filters.';
+  'Portal-hybrid-rank-v1: projection PGroonga lexical candidates and exact latest-visible source-HNSW semantic candidates fuse before stored-card filters.';
 
 revoke all on function private.portal_projection_hybrid_search_v1_impl(
   text, text[], extensions.vector, jsonb, integer, text
@@ -755,6 +778,6 @@ revoke create on schema private from api_internal_executor;
 revoke api_internal_executor from postgres;
 
 comment on table private.portal_catalog_search_rows_v1 is
-  'Private synchronized, public-safe Portal card/document/vector projection. Browser and service roles have no direct ACL.';
+  'Private synchronized, public-safe Portal card/document projection. Source embeddings and HNSW indexes remain authoritative and are not duplicated.';
 
 commit;
