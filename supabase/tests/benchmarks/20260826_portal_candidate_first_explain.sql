@@ -113,10 +113,14 @@ select
   and :'writer_samples'::integer = 50
   and (
     (
+      :'benchmark_profile_name' = 'sparse-zero'
+      and
       :'process_vector_rows'::integer = 0
       and :'flow_vector_rows'::integer = 0
     )
     or (
+      :'benchmark_profile_name' = 'sparse-199'
+      and
       :'process_vector_rows'::integer = 199
       and :'flow_vector_rows'::integer = 199
     )
@@ -1354,7 +1358,8 @@ where (:'process_rows'::integer >= 10000
              'flow_semantic_candidate_path'
            )
            and (
-             plan_text ~ 'temp (read|written)=[1-9]'
+             plan_text ~ 'temp read=[1-9]'
+             or plan_text ~ 'temp (read=[0-9]+ )?written=[1-9]'
              or plan_text ~ 'Disk:'
              or plan_text ~ 'external merge'
            )
@@ -1370,7 +1375,10 @@ select label,
     as flow_pgroonga,
   plan_text ~ 'processes_embedding_ft_hnsw_idx' as process_hnsw,
   plan_text ~ 'flows_embedding_ft_hnsw_idx' as flow_hnsw,
-  plan_text ~ 'temp (read|written)=[1-9]' as nonzero_temp,
+  (
+    plan_text ~ 'temp read=[1-9]'
+    or plan_text ~ 'temp (read=[0-9]+ )?written=[1-9]'
+  ) as nonzero_temp,
   plan_text ~ 'Disk:|external merge' as disk_sort
 from pg_temp.portal_benchmark_plans
 order by label;
