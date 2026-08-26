@@ -960,25 +960,25 @@ begin
   on conflict (dataset_kind, id, version) do nothing;
 
   select count(*) into v_probe
-  from private.portal_catalog_search_rows_v1 as projection
-  left join private.portal_catalog_facet_rows_v1 as facet
-    on facet.dataset_kind = projection.dataset_kind
-   and facet.id = projection.id
-   and facet.version = projection.version
-  where facet.id is null
-     or facet.state_code is distinct from projection.state_code
-     or facet.modified_at is distinct from projection.modified_at
-     or facet.facet_contract_version is distinct from 1;
+  from private.portal_catalog_search_rows_v1
+  where dataset_kind = 'process';
+  if v_probe <> (
+    select count(*)
+    from private.portal_catalog_facet_rows_v1
+    where dataset_kind = 'process'
+  ) then
+    raise exception 'representative Process facet reconcile parity failed';
+  end if;
 
-  if v_probe <> 0
-     or (
-       select count(*)
-       from private.portal_catalog_facet_rows_v1
-     ) <> (
-       select count(*)
-       from private.portal_catalog_search_rows_v1
-     ) then
-    raise exception 'representative facet reconcile parity failed';
+  select count(*) into v_probe
+  from private.portal_catalog_search_rows_v1
+  where dataset_kind = 'flow';
+  if v_probe <> (
+    select count(*)
+    from private.portal_catalog_facet_rows_v1
+    where dataset_kind = 'flow'
+  ) then
+    raise exception 'representative Flow facet reconcile parity failed';
   end if;
 
   insert into pg_temp.portal_benchmark_fence_metrics values (

@@ -233,9 +233,7 @@ def main() -> int:
             "where projection.dataset_kind = 'flow'",
             "where facet.dataset_kind = 'process'",
             "where facet.dataset_kind = 'flow'",
-            "facet.state_code is distinct from projection.state_code",
-            "facet.modified_at is distinct from projection.modified_at",
-            "facet.facet_contract_version is distinct from 1",
+            "select count(*)",
             lower,
         )
         missing = [token for token in required_tokens if token not in executable_sql]

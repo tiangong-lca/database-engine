@@ -32,7 +32,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: a9e0c5d
+lastReviewedCommit: c5f34b3
 lastReviewedNote: "Reviewed for dual Portal manifests, migration-equivalent reconcile timing, populated-upgrade evidence, and promotion proof."
 related:
   - ../../AGENTS.md

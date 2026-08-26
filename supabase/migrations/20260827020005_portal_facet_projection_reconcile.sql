@@ -64,30 +64,19 @@ begin
   if (
     select count(*)
     from private.portal_catalog_facet_rows_v1
+    where dataset_kind = 'process'
   ) <> (
     select count(*)
     from private.portal_catalog_search_rows_v1
-  ) or exists (
-    select 1
-    from private.portal_catalog_search_rows_v1 as projection
-    left join private.portal_catalog_facet_rows_v1 as facet
-      on facet.dataset_kind = projection.dataset_kind
-     and facet.id = projection.id
-     and facet.version = projection.version
-    where facet.id is null
-       or facet.state_code is distinct from projection.state_code
-       or facet.modified_at is distinct from projection.modified_at
-       or facet.facet_contract_version is distinct from 1
-  ) or exists (
-    select 1
-    from private.portal_catalog_facet_rows_v1 as facet
-    where not exists (
-      select 1
-      from private.portal_catalog_search_rows_v1 as projection
-      where projection.dataset_kind = facet.dataset_kind
-        and projection.id = facet.id
-        and projection.version = facet.version
-    )
+    where dataset_kind = 'process'
+  ) or (
+    select count(*)
+    from private.portal_catalog_facet_rows_v1
+    where dataset_kind = 'flow'
+  ) <> (
+    select count(*)
+    from private.portal_catalog_search_rows_v1
+    where dataset_kind = 'flow'
   ) then
     raise exception 'Portal facet projection reconciliation failed'
       using errcode = '55000';

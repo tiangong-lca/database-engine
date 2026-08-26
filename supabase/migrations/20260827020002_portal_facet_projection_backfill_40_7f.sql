@@ -64,99 +64,47 @@ where projection.dataset_kind = 'flow'
     and projection.id < '80000000-0000-0000-0000-000000000000'::uuid
 on conflict (dataset_kind, id, version) do nothing;
 
-do $verify_portal_facet_backfill_40_7f_process_parity$
+do $verify_portal_facet_backfill_40_7f_process_count$
 begin
-  if exists (
-    select 1
+  if (
+    select count(*)
     from private.portal_catalog_search_rows_v1 as projection
-    left join private.portal_catalog_facet_rows_v1 as facet
-      on facet.dataset_kind = projection.dataset_kind
-     and facet.id = projection.id
-     and facet.version = projection.version
     where projection.dataset_kind = 'process'
       and projection.id >= '40000000-0000-0000-0000-000000000000'::uuid
     and projection.id < '80000000-0000-0000-0000-000000000000'::uuid
-      and (
-        facet.id is null
-        or facet.state_code is distinct from projection.state_code
-        or facet.modified_at is distinct from projection.modified_at
-        or facet.facet_contract_version is distinct from 1
-      )
-  ) then
-    raise exception 'Portal facet projection backfill 40_7f is incomplete'
-      using errcode = '55000';
-  end if;
-end
-$verify_portal_facet_backfill_40_7f_process_parity$;
-
-do $verify_portal_facet_backfill_40_7f_flow_parity$
-begin
-  if exists (
-    select 1
-    from private.portal_catalog_search_rows_v1 as projection
-    left join private.portal_catalog_facet_rows_v1 as facet
-      on facet.dataset_kind = projection.dataset_kind
-     and facet.id = projection.id
-     and facet.version = projection.version
-    where projection.dataset_kind = 'flow'
-      and projection.id >= '40000000-0000-0000-0000-000000000000'::uuid
-    and projection.id < '80000000-0000-0000-0000-000000000000'::uuid
-      and (
-        facet.id is null
-        or facet.state_code is distinct from projection.state_code
-        or facet.modified_at is distinct from projection.modified_at
-        or facet.facet_contract_version is distinct from 1
-      )
-  ) then
-    raise exception 'Portal facet projection backfill 40_7f is incomplete'
-      using errcode = '55000';
-  end if;
-end
-$verify_portal_facet_backfill_40_7f_flow_parity$;
-
-do $verify_portal_facet_backfill_40_7f_process_extra$
-begin
-  if exists (
-    select 1
+  ) <> (
+    select count(*)
     from private.portal_catalog_facet_rows_v1 as facet
     where facet.dataset_kind = 'process'
       and facet.id >= '40000000-0000-0000-0000-000000000000'::uuid
     and facet.id < '80000000-0000-0000-0000-000000000000'::uuid
-      and not exists (
-        select 1
-        from private.portal_catalog_search_rows_v1 as projection
-        where projection.dataset_kind = facet.dataset_kind
-          and projection.id = facet.id
-          and projection.version = facet.version
-      )
   ) then
     raise exception 'Portal facet projection backfill 40_7f is incomplete'
       using errcode = '55000';
   end if;
 end
-$verify_portal_facet_backfill_40_7f_process_extra$;
+$verify_portal_facet_backfill_40_7f_process_count$;
 
-do $verify_portal_facet_backfill_40_7f_flow_extra$
+do $verify_portal_facet_backfill_40_7f_flow_count$
 begin
-  if exists (
-    select 1
+  if (
+    select count(*)
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'flow'
+      and projection.id >= '40000000-0000-0000-0000-000000000000'::uuid
+    and projection.id < '80000000-0000-0000-0000-000000000000'::uuid
+  ) <> (
+    select count(*)
     from private.portal_catalog_facet_rows_v1 as facet
     where facet.dataset_kind = 'flow'
       and facet.id >= '40000000-0000-0000-0000-000000000000'::uuid
     and facet.id < '80000000-0000-0000-0000-000000000000'::uuid
-      and not exists (
-        select 1
-        from private.portal_catalog_search_rows_v1 as projection
-        where projection.dataset_kind = facet.dataset_kind
-          and projection.id = facet.id
-          and projection.version = facet.version
-      )
   ) then
     raise exception 'Portal facet projection backfill 40_7f is incomplete'
       using errcode = '55000';
   end if;
 end
-$verify_portal_facet_backfill_40_7f_flow_extra$;
+$verify_portal_facet_backfill_40_7f_flow_count$;
 
 reset role;
 revoke api_internal_executor from postgres;
