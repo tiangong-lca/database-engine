@@ -78,7 +78,8 @@
       "description": "Trimmed/lowercase public-card filter. The database additionally enforces at most 1024 UTF-8 bytes after normalization.",
       "type": "string",
       "minLength": 1,
-      "maxLength": 128
+      "maxLength": 128,
+      "pattern": "^[^\\u0000-\\u001f\\u007f-\\u009f]+$"
     },
     "Filters": {
       "description": "Strict normalized public-card filters. Their canonical serialized UTF-8 representation is limited to 4096 bytes.",

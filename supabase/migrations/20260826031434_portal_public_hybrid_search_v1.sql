@@ -123,7 +123,12 @@ begin
     raise exception using errcode = '22023', message = 'invalid portal request';
   end if;
 
-  select pg_catalog.array_agg(lower(btrim(supplied.term)) order by supplied.ordinality)
+  select pg_catalog.array_agg(
+    pg_catalog.lower(
+      pg_catalog.btrim(supplied.term) collate pg_catalog."und-x-icu"
+    )
+    order by supplied.ordinality
+  )
   into v_terms
   from pg_catalog.unnest(p_query_terms) with ordinality as supplied(term, ordinality);
 
@@ -131,7 +136,14 @@ begin
   loop
     if pg_catalog.char_length(v_term) not between 1 and 512
        or pg_catalog.octet_length(v_term) > 2048
-       or v_term ~ '[[:cntrl:]]' then
+       or exists (
+         select 1
+         from pg_catalog.generate_series(1, pg_catalog.char_length(v_term)) as position(value)
+         where pg_catalog.ascii(pg_catalog.substr(v_term, position.value, 1))
+           between 0 and 31
+            or pg_catalog.ascii(pg_catalog.substr(v_term, position.value, 1))
+              between 127 and 159
+       ) then
       raise exception using errcode = '22023', message = 'invalid portal request';
     end if;
   end loop;
@@ -175,7 +187,24 @@ begin
   ) then
     raise exception using errcode = '22023', message = 'invalid portal request';
   end if;
-  v_filters := private.portal_normalize_filters_v1(p_filters);
+  select coalesce(
+    pg_catalog.jsonb_object_agg(
+      supplied.key,
+      case
+        when supplied.key in (
+          'accessLevel', 'geography', 'classification', 'processSubtype', 'source'
+        ) and pg_catalog.jsonb_typeof(supplied.value) = 'string'
+          then pg_catalog.to_jsonb(pg_catalog.lower(
+            pg_catalog.btrim(supplied.value #>> '{}') collate pg_catalog."und-x-icu"
+          ))
+        else supplied.value
+      end
+      order by supplied.key
+    ),
+    '{}'::jsonb
+  )
+  into v_filters
+  from pg_catalog.jsonb_each(p_filters) as supplied(key, value);
   if pg_catalog.octet_length(pg_catalog.convert_to(v_filters::text, 'UTF8')) > 4096
      or (p_kind = 'flow' and v_filters ? 'processSubtype')
      or (
@@ -195,6 +224,19 @@ begin
          pg_catalog.jsonb_typeof(v_filters -> v_key) <> 'string'
          or pg_catalog.char_length(v_filters ->> v_key) not between 1 and 128
          or pg_catalog.octet_length(v_filters ->> v_key) > 1024
+         or exists (
+           select 1
+           from pg_catalog.generate_series(
+             1,
+             pg_catalog.char_length(v_filters ->> v_key)
+           ) as position(value)
+           where pg_catalog.ascii(
+             pg_catalog.substr(v_filters ->> v_key, position.value, 1)
+           ) between 0 and 31
+              or pg_catalog.ascii(
+                pg_catalog.substr(v_filters ->> v_key, position.value, 1)
+              ) between 127 and 159
+         )
        ) then
       raise exception using errcode = '22023', message = 'invalid portal request';
     end if;
