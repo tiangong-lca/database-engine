@@ -1532,7 +1532,8 @@ where (:'process_rows'::integer >= 10000
              'flow_semantic_candidate_path'
            )
            and (
-             plan_text ~ 'temp read=[1-9]'
+             plan_text !~ 'Buffers: shared'
+             or plan_text ~ 'temp read=[1-9]'
              or plan_text ~ 'temp (read=[0-9]+ )?written=[1-9]'
              or plan_text ~ 'Disk:'
              or plan_text ~ 'external merge'
