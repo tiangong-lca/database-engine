@@ -1621,6 +1621,7 @@ begin
           'hnsw.max_scan_tuples=200000',
           'hnsw.scan_mem_multiplier=4',
           'enable_sort=off',
+          'jit=off',
           'row_security=on'
         ]::text[]
         and coalesce(routine.proacl::text, '')

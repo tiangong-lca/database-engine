@@ -660,6 +660,7 @@ set hnsw.ef_search = '1000'
 set hnsw.max_scan_tuples = '200000'
 set hnsw.scan_mem_multiplier = '4'
 set enable_sort = 'off'
+set jit = 'off'
 set row_security = 'on'
 as $function$
 declare
@@ -670,6 +671,8 @@ declare
   v_source_versions text[];
   v_source_distances double precision[];
   v_source_rows integer;
+  v_previous_work_mem text;
+  v_previous_enable_nestloop text;
 begin
   if p_query_embedding is null then
     raise exception using
@@ -818,53 +821,66 @@ begin
     return;
   end if;
 
-  return query
-  select eligible.id,
-    eligible.version,
-    eligible.semantic_distance
-  from (
-    select process.id,
-      process.version::text as version,
-      process.embedding_ft operator(extensions.<=>) p_query_embedding
-        as semantic_distance
-    from public.processes as process
-    where process.state_code in (100, 200)
-      and process.embedding_ft is not null
-      and exists (
-        select 1
-        from private.portal_catalog_search_rows_v1 as projection
-        where projection.dataset_kind = 'process'
-          and projection.id = process.id
-          and projection.version = process.version::text
-          and not exists (
-            select 1
-            from private.portal_catalog_search_rows_v1 as newer
-            where newer.dataset_kind = projection.dataset_kind
-              and newer.id = projection.id
-              and (
-                newer.version > projection.version
-                or (
-                  newer.version = projection.version
-                  and newer.modified_at > projection.modified_at
-                )
-                or (
-                  newer.version = projection.version
-                  and newer.modified_at = projection.modified_at
-                  and newer.state_code > projection.state_code
-                )
-              )
-          )
-        offset 0
-      )
-    offset 0
-  ) as eligible
-  where eligible.semantic_distance is not null
-    and eligible.semantic_distance >= 0::double precision
-    and eligible.semantic_distance <= 0.5::double precision
-  order by eligible.semantic_distance,
-    eligible.id,
-    eligible.version desc
-  limit 200;
+  v_previous_work_mem := pg_catalog.current_setting('work_mem');
+  v_previous_enable_nestloop := pg_catalog.current_setting('enable_nestloop');
+  begin
+    perform pg_catalog.set_config('work_mem', '32MB', true);
+    perform pg_catalog.set_config('enable_nestloop', 'off', true);
+
+    return query
+    with latest_keys as materialized (
+      select distinct on (projection.id)
+        projection.id,
+        projection.version
+      from private.portal_catalog_search_rows_v1 as projection
+      where projection.dataset_kind = 'process'
+      order by projection.id,
+        projection.version desc,
+        projection.modified_at desc,
+        projection.state_code desc
+    ), eligible as materialized (
+      select process.id,
+        process.version::text as version,
+        process.embedding_ft operator(extensions.<=>) p_query_embedding
+          as semantic_distance
+      from public.processes as process
+      join latest_keys as latest
+        on latest.id = process.id
+       and process.version = latest.version::character(9)
+      where process.state_code in (100, 200)
+        and process.embedding_ft is not null
+    )
+    select eligible.id,
+      eligible.version,
+      eligible.semantic_distance
+    from eligible
+    where eligible.semantic_distance is not null
+      and eligible.semantic_distance >= 0::double precision
+      and eligible.semantic_distance <= 0.5::double precision
+    order by eligible.semantic_distance,
+      eligible.id,
+      eligible.version desc
+    limit 200;
+
+    perform pg_catalog.set_config(
+      'enable_nestloop', v_previous_enable_nestloop, true
+    );
+    perform pg_catalog.set_config('work_mem', v_previous_work_mem, true);
+  exception
+    when query_canceled then
+      perform pg_catalog.set_config(
+        'enable_nestloop', v_previous_enable_nestloop, true
+      );
+      perform pg_catalog.set_config('work_mem', v_previous_work_mem, true);
+      raise;
+    when others then
+      perform pg_catalog.set_config(
+        'enable_nestloop', v_previous_enable_nestloop, true
+      );
+      perform pg_catalog.set_config('work_mem', v_previous_work_mem, true);
+      raise;
+  end;
+  return;
 end
 $function$;
 
@@ -888,6 +904,7 @@ set hnsw.ef_search = '1000'
 set hnsw.max_scan_tuples = '200000'
 set hnsw.scan_mem_multiplier = '4'
 set enable_sort = 'off'
+set jit = 'off'
 set row_security = 'on'
 as $function$
 declare
@@ -898,6 +915,8 @@ declare
   v_source_versions text[];
   v_source_distances double precision[];
   v_source_rows integer;
+  v_previous_work_mem text;
+  v_previous_enable_nestloop text;
 begin
   if p_query_embedding is null then
     raise exception using
@@ -1046,53 +1065,66 @@ begin
     return;
   end if;
 
-  return query
-  select eligible.id,
-    eligible.version,
-    eligible.semantic_distance
-  from (
-    select flow.id,
-      flow.version::text as version,
-      flow.embedding_ft operator(extensions.<=>) p_query_embedding
-        as semantic_distance
-    from public.flows as flow
-    where flow.state_code in (100, 200)
-      and flow.embedding_ft is not null
-      and exists (
-        select 1
-        from private.portal_catalog_search_rows_v1 as projection
-        where projection.dataset_kind = 'flow'
-          and projection.id = flow.id
-          and projection.version = flow.version::text
-          and not exists (
-            select 1
-            from private.portal_catalog_search_rows_v1 as newer
-            where newer.dataset_kind = projection.dataset_kind
-              and newer.id = projection.id
-              and (
-                newer.version > projection.version
-                or (
-                  newer.version = projection.version
-                  and newer.modified_at > projection.modified_at
-                )
-                or (
-                  newer.version = projection.version
-                  and newer.modified_at = projection.modified_at
-                  and newer.state_code > projection.state_code
-                )
-              )
-          )
-        offset 0
-      )
-    offset 0
-  ) as eligible
-  where eligible.semantic_distance is not null
-    and eligible.semantic_distance >= 0::double precision
-    and eligible.semantic_distance <= 0.5::double precision
-  order by eligible.semantic_distance,
-    eligible.id,
-    eligible.version desc
-  limit 200;
+  v_previous_work_mem := pg_catalog.current_setting('work_mem');
+  v_previous_enable_nestloop := pg_catalog.current_setting('enable_nestloop');
+  begin
+    perform pg_catalog.set_config('work_mem', '32MB', true);
+    perform pg_catalog.set_config('enable_nestloop', 'off', true);
+
+    return query
+    with latest_keys as materialized (
+      select distinct on (projection.id)
+        projection.id,
+        projection.version
+      from private.portal_catalog_search_rows_v1 as projection
+      where projection.dataset_kind = 'flow'
+      order by projection.id,
+        projection.version desc,
+        projection.modified_at desc,
+        projection.state_code desc
+    ), eligible as materialized (
+      select flow.id,
+        flow.version::text as version,
+        flow.embedding_ft operator(extensions.<=>) p_query_embedding
+          as semantic_distance
+      from public.flows as flow
+      join latest_keys as latest
+        on latest.id = flow.id
+       and flow.version = latest.version::character(9)
+      where flow.state_code in (100, 200)
+        and flow.embedding_ft is not null
+    )
+    select eligible.id,
+      eligible.version,
+      eligible.semantic_distance
+    from eligible
+    where eligible.semantic_distance is not null
+      and eligible.semantic_distance >= 0::double precision
+      and eligible.semantic_distance <= 0.5::double precision
+    order by eligible.semantic_distance,
+      eligible.id,
+      eligible.version desc
+    limit 200;
+
+    perform pg_catalog.set_config(
+      'enable_nestloop', v_previous_enable_nestloop, true
+    );
+    perform pg_catalog.set_config('work_mem', v_previous_work_mem, true);
+  exception
+    when query_canceled then
+      perform pg_catalog.set_config(
+        'enable_nestloop', v_previous_enable_nestloop, true
+      );
+      perform pg_catalog.set_config('work_mem', v_previous_work_mem, true);
+      raise;
+    when others then
+      perform pg_catalog.set_config(
+        'enable_nestloop', v_previous_enable_nestloop, true
+      );
+      perform pg_catalog.set_config('work_mem', v_previous_work_mem, true);
+      raise;
+  end;
+  return;
 end
 $function$;
 

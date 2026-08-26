@@ -524,6 +524,7 @@ select extensions.ok(
           'hnsw.max_scan_tuples=200000',
           'hnsw.scan_mem_multiplier=4',
           'enable_sort=off',
+          'jit=off',
           'row_security=on'
         ]::text[]
         and routine.prosrc ~ 'portal_catalog_search_rows_v1'
@@ -1810,14 +1811,14 @@ select extensions.is(
         'from pg_catalog.generate_subscripts(v_ids, 1)'
       ) < pg_catalog.strpos(
         routine.prosrc,
-        E') as eligible\n  where eligible.semantic_distance'
+        'with latest_keys as materialized'
       )
       and pg_catalog.strpos(
         routine.prosrc,
         E'    return;\n  end if;'
       ) < pg_catalog.strpos(
         routine.prosrc,
-        E') as eligible\n  where eligible.semantic_distance'
+        'with latest_keys as materialized'
       )
   ),
   2::bigint,
@@ -1953,6 +1954,9 @@ grant insert, select on pg_temp.portal_semantic_streaming_actual,
   pg_temp.portal_semantic_streaming_exact
 to api_internal_executor;
 
+set local work_mem = '5MB';
+set local enable_nestloop = on;
+
 grant api_internal_executor to postgres;
 set local role api_internal_executor;
 
@@ -2071,6 +2075,12 @@ where bounded.row_position <= 200;
 
 reset role;
 revoke api_internal_executor from postgres;
+
+select extensions.ok(
+  pg_catalog.current_setting('work_mem') = '5MB'
+  and pg_catalog.current_setting('enable_nestloop') = 'on',
+  'streaming exact helpers restore caller work_mem and join planner settings'
+);
 
 select extensions.is(
   (
