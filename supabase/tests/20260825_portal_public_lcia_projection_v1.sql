@@ -458,6 +458,8 @@ values
   ('process_open_b', '52710000-0000-4000-8000-000000000102'),
   ('process_state_200', '52710000-0000-4000-8000-000000000103'),
   ('process_draft', '52710000-0000-4000-8000-000000000104'),
+  ('process_unrelated', '52710000-0000-4000-8000-000000000105'),
+  ('flow_public', '52710000-0000-4000-8000-000000000106'),
   ('method_a', '52710000-0000-4000-8000-000000000201'),
   ('method_b', '52710000-0000-4000-8000-000000000202'),
   ('impact_a', '52710000-0000-4000-8000-000000000301'),
@@ -551,12 +553,28 @@ values
     '52710000-0000-4000-8000-000000000001', 100
   ),
   (
+    '52710000-0000-4000-8000-000000000103', '01.00.000',
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"@xml:lang":"en","#text":"State 200 process"}]}},"geography":{"locationOfOperationSupplyOrProduction":{"@location":"CN"}},"time":{"common:referenceYear":"2023"}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::jsonb,
+    '52710000-0000-4000-8000-000000000001', 200
+  ),
+  (
     '52710000-0000-4000-8000-000000000104', '01.00.000',
     '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"@xml:lang":"en","#text":"Draft process"}]}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}}'::jsonb,
     '52710000-0000-4000-8000-000000000001', 20
   );
 
 alter table public.processes enable trigger user;
+
+alter table public.flows disable trigger user;
+insert into public.flows (id, version, json, user_id, state_code)
+values (
+  '52710000-0000-4000-8000-000000000106',
+  '01.00.000',
+  '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":[{"@xml:lang":"en","#text":"Public flow without LCIA"}]},"typeOfDataSet":"Elementary flow"}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::jsonb,
+  '52710000-0000-4000-8000-000000000001',
+  100
+);
+alter table public.flows enable trigger user;
 
 -- Build one valid, frozen certificate directly from the existing authoritative
 -- relations.  The fixture deliberately uses ready retained artifacts and a
@@ -2479,6 +2497,20 @@ select extensions.is(
   'prepared rows are invisible before an exact publication binding is finalized'
 );
 
+select extensions.ok(
+  api.portal_get_dataset_v1(
+    'process',
+    '52710000-0000-4000-8000-000000000101',
+    '01.00.000'
+  ) #>> '{capabilities,lciaVisible}' = 'false'
+  and api.portal_get_dataset_v1(
+    'process',
+    '52710000-0000-4000-8000-000000000101',
+    '01.00.000'
+  ) -> 'publication' = 'null'::jsonb,
+  'prepared projection evidence does not overstate catalog LCIA visibility'
+);
+
 reset role;
 
 -- Actor preparation is a read-only manager gate over the exact current
@@ -2769,10 +2801,180 @@ select extensions.ok(
 
 reset role;
 
+-- Add an otherwise-open Process only after the V3 package/publication set has
+-- been frozen.  It is deliberately absent from the prepared projection and
+-- proves that open license alone cannot synthesize LCIA capability.
+alter table public.processes disable trigger user;
+insert into public.processes (id, version, json, user_id, state_code)
+values (
+  '52710000-0000-4000-8000-000000000105', '01.00.000',
+  '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"@xml:lang":"en","#text":"Open process unrelated"}]}},"geography":{"locationOfOperationSupplyOrProduction":{"@location":"CN"}},"time":{"common:referenceYear":"2022"}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::jsonb,
+  '52710000-0000-4000-8000-000000000001', 100
+);
+
+insert into public.processes (id, version, json, user_id, state_code)
+select
+  (
+    '52719999-0000-4000-8000-' ||
+    lpad(fixture.ordinal::text, 12, '0')
+  )::uuid,
+  '01.00.000',
+  '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":[{"@xml:lang":"en","#text":"Open process benchmark"}]}},"geography":{"locationOfOperationSupplyOrProduction":{"@location":"CN"}},"time":{"common:referenceYear":"2022"}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::jsonb,
+  '52710000-0000-4000-8000-000000000001',
+  100
+from generate_series(1, 47) as fixture(ordinal);
+alter table public.processes enable trigger user;
+
+select extensions.ok(
+  private.portal_current_lcia_publication_for_process_v1(
+    '52710000-0000-4000-8000-000000000101', '01.00.000'
+  ) is not null,
+  'the private resolver finds the exact current finalized Process publication'
+);
+
 grant select on portal_lcia_ids to anon;
 set local role anon;
 select pg_catalog.set_config('request.jwt.claim.role', 'anon', true);
 select pg_catalog.set_config('request.jwt.claims', '{"role":"anon"}', true);
+
+create temporary table portal_lcia_catalog_pages (
+  label text primary key,
+  response jsonb
+) on commit drop;
+
+insert into portal_lcia_catalog_pages (label, response)
+values
+  (
+    'detail_open_a',
+    api.portal_get_dataset_v1(
+      'process', '52710000-0000-4000-8000-000000000101', '01.00.000'
+    )
+  ),
+  (
+    'detail_unrelated',
+    api.portal_get_dataset_v1(
+      'process', '52710000-0000-4000-8000-000000000105', '01.00.000'
+    )
+  ),
+  (
+    'detail_state_200',
+    api.portal_get_dataset_v1(
+      'process', '52710000-0000-4000-8000-000000000103', '01.00.000'
+    )
+  ),
+  (
+    'detail_flow',
+    api.portal_get_dataset_v1(
+      'flow', '52710000-0000-4000-8000-000000000106', '01.00.000'
+    )
+  ),
+  (
+    'search_processes',
+    api.portal_search_processes_v1(
+      'open process', '{}'::jsonb, 'relevance', null, 50
+    )
+  ),
+  (
+    'versions_open_a',
+    api.portal_list_versions_v1(
+      'process', '52710000-0000-4000-8000-000000000101', null, 50
+    )
+  );
+
+select extensions.ok(
+  (
+    select response #>> '{capabilities,lciaVisible}' = 'true'
+      and response #>> '{publication,publicationId}' =
+            (select id::text from portal_lcia_ids where label = 'publication')
+      and response #>> '{publication,packageId}' =
+            (select id::text from portal_lcia_ids where label = 'package')
+      and response #>> '{publication,packageVersion}' =
+            'portal-lcia-package-v3'
+      and response #>> '{publication,publishedAt}' is not null
+      and jsonb_array_length(response #> '{publication,lciaMethods}') = 2
+      and (
+        select count(distinct (method.value->>'id', method.value->>'version'))
+        from jsonb_array_elements(
+          response #> '{publication,lciaMethods}'
+        ) as method(value)
+      ) = 2
+    from portal_lcia_catalog_pages where label = 'detail_open_a'
+  ),
+  'exact open Process detail carries current publication and both distinct LCIA Methods'
+);
+
+select extensions.ok(
+  (
+    select count(*) = 2
+    from portal_lcia_catalog_pages as page
+    cross join lateral jsonb_array_elements(page.response->'items') as item(value)
+    where page.label = 'search_processes'
+      and item.value #>> '{key,id}' in (
+        '52710000-0000-4000-8000-000000000101',
+        '52710000-0000-4000-8000-000000000102'
+      )
+      and item.value #>> '{capabilities,lciaVisible}' = 'true'
+  )
+  and (
+    select count(*) = 1
+    from portal_lcia_catalog_pages as page
+    cross join lateral jsonb_array_elements(page.response->'items') as item(value)
+    where page.label = 'search_processes'
+      and item.value #>> '{key,id}' =
+            '52710000-0000-4000-8000-000000000105'
+      and item.value #>> '{capabilities,lciaVisible}' = 'false'
+  ),
+  'Process search decorates only exact members of the current projection'
+);
+
+select extensions.ok(
+  (
+    select response #>> '{items,0,key,id}' =
+             '52710000-0000-4000-8000-000000000101'
+      and response #>> '{items,0,capabilities,lciaVisible}' = 'true'
+      and response -> 'nextCursor' = 'null'::jsonb
+    from portal_lcia_catalog_pages where label = 'versions_open_a'
+  ),
+  'Versions preserves the exact item/cursor contract while exposing LCIA visibility'
+);
+
+select extensions.ok(
+  (
+    select response->>'accessLevel' = 'open'
+      and response #>> '{capabilities,lciaVisible}' = 'false'
+      and response->'publication' = 'null'::jsonb
+    from portal_lcia_catalog_pages where label = 'detail_unrelated'
+  ),
+  'an unrelated open Process remains publication-null and LCIA-invisible'
+);
+
+select extensions.ok(
+  (
+    select response->>'accessLevel' = 'metadata_only'
+      and response #>> '{capabilities,lciaVisible}' = 'false'
+      and response->'publication' = 'null'::jsonb
+    from portal_lcia_catalog_pages where label = 'detail_state_200'
+  ),
+  'state-200 Process metadata never inherits LCIA publication capability'
+);
+
+select extensions.ok(
+  (
+    select response #>> '{key,kind}' = 'flow'
+      and response #>> '{capabilities,lciaVisible}' = 'false'
+      and response->'publication' = 'null'::jsonb
+    from portal_lcia_catalog_pages where label = 'detail_flow'
+  ),
+  'Flow detail remains LCIA-invisible and publication-null'
+);
+
+-- Fifty matching Process items exercise the bounded decorator path.  The
+-- emitted plan/timing is isolated-local evidence only; persistent Dev must
+-- repeat this with representative cardinality before any index decision.
+explain (analyze, buffers, format text)
+select api.portal_search_processes_v1(
+  'open process', '{}'::jsonb, 'relevance', null, 50
+);
 
 create temporary table portal_lcia_public_pages (
   label text primary key,
@@ -3221,7 +3423,41 @@ select extensions.is(
   'revoked projection publication is immediately unavailable to anon'
 );
 
+select extensions.ok(
+  api.portal_get_dataset_v1(
+    'process', '52710000-0000-4000-8000-000000000101', '01.00.000'
+  ) #>> '{capabilities,lciaVisible}' = 'false'
+  and api.portal_get_dataset_v1(
+    'process', '52710000-0000-4000-8000-000000000101', '01.00.000'
+  ) -> 'publication' = 'null'::jsonb
+  and (
+    select item.value #>> '{capabilities,lciaVisible}' = 'false'
+    from jsonb_array_elements(
+      api.portal_search_processes_v1(
+        'open process a', '{}'::jsonb, 'relevance', null, 50
+      ) -> 'items'
+    ) as item(value)
+    where item.value #>> '{key,id}' =
+          '52710000-0000-4000-8000-000000000101'
+  )
+  and api.portal_list_versions_v1(
+    'process', '52710000-0000-4000-8000-000000000101', null, 50
+  ) #>> '{items,0,capabilities,lciaVisible}' = 'false',
+  'revocation immediately removes LCIA capability from detail, search, and versions'
+);
+
 reset role;
+select extensions.ok(
+  (
+    select revoked_at is not null
+      and pg_catalog.clock_timestamp() <= revoked_at + interval '60 seconds'
+    from private.portal_lcia_projection_publications
+    where lcia_result_publication_id =
+          (select id from portal_lcia_ids where label = 'publication')
+  ),
+  'catalog visibility observes revocation inside the sixty-second SLA'
+);
+
 select extensions.is(
   (select count(*) from private.portal_lcia_projection_values
    where projection_id = (select id from portal_lcia_ids where label = 'stage')),
