@@ -455,6 +455,14 @@ grant execute on function pg_temp.portal_hybrid_has_forbidden_key(jsonb)
 -- public row and embedding, never on a trigger side effect or legacy RPC.
 alter table public.processes disable trigger user;
 alter table public.flows disable trigger user;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.processes
+  enable trigger portal_catalog_projection_embedding_sync_v1;
+alter table public.flows
+  enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.flows
+  enable trigger portal_catalog_projection_embedding_sync_v1;
 
 insert into public.processes (
   id,

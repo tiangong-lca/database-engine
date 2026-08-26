@@ -95,30 +95,30 @@ select extensions.ok(
       and routine.proconfig @> array['search_path=""']::text[]
     from pg_catalog.pg_proc as routine
     where routine.oid = pg_catalog.to_regprocedure(
-      'private.catalog_portal_facts_v1(text,integer,jsonb,jsonb,text)'
+      'private.catalog_portal_card_facts_v1(jsonb,jsonb,text)'
     )
   )
   and pg_catalog.has_function_privilege(
     'api_internal_executor',
-    'private.catalog_portal_facts_v1(text,integer,jsonb,jsonb,text)',
+    'private.catalog_portal_card_facts_v1(jsonb,jsonb,text)',
     'EXECUTE'
   )
   and not pg_catalog.has_function_privilege(
     'anon',
-    'private.catalog_portal_facts_v1(text,integer,jsonb,jsonb,text)',
+    'private.catalog_portal_card_facts_v1(jsonb,jsonb,text)',
     'EXECUTE'
   )
   and not pg_catalog.has_function_privilege(
     'authenticated',
-    'private.catalog_portal_facts_v1(text,integer,jsonb,jsonb,text)',
+    'private.catalog_portal_card_facts_v1(jsonb,jsonb,text)',
     'EXECUTE'
   )
   and not pg_catalog.has_function_privilege(
     'service_role',
-    'private.catalog_portal_facts_v1(text,integer,jsonb,jsonb,text)',
+    'private.catalog_portal_card_facts_v1(jsonb,jsonb,text)',
     'EXECUTE'
   ),
-  'exact pre-limit facts remain an immutable owner-to-internal-only helper'
+  'stored-card score/filter facts remain an immutable owner-to-internal-only helper'
 );
 
 select extensions.is(
@@ -998,23 +998,20 @@ select extensions.ok(
       and facts.value -> 'processSubtype' is not distinct from card.value -> 'processSubtype'
       and facts.value -> 'source' is not distinct from card.value -> 'source'
       and facts.value -> 'casNumber' is not distinct from card.value -> 'casNumber'
-    from public.processes as process
+    from private.portal_catalog_search_rows_v1 as projection
     cross join lateral (
-      select private.catalog_portal_facts_v1(
-        'process',
-        process.state_code,
-        process.json,
+      select private.catalog_portal_card_facts_v1(
+        projection.card,
         '{"accessLevel":"open","geography":"cn","classification":"portal","referenceYearFrom":0,"referenceYearTo":9999,"processSubtype":"unit","source":"provider"}'::jsonb,
         'candidate public'
       ) as value
     ) as facts
     cross join lateral (
-      select private.portal_catalog_card_v1(
-        'process', process.state_code, process.json
-      ) as value
+      select projection.card as value
     ) as card
-    where process.id = '53100000-0000-4000-8000-000000000102'
-      and process.version = '01.00.000'
+    where projection.dataset_kind = 'process'
+      and projection.id = '53100000-0000-4000-8000-000000000102'
+      and projection.version = '01.00.000'
   ),
   'Process pre-limit score/filter facts are exact projections of the reviewed card'
 );
@@ -1054,23 +1051,20 @@ select extensions.ok(
       and facts.value -> 'processSubtype' is not distinct from card.value -> 'processSubtype'
       and facts.value -> 'source' is not distinct from card.value -> 'source'
       and facts.value -> 'casNumber' is not distinct from card.value -> 'casNumber'
-    from public.flows as flow
+    from private.portal_catalog_search_rows_v1 as projection
     cross join lateral (
-      select private.catalog_portal_facts_v1(
-        'flow',
-        flow.state_code,
-        flow.json,
+      select private.catalog_portal_card_facts_v1(
+        projection.card,
         '{"accessLevel":"open","geography":"cn","classification":"portal","referenceYearFrom":0,"referenceYearTo":9999,"source":"provider"}'::jsonb,
         'candidate public'
       ) as value
     ) as facts
     cross join lateral (
-      select private.portal_catalog_card_v1(
-        'flow', flow.state_code, flow.json
-      ) as value
+      select projection.card as value
     ) as card
-    where flow.id = '53100000-0000-4000-8000-000000000202'
-      and flow.version = '01.00.000'
+    where projection.dataset_kind = 'flow'
+      and projection.id = '53100000-0000-4000-8000-000000000202'
+      and projection.version = '01.00.000'
   ),
   'Flow pre-limit score/filter facts are exact projections of the reviewed card'
 );

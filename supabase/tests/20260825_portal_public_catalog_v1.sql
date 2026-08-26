@@ -1208,6 +1208,14 @@ $$;
 -- rollback-only transaction. Portal reads must not depend on trigger products.
 alter table public.processes disable trigger user;
 alter table public.flows disable trigger user;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.processes
+  enable trigger portal_catalog_projection_embedding_sync_v1;
+alter table public.flows
+  enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.flows
+  enable trigger portal_catalog_projection_embedding_sync_v1;
 alter table public.flowproperties disable trigger user;
 alter table public.unitgroups disable trigger user;
 
