@@ -1135,7 +1135,7 @@ set local enable_seqscan = on;
 set local enable_indexscan = on;
 set local enable_indexonlyscan = on;
 set local enable_bitmapscan = on;
-set local enable_sort = off;
+set local enable_sort = on;
 set local plan_cache_mode = force_custom_plan;
 set local jit = off;
 set local row_security = on;
@@ -1188,7 +1188,10 @@ set local enable_seqscan = on;
 set local enable_indexscan = on;
 set local enable_indexonlyscan = on;
 set local enable_bitmapscan = on;
-set local enable_sort = on;
+set local enable_sort = off;
+set local plan_cache_mode = force_custom_plan;
+set local jit = off;
+set local row_security = on;
 
 \qecho profile=flow-source-embedding-eligibility
 explain (analyze, buffers, settings, wal, summary, format json)
