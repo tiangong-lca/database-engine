@@ -118,6 +118,7 @@ parallel restricted
 security definer
 set search_path = ''
 set statement_timeout = '8s'
+set work_mem = '32MB'
 set plan_cache_mode = 'force_custom_plan'
 set row_security = 'on'
 as $function$
@@ -392,6 +393,7 @@ begin
         and coalesce(routine.proconfig, '{}'::text[]) @> array[
           'search_path=""',
           'statement_timeout=8s',
+          'work_mem=32MB',
           'plan_cache_mode=force_custom_plan',
           'row_security=on'
         ]::text[]

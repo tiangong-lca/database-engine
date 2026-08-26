@@ -1794,10 +1794,15 @@ where (:'process_rows'::integer >= 10000
        and (
          plan_text !~ 'Buffers: shared'
          or plan_text !~ 'Execution Time: [0-9]'
-         or plan_text ~ 'temp read=[1-9]'
-         or plan_text ~ 'temp (read=[0-9]+ )?written=[1-9]'
          or plan_text ~ 'Disk:'
          or plan_text ~ 'external merge'
+         or (
+           label like '%_empty_plan'
+           and (
+             plan_text ~ 'temp read=[1-9]'
+             or plan_text ~ 'temp (read=[0-9]+ )?written=[1-9]'
+           )
+         )
          or coalesce((
            pg_catalog.regexp_match(
              plan_text,

@@ -263,6 +263,7 @@ def main() -> int:
             "catalog_portal_facets_empty_v1_impl",
             "catalog_portal_facets_v1_impl",
             "portal_catalog_facet_rows_v1",
+            "set work_mem = '32mb'",
             "portal facet cutover contract drifted",
         ),
     }.items():
