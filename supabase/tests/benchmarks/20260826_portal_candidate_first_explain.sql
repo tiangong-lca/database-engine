@@ -1194,6 +1194,25 @@ values
     pg_temp.portal_raw_ann_count('flow', pg_temp.portal_bench_vector(1))
   );
 
+\if :benchmark_semantic_plan_profile
+select pg_temp.capture_portal_benchmark_plan(
+  'process_raw_ann',
+  $query$
+    select pg_temp.portal_raw_ann_count(
+      'process', pg_temp.portal_bench_vector(1)
+    )
+  $query$
+);
+select pg_temp.capture_portal_benchmark_plan(
+  'flow_raw_ann',
+  $query$
+    select pg_temp.portal_raw_ann_count(
+      'flow', pg_temp.portal_bench_vector(1)
+    )
+  $query$
+);
+\endif
+
 \qecho profile=process-source-hnsw-latest-public
 explain (analyze, buffers, settings, wal, summary, format json)
 select process.id
@@ -1525,7 +1544,7 @@ where (:'process_rows'::integer >= 10000
     and :'flow_rows'::integer >= 100000)
   and (
     (select count(*) from pg_temp.portal_benchmark_plans) <> case
-      when :'benchmark_semantic_plan_profile'::boolean then 6 else 4
+      when :'benchmark_semantic_plan_profile'::boolean then 8 else 4
     end
    or not coalesce((
      select plan_text ~ 'portal_catalog_search_process_document_v1_pgroonga'
@@ -1565,6 +1584,8 @@ where (:'process_rows'::integer >= 10000
          select 1
          from pg_temp.portal_benchmark_plans
           where label in (
+             'process_raw_ann',
+             'flow_raw_ann',
              'process_semantic_candidate_path',
              'flow_semantic_candidate_path'
            )
@@ -1656,6 +1677,56 @@ where :'benchmark_semantic_plan_profile'::boolean
 insert into pg_temp.portal_benchmark_failures (
   label, sqlstate, message, elapsed_ms
 )
+with phase_buffers as (
+  select case
+      when label like 'process_%' then 'process'
+      else 'flow'
+    end as dataset_kind,
+    coalesce(
+      (pg_catalog.regexp_match(plan_text, 'shared hit=([0-9]+)'))[1]::bigint,
+      0
+    ) as hit_blocks,
+    coalesce(
+      (pg_catalog.regexp_match(
+        plan_text,
+        'shared[^\n]*read=([0-9]+)'
+      ))[1]::bigint,
+      0
+    ) as read_blocks
+  from pg_temp.portal_benchmark_plans
+  where label in (
+    'process_raw_ann',
+    'process_semantic_candidate_path',
+    'flow_raw_ann',
+    'flow_semantic_candidate_path'
+  )
+), combined as (
+  select dataset_kind,
+    count(*) as measured_phases,
+    sum(hit_blocks) as hit_blocks,
+    sum(read_blocks) as read_blocks
+  from phase_buffers
+  group by dataset_kind
+)
+select
+  'semantic_combined_buffer_guard',
+  'P0001',
+  'formal ANN plus exact phases exceeded combined buffer ceilings',
+  0
+where :'benchmark_semantic_plan_profile'::boolean
+  and (
+    (select count(*) from combined where measured_phases = 2) <> 2
+    or exists (
+      select 1
+      from combined
+      where hit_blocks + read_blocks > 750000
+         or read_blocks > 250000
+    )
+  );
+
+insert into pg_temp.portal_benchmark_failures (
+  label, sqlstate, message, elapsed_ms
+)
 with semantic_times as (
   select label,
     (
@@ -1701,9 +1772,9 @@ with phase_times as (
     )[1]::numeric as execution_ms
   from pg_temp.portal_benchmark_plans
   where label in (
-    'process_source_hnsw',
+    'process_raw_ann',
     'process_semantic_candidate_path',
-    'flow_source_hnsw',
+    'flow_raw_ann',
     'flow_semantic_candidate_path'
   )
 ), combined as (
