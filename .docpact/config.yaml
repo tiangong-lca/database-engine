@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-26"
-lastReviewedCommit: "85059aa1123d8754450d4fabdcdd9a20476eea71"
-lastReviewedNote: "Reviewed after the additive Portal LCIA catalog visibility migration, pgTAP evidence, and exact-local workspace refresh; routing and deployment ownership are unchanged."
+lastReviewedCommit: "3a59878d82adb1291d82feec55038c28cffc139a"
+lastReviewedNote: "Reviewed after exact Portal LCIA package-ready replay recovery and the targeted persistent-Dev PostgREST runtime refresh; routing and ownership are unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

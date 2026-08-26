@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 85059aa1123d8754450d4fabdcdd9a20476eea71
-lastReviewedNote: "已在 Issue #527 把 Portal LCIA 目录可见性 pgTAP 加入部署前合同后复核；持久化 Dev 的唯一 migration 部署者与 Edge Function 交接不变。"
+lastReviewedCommit: 3a59878d82adb1291d82feec55038c28cffc139a
+lastReviewedNote: "已在持久化 Dev 增加用于恢复 PostgREST 旧运行态的准确三字段 PATCH 后复核；唯一 migration 部署者与 Edge Function 交接不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -75,7 +75,7 @@ related:
 - 把 `supabase/migrations/` 中已提交的文件视为 production、`dev` 和 preview 分支共同遵循的 schema 真相源。
 - 分支差异放在 `supabase/config.toml` 的 `[remotes.<branch>]` 中。
 - 不要为不同 Git 分支复制多套 `supabase/` 目录。
-- 把 `.github/workflows/supabase-dev.yml` 作为持久化 `dev` 的唯一 migration 部署者；它可以执行 `supabase link` 和准确一次 `supabase db push --include-all`，但不得部署/删除 Edge Functions 或推送项目配置。
+- 把 `.github/workflows/supabase-dev.yml` 作为持久化 `dev` 的唯一 migration 部署者；它可以执行 `supabase link`、准确一次 `supabase db push --include-all`，以及一次仅包含 `db_schema`、`db_extra_search_path`、`max_rows` 的 Management API PATCH，让运行中的 PostgREST 与 checked-in 合同一致；但不得部署/删除 Edge Functions、执行 `supabase config push` 或修改其他项目设置。
 - 数据库 workflow 成功后，通过 `tiangong-lca-edge-functions` 部署并验证持久化 Dev 所需的 Functions。Function 源码、函数选择、部署命令和运行时验证仍由 Edge 仓负责。
 - 不要为 Git `main` 增加 checked-in 的 GitHub Actions 生产部署流程；生产项目由绑定到本仓的 Supabase GitHub integration 自动迁移。
 - 不要先手改远端数据库再回头补 migration。
@@ -143,8 +143,10 @@ related:
 4. preview branch 只用于 PR 级别验证；它不是持久化 Supabase `dev` 分支。
 5. 合并后，`.github/workflows/supabase-dev.yml` 先完成本地空库重建；本地合同通过后，绑定配置的持久化 Dev 项目并执行 `supabase db push --include-all`。
 6. workflow 从当前 checkout 的 migration 目录推导期望 head，再等待 service-only readback 报告该准确 head；workflow 中不手工固定 migration head。
-7. workflow 通过 Management API 回读 `public,api,graphql_public` 与
-   `public,api,extensions`，并验证托管 Data API 边界；`db push` 后的这些检查均为只读。
+7. workflow 在第一次托管 RPC 探测前，通过一次定向 Management API PATCH
+   应用且只应用 `db_schema=public,api,graphql_public`、
+   `db_extra_search_path=public,api,extensions` 与 `max_rows=1000`；随后回读
+   这三个值并验证托管 Data API 边界，其余检查均为只读。
 8. 数据库 workflow 成功后，通过 `tiangong-lca-edge-functions` 部署并验证目标 Dev Functions。
 
 `--include-all` 表示所有尚未出现在远端 migration history 中的已提交 migration
@@ -237,10 +239,12 @@ Git `main` 由 Supabase GitHub integration 处理。运维人员仍可在本地�
 - 对 Git `dev` 的 push 由 `.github/workflows/supabase-dev.yml` 部署。
 - workflow 先在本地重建并验证完整 migration history；Hosted job 依赖该结果，
   随后绑定配置的 Dev 项目，并准确执行一次 `supabase db push --include-all`。
-- 部署后从当前 checkout 推导期望 head，并在 exact-head readback、Management API
-  回读或 REST profile 探测不符合合同时失败。
-- workflow 只负责数据库 migration，不得执行 `supabase functions deploy`、
-  `supabase functions delete` 或 `supabase config push`。
+- 部署后先应用准确的三字段 PostgREST 运行时 PATCH，再从当前 checkout 推导
+  期望 head；exact-head readback、Management API 回读或 REST profile 探测任一
+  不符合合同时都失败。
+- workflow 只负责数据库 migration 与这一次窄范围 PostgREST 运行时刷新，不得执行
+  `supabase functions deploy`、`supabase functions delete`、`supabase config push`
+  或其他 Management API 修改。
 - 数据库 workflow 成功后，使用 Edge 仓当前的 Dev 部署与验证流程；不要在本仓复制其函数清单或部署参数。
 
 ### 生产 `main` 部署

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 85059aa1123d8754450d4fabdcdd9a20476eea71
-lastReviewedNote: "已在 Issue #527 Portal LCIA 目录可见性 exact-local 重建后复核；五 schema 命令与脚本行为不变。"
+lastReviewedCommit: 3a59878d82adb1291d82feec55038c28cffc139a
+lastReviewedNote: "已在持久化 Dev workflow 合同加入准确三字段 PostgREST 运行时 PATCH 后复核；schema-workspace helper 行为不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -96,8 +96,9 @@ python scripts/test_resolve_migration_head.py
 
 除非持久化 Dev workflow 在绑定目标项目后准确执行一次
 `supabase db push --include-all`，否则立即失败。该契约同时拒绝 Functions
-deploy/delete、`config push`、Management API 写操作和手工固定 migration head，
-并要求 Hosted job 使用同一 checkout 完成 exact-head readback。
+deploy/delete、`config push`、手工固定 migration head、多个 PostgREST PATCH，
+以及任何不完全等于 `db_schema`、`db_extra_search_path`、`max_rows` 三字段合同的
+PATCH body；并要求该定向 PATCH 在同一 checkout 的 exact-head 与 profile 探测前完成。
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py

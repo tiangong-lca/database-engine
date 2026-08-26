@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 85059aa1123d8754450d4fabdcdd9a20476eea71
-lastReviewedNote: "Reviewed after binding Portal catalog LCIA visibility and Detail publication context to the existing anonymous publication predicate; repository shape is unchanged."
+lastReviewedCommit: 3a59878d82adb1291d82feec55038c28cffc139a
+lastReviewedNote: "Reviewed after adding exact Portal LCIA package-ready replay recovery and the targeted persistent-Dev PostgREST runtime refresh; repository shape is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -82,7 +82,7 @@ Portal capability policy is fail closed. State 200 and unknown, missing, exclusi
 
 Process Search, exact Detail, and Versions do not infer LCIA availability from state or metadata alone. A constrained decorator resolves the exact Process against the same current, finalized, non-revoked projection predicate used by the anonymous numeric reader. Search and Versions change only `capabilities.lciaVisible` while preserving strict item order and cursor; Detail also returns the locator-free publication/package/version/time and distinct sorted Method identities already allowed by `portal.public-dataset.v1`. Flow, state 200, unrelated, unprepared, unpublished, or revoked evidence remains `false`/`null`. One narrow executor-owned boolean definer reuses the existing license capability dependency graph without granting those helpers or raw tables to browser roles or postgres.
 
-Package publication is a separate authenticated-manager plan/command pair. The read-only prepare result freezes the V3 package, projection axes/counts/hashes, current eligible Process-set hash, selected display default, and current-publication predecessor into `publishPlanHash`; the command locks publication state, recomputes and requires that exact hash, then records it for response-loss reconciliation. Projection finalization independently recomputes typed evidence and binds the exact current package publication. Anonymous visibility uses the same full predicate returned by manager readback as `isPubliclyVisible`; supersede, unpublish, or projection revoke makes the public RPC return unavailable rather than a synthetic zero. The public RPC is bounded and locator-free, while Calculation Bundle/result artifact storage remains private.
+Package readiness remains a service-only V3 wrapper over the frozen V1/V2 insert helper. If the insert reports `package_conflict` after an ambiguous response, the wrapper reads only the same build-job/package-version row and compares every stored build, input, eligibility, result, artifact, projection, Method, closure, status, and creator field with the immutable request. Exact equality returns the same locator-free receipt with `reused=true`; any difference remains conflict, and the legacy helper is unchanged. Package publication is a separate authenticated-manager plan/command pair. The read-only prepare result freezes the V3 package, projection axes/counts/hashes, current eligible Process-set hash, selected display default, and current-publication predecessor into `publishPlanHash`; the command locks publication state, recomputes and requires that exact hash, then records it for response-loss reconciliation. Projection finalization independently recomputes typed evidence and binds the exact current package publication. Anonymous visibility uses the same full predicate returned by manager readback as `isPubliclyVisible`; supersede, unpublish, or projection revoke makes the public RPC return unavailable rather than a synthetic zero. The public RPC is bounded and locator-free, while Calculation Bundle/result artifact storage remains private.
 
 For Exchange support types whose TIDAS schemas do not carry a Process-style license field, `portal-capability-policy.v1` treats exact state-100 Flow, FlowProperty, and UnitGroup rows as the explicit support capability only after the containing Process passes the full-free license policy. State 200 never supplies numeric support. Public search matches only the projected allowlist, never `search_text`, `extracted_md`, URI, or stripped raw fields. Facet values use the same bounded normalization as filters and return at most 100 values per group with `hasMore` evidence.
 
@@ -148,7 +148,7 @@ executable by application roles.
 - Git `dev` is the daily integration trunk
 - Git `main` is the promoted release line
 - PR branches map to Supabase preview branches
-- `.github/workflows/supabase-dev.yml` is the sole migration deployer for Git `dev`; it gates the remote job on the local contract, issues exactly one `db push --include-all`, and verifies the exact hosted result without Functions deployment, config push, or Management API mutations
+- `.github/workflows/supabase-dev.yml` is the sole migration deployer for Git `dev`; it gates the remote job on the local contract, issues exactly one `db push --include-all`, applies one exact Management API PATCH limited to the three PostgREST runtime fields checked into `supabase/config.toml`, and verifies the exact hosted result without Functions deployment, broad config push, or any other Management API mutation
 - after the database deployment succeeds, persistent-Dev Functions are deployed and validated through `tiangong-lca-edge-functions`; this repo contains no Function runtime source or Function deploy command
 - the production Supabase project is migrated automatically by the Supabase GitHub integration when Git `main` advances
 

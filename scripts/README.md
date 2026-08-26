@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 85059aa1123d8754450d4fabdcdd9a20476eea71
-lastReviewedNote: "Reviewed after the Issue #527 Portal LCIA catalog-visibility exact-local regeneration; the five-schema command and script behavior remain unchanged."
+lastReviewedCommit: 3a59878d82adb1291d82feec55038c28cffc139a
+lastReviewedNote: "Reviewed after the persistent-Dev workflow contract gained one exact three-field PostgREST runtime PATCH; schema-workspace helper behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -104,9 +104,11 @@ python scripts/test_resolve_migration_head.py
 
 Fails closed unless the persistent-Dev workflow performs exactly one database
 deployment with `supabase db push --include-all` after linking the configured
-project. It rejects Functions deploy/delete, `config push`, Management API
-mutation, and a manually pinned migration head, then requires exact-head
-readback from the same checkout.
+project. It rejects Functions deploy/delete, `config push`, a manually pinned
+migration head, more than one PostgREST PATCH, or any PATCH body other than the
+exact `db_schema`, `db_extra_search_path`, and `max_rows` runtime contract. It
+then requires that targeted PATCH to precede exact-head and profile probes from
+the same checkout.
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py

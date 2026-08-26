@@ -100,6 +100,25 @@ jobs:
       - name: Push migrations to Supabase Dev branch
         run: supabase db push --include-all
 
+      - name: Apply exact PostgREST runtime contract
+        shell: bash
+        run: |
+          patch_payload='{"db_schema":"public,api,graphql_public","db_extra_search_path":"public,api,extensions","max_rows":1000}'
+          postgrest_config="$(
+            curl --fail-with-body --silent --show-error \
+              --request PATCH \
+              --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data "$patch_payload" \
+              "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_ID/postgrest"
+          )"
+          jq -e '
+            def csv_list: split(",") | map(gsub("^\\s+|\\s+$"; ""));
+            (.db_schema | csv_list) == ["public", "api", "graphql_public"]
+            and (.db_extra_search_path | csv_list) == ["public", "api", "extensions"]
+            and .max_rows == 1000
+          ' <<<"$postgrest_config" >/dev/null
+
       - name: Resolve expected migration head
         id: migration_head
         shell: bash
@@ -158,6 +177,7 @@ jobs:
             def csv_list: split(",") | map(gsub("^\\s+|\\s+$"; ""));
             (.db_schema | csv_list) == ["public", "api", "graphql_public"]
             and (.db_extra_search_path | csv_list) == ["public", "api", "extensions"]
+            and .max_rows == 1000
           ' <<<"$postgrest_config" >/dev/null
 
           rest_url="https://$SUPABASE_PROJECT_ID.supabase.co/rest/v1"

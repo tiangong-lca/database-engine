@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 85059aa1123d8754450d4fabdcdd9a20476eea71
-lastReviewedNote: "Reviewed after generating the Issue #527 Portal LCIA catalog-visibility routines, ACLs, and unchanged Data API signatures from the exact local migration head; generation behavior is unchanged."
+lastReviewedCommit: 3a59878d82adb1291d82feec55038c28cffc139a
+lastReviewedNote: "Reviewed after the persistent-Dev workflow contract gained a targeted PostgREST runtime refresh; generated-workspace paths, refresh behavior, and type ownership are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

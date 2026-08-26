@@ -37,8 +37,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 85059aa1123d8754450d4fabdcdd9a20476eea71
-lastReviewedNote: "Reviewed after binding Portal Search, Detail, and Versions LCIA capability to the same current finalized non-revoked publication predicate; ownership and deployment boundaries are unchanged."
+lastReviewedCommit: 3a59878d82adb1291d82feec55038c28cffc139a
+lastReviewedNote: "Reviewed after adding exact Portal LCIA package-ready replay recovery and the narrowly scoped persistent-Dev PostgREST runtime refresh; ownership boundaries are unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -114,12 +114,12 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - local baseline: `supabase start`, `supabase db reset`, `supabase migration list`
 - schema boundary: `public` contains only `processes`, `flows`, `contacts`, `sources`, `unitgroups`, `flowproperties`, `lciamethods`, `lifecyclemodels`, and `ilcd`; client RPCs live in the exposed `api` schema, internal state and service helpers live in `private`, operational tooling lives in `util`, and retired rollback evidence lives in `archive`
 - PostgREST exposes `public` and `api`; entity access keeps `public` as the default profile, while RPC callers must select the `api` profile explicitly
-- anonymous Portal numerics come only from immutable publication-bound typed projections; Search, Detail, and Versions derive `lciaVisible` and Detail publication context from the same current finalized non-revoked predicate as the numeric reader; V3 Worker staging is service-only and lease-fenced, package publication/finalization is authenticated-manager-only with exact plan/hash confirmation, and raw projection/artifact tables never gain browser access
+- anonymous Portal numerics come only from immutable publication-bound typed projections; Search, Detail, and Versions derive `lciaVisible` and Detail publication context from the same current finalized non-revoked predicate as the numeric reader; V3 Worker staging and package readiness are service-only and lease-fenced, an exact package-ready retry may recover only a fully matching committed package, package publication/finalization is authenticated-manager-only with exact plan/hash confirmation, and raw projection/artifact tables never gain browser access
 - `supabase/seed.sql` must remain an executable SQL batch even when it seeds no rows; retain a data-neutral no-op rather than comments only
 - hosted mutation E2E assets under `supabase/tests/preview/**` are exact-Preview, disposable test paths; their complete actor, credential, recovery, and cleanup proof requirements live in `docs/agents/repo-validation.md`
 - migration authoring starts from Git `dev`, not GitHub default-branch UI
 - preview-branch proof belongs to the repo PR
-- persistent `dev` migration deployment belongs to `.github/workflows/supabase-dev.yml`; after the local contract passes, it links the configured Dev project, runs exactly one `supabase db push --include-all`, derives the expected head from the checkout, reads back the ordered hosted PostgREST schema/search-path lists, and probes the default `public`, explicit `api`, rejected `private`, and retired `public` RPC routes; it must never deploy or delete Edge Functions or push project configuration
+- persistent `dev` migration deployment belongs to `.github/workflows/supabase-dev.yml`; after the local contract passes, it links the configured Dev project, runs exactly one `supabase db push --include-all`, applies only the exact `db_schema`, `db_extra_search_path`, and `max_rows` PostgREST runtime contract through one targeted Management API PATCH, derives the expected head from the checkout, reads the settings back, and probes the default `public`, explicit `api`, rejected `private`, and retired `public` RPC routes; it must never deploy or delete Edge Functions or run a broad project-configuration push
 - after the persistent `dev` database workflow succeeds, deploy and validate the intended Dev Functions through `tiangong-lca-edge-functions`; this repo does not own the Function source, function selection, or deploy command
 - production `main` proof belongs after `dev -> main` promote and should confirm Supabase GitHub integration applied migrations automatically; when `supabase/config.toml` changes, the operator must also push and verify that configuration against the production project
 - production-volume administrative backfills must fit the platform statement timeout or use a bounded session override that is restored immediately after the statement; Preview row counts alone are not sufficient volume proof
