@@ -130,14 +130,42 @@ cleanup() {
 }
 trap cleanup EXIT INT TERM
 
+requested_profile="${PORTAL_PROJECTION_BENCHMARK_PROFILE:-auto}"
+case "$requested_profile" in
+  auto|release|sparse-zero|sparse-199|diagnostic) ;;
+  *)
+    echo "PORTAL_PROJECTION_BENCHMARK_PROFILE must be auto, release, sparse-zero, sparse-199, or diagnostic" >&2
+    exit 2
+    ;;
+esac
+
+default_process_vectors=17299
+default_flow_vectors=108947
+default_process_old=100
+default_flow_old=21000
+default_draft_vectors=100
+if [[ "$requested_profile" == "sparse-zero" ]]; then
+  default_process_vectors=0
+  default_flow_vectors=0
+  default_process_old=0
+  default_flow_old=0
+  default_draft_vectors=0
+elif [[ "$requested_profile" == "sparse-199" ]]; then
+  default_process_vectors=199
+  default_flow_vectors=199
+  default_process_old=0
+  default_flow_old=0
+  default_draft_vectors=0
+fi
+
 benchmark_samples="${PORTAL_PROJECTION_BENCHMARK_SAMPLES:-20}"
 process_rows="${PORTAL_PROJECTION_BENCHMARK_PROCESS_ROWS:-17299}"
 flow_rows="${PORTAL_PROJECTION_BENCHMARK_FLOW_ROWS:-108947}"
-process_vector_rows="${PORTAL_PROJECTION_BENCHMARK_PROCESS_VECTOR_ROWS:-17299}"
-flow_vector_rows="${PORTAL_PROJECTION_BENCHMARK_FLOW_VECTOR_ROWS:-108947}"
-process_old_rows="${PORTAL_PROJECTION_BENCHMARK_PROCESS_OLD_ROWS:-100}"
-flow_old_rows="${PORTAL_PROJECTION_BENCHMARK_FLOW_OLD_ROWS:-21000}"
-draft_vector_rows="${PORTAL_PROJECTION_BENCHMARK_DRAFT_ROWS:-100}"
+process_vector_rows="${PORTAL_PROJECTION_BENCHMARK_PROCESS_VECTOR_ROWS:-$default_process_vectors}"
+flow_vector_rows="${PORTAL_PROJECTION_BENCHMARK_FLOW_VECTOR_ROWS:-$default_flow_vectors}"
+process_old_rows="${PORTAL_PROJECTION_BENCHMARK_PROCESS_OLD_ROWS:-$default_process_old}"
+flow_old_rows="${PORTAL_PROJECTION_BENCHMARK_FLOW_OLD_ROWS:-$default_flow_old}"
+draft_vector_rows="${PORTAL_PROJECTION_BENCHMARK_DRAFT_ROWS:-$default_draft_vectors}"
 writer_samples="${PORTAL_PROJECTION_BENCHMARK_WRITER_SAMPLES:-50}"
 
 validate_integer() {
@@ -172,6 +200,8 @@ if ((10#$process_vector_rows > 10#$process_rows \
 fi
 
 release_profile=false
+sparse_profile=false
+profile_name=diagnostic
 if [[ "$benchmark_samples" == "20" \
    && "$process_rows" == "17299" \
    && "$flow_rows" == "108947" \
@@ -182,10 +212,46 @@ if [[ "$benchmark_samples" == "20" \
    && "$draft_vector_rows" == "100" \
    && "$writer_samples" == "50" ]]; then
   release_profile=true
+  profile_name=release
 fi
-if [[ "$release_profile" == "true" \
+if [[ "$benchmark_samples" == "20" \
+   && "$process_rows" == "17299" \
+   && "$flow_rows" == "108947" \
+   && "$process_vector_rows" == "0" \
+   && "$flow_vector_rows" == "0" \
+   && "$process_old_rows" == "0" \
+   && "$flow_old_rows" == "0" \
+   && "$draft_vector_rows" == "0" \
+   && "$writer_samples" == "50" ]]; then
+  sparse_profile=true
+  profile_name=sparse-zero
+elif [[ "$benchmark_samples" == "20" \
+   && "$process_rows" == "17299" \
+   && "$flow_rows" == "108947" \
+   && "$process_vector_rows" == "199" \
+   && "$flow_vector_rows" == "199" \
+   && "$process_old_rows" == "0" \
+   && "$flow_old_rows" == "0" \
+   && "$draft_vector_rows" == "0" \
+   && "$writer_samples" == "50" ]]; then
+  sparse_profile=true
+  profile_name=sparse-199
+fi
+
+if [[ "$requested_profile" != "auto" \
+   && "$requested_profile" != "diagnostic" \
+   && "$profile_name" != "$requested_profile" ]]; then
+  echo "benchmark variables do not match requested exact profile: $requested_profile" >&2
+  exit 2
+fi
+if [[ "$requested_profile" == "diagnostic" ]]; then
+  release_profile=false
+  sparse_profile=false
+  profile_name=diagnostic
+fi
+if [[ ("$release_profile" == "true" || "$sparse_profile" == "true") \
    && -n "$(git -C "$repo_root" status --porcelain)" ]]; then
-  echo "release benchmark requires a clean exact repository HEAD" >&2
+  echo "release and sparse benchmark gates require a clean exact repository HEAD" >&2
   exit 2
 fi
 
@@ -197,7 +263,7 @@ fi
 
 echo "Supabase CLI: $supabase_cli_version" | tee "$results_log"
 echo "Benchmark target: $project_id" | tee -a "$results_log"
-echo "Benchmark profile: $release_profile" | tee -a "$results_log"
+echo "Benchmark profile: $profile_name" | tee -a "$results_log"
 echo "Repository HEAD: $repository_head" | tee -a "$results_log"
 echo "Migration tree SHA-256 (257 files): $migration_tree_sha256" \
   | tee -a "$results_log"
@@ -227,12 +293,16 @@ docker exec -i "$container_name" \
     -v flow_old_version_rows="$flow_old_rows" \
     -v draft_vector_rows="$draft_vector_rows" \
     -v writer_samples="$writer_samples" \
+    -v benchmark_sparse_profile="$sparse_profile" \
+    -v benchmark_profile_name="$profile_name" \
   <"$repo_root/supabase/tests/benchmarks/20260826_portal_candidate_first_explain.sql" \
   2>&1 | tee -a "$results_log"
 
 expected_sql_status=DIAGNOSTIC_PASS
 if [[ "$release_profile" == "true" ]]; then
   expected_sql_status=RELEASE_PASS
+elif [[ "$sparse_profile" == "true" ]]; then
+  expected_sql_status=SPARSE_PASS
 fi
 if ! grep -q "^SQL_STATUS=${expected_sql_status}$" "$results_log"; then
   echo "benchmark SQL reported failure" >&2
@@ -261,6 +331,8 @@ reset_completed=true
 
 if [[ "$release_profile" == "true" ]]; then
   echo "BENCHMARK_STATUS=PASS" | tee -a "$results_log"
+elif [[ "$sparse_profile" == "true" ]]; then
+  echo "BENCHMARK_STATUS=SPARSE_PASS" | tee -a "$results_log"
 else
   echo "BENCHMARK_STATUS=DIAGNOSTIC_PASS" | tee -a "$results_log"
 fi

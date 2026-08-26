@@ -96,6 +96,26 @@ select
   as benchmark_release_profile
 \gset
 
+select
+  :'benchmark_samples'::integer = 20
+  and :'process_rows'::integer = 17299
+  and :'flow_rows'::integer = 108947
+  and :'process_old_version_rows'::integer = 0
+  and :'flow_old_version_rows'::integer = 0
+  and :'draft_vector_rows'::integer = 0
+  and :'writer_samples'::integer = 50
+  and (
+    (
+      :'process_vector_rows'::integer = 0
+      and :'flow_vector_rows'::integer = 0
+    )
+    or (
+      :'process_vector_rows'::integer = 199
+      and :'flow_vector_rows'::integer = 199
+    )
+  ) as benchmark_sparse_profile
+\gset
+
 begin;
 set local search_path = public, extensions, pg_temp;
 set local statement_timeout = '15min';
@@ -1093,6 +1113,25 @@ select pg_temp.capture_portal_benchmark_plan(
   $query$
 );
 
+\if :benchmark_sparse_profile
+\qecho profile=process-semantic-helper-sparse
+explain (analyze, buffers, settings, wal, summary, format json)
+select candidate.*
+from private.portal_projection_semantic_process_v1(
+  pg_temp.portal_bench_vector(1)
+) as candidate;
+
+select pg_temp.capture_portal_benchmark_plan(
+  'process_semantic_sparse',
+  $query$
+    select candidate.*
+    from private.portal_projection_semantic_process_v1(
+      pg_temp.portal_bench_vector(1)
+    ) as candidate
+  $query$
+);
+\endif
+
 \qecho profile=flow-source-hnsw-latest-public
 explain (analyze, buffers, settings, wal, summary, format json)
 select flow.id
@@ -1166,6 +1205,25 @@ select pg_temp.capture_portal_benchmark_plan(
   $query$
 );
 
+\if :benchmark_sparse_profile
+\qecho profile=flow-semantic-helper-sparse
+explain (analyze, buffers, settings, wal, summary, format json)
+select candidate.*
+from private.portal_projection_semantic_flow_v1(
+  pg_temp.portal_bench_vector(1)
+) as candidate;
+
+select pg_temp.capture_portal_benchmark_plan(
+  'flow_semantic_sparse',
+  $query$
+    select candidate.*
+    from private.portal_projection_semantic_flow_v1(
+      pg_temp.portal_bench_vector(1)
+    ) as candidate
+  $query$
+);
+\endif
+
 set local enable_sort = on;
 set local hnsw.iterative_scan = strict_order;
 
@@ -1199,7 +1257,9 @@ select
 where (:'process_rows'::integer >= 10000
     and :'flow_rows'::integer >= 100000)
   and (
-    (select count(*) from pg_temp.portal_benchmark_plans) <> 4
+    (select count(*) from pg_temp.portal_benchmark_plans) <> case
+      when :'benchmark_sparse_profile'::boolean then 6 else 4
+    end
    or not coalesce((
      select plan_text ~ 'portal_catalog_search_process_document_v1_pgroonga'
      from pg_temp.portal_benchmark_plans
@@ -1225,6 +1285,24 @@ where (:'process_rows'::integer >= 10000
      from pg_temp.portal_benchmark_plans
      where label = 'flow_source_hnsw'
    ), false)
+   or (
+     :'benchmark_sparse_profile'::boolean
+     and (
+       (select count(*)
+        from pg_temp.portal_benchmark_plans
+        where label in (
+          'process_semantic_sparse', 'flow_semantic_sparse'
+        )) <> 2
+       or exists (
+         select 1
+         from pg_temp.portal_benchmark_plans
+         where label in (
+             'process_semantic_sparse', 'flow_semantic_sparse'
+           )
+           and plan_text ~ 'temp (read|written)='
+       )
+     )
+   )
   );
 
 create or replace function pg_temp.record_portal_search_timing(
@@ -2188,7 +2266,8 @@ with expected(label) as (
   select label,
     count(*) as samples,
     pg_catalog.percentile_cont(0.95)
-      within group (order by elapsed_ms) as p95_ms
+      within group (order by elapsed_ms) as p95_ms,
+    max(elapsed_ms) as max_ms
   from portal_benchmark_timings
   group by label
 ), expected_writer(mode) as (
@@ -2237,6 +2316,10 @@ select not exists (select 1 from portal_benchmark_failures)
          when summary.label like '%_hybrid_%' then 6000
          else 2000
        end
+       or (
+         summary.label like '%_hybrid_%'
+         and summary.max_ms >= 8000
+       )
   )
   and not exists (
     select 1
@@ -2276,6 +2359,8 @@ analyze private.portal_catalog_search_rows_v1;
 \if :benchmark_pass
   \if :benchmark_release_profile
     \echo 'SQL_STATUS=RELEASE_PASS'
+  \elif :benchmark_sparse_profile
+    \echo 'SQL_STATUS=SPARSE_PASS'
   \else
     \echo 'SQL_STATUS=DIAGNOSTIC_PASS'
   \endif
