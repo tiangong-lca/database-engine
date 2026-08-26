@@ -105,6 +105,7 @@ declare
   v_key text;
   v_year numeric;
   v_embedding extensions.vector(1024);
+  v_embedding_components text[];
   v_embedding_text text;
   v_embedding_sha256 text;
   v_fingerprint text;
@@ -157,7 +158,21 @@ begin
 
   if p_query_embedding is null
      or pg_catalog.octet_length(p_query_embedding) > 65536
-     or p_query_embedding !~ '^\[-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?(?:,-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?){1023}\]$' then
+     or pg_catalog.left(p_query_embedding, 1) <> '['
+     or pg_catalog.right(p_query_embedding, 1) <> ']' then
+    raise exception using errcode = '22023', message = 'invalid portal request';
+  end if;
+  v_embedding_components := pg_catalog.string_to_array(
+    pg_catalog.substr(p_query_embedding, 2, pg_catalog.char_length(p_query_embedding) - 2),
+    ','
+  );
+  if pg_catalog.cardinality(v_embedding_components) <> 1024
+     or exists (
+       select 1
+       from pg_catalog.unnest(v_embedding_components) as component(value)
+       where component.value
+         !~ '^-?(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?$'
+     ) then
     raise exception using errcode = '22023', message = 'invalid portal request';
   end if;
   begin
@@ -193,7 +208,7 @@ begin
       supplied.key,
       case
         when supplied.key in (
-          'accessLevel', 'geography', 'classification', 'processSubtype', 'source'
+          'geography', 'classification', 'processSubtype', 'source'
         ) and pg_catalog.jsonb_typeof(supplied.value) = 'string'
           then pg_catalog.to_jsonb(pg_catalog.lower(
             pg_catalog.btrim(supplied.value #>> '{}') collate pg_catalog."und-x-icu"
@@ -427,7 +442,9 @@ begin
   ), semantic_distances as materialized (
     select latest.id,
       latest.version,
-      (latest.embedding_ft <=> p_query_embedding) as semantic_distance
+      (
+        latest.embedding_ft operator(extensions.<=>) p_query_embedding
+      ) as semantic_distance
     from latest
     where latest.embedding_ft is not null
   ), semantic_candidates as materialized (
@@ -458,9 +475,9 @@ begin
       semantic_ranked.semantic_rank,
       semantic_ranked.semantic_distance,
       pg_catalog.round(
-        pg_catalog.least(
+        least(
           1::numeric,
-          pg_catalog.greatest(
+          greatest(
             0::numeric,
             (
               coalesce(0.5::numeric / (60 + lexical_ranked.lexical_rank), 0::numeric)
@@ -627,6 +644,7 @@ set statement_timeout = '8s'
 as $function$
 declare
   v_input jsonb;
+  v_page jsonb;
 begin
   v_input := private.portal_public_hybrid_input_v1(
     p_kind,
@@ -635,19 +653,26 @@ begin
     p_filters,
     p_limit
   );
-  return private.portal_public_hybrid_search_v1_impl(
-    v_input ->> 'kind',
-    array(
-      select term.value
-      from pg_catalog.jsonb_array_elements_text(v_input -> 'queryTerms')
-        with ordinality as term(value, ordinality)
-      order by term.ordinality
-    ),
-    (v_input ->> 'queryEmbedding')::extensions.vector(1024),
-    v_input -> 'filters',
-    (v_input ->> 'limit')::integer,
-    v_input ->> 'queryFingerprint'
+  v_page := private.portal_lcia_decorate_item_page_v1(
+    private.portal_public_hybrid_search_v1_impl(
+      v_input ->> 'kind',
+      array(
+        select term.value
+        from pg_catalog.jsonb_array_elements_text(v_input -> 'queryTerms')
+          with ordinality as term(value, ordinality)
+        order by term.ordinality
+      ),
+      (v_input ->> 'queryEmbedding')::extensions.vector(1024),
+      v_input -> 'filters',
+      (v_input ->> 'limit')::integer,
+      v_input ->> 'queryFingerprint'
+    )
   );
+  if v_page is null
+     or pg_catalog.octet_length(pg_catalog.convert_to(v_page::text, 'UTF8')) > 524288 then
+    raise exception using errcode = '54000', message = 'portal hybrid response too large';
+  end if;
+  return v_page;
 exception
   when sqlstate '22023' then
     raise exception using errcode = '22023', message = 'invalid portal request';
@@ -713,6 +738,7 @@ begin
       and routine.prosecdef
       and coalesce(routine.proconfig, '{}'::text[])
         @> array['search_path=""', 'statement_timeout=8s']::text[]
+      and routine.prosrc ~ 'portal_lcia_decorate_item_page_v1'
     from pg_catalog.pg_proc as routine
     where routine.oid = v_api
   ) is not true then
