@@ -88,6 +88,8 @@ values
   ('service', 'private.svc_portal_lcia_projection_stage_fail_v1(uuid, uuid, text, text, jsonb)'),
   ('service', 'private.svc_portal_lcia_projection_worker_input_v1(uuid, uuid)'),
   ('service', 'private.svc_portal_lcia_projection_package_mark_ready_v1(uuid, uuid, uuid, text, uuid, uuid, uuid, jsonb, jsonb, jsonb, jsonb, text, text, jsonb)'),
+  ('service', 'private.svc_portal_lcia_projection_package_ready_readback_v1(uuid, uuid)'),
+  ('internal', 'private.portal_lcia_projection_package_binding_valid_v1(uuid, uuid, uuid)'),
   ('public', 'api.portal_get_published_lcia_values_v1(text, jsonb, text, text, integer)');
 
 create temporary table portal_lcia_legacy_routines (
@@ -117,8 +119,8 @@ select extensions.is(
     from portal_lcia_expected_routines as expected
     where pg_catalog.to_regprocedure(expected.routine_identity) is not null
   ),
-  15::bigint,
-  'the Portal LCIA surface has all fifteen exact frozen producer, actor, service, and public signatures'
+  17::bigint,
+  'the Portal LCIA surface has all seventeen exact frozen producer, actor, service, internal, and public signatures'
 );
 
 select extensions.is(
@@ -132,7 +134,7 @@ select extensions.is(
       and routine.proconfig @> array['search_path=""']::text[]
       and routine.proowner = 'postgres'::regrole
   ),
-  13::bigint,
+  14::bigint,
   'all Portal LCIA actor and service routines are postgres-owned security definers with an empty search_path'
 );
 
@@ -186,12 +188,44 @@ select extensions.is(
         'svc_portal_lcia_projection_stage_seal_v1',
         'svc_portal_lcia_projection_stage_fail_v1',
         'svc_portal_lcia_projection_worker_input_v1',
-        'svc_portal_lcia_projection_package_mark_ready_v1'
+        'svc_portal_lcia_projection_package_mark_ready_v1',
+        'svc_portal_lcia_projection_package_ready_readback_v1',
+        'portal_lcia_projection_package_binding_valid_v1'
       )
     )
   ),
-  15::bigint,
+  17::bigint,
   'no overload broadens any frozen Portal LCIA routine name'
+);
+
+select extensions.ok(
+  (
+    select routine.prosrc ~ 'portal_lcia_projection_v3_job_binding_valid_v1'
+      and routine.prosrc ~ 'portalProjectionId'
+      and routine.prosrc ~ 'portalProjectionContentHash'
+      and routine.prosrc ~ 'portal_lcia_projection_package_binding_valid_v1'
+      and routine.prosrc !~ 'stage_lease_token'
+    from pg_catalog.pg_proc as routine
+    where routine.oid =
+      'private.svc_portal_lcia_projection_package_ready_readback_v1(uuid,uuid)'::regprocedure
+  ),
+  'restart readback binds the current V3 job lease and committed manifest projection without requiring the old projection lease'
+);
+
+select extensions.ok(
+  (
+    select not routine.prosecdef
+      and routine.proconfig @> array['search_path=""']::text[]
+      and routine.proowner = 'postgres'::regrole
+      and routine.prosrc ~ 'eligibility_resolved_at'
+      and routine.prosrc ~ 'result_artifact_ref'
+      and routine.prosrc ~ 'default_impact_category'
+      and routine.prosrc ~ 'closure_certificate_hash'
+    from pg_catalog.pg_proc as routine
+    where routine.oid =
+      'private.portal_lcia_projection_package_binding_valid_v1(uuid,uuid,uuid)'::regprocedure
+  ),
+  'the shared exact-binding validator is an owner-only invoker with the full package evidence domains'
 );
 
 select extensions.is(
@@ -2222,7 +2256,7 @@ insert into private.lca_results (
 )
 values (
   '52710000-0000-4000-8000-000000000430',
-  (select id from portal_lcia_ids where label = 'worker_job_v3'),
+  (select id from portal_lcia_ids where label = 'build_v3'),
   '52710000-0000-4000-8000-000000000403', '{}'::jsonb, '{}'::jsonb,
   's3://portal-lcia-test/private/v3-result.json', repeat('b', 64), 301,
   'application/json',
@@ -2230,7 +2264,7 @@ values (
 );
 
 update private.lca_latest_all_unit_results
-set job_id = (select id from portal_lcia_ids where label = 'worker_job_v3'),
+set job_id = (select id from portal_lcia_ids where label = 'build_v3'),
     result_id = '52710000-0000-4000-8000-000000000430',
     query_artifact_url = 's3://portal-lcia-test/private/v3-query.json',
     query_artifact_sha256 = repeat('c', 64),
@@ -2280,16 +2314,34 @@ select extensions.is(
       '52710000-0000-4000-8000-000000000202'
     ),
     '52710000-0000-4000-8000-000000000201',
-    repeat('1', 64),
+    repeat('b', 64),
     '{}'::jsonb
   ) ->> 'code',
   'service_role_required',
   'an actor cannot use the V3 package-ready service helper'
 );
 
+select extensions.is(
+  private.svc_portal_lcia_projection_package_ready_readback_v1(
+    (select id from portal_lcia_ids where label = 'worker_job_v3'),
+    '52710000-0000-4000-8000-000000000420'
+  ) ->> 'code',
+  'service_role_required',
+  'an actor cannot use the process-restart package readback helper'
+);
+
 select pg_catalog.set_config('request.jwt.claim.role', 'service_role', true);
 select pg_catalog.set_config(
   'request.jwt.claims', '{"role":"service_role"}', true
+);
+
+select extensions.is(
+  private.svc_portal_lcia_projection_package_ready_readback_v1(
+    (select id from portal_lcia_ids where label = 'worker_job_v3'),
+    '52710000-0000-4000-8000-000000000420'
+  ) ->> 'code',
+  'projection_package_not_found',
+  'restart readback returns the stable 404 code before this V3 job has a committed package'
 );
 
 select extensions.is(
@@ -2317,7 +2369,7 @@ select extensions.is(
       '52710000-0000-4000-8000-000000000202'
     ),
     '52710000-0000-4000-8000-000000000201',
-    repeat('1', 64),
+    repeat('b', 64),
     '{}'::jsonb
   ) ->> 'code',
   'projection_evidence_mismatch',
@@ -2359,7 +2411,7 @@ select extensions.is(
       '52710000-0000-4000-8000-000000000201'
     ),
     '52710000-0000-4000-8000-000000000201',
-    repeat('1', 64),
+    repeat('b', 64),
     '{}'::jsonb
   ) ->> 'code',
   'projection_evidence_mismatch',
@@ -2405,7 +2457,7 @@ values (
       '52710000-0000-4000-8000-000000000202'
     ),
     '52710000-0000-4000-8000-000000000201',
-    repeat('1', 64),
+    repeat('b', 64),
     '{}'::jsonb
   )
 );
@@ -2445,7 +2497,7 @@ select extensions.ok(
       and build_worker_job_id =
         (select id from portal_lcia_ids where label = 'worker_job_v3')
       and package_version = 'portal-lcia-package-v3'
-      and package_result_hash = repeat('1', 64)
+      and package_result_hash = repeat('b', 64)
       and included_input_count = 2
       and available_impact_categories = jsonb_build_array(
         '52710000-0000-4000-8000-000000000201',
@@ -2511,7 +2563,7 @@ values (
       '52710000-0000-4000-8000-000000000202'
     ),
     '52710000-0000-4000-8000-000000000201',
-    repeat('1', 64),
+    repeat('b', 64),
     '{}'::jsonb
   )
 );
@@ -2598,7 +2650,7 @@ values (
       '52710000-0000-4000-8000-000000000202'
     ),
     '52710000-0000-4000-8000-000000000201',
-    repeat('1', 64),
+    repeat('b', 64),
     '{}'::jsonb
   )
 );
@@ -2655,6 +2707,149 @@ select extensions.ok(
       and before_state.payload_ref is not distinct from after_state.payload_ref
   ),
   'recovery preserves the exact legacy package helper metadata and V1/V2 job snapshots'
+);
+
+-- A reclaimed Worker job receives a fresh lease, while the already committed
+-- package remains bound to the prepared projection produced by the prior
+-- process.  Job-level readback must recover that immutable pair without
+-- requiring or rewriting the old projection lease.
+create temporary table portal_lcia_v3_projection_before_restart
+on commit drop as
+select projection.id, to_jsonb(projection) as projection_row
+from private.portal_lcia_projection_headers as projection
+where projection.id = (select id from portal_lcia_ids where label = 'stage');
+
+update private.worker_jobs
+set lease_token = '52710000-0000-4000-8000-000000000439',
+    lease_expires_at = pg_catalog.clock_timestamp() + interval '10 minutes'
+where id = (select id from portal_lcia_ids where label = 'worker_job_v3');
+
+select extensions.ok(
+  private.portal_lcia_projection_v3_job_binding_valid_v1(
+    (select id from portal_lcia_ids where label = 'worker_job_v3'),
+    '52710000-0000-4000-8000-000000000439'
+  )
+  and exists (
+    select 1
+    from private.portal_lcia_projection_headers as projection
+    where projection.id = (select id from portal_lcia_ids where label = 'stage')
+      and projection.stage_lease_token =
+        '52710000-0000-4000-8000-000000000420'
+      and projection.stage_lease_token <>
+        '52710000-0000-4000-8000-000000000439'
+  ),
+  'simulated restart gives the V3 job a valid fresh lease while the committed projection retains its old lease'
+);
+
+create temporary table portal_lcia_v3_package_restart_readback_response (
+  response jsonb not null
+) on commit drop;
+
+insert into portal_lcia_v3_package_restart_readback_response (response)
+values (
+  private.svc_portal_lcia_projection_package_ready_readback_v1(
+    (select id from portal_lcia_ids where label = 'worker_job_v3'),
+    '52710000-0000-4000-8000-000000000439'
+  )
+);
+
+select extensions.ok(
+  (select (response ->> 'ok')::boolean
+   from portal_lcia_v3_package_restart_readback_response)
+  and (select (response ->> 'reused')::boolean
+       from portal_lcia_v3_package_restart_readback_response)
+  and (select response = jsonb_set(
+         (select response from portal_lcia_v3_package_response),
+         '{reused}', 'true'::jsonb, false
+       ) from portal_lcia_v3_package_restart_readback_response)
+  and (select private.portal_lcia_json_object_has_keys_v1(
+         response, array['ok', 'reused', 'data']
+       ) from portal_lcia_v3_package_restart_readback_response)
+  and (select private.portal_lcia_json_object_has_keys_v1(
+         response -> 'data',
+         array[
+           'packageId', 'packageVersion', 'status', 'buildWorkerJobId',
+           'includedInputCount', 'projection'
+         ]
+       ) from portal_lcia_v3_package_restart_readback_response)
+  and (select private.portal_lcia_json_object_has_keys_v1(
+         response #> '{data,projection}',
+         array['projectionId', 'contentHash', 'hashContractVersion']
+       ) from portal_lcia_v3_package_restart_readback_response),
+  'a new Worker process recovers the same strict locator-free receipt through job-level readback'
+);
+
+select extensions.ok(
+  (
+    select before_state.package_row = to_jsonb(package)
+    from portal_lcia_v3_package_before_replay as before_state
+    join private.lcia_result_packages as package using (id)
+  )
+  and (
+    select before_state.projection_row = to_jsonb(projection)
+    from portal_lcia_v3_projection_before_restart as before_state
+    join private.portal_lcia_projection_headers as projection using (id)
+  )
+  and (
+    select count(*) = 1
+    from private.lcia_result_packages as package
+    where package.build_worker_job_id =
+      (select id from portal_lcia_ids where label = 'worker_job_v3')
+  )
+  and (
+    select count(*) = 1
+    from private.portal_lcia_projection_headers as projection
+    where projection.build_worker_job_id =
+      (select id from portal_lcia_ids where label = 'worker_job_v3')
+      and projection.status = 'prepared'
+  ),
+  'restart readback creates or changes no package or projection row'
+);
+
+create temporary table portal_lcia_v3_package_restart_drift_response (
+  response jsonb not null
+) on commit drop;
+
+update private.lca_results
+set artifact_sha256 = repeat('0', 64)
+where id = '52710000-0000-4000-8000-000000000430';
+
+insert into portal_lcia_v3_package_restart_drift_response (response)
+values (
+  private.svc_portal_lcia_projection_package_ready_readback_v1(
+    (select id from portal_lcia_ids where label = 'worker_job_v3'),
+    '52710000-0000-4000-8000-000000000439'
+  )
+);
+
+update private.lca_results
+set artifact_sha256 = repeat('b', 64)
+where id = '52710000-0000-4000-8000-000000000430';
+
+select extensions.ok(
+  (select response ->> 'ok' = 'false'
+   from portal_lcia_v3_package_restart_drift_response)
+  and (select response ->> 'code' = 'projection_package_binding_invalid'
+       from portal_lcia_v3_package_restart_drift_response)
+  and (select response ->> 'status' = '409'
+       from portal_lcia_v3_package_restart_drift_response)
+  and exists (
+    select 1
+    from private.lca_results
+    where id = '52710000-0000-4000-8000-000000000430'
+      and artifact_sha256 = repeat('b', 64)
+  )
+  and (
+    select before_state.package_row = to_jsonb(package)
+    from portal_lcia_v3_package_before_replay as before_state
+    join private.lcia_result_packages as package using (id)
+  )
+  and (
+    select before_state.projection_row = to_jsonb(projection)
+    from portal_lcia_v3_projection_before_restart as before_state
+    join private.portal_lcia_projection_headers as projection using (id)
+  ),
+  'restart readback fails closed when the authoritative result SHA drifts from packageResultHash and mutates no package or projection evidence'
 );
 
 -- The additive V3-only publisher reconciles the certificate Process set and
@@ -2819,7 +3014,7 @@ select extensions.ok(
   api.cmd_portal_lcia_projection_finalize_publication_v1(
     (select id from portal_lcia_ids where label = 'stage'),
     (select id from portal_lcia_ids where label = 'publication'),
-    'portal-lcia-package-v3', repeat('1', 64),
+    'portal-lcia-package-v3', repeat('b', 64),
     (select response #>> '{data,contentHash}' from portal_lcia_seal_response),
     'unauthenticated-finalize', '{}'::jsonb
   ) ->> 'code' = 'auth_required'
@@ -2858,7 +3053,7 @@ select extensions.ok(
   api.cmd_portal_lcia_projection_finalize_publication_v1(
     (select id from portal_lcia_ids where label = 'stage'),
     (select id from portal_lcia_ids where label = 'publication'),
-    'portal-lcia-package-v3', repeat('1', 64),
+    'portal-lcia-package-v3', repeat('b', 64),
     (select response #>> '{data,contentHash}' from portal_lcia_seal_response),
     'ordinary-finalize', '{}'::jsonb
   ) ->> 'code' = 'not_data_product_manager'
@@ -2936,7 +3131,7 @@ select extensions.is(
   api.cmd_portal_lcia_projection_finalize_publication_v1(
     (select id from portal_lcia_ids where label = 'stage'),
     '52710000-0000-4000-8000-000000009999',
-    'portal-lcia-package-v3', repeat('1', 64),
+    'portal-lcia-package-v3', repeat('b', 64),
     (select response #>> '{data,contentHash}' from portal_lcia_seal_response),
     'portal-lcia-finalize-v1', '{}'::jsonb
   ) ->> 'code',
@@ -2948,7 +3143,7 @@ select extensions.is(
   api.cmd_portal_lcia_projection_finalize_publication_v1(
     (select id from portal_lcia_ids where label = 'stage'),
     (select id from portal_lcia_ids where label = 'legacy_publication'),
-    'portal-lcia-package-v3', repeat('1', 64),
+    'portal-lcia-package-v3', repeat('b', 64),
     (select response #>> '{data,contentHash}' from portal_lcia_seal_response),
     'portal-lcia-finalize-v1', '{}'::jsonb
   ) ->> 'code',
@@ -2960,7 +3155,7 @@ select extensions.is(
   api.cmd_portal_lcia_projection_finalize_publication_v1(
     (select id from portal_lcia_ids where label = 'stage'),
     (select id from portal_lcia_ids where label = 'publication'),
-    'portal-lcia-package-drift', repeat('1', 64),
+    'portal-lcia-package-drift', repeat('b', 64),
     (select response #>> '{data,contentHash}' from portal_lcia_seal_response),
     'portal-lcia-finalize-v1', '{}'::jsonb
   ) ->> 'code',
@@ -2984,7 +3179,7 @@ select extensions.is(
   api.cmd_portal_lcia_projection_finalize_publication_v1(
     (select id from portal_lcia_ids where label = 'stage'),
     (select id from portal_lcia_ids where label = 'publication'),
-    'portal-lcia-package-v3', repeat('1', 64), repeat('0', 64),
+    'portal-lcia-package-v3', repeat('b', 64), repeat('0', 64),
     'portal-lcia-finalize-v1', '{}'::jsonb
   ) ->> 'code',
   'projection_not_prepared',
@@ -3001,7 +3196,7 @@ values (
   api.cmd_portal_lcia_projection_finalize_publication_v1(
     (select id from portal_lcia_ids where label = 'stage'),
     (select id from portal_lcia_ids where label = 'publication'),
-    'portal-lcia-package-v3', repeat('1', 64),
+    'portal-lcia-package-v3', repeat('b', 64),
     (select response #>> '{data,contentHash}' from portal_lcia_seal_response),
     'portal-lcia-finalize-v1', '{}'::jsonb
   )
@@ -3037,7 +3232,7 @@ select extensions.ok(
     api.cmd_portal_lcia_projection_finalize_publication_v1(
       (select id from portal_lcia_ids where label = 'stage'),
       (select id from portal_lcia_ids where label = 'publication'),
-      'portal-lcia-package-v3', repeat('1', 64),
+      'portal-lcia-package-v3', repeat('b', 64),
       (select response #>> '{data,contentHash}' from portal_lcia_seal_response),
       'portal-lcia-finalize-v1', '{}'::jsonb
     ) ->> 'reused'
@@ -3049,7 +3244,7 @@ select extensions.is(
   api.cmd_portal_lcia_projection_finalize_publication_v1(
     (select id from portal_lcia_ids where label = 'stage'),
     (select id from portal_lcia_ids where label = 'publication'),
-    'portal-lcia-package-v3', repeat('1', 64),
+    'portal-lcia-package-v3', repeat('b', 64),
     (select response #>> '{data,contentHash}' from portal_lcia_seal_response),
     'portal-lcia-finalize-conflict', '{}'::jsonb
   ) ->> 'code',
@@ -3676,7 +3871,7 @@ select extensions.is(
   api.cmd_portal_lcia_projection_finalize_publication_v1(
     (select id from portal_lcia_ids where label = 'stage'),
     (select id from portal_lcia_ids where label = 'publication'),
-    'portal-lcia-package-v3', repeat('1', 64),
+    'portal-lcia-package-v3', repeat('b', 64),
     (select response #>> '{data,contentHash}' from portal_lcia_seal_response),
     'portal-lcia-finalize-v1', '{}'::jsonb
   ) ->> 'code',
