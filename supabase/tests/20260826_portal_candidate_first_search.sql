@@ -60,11 +60,16 @@ select extensions.ok(
     'EXECUTE'
   )
   and pg_catalog.has_function_privilege(
+    'portal_public_executor',
+    'private.catalog_portal_document_v1(text,jsonb)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
     'api_internal_executor',
     'private.catalog_portal_document_v1(text,jsonb)',
     'EXECUTE'
   )
-  and pg_catalog.has_function_privilege(
+  and not pg_catalog.has_function_privilege(
     'service_role',
     'private.catalog_portal_document_v1(text,jsonb)',
     'EXECUTE'
@@ -79,7 +84,7 @@ select extensions.ok(
     'private.catalog_portal_document_v1(text,jsonb)',
     'EXECUTE'
   ),
-  'only database writer roles can evaluate the Portal index expression'
+  'only the projection builder owner and postgres migration role can evaluate the Portal document'
 );
 
 select extensions.ok(
@@ -90,30 +95,59 @@ select extensions.ok(
       and routine.proconfig @> array['search_path=""']::text[]
     from pg_catalog.pg_proc as routine
     where routine.oid = pg_catalog.to_regprocedure(
-      'private.catalog_portal_facts_v1(text,integer,jsonb)'
+      'private.catalog_portal_facts_v1(text,integer,jsonb,jsonb,text)'
     )
   )
   and pg_catalog.has_function_privilege(
     'api_internal_executor',
-    'private.catalog_portal_facts_v1(text,integer,jsonb)',
+    'private.catalog_portal_facts_v1(text,integer,jsonb,jsonb,text)',
     'EXECUTE'
   )
   and not pg_catalog.has_function_privilege(
     'anon',
-    'private.catalog_portal_facts_v1(text,integer,jsonb)',
+    'private.catalog_portal_facts_v1(text,integer,jsonb,jsonb,text)',
     'EXECUTE'
   )
   and not pg_catalog.has_function_privilege(
     'authenticated',
-    'private.catalog_portal_facts_v1(text,integer,jsonb)',
+    'private.catalog_portal_facts_v1(text,integer,jsonb,jsonb,text)',
     'EXECUTE'
   )
   and not pg_catalog.has_function_privilege(
     'service_role',
-    'private.catalog_portal_facts_v1(text,integer,jsonb)',
+    'private.catalog_portal_facts_v1(text,integer,jsonb,jsonb,text)',
     'EXECUTE'
   ),
   'exact pre-limit facts remain an immutable owner-to-internal-only helper'
+);
+
+select extensions.is(
+  (
+    select count(*)
+    from pg_catalog.pg_proc as routine
+    join pg_catalog.pg_namespace as namespace
+      on namespace.oid = routine.pronamespace
+    where namespace.nspname = 'private'
+      and routine.proname in (
+        'catalog_portal_process_pattern_versions_v1',
+        'catalog_portal_flow_pattern_versions_v1'
+      )
+      and routine.proowner = 'portal_public_executor'::regrole
+      and routine.prosecdef
+      and routine.proconfig @> array[
+        'search_path=""',
+        'statement_timeout=8s',
+        'plan_cache_mode=force_custom_plan',
+        'row_security=on'
+      ]::text[]
+      and pg_catalog.strpos(routine.prosrc, 'return query execute pg_catalog.format') > 0
+      and pg_catalog.strpos(routine.prosrc, '%L') > 0
+      and pg_catalog.strpos(routine.prosrc, '%I') = 0
+      and coalesce(routine.proacl::text, '')
+        = '{portal_public_executor=X/portal_public_executor}'
+  ),
+  2::bigint,
+  'two owner-only fixed SQL templates render only a literal LIKE pattern and never an identifier'
 );
 
 select extensions.ok(
@@ -130,8 +164,7 @@ select extensions.ok(
 
 select extensions.ok(
   (
-    select routine.prosrc ~ 'catalog_portal_document_v1\('
-      and routine.prosrc ~ 'operator\(extensions\.\&@\)'
+    select routine.prosrc ~ 'catalog_portal_candidate_rows_v1\('
       and pg_catalog.strpos(routine.prosrc, 'portal_prefilter')
         < pg_catalog.strpos(routine.prosrc, 'portal_facts')
       and pg_catalog.strpos(routine.prosrc, 'portal_ordered')
@@ -150,16 +183,112 @@ select extensions.ok(
 
 select extensions.ok(
   (
-    select routine.prosrc ~ 'catalog_portal_document_v1\('
-      and routine.prosrc ~ 'operator\(extensions\.\&@\|\)'
-      and pg_catalog.strpos(routine.prosrc, 'portal_lexical_prefilter')
-        < pg_catalog.strpos(routine.prosrc, 'portal_lexical_documents')
+    select routine.proowner = 'portal_public_executor'::regrole
+      and routine.prosecdef
+      and routine.proconfig @> array[
+        'search_path=""',
+        'statement_timeout=8s',
+        'plan_cache_mode=force_custom_plan',
+        'row_security=on'
+      ]::text[]
+      and (
+        (pg_catalog.length(routine.prosrc)
+          - pg_catalog.length(pg_catalog.replace(
+            routine.prosrc,
+            'return query',
+            ''
+          ))) / pg_catalog.length('return query')
+      ) = 6
+      and routine.prosrc ~ 'catalog_portal_process_pattern_versions_v1'
+      and routine.prosrc ~ 'catalog_portal_flow_pattern_versions_v1'
+      and routine.prosrc !~* '[[:space:]]execute[[:space:]]'
+    from pg_catalog.pg_proc as routine
+    where routine.oid = pg_catalog.to_regprocedure(
+      'private.catalog_portal_candidate_rows_v1(text,text,uuid,text)'
+    )
+  )
+  and pg_catalog.has_function_privilege(
+    'api_internal_executor',
+    'private.catalog_portal_candidate_rows_v1(text,text,uuid,text)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'anon',
+    'private.catalog_portal_candidate_rows_v1(text,text,uuid,text)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.catalog_portal_candidate_rows_v1(text,text,uuid,text)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'service_role',
+    'private.catalog_portal_candidate_rows_v1(text,text,uuid,text)',
+    'EXECUTE'
+  ),
+  'candidate lookup has six static branches and no external or dynamic-SQL edge'
+);
+
+select extensions.ok(
+  pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.processes', 'id', 'SELECT'
+  )
+  and pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.processes', 'version', 'SELECT'
+  )
+  and pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.processes', 'json', 'SELECT'
+  )
+  and pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.processes', 'state_code', 'SELECT'
+  )
+  and pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.processes', 'modified_at', 'SELECT'
+  )
+  and pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.flows', 'id', 'SELECT'
+  )
+  and pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.flows', 'version', 'SELECT'
+  )
+  and pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.flows', 'json', 'SELECT'
+  )
+  and pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.flows', 'state_code', 'SELECT'
+  )
+  and pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.flows', 'modified_at', 'SELECT'
+  )
+  and not pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.processes', 'search_text', 'SELECT'
+  )
+  and not pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.processes', 'embedding_ft', 'SELECT'
+  )
+  and not pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.flows', 'search_text', 'SELECT'
+  )
+  and not pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.flows', 'embedding_ft', 'SELECT'
+  ),
+  'candidate owner retains only the original five safe source columns per table'
+);
+
+select extensions.ok(
+  (
+    select routine.prosrc ~ 'portal_catalog_search_rows_v1'
+      and routine.prosrc !~ 'public\.processes|public\.flows'
+      and routine.prosrc ~ 'order by projection\.embedding_ft'
+      and pg_catalog.strpos(routine.prosrc, 'portal_lexical_matches')
+        < pg_catalog.strpos(routine.prosrc, 'portal_fused')
       and pg_catalog.strpos(routine.prosrc, 'portal_fused')
         < pg_catalog.strpos(routine.prosrc, 'portal_fused_decorated')
     from pg_catalog.pg_proc as routine
     where routine.oid = 'private.portal_public_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'::regprocedure
   ),
-  'Hybrid reduces lexical and semantic candidates before final card hydration'
+  'Hybrid uses the private lexical/vector projection and reduces candidates before stored-card filtering'
 );
 
 select extensions.is(
@@ -305,8 +434,49 @@ values (
   false
 );
 
+create or replace function pg_temp.portal_candidate_process_payload(
+  p_name text
+)
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'processDataSet', pg_catalog.jsonb_build_object(
+      'processInformation', pg_catalog.jsonb_build_object(
+        'dataSetInformation', pg_catalog.jsonb_build_object(
+          'name', pg_catalog.jsonb_build_object(
+            'baseName', pg_catalog.jsonb_build_object(
+              '@xml:lang', 'en',
+              '#text', p_name
+            )
+          )
+        )
+      ),
+      'administrativeInformation', pg_catalog.jsonb_build_object(
+        'publicationAndOwnership', pg_catalog.jsonb_build_object(
+          'common:dataSetVersion', '01.00.000',
+          'common:licenseType', 'Free of charge for all users and uses'
+        )
+      )
+    )
+  )
+$function$;
+
+grant execute on function pg_temp.portal_candidate_process_payload(text)
+  to service_role;
+
 alter table public.processes disable trigger user;
 alter table public.flows disable trigger user;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.processes
+  enable trigger portal_catalog_projection_embedding_sync_v1;
+alter table public.flows
+  enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.flows
+  enable trigger portal_catalog_projection_embedding_sync_v1;
 
 set local role service_role;
 
@@ -329,6 +499,19 @@ values
     null
   ),
   (
+    '53100000-0000-4000-8000-000000000103',
+    '01.00.000',
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"candidate review process"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000"}}}}'::jsonb,
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"candidate review process"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000"}}}}'::json,
+    '53100000-0000-4000-8000-000000000001',
+    20,
+    true,
+    '2026-08-26 06:30:03+00',
+    null,
+    null,
+    null
+  ),
+  (
     '53100000-0000-4000-8000-000000000102',
     '01.00.000',
     '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"candidate public process"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::jsonb,
@@ -337,6 +520,114 @@ values
     100,
     true,
     '2026-08-26 06:30:02+00',
+    null,
+    null,
+    null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000104',
+    '01.00.000',
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"alpha"}},"common:generalComment":{"@xml:lang":"en","#text":"beta"}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::jsonb,
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"alpha"}},"common:generalComment":{"@xml:lang":"en","#text":"beta"}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::json,
+    '53100000-0000-4000-8000-000000000001',
+    100,
+    true,
+    '2026-08-26 06:30:04+00',
+    null,
+    null,
+    null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000105',
+    '01.00.000',
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"percent% underscore_ backslash\\ punctuation--- singlea 电力生产"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::jsonb,
+    '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"percent% underscore_ backslash\\ punctuation--- singlea 电力生产"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::json,
+    '53100000-0000-4000-8000-000000000001',
+    100,
+    true,
+    '2026-08-26 06:30:05+00',
+    null,
+    null,
+    null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000100',
+    '01.00.000',
+    pg_temp.portal_candidate_process_payload(
+      'prefix candidate public process suffix'
+    ),
+    pg_temp.portal_candidate_process_payload(
+      'prefix candidate public process suffix'
+    )::json,
+    '53100000-0000-4000-8000-000000000001',
+    100,
+    true,
+    '2026-08-26 06:30:06+00',
+    null,
+    null,
+    null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000106',
+    '01.00.000',
+    pg_temp.portal_candidate_process_payload('filterfillneedle open one'),
+    pg_temp.portal_candidate_process_payload('filterfillneedle open one')::json,
+    '53100000-0000-4000-8000-000000000001',
+    100,
+    true,
+    '2026-08-26 06:30:07+00',
+    null,
+    null,
+    null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000107',
+    '01.00.000',
+    pg_temp.portal_candidate_process_payload('filterfillneedle open two'),
+    pg_temp.portal_candidate_process_payload('filterfillneedle open two')::json,
+    '53100000-0000-4000-8000-000000000001',
+    100,
+    true,
+    '2026-08-26 06:30:08+00',
+    null,
+    null,
+    null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000108',
+    '01.00.000',
+    pg_temp.portal_candidate_process_payload('filterfillneedle open three'),
+    pg_temp.portal_candidate_process_payload('filterfillneedle open three')::json,
+    '53100000-0000-4000-8000-000000000001',
+    100,
+    true,
+    '2026-08-26 06:30:09+00',
+    null,
+    null,
+    null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000109',
+    '01.00.000',
+    pg_temp.portal_candidate_process_payload('filterfillneedle metadata one'),
+    pg_temp.portal_candidate_process_payload('filterfillneedle metadata one')::json,
+    '53100000-0000-4000-8000-000000000001',
+    200,
+    true,
+    '2026-08-26 06:30:10+00',
+    null,
+    null,
+    null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000110',
+    '01.00.000',
+    pg_temp.portal_candidate_process_payload('filterfillneedle metadata two'),
+    pg_temp.portal_candidate_process_payload('filterfillneedle metadata two')::json,
+    '53100000-0000-4000-8000-000000000001',
+    200,
+    true,
+    '2026-08-26 06:30:11+00',
     null,
     null,
     null
@@ -368,6 +659,18 @@ values
     100,
     true,
     '2026-08-26 06:31:02+00',
+    null,
+    null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000203',
+    '01.00.000',
+    '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"candidate review flow"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000"}}}}'::jsonb,
+    '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"candidate review flow"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000"}}}}'::json,
+    '53100000-0000-4000-8000-000000000001',
+    20,
+    true,
+    '2026-08-26 06:31:03+00',
     null,
     null
   );
@@ -483,8 +786,146 @@ select extensions.ok(
   'both authenticated command updates persist their exact draft payloads inside the rollback-only proof'
 );
 
+set local role anon;
+
+select extensions.is(
+  (
+    with queries(label, query_text, expected_id) as (
+      values
+        ('cross_field', 'alpha beta', '53100000-0000-4000-8000-000000000104'::uuid),
+        ('percent', '%', '53100000-0000-4000-8000-000000000105'::uuid),
+        ('underscore', '_', '53100000-0000-4000-8000-000000000105'::uuid),
+        ('backslash', pg_catalog.chr(92), '53100000-0000-4000-8000-000000000105'::uuid),
+        ('punctuation', '---', '53100000-0000-4000-8000-000000000105'::uuid),
+        ('single_character', 'a', '53100000-0000-4000-8000-000000000105'::uuid),
+        ('cjk', '电力生产', '53100000-0000-4000-8000-000000000105'::uuid)
+    )
+    select count(*)
+    from queries
+    cross join lateral (
+      select api.portal_search_processes_v1(
+        queries.query_text,
+        '{}'::jsonb,
+        'relevance',
+        null,
+        20
+      ) as payload
+    ) as response
+    where exists (
+      select 1
+      from pg_catalog.jsonb_array_elements(
+        response.payload -> 'items'
+      ) as item(value)
+      where item.value #>> '{key,id}' = queries.expected_id::text
+    )
+  ),
+  7::bigint,
+  'literal LIKE candidates preserve cross-field, wildcard, slash, punctuation, single-character, and CJK matches'
+);
+
+select extensions.ok(
+  api.portal_search_processes_v1(
+    'candidate public process',
+    '{}'::jsonb,
+    'relevance',
+    null,
+    20
+  ) #>> '{items,0,key,id}' = '53100000-0000-4000-8000-000000000102'
+  and api.portal_search_processes_v1(
+    'candidate public process',
+    '{}'::jsonb,
+    'relevance',
+    null,
+    20
+  ) #>> '{items,0,match,score}' = '0.95'
+  and api.portal_search_processes_v1(
+    'candidate public process',
+    '{}'::jsonb,
+    'relevance',
+    null,
+    20
+  ) #> '{items,0,match,reasonCodes}' = '["name"]'::jsonb,
+  'exact name score outranks an earlier-ID generic document match'
+);
+
+select extensions.ok(
+  (
+    with response as (
+      select api.portal_search_processes_v1(
+        'filterfillneedle',
+        '{"accessLevel":"metadata_only"}'::jsonb,
+        'relevance',
+        null,
+        2
+      ) as payload
+    )
+    select pg_catalog.jsonb_array_length(response.payload -> 'items') = 2
+      and not exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(response.payload -> 'items') as item(value)
+        where item.value ->> 'accessLevel' <> 'metadata_only'
+      )
+    from response
+  ),
+  'filters run before limit and fill the page after earlier open candidates are removed'
+);
+
+select extensions.ok(
+  (
+    with first_page as (
+      select api.portal_search_processes_v1(
+        'filterfillneedle',
+        '{"accessLevel":"metadata_only"}'::jsonb,
+        'relevance',
+        null,
+        1
+      ) as payload
+    ), second_page as (
+      select api.portal_search_processes_v1(
+        'filterfillneedle',
+        '{"accessLevel":"metadata_only"}'::jsonb,
+        'relevance',
+        first_page.payload ->> 'nextCursor',
+        1
+      ) as payload
+      from first_page
+    )
+    select first_page.payload ->> 'nextCursor' is not null
+      and first_page.payload #>> '{items,0,key,id}'
+        <> second_page.payload #>> '{items,0,key,id}'
+      and pg_catalog.jsonb_array_length(second_page.payload -> 'items') = 1
+    from first_page
+    cross join second_page
+  ),
+  'filtered relevance cursor continues without overlap or an underfilled second page'
+);
+
+reset role;
+
 grant portal_public_executor to postgres;
 set local role portal_public_executor;
+
+select extensions.is(
+  (
+    select count(*)
+    from private.catalog_portal_candidate_rows_v1(
+      'process', '', null, null
+    )
+  ),
+  9::bigint,
+  'candidate helper and Portal RLS exclude state-0/state-20 Process rows'
+);
+
+select extensions.is(
+  (
+    select count(*)
+    from private.catalog_portal_candidate_rows_v1(
+      'flow', '', null, null
+    )
+  ),
+  1::bigint,
+  'candidate helper and Portal RLS exclude state-0/state-20 Flow rows'
+);
 
 select extensions.is(
   (
@@ -525,18 +966,46 @@ select extensions.is(
 select extensions.ok(
   (
     select facts.value ->> 'accessLevel' is not distinct from card.value ->> 'accessLevel'
-      and facts.value -> 'names' is not distinct from card.value -> 'names'
-      and facts.value -> 'classifications' is not distinct from card.value -> 'classifications'
+      and facts.value ->> 'nameKey' is not distinct from card.value #>> '{names,0,value}'
+      and (facts.value ->> 'nameExact')::boolean = exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(card.value -> 'names') as name(item)
+        where pg_catalog.lower(pg_catalog.btrim(name.item ->> 'value'))
+          = 'candidate public'
+      )
+      and (facts.value ->> 'nameContains')::boolean = exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(card.value -> 'names') as name(item)
+        where pg_catalog.strpos(
+          pg_catalog.lower(name.item ->> 'value'),
+          'candidate public'
+        ) > 0
+      )
+      and (facts.value ->> 'classificationExact')::boolean = exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(card.value -> 'classifications') as classification(item)
+        where pg_catalog.lower(pg_catalog.btrim(classification.item ->> 'code'))
+          = 'candidate public'
+      )
+      and (facts.value ->> 'classificationFilterMatch')::boolean = exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(card.value -> 'classifications') as classification(item)
+        where pg_catalog.lower(pg_catalog.btrim(classification.item ->> 'code'))
+          = 'portal'
+      )
       and facts.value ->> 'geographyCode' is not distinct from card.value #>> '{geography,code}'
       and facts.value -> 'referenceYear' is not distinct from card.value -> 'referenceYear'
       and facts.value -> 'processSubtype' is not distinct from card.value -> 'processSubtype'
       and facts.value -> 'source' is not distinct from card.value -> 'source'
       and facts.value -> 'casNumber' is not distinct from card.value -> 'casNumber'
-      and facts.value ->> 'document' is not distinct from card.value ->> 'document'
     from public.processes as process
     cross join lateral (
       select private.catalog_portal_facts_v1(
-        'process', process.state_code, process.json
+        'process',
+        process.state_code,
+        process.json,
+        '{"accessLevel":"open","geography":"cn","classification":"portal","referenceYearFrom":0,"referenceYearTo":9999,"processSubtype":"unit","source":"provider"}'::jsonb,
+        'candidate public'
       ) as value
     ) as facts
     cross join lateral (
@@ -553,18 +1022,46 @@ select extensions.ok(
 select extensions.ok(
   (
     select facts.value ->> 'accessLevel' is not distinct from card.value ->> 'accessLevel'
-      and facts.value -> 'names' is not distinct from card.value -> 'names'
-      and facts.value -> 'classifications' is not distinct from card.value -> 'classifications'
+      and facts.value ->> 'nameKey' is not distinct from card.value #>> '{names,0,value}'
+      and (facts.value ->> 'nameExact')::boolean = exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(card.value -> 'names') as name(item)
+        where pg_catalog.lower(pg_catalog.btrim(name.item ->> 'value'))
+          = 'candidate public'
+      )
+      and (facts.value ->> 'nameContains')::boolean = exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(card.value -> 'names') as name(item)
+        where pg_catalog.strpos(
+          pg_catalog.lower(name.item ->> 'value'),
+          'candidate public'
+        ) > 0
+      )
+      and (facts.value ->> 'classificationExact')::boolean = exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(card.value -> 'classifications') as classification(item)
+        where pg_catalog.lower(pg_catalog.btrim(classification.item ->> 'code'))
+          = 'candidate public'
+      )
+      and (facts.value ->> 'classificationFilterMatch')::boolean = exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(card.value -> 'classifications') as classification(item)
+        where pg_catalog.lower(pg_catalog.btrim(classification.item ->> 'code'))
+          = 'portal'
+      )
       and facts.value ->> 'geographyCode' is not distinct from card.value #>> '{geography,code}'
       and facts.value -> 'referenceYear' is not distinct from card.value -> 'referenceYear'
       and facts.value -> 'processSubtype' is not distinct from card.value -> 'processSubtype'
       and facts.value -> 'source' is not distinct from card.value -> 'source'
       and facts.value -> 'casNumber' is not distinct from card.value -> 'casNumber'
-      and facts.value ->> 'document' is not distinct from card.value ->> 'document'
     from public.flows as flow
     cross join lateral (
       select private.catalog_portal_facts_v1(
-        'flow', flow.state_code, flow.json
+        'flow',
+        flow.state_code,
+        flow.json,
+        '{"accessLevel":"open","geography":"cn","classification":"portal","referenceYearFrom":0,"referenceYearTo":9999,"source":"provider"}'::jsonb,
+        'candidate public'
       ) as value
     ) as facts
     cross join lateral (
