@@ -282,7 +282,8 @@ select extensions.ok(
   (
     select routine.prosrc ~ 'portal_catalog_search_rows_v1'
       and routine.prosrc !~ 'public\.processes|public\.flows'
-      and routine.prosrc ~ 'order by projection\.embedding_ft'
+      and routine.prosrc ~ 'portal_projection_semantic_process_v1'
+      and routine.prosrc ~ 'portal_projection_semantic_flow_v1'
       and pg_catalog.strpos(routine.prosrc, 'portal_lexical_matches')
         < pg_catalog.strpos(routine.prosrc, 'portal_fused')
       and pg_catalog.strpos(routine.prosrc, 'portal_fused')
@@ -290,7 +291,41 @@ select extensions.ok(
     from pg_catalog.pg_proc as routine
     where routine.oid = 'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'::regprocedure
   ),
-  'Hybrid uses the private lexical/vector projection and reduces candidates before stored-card filtering'
+  'Hybrid uses projection lexical/card rows and isolated source-HNSW semantic helpers before filtering'
+);
+
+select extensions.ok(
+  not exists (
+    select 1
+    from pg_catalog.pg_proc as routine
+    where routine.oid = any (array[
+        'private.portal_projection_semantic_process_v1(extensions.vector)'::regprocedure::oid,
+        'private.portal_projection_semantic_flow_v1(extensions.vector)'::regprocedure::oid
+      ])
+      and not (
+        routine.proowner = 'api_internal_executor'::regrole
+        and routine.prosecdef
+        and routine.proconfig @> array[
+          'search_path=""',
+          'statement_timeout=8s',
+          'plan_cache_mode=force_custom_plan',
+          'hnsw.iterative_scan=strict_order',
+          'enable_sort=off',
+          'row_security=on'
+        ]::text[]
+        and routine.prosrc ~ 'portal_catalog_search_rows_v1'
+        and routine.prosrc ~ 'embedding_ft'
+      )
+  )
+  and not exists (
+    select 1
+    from pg_catalog.pg_attribute as attribute
+    where attribute.attrelid =
+      'private.portal_catalog_search_rows_v1'::regclass
+      and attribute.attname = 'embedding_ft'
+      and not attribute.attisdropped
+  ),
+  'semantic helpers reuse source HNSW under isolated planner settings without copying vectors'
 );
 
 select extensions.is(
@@ -473,12 +508,8 @@ alter table public.processes disable trigger user;
 alter table public.flows disable trigger user;
 alter table public.processes
   enable trigger portal_catalog_projection_content_sync_v1;
-alter table public.processes
-  enable trigger portal_catalog_projection_embedding_sync_v1;
 alter table public.flows
   enable trigger portal_catalog_projection_content_sync_v1;
-alter table public.flows
-  enable trigger portal_catalog_projection_embedding_sync_v1;
 
 set local role service_role;
 
@@ -720,7 +751,7 @@ select extensions.ok(
     where id = '53100000-0000-4000-8000-000000000102'
       and version = '01.00.000'
   ),
-  'service-role Process derivative update retains authored JSON and modified_at while maintaining both indexes'
+  'service-role Process derivative update retains authored JSON/modified_at and updates only source derivatives'
 );
 
 select extensions.ok(
@@ -734,7 +765,7 @@ select extensions.ok(
     where id = '53100000-0000-4000-8000-000000000202'
       and version = '01.00.000'
   ),
-  'service-role Flow derivative update retains authored JSON and modified_at while maintaining both indexes'
+  'service-role Flow derivative update retains authored JSON/modified_at and updates only source derivatives'
 );
 
 set local role authenticated;

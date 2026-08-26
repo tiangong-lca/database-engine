@@ -80,10 +80,10 @@ select
     'private.portal_catalog_search_flow_document_v1_pgroonga'
   ) is not null
   and pg_catalog.to_regclass(
-    'private.portal_catalog_search_process_embedding_v1_hnsw'
+    'public.processes_embedding_ft_hnsw_idx'
   ) is not null
   and pg_catalog.to_regclass(
-    'private.portal_catalog_search_flow_embedding_v1_hnsw'
+    'public.flows_embedding_ft_hnsw_idx'
   ) is not null
   and pg_catalog.to_regprocedure(
     'private.catalog_portal_search_v1_impl(text,text,jsonb,text,text,uuid,text,integer,text)'
@@ -347,12 +347,8 @@ $measure_portal_writer_baseline$;
 
 alter table public.processes
   enable trigger portal_catalog_projection_content_sync_v1;
-alter table public.processes
-  enable trigger portal_catalog_projection_embedding_sync_v1;
 alter table public.flows
   enable trigger portal_catalog_projection_content_sync_v1;
-alter table public.flows
-  enable trigger portal_catalog_projection_embedding_sync_v1;
 
 do $measure_portal_projection_writes$
 declare
@@ -432,7 +428,7 @@ begin
       )
       and version = '01.00.000';
     insert into pg_temp.portal_benchmark_writer_timings values (
-      'process_embedding_update_projection',
+      'process_embedding_update_source_hnsw',
       1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
     );
 
@@ -444,7 +440,7 @@ begin
       )
       and version = '01.00.000';
     insert into pg_temp.portal_benchmark_writer_timings values (
-      'flow_embedding_update_projection',
+      'flow_embedding_update_source_hnsw',
       1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
     );
   end loop;
@@ -642,7 +638,6 @@ begin
       process.id is null
       or process.state_code <> projection.state_code
       or process.modified_at <> projection.modified_at
-      or (process.embedding_ft is null) <> (projection.embedding_ft is null)
     );
 
   select count(*) into v_probe
@@ -656,7 +651,6 @@ begin
       flow.id is null
       or flow.state_code <> projection.state_code
       or flow.modified_at <> projection.modified_at
-      or (flow.embedding_ft is null) <> (projection.embedding_ft is null)
     );
 
   insert into pg_temp.portal_benchmark_fence_metrics values (
@@ -715,11 +709,11 @@ select pg_catalog.jsonb_build_object(
   'flow_index_bytes', pg_catalog.pg_relation_size(
     'private.portal_catalog_search_flow_document_v1_pgroonga'
   ),
-  'process_hnsw_bytes', pg_catalog.pg_relation_size(
-    'private.portal_catalog_search_process_embedding_v1_hnsw'
+  'reused_process_hnsw_bytes', pg_catalog.pg_relation_size(
+    'public.processes_embedding_ft_hnsw_idx'
   ),
-  'flow_hnsw_bytes', pg_catalog.pg_relation_size(
-    'private.portal_catalog_search_flow_embedding_v1_hnsw'
+  'reused_flow_hnsw_bytes', pg_catalog.pg_relation_size(
+    'public.flows_embedding_ft_hnsw_idx'
   ),
   'projection_total_bytes', pg_catalog.pg_total_relation_size(
     'private.portal_catalog_search_rows_v1'
@@ -760,25 +754,57 @@ revoke portal_public_executor from postgres;
 grant api_internal_executor to postgres;
 set local role api_internal_executor;
 
-\qecho profile=process-projection-hnsw
+set local enable_sort = off;
+
+\qecho profile=process-source-hnsw-latest-public
 explain (analyze, buffers, settings, wal, summary, format json)
-select projection.id
-from private.portal_catalog_search_rows_v1 as projection
-where projection.dataset_kind = 'process'
-  and projection.embedding_ft is not null
-order by projection.embedding_ft
+select process.id
+from public.processes as process
+where process.state_code in (100, 200)
+  and process.embedding_ft is not null
+  and exists (
+    select 1
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'process'
+      and projection.id = process.id
+      and projection.version = process.version::text
+      and not exists (
+        select 1
+        from private.portal_catalog_search_rows_v1 as newer
+        where newer.dataset_kind = projection.dataset_kind
+          and newer.id = projection.id
+          and newer.version > projection.version
+      )
+  )
+order by process.embedding_ft
   operator(extensions.<=>) pg_temp.portal_bench_vector(1)
 limit 200;
 
-\qecho profile=flow-projection-hnsw
+\qecho profile=flow-source-hnsw-latest-public
 explain (analyze, buffers, settings, wal, summary, format json)
-select projection.id
-from private.portal_catalog_search_rows_v1 as projection
-where projection.dataset_kind = 'flow'
-  and projection.embedding_ft is not null
-order by projection.embedding_ft
+select flow.id
+from public.flows as flow
+where flow.state_code in (100, 200)
+  and flow.embedding_ft is not null
+  and exists (
+    select 1
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'flow'
+      and projection.id = flow.id
+      and projection.version = flow.version::text
+      and not exists (
+        select 1
+        from private.portal_catalog_search_rows_v1 as newer
+        where newer.dataset_kind = projection.dataset_kind
+          and newer.id = projection.id
+          and newer.version > projection.version
+      )
+  )
+order by flow.embedding_ft
   operator(extensions.<=>) pg_temp.portal_bench_vector(1)
 limit 200;
+
+set local enable_sort = on;
 
 reset role;
 revoke api_internal_executor from postgres;
@@ -1227,8 +1253,8 @@ with expected(label) as (
     ('flow_insert_projection'),
     ('process_content_update_projection'),
     ('flow_content_update_projection'),
-    ('process_embedding_update_projection'),
-    ('flow_embedding_update_projection')
+    ('process_embedding_update_source_hnsw'),
+    ('flow_embedding_update_source_hnsw')
 ), writer_summary as (
   select mode,
     count(*) as samples,

@@ -134,12 +134,8 @@ alter table public.processes disable trigger user;
 alter table public.flows disable trigger user;
 alter table public.processes
   enable trigger portal_catalog_projection_content_sync_v1;
-alter table public.processes
-  enable trigger portal_catalog_projection_embedding_sync_v1;
 alter table public.flows
   enable trigger portal_catalog_projection_content_sync_v1;
-alter table public.flows
-  enable trigger portal_catalog_projection_embedding_sync_v1;
 
 insert into public.processes (
   id, version, json, json_ordered, user_id, state_code,
@@ -329,13 +325,18 @@ assert_sql "
       and id = '53190000-0000-4000-8000-000000000005'::uuid
   ), false)
   and coalesce((
-    select card #>> '{names,0,value}' = 'race embedding only'
-      and embedding_ft is not null
+    select embedding_ft is not null
+    from public.processes
+    where id = '53190000-0000-4000-8000-000000000006'::uuid
+      and version = '01.00.000'
+  ), false)
+  and not exists (
+    select 1
     from private.portal_catalog_search_rows_v1
     where dataset_kind = 'process'
       and id = '53190000-0000-4000-8000-000000000006'::uuid
-  ), false)
-" "pre-fence race state did not preserve valid/key/embedding winners and exact stale invalidations"
+  )
+" "pre-fence race state did not preserve valid/key/source-vector winners and exact missing/stale rows"
 
 # Hold a real writer lock beyond the five-second lock budget. The authored
 # reconcile transaction must fail with no ledger row and no partial cleanup.
@@ -395,7 +396,7 @@ assert_sql "
       and id = '53190000-0000-4000-8000-000000000005'::uuid
   ), false)
   and coalesce((
-    select embedding_ft is not null
+    select card #>> '{names,0,value}' = 'race embedding only'
     from private.portal_catalog_search_rows_v1
     where dataset_kind = 'process'
       and id = '53190000-0000-4000-8000-000000000006'::uuid
@@ -440,8 +441,9 @@ assert_sql "
 
 # Breakpoint 3: a cutover guard failure rolls back every CREATE OR REPLACE.
 # Restoring the guarded index and repeating migration-up must continue from the
-# unchanged ledger, then a no-op repeat must preserve all four index OIDs.
-reset_to 20260826080357
+# unchanged ledger, then a no-op repeat must preserve both new lexical indexes
+# and both reused source HNSW index OIDs.
+reset_to 20260826080351
 wrapper_before="$(scalar_sql "
   select pg_catalog.md5(pg_catalog.pg_get_functiondef(
     'api.portal_search_processes_v1(text,jsonb,text,text,integer)'::regprocedure
@@ -477,12 +479,18 @@ index_oids_before="$(scalar_sql "
   from pg_catalog.pg_class as index_relation
   join pg_catalog.pg_namespace as namespace
     on namespace.oid = index_relation.relnamespace
-  where namespace.nspname = 'private'
-    and index_relation.relname in (
-      'portal_catalog_search_process_document_v1_pgroonga',
-      'portal_catalog_search_flow_document_v1_pgroonga',
-      'portal_catalog_search_process_embedding_v1_hnsw',
-      'portal_catalog_search_flow_embedding_v1_hnsw'
+  where (
+      namespace.nspname = 'private'
+      and index_relation.relname in (
+        'portal_catalog_search_process_document_v1_pgroonga',
+        'portal_catalog_search_flow_document_v1_pgroonga'
+      )
+    ) or (
+      namespace.nspname = 'public'
+      and index_relation.relname in (
+        'processes_embedding_ft_hnsw_idx',
+        'flows_embedding_ft_hnsw_idx'
+      )
     )
 ")"
 apply_pending
@@ -491,12 +499,18 @@ index_oids_after="$(scalar_sql "
   from pg_catalog.pg_class as index_relation
   join pg_catalog.pg_namespace as namespace
     on namespace.oid = index_relation.relnamespace
-  where namespace.nspname = 'private'
-    and index_relation.relname in (
-      'portal_catalog_search_process_document_v1_pgroonga',
-      'portal_catalog_search_flow_document_v1_pgroonga',
-      'portal_catalog_search_process_embedding_v1_hnsw',
-      'portal_catalog_search_flow_embedding_v1_hnsw'
+  where (
+      namespace.nspname = 'private'
+      and index_relation.relname in (
+        'portal_catalog_search_process_document_v1_pgroonga',
+        'portal_catalog_search_flow_document_v1_pgroonga'
+      )
+    ) or (
+      namespace.nspname = 'public'
+      and index_relation.relname in (
+        'processes_embedding_ft_hnsw_idx',
+        'flows_embedding_ft_hnsw_idx'
+      )
     )
 ")"
 if [[ "$index_oids_before" != "$index_oids_after" ]]; then
