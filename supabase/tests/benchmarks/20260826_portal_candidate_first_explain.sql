@@ -25,22 +25,37 @@
 
 \if :{?process_rows}
 \else
-  \set process_rows 17240
+  \set process_rows 17299
 \endif
 
 \if :{?flow_rows}
 \else
-  \set flow_rows 108886
+  \set flow_rows 108947
 \endif
 
 \if :{?process_vector_rows}
 \else
-  \set process_vector_rows 5000
+  \set process_vector_rows 17299
 \endif
 
 \if :{?flow_vector_rows}
 \else
-  \set flow_vector_rows 20000
+  \set flow_vector_rows 108947
+\endif
+
+\if :{?process_old_version_rows}
+\else
+  \set process_old_version_rows 100
+\endif
+
+\if :{?flow_old_version_rows}
+\else
+  \set flow_old_version_rows 21000
+\endif
+
+\if :{?draft_vector_rows}
+\else
+  \set draft_vector_rows 100
 \endif
 
 \if :{?writer_samples}
@@ -53,6 +68,19 @@ select :'benchmark_target' = 'local' as benchmark_attestation_ok \gset
 \else
   \echo 'ERROR: this rollback-only profile is local-only'
   \quit 3
+\endif
+
+select case
+  when pg_catalog.inet_server_addr() is null then true
+  when pg_catalog.family(pg_catalog.inet_server_addr()) = 4 then
+    pg_catalog.inet_server_addr() << '127.0.0.0/8'::inet
+  else pg_catalog.inet_server_addr() = '::1'::inet
+end as benchmark_server_is_local
+\gset
+\if :benchmark_server_is_local
+\else
+  \echo 'ERROR: benchmark database socket/address is not local'
+  \quit
 \endif
 
 begin;
@@ -144,7 +172,7 @@ immutable
 set search_path = ''
 as $function$
   select (
-    '[1,0.' || pg_catalog.lpad(((p_ordinal % 97) + 1)::text, 4, '0') || ',' ||
+    '[1,0.' || pg_catalog.lpad(p_ordinal::text, 6, '0') || ',' ||
     pg_catalog.array_to_string(
       pg_catalog.array_fill('0'::text, array[1022]),
       ','
@@ -498,7 +526,10 @@ select
     + pg_catalog.make_interval(secs => series.ordinal::double precision / 1000),
   null,
   case when series.ordinal <= :process_vector_rows
-    then pg_temp.portal_bench_vector(series.ordinal)
+    then case when series.ordinal = 1
+      then pg_temp.portal_bench_far_vector()
+      else pg_temp.portal_bench_vector(series.ordinal)
+    end
     else null
   end,
   null
@@ -531,7 +562,10 @@ select
     + pg_catalog.make_interval(secs => series.ordinal::double precision / 1000),
   null,
   case when series.ordinal <= :flow_vector_rows
-    then pg_temp.portal_bench_vector(series.ordinal)
+    then case when series.ordinal = 1
+      then pg_temp.portal_bench_far_vector()
+      else pg_temp.portal_bench_vector(series.ordinal)
+    end
     else null
   end
 from pg_catalog.generate_series(1, :flow_rows) as series(ordinal)
@@ -555,7 +589,10 @@ select
   null,
   pg_temp.portal_bench_vector(1),
   null
-from pg_catalog.generate_series(1, least(:process_rows, 100)) as series(ordinal)
+from pg_catalog.generate_series(
+  1,
+  least(:process_rows, :process_old_version_rows)
+) as series(ordinal)
 cross join lateral (
   select pg_temp.portal_bench_process_payload(series.ordinal) as value
 ) as payload;
@@ -575,7 +612,57 @@ select
   '2026-08-25 00:00:00+00'::timestamptz,
   null,
   pg_temp.portal_bench_vector(1)
-from pg_catalog.generate_series(1, least(:flow_rows, 100)) as series(ordinal)
+from pg_catalog.generate_series(
+  1,
+  least(:flow_rows, :flow_old_version_rows)
+) as series(ordinal)
+cross join lateral (
+  select pg_temp.portal_bench_flow_payload(series.ordinal) as value
+) as payload;
+
+insert into public.processes (
+  id, version, json, json_ordered, user_id, state_code,
+  rule_verification, modified_at, search_text, embedding_ft, model_id
+)
+select
+  pg_temp.portal_bench_uuid('process', series.ordinal),
+  '99.99.999',
+  payload.value,
+  payload.value::json,
+  '53100000-0000-4000-8000-000000000001'::uuid,
+  0,
+  true,
+  '2026-08-27 00:00:00+00'::timestamptz,
+  null,
+  pg_temp.portal_bench_vector(1),
+  null
+from pg_catalog.generate_series(
+  1,
+  least(:process_rows, :draft_vector_rows)
+) as series(ordinal)
+cross join lateral (
+  select pg_temp.portal_bench_process_payload(series.ordinal) as value
+) as payload;
+
+insert into public.flows (
+  id, version, json, json_ordered, user_id, state_code,
+  rule_verification, modified_at, search_text, embedding_ft
+)
+select
+  pg_temp.portal_bench_uuid('flow', series.ordinal),
+  '99.99.999',
+  payload.value,
+  payload.value::json,
+  '53100000-0000-4000-8000-000000000001'::uuid,
+  0,
+  true,
+  '2026-08-27 00:00:00+00'::timestamptz,
+  null,
+  pg_temp.portal_bench_vector(1)
+from pg_catalog.generate_series(
+  1,
+  least(:flow_rows, :draft_vector_rows)
+) as series(ordinal)
 cross join lateral (
   select pg_temp.portal_bench_flow_payload(series.ordinal) as value
 ) as payload;
@@ -720,6 +807,38 @@ select pg_catalog.jsonb_build_object(
   )
 ) as redacted_benchmark_metadata;
 
+create temporary table portal_benchmark_plans (
+  label text primary key,
+  plan_text text not null
+) on commit drop;
+
+create or replace function pg_temp.capture_portal_benchmark_plan(
+  p_label text,
+  p_query text
+)
+returns void
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  v_line text;
+  v_plan text := '';
+begin
+  for v_line in execute
+    'explain (analyze, buffers, settings, summary, format text) ' || p_query
+  loop
+    v_plan := v_plan || v_line || pg_catalog.chr(10);
+  end loop;
+  insert into pg_temp.portal_benchmark_plans(label, plan_text)
+  values (p_label, v_plan);
+end
+$function$;
+
+grant insert, select on pg_temp.portal_benchmark_plans
+  to portal_public_executor, api_internal_executor;
+grant execute on function pg_temp.capture_portal_benchmark_plan(text, text)
+  to portal_public_executor, api_internal_executor;
+
 \pset format unaligned
 \pset tuples_only on
 \o :explain_output
@@ -739,6 +858,18 @@ where projection.dataset_kind = 'process'
 order by projection.id
 limit 200;
 
+select pg_temp.capture_portal_benchmark_plan(
+  'process_pgroonga',
+  $query$
+    select projection.id
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'process'
+      and projection.document like '%portalbenchneedle%' escape E'\\'
+    order by projection.id
+    limit 200
+  $query$
+);
+
 \qecho profile=flow-projection-pgroonga
 explain (analyze, buffers, settings, wal, summary, format json)
 select projection.id
@@ -747,6 +878,18 @@ where projection.dataset_kind = 'flow'
   and projection.document like '%portalbenchneedle%' escape E'\\'
 order by projection.id
 limit 200;
+
+select pg_temp.capture_portal_benchmark_plan(
+  'flow_pgroonga',
+  $query$
+    select projection.id
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'flow'
+      and projection.document like '%portalbenchneedle%' escape E'\\'
+    order by projection.id
+    limit 200
+  $query$
+);
 
 reset role;
 revoke portal_public_executor from postgres;
@@ -773,12 +916,61 @@ where process.state_code in (100, 200)
         from private.portal_catalog_search_rows_v1 as newer
         where newer.dataset_kind = projection.dataset_kind
           and newer.id = projection.id
-          and newer.version > projection.version
+          and (
+            newer.version > projection.version
+            or (
+              newer.version = projection.version
+              and newer.modified_at > projection.modified_at
+            )
+            or (
+              newer.version = projection.version
+              and newer.modified_at = projection.modified_at
+              and newer.state_code > projection.state_code
+            )
+          )
       )
   )
 order by process.embedding_ft
   operator(extensions.<=>) pg_temp.portal_bench_vector(1)
 limit 200;
+
+select pg_temp.capture_portal_benchmark_plan(
+  'process_source_hnsw',
+  $query$
+    select process.id
+    from public.processes as process
+    where process.state_code in (100, 200)
+      and process.embedding_ft is not null
+      and exists (
+        select 1
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'process'
+          and projection.id = process.id
+          and projection.version = process.version::text
+          and not exists (
+            select 1
+            from private.portal_catalog_search_rows_v1 as newer
+            where newer.dataset_kind = projection.dataset_kind
+              and newer.id = projection.id
+              and (
+                newer.version > projection.version
+                or (
+                  newer.version = projection.version
+                  and newer.modified_at > projection.modified_at
+                )
+                or (
+                  newer.version = projection.version
+                  and newer.modified_at = projection.modified_at
+                  and newer.state_code > projection.state_code
+                )
+              )
+          )
+      )
+    order by process.embedding_ft
+      operator(extensions.<=>) pg_temp.portal_bench_vector(1)
+    limit 200
+  $query$
+);
 
 \qecho profile=flow-source-hnsw-latest-public
 explain (analyze, buffers, settings, wal, summary, format json)
@@ -797,12 +989,61 @@ where flow.state_code in (100, 200)
         from private.portal_catalog_search_rows_v1 as newer
         where newer.dataset_kind = projection.dataset_kind
           and newer.id = projection.id
-          and newer.version > projection.version
+          and (
+            newer.version > projection.version
+            or (
+              newer.version = projection.version
+              and newer.modified_at > projection.modified_at
+            )
+            or (
+              newer.version = projection.version
+              and newer.modified_at = projection.modified_at
+              and newer.state_code > projection.state_code
+            )
+          )
       )
   )
 order by flow.embedding_ft
   operator(extensions.<=>) pg_temp.portal_bench_vector(1)
 limit 200;
+
+select pg_temp.capture_portal_benchmark_plan(
+  'flow_source_hnsw',
+  $query$
+    select flow.id
+    from public.flows as flow
+    where flow.state_code in (100, 200)
+      and flow.embedding_ft is not null
+      and exists (
+        select 1
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'flow'
+          and projection.id = flow.id
+          and projection.version = flow.version::text
+          and not exists (
+            select 1
+            from private.portal_catalog_search_rows_v1 as newer
+            where newer.dataset_kind = projection.dataset_kind
+              and newer.id = projection.id
+              and (
+                newer.version > projection.version
+                or (
+                  newer.version = projection.version
+                  and newer.modified_at > projection.modified_at
+                )
+                or (
+                  newer.version = projection.version
+                  and newer.modified_at = projection.modified_at
+                  and newer.state_code > projection.state_code
+                )
+              )
+          )
+      )
+    order by flow.embedding_ft
+      operator(extensions.<=>) pg_temp.portal_bench_vector(1)
+    limit 200
+  $query$
+);
 
 set local enable_sort = on;
 
@@ -824,6 +1065,44 @@ create temporary table portal_benchmark_failures (
   message text not null,
   elapsed_ms double precision not null
 ) on commit drop;
+
+insert into pg_temp.portal_benchmark_failures (
+  label, sqlstate, message, elapsed_ms
+)
+select
+  'plan_index_guard',
+  'P0001',
+  'representative plan missed an exact PGroonga/full-source-HNSW index or used source Sort/SeqScan',
+  0
+where (:process_rows >= 10000 and :flow_rows >= 100000)
+  and (
+    (select count(*) from pg_temp.portal_benchmark_plans) <> 4
+   or not coalesce((
+     select plan_text ~ 'portal_catalog_search_process_document_v1_pgroonga'
+     from pg_temp.portal_benchmark_plans
+     where label = 'process_pgroonga'
+   ), false)
+   or not coalesce((
+     select plan_text ~ 'portal_catalog_search_flow_document_v1_pgroonga'
+     from pg_temp.portal_benchmark_plans
+     where label = 'flow_pgroonga'
+   ), false)
+   or not coalesce((
+     select plan_text ~ 'processes_embedding_ft_hnsw_idx'
+       and plan_text !~ 'processes_embedding_ft_tg_hnsw_idx'
+       and plan_text !~ 'Seq Scan on processes'
+       and plan_text !~ '(^|\n)[[:space:]]*Sort[[:space:]]'
+     from pg_temp.portal_benchmark_plans
+     where label = 'process_source_hnsw'
+   ), false)
+   or not coalesce((
+     select plan_text ~ 'flows_embedding_ft_hnsw_idx'
+       and plan_text !~ 'Seq Scan on flows'
+       and plan_text !~ '(^|\n)[[:space:]]*Sort[[:space:]]'
+     from pg_temp.portal_benchmark_plans
+     where label = 'flow_source_hnsw'
+   ), false)
+  );
 
 create or replace function pg_temp.record_portal_search_timing(
   p_label text,
@@ -1178,6 +1457,204 @@ values
   );
 reset role;
 
+create temporary table portal_benchmark_recall (
+  dataset_kind text not null,
+  requested_k integer not null,
+  exact_count integer not null,
+  matched_count integer not null,
+  ann_count integer not null,
+  recall numeric not null,
+  primary key (dataset_kind, requested_k)
+) on commit drop;
+grant insert, select on pg_temp.portal_benchmark_recall
+  to api_internal_executor;
+
+grant api_internal_executor to postgres;
+set local role api_internal_executor;
+
+create temporary table portal_exact_process on commit drop as
+with eligible as materialized (
+  select process.id,
+    process.version::text as version,
+    process.embedding_ft operator(extensions.<=>)
+      pg_temp.portal_bench_vector(1) as semantic_distance
+  from public.processes as process
+  where process.state_code in (100, 200)
+    and process.embedding_ft is not null
+    and exists (
+      select 1
+      from private.portal_catalog_search_rows_v1 as projection
+      where projection.dataset_kind = 'process'
+        and projection.id = process.id
+        and projection.version = process.version::text
+        and not exists (
+          select 1
+          from private.portal_catalog_search_rows_v1 as newer
+          where newer.dataset_kind = projection.dataset_kind
+            and newer.id = projection.id
+            and (
+              newer.version > projection.version
+              or (
+                newer.version = projection.version
+                and newer.modified_at > projection.modified_at
+              )
+              or (
+                newer.version = projection.version
+                and newer.modified_at = projection.modified_at
+                and newer.state_code > projection.state_code
+              )
+            )
+        )
+    )
+)
+select eligible.*,
+  pg_catalog.row_number() over (
+    order by eligible.semantic_distance, eligible.id, eligible.version desc
+  )::integer as exact_rank
+from eligible
+where eligible.semantic_distance between 0::double precision
+  and 0.5::double precision
+order by eligible.semantic_distance, eligible.id, eligible.version desc
+limit 200;
+
+create temporary table portal_ann_process on commit drop as
+select semantic.*
+from private.portal_projection_semantic_process_v1(
+  pg_temp.portal_bench_vector(1)
+) as semantic;
+
+create temporary table portal_exact_flow on commit drop as
+with eligible as materialized (
+  select flow.id,
+    flow.version::text as version,
+    flow.embedding_ft operator(extensions.<=>)
+      pg_temp.portal_bench_vector(1) as semantic_distance
+  from public.flows as flow
+  where flow.state_code in (100, 200)
+    and flow.embedding_ft is not null
+    and exists (
+      select 1
+      from private.portal_catalog_search_rows_v1 as projection
+      where projection.dataset_kind = 'flow'
+        and projection.id = flow.id
+        and projection.version = flow.version::text
+        and not exists (
+          select 1
+          from private.portal_catalog_search_rows_v1 as newer
+          where newer.dataset_kind = projection.dataset_kind
+            and newer.id = projection.id
+            and (
+              newer.version > projection.version
+              or (
+                newer.version = projection.version
+                and newer.modified_at > projection.modified_at
+              )
+              or (
+                newer.version = projection.version
+                and newer.modified_at = projection.modified_at
+                and newer.state_code > projection.state_code
+              )
+            )
+        )
+    )
+)
+select eligible.*,
+  pg_catalog.row_number() over (
+    order by eligible.semantic_distance, eligible.id, eligible.version desc
+  )::integer as exact_rank
+from eligible
+where eligible.semantic_distance between 0::double precision
+  and 0.5::double precision
+order by eligible.semantic_distance, eligible.id, eligible.version desc
+limit 200;
+
+create temporary table portal_ann_flow on commit drop as
+select semantic.*
+from private.portal_projection_semantic_flow_v1(
+  pg_temp.portal_bench_vector(1)
+) as semantic;
+
+insert into pg_temp.portal_benchmark_recall (
+  dataset_kind,
+  requested_k,
+  exact_count,
+  matched_count,
+  ann_count,
+  recall
+)
+select kind.value,
+  level.value,
+  exact.expected_count,
+  matched.value,
+  ann.value,
+  case when exact.expected_count = 0 then 1::numeric
+    else matched.value::numeric / exact.expected_count
+  end
+from (values ('process'::text), ('flow'::text)) as kind(value)
+cross join (values (20), (200)) as level(value)
+cross join lateral (
+  select case kind.value
+    when 'process' then (
+      select count(*)::integer
+      from pg_temp.portal_exact_process
+      where exact_rank <= level.value
+    )
+    else (
+      select count(*)::integer
+      from pg_temp.portal_exact_flow
+      where exact_rank <= level.value
+    )
+  end as expected_count
+) as exact
+cross join lateral (
+  select case kind.value
+    when 'process' then (
+      select count(*)::integer
+      from pg_temp.portal_exact_process as expected
+      where expected.exact_rank <= level.value
+        and exists (
+          select 1
+          from pg_temp.portal_ann_process as actual
+          where actual.id = expected.id
+            and actual.version = expected.version
+        )
+    )
+    else (
+      select count(*)::integer
+      from pg_temp.portal_exact_flow as expected
+      where expected.exact_rank <= level.value
+        and exists (
+          select 1
+          from pg_temp.portal_ann_flow as actual
+          where actual.id = expected.id
+            and actual.version = expected.version
+        )
+    )
+  end as value
+) as matched
+cross join lateral (
+  select case kind.value
+    when 'process' then (
+      select count(*)::integer from pg_temp.portal_ann_process
+    )
+    else (
+      select count(*)::integer from pg_temp.portal_ann_flow
+    )
+  end as value
+) as ann;
+
+reset role;
+revoke api_internal_executor from postgres;
+
+select dataset_kind,
+  requested_k,
+  exact_count,
+  matched_count,
+  ann_count,
+  pg_catalog.round(recall, 6) as recall
+from pg_temp.portal_benchmark_recall
+order by dataset_kind, requested_k;
+
 insert into pg_temp.portal_benchmark_failures (
   label, sqlstate, message, elapsed_ms
 )
@@ -1196,7 +1673,26 @@ where exists (
            probe.payload -> 'items'
          ) as item(value)
          where item.value #>> '{key,version}' = '00.99.999'
+            or item.value #>> '{key,id}' = pg_temp.portal_bench_uuid(
+              probe.dataset_kind,
+              1
+            )::text
        )
+);
+
+insert into pg_temp.portal_benchmark_failures (
+  label, sqlstate, message, elapsed_ms
+)
+select
+  'semantic_ann_recall',
+  'P0001',
+  'source-HNSW recall/count differs from exact latest-visible top-k',
+  0
+where exists (
+  select 1
+  from pg_temp.portal_benchmark_recall
+  where recall < 0.95::numeric
+     or ann_count < exact_count
 );
 
 select label,
@@ -1307,5 +1803,5 @@ analyze private.portal_catalog_search_rows_v1;
 \if :benchmark_pass
 \else
   \echo 'ERROR: Portal projection benchmark failed or exceeded 2000ms p95'
-  \quit 5
+  select 1 / 0;
 \endif
