@@ -29,8 +29,12 @@ begin
         and second_key.attnum = index_catalog.indkey[1]
        join pg_catalog.pg_opclass as first_opclass
          on first_opclass.oid = index_catalog.indclass[0]
+       join pg_catalog.pg_namespace as first_opclass_namespace
+         on first_opclass_namespace.oid = first_opclass.opcnamespace
        join pg_catalog.pg_opclass as second_opclass
          on second_opclass.oid = index_catalog.indclass[1]
+       join pg_catalog.pg_namespace as second_opclass_namespace
+         on second_opclass_namespace.oid = second_opclass.opcnamespace
        where index_catalog.indexrelid = v_index
          and source_namespace.nspname = 'public'
          and source_relation.relname = 'flows'
@@ -44,8 +48,12 @@ begin
          and index_catalog.indexprs is null
          and first_key.attname = 'id'
          and second_key.attname = 'version'
+         and first_opclass_namespace.nspname = 'pg_catalog'
+         and second_opclass_namespace.nspname = 'pg_catalog'
          and first_opclass.opcname = 'uuid_ops'
          and second_opclass.opcname = 'bpchar_ops'
+         and first_opclass.opcintype = 'pg_catalog.uuid'::pg_catalog.regtype
+         and second_opclass.opcintype = 'pg_catalog.bpchar'::pg_catalog.regtype
          and pg_catalog.regexp_replace(
            pg_catalog.lower(pg_catalog.pg_get_expr(
              index_catalog.indpred,

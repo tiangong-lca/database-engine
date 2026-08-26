@@ -201,8 +201,12 @@ def main() -> int:
             "index_catalog.indnatts = 2",
             "first_key.attname = 'id'",
             "second_key.attname = 'version'",
+            "first_opclass_namespace.nspname = 'pg_catalog'",
+            "second_opclass_namespace.nspname = 'pg_catalog'",
             "first_opclass.opcname = 'uuid_ops'",
             "second_opclass.opcname = 'bpchar_ops'",
+            "first_opclass.opcintype = 'pg_catalog.uuid'::pg_catalog.regtype",
+            "second_opclass.opcintype = 'pg_catalog.bpchar'::pg_catalog.regtype",
             "((state_code=any(array[100,200]))and(embedding_ftisnotnull))",
             "portal flow embedding eligibility index drifted",
         )

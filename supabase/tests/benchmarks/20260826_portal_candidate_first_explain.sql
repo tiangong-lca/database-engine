@@ -1135,7 +1135,10 @@ set local enable_seqscan = on;
 set local enable_indexscan = on;
 set local enable_indexonlyscan = on;
 set local enable_bitmapscan = on;
-set local enable_sort = on;
+set local enable_sort = off;
+set local plan_cache_mode = force_custom_plan;
+set local jit = off;
+set local row_security = on;
 
 \qecho profile=process-projection-natural-lexical
 explain (analyze, buffers, settings, wal, summary, format json)
@@ -1189,30 +1192,54 @@ set local enable_sort = on;
 
 \qecho profile=flow-source-embedding-eligibility
 explain (analyze, buffers, settings, wal, summary, format json)
-select flow.id,
-  flow.version::text as version,
-  flow.embedding_ft operator(extensions.<=>) pg_temp.portal_bench_vector(1)
-    as semantic_distance
-from public.flows as flow
-where flow.state_code in (100, 200)
-  and flow.embedding_ft is not null
-limit 200;
+select pg_catalog.array_agg(
+    bounded_source.id order by bounded_source.id, bounded_source.version desc
+  ),
+  pg_catalog.array_agg(
+    bounded_source.version order by bounded_source.id, bounded_source.version desc
+  ),
+  pg_catalog.array_agg(
+    bounded_source.semantic_distance
+    order by bounded_source.id, bounded_source.version desc
+  )
+from (
+  select flow.id,
+    flow.version::text as version,
+    flow.embedding_ft operator(extensions.<=>) pg_temp.portal_bench_vector(1)
+      as semantic_distance
+  from public.flows as flow
+  where flow.state_code in (100, 200)
+    and flow.embedding_ft is not null
+  limit 200
+) as bounded_source;
 
 select pg_temp.capture_portal_benchmark_plan(
   'flow_embedding_eligibility',
   $query$
-    select flow.id,
-      flow.version::text as version,
-      flow.embedding_ft operator(extensions.<=>) pg_temp.portal_bench_vector(1)
-        as semantic_distance
-    from public.flows as flow
-    where flow.state_code in (100, 200)
-      and flow.embedding_ft is not null
-    limit 200
+    select pg_catalog.array_agg(
+        bounded_source.id order by bounded_source.id, bounded_source.version desc
+      ),
+      pg_catalog.array_agg(
+        bounded_source.version
+        order by bounded_source.id, bounded_source.version desc
+      ),
+      pg_catalog.array_agg(
+        bounded_source.semantic_distance
+        order by bounded_source.id, bounded_source.version desc
+      )
+    from (
+      select flow.id,
+        flow.version::text as version,
+        flow.embedding_ft operator(extensions.<=>) pg_temp.portal_bench_vector(1)
+          as semantic_distance
+      from public.flows as flow
+      where flow.state_code in (100, 200)
+        and flow.embedding_ft is not null
+      limit 200
+    ) as bounded_source
   $query$
 );
 
-set local enable_sort = off;
 set local hnsw.iterative_scan = relaxed_order;
 set local hnsw.ef_search = 1000;
 set local hnsw.max_scan_tuples = 200000;
