@@ -312,19 +312,29 @@ fi
 docker cp "$container_name:$container_explain" "$explain_log" >/dev/null
 chmod 600 "$explain_log"
 
-# The ~17k-row Process lexical leaf has two valid natural-cost plans.  SQL
-# records and bounds whichever the planner selects; the fresh migration guard
-# separately validates its PGroonga catalog.  Flow must name PGroonga here.
-for expected_index in \
-  portal_catalog_search_flow_document_v1_pgroonga \
-  processes_embedding_ft_hnsw_idx \
-  flows_embedding_ft_hnsw_idx
-do
+# The ~17k-row Process lexical leaf has two valid natural-cost plans. SQL
+# records and bounds whichever the planner selects; Flow must name PGroonga.
+for expected_index in portal_catalog_search_flow_document_v1_pgroonga; do
   if ! grep -q "$expected_index" "$explain_log"; then
     echo "missing representative plan index: $expected_index" >&2
     exit 1
   fi
 done
+
+# Empty/sparse source universes may naturally use an eligibility/empty-set
+# plan. The full-vector release profile must still exercise both source HNSW
+# indexes; sparse profiles separately require the Flow eligibility B-tree.
+if [[ "$release_profile" == "true" ]]; then
+  for expected_index in \
+    processes_embedding_ft_hnsw_idx \
+    flows_embedding_ft_hnsw_idx
+  do
+    if ! grep -q "$expected_index" "$explain_log"; then
+      echo "release profile missed source HNSW index: $expected_index" >&2
+      exit 1
+    fi
+  done
+fi
 
 if [[ "$sparse_profile" == "true" ]] \
    && ! grep -q "flows_portal_embedding_eligible_v1_idx" "$explain_log"; then

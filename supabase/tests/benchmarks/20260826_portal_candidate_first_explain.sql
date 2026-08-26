@@ -1694,17 +1694,39 @@ where (:'process_rows'::integer >= 10000
      where label = 'flow_embedding_eligibility'
    ), false)
    or not coalesce((
-     select plan_text ~ 'processes_embedding_ft_hnsw_idx'
-       and plan_text !~ 'processes_embedding_ft_tg_hnsw_idx'
-       and plan_text !~ 'Seq Scan on processes'
-       and plan_text !~ '(^|\n)[[:space:]]*Sort[[:space:]]'
+     select plan_text ~ 'Buffers: shared'
+       and plan_text ~ 'Execution Time: [0-9]'
+       and plan_text !~ 'temp read=[1-9]'
+       and plan_text !~ 'temp (read=[0-9]+ )?written=[1-9]'
+       and plan_text !~ 'Disk:'
+       and plan_text !~ 'external merge'
+       and (
+         not :'benchmark_release_profile'::boolean
+         or (
+           plan_text ~ 'processes_embedding_ft_hnsw_idx'
+           and plan_text !~ 'processes_embedding_ft_tg_hnsw_idx'
+           and plan_text !~ 'Seq Scan on processes'
+           and plan_text !~ '(^|\n)[[:space:]]*Sort[[:space:]]'
+         )
+       )
      from pg_temp.portal_benchmark_plans
      where label = 'process_source_hnsw'
    ), false)
    or not coalesce((
-     select plan_text ~ 'flows_embedding_ft_hnsw_idx'
-       and plan_text !~ 'Seq Scan on flows'
-       and plan_text !~ '(^|\n)[[:space:]]*Sort[[:space:]]'
+     select plan_text ~ 'Buffers: shared'
+       and plan_text ~ 'Execution Time: [0-9]'
+       and plan_text !~ 'temp read=[1-9]'
+       and plan_text !~ 'temp (read=[0-9]+ )?written=[1-9]'
+       and plan_text !~ 'Disk:'
+       and plan_text !~ 'external merge'
+       and (
+         not :'benchmark_release_profile'::boolean
+         or (
+           plan_text ~ 'flows_embedding_ft_hnsw_idx'
+           and plan_text !~ 'Seq Scan on flows'
+           and plan_text !~ '(^|\n)[[:space:]]*Sort[[:space:]]'
+         )
+       )
      from pg_temp.portal_benchmark_plans
      where label = 'flow_source_hnsw'
    ), false)

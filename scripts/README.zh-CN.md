@@ -117,7 +117,9 @@ temp/disk spill。每次运行必须使用新的 mode-0700 输出目录。正式
 必须满足精确 needle fixture identity 且无 spill。
 每个 profile 还会记录精确的 Flow embedding universe probe。sparse profile 必须
 自然命中窄 partial eligibility B-tree，且不得扫描宽 Flow heap；release profile
-记录全量 vector 的自然计划，不强制使用该索引。
+记录全量 vector 的自然计划，不强制使用该索引。只有 release 必须命名两个 source
+HNSW index；sparse source probe 可以选择 eligibility/empty-set plan，但仍必须提供
+buffers、execution time 且没有 temp/disk spill。
 
 ### `check_portal_projection_manifest.py`
 

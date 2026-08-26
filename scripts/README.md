@@ -134,7 +134,9 @@ Both lexical probes require the exact needle fixture identity and no spill.
 Every profile also records the exact Flow embedding-universe probe. Sparse
 profiles must naturally use the narrow partial eligibility B-tree and may not
 scan the wide Flow heap; release records the natural full-vector plan without
-forcing that index.
+forcing that index. Only release must name both source HNSW indexes; sparse
+source probes may choose an eligibility/empty-set plan but still require
+buffers, execution time, and no temp/disk spill.
 
 ### `check_portal_projection_manifest.py`
 
