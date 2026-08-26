@@ -160,7 +160,8 @@ begin
         process.id is null
         or process.state_code <> projection.state_code
         or process.modified_at <> projection.modified_at
-        or process.embedding_ft is distinct from projection.embedding_ft
+        or (process.embedding_ft is null)
+          <> (projection.embedding_ft is null)
       )
   ) or exists (
     select 1
@@ -174,7 +175,8 @@ begin
         flow.id is null
         or flow.state_code <> projection.state_code
         or flow.modified_at <> projection.modified_at
-        or flow.embedding_ft is distinct from projection.embedding_ft
+        or (flow.embedding_ft is null)
+          <> (projection.embedding_ft is null)
       )
   ) then
     raise exception 'Portal projection reconciliation key/source parity mismatch';
