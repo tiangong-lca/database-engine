@@ -377,8 +377,8 @@ set statement_timeout = '8s'
 set plan_cache_mode = 'force_custom_plan'
 set hnsw.iterative_scan = 'relaxed_order'
 set hnsw.ef_search = '1000'
-set hnsw.max_scan_tuples = '100000'
-set hnsw.scan_mem_multiplier = '1'
+set hnsw.max_scan_tuples = '200000'
+set hnsw.scan_mem_multiplier = '4'
 set enable_sort = 'off'
 set row_security = 'on'
 as $function$
@@ -427,7 +427,7 @@ begin
       )
     order by process.embedding_ft
       operator(extensions.<=>) p_query_embedding
-    limit 400
+    limit 5000
   ) as candidate
   where candidate.semantic_distance is not null
     and candidate.semantic_distance >= 0::double precision
@@ -456,8 +456,8 @@ set statement_timeout = '8s'
 set plan_cache_mode = 'force_custom_plan'
 set hnsw.iterative_scan = 'relaxed_order'
 set hnsw.ef_search = '1000'
-set hnsw.max_scan_tuples = '100000'
-set hnsw.scan_mem_multiplier = '1'
+set hnsw.max_scan_tuples = '200000'
+set hnsw.scan_mem_multiplier = '4'
 set enable_sort = 'off'
 set row_security = 'on'
 as $function$
@@ -506,7 +506,7 @@ begin
       )
     order by flow.embedding_ft
       operator(extensions.<=>) p_query_embedding
-    limit 400
+    limit 5000
   ) as candidate
   where candidate.semantic_distance is not null
     and candidate.semantic_distance >= 0::double precision

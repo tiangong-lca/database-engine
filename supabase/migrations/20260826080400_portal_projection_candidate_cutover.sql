@@ -568,34 +568,46 @@ begin
         pg_catalog.bool_or(matched.exact_id) as exact_id
       from matched
       group by matched.id
+    ), matched_versions as materialized (
+      select distinct matched.id,
+        matched.version
+      from matched
+    ), latest_keys as materialized (
+      select latest.id,
+        latest.version,
+        candidate_ids.exact_id
+      from candidate_ids
+      cross join lateral (
+        select projection.id,
+          projection.version
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'process'
+          and projection.id = candidate_ids.id
+        order by projection.version desc,
+          projection.modified_at desc,
+          projection.state_code desc
+        limit 1
+      ) as latest
+    ), eligible_keys as materialized (
+      select latest.id,
+        latest.version
+      from latest_keys as latest
+      left join matched_versions as latest_match
+        on latest_match.id = latest.id
+       and latest_match.version = latest.version
+      where latest.exact_id
+         or latest_match.id is not null
     )
-    select latest.id,
-      latest.version,
-      latest.card,
-      latest.state_code,
-      latest.modified_at
-    from candidate_ids
-    cross join lateral (
-      select projection.id,
-        projection.version,
-        projection.card,
-        projection.state_code,
-        projection.modified_at
-      from private.portal_catalog_search_rows_v1 as projection
-      where projection.dataset_kind = 'process'
-        and projection.id = candidate_ids.id
-      order by projection.version desc,
-        projection.modified_at desc,
-        projection.state_code desc
-      limit 1
-    ) as latest
-    where candidate_ids.exact_id
-       or exists (
-         select 1
-         from matched
-         where matched.id = latest.id
-           and matched.version = latest.version
-       );
+    select projection.id,
+      projection.version,
+      projection.card,
+      projection.state_code,
+      projection.modified_at
+    from eligible_keys
+    join private.portal_catalog_search_rows_v1 as projection
+      on projection.dataset_kind = 'process'
+     and projection.id = eligible_keys.id
+     and projection.version = eligible_keys.version;
     return;
   end if;
 
@@ -610,33 +622,43 @@ begin
     ), candidate_ids as materialized (
       select distinct matched.id
       from matched
-    )
-    select latest.id,
-      latest.version,
-      latest.card,
-      latest.state_code,
-      latest.modified_at
-    from candidate_ids
-    cross join lateral (
-      select projection.id,
-        projection.version,
-        projection.card,
-        projection.state_code,
-        projection.modified_at
-      from private.portal_catalog_search_rows_v1 as projection
-      where projection.dataset_kind = 'process'
-        and projection.id = candidate_ids.id
-      order by projection.version desc,
-        projection.modified_at desc,
-        projection.state_code desc
-      limit 1
-    ) as latest
-    where exists (
-      select 1
+    ), matched_versions as materialized (
+      select distinct matched.id,
+        matched.version
       from matched
-      where matched.id = latest.id
-        and matched.version = latest.version
-    );
+    ), latest_keys as materialized (
+      select latest.id,
+        latest.version
+      from candidate_ids
+      cross join lateral (
+        select projection.id,
+          projection.version
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'process'
+          and projection.id = candidate_ids.id
+        order by projection.version desc,
+          projection.modified_at desc,
+          projection.state_code desc
+        limit 1
+      ) as latest
+    ), eligible_keys as materialized (
+      select latest.id,
+        latest.version
+      from latest_keys as latest
+      join matched_versions as latest_match
+        on latest_match.id = latest.id
+       and latest_match.version = latest.version
+    )
+    select projection.id,
+      projection.version,
+      projection.card,
+      projection.state_code,
+      projection.modified_at
+    from eligible_keys
+    join private.portal_catalog_search_rows_v1 as projection
+      on projection.dataset_kind = 'process'
+     and projection.id = eligible_keys.id
+     and projection.version = eligible_keys.version;
     return;
   end if;
 
@@ -678,34 +700,46 @@ begin
         pg_catalog.bool_or(matched.exact_id) as exact_id
       from matched
       group by matched.id
+    ), matched_versions as materialized (
+      select distinct matched.id,
+        matched.version
+      from matched
+    ), latest_keys as materialized (
+      select latest.id,
+        latest.version,
+        candidate_ids.exact_id
+      from candidate_ids
+      cross join lateral (
+        select projection.id,
+          projection.version
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'flow'
+          and projection.id = candidate_ids.id
+        order by projection.version desc,
+          projection.modified_at desc,
+          projection.state_code desc
+        limit 1
+      ) as latest
+    ), eligible_keys as materialized (
+      select latest.id,
+        latest.version
+      from latest_keys as latest
+      left join matched_versions as latest_match
+        on latest_match.id = latest.id
+       and latest_match.version = latest.version
+      where latest.exact_id
+         or latest_match.id is not null
     )
-    select latest.id,
-      latest.version,
-      latest.card,
-      latest.state_code,
-      latest.modified_at
-    from candidate_ids
-    cross join lateral (
-      select projection.id,
-        projection.version,
-        projection.card,
-        projection.state_code,
-        projection.modified_at
-      from private.portal_catalog_search_rows_v1 as projection
-      where projection.dataset_kind = 'flow'
-        and projection.id = candidate_ids.id
-      order by projection.version desc,
-        projection.modified_at desc,
-        projection.state_code desc
-      limit 1
-    ) as latest
-    where candidate_ids.exact_id
-       or exists (
-         select 1
-         from matched
-         where matched.id = latest.id
-           and matched.version = latest.version
-       );
+    select projection.id,
+      projection.version,
+      projection.card,
+      projection.state_code,
+      projection.modified_at
+    from eligible_keys
+    join private.portal_catalog_search_rows_v1 as projection
+      on projection.dataset_kind = 'flow'
+     and projection.id = eligible_keys.id
+     and projection.version = eligible_keys.version;
     return;
   end if;
 
@@ -720,33 +754,43 @@ begin
     ), candidate_ids as materialized (
       select distinct matched.id
       from matched
-    )
-    select latest.id,
-      latest.version,
-      latest.card,
-      latest.state_code,
-      latest.modified_at
-    from candidate_ids
-    cross join lateral (
-      select projection.id,
-        projection.version,
-        projection.card,
-        projection.state_code,
-        projection.modified_at
-      from private.portal_catalog_search_rows_v1 as projection
-      where projection.dataset_kind = 'flow'
-        and projection.id = candidate_ids.id
-      order by projection.version desc,
-        projection.modified_at desc,
-        projection.state_code desc
-      limit 1
-    ) as latest
-    where exists (
-      select 1
+    ), matched_versions as materialized (
+      select distinct matched.id,
+        matched.version
       from matched
-      where matched.id = latest.id
-        and matched.version = latest.version
-    );
+    ), latest_keys as materialized (
+      select latest.id,
+        latest.version
+      from candidate_ids
+      cross join lateral (
+        select projection.id,
+          projection.version
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'flow'
+          and projection.id = candidate_ids.id
+        order by projection.version desc,
+          projection.modified_at desc,
+          projection.state_code desc
+        limit 1
+      ) as latest
+    ), eligible_keys as materialized (
+      select latest.id,
+        latest.version
+      from latest_keys as latest
+      join matched_versions as latest_match
+        on latest_match.id = latest.id
+       and latest_match.version = latest.version
+    )
+    select projection.id,
+      projection.version,
+      projection.card,
+      projection.state_code,
+      projection.modified_at
+    from eligible_keys
+    join private.portal_catalog_search_rows_v1 as projection
+      on projection.dataset_kind = 'flow'
+     and projection.id = eligible_keys.id
+     and projection.version = eligible_keys.version;
   end if;
 end
 $function$;
@@ -1526,8 +1570,8 @@ begin
           'plan_cache_mode=force_custom_plan',
           'hnsw.iterative_scan=relaxed_order',
           'hnsw.ef_search=1000',
-          'hnsw.max_scan_tuples=100000',
-          'hnsw.scan_mem_multiplier=1',
+          'hnsw.max_scan_tuples=200000',
+          'hnsw.scan_mem_multiplier=4',
           'enable_sort=off',
           'row_security=on'
         ]::text[]

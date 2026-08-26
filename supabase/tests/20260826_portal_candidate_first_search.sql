@@ -204,6 +204,23 @@ select extensions.ok(
       and routine.prosrc ~ 'catalog_portal_process_pattern_versions_v1'
       and routine.prosrc ~ 'catalog_portal_flow_pattern_versions_v1'
       and routine.prosrc !~* '[[:space:]]execute[[:space:]]'
+      and (
+        pg_catalog.length(routine.prosrc)
+        - pg_catalog.length(pg_catalog.replace(
+          routine.prosrc,
+          'latest_keys as materialized',
+          ''
+        ))
+      ) / pg_catalog.length('latest_keys as materialized') = 4
+      and (
+        pg_catalog.length(routine.prosrc)
+        - pg_catalog.length(pg_catalog.replace(
+          routine.prosrc,
+          'eligible_keys as materialized',
+          ''
+        ))
+      ) / pg_catalog.length('eligible_keys as materialized') = 4
+      and routine.prosrc ~ 'join matched_versions as latest_match'
     from pg_catalog.pg_proc as routine
     where routine.oid = pg_catalog.to_regprocedure(
       'private.catalog_portal_candidate_rows_v1(text,text,uuid,text)'
@@ -310,8 +327,8 @@ select extensions.ok(
           'plan_cache_mode=force_custom_plan',
           'hnsw.iterative_scan=relaxed_order',
           'hnsw.ef_search=1000',
-          'hnsw.max_scan_tuples=100000',
-          'hnsw.scan_mem_multiplier=1',
+          'hnsw.max_scan_tuples=200000',
+          'hnsw.scan_mem_multiplier=4',
           'enable_sort=off',
           'row_security=on'
         ]::text[]
@@ -598,10 +615,10 @@ values
     '53100000-0000-4000-8000-000000000100',
     '01.00.000',
     pg_temp.portal_candidate_process_payload(
-      'prefix candidate public process suffix'
+      'prefix candidate public process suffix 53100000-0000-4000-8000-000000000100'
     ),
     pg_temp.portal_candidate_process_payload(
-      'prefix candidate public process suffix'
+      'prefix candidate public process suffix 53100000-0000-4000-8000-000000000100'
     )::json,
     '53100000-0000-4000-8000-000000000001',
     100,
@@ -675,6 +692,32 @@ values
     null,
     null,
     null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000112',
+    '01.00.000',
+    pg_temp.portal_candidate_process_payload('staleversionneedle process'),
+    pg_temp.portal_candidate_process_payload('staleversionneedle process')::json,
+    '53100000-0000-4000-8000-000000000001',
+    100,
+    true,
+    '2026-08-26 06:30:12+00',
+    null,
+    null,
+    null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000112',
+    '01.00.001',
+    pg_temp.portal_candidate_process_payload('latest neutral process'),
+    pg_temp.portal_candidate_process_payload('latest neutral process')::json,
+    '53100000-0000-4000-8000-000000000001',
+    100,
+    true,
+    '2026-08-26 06:30:13+00',
+    null,
+    null,
+    null
   );
 
 insert into public.flows (
@@ -715,6 +758,30 @@ values
     20,
     true,
     '2026-08-26 06:31:03+00',
+    null,
+    null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000204',
+    '01.00.000',
+    '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"staleversionneedle flow"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::jsonb,
+    '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"staleversionneedle flow"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::json,
+    '53100000-0000-4000-8000-000000000001',
+    100,
+    true,
+    '2026-08-26 06:31:04+00',
+    null,
+    null
+  ),
+  (
+    '53100000-0000-4000-8000-000000000204',
+    '01.00.001',
+    '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"latest neutral flow"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.001","common:licenseType":"Free of charge for all users and uses"}}}}'::jsonb,
+    '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"latest neutral flow"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.001","common:licenseType":"Free of charge for all users and uses"}}}}'::json,
+    '53100000-0000-4000-8000-000000000001',
+    100,
+    true,
+    '2026-08-26 06:31:05+00',
     null,
     null
   );
@@ -911,6 +978,30 @@ select extensions.is(
 );
 
 select extensions.ok(
+  pg_catalog.jsonb_array_length(
+    api.portal_search_processes_v1(
+      'staleversionneedle', '{}'::jsonb, 'relevance', null, 20
+    ) -> 'items'
+  ) = 0
+  and pg_catalog.jsonb_array_length(
+    api.portal_search_flows_v1(
+      'staleversionneedle', '{}'::jsonb, 'relevance', null, 20
+    ) -> 'items'
+  ) = 0
+  and pg_catalog.jsonb_array_length(
+    api.portal_facets_v1(
+      'process', 'staleversionneedle', '{}'::jsonb
+    ) -> 'groups'
+  ) = 0
+  and pg_catalog.jsonb_array_length(
+    api.portal_facets_v1(
+      'flow', 'staleversionneedle', '{}'::jsonb
+    ) -> 'groups'
+  ) = 0,
+  'older visible lexical hits are excluded when the latest visible version does not match'
+);
+
+select extensions.ok(
   api.portal_search_processes_v1(
     'candidate public process',
     '{}'::jsonb,
@@ -933,6 +1024,25 @@ select extensions.ok(
     20
   ) #> '{items,0,match,reasonCodes}' = '["name"]'::jsonb,
   'exact name score outranks an earlier-ID generic document match'
+);
+
+select extensions.ok(
+  (
+    with response as (
+      select api.portal_search_processes_v1(
+        '53100000-0000-4000-8000-000000000100',
+        '{}'::jsonb,
+        'relevance',
+        null,
+        20
+      ) as payload
+    )
+    select pg_catalog.jsonb_array_length(response.payload -> 'items') = 1
+      and response.payload #>> '{items,0,key,id}'
+        = '53100000-0000-4000-8000-000000000100'
+    from response
+  ),
+  'UUID and lexical matches for the same latest row are de-duplicated'
 );
 
 select extensions.ok(
@@ -999,7 +1109,7 @@ select extensions.is(
       'process', '', null, null
     )
   ),
-  9::bigint,
+  10::bigint,
   'candidate helper and Portal RLS exclude state-0/state-20 Process rows'
 );
 
@@ -1010,7 +1120,7 @@ select extensions.is(
       'flow', '', null, null
     )
   ),
-  1::bigint,
+  2::bigint,
   'candidate helper and Portal RLS exclude state-0/state-20 Flow rows'
 );
 
