@@ -382,17 +382,93 @@ set hnsw.scan_mem_multiplier = '4'
 set enable_sort = 'off'
 set row_security = 'on'
 as $function$
+declare
+  v_ids uuid[];
+  v_versions text[];
+  v_distances double precision[];
 begin
   if p_query_embedding is null then
     raise exception using
       errcode = '22023',
       message = 'invalid portal semantic query';
   end if;
-  return query
-  select candidate.id,
-    candidate.version,
-    candidate.semantic_distance
+
+  select pg_catalog.array_agg(
+      candidate.id
+      order by candidate.semantic_distance, candidate.id, candidate.version desc
+    ),
+    pg_catalog.array_agg(
+      candidate.version
+      order by candidate.semantic_distance, candidate.id, candidate.version desc
+    ),
+    pg_catalog.array_agg(
+      candidate.semantic_distance
+      order by candidate.semantic_distance, candidate.id, candidate.version desc
+    )
+  into v_ids, v_versions, v_distances
   from (
+    select approximate.id,
+      approximate.version,
+      approximate.semantic_distance
+    from (
+      select process.id,
+        process.version::text as version,
+        process.embedding_ft operator(extensions.<=>) p_query_embedding
+          as semantic_distance
+      from public.processes as process
+      where process.state_code in (100, 200)
+        and process.embedding_ft is not null
+        and exists (
+          select 1
+          from private.portal_catalog_search_rows_v1 as projection
+          where projection.dataset_kind = 'process'
+            and projection.id = process.id
+            and projection.version = process.version::text
+            and not exists (
+              select 1
+              from private.portal_catalog_search_rows_v1 as newer
+              where newer.dataset_kind = projection.dataset_kind
+                and newer.id = projection.id
+                and (
+                  newer.version > projection.version
+                  or (
+                    newer.version = projection.version
+                    and newer.modified_at > projection.modified_at
+                  )
+                  or (
+                    newer.version = projection.version
+                    and newer.modified_at = projection.modified_at
+                    and newer.state_code > projection.state_code
+                  )
+                )
+            )
+        )
+      order by process.embedding_ft
+        operator(extensions.<=>) p_query_embedding
+      limit 5000
+    ) as approximate
+    where approximate.semantic_distance is not null
+      and approximate.semantic_distance >= 0::double precision
+    order by approximate.semantic_distance + 0::double precision,
+      approximate.id,
+      approximate.version desc
+    limit 200
+  ) as candidate;
+
+  if coalesce(pg_catalog.cardinality(v_ids), 0) >= 200 then
+    return query
+    select v_ids[candidate.ordinal],
+      v_versions[candidate.ordinal],
+      v_distances[candidate.ordinal]
+    from pg_catalog.generate_subscripts(v_ids, 1)
+      as candidate(ordinal)
+    where v_distances[candidate.ordinal] <= 0.5::double precision
+    order by candidate.ordinal;
+    return;
+  end if;
+
+  return query
+  with eligible as materialized (
     select process.id,
       process.version::text as version,
       process.embedding_ft operator(extensions.<=>) p_query_embedding
@@ -425,16 +501,17 @@ begin
               )
           )
       )
-    order by process.embedding_ft
-      operator(extensions.<=>) p_query_embedding
-    limit 5000
-  ) as candidate
-  where candidate.semantic_distance is not null
-    and candidate.semantic_distance >= 0::double precision
-    and candidate.semantic_distance <= 0.5::double precision
-  order by candidate.semantic_distance + 0::double precision,
-    candidate.id,
-    candidate.version desc
+  )
+  select eligible.id,
+    eligible.version,
+    eligible.semantic_distance
+  from eligible
+  where eligible.semantic_distance is not null
+    and eligible.semantic_distance >= 0::double precision
+    and eligible.semantic_distance <= 0.5::double precision
+  order by eligible.semantic_distance,
+    eligible.id,
+    eligible.version desc
   limit 200;
 end
 $function$;
@@ -461,17 +538,93 @@ set hnsw.scan_mem_multiplier = '4'
 set enable_sort = 'off'
 set row_security = 'on'
 as $function$
+declare
+  v_ids uuid[];
+  v_versions text[];
+  v_distances double precision[];
 begin
   if p_query_embedding is null then
     raise exception using
       errcode = '22023',
       message = 'invalid portal semantic query';
   end if;
-  return query
-  select candidate.id,
-    candidate.version,
-    candidate.semantic_distance
+
+  select pg_catalog.array_agg(
+      candidate.id
+      order by candidate.semantic_distance, candidate.id, candidate.version desc
+    ),
+    pg_catalog.array_agg(
+      candidate.version
+      order by candidate.semantic_distance, candidate.id, candidate.version desc
+    ),
+    pg_catalog.array_agg(
+      candidate.semantic_distance
+      order by candidate.semantic_distance, candidate.id, candidate.version desc
+    )
+  into v_ids, v_versions, v_distances
   from (
+    select approximate.id,
+      approximate.version,
+      approximate.semantic_distance
+    from (
+      select flow.id,
+        flow.version::text as version,
+        flow.embedding_ft operator(extensions.<=>) p_query_embedding
+          as semantic_distance
+      from public.flows as flow
+      where flow.state_code in (100, 200)
+        and flow.embedding_ft is not null
+        and exists (
+          select 1
+          from private.portal_catalog_search_rows_v1 as projection
+          where projection.dataset_kind = 'flow'
+            and projection.id = flow.id
+            and projection.version = flow.version::text
+            and not exists (
+              select 1
+              from private.portal_catalog_search_rows_v1 as newer
+              where newer.dataset_kind = projection.dataset_kind
+                and newer.id = projection.id
+                and (
+                  newer.version > projection.version
+                  or (
+                    newer.version = projection.version
+                    and newer.modified_at > projection.modified_at
+                  )
+                  or (
+                    newer.version = projection.version
+                    and newer.modified_at = projection.modified_at
+                    and newer.state_code > projection.state_code
+                  )
+                )
+            )
+        )
+      order by flow.embedding_ft
+        operator(extensions.<=>) p_query_embedding
+      limit 5000
+    ) as approximate
+    where approximate.semantic_distance is not null
+      and approximate.semantic_distance >= 0::double precision
+    order by approximate.semantic_distance + 0::double precision,
+      approximate.id,
+      approximate.version desc
+    limit 200
+  ) as candidate;
+
+  if coalesce(pg_catalog.cardinality(v_ids), 0) >= 200 then
+    return query
+    select v_ids[candidate.ordinal],
+      v_versions[candidate.ordinal],
+      v_distances[candidate.ordinal]
+    from pg_catalog.generate_subscripts(v_ids, 1)
+      as candidate(ordinal)
+    where v_distances[candidate.ordinal] <= 0.5::double precision
+    order by candidate.ordinal;
+    return;
+  end if;
+
+  return query
+  with eligible as materialized (
     select flow.id,
       flow.version::text as version,
       flow.embedding_ft operator(extensions.<=>) p_query_embedding
@@ -504,16 +657,17 @@ begin
               )
           )
       )
-    order by flow.embedding_ft
-      operator(extensions.<=>) p_query_embedding
-    limit 5000
-  ) as candidate
-  where candidate.semantic_distance is not null
-    and candidate.semantic_distance >= 0::double precision
-    and candidate.semantic_distance <= 0.5::double precision
-  order by candidate.semantic_distance + 0::double precision,
-    candidate.id,
-    candidate.version desc
+  )
+  select eligible.id,
+    eligible.version,
+    eligible.semantic_distance
+  from eligible
+  where eligible.semantic_distance is not null
+    and eligible.semantic_distance >= 0::double precision
+    and eligible.semantic_distance <= 0.5::double precision
+  order by eligible.semantic_distance,
+    eligible.id,
+    eligible.version desc
   limit 200;
 end
 $function$;
@@ -826,7 +980,7 @@ $function$;
 comment on function private.portal_projection_hybrid_search_v1_impl(
   text, text[], extensions.vector, jsonb, integer, text
 ) is
-  'Portal-hybrid-rank-v1: projection PGroonga lexical candidates and exact latest-visible source-HNSW semantic candidates fuse before stored-card filters.';
+  'Portal-hybrid-rank-v1: projection PGroonga lexical candidates and bounded latest-visible source-HNSW candidates with exact underfill parity fuse before stored-card filters.';
 
 revoke all on function private.portal_projection_hybrid_search_v1_impl(
   text, text[], extensions.vector, jsonb, integer, text

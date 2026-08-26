@@ -1271,6 +1271,359 @@ select extensions.ok(
 reset role;
 revoke portal_public_executor from postgres;
 
+-- Exercise both semantic helper exits.  A two-row Flow set must take the
+-- underfill exact branch and equal the exact latest-visible scan.  A separate
+-- 205-row Process set must fill the bounded ANN branch and preserve the raw
+-- ANN order byte-for-byte without falling through into the exact scan.
+create or replace function pg_temp.portal_candidate_vector(p_ordinal integer)
+returns extensions.vector(1024)
+language sql
+immutable
+set search_path = ''
+as $function$
+  select (
+    '[1,' || (p_ordinal::numeric / 10000::numeric)::text || ',' ||
+    pg_catalog.array_to_string(
+      pg_catalog.array_fill('0'::text, array[1022]),
+      ','
+    ) || ']'
+  )::extensions.vector(1024)
+$function$;
+
+grant execute on function pg_temp.portal_candidate_vector(integer)
+  to service_role, api_internal_executor;
+
+alter table public.processes disable trigger user;
+alter table public.flows disable trigger user;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.flows
+  enable trigger portal_catalog_projection_content_sync_v1;
+
+set local role service_role;
+
+update public.flows
+set embedding_ft = pg_temp.portal_candidate_vector(1),
+    embedding_ft_at = '2026-08-26 07:00:01+00'
+where id = '53100000-0000-4000-8000-000000000202'
+  and version = '01.00.000';
+
+update public.flows
+set embedding_ft = pg_temp.portal_candidate_vector(2),
+    embedding_ft_at = '2026-08-26 07:00:02+00'
+where id = '53100000-0000-4000-8000-000000000204'
+  and version = '01.00.001';
+
+insert into public.processes (
+  id, version, json, json_ordered, user_id, state_code,
+  rule_verification, modified_at, search_text, embedding_ft, model_id
+)
+select (
+    '53200000-0000-4000-8000-' ||
+    pg_catalog.lpad(series.ordinal::text, 12, '0')
+  )::uuid,
+  '01.00.000',
+  pg_temp.portal_candidate_process_payload(
+    'healthy semantic process ' || series.ordinal::text
+  ),
+  pg_temp.portal_candidate_process_payload(
+    'healthy semantic process ' || series.ordinal::text
+  )::json,
+  '53100000-0000-4000-8000-000000000001'::uuid,
+  100,
+  true,
+  '2026-08-26 07:01:00+00'::timestamptz
+    + series.ordinal * interval '1 millisecond',
+  null,
+  pg_temp.portal_candidate_vector(series.ordinal),
+  null
+from pg_catalog.generate_series(1, 205) as series(ordinal);
+
+reset role;
+
+alter table public.processes enable trigger user;
+alter table public.flows enable trigger user;
+
+create temporary table portal_semantic_underfill_actual (
+  row_position bigint primary key,
+  id uuid not null,
+  version text not null,
+  semantic_distance double precision not null
+) on commit drop;
+
+create temporary table portal_semantic_underfill_exact (
+  row_position bigint primary key,
+  id uuid not null,
+  version text not null,
+  semantic_distance double precision not null
+) on commit drop;
+
+create temporary table portal_semantic_healthy_actual (
+  row_position bigint primary key,
+  id uuid not null,
+  version text not null,
+  semantic_distance double precision not null
+) on commit drop;
+
+create temporary table portal_semantic_healthy_raw_ann (
+  row_position bigint primary key,
+  id uuid not null,
+  version text not null,
+  semantic_distance double precision not null
+) on commit drop;
+
+grant insert, select on
+  pg_temp.portal_semantic_underfill_actual,
+  pg_temp.portal_semantic_underfill_exact,
+  pg_temp.portal_semantic_healthy_actual,
+  pg_temp.portal_semantic_healthy_raw_ann
+to api_internal_executor;
+
+grant api_internal_executor to postgres;
+set local role api_internal_executor;
+
+insert into pg_temp.portal_semantic_underfill_actual
+select pg_catalog.row_number() over (
+    order by candidate.semantic_distance,
+      candidate.id,
+      candidate.version desc
+  ) as row_position,
+  candidate.id,
+  candidate.version,
+  candidate.semantic_distance
+from private.portal_projection_semantic_flow_v1(
+  pg_temp.portal_candidate_vector(0)
+) as candidate;
+
+insert into pg_temp.portal_semantic_underfill_exact
+with eligible as materialized (
+  select flow.id,
+    flow.version::text as version,
+    flow.embedding_ft operator(extensions.<=>)
+      pg_temp.portal_candidate_vector(0) as semantic_distance
+  from public.flows as flow
+  where flow.state_code in (100, 200)
+    and flow.embedding_ft is not null
+    and exists (
+      select 1
+      from private.portal_catalog_search_rows_v1 as projection
+      where projection.dataset_kind = 'flow'
+        and projection.id = flow.id
+        and projection.version = flow.version::text
+        and not exists (
+          select 1
+          from private.portal_catalog_search_rows_v1 as newer
+          where newer.dataset_kind = projection.dataset_kind
+            and newer.id = projection.id
+            and (
+              newer.version > projection.version
+              or (
+                newer.version = projection.version
+                and newer.modified_at > projection.modified_at
+              )
+              or (
+                newer.version = projection.version
+                and newer.modified_at = projection.modified_at
+                and newer.state_code > projection.state_code
+              )
+            )
+        )
+    )
+), ordered as (
+  select eligible.*
+  from eligible
+  where eligible.semantic_distance is not null
+    and eligible.semantic_distance >= 0::double precision
+    and eligible.semantic_distance <= 0.5::double precision
+  order by eligible.semantic_distance,
+    eligible.id,
+    eligible.version desc
+  limit 200
+)
+select pg_catalog.row_number() over (
+    order by ordered.semantic_distance,
+      ordered.id,
+      ordered.version desc
+  ) as row_position,
+  ordered.id,
+  ordered.version,
+  ordered.semantic_distance
+from ordered;
+
+insert into pg_temp.portal_semantic_healthy_actual
+select pg_catalog.row_number() over (
+    order by candidate.semantic_distance,
+      candidate.id,
+      candidate.version desc
+  ) as row_position,
+  candidate.id,
+  candidate.version,
+  candidate.semantic_distance
+from private.portal_projection_semantic_process_v1(
+  pg_temp.portal_candidate_vector(0)
+) as candidate;
+
+set local enable_sort = off;
+set local hnsw.iterative_scan = relaxed_order;
+set local hnsw.ef_search = 1000;
+set local hnsw.max_scan_tuples = 200000;
+set local hnsw.scan_mem_multiplier = 4;
+
+insert into pg_temp.portal_semantic_healthy_raw_ann
+with approximate as materialized (
+  select process.id,
+    process.version::text as version,
+    process.embedding_ft operator(extensions.<=>)
+      pg_temp.portal_candidate_vector(0) as semantic_distance
+  from public.processes as process
+  where process.state_code in (100, 200)
+    and process.embedding_ft is not null
+    and exists (
+      select 1
+      from private.portal_catalog_search_rows_v1 as projection
+      where projection.dataset_kind = 'process'
+        and projection.id = process.id
+        and projection.version = process.version::text
+        and not exists (
+          select 1
+          from private.portal_catalog_search_rows_v1 as newer
+          where newer.dataset_kind = projection.dataset_kind
+            and newer.id = projection.id
+            and (
+              newer.version > projection.version
+              or (
+                newer.version = projection.version
+                and newer.modified_at > projection.modified_at
+              )
+              or (
+                newer.version = projection.version
+                and newer.modified_at = projection.modified_at
+                and newer.state_code > projection.state_code
+              )
+            )
+        )
+    )
+  order by process.embedding_ft operator(extensions.<=>)
+    pg_temp.portal_candidate_vector(0)
+  limit 5000
+), raw_bounded as (
+  select approximate.*
+  from approximate
+  where approximate.semantic_distance is not null
+    and approximate.semantic_distance >= 0::double precision
+  order by approximate.semantic_distance + 0::double precision,
+    approximate.id,
+    approximate.version desc
+  limit 200
+), thresholded as (
+  select raw_bounded.*
+  from raw_bounded
+  where raw_bounded.semantic_distance <= 0.5::double precision
+  order by raw_bounded.semantic_distance,
+    raw_bounded.id,
+    raw_bounded.version desc
+)
+select pg_catalog.row_number() over (
+    order by thresholded.semantic_distance,
+      thresholded.id,
+      thresholded.version desc
+  ) as row_position,
+  thresholded.id,
+  thresholded.version,
+  thresholded.semantic_distance
+from thresholded;
+
+reset role;
+revoke api_internal_executor from postgres;
+
+select extensions.ok(
+  (select count(*) from pg_temp.portal_semantic_underfill_actual)
+    between 1 and 199,
+  'the sparse Flow fixture deterministically exercises the underfill branch'
+);
+
+select extensions.is(
+  (
+    select count(*)
+    from (
+      (
+        select id, version, semantic_distance
+        from pg_temp.portal_semantic_underfill_actual
+        except
+        select id, version, semantic_distance
+        from pg_temp.portal_semantic_underfill_exact
+      )
+      union all
+      (
+        select id, version, semantic_distance
+        from pg_temp.portal_semantic_underfill_exact
+        except
+        select id, version, semantic_distance
+        from pg_temp.portal_semantic_underfill_actual
+      )
+    ) as difference
+  ),
+  0::bigint,
+  'underfill fallback is a two-way exact latest-visible candidate match'
+);
+
+select extensions.is(
+  (
+    select count(*)
+    from pg_temp.portal_semantic_underfill_actual as actual
+    full join pg_temp.portal_semantic_underfill_exact as expected
+      using (row_position)
+    where actual.id is distinct from expected.id
+      or actual.version is distinct from expected.version
+      or actual.semantic_distance is distinct from expected.semantic_distance
+  ),
+  0::bigint,
+  'underfill fallback preserves exact distance/id/version order positionally'
+);
+
+select extensions.is(
+  (select count(*) from pg_temp.portal_semantic_healthy_actual),
+  200::bigint,
+  'the healthy Process fixture fills the bounded ANN branch'
+);
+
+select extensions.is(
+  (
+    select count(*)
+    from pg_temp.portal_semantic_healthy_actual as actual
+    full join pg_temp.portal_semantic_healthy_raw_ann as expected
+      using (row_position)
+    where actual.id is distinct from expected.id
+      or actual.version is distinct from expected.version
+      or actual.semantic_distance is distinct from expected.semantic_distance
+  ),
+  0::bigint,
+  'healthy semantic output preserves raw bounded ANN rows positionally'
+);
+
+select extensions.is(
+  (
+    select count(*)
+    from pg_catalog.pg_proc as routine
+    where routine.oid = any (array[
+        'private.portal_projection_semantic_process_v1(extensions.vector)'::regprocedure::oid,
+        'private.portal_projection_semantic_flow_v1(extensions.vector)'::regprocedure::oid
+      ])
+      and routine.prosrc ~ 'cardinality\(v_ids\), 0\) >= 200'
+      and routine.prosrc ~ 'generate_subscripts\(v_ids, 1\)'
+      and pg_catalog.strpos(
+        routine.prosrc,
+        'from pg_catalog.generate_subscripts(v_ids, 1)'
+      ) < pg_catalog.strpos(routine.prosrc, 'with eligible as materialized')
+      and pg_catalog.strpos(
+        routine.prosrc,
+        E'    return;\n  end if;'
+      ) < pg_catalog.strpos(routine.prosrc, 'with eligible as materialized')
+  ),
+  2::bigint,
+  'both semantic helpers structurally return the healthy ANN arrays before exact fallback'
+);
+
 select * from extensions.finish();
 
 rollback;
