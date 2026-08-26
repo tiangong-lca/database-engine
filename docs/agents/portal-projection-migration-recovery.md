@@ -63,13 +63,13 @@ The rollout has five observable boundaries:
    existing Process/Flow source HNSW indexes and precede the
    transactional Search/Hybrid cutover at `20260826080400` and the transactional
    Facets cutover at `20260826080403`.
-5. `20260827010000` adds one narrow concurrent Flow source B-tree over
-   `(id, version)` only for state-100/200 rows with a non-null embedding.
+5. `20260827010000` adds one narrow concurrent Flow source B-tree on
+   `state_code`, restricted to state-100/200 rows with a non-null embedding.
    `20260827010003` transactionally verifies its exact table, keys, opclasses,
    predicate, owner, validity, and lack of INCLUDE/expression/options drift.
-   This post-cutover index accelerates the exact 0..199 embedding-universe
-   probe; it does not store vectors, rank semantic candidates, or alter API
-   semantics.
+   This low-selectivity membership index accelerates the exact 0..199
+   embedding-universe probe without becoming a covering id/version join path;
+   it does not store vectors, rank semantic candidates, or alter API semantics.
 
 The expand, reconcile, Search/Hybrid cutover, and Facets cutover files are
 explicit transactions. A statement or guard failure rolls back the entire
