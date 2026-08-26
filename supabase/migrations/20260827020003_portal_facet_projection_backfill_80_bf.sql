@@ -13,20 +13,11 @@ select private.assert_portal_catalog_projection_contract_v1();
 select private.assert_portal_catalog_facet_contract_v1();
 
 insert into private.portal_catalog_facet_rows_v1 (
-  dataset_kind,
-  id,
-  version,
-  state_code,
-  modified_at,
-  facet_access_level,
-  facet_geography,
-  facet_reference_year,
-  facet_process_subtype,
-  facet_source,
-  facet_contract_version
+  dataset_kind, id, version, state_code, modified_at,
+  facet_access_level, facet_geography, facet_reference_year,
+  facet_process_subtype, facet_source, facet_contract_version
 )
-select
-  projection.dataset_kind,
+select projection.dataset_kind,
   projection.id,
   projection.version,
   projection.state_code,
@@ -48,20 +39,11 @@ where projection.dataset_kind = 'process'
 on conflict (dataset_kind, id, version) do nothing;
 
 insert into private.portal_catalog_facet_rows_v1 (
-  dataset_kind,
-  id,
-  version,
-  state_code,
-  modified_at,
-  facet_access_level,
-  facet_geography,
-  facet_reference_year,
-  facet_process_subtype,
-  facet_source,
-  facet_contract_version
+  dataset_kind, id, version, state_code, modified_at,
+  facet_access_level, facet_geography, facet_reference_year,
+  facet_process_subtype, facet_source, facet_contract_version
 )
-select
-  projection.dataset_kind,
+select projection.dataset_kind,
   projection.id,
   projection.version,
   projection.state_code,
@@ -82,7 +64,7 @@ where projection.dataset_kind = 'flow'
     and projection.id < 'c0000000-0000-0000-0000-000000000000'::uuid
 on conflict (dataset_kind, id, version) do nothing;
 
-do $verify_portal_facet_backfill_80_bf$
+do $verify_portal_facet_backfill_80_bf_process_parity$
 begin
   if exists (
     select 1
@@ -102,17 +84,23 @@ begin
         facet.id is null
         or facet.state_code is distinct from projection.state_code
         or facet.modified_at is distinct from projection.modified_at
-        or facet.facet_access_level is distinct from
-          facts.facet_access_level
+        or facet.facet_access_level is distinct from facts.facet_access_level
         or facet.facet_geography is distinct from facts.facet_geography
-        or facet.facet_reference_year is distinct from
-          facts.facet_reference_year
-        or facet.facet_process_subtype is distinct from
-          facts.facet_process_subtype
+        or facet.facet_reference_year is distinct from facts.facet_reference_year
+        or facet.facet_process_subtype is distinct from facts.facet_process_subtype
         or facet.facet_source is distinct from facts.facet_source
         or facet.facet_contract_version is distinct from 1
       )
-  ) or exists (
+  ) then
+    raise exception 'Portal facet projection backfill 80_bf is incomplete'
+      using errcode = '55000';
+  end if;
+end
+$verify_portal_facet_backfill_80_bf_process_parity$;
+
+do $verify_portal_facet_backfill_80_bf_flow_parity$
+begin
+  if exists (
     select 1
     from private.portal_catalog_search_rows_v1 as projection
     cross join lateral private.portal_catalog_facet_facts_v1(
@@ -130,17 +118,23 @@ begin
         facet.id is null
         or facet.state_code is distinct from projection.state_code
         or facet.modified_at is distinct from projection.modified_at
-        or facet.facet_access_level is distinct from
-          facts.facet_access_level
+        or facet.facet_access_level is distinct from facts.facet_access_level
         or facet.facet_geography is distinct from facts.facet_geography
-        or facet.facet_reference_year is distinct from
-          facts.facet_reference_year
-        or facet.facet_process_subtype is distinct from
-          facts.facet_process_subtype
+        or facet.facet_reference_year is distinct from facts.facet_reference_year
+        or facet.facet_process_subtype is distinct from facts.facet_process_subtype
         or facet.facet_source is distinct from facts.facet_source
         or facet.facet_contract_version is distinct from 1
       )
-  ) or exists (
+  ) then
+    raise exception 'Portal facet projection backfill 80_bf is incomplete'
+      using errcode = '55000';
+  end if;
+end
+$verify_portal_facet_backfill_80_bf_flow_parity$;
+
+do $verify_portal_facet_backfill_80_bf_process_extra$
+begin
+  if exists (
     select 1
     from private.portal_catalog_facet_rows_v1 as facet
     where facet.dataset_kind = 'process'
@@ -153,7 +147,16 @@ begin
           and projection.id = facet.id
           and projection.version = facet.version
       )
-  ) or exists (
+  ) then
+    raise exception 'Portal facet projection backfill 80_bf is incomplete'
+      using errcode = '55000';
+  end if;
+end
+$verify_portal_facet_backfill_80_bf_process_extra$;
+
+do $verify_portal_facet_backfill_80_bf_flow_extra$
+begin
+  if exists (
     select 1
     from private.portal_catalog_facet_rows_v1 as facet
     where facet.dataset_kind = 'flow'
@@ -171,7 +174,7 @@ begin
       using errcode = '55000';
   end if;
 end
-$verify_portal_facet_backfill_80_bf$;
+$verify_portal_facet_backfill_80_bf_flow_extra$;
 
 reset role;
 revoke api_internal_executor from postgres;
