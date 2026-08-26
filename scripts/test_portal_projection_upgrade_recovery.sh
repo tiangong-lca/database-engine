@@ -780,7 +780,9 @@ apply_pending
 reset_to 20260826080403
 run_psql <<'SQL'
 create index flows_portal_embedding_eligible_v1_idx
-on public.flows (id);
+on public.flows (id, version)
+where state_code in (100, 200)
+  and embedding_ft is not null;
 SQL
 
 eligibility_name_log_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"

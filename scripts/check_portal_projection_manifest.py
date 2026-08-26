@@ -170,7 +170,7 @@ def main() -> int:
             r"\s*create\s+index\s+concurrently\s+"
             r"flows_portal_embedding_eligible_v1_idx\s+"
             r"on\s+public[.]flows\s+using\s+btree\s*"
-            r"[(]\s*id\s*,\s*version\s*[)]\s*"
+            r"[(]\s*state_code\s*[)]\s*"
             r"where\s+state_code\s+in\s*[(]\s*100\s*,\s*200\s*[)]\s*"
             r"and\s+embedding_ft\s+is\s+not\s+null\s*;\s*",
             flags=re.IGNORECASE,
@@ -197,16 +197,12 @@ def main() -> int:
             "index_catalog.indisvalid",
             "index_catalog.indisready",
             "index_catalog.indislive",
-            "index_catalog.indnkeyatts = 2",
-            "index_catalog.indnatts = 2",
-            "first_key.attname = 'id'",
-            "second_key.attname = 'version'",
+            "index_catalog.indnkeyatts = 1",
+            "index_catalog.indnatts = 1",
+            "first_key.attname = 'state_code'",
             "first_opclass_namespace.nspname = 'pg_catalog'",
-            "second_opclass_namespace.nspname = 'pg_catalog'",
-            "first_opclass.opcname = 'uuid_ops'",
-            "second_opclass.opcname = 'bpchar_ops'",
-            "first_opclass.opcintype = 'pg_catalog.uuid'::pg_catalog.regtype",
-            "second_opclass.opcintype = 'pg_catalog.bpchar'::pg_catalog.regtype",
+            "first_opclass.opcname = 'int4_ops'",
+            "first_opclass.opcintype = 'pg_catalog.int4'::pg_catalog.regtype",
             "((state_code=any(array[100,200]))and(embedding_ftisnotnull))",
             "portal flow embedding eligibility index drifted",
         )
