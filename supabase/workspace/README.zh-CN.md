@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 450c04e
+lastReviewedCommit: d4c2976
 lastReviewedNote: "已复核 Portal manifest 与 sparse benchmark 工具；生成 workspace 路径、刷新行为与类型所有权不变。"
 related:
   - ../../AGENTS.md

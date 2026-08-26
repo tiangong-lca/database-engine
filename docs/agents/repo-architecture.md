@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 450c04e
+lastReviewedCommit: d4c2976
 lastReviewedNote: "Reviewed for the synchronized Portal candidate projection, versioned ANN semantics, immutable derivation manifest, and sparse fallback gates."
 related:
   - ../../AGENTS.md
