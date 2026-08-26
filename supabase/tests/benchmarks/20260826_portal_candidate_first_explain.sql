@@ -966,6 +966,11 @@ create temporary table portal_benchmark_plans (
   plan_text text not null
 ) on commit drop;
 
+create temporary table portal_benchmark_raw_ann_counts (
+  dataset_kind text primary key,
+  raw_count integer not null
+) on commit drop;
+
 create or replace function pg_temp.capture_portal_benchmark_plan(
   p_label text,
   p_query text
@@ -988,10 +993,129 @@ begin
 end
 $function$;
 
+create or replace function pg_temp.portal_raw_ann_count(
+  p_kind text,
+  p_query_embedding extensions.vector(1024)
+)
+returns integer
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  v_count integer;
+begin
+  if p_kind = 'process' then
+    select count(*) into v_count
+    from (
+      select approximate.id
+      from (
+        select process.id,
+          process.version::text as version,
+          process.embedding_ft operator(extensions.<=>) p_query_embedding
+            as semantic_distance
+        from public.processes as process
+        where process.state_code in (100, 200)
+          and process.embedding_ft is not null
+          and exists (
+            select 1
+            from private.portal_catalog_search_rows_v1 as projection
+            where projection.dataset_kind = 'process'
+              and projection.id = process.id
+              and projection.version = process.version::text
+              and not exists (
+                select 1
+                from private.portal_catalog_search_rows_v1 as newer
+                where newer.dataset_kind = projection.dataset_kind
+                  and newer.id = projection.id
+                  and (
+                    newer.version > projection.version
+                    or (
+                      newer.version = projection.version
+                      and newer.modified_at > projection.modified_at
+                    )
+                    or (
+                      newer.version = projection.version
+                      and newer.modified_at = projection.modified_at
+                      and newer.state_code > projection.state_code
+                    )
+                  )
+              )
+          )
+        order by process.embedding_ft
+          operator(extensions.<=>) p_query_embedding
+        limit 5000
+      ) as approximate
+      where approximate.semantic_distance is not null
+        and approximate.semantic_distance >= 0::double precision
+      order by approximate.semantic_distance + 0::double precision,
+        approximate.id,
+        approximate.version desc
+      limit 200
+    ) as raw_candidates;
+  elsif p_kind = 'flow' then
+    select count(*) into v_count
+    from (
+      select approximate.id
+      from (
+        select flow.id,
+          flow.version::text as version,
+          flow.embedding_ft operator(extensions.<=>) p_query_embedding
+            as semantic_distance
+        from public.flows as flow
+        where flow.state_code in (100, 200)
+          and flow.embedding_ft is not null
+          and exists (
+            select 1
+            from private.portal_catalog_search_rows_v1 as projection
+            where projection.dataset_kind = 'flow'
+              and projection.id = flow.id
+              and projection.version = flow.version::text
+              and not exists (
+                select 1
+                from private.portal_catalog_search_rows_v1 as newer
+                where newer.dataset_kind = projection.dataset_kind
+                  and newer.id = projection.id
+                  and (
+                    newer.version > projection.version
+                    or (
+                      newer.version = projection.version
+                      and newer.modified_at > projection.modified_at
+                    )
+                    or (
+                      newer.version = projection.version
+                      and newer.modified_at = projection.modified_at
+                      and newer.state_code > projection.state_code
+                    )
+                  )
+              )
+          )
+        order by flow.embedding_ft
+          operator(extensions.<=>) p_query_embedding
+        limit 5000
+      ) as approximate
+      where approximate.semantic_distance is not null
+        and approximate.semantic_distance >= 0::double precision
+      order by approximate.semantic_distance + 0::double precision,
+        approximate.id,
+        approximate.version desc
+      limit 200
+    ) as raw_candidates;
+  else
+    raise exception 'unsupported raw ANN benchmark kind';
+  end if;
+  return v_count;
+end
+$function$;
+
 grant insert, select on pg_temp.portal_benchmark_plans
   to portal_public_executor, api_internal_executor;
+grant insert, select on pg_temp.portal_benchmark_raw_ann_counts
+  to api_internal_executor;
 grant execute on function pg_temp.capture_portal_benchmark_plan(text, text)
   to portal_public_executor, api_internal_executor;
+grant execute on function pg_temp.portal_raw_ann_count(
+  text, extensions.vector
+) to api_internal_executor;
 
 \pset format unaligned
 \pset tuples_only on
@@ -1056,6 +1180,19 @@ set local hnsw.iterative_scan = relaxed_order;
 set local hnsw.ef_search = 1000;
 set local hnsw.max_scan_tuples = 200000;
 set local hnsw.scan_mem_multiplier = 4;
+
+insert into pg_temp.portal_benchmark_raw_ann_counts (
+  dataset_kind, raw_count
+)
+values
+  (
+    'process',
+    pg_temp.portal_raw_ann_count('process', pg_temp.portal_bench_vector(1))
+  ),
+  (
+    'flow',
+    pg_temp.portal_raw_ann_count('flow', pg_temp.portal_bench_vector(1))
+  );
 
 \qecho profile=process-source-hnsw-latest-public
 explain (analyze, buffers, settings, wal, summary, format json)
@@ -1131,13 +1268,6 @@ select pg_temp.capture_portal_benchmark_plan(
 );
 
 \if :benchmark_semantic_plan_profile
-\qecho profile=process-semantic-helper-candidate-path
-explain (analyze, buffers, settings, wal, summary, format json)
-select candidate.*
-from private.portal_projection_semantic_process_v1(
-  pg_temp.portal_bench_vector(1)
-) as candidate;
-
 select pg_temp.capture_portal_benchmark_plan(
   'process_semantic_candidate_path',
   $query$
@@ -1147,6 +1277,13 @@ select pg_temp.capture_portal_benchmark_plan(
     ) as candidate
   $query$
 );
+
+\qecho profile=process-semantic-helper-candidate-path
+explain (analyze, buffers, settings, wal, summary, format json)
+select candidate.*
+from private.portal_projection_semantic_process_v1(
+  pg_temp.portal_bench_vector(1)
+) as candidate;
 \endif
 
 \qecho profile=flow-source-hnsw-latest-public
@@ -1223,13 +1360,6 @@ select pg_temp.capture_portal_benchmark_plan(
 );
 
 \if :benchmark_semantic_plan_profile
-\qecho profile=flow-semantic-helper-candidate-path
-explain (analyze, buffers, settings, wal, summary, format json)
-select candidate.*
-from private.portal_projection_semantic_flow_v1(
-  pg_temp.portal_bench_vector(1)
-) as candidate;
-
 select pg_temp.capture_portal_benchmark_plan(
   'flow_semantic_candidate_path',
   $query$
@@ -1239,6 +1369,13 @@ select pg_temp.capture_portal_benchmark_plan(
     ) as candidate
   $query$
 );
+
+\qecho profile=flow-semantic-helper-candidate-path
+explain (analyze, buffers, settings, wal, summary, format json)
+select candidate.*
+from private.portal_projection_semantic_flow_v1(
+  pg_temp.portal_bench_vector(1)
+) as candidate;
 \endif
 
 set local enable_sort = on;
@@ -1301,6 +1438,42 @@ where (
     or (select count(*) from public.flows where version = '99.99.999')
       <> :'draft_vector_rows'::integer
   );
+
+insert into pg_temp.portal_benchmark_failures (
+  label, sqlstate, message, elapsed_ms
+)
+select
+  'named_profile_raw_ann_path',
+  'P0001',
+  'raw filtered ANN counts do not exercise the named candidate path',
+  0
+where (select count(*) from pg_temp.portal_benchmark_raw_ann_counts) <> 2
+   or (
+     :'benchmark_release_profile'::boolean
+     and exists (
+       select 1
+       from pg_temp.portal_benchmark_raw_ann_counts
+       where raw_count >= 200
+     )
+   )
+   or (
+     :'benchmark_sparse_profile'::boolean
+     and :'benchmark_profile_name' = 'sparse-zero'
+     and exists (
+       select 1
+       from pg_temp.portal_benchmark_raw_ann_counts
+       where raw_count <> 0
+     )
+   )
+   or (
+     :'benchmark_sparse_profile'::boolean
+     and :'benchmark_profile_name' = 'sparse-199'
+     and exists (
+       select 1
+       from pg_temp.portal_benchmark_raw_ann_counts
+       where raw_count <> 199
+     )
+   );
 
 insert into pg_temp.portal_benchmark_failures (
   label, sqlstate, message, elapsed_ms
@@ -1379,9 +1552,60 @@ select label,
     plan_text ~ 'temp read=[1-9]'
     or plan_text ~ 'temp (read=[0-9]+ )?written=[1-9]'
   ) as nonzero_temp,
-  plan_text ~ 'Disk:|external merge' as disk_sort
+  plan_text ~ 'Disk:|external merge' as disk_sort,
+  coalesce(
+    (pg_catalog.regexp_match(plan_text, 'shared hit=([0-9]+)'))[1]::bigint,
+    0
+  ) as shared_hit_blocks,
+  coalesce(
+    (pg_catalog.regexp_match(
+      plan_text,
+      'shared[^\n]*read=([0-9]+)'
+    ))[1]::bigint,
+    0
+  ) as shared_read_blocks
 from pg_temp.portal_benchmark_plans
 order by label;
+
+select dataset_kind,
+  raw_count
+from pg_temp.portal_benchmark_raw_ann_counts
+order by dataset_kind;
+
+insert into pg_temp.portal_benchmark_failures (
+  label, sqlstate, message, elapsed_ms
+)
+with semantic_buffers as (
+  select label,
+    coalesce(
+      (pg_catalog.regexp_match(plan_text, 'shared hit=([0-9]+)'))[1]::bigint,
+      0
+    ) as hit_blocks,
+    coalesce(
+      (pg_catalog.regexp_match(
+        plan_text,
+        'shared[^\n]*read=([0-9]+)'
+      ))[1]::bigint,
+      0
+    ) as read_blocks
+  from pg_temp.portal_benchmark_plans
+  where label in (
+    'process_semantic_candidate_path',
+    'flow_semantic_candidate_path'
+  )
+)
+select
+  'semantic_buffer_guard',
+  'P0001',
+  'semantic candidate path exceeded 750000 total or 250000 read buffers',
+  0
+where :'benchmark_semantic_plan_profile'::boolean
+  and exists (
+    select 1
+    from semantic_buffers
+    where hit_blocks + read_blocks > 750000
+       or read_blocks > 250000
+  );
 
 create or replace function pg_temp.record_portal_search_timing(
   p_label text,
