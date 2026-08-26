@@ -36,9 +36,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 12f54fe1188223d434a40799466167d5dd83c48e
-lastReviewedNote: "Reviewed after PR Preview verification became fail-closed on all three authority inputs, resolved the disposable branch without credential expansion, and isolated enabled-public-key selection from the anonymous transport gate; ownership boundaries are unchanged."
+lastReviewedAt: 2026-08-27
+lastReviewedCommit: 450c04e
+lastReviewedNote: "Reviewed for the immutable Portal projection manifest, sparse performance gates, and recovery contract; repository ownership and delivery boundaries are unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

@@ -29,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 12f54fe1188223d434a40799466167d5dd83c48e
-lastReviewedNote: "Reviewed for Issue #529 after the PR Preview path minimized branch/key authority while preserving official-check/ref binding and a credential-free anonymous runtime gate; repository ownership is unchanged."
+lastReviewedAt: 2026-08-27
+lastReviewedCommit: 450c04e
+lastReviewedNote: "Reviewed for the synchronized Portal candidate projection, versioned ANN semantics, immutable derivation manifest, and sparse fallback gates."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -262,15 +262,51 @@ The anonymous Portal Hybrid facade is a separate additive boundary, not a new
 grant or parameter preset over those actor/team-aware raw Hybrid families.
 `api.portal_hybrid_search_v1` accepts only Process or Flow, one to twelve
 normalized model-generated terms, one exact finite 1024-dimensional embedding,
-the fixed public-card filters, and a limit of 1..20. Its constrained private
-kernel ranks only the latest visible state-100/state-200 exact version, uses the
-fixed `portal-hybrid-rank-v1` pool, threshold, weights, and RRF constant, then
-hydrates only the existing public catalog card before applying the authoritative
-LCIA item-page decorator. The facade never invokes or relaxes the legacy raw
-Hybrid or semantic helpers and exposes no actor, team, state, data-source,
-cursor, model, weight, threshold, raw document, embedding, or locator control.
-Representative-cardinality plans and advisor evidence remain a persistent-Dev
-gate; the additive migration deliberately creates no speculative index.
+the fixed public-card filters, and a limit of 1..20. Search, Facets, and Hybrid
+read one synchronized private card/document projection maintained from exact
+Process/Flow content writes. Two projection PGroonga indexes serve lexical
+candidates; semantic retrieval reuses the existing full source HNSW indexes and
+never duplicates vectors or HNSW storage in the projection.
+
+The `portal-hybrid-rank-v1` contract binds the latest visible state-100/200
+identity exactly and excludes every false-positive identity. A filled semantic
+pool uses bounded filtered source-HNSW with recall@20 and recall@200 of at least
+0.95; raw ANN underfill takes an exact-distance fallback. Threshold, weights,
+RRF constant, and score/id/version tie-breaks are deterministic for the actual
+candidate pool. ACL-closed Process/Flow exact helpers own the full fallback:
+they use one 32-MB-per-node workspace, hash the latest projection keys against
+one source scan, force Hash Join while disabling nested/merge joins, JIT, and parallel workers, and
+restore all caller GUCs through function configuration. The release benchmark invokes those exact
+helpers directly at full vector cardinality, while raw ANN counts separately
+record the naturally selected runtime branch. A second formal ANN plan mirrors
+the production 5,000-candidate scan and 200-candidate rerank; its time and
+buffers are added to the direct exact plan. Production-cardinality release,
+zero-vector, and 199-vector profiles retain the 6-second p95, sub-8-second
+per-call, direct-exact 5-second, combined ANN-plus-exact 6-second, zero-spill,
+and reviewed shared-buffer ceilings; the Edge admission
+gate bounds concurrency before R2 is enabled.
+
+Projection rows bind an immutable v1 derivation-contract version. Its registry
+stores a committed SHA-256 over the exact transitive card/document helper
+closure, and each Portal read checks the live manifest once before using the
+projection. The v1 helpers and registry row are immutable: any semantic change
+requires a new helper closure, shadow projection, bounded backfill, concurrent
+indexes, short reconcile fence, and atomic read cutover. Updating a digest or
+rebuilding v1 rows in place is not a valid migration path.
+
+This contract assumes privileged DDL is delivered only through the governed
+migration and CI path. The live digest proves current definitions, not the
+historical derivation of a row after out-of-band change/write/restore. Direct or
+dynamic privileged DDL is outside the supported safety model. If it may have
+overlapped a source write or backfill, restoring old bytes does not make v1
+trusted again; reads stay disabled operationally and recovery uses a shadow v2
+rebuild/cutover.
+
+The facade never invokes or relaxes the legacy raw Hybrid or semantic helpers
+and exposes no actor, team, state, data-source, cursor, model, weight, threshold,
+raw document, embedding, or locator control. Representative-cardinality plans,
+advisors, and the complete one-to-twelve-term/filter/sort/cursor input matrix
+remain promotion gates.
 
 ## Worker Jobs And Domain State
 

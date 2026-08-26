@@ -12,6 +12,9 @@ from resolve_migration_head import resolve_migration_head
 REPO_ROOT = Path(__file__).resolve().parents[1]
 WORKFLOW = REPO_ROOT / ".github" / "workflows" / "supabase-dev.yml"
 MIGRATIONS = REPO_ROOT / "supabase" / "migrations"
+API_CONTRACT_TEST = (
+    REPO_ROOT / "supabase" / "tests" / "20260806_api_contract_closure.sql"
+)
 
 
 def job_sections(text: str) -> dict[str, str]:
@@ -57,6 +60,18 @@ def main() -> int:
     expected_head = resolve_migration_head(MIGRATIONS)
     if re.search(r'EXPECTED_MIGRATION_HEAD:\s*["\']?\d{14}', text):
         failures.append("migration head must not be pinned manually")
+
+    api_contract_text = API_CONTRACT_TEST.read_text(encoding="utf-8")
+    api_contract_heads = re.findall(
+        r"api[.]svc_schema_contract_status[(][)]\s*->>\s*'migrationHead'\s*,"
+        r"\s*'(\d{14})'::text",
+        api_contract_text,
+    )
+    if api_contract_heads != [expected_head]:
+        failures.append(
+            "API closure must assert the exact checkout migration head "
+            f"{expected_head}, found {api_contract_heads or 'none'}"
+        )
 
     jobs = job_sections(text)
     hosted_workflow = jobs.get("deploy-and-verify", "")

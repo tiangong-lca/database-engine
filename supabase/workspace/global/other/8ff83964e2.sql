@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."catalog_portal_projection_payload_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") IS 'Pure Portal public-card/document projection used only by the private synchronized search relation.';

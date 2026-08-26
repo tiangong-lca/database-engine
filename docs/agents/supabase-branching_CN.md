@@ -20,8 +20,8 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 12f54fe1188223d434a40799466167d5dd83c48e
+lastReviewedAt: 2026-08-27
+lastReviewedCommit: 70c2294ba894df3982939dec6b5e549e108f9630
 lastReviewedNote: "已在准确 PR Preview 门最小化 branch/key 权限并把公共 key 选择与匿名传输隔离后复核；持久化 Dev 与生产的修改边界不变。"
 related:
   - ../../AGENTS.md

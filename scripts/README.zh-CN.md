@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 12f54fe1188223d434a40799466167d5dd83c48e
-lastReviewedNote: "已在 workflow 合同隔离持久化 Dev 部署与 fail-closed、最小权限 PR Preview 运行态门后复核；schema-workspace helper 行为不变。"
+lastReviewedAt: 2026-08-27
+lastReviewedCommit: 450c04e
+lastReviewedNote: "已复核 Portal projection manifest 检查器与命名 release/sparse benchmark profile；schema-workspace helper 行为不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -74,6 +74,56 @@ migration，并证明七张表的 OID 与 heap relfilenode 都不变，同时代
 
 ```bash
 scripts/test_search_text_array_upgrade.sh
+```
+
+### `test_portal_projection_upgrade_recovery.sh`
+
+在显式确认且隔离的本地 Supabase 项目中验证 Issue 531 Portal projection
+上线。脚本使用真实并发连接覆盖有效更新、删除、状态失效、主键变更以及仅 embedding
+更新竞态；主动制造 reconcile 锁超时与 cutover guard 失败；并证明相同 migration
+history 下可重试、同名 concurrent index 可受控清理，以及已记录迁移重复执行不会重建
+索引。所需环境变量与恢复边界见
+`docs/agents/portal-projection-migration-recovery.md`。正式证据还要求干净 HEAD、
+Supabase CLI `2.109.1`，以及完整 257-file migration tree 的逐字相等和 aggregate
+SHA-256。
+
+### `run_portal_projection_benchmark.sh`
+
+仅在显式确认的 Issue 531 隔离本地 Supabase 项目中运行代表性 Process/Flow
+Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把全部
+Issue 531 migration 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
+reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合同与 recovery runner
+一致，另要求 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`。
+
+`PORTAL_PROJECTION_BENCHMARK_PROFILE` 用于选择 fail-closed 命名 profile：
+
+- `release` 使用代表性行数/向量数和 21,000 条旧 Flow 版本压力，记录自然
+  raw-ANN 分支，直接验收两类完整规模 exact helper，并捕获生产一致的
+  5,000-to-200 ANN 阶段；
+- `sparse-zero` 使用代表性行数但不写 embedding；
+- `sparse-199` 为每类数据只写 199 条 embedding；
+- `diagnostic` 允许显式传入较小规模，不能作为发布证据；`auto` 会根据
+  精确参数识别命名 profile。
+
+所有命名 gate 都要求干净且精确的 HEAD，覆盖完整公开请求形态，保持
+Search/Facets p95 <= 2 秒、Hybrid p95 <= 6 秒、每次 Hybrid < 8 秒。正式
+semantic plan 必须含可解析的 shared-buffer 证据、低于 750,000 total / 250,000
+read blocks、exact 在 5 秒内完成、formal ANN+exact 合计不超过 6 秒，且没有
+temp/disk spill。每次运行必须使用新的 mode-0700 输出目录。正式 lexical plan
+使用与 Process/Flow pattern helper 完全一致的 leaf，并保持所有常规 planner
+路径开启。代表性 Flow 基数必须自然命中其 PGroonga scan node；Process 基数较小，
+因此记录自然成本计划而不强制某个索引，迁移期 catalog guard 负责证明其 PGroonga
+索引，命名 timing 独立覆盖 Process 性能、排序和 cursor。两类 lexical probe 都
+必须满足精确 needle fixture identity 且无 spill。
+
+### `check_portal_projection_manifest.py`
+
+验证已提交的 Portal projection-v1 digest 与十一函数闭包仍完整，禁止后续
+migration 创建、替换、删除或修改 v1 闭包/控制函数，并确认 reconcile、
+Search/Hybrid 与 Facets 保留所需 runtime guard。
+
+```bash
+python3 scripts/check_portal_projection_manifest.py
 ```
 
 ### `resolve_migration_head.py`

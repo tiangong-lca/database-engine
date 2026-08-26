@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."catalog_portal_facets_v1_impl"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text", "p_filters" "jsonb", "p_query_fingerprint" "text") IS 'Full-result Portal facet aggregation over exact latest synchronized projection candidates.';

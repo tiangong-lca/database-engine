@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 12f54fe1188223d434a40799466167d5dd83c48e
-lastReviewedNote: "Reviewed after the workflow contract separated persistent-Dev deployment from a fail-closed, minimum-authority PR Preview runtime gate; schema-workspace helper behavior is unchanged."
+lastReviewedAt: 2026-08-27
+lastReviewedCommit: 450c04e
+lastReviewedNote: "Reviewed for the Portal projection manifest checker and named release/sparse benchmark profiles; schema-workspace helper behavior is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -81,6 +81,65 @@ script finishes with a clean reset to the checked-out migration head.
 
 ```bash
 scripts/test_search_text_array_upgrade.sh
+```
+
+### `test_portal_projection_upgrade_recovery.sh`
+
+Exercises the Issue 531 Portal projection rollout against an explicitly
+attested, isolated local Supabase project. It uses live concurrent connections
+to prove valid-update, delete, state-invalidation, key-change, and
+embedding-only races; forces reconcile lock-timeout and cutover-guard failures;
+and verifies same-history retry, controlled same-name concurrent-index cleanup,
+and no-op repeat without index rebuild. See
+`docs/agents/portal-projection-migration-recovery.md` for the required
+environment and recovery boundaries. Formal evidence additionally requires
+clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
+the complete 257-file migration tree.
+
+### `run_portal_projection_benchmark.sh`
+
+Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
+fence, plan, and ANN-recall benchmark only against an explicitly attested
+Issue-531 local Supabase project. The runner byte-compares every Issue 531
+migration with the repository, writes into a new operator-selected private
+directory, and resets the isolated database before and after the run so rolled
+back HNSW pages cannot accumulate. Its environment contract mirrors the
+recovery runner and additionally requires
+`PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`.
+
+`PORTAL_PROJECTION_BENCHMARK_PROFILE` selects a fail-closed named profile:
+
+- `release` uses representative rows/vectors plus the 21,000-old-Flow pressure,
+  records the natural raw-ANN branch, directly gates both full-cardinality
+  exact helpers, and captures the production 5,000-to-200 ANN phase;
+- `sparse-zero` uses representative rows with zero embeddings;
+- `sparse-199` uses representative rows with 199 embeddings per dataset;
+- `diagnostic` permits explicitly supplied smaller counts and is not release
+  evidence; `auto` recognizes an exact named profile from its counts.
+
+All named gates require a clean exact HEAD. They cover the complete public
+request shapes, retain Search/Facets p95 <= 2 seconds and Hybrid p95 <= 6
+seconds with every Hybrid call below 8 seconds. Formal semantic plans must
+include parseable shared-buffer evidence, remain below 750,000 total and
+250,000 read blocks, finish exact execution within 5 seconds and formal
+ANN-plus-exact phases within 6 seconds, and show no temp/disk spill. Use a new
+mode-0700 output directory for every run. Formal lexical plans use the exact
+Process/Flow pattern-helper leaf with every normal planner path enabled. The
+representative Flow cardinality must naturally select its PGroonga scan node;
+the smaller Process cardinality records its natural-cost plan without forcing
+one index, while the migration catalog guard proves its PGroonga index and the
+named timings independently cover Process performance, ordering, and cursors.
+Both lexical probes require the exact needle fixture identity and no spill.
+
+### `check_portal_projection_manifest.py`
+
+Checks that the committed Portal projection-v1 digest and exact eleven-function
+closure remain present, that no later migration creates, replaces, drops, or
+alters a v1 closure/control function, and that reconcile/Search-Hybrid/Facets
+retain their required runtime guards.
+
+```bash
+python3 scripts/check_portal_projection_manifest.py
 ```
 
 ### `resolve_migration_head.py`

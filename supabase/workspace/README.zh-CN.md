@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 12f54fe1188223d434a40799466167d5dd83c48e
-lastReviewedNote: "已在 workflow 合同加入隔离且最小权限的 PR Preview 运行态门后复核；生成 workspace 路径、刷新行为与类型所有权不变。"
+lastReviewedAt: 2026-08-27
+lastReviewedCommit: 450c04e
+lastReviewedNote: "已复核 Portal manifest 与 sparse benchmark 工具；生成 workspace 路径、刷新行为与类型所有权不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

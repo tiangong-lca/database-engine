@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-26"
-lastReviewedCommit: "12f54fe1188223d434a40799466167d5dd83c48e"
-lastReviewedNote: "Reviewed after the isolated PR Preview job minimized branch and key authority while retaining exact official-check/ref binding; routing and ownership are unchanged."
+lastReviewedAt: "2026-08-27"
+lastReviewedCommit: "450c04e"
+lastReviewedNote: "Reviewed for the Portal projection recovery document catalog, coverage, routing intents, derivation-contract rule, and exact-head validation evidence."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -17,6 +17,7 @@ catalog:
       workflowDocs:
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
+        - docs/agents/portal-projection-migration-recovery.md
       workspaceIntegrationRequired: true
 
 ownership:
@@ -76,6 +77,7 @@ coverage:
     - .docpact/**
     - docs/agents/repo-validation.md
     - docs/agents/repo-architecture.md
+    - docs/agents/portal-projection-migration-recovery.md
     - docs/agents/supabase-branching.md
     - docs/agents/supabase-branching_CN.md
     - scripts/README.md
@@ -135,6 +137,7 @@ routing:
         - supabase/tests/*portal_*.sql
         - docs/agents/repo-architecture.md
         - docs/agents/repo-validation.md
+        - docs/agents/portal-projection-migration-recovery.md
     hybrid-search-performance:
       paths:
         - supabase/migrations/*hybrid_search*.sql
@@ -147,6 +150,7 @@ routing:
         - supabase/tests/benchmarks/README.md
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
+        - docs/agents/portal-projection-migration-recovery.md
     review-submission-quality-diagnostic:
       paths:
         - supabase/migrations/*review_quality_diagnostic*.sql
@@ -227,6 +231,7 @@ routing:
         - supabase/seeds/**
         - supabase/tests/**
         - .github/workflows/supabase-dev.yml
+        - docs/agents/portal-projection-migration-recovery.md
     root-integration:
       paths:
         - AGENTS.md
@@ -241,6 +246,7 @@ docInventory:
     - .docpact/config.yaml
     - docs/agents/repo-validation.md
     - docs/agents/repo-architecture.md
+    - docs/agents/portal-projection-migration-recovery.md
     - docs/agents/supabase-branching.md
     - docs/agents/supabase-branching_CN.md
     - scripts/README.md
@@ -453,3 +459,35 @@ rules:
       - path: docs/agents/repo-architecture.md
         mode: review_or_update
     reason: Portal schemas are the exhaustive locator-free public DTO boundary shared by Database, Edge, and the anonymous Portal consumer.
+  - id: database-engine-portal-projection-derivation-contract
+    scope: repo
+    repo: database-engine
+    triggers:
+      - path: docs/agents/portal-projection-migration-recovery.md
+        kind: deep-doc
+      - path: supabase/migrations/20260826060422_portal_candidate_first_search.sql
+        kind: database-migration
+      - path: supabase/migrations/20260826080345_portal_projection_reconcile.sql
+        kind: database-migration
+      - path: supabase/migrations/20260826080400_portal_projection_candidate_cutover.sql
+        kind: database-migration
+      - path: supabase/migrations/20260826080403_portal_projection_facets.sql
+        kind: database-migration
+      - path: supabase/tests/20260826_portal_candidate_first_search.sql
+        kind: database-contract-test
+      - path: supabase/tests/benchmarks/20260826_portal_candidate_first_explain.sql
+        kind: database-benchmark
+      - path: scripts/test_portal_projection_upgrade_recovery.sh
+        kind: migration-recovery
+      - path: scripts/check_portal_projection_manifest.py
+        kind: contract-check
+    requiredDocs:
+      - path: .docpact/config.yaml
+        mode: review_or_update
+      - path: docs/agents/repo-architecture.md
+        mode: review_or_update
+      - path: docs/agents/repo-validation.md
+        mode: review_or_update
+      - path: docs/agents/portal-projection-migration-recovery.md
+        mode: review_or_update
+    reason: The immutable projection manifest, online expand/backfill/reconcile/index/cutover sequence, recovery procedure, and representative performance gates must change together.

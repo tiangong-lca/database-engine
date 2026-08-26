@@ -50,7 +50,7 @@ select extensions.ok(
         'plan_cache_mode=force_custom_plan', 'hnsw.iterative_scan=strict_order'
       ]::text[]
     from pg_catalog.pg_proc as routine
-    where routine.oid = 'private.portal_public_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'::regprocedure
+    where routine.oid = 'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'::regprocedure
   ),
   'Portal Hybrid kernel is owned by the NOLOGIN/NOBYPASSRLS internal executor with fixed plan controls'
 );
@@ -100,7 +100,7 @@ select extensions.ok(
   )
   and not pg_catalog.has_function_privilege(
     'service_role',
-    'private.portal_public_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)',
+    'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)',
     'EXECUTE'
   ),
   'private Portal Hybrid helpers remain external- and service-role-opaque'
@@ -218,15 +218,14 @@ select extensions.is(
       where routine.oid in (
         'private.portal_public_hybrid_input_v1(text,text[],text,jsonb,integer)'::regprocedure,
         'private.portal_public_hybrid_card_v1(text,integer,jsonb)'::regprocedure,
-        'private.portal_public_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'::regprocedure
+        'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'::regprocedure
       )
     ), expected(routine_identity, grantee, privilege_type, is_grantable) as (
       values
         ('private.portal_public_hybrid_input_v1(text,text[],text,jsonb,integer)', 'portal_public_executor', 'EXECUTE', false),
         ('private.portal_public_hybrid_card_v1(text,integer,jsonb)', 'portal_public_executor', 'EXECUTE', false),
         ('private.portal_public_hybrid_card_v1(text,integer,jsonb)', 'api_internal_executor', 'EXECUTE', false),
-        ('private.portal_public_hybrid_search_v1_impl(text,text[],vector,jsonb,integer,text)', 'api_internal_executor', 'EXECUTE', false),
-        ('private.portal_public_hybrid_search_v1_impl(text,text[],vector,jsonb,integer,text)', 'portal_public_executor', 'EXECUTE', false)
+        ('private.portal_projection_hybrid_search_v1_impl(text,text[],vector,jsonb,integer,text)', 'portal_public_executor', 'EXECUTE', false)
     )
     select count(*)
     from (
@@ -450,11 +449,15 @@ grant execute on function pg_temp.portal_hybrid_vector_text(real, real)
 grant execute on function pg_temp.portal_hybrid_has_forbidden_key(jsonb)
   to anon, authenticated;
 
--- Fixture writes bypass production derivative hooks only inside this
--- rollback-only transaction. Hybrid retrieval must depend on the exact stored
--- public row and embedding, never on a trigger side effect or legacy RPC.
+-- Fixture writes bypass every other production derivative hook only inside
+-- this rollback-only transaction, while retaining the synchronized Portal
+-- projection trigger. Hybrid never depends on a legacy RPC side effect.
 alter table public.processes disable trigger user;
 alter table public.flows disable trigger user;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.flows
+  enable trigger portal_catalog_projection_content_sync_v1;
 
 insert into public.processes (
   id,
@@ -1583,9 +1586,16 @@ select extensions.ok(
       and pg_catalog.pg_get_functiondef(routine.oid)
         !~ 'private\.semantic_(process|flow)_candidates'
     from pg_catalog.pg_proc as routine
-    where routine.oid = 'private.portal_public_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'::regprocedure
+    where routine.oid = 'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'::regprocedure
   ),
-  'new Portal Hybrid routines never call any legacy raw Hybrid or semantic helper'
+  'Portal Hybrid routines call only the projection kernel and isolated source-HNSW helpers'
+);
+
+select extensions.ok(
+  pg_catalog.to_regprocedure(
+    'private.portal_public_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'
+  ) is null,
+  'the superseded raw-source Portal Hybrid kernel is removed at cutover'
 );
 
 select * from extensions.finish();

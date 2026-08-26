@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."sync_portal_catalog_search_row_v1"() IS 'NOLOGIN/NOBYPASSRLS writer maintains exact visible public-card rows; derivatives remain source-owned and do not touch the projection.';

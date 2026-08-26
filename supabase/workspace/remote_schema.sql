@@ -18780,18 +18780,21 @@ CREATE OR REPLACE FUNCTION "api"."portal_facets_v1"("p_kind" "text", "p_query" "
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
     SET "statement_timeout" TO '8s'
-    AS $$
+    AS $_$
 declare
   v_kind text;
   v_query text;
   v_filters jsonb;
   v_fingerprint text;
-  v_groups jsonb;
+  v_exact_id uuid;
+  v_like_pattern text;
 begin
+  perform private.assert_portal_catalog_projection_contract_v1();
+
   if pg_catalog.octet_length(coalesce(p_kind, '')) > 32 then
     raise exception using errcode = '22023', message = 'invalid portal request';
   end if;
-  v_kind := lower(btrim(coalesce(p_kind, '')));
+  v_kind := pg_catalog.lower(pg_catalog.btrim(coalesce(p_kind, '')));
   perform private.portal_validate_search_v1(
     v_kind,
     coalesce(p_query, ''),
@@ -18799,133 +18802,40 @@ begin
     'relevance',
     1
   );
-  v_query := lower(btrim(coalesce(p_query, '')));
+  v_query := pg_catalog.lower(pg_catalog.btrim(coalesce(p_query, '')));
   v_filters := private.portal_normalize_filters_v1(p_filters);
-  v_fingerprint := private.portal_query_fingerprint_v1(v_kind, v_query, v_filters, 'relevance');
+  v_fingerprint := private.portal_query_fingerprint_v1(
+    v_kind,
+    v_query,
+    v_filters,
+    'relevance'
+  );
+  if v_query ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    v_exact_id := v_query::uuid;
+  end if;
+  if v_query <> '' then
+    v_like_pattern := '%' || pg_catalog.replace(
+      pg_catalog.replace(
+        pg_catalog.replace(
+          v_query,
+          pg_catalog.chr(92),
+          pg_catalog.chr(92) || pg_catalog.chr(92)
+        ),
+        '%',
+        pg_catalog.chr(92) || '%'
+      ),
+      '_',
+      pg_catalog.chr(92) || '_'
+    ) || '%';
+  end if;
 
-  with source_rows as materialized (
-    select kinds.kind as dataset_kind, source.*
-    from (values ('process'::text), ('flow'::text)) as kinds(kind)
-    cross join lateral private.portal_catalog_rows_v1(kinds.kind) as source
-    where v_kind = 'all' or kinds.kind = v_kind
-  ), latest as materialized (
-    select candidate.*
-    from (
-      select source_rows.*,
-        row_number() over (
-          partition by source_rows.dataset_kind, source_rows.id
-          order by source_rows.version desc
-        ) as version_rank
-      from source_rows
-    ) as candidate
-    where candidate.version_rank = 1
-  ), decorated as materialized (
-    select latest.*,
-      private.portal_catalog_card_v1(latest.dataset_kind, latest.state_code, latest.json_data) as card
-    from latest
-  ), matched as materialized (
-    select decorated.*
-    from decorated
-    where (
-      v_query = ''
-      or lower(decorated.id::text) = v_query
-      or lower(coalesce(decorated.card ->> 'casNumber', '')) = v_query
-      or strpos(lower(concat_ws(' ', decorated.card ->> 'document', decorated.lexical_text)), v_query) > 0
-    )
-      and (not (v_filters ? 'accessLevel') or decorated.card ->> 'accessLevel' = v_filters ->> 'accessLevel')
-      and (not (v_filters ? 'geography') or lower(btrim(coalesce(decorated.card #>> '{geography,code}', ''))) = v_filters ->> 'geography')
-      and (not (v_filters ? 'classification') or exists (
-        select 1 from jsonb_array_elements(decorated.card -> 'classifications') as classification(item)
-        where lower(btrim(item ->> 'code')) = v_filters ->> 'classification'
-      ))
-      and (not (v_filters ? 'referenceYearFrom') or (decorated.card ->> 'referenceYear')::integer >= (v_filters ->> 'referenceYearFrom')::integer)
-      and (not (v_filters ? 'referenceYearTo') or (decorated.card ->> 'referenceYear')::integer <= (v_filters ->> 'referenceYearTo')::integer)
-      and (not (v_filters ? 'processSubtype') or lower(btrim(coalesce(decorated.card ->> 'processSubtype', ''))) = v_filters ->> 'processSubtype')
-      and (not (v_filters ? 'source') or lower(btrim(coalesce(decorated.card ->> 'source', ''))) = v_filters ->> 'source')
-  ), facet_values as materialized (
-    select 'kind'::text as group_id, 1 as group_order,
-      matched.dataset_kind as value, matched.dataset_kind as label
-    from matched
-    union all
-    select 'accessLevel', 2,
-      matched.card ->> 'accessLevel' as value, matched.card ->> 'accessLevel' as label
-    from matched
-    union all
-    select 'geography', 3,
-      lower(btrim(matched.card #>> '{geography,code}')),
-      matched.card #>> '{geography,code}'
-    from matched
-    union all
-    select 'referenceYear', 4,
-      btrim(matched.card ->> 'referenceYear'),
-      btrim(matched.card ->> 'referenceYear')
-    from matched
-    union all
-    select 'processSubtype', 5,
-      lower(btrim(matched.card ->> 'processSubtype')),
-      matched.card ->> 'processSubtype'
-    from matched where matched.dataset_kind = 'process'
-    union all
-    select 'source', 6,
-      lower(btrim(matched.card ->> 'source')),
-      matched.card ->> 'source'
-    from matched
-  ), counts as materialized (
-    select group_id, group_order, value, min(value) as label, count(*) as value_count
-    from facet_values
-    where nullif(btrim(value), '') is not null
-      and length(value) <= 128
-      and pg_catalog.octet_length(value) <= 512
-    group by group_id, group_order, value
-  ), ranked_counts as materialized (
-    select counts.*,
-      row_number() over (
-        partition by counts.group_id
-        order by counts.value
-      ) as value_rank
-    from counts
-  ), grouped as materialized (
-    select ranked_counts.group_id, ranked_counts.group_order,
-      jsonb_agg(jsonb_build_object(
-        'value', ranked_counts.value,
-        'label', jsonb_build_array(jsonb_build_object('language', 'und', 'value', ranked_counts.label)),
-        'count', ranked_counts.value_count
-      ) order by ranked_counts.value) filter (where ranked_counts.value_rank <= 100) as values_json,
-      bool_or(ranked_counts.value_rank > 100) as has_more
-    from ranked_counts
-    group by ranked_counts.group_id, ranked_counts.group_order
-  )
-  select coalesce(jsonb_agg(jsonb_build_object(
-    'id', grouped.group_id,
-    'label', jsonb_build_array(
-      jsonb_build_object('language', 'en', 'value', case grouped.group_id
-        when 'kind' then 'Object type'
-        when 'accessLevel' then 'Access level'
-        when 'geography' then 'Geography'
-        when 'referenceYear' then 'Reference year'
-        when 'processSubtype' then 'Process subtype'
-        else 'Source'
-      end),
-      jsonb_build_object('language', 'zh-CN', 'value', case grouped.group_id
-        when 'kind' then '对象类型'
-        when 'accessLevel' then '访问级别'
-        when 'geography' then '地区'
-        when 'referenceYear' then '参考年'
-        when 'processSubtype' then '过程类型'
-        else '数据源'
-      end)
-    ),
-    'values', grouped.values_json,
-    'hasMore', grouped.has_more
-  ) order by grouped.group_order), '[]'::jsonb)
-  into v_groups
-  from grouped;
-
-  return jsonb_build_object(
-    'schemaVersion', 'portal.public-facets.v1',
-    'kind', v_kind,
-    'queryFingerprint', v_fingerprint,
-    'groups', v_groups
+  return private.catalog_portal_facets_v1_impl(
+    v_kind,
+    v_query,
+    v_exact_id,
+    v_like_pattern,
+    v_filters,
+    v_fingerprint
   );
 exception
   when sqlstate '22023' then
@@ -18935,7 +18845,7 @@ exception
   when others then
     raise exception using errcode = 'P0001', message = 'portal catalog unavailable';
 end
-$$;
+$_$;
 
 
 ALTER FUNCTION "api"."portal_facets_v1"("p_kind" "text", "p_query" "text", "p_filters" "jsonb") OWNER TO "portal_public_executor";
@@ -19334,7 +19244,7 @@ begin
     p_limit
   );
   v_page := private.portal_lcia_decorate_item_page_v1(
-    private.portal_public_hybrid_search_v1_impl(
+    private.portal_projection_hybrid_search_v1_impl(
       v_input ->> 'kind',
       array(
         select term.value
@@ -19349,8 +19259,12 @@ begin
     )
   );
   if v_page is null
-     or pg_catalog.octet_length(pg_catalog.convert_to(v_page::text, 'UTF8')) > 524288 then
-    raise exception using errcode = '54000', message = 'portal hybrid response too large';
+     or pg_catalog.octet_length(
+       pg_catalog.convert_to(v_page::text, 'UTF8')
+     ) > 524288 then
+    raise exception using
+      errcode = '54000',
+      message = 'portal hybrid response too large';
   end if;
   return v_page;
 exception
@@ -24711,6 +24625,1245 @@ $$;
 
 
 ALTER FUNCTION "api"."unitgroups_embedding_ft_input"("proc" "public"."unitgroups") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "private"."assert_portal_catalog_projection_contract_v1"() RETURNS "void"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "row_security" TO 'on'
+    AS $$
+declare
+  v_expected_identities constant text[] := array[
+    'private.catalog_portal_projection_payload_v1(text,integer,jsonb)',
+    'private.portal_catalog_card_v1(text,integer,jsonb)',
+    'private.portal_capabilities_v1(text,integer,jsonb)',
+    'private.portal_publication_root_v1(text,jsonb)',
+    'private.portal_access_restrictions_open_v1(jsonb)',
+    'private.portal_scalar_text_v1(jsonb)',
+    'private.portal_localized_text_v1(jsonb)',
+    'private.portal_json_items_v1(jsonb)',
+    'private.portal_classifications_v1(jsonb)',
+    'private.portal_safe_year_v1(text)',
+    'private.portal_source_v1(text,jsonb)'
+  ]::text[];
+  v_expected_digest constant text :=
+    'b5e0aff9abbffcc8d2dacaf559a5d1a8c993c20b647d0c70f0e4fa18eb06d2dc';
+  v_live_digest text;
+begin
+  select private.portal_catalog_projection_manifest_sha256_v1()
+  into v_live_digest;
+
+  if v_live_digest is distinct from v_expected_digest
+     or (
+       select count(*)
+       from private.portal_catalog_projection_contract_v1 as contract
+       where contract.contract_version = 1
+         and contract.manifest_schema =
+           'portal.catalog-projection-function-manifest.v1'
+         and contract.function_identities = v_expected_identities
+         and contract.manifest_sha256 = v_expected_digest
+         and contract.created_by_migration = '20260826060422'
+     ) <> 1
+     or (
+       select count(*)
+       from private.portal_catalog_projection_contract_v1
+     ) <> 1
+     or (
+       select not relation.relrowsecurity
+         or not relation.relforcerowsecurity
+         or relation.relowner <> 'postgres'::regrole
+       from pg_catalog.pg_class as relation
+       where relation.oid =
+         'private.portal_catalog_projection_contract_v1'::regclass
+     ) is not false
+     or not exists (
+       select 1
+       from pg_catalog.pg_attribute as attribute
+       where attribute.attrelid =
+         'private.portal_catalog_search_rows_v1'::regclass
+         and attribute.attname = 'projection_contract_version'
+         and attribute.atttypid = 'pg_catalog.int2'::regtype
+         and attribute.attnotnull
+         and not attribute.atthasdef
+         and not attribute.attisdropped
+     )
+     or not exists (
+       select 1
+       from pg_catalog.pg_constraint as contract_check
+       where contract_check.conrelid =
+           'private.portal_catalog_search_rows_v1'::regclass
+         and contract_check.conname =
+           'portal_catalog_search_rows_contract_version_v1_chk'
+         and contract_check.contype = 'c'
+         and contract_check.convalidated
+         and pg_catalog.regexp_replace(
+           pg_catalog.pg_get_expr(
+             contract_check.conbin,
+             contract_check.conrelid
+           ),
+           '[[:space:]]',
+           '',
+           'g'
+         ) = '(projection_contract_version=1)'
+     )
+     or not exists (
+       select 1
+       from pg_catalog.pg_constraint as contract_fk
+       where contract_fk.conrelid =
+           'private.portal_catalog_search_rows_v1'::regclass
+         and contract_fk.confrelid =
+           'private.portal_catalog_projection_contract_v1'::regclass
+         and contract_fk.conname =
+           'portal_catalog_search_rows_contract_version_v1_fk'
+         and contract_fk.contype = 'f'
+         and contract_fk.convalidated
+         and contract_fk.confupdtype = 'r'
+         and contract_fk.confdeltype = 'r'
+         and contract_fk.conkey = array[(
+           select attribute.attnum
+           from pg_catalog.pg_attribute as attribute
+           where attribute.attrelid = contract_fk.conrelid
+             and attribute.attname = 'projection_contract_version'
+         )]::smallint[]
+         and contract_fk.confkey = array[(
+           select attribute.attnum
+           from pg_catalog.pg_attribute as attribute
+           where attribute.attrelid = contract_fk.confrelid
+             and attribute.attname = 'contract_version'
+         )]::smallint[]
+     ) then
+    raise exception using
+      errcode = '55000',
+      message = 'Portal projection derivation contract drifted';
+  end if;
+end
+$$;
+
+
+ALTER FUNCTION "private"."assert_portal_catalog_projection_contract_v1"() OWNER TO "api_internal_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."catalog_portal_candidate_rows_v1"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text") RETURNS TABLE("id" "uuid", "version" "text", "card" "jsonb", "state_code" integer, "modified_at" timestamp with time zone)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    SET "row_security" TO 'on'
+    AS $$
+begin
+  if p_kind = 'process' and p_query = '' then
+    return query
+    select distinct on (projection.id)
+      projection.id,
+      projection.version,
+      projection.card,
+      projection.state_code,
+      projection.modified_at
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'process'
+    order by projection.id,
+      projection.version desc,
+      projection.modified_at desc,
+      projection.state_code desc;
+    return;
+  end if;
+
+  if p_kind = 'process' and p_exact_id is not null then
+    return query
+    with matched as materialized (
+      select pattern.id,
+        pattern.version,
+        false as exact_id
+      from private.catalog_portal_process_pattern_versions_v1(
+        p_like_pattern
+      ) as pattern
+      union
+      select projection.id,
+        projection.version,
+        true
+      from private.portal_catalog_search_rows_v1 as projection
+      where projection.dataset_kind = 'process'
+        and projection.id = p_exact_id
+    ), candidate_ids as materialized (
+      select matched.id,
+        pg_catalog.bool_or(matched.exact_id) as exact_id
+      from matched
+      group by matched.id
+    ), matched_versions as materialized (
+      select distinct matched.id,
+        matched.version
+      from matched
+    ), latest_keys as materialized (
+      select latest.id,
+        latest.version,
+        candidate_ids.exact_id
+      from candidate_ids
+      cross join lateral (
+        select projection.id,
+          projection.version
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'process'
+          and projection.id = candidate_ids.id
+        order by projection.version desc,
+          projection.modified_at desc,
+          projection.state_code desc
+        limit 1
+      ) as latest
+    ), eligible_keys as materialized (
+      select latest.id,
+        latest.version
+      from latest_keys as latest
+      left join matched_versions as latest_match
+        on latest_match.id = latest.id
+       and latest_match.version = latest.version
+      where latest.exact_id
+         or latest_match.id is not null
+    )
+    select projection.id,
+      projection.version,
+      projection.card,
+      projection.state_code,
+      projection.modified_at
+    from eligible_keys
+    join private.portal_catalog_search_rows_v1 as projection
+      on projection.dataset_kind = 'process'
+     and projection.id = eligible_keys.id
+     and projection.version = eligible_keys.version;
+    return;
+  end if;
+
+  if p_kind = 'process' then
+    return query
+    with matched as materialized (
+      select pattern.id,
+        pattern.version
+      from private.catalog_portal_process_pattern_versions_v1(
+        p_like_pattern
+      ) as pattern
+    ), candidate_ids as materialized (
+      select distinct matched.id
+      from matched
+    ), matched_versions as materialized (
+      select distinct matched.id,
+        matched.version
+      from matched
+    ), latest_keys as materialized (
+      select latest.id,
+        latest.version
+      from candidate_ids
+      cross join lateral (
+        select projection.id,
+          projection.version
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'process'
+          and projection.id = candidate_ids.id
+        order by projection.version desc,
+          projection.modified_at desc,
+          projection.state_code desc
+        limit 1
+      ) as latest
+    ), eligible_keys as materialized (
+      select latest.id,
+        latest.version
+      from latest_keys as latest
+      join matched_versions as latest_match
+        on latest_match.id = latest.id
+       and latest_match.version = latest.version
+    )
+    select projection.id,
+      projection.version,
+      projection.card,
+      projection.state_code,
+      projection.modified_at
+    from eligible_keys
+    join private.portal_catalog_search_rows_v1 as projection
+      on projection.dataset_kind = 'process'
+     and projection.id = eligible_keys.id
+     and projection.version = eligible_keys.version;
+    return;
+  end if;
+
+  if p_kind = 'flow' and p_query = '' then
+    return query
+    select distinct on (projection.id)
+      projection.id,
+      projection.version,
+      projection.card,
+      projection.state_code,
+      projection.modified_at
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'flow'
+    order by projection.id,
+      projection.version desc,
+      projection.modified_at desc,
+      projection.state_code desc;
+    return;
+  end if;
+
+  if p_kind = 'flow' and p_exact_id is not null then
+    return query
+    with matched as materialized (
+      select pattern.id,
+        pattern.version,
+        false as exact_id
+      from private.catalog_portal_flow_pattern_versions_v1(
+        p_like_pattern
+      ) as pattern
+      union
+      select projection.id,
+        projection.version,
+        true
+      from private.portal_catalog_search_rows_v1 as projection
+      where projection.dataset_kind = 'flow'
+        and projection.id = p_exact_id
+    ), candidate_ids as materialized (
+      select matched.id,
+        pg_catalog.bool_or(matched.exact_id) as exact_id
+      from matched
+      group by matched.id
+    ), matched_versions as materialized (
+      select distinct matched.id,
+        matched.version
+      from matched
+    ), latest_keys as materialized (
+      select latest.id,
+        latest.version,
+        candidate_ids.exact_id
+      from candidate_ids
+      cross join lateral (
+        select projection.id,
+          projection.version
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'flow'
+          and projection.id = candidate_ids.id
+        order by projection.version desc,
+          projection.modified_at desc,
+          projection.state_code desc
+        limit 1
+      ) as latest
+    ), eligible_keys as materialized (
+      select latest.id,
+        latest.version
+      from latest_keys as latest
+      left join matched_versions as latest_match
+        on latest_match.id = latest.id
+       and latest_match.version = latest.version
+      where latest.exact_id
+         or latest_match.id is not null
+    )
+    select projection.id,
+      projection.version,
+      projection.card,
+      projection.state_code,
+      projection.modified_at
+    from eligible_keys
+    join private.portal_catalog_search_rows_v1 as projection
+      on projection.dataset_kind = 'flow'
+     and projection.id = eligible_keys.id
+     and projection.version = eligible_keys.version;
+    return;
+  end if;
+
+  if p_kind = 'flow' then
+    return query
+    with matched as materialized (
+      select pattern.id,
+        pattern.version
+      from private.catalog_portal_flow_pattern_versions_v1(
+        p_like_pattern
+      ) as pattern
+    ), candidate_ids as materialized (
+      select distinct matched.id
+      from matched
+    ), matched_versions as materialized (
+      select distinct matched.id,
+        matched.version
+      from matched
+    ), latest_keys as materialized (
+      select latest.id,
+        latest.version
+      from candidate_ids
+      cross join lateral (
+        select projection.id,
+          projection.version
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'flow'
+          and projection.id = candidate_ids.id
+        order by projection.version desc,
+          projection.modified_at desc,
+          projection.state_code desc
+        limit 1
+      ) as latest
+    ), eligible_keys as materialized (
+      select latest.id,
+        latest.version
+      from latest_keys as latest
+      join matched_versions as latest_match
+        on latest_match.id = latest.id
+       and latest_match.version = latest.version
+    )
+    select projection.id,
+      projection.version,
+      projection.card,
+      projection.state_code,
+      projection.modified_at
+    from eligible_keys
+    join private.portal_catalog_search_rows_v1 as projection
+      on projection.dataset_kind = 'flow'
+     and projection.id = eligible_keys.id
+     and projection.version = eligible_keys.version;
+  end if;
+end
+$$;
+
+
+ALTER FUNCTION "private"."catalog_portal_candidate_rows_v1"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."catalog_portal_candidate_rows_v1"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text") IS 'Six static kind-by-empty/UUID/lexical branches: indexed public-document IDs, then exact latest-visible recheck without pre-limit.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."catalog_portal_card_facts_v1"("p_card" "jsonb", "p_filters" "jsonb", "p_query" "text") RETURNS "jsonb"
+    LANGUAGE "sql" IMMUTABLE SECURITY DEFINER PARALLEL SAFE
+    SET "search_path" TO ''
+    AS $$
+  select pg_catalog.jsonb_build_object(
+    'accessLevel', p_card -> 'accessLevel',
+    'nameKey', p_card #> '{names,0,value}',
+    'nameExact', pg_catalog.to_jsonb(case when p_query = '' then false else
+      exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(
+          coalesce(p_card -> 'names', '[]'::jsonb)
+        ) as name(item)
+        where pg_catalog.lower(pg_catalog.btrim(name.item ->> 'value')) = p_query
+      )
+    end),
+    'nameContains', pg_catalog.to_jsonb(case when p_query = '' then false else
+      exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(
+          coalesce(p_card -> 'names', '[]'::jsonb)
+        ) as name(item)
+        where pg_catalog.strpos(
+          pg_catalog.lower(name.item ->> 'value'),
+          p_query
+        ) > 0
+      )
+    end),
+    'classificationExact', pg_catalog.to_jsonb(
+      case when p_query = '' then false else exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(
+          coalesce(p_card -> 'classifications', '[]'::jsonb)
+        ) as classification(item)
+        where pg_catalog.lower(pg_catalog.btrim(
+          classification.item ->> 'code'
+        )) = p_query
+      ) end
+    ),
+    'classificationContains', pg_catalog.to_jsonb(
+      case when p_query = '' then false else exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(
+          coalesce(p_card -> 'classifications', '[]'::jsonb)
+        ) as classification(item)
+        where pg_catalog.strpos(
+          pg_catalog.lower(classification.item ->> 'code'),
+          p_query
+        ) > 0
+      ) end
+    ),
+    'classificationFilterMatch', pg_catalog.to_jsonb(
+      case when not (p_filters ? 'classification') then false else exists (
+        select 1
+        from pg_catalog.jsonb_array_elements(
+          coalesce(p_card -> 'classifications', '[]'::jsonb)
+        ) as classification(item)
+        where pg_catalog.lower(pg_catalog.btrim(
+          classification.item ->> 'code'
+        )) = p_filters ->> 'classification'
+      ) end
+    ),
+    'geographyCode', p_card #> '{geography,code}',
+    'referenceYear', p_card -> 'referenceYear',
+    'processSubtype', p_card -> 'processSubtype',
+    'source', p_card -> 'source',
+    'casNumber', p_card -> 'casNumber'
+  )
+$$;
+
+
+ALTER FUNCTION "private"."catalog_portal_card_facts_v1"("p_card" "jsonb", "p_filters" "jsonb", "p_query" "text") OWNER TO "portal_public_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."catalog_portal_facet_candidate_rows_v1"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text") RETURNS TABLE("dataset_kind" "text", "id" "uuid", "version" "text", "card" "jsonb")
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    SET "row_security" TO 'on'
+    AS $$
+begin
+  if p_kind = 'process' then
+    return query
+    select 'process'::text,
+      candidate.id,
+      candidate.version,
+      candidate.card
+    from private.catalog_portal_candidate_rows_v1(
+      'process', p_query, p_exact_id, p_like_pattern
+    ) as candidate;
+  elsif p_kind = 'flow' then
+    return query
+    select 'flow'::text,
+      candidate.id,
+      candidate.version,
+      candidate.card
+    from private.catalog_portal_candidate_rows_v1(
+      'flow', p_query, p_exact_id, p_like_pattern
+    ) as candidate;
+  elsif p_kind = 'all' then
+    return query
+    select 'process'::text,
+      candidate.id,
+      candidate.version,
+      candidate.card
+    from private.catalog_portal_candidate_rows_v1(
+      'process', p_query, p_exact_id, p_like_pattern
+    ) as candidate;
+    return query
+    select 'flow'::text,
+      candidate.id,
+      candidate.version,
+      candidate.card
+    from private.catalog_portal_candidate_rows_v1(
+      'flow', p_query, p_exact_id, p_like_pattern
+    ) as candidate;
+  end if;
+end
+$$;
+
+
+ALTER FUNCTION "private"."catalog_portal_facet_candidate_rows_v1"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."catalog_portal_facet_candidate_rows_v1"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text") IS 'Exact Process/Flow/all latest-visible facet candidates over the synchronized public-safe projection.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."catalog_portal_facets_v1_impl"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text", "p_filters" "jsonb", "p_query_fingerprint" "text") RETURNS "jsonb"
+    LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    SET "row_security" TO 'on'
+    AS $$
+  with matched as materialized (
+    select candidate.*
+    from private.catalog_portal_facet_candidate_rows_v1(
+      p_kind,
+      p_query,
+      p_exact_id,
+      p_like_pattern
+    ) as candidate
+    where (
+        not (p_filters ? 'accessLevel')
+        or candidate.card ->> 'accessLevel' = p_filters ->> 'accessLevel'
+      )
+      and (
+        not (p_filters ? 'geography')
+        or pg_catalog.lower(pg_catalog.btrim(coalesce(
+          candidate.card #>> '{geography,code}',
+          ''
+        ))) = p_filters ->> 'geography'
+      )
+      and (
+        not (p_filters ? 'classification')
+        or exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(
+            candidate.card -> 'classifications'
+          ) as classification(item)
+          where pg_catalog.lower(pg_catalog.btrim(
+            classification.item ->> 'code'
+          )) = p_filters ->> 'classification'
+        )
+      )
+      and (
+        not (p_filters ? 'referenceYearFrom')
+        or (candidate.card ->> 'referenceYear')::integer
+          >= (p_filters ->> 'referenceYearFrom')::integer
+      )
+      and (
+        not (p_filters ? 'referenceYearTo')
+        or (candidate.card ->> 'referenceYear')::integer
+          <= (p_filters ->> 'referenceYearTo')::integer
+      )
+      and (
+        not (p_filters ? 'processSubtype')
+        or pg_catalog.lower(pg_catalog.btrim(coalesce(
+          candidate.card ->> 'processSubtype',
+          ''
+        ))) = p_filters ->> 'processSubtype'
+      )
+      and (
+        not (p_filters ? 'source')
+        or pg_catalog.lower(pg_catalog.btrim(coalesce(
+          candidate.card ->> 'source',
+          ''
+        ))) = p_filters ->> 'source'
+      )
+  ), facet_values as materialized (
+    select 'kind'::text as group_id,
+      1 as group_order,
+      matched.dataset_kind as value,
+      matched.dataset_kind as label
+    from matched
+    union all
+    select 'accessLevel',
+      2,
+      matched.card ->> 'accessLevel',
+      matched.card ->> 'accessLevel'
+    from matched
+    union all
+    select 'geography',
+      3,
+      pg_catalog.lower(pg_catalog.btrim(
+        matched.card #>> '{geography,code}'
+      )),
+      matched.card #>> '{geography,code}'
+    from matched
+    union all
+    select 'referenceYear',
+      4,
+      pg_catalog.btrim(matched.card ->> 'referenceYear'),
+      pg_catalog.btrim(matched.card ->> 'referenceYear')
+    from matched
+    union all
+    select 'processSubtype',
+      5,
+      pg_catalog.lower(pg_catalog.btrim(
+        matched.card ->> 'processSubtype'
+      )),
+      matched.card ->> 'processSubtype'
+    from matched
+    where matched.dataset_kind = 'process'
+    union all
+    select 'source',
+      6,
+      pg_catalog.lower(pg_catalog.btrim(matched.card ->> 'source')),
+      matched.card ->> 'source'
+    from matched
+  ), counts as materialized (
+    select group_id,
+      group_order,
+      value,
+      pg_catalog.min(value) as label,
+      pg_catalog.count(*) as value_count
+    from facet_values
+    where nullif(pg_catalog.btrim(value), '') is not null
+      and pg_catalog.length(value) <= 128
+      and pg_catalog.octet_length(value) <= 512
+    group by group_id, group_order, value
+  ), ranked_counts as materialized (
+    select counts.*,
+      pg_catalog.row_number() over (
+        partition by counts.group_id
+        order by counts.value
+      ) as value_rank
+    from counts
+  ), grouped as materialized (
+    select ranked_counts.group_id,
+      ranked_counts.group_order,
+      pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+        'value', ranked_counts.value,
+        'label', pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'language', 'und', 'value', ranked_counts.label
+          )
+        ),
+        'count', ranked_counts.value_count
+      ) order by ranked_counts.value)
+        filter (where ranked_counts.value_rank <= 100) as values_json,
+      pg_catalog.bool_or(ranked_counts.value_rank > 100) as has_more
+    from ranked_counts
+    group by ranked_counts.group_id, ranked_counts.group_order
+  ), groups as (
+    select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'id', grouped.group_id,
+      'label', pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object(
+          'language', 'en',
+          'value', case grouped.group_id
+            when 'kind' then 'Object type'
+            when 'accessLevel' then 'Access level'
+            when 'geography' then 'Geography'
+            when 'referenceYear' then 'Reference year'
+            when 'processSubtype' then 'Process subtype'
+            else 'Source'
+          end
+        ),
+        pg_catalog.jsonb_build_object(
+          'language', 'zh-CN',
+          'value', case grouped.group_id
+            when 'kind' then '对象类型'
+            when 'accessLevel' then '访问级别'
+            when 'geography' then '地区'
+            when 'referenceYear' then '参考年'
+            when 'processSubtype' then '过程类型'
+            else '数据源'
+          end
+        )
+      ),
+      'values', grouped.values_json,
+      'hasMore', grouped.has_more
+    ) order by grouped.group_order), '[]'::jsonb) as value
+    from grouped
+  )
+  select pg_catalog.jsonb_build_object(
+    'schemaVersion', 'portal.public-facets.v1',
+    'kind', p_kind,
+    'queryFingerprint', p_query_fingerprint,
+    'groups', groups.value
+  )
+  from groups
+$$;
+
+
+ALTER FUNCTION "private"."catalog_portal_facets_v1_impl"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text", "p_filters" "jsonb", "p_query_fingerprint" "text") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."catalog_portal_facets_v1_impl"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text", "p_filters" "jsonb", "p_query_fingerprint" "text") IS 'Full-result Portal facet aggregation over exact latest synchronized projection candidates.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_like_pattern" "text") RETURNS TABLE("id" "uuid", "version" "text")
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    SET "row_security" TO 'on'
+    AS $_$
+begin
+  return query execute pg_catalog.format($sql$
+    select projection.id,
+      projection.version
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'flow'
+      and projection.document like %L escape E'\\'
+  $sql$, p_like_pattern);
+end
+$_$;
+
+
+ALTER FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_like_pattern" "text") OWNER TO "portal_public_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."catalog_portal_hybrid_pattern_matches_v1"("p_kind" "text", "p_query_terms" "text"[]) RETURNS TABLE("id" "uuid", "version" "text", "term_ordinal" integer)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    SET "row_security" TO 'on'
+    AS $$
+declare
+  v_pattern text;
+begin
+  for v_ordinal in 1..pg_catalog.cardinality(p_query_terms)
+  loop
+    v_pattern := '%' || pg_catalog.replace(
+      pg_catalog.replace(
+        pg_catalog.replace(
+          p_query_terms[v_ordinal],
+          pg_catalog.chr(92),
+          pg_catalog.chr(92) || pg_catalog.chr(92)
+        ),
+        '%',
+        pg_catalog.chr(92) || '%'
+      ),
+      '_',
+      pg_catalog.chr(92) || '_'
+    ) || '%';
+    if p_kind = 'process' then
+      return query
+      select pattern.id,
+        pattern.version,
+        v_ordinal
+      from private.catalog_portal_process_pattern_versions_v1(
+        v_pattern
+      ) as pattern;
+    elsif p_kind = 'flow' then
+      return query
+      select pattern.id,
+        pattern.version,
+        v_ordinal
+      from private.catalog_portal_flow_pattern_versions_v1(
+        v_pattern
+      ) as pattern;
+    end if;
+  end loop;
+end
+$$;
+
+
+ALTER FUNCTION "private"."catalog_portal_hybrid_pattern_matches_v1"("p_kind" "text", "p_query_terms" "text"[]) OWNER TO "portal_public_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."catalog_portal_process_pattern_versions_v1"("p_like_pattern" "text") RETURNS TABLE("id" "uuid", "version" "text")
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    SET "row_security" TO 'on'
+    AS $_$
+begin
+  return query execute pg_catalog.format($sql$
+    select projection.id,
+      projection.version
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'process'
+      and projection.document like %L escape E'\\'
+  $sql$, p_like_pattern);
+end
+$_$;
+
+
+ALTER FUNCTION "private"."catalog_portal_process_pattern_versions_v1"("p_like_pattern" "text") OWNER TO "portal_public_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."catalog_portal_projection_payload_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    AS $$
+declare
+  v_card jsonb;
+begin
+  v_card := private.portal_catalog_card_v1(
+    p_kind,
+    p_state_code,
+    p_json
+  );
+  if pg_catalog.jsonb_typeof(v_card) <> 'object' then
+    return null;
+  end if;
+  return pg_catalog.jsonb_build_object(
+    'card', v_card,
+    'document', coalesce(v_card ->> 'document', '')
+  );
+end
+$$;
+
+
+ALTER FUNCTION "private"."catalog_portal_projection_payload_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."catalog_portal_projection_payload_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") IS 'Pure Portal public-card/document projection used only by the private synchronized search relation.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."catalog_portal_search_v1_impl"("p_kind" "text", "p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    AS $_$
+declare
+  v_items jsonb;
+  v_next_cursor_payload jsonb;
+  v_exact_id uuid;
+  v_like_pattern text;
+begin
+  if p_query ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    v_exact_id := p_query::uuid;
+  end if;
+  if p_query <> '' then
+    v_like_pattern := '%' || pg_catalog.replace(
+      pg_catalog.replace(
+        pg_catalog.replace(
+          p_query,
+          pg_catalog.chr(92),
+          pg_catalog.chr(92) || pg_catalog.chr(92)
+        ),
+        '%',
+        pg_catalog.chr(92) || '%'
+      ),
+      '_',
+      pg_catalog.chr(92) || '_'
+    ) || '%';
+  end if;
+  -- Empty unfiltered browse pages do not require search facts for the whole
+  -- catalog.  Order/latest/cursor reduction happens before at most limit+1
+  -- cards are hydrated.
+  if p_query = ''
+     and p_filters = '{}'::jsonb
+     and p_sort in ('relevance', 'modified_desc', 'name_asc') then
+    with portal_prefilter as materialized (
+      select p_kind as dataset_kind,
+        candidate.*,
+        case when p_sort = 'name_asc' then case
+          when nullif(candidate.card #>> '{names,0,value}', '') is not null
+            and pg_catalog.length(
+              candidate.card #>> '{names,0,value}'
+            ) <= 500
+            and pg_catalog.octet_length(
+              candidate.card #>> '{names,0,value}'
+            ) <= 2000
+            and candidate.card #>> '{names,0,value}' !~ '[[:cntrl:]]'
+            then candidate.card #>> '{names,0,value}'
+          else '~unnamed:' || candidate.id::text
+        end end as name_key
+      from private.catalog_portal_candidate_rows_v1(
+        p_kind,
+        p_query,
+        v_exact_id,
+        v_like_pattern
+      ) as candidate
+    ), portal_after_cursor as materialized (
+      select portal_prefilter.*
+      from portal_prefilter
+      where p_cursor_rank is null
+        or case p_sort
+          when 'relevance' then
+            0::numeric < p_cursor_rank::numeric
+            or (
+              0::numeric = p_cursor_rank::numeric
+              and (
+                portal_prefilter.id > p_cursor_id
+                or (
+                  portal_prefilter.id = p_cursor_id
+                  and portal_prefilter.version < p_cursor_version
+                )
+              )
+            )
+          when 'modified_desc' then
+            portal_prefilter.modified_at < p_cursor_rank::timestamptz
+            or (
+              portal_prefilter.modified_at = p_cursor_rank::timestamptz
+              and (
+                portal_prefilter.id > p_cursor_id
+                or (
+                  portal_prefilter.id = p_cursor_id
+                  and portal_prefilter.version < p_cursor_version
+                )
+              )
+            )
+          else
+            pg_catalog.lower(portal_prefilter.name_key)
+              > pg_catalog.lower(p_cursor_rank)
+            or (
+              pg_catalog.lower(portal_prefilter.name_key)
+                = pg_catalog.lower(p_cursor_rank)
+              and (
+                portal_prefilter.id > p_cursor_id
+                or (
+                  portal_prefilter.id = p_cursor_id
+                  and portal_prefilter.version < p_cursor_version
+                )
+              )
+            )
+        end
+    ), portal_ordered as materialized (
+      select portal_after_cursor.*,
+        pg_catalog.row_number() over (
+          order by
+            case when p_sort = 'modified_desc'
+              then portal_after_cursor.modified_at end desc,
+            case when p_sort = 'name_asc'
+              then pg_catalog.lower(portal_after_cursor.name_key) end asc,
+            portal_after_cursor.id asc,
+            portal_after_cursor.version desc
+        ) as page_rank
+      from portal_after_cursor
+      order by
+        case when p_sort = 'modified_desc'
+          then portal_after_cursor.modified_at end desc,
+        case when p_sort = 'name_asc'
+          then pg_catalog.lower(portal_after_cursor.name_key) end asc,
+        portal_after_cursor.id asc,
+        portal_after_cursor.version desc
+      limit p_limit + 1
+    ), portal_decorated as materialized (
+      select portal_ordered.*
+      from portal_ordered
+    )
+    select
+      coalesce(pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object(
+          'key', pg_catalog.jsonb_build_object(
+            'kind', p_kind,
+            'id', portal_decorated.id::text,
+            'version', portal_decorated.version
+          ),
+          'accessLevel', portal_decorated.card -> 'accessLevel',
+          'capabilities', portal_decorated.card -> 'capabilities',
+          'names', portal_decorated.card -> 'names',
+          'summary', portal_decorated.card -> 'summary',
+          'geography', portal_decorated.card -> 'geography',
+          'referenceYear', portal_decorated.card -> 'referenceYear',
+          'modifiedAt', pg_catalog.to_char(
+            portal_decorated.modified_at at time zone 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+          ),
+          'match', pg_catalog.jsonb_build_object(
+            'kind', 'lexical',
+            'score', 0::numeric,
+            'reasonCodes', '[]'::jsonb
+          )
+        ) order by portal_decorated.page_rank
+      ) filter (where portal_decorated.page_rank <= p_limit), '[]'::jsonb),
+      case when max(portal_decorated.page_rank) > p_limit then
+        (pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'v', 1,
+          'fp', p_query_fingerprint,
+          'rankKey', case p_sort
+            when 'relevance' then '0'
+            when 'modified_desc' then pg_catalog.to_char(
+              portal_decorated.modified_at at time zone 'UTC',
+              'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+            )
+            else pg_catalog.lower(portal_decorated.name_key)
+          end,
+          'kind', p_kind,
+          'id', portal_decorated.id::text,
+          'version', portal_decorated.version
+        ) order by portal_decorated.page_rank)
+          filter (where portal_decorated.page_rank = p_limit)) -> 0
+      else null end
+    into v_items, v_next_cursor_payload
+    from portal_decorated;
+
+    return pg_catalog.jsonb_build_object(
+      'items', v_items,
+      'nextCursorPayload', v_next_cursor_payload
+    );
+  end if;
+
+  with portal_prefilter as materialized (
+    select p_kind as dataset_kind,
+      candidate.*
+    from private.catalog_portal_candidate_rows_v1(
+      p_kind,
+      p_query,
+      v_exact_id,
+      v_like_pattern
+    ) as candidate
+  ), portal_facts as materialized (
+    select portal_prefilter.*,
+      private.catalog_portal_card_facts_v1(
+        portal_prefilter.card,
+        p_filters,
+        p_query
+      ) as facts
+    from portal_prefilter
+  ), portal_scored as materialized (
+    select portal_facts.*,
+      case
+        when nullif(portal_facts.facts ->> 'nameKey', '') is not null
+          and pg_catalog.length(portal_facts.facts ->> 'nameKey') <= 500
+          and pg_catalog.octet_length(portal_facts.facts ->> 'nameKey') <= 2000
+          and portal_facts.facts ->> 'nameKey' !~ '[[:cntrl:]]'
+          then portal_facts.facts ->> 'nameKey'
+        else '~unnamed:' || portal_facts.id::text
+      end as name_key,
+      case
+        when p_query = '' then 0::numeric
+        when pg_catalog.lower(portal_facts.id::text) = p_query then 1::numeric
+        when pg_catalog.lower(coalesce(portal_facts.facts ->> 'casNumber', '')) = p_query
+          then 0.98::numeric
+        when (portal_facts.facts ->> 'nameExact')::boolean then 0.95::numeric
+        when (portal_facts.facts ->> 'classificationExact')::boolean
+          then 0.92::numeric
+        when p_query <> '' then 0.70::numeric
+        else 0::numeric
+      end as score,
+      case
+        when pg_catalog.lower(portal_facts.id::text) = p_query
+          then pg_catalog.jsonb_build_array('exact_id')
+        when pg_catalog.lower(coalesce(portal_facts.facts ->> 'casNumber', '')) = p_query
+          then pg_catalog.jsonb_build_array('cas')
+        when (portal_facts.facts ->> 'nameExact')::boolean
+          or (portal_facts.facts ->> 'nameContains')::boolean
+          then pg_catalog.jsonb_build_array('name')
+        when (portal_facts.facts ->> 'classificationExact')::boolean
+          or (portal_facts.facts ->> 'classificationContains')::boolean
+          then pg_catalog.jsonb_build_array('classification')
+        when p_query <> '' then pg_catalog.jsonb_build_array('full_text')
+        else '[]'::jsonb
+      end as reason_codes
+    from portal_facts
+  ), portal_filtered as materialized (
+    select portal_scored.*,
+      case p_sort
+        when 'relevance' then portal_scored.score::text
+        when 'modified_desc' then pg_catalog.to_char(
+          portal_scored.modified_at at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+        )
+        else pg_catalog.lower(portal_scored.name_key)
+      end as rank_key
+    from portal_scored
+    where (p_query = '' or portal_scored.score > 0)
+      and (
+        not (p_filters ? 'accessLevel')
+        or portal_scored.facts ->> 'accessLevel' = p_filters ->> 'accessLevel'
+      )
+      and (
+        not (p_filters ? 'geography')
+        or pg_catalog.lower(pg_catalog.btrim(coalesce(
+          portal_scored.facts ->> 'geographyCode',
+          ''
+        ))) = p_filters ->> 'geography'
+      )
+      and (
+        not (p_filters ? 'classification')
+        or (portal_scored.facts ->> 'classificationFilterMatch')::boolean
+      )
+      and (
+        not (p_filters ? 'referenceYearFrom')
+        or (portal_scored.facts ->> 'referenceYear')::integer
+          >= (p_filters ->> 'referenceYearFrom')::integer
+      )
+      and (
+        not (p_filters ? 'referenceYearTo')
+        or (portal_scored.facts ->> 'referenceYear')::integer
+          <= (p_filters ->> 'referenceYearTo')::integer
+      )
+      and (
+        not (p_filters ? 'processSubtype')
+        or pg_catalog.lower(pg_catalog.btrim(coalesce(
+          portal_scored.facts ->> 'processSubtype',
+          ''
+        ))) = p_filters ->> 'processSubtype'
+      )
+      and (
+        not (p_filters ? 'source')
+        or pg_catalog.lower(pg_catalog.btrim(coalesce(
+          portal_scored.facts ->> 'source',
+          ''
+        ))) = p_filters ->> 'source'
+      )
+  ), portal_after_cursor as materialized (
+    select portal_filtered.*
+    from portal_filtered
+    where p_cursor_rank is null
+      or case p_sort
+        when 'relevance' then
+          portal_filtered.score < p_cursor_rank::numeric
+          or (
+            portal_filtered.score = p_cursor_rank::numeric
+            and (
+              portal_filtered.id > p_cursor_id
+              or (
+                portal_filtered.id = p_cursor_id
+                and portal_filtered.version < p_cursor_version
+              )
+            )
+          )
+        when 'modified_desc' then
+          portal_filtered.modified_at < p_cursor_rank::timestamptz
+          or (
+            portal_filtered.modified_at = p_cursor_rank::timestamptz
+            and (
+              portal_filtered.id > p_cursor_id
+              or (
+                portal_filtered.id = p_cursor_id
+                and portal_filtered.version < p_cursor_version
+              )
+            )
+          )
+        else
+          pg_catalog.lower(portal_filtered.name_key) > pg_catalog.lower(p_cursor_rank)
+          or (
+            pg_catalog.lower(portal_filtered.name_key) = pg_catalog.lower(p_cursor_rank)
+            and (
+              portal_filtered.id > p_cursor_id
+              or (
+                portal_filtered.id = p_cursor_id
+                and portal_filtered.version < p_cursor_version
+              )
+            )
+          )
+      end
+  ), portal_ordered as materialized (
+    select portal_after_cursor.*,
+      pg_catalog.row_number() over (
+        order by
+          case when p_sort = 'relevance' then portal_after_cursor.score end desc,
+          case when p_sort = 'modified_desc' then portal_after_cursor.modified_at end desc,
+          case when p_sort = 'name_asc'
+            then pg_catalog.lower(portal_after_cursor.name_key) end asc,
+          portal_after_cursor.id asc,
+          portal_after_cursor.version desc
+      ) as page_rank
+    from portal_after_cursor
+    order by
+      case when p_sort = 'relevance' then portal_after_cursor.score end desc,
+      case when p_sort = 'modified_desc' then portal_after_cursor.modified_at end desc,
+      case when p_sort = 'name_asc'
+        then pg_catalog.lower(portal_after_cursor.name_key) end asc,
+      portal_after_cursor.id asc,
+      portal_after_cursor.version desc
+    limit p_limit + 1
+  ), portal_hydrated as materialized (
+    select portal_ordered.*
+    from portal_ordered
+  )
+  select
+    coalesce(pg_catalog.jsonb_agg(
+      pg_catalog.jsonb_build_object(
+        'key', pg_catalog.jsonb_build_object(
+          'kind', p_kind,
+          'id', portal_hydrated.id::text,
+          'version', portal_hydrated.version
+        ),
+        'accessLevel', portal_hydrated.card -> 'accessLevel',
+        'capabilities', portal_hydrated.card -> 'capabilities',
+        'names', portal_hydrated.card -> 'names',
+        'summary', portal_hydrated.card -> 'summary',
+        'geography', portal_hydrated.card -> 'geography',
+        'referenceYear', portal_hydrated.card -> 'referenceYear',
+        'modifiedAt', pg_catalog.to_char(
+          portal_hydrated.modified_at at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+        ),
+        'match', pg_catalog.jsonb_build_object(
+          'kind', case when portal_hydrated.reason_codes
+            ?| array['exact_id', 'cas', 'classification']
+            then 'identifier' else 'lexical' end,
+          'score', portal_hydrated.score,
+          'reasonCodes', portal_hydrated.reason_codes
+        )
+      ) order by portal_hydrated.page_rank
+    ) filter (where portal_hydrated.page_rank <= p_limit), '[]'::jsonb),
+    case when max(portal_hydrated.page_rank) > p_limit then
+      (pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+        'v', 1,
+        'fp', p_query_fingerprint,
+        'rankKey', portal_hydrated.rank_key,
+        'kind', p_kind,
+        'id', portal_hydrated.id::text,
+        'version', portal_hydrated.version
+      ) order by portal_hydrated.page_rank)
+        filter (where portal_hydrated.page_rank = p_limit)) -> 0
+    else null end
+  into v_items, v_next_cursor_payload
+  from portal_hydrated;
+
+  return pg_catalog.jsonb_build_object(
+    'items', v_items,
+    'nextCursorPayload', v_next_cursor_payload
+  );
+end
+$_$;
+
+
+ALTER FUNCTION "private"."catalog_portal_search_v1_impl"("p_kind" "text", "p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "private"."catalog_portal_search_v1_impl"("p_kind" "text", "p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") IS 'Candidate-first Portal catalog kernel: fixed public-document PGroonga candidates, exact latest-visible recheck, then public-card hydration.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."cmd_dataset_alias_batch_guarded"("p_batch" "jsonb") RETURNS "jsonb"
@@ -38779,6 +39932,66 @@ $_$;
 ALTER FUNCTION "private"."portal_catalog_card_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") OWNER TO "portal_public_executor";
 
 
+CREATE OR REPLACE FUNCTION "private"."portal_catalog_projection_manifest_sha256_v1"() RETURNS "text"
+    LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "row_security" TO 'on'
+    AS $$
+  with expected(identity) as (
+    values
+      ('private.catalog_portal_projection_payload_v1(text,integer,jsonb)'::text),
+      ('private.portal_catalog_card_v1(text,integer,jsonb)'),
+      ('private.portal_capabilities_v1(text,integer,jsonb)'),
+      ('private.portal_publication_root_v1(text,jsonb)'),
+      ('private.portal_access_restrictions_open_v1(jsonb)'),
+      ('private.portal_scalar_text_v1(jsonb)'),
+      ('private.portal_localized_text_v1(jsonb)'),
+      ('private.portal_json_items_v1(jsonb)'),
+      ('private.portal_classifications_v1(jsonb)'),
+      ('private.portal_safe_year_v1(text)'),
+      ('private.portal_source_v1(text,jsonb)')
+  ), manifest_entries as (
+    select expected.identity,
+      pg_catalog.jsonb_build_object(
+        'identity', expected.identity,
+        'definition', pg_catalog.pg_get_functiondef(routine.oid),
+        'owner', pg_catalog.pg_get_userbyid(routine.proowner),
+        'language', language.lanname,
+        'volatility', routine.provolatile,
+        'parallel', routine.proparallel,
+        'securityDefiner', routine.prosecdef,
+        'config', coalesce(
+          pg_catalog.to_jsonb(routine.proconfig),
+          'null'::jsonb
+        )
+      )::text as entry
+    from expected
+    join pg_catalog.pg_proc as routine
+      on routine.oid = pg_catalog.to_regprocedure(expected.identity)
+    join pg_catalog.pg_language as language
+      on language.oid = routine.prolang
+  )
+  select pg_catalog.encode(
+    extensions.digest(
+      pg_catalog.convert_to(
+        pg_catalog.string_agg(
+          manifest_entries.entry,
+          E'\n'
+          order by manifest_entries.identity
+        ),
+        'UTF8'
+      ),
+      'sha256'
+    ),
+    'hex'
+  )
+  from manifest_entries
+$$;
+
+
+ALTER FUNCTION "private"."portal_catalog_projection_manifest_sha256_v1"() OWNER TO "api_internal_executor";
+
+
 CREATE OR REPLACE FUNCTION "private"."portal_catalog_rows_v1"("p_kind" "text") RETURNS TABLE("id" "uuid", "version" "text", "json_data" "jsonb", "state_code" integer, "modified_at" timestamp with time zone, "lexical_text" "text")
     LANGUAGE "plpgsql" STABLE PARALLEL RESTRICTED
     SET "search_path" TO ''
@@ -41834,6 +43047,750 @@ $_$;
 ALTER FUNCTION "private"."portal_process_reference_product_v1"("p_json" "jsonb") OWNER TO "portal_public_executor";
 
 
+CREATE OR REPLACE FUNCTION "private"."portal_projection_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    SET "hnsw.iterative_scan" TO 'strict_order'
+    SET "row_security" TO 'on'
+    AS $$
+declare
+  v_items jsonb;
+  v_result jsonb;
+begin
+  perform private.assert_portal_catalog_projection_contract_v1();
+
+  with portal_lexical_matches as materialized (
+    select match.id,
+      match.version,
+      match.term_ordinal
+    from private.catalog_portal_hybrid_pattern_matches_v1(
+      p_kind,
+      p_query_terms
+    ) as match
+  ), portal_latest_keys as materialized (
+    select distinct on (projection.id)
+      projection.id,
+      projection.version
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = p_kind
+    order by projection.id,
+      projection.version desc,
+      projection.modified_at desc,
+      projection.state_code desc
+  ), portal_lexical_counts as materialized (
+    select portal_lexical_matches.id,
+      portal_lexical_matches.version,
+      pg_catalog.count(distinct portal_lexical_matches.term_ordinal)::integer
+        as lexical_hit_count
+    from portal_lexical_matches
+    join portal_latest_keys
+      on portal_latest_keys.id = portal_lexical_matches.id
+     and portal_latest_keys.version = portal_lexical_matches.version
+    group by portal_lexical_matches.id,
+      portal_lexical_matches.version
+  ), portal_lexical_candidates as materialized (
+    select portal_lexical_counts.*
+    from portal_lexical_counts
+    where portal_lexical_counts.lexical_hit_count > 0
+    order by portal_lexical_counts.lexical_hit_count desc,
+      portal_lexical_counts.id asc,
+      portal_lexical_counts.version desc
+    limit 200
+  ), portal_lexical_ranked as materialized (
+    select portal_lexical_candidates.*,
+      pg_catalog.row_number() over (
+        order by portal_lexical_candidates.lexical_hit_count desc,
+          portal_lexical_candidates.id asc,
+          portal_lexical_candidates.version desc
+      )::integer as lexical_rank
+    from portal_lexical_candidates
+  ), portal_semantic_candidates as materialized (
+    select semantic.*
+    from private.portal_projection_semantic_candidates_v1(
+      p_kind,
+      p_query_embedding
+    ) as semantic
+  ), portal_semantic_ranked as materialized (
+    select portal_semantic_candidates.*,
+      pg_catalog.row_number() over (
+        order by portal_semantic_candidates.semantic_distance asc,
+          portal_semantic_candidates.id asc,
+          portal_semantic_candidates.version desc
+      )::integer as semantic_rank
+    from portal_semantic_candidates
+  ), portal_fused as materialized (
+    select
+      coalesce(portal_lexical_ranked.id, portal_semantic_ranked.id) as id,
+      coalesce(portal_lexical_ranked.version, portal_semantic_ranked.version)
+        as version,
+      portal_lexical_ranked.lexical_rank,
+      portal_semantic_ranked.semantic_rank,
+      portal_semantic_ranked.semantic_distance,
+      pg_catalog.round(
+        least(
+          1::numeric,
+          greatest(
+            0::numeric,
+            (
+              coalesce(
+                0.5::numeric / (60 + portal_lexical_ranked.lexical_rank),
+                0::numeric
+              )
+              + coalesce(
+                0.5::numeric / (60 + portal_semantic_ranked.semantic_rank),
+                0::numeric
+              )
+            ) * 61::numeric
+          )
+        ),
+        12
+      ) as normalized_score
+    from portal_lexical_ranked
+    full outer join portal_semantic_ranked
+      on portal_semantic_ranked.id = portal_lexical_ranked.id
+     and portal_semantic_ranked.version = portal_lexical_ranked.version
+  ), portal_fused_decorated as materialized (
+    select portal_fused.*,
+      projection.card,
+      projection.state_code,
+      projection.modified_at
+    from portal_fused
+    join private.portal_catalog_search_rows_v1 as projection
+      on projection.dataset_kind = p_kind
+     and projection.id = portal_fused.id
+     and projection.version = portal_fused.version
+  ), portal_filtered as materialized (
+    select portal_fused_decorated.*
+    from portal_fused_decorated
+    where (
+        not (p_filters ? 'accessLevel')
+        or portal_fused_decorated.card ->> 'accessLevel'
+          = p_filters ->> 'accessLevel'
+      )
+      and (
+        not (p_filters ? 'geography')
+        or pg_catalog.lower(pg_catalog.btrim(coalesce(
+          portal_fused_decorated.card #>> '{geography,code}',
+          ''
+        ))) = p_filters ->> 'geography'
+      )
+      and (
+        not (p_filters ? 'classification')
+        or exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(coalesce(
+            portal_fused_decorated.card -> 'classifications',
+            '[]'::jsonb
+          )) as classification(item)
+          where pg_catalog.lower(pg_catalog.btrim(classification.item ->> 'code'))
+            = p_filters ->> 'classification'
+        )
+      )
+      and (
+        not (p_filters ? 'referenceYearFrom')
+        or (portal_fused_decorated.card ->> 'referenceYear')::integer
+          >= (p_filters ->> 'referenceYearFrom')::integer
+      )
+      and (
+        not (p_filters ? 'referenceYearTo')
+        or (portal_fused_decorated.card ->> 'referenceYear')::integer
+          <= (p_filters ->> 'referenceYearTo')::integer
+      )
+      and (
+        not (p_filters ? 'processSubtype')
+        or pg_catalog.lower(pg_catalog.btrim(coalesce(
+          portal_fused_decorated.card ->> 'processSubtype',
+          ''
+        ))) = p_filters ->> 'processSubtype'
+      )
+      and (
+        not (p_filters ? 'source')
+        or pg_catalog.lower(pg_catalog.btrim(coalesce(
+          portal_fused_decorated.card ->> 'source',
+          ''
+        ))) = p_filters ->> 'source'
+      )
+  ), portal_ordered as materialized (
+    select portal_filtered.*
+    from portal_filtered
+    order by portal_filtered.normalized_score desc,
+      portal_filtered.id asc,
+      portal_filtered.version desc
+    limit p_limit
+  )
+  select coalesce(
+    pg_catalog.jsonb_agg(
+      pg_catalog.jsonb_build_object(
+        'key', pg_catalog.jsonb_build_object(
+          'kind', p_kind,
+          'id', portal_ordered.id::text,
+          'version', portal_ordered.version
+        ),
+        'accessLevel', portal_ordered.card -> 'accessLevel',
+        'capabilities', portal_ordered.card -> 'capabilities',
+        'names', portal_ordered.card -> 'names',
+        'summary', portal_ordered.card -> 'summary',
+        'geography', portal_ordered.card -> 'geography',
+        'referenceYear', portal_ordered.card -> 'referenceYear',
+        'modifiedAt', pg_catalog.to_char(
+          portal_ordered.modified_at at time zone 'UTC',
+          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+        ),
+        'match', pg_catalog.jsonb_build_object(
+          'kind', 'hybrid',
+          'algorithmVersion', 'portal-hybrid-rank-v1',
+          'score', portal_ordered.normalized_score,
+          'reasonCodes', pg_catalog.to_jsonb(pg_catalog.array_remove(array[
+            case when portal_ordered.lexical_rank is not null
+              then 'lexical_public_projection'::text end,
+            case when portal_ordered.semantic_rank is not null
+              then 'semantic_public_projection'::text end
+          ], null)),
+          'evidence', pg_catalog.jsonb_build_object(
+            'lexicalRank', portal_ordered.lexical_rank,
+            'semanticRank', portal_ordered.semantic_rank,
+            'semanticDistance', case
+              when portal_ordered.semantic_distance is null then null
+              else pg_catalog.trim_scale(
+                portal_ordered.semantic_distance::numeric
+              )::text
+            end
+          )
+        )
+      )
+      order by portal_ordered.normalized_score desc,
+        portal_ordered.id asc,
+        portal_ordered.version desc
+    ),
+    '[]'::jsonb
+  )
+  into v_items
+  from portal_ordered;
+
+  v_result := pg_catalog.jsonb_build_object(
+    'schemaVersion', 'portal.public-hybrid-candidate-page.v1',
+    'kind', p_kind,
+    'queryFingerprint', p_query_fingerprint,
+    'items', v_items
+  );
+  if pg_catalog.octet_length(
+    pg_catalog.convert_to(v_result::text, 'UTF8')
+  ) > 524288 then
+    raise exception using
+      errcode = '54000',
+      message = 'portal hybrid response too large';
+  end if;
+  return v_result;
+end
+$$;
+
+
+ALTER FUNCTION "private"."portal_projection_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "private"."portal_projection_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") IS 'Portal-hybrid-rank-v1: projection PGroonga lexical candidates and bounded latest-visible source-HNSW candidates with exact underfill parity fuse before stored-card filters.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_projection_semantic_candidates_v1"("p_kind" "text", "p_query_embedding" "extensions"."vector") RETURNS TABLE("id" "uuid", "version" "text", "semantic_distance" double precision)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "row_security" TO 'on'
+    AS $$
+begin
+  if p_kind = 'process' then
+    return query
+    select candidate.*
+    from private.portal_projection_semantic_process_v1(
+      p_query_embedding
+    ) as candidate;
+  elsif p_kind = 'flow' then
+    return query
+    select candidate.*
+    from private.portal_projection_semantic_flow_v1(
+      p_query_embedding
+    ) as candidate;
+  end if;
+end
+$$;
+
+
+ALTER FUNCTION "private"."portal_projection_semantic_candidates_v1"("p_kind" "text", "p_query_embedding" "extensions"."vector") OWNER TO "api_internal_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_projection_semantic_flow_exact_v1"("p_query_embedding" "extensions"."vector") RETURNS TABLE("id" "uuid", "version" "text", "semantic_distance" double precision)
+    LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    SET "work_mem" TO '32MB'
+    SET "enable_hashjoin" TO 'on'
+    SET "enable_nestloop" TO 'off'
+    SET "enable_mergejoin" TO 'off'
+    SET "enable_sort" TO 'on'
+    SET "max_parallel_workers_per_gather" TO '0'
+    SET "jit" TO 'off'
+    SET "row_security" TO 'on'
+    AS $$
+  with latest_keys as materialized (
+    select distinct on (projection.id)
+      projection.id,
+      projection.version
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'flow'
+    order by projection.id,
+      projection.version desc,
+      projection.modified_at desc,
+      projection.state_code desc
+  ), eligible as materialized (
+    select flow.id,
+      flow.version::text as version,
+      flow.embedding_ft operator(extensions.<=>) p_query_embedding
+        as semantic_distance
+    from public.flows as flow
+    join latest_keys as latest
+      on latest.id = flow.id
+     and flow.version = latest.version::character(9)
+    where flow.state_code in (100, 200)
+      and flow.embedding_ft is not null
+  )
+  select eligible.id,
+    eligible.version,
+    eligible.semantic_distance
+  from eligible
+  where eligible.semantic_distance is not null
+    and eligible.semantic_distance >= 0::double precision
+    and eligible.semantic_distance <= 0.5::double precision
+  order by eligible.semantic_distance,
+    eligible.id,
+    eligible.version desc
+  limit 200
+$$;
+
+
+ALTER FUNCTION "private"."portal_projection_semantic_flow_exact_v1"("p_query_embedding" "extensions"."vector") OWNER TO "api_internal_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_projection_semantic_flow_v1"("p_query_embedding" "extensions"."vector") RETURNS TABLE("id" "uuid", "version" "text", "semantic_distance" double precision)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    SET "hnsw.iterative_scan" TO 'relaxed_order'
+    SET "hnsw.ef_search" TO '1000'
+    SET "hnsw.max_scan_tuples" TO '200000'
+    SET "hnsw.scan_mem_multiplier" TO '4'
+    SET "enable_sort" TO 'off'
+    SET "jit" TO 'off'
+    SET "row_security" TO 'on'
+    AS $$
+declare
+  v_ids uuid[];
+  v_versions text[];
+  v_distances double precision[];
+  v_source_ids uuid[];
+  v_source_versions text[];
+  v_source_distances double precision[];
+  v_source_rows integer;
+begin
+  if p_query_embedding is null then
+    raise exception using
+      errcode = '22023',
+      message = 'invalid portal semantic query';
+  end if;
+
+  select pg_catalog.array_agg(
+      candidate.id
+      order by candidate.semantic_distance, candidate.id, candidate.version desc
+    ),
+    pg_catalog.array_agg(
+      candidate.version
+      order by candidate.semantic_distance, candidate.id, candidate.version desc
+    ),
+    pg_catalog.array_agg(
+      candidate.semantic_distance
+      order by candidate.semantic_distance, candidate.id, candidate.version desc
+    )
+  into v_ids, v_versions, v_distances
+  from (
+    select approximate.id,
+      approximate.version,
+      approximate.semantic_distance
+    from (
+      select flow.id,
+        flow.version::text as version,
+        flow.embedding_ft operator(extensions.<=>) p_query_embedding
+          as semantic_distance
+      from public.flows as flow
+      where flow.state_code in (100, 200)
+        and flow.embedding_ft is not null
+        and exists (
+          select 1
+          from private.portal_catalog_search_rows_v1 as projection
+          where projection.dataset_kind = 'flow'
+            and projection.id = flow.id
+            and projection.version = flow.version::text
+            and not exists (
+              select 1
+              from private.portal_catalog_search_rows_v1 as newer
+              where newer.dataset_kind = projection.dataset_kind
+                and newer.id = projection.id
+                and (
+                  newer.version > projection.version
+                  or (
+                    newer.version = projection.version
+                    and newer.modified_at > projection.modified_at
+                  )
+                  or (
+                    newer.version = projection.version
+                    and newer.modified_at = projection.modified_at
+                    and newer.state_code > projection.state_code
+                  )
+                )
+            )
+        )
+      order by flow.embedding_ft
+        operator(extensions.<=>) p_query_embedding
+      limit 5000
+    ) as approximate
+    where approximate.semantic_distance is not null
+      and approximate.semantic_distance >= 0::double precision
+    order by approximate.semantic_distance + 0::double precision,
+      approximate.id,
+      approximate.version desc
+    limit 200
+  ) as candidate;
+
+  if coalesce(pg_catalog.cardinality(v_ids), 0) >= 200 then
+    return query
+    select v_ids[candidate.ordinal],
+      v_versions[candidate.ordinal],
+      v_distances[candidate.ordinal]
+    from pg_catalog.generate_subscripts(v_ids, 1)
+      as candidate(ordinal)
+    where v_distances[candidate.ordinal] <= 0.5::double precision
+    order by candidate.ordinal;
+    return;
+  end if;
+
+  select pg_catalog.array_agg(
+      bounded_source.id order by bounded_source.id, bounded_source.version desc
+    ),
+    pg_catalog.array_agg(
+      bounded_source.version
+      order by bounded_source.id, bounded_source.version desc
+    ),
+    pg_catalog.array_agg(
+      bounded_source.semantic_distance
+      order by bounded_source.id, bounded_source.version desc
+    )
+  into v_source_ids, v_source_versions, v_source_distances
+  from (
+    select flow.id,
+      flow.version::text as version,
+      flow.embedding_ft operator(extensions.<=>) p_query_embedding
+        as semantic_distance
+    from public.flows as flow
+    where flow.state_code in (100, 200)
+      and flow.embedding_ft is not null
+    limit 200
+  ) as bounded_source;
+
+  v_source_rows := coalesce(pg_catalog.cardinality(v_source_ids), 0);
+
+  if v_source_rows < 200 then
+    return query
+    select v_source_ids[source.ordinal],
+      v_source_versions[source.ordinal],
+      v_source_distances[source.ordinal]
+    from pg_catalog.generate_subscripts(v_source_ids, 1)
+      as source(ordinal)
+    where v_source_distances[source.ordinal] is not null
+      and v_source_distances[source.ordinal] >= 0::double precision
+      and v_source_distances[source.ordinal] <= 0.5::double precision
+      and exists (
+        select 1
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'flow'
+          and projection.id = v_source_ids[source.ordinal]
+          and projection.version = v_source_versions[source.ordinal]
+          and not exists (
+            select 1
+            from private.portal_catalog_search_rows_v1 as newer
+            where newer.dataset_kind = projection.dataset_kind
+              and newer.id = projection.id
+              and (
+                newer.version > projection.version
+                or (
+                  newer.version = projection.version
+                  and newer.modified_at > projection.modified_at
+                )
+                or (
+                  newer.version = projection.version
+                  and newer.modified_at = projection.modified_at
+                  and newer.state_code > projection.state_code
+                )
+              )
+          )
+        offset 0
+      )
+    order by v_source_distances[source.ordinal],
+      v_source_ids[source.ordinal],
+      v_source_versions[source.ordinal] desc;
+    return;
+  end if;
+
+  return query
+  select exact.*
+  from private.portal_projection_semantic_flow_exact_v1(
+    p_query_embedding
+  ) as exact;
+  return;
+end
+$$;
+
+
+ALTER FUNCTION "private"."portal_projection_semantic_flow_v1"("p_query_embedding" "extensions"."vector") OWNER TO "api_internal_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_projection_semantic_process_exact_v1"("p_query_embedding" "extensions"."vector") RETURNS TABLE("id" "uuid", "version" "text", "semantic_distance" double precision)
+    LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    SET "work_mem" TO '32MB'
+    SET "enable_hashjoin" TO 'on'
+    SET "enable_nestloop" TO 'off'
+    SET "enable_mergejoin" TO 'off'
+    SET "enable_sort" TO 'on'
+    SET "max_parallel_workers_per_gather" TO '0'
+    SET "jit" TO 'off'
+    SET "row_security" TO 'on'
+    AS $$
+  with latest_keys as materialized (
+    select distinct on (projection.id)
+      projection.id,
+      projection.version
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'process'
+    order by projection.id,
+      projection.version desc,
+      projection.modified_at desc,
+      projection.state_code desc
+  ), eligible as materialized (
+    select process.id,
+      process.version::text as version,
+      process.embedding_ft operator(extensions.<=>) p_query_embedding
+        as semantic_distance
+    from public.processes as process
+    join latest_keys as latest
+      on latest.id = process.id
+     and process.version = latest.version::character(9)
+    where process.state_code in (100, 200)
+      and process.embedding_ft is not null
+  )
+  select eligible.id,
+    eligible.version,
+    eligible.semantic_distance
+  from eligible
+  where eligible.semantic_distance is not null
+    and eligible.semantic_distance >= 0::double precision
+    and eligible.semantic_distance <= 0.5::double precision
+  order by eligible.semantic_distance,
+    eligible.id,
+    eligible.version desc
+  limit 200
+$$;
+
+
+ALTER FUNCTION "private"."portal_projection_semantic_process_exact_v1"("p_query_embedding" "extensions"."vector") OWNER TO "api_internal_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_projection_semantic_process_v1"("p_query_embedding" "extensions"."vector") RETURNS TABLE("id" "uuid", "version" "text", "semantic_distance" double precision)
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    SET "hnsw.iterative_scan" TO 'relaxed_order'
+    SET "hnsw.ef_search" TO '1000'
+    SET "hnsw.max_scan_tuples" TO '200000'
+    SET "hnsw.scan_mem_multiplier" TO '4'
+    SET "enable_sort" TO 'off'
+    SET "jit" TO 'off'
+    SET "row_security" TO 'on'
+    AS $$
+declare
+  v_ids uuid[];
+  v_versions text[];
+  v_distances double precision[];
+  v_source_ids uuid[];
+  v_source_versions text[];
+  v_source_distances double precision[];
+  v_source_rows integer;
+begin
+  if p_query_embedding is null then
+    raise exception using
+      errcode = '22023',
+      message = 'invalid portal semantic query';
+  end if;
+
+  select pg_catalog.array_agg(
+      candidate.id
+      order by candidate.semantic_distance, candidate.id, candidate.version desc
+    ),
+    pg_catalog.array_agg(
+      candidate.version
+      order by candidate.semantic_distance, candidate.id, candidate.version desc
+    ),
+    pg_catalog.array_agg(
+      candidate.semantic_distance
+      order by candidate.semantic_distance, candidate.id, candidate.version desc
+    )
+  into v_ids, v_versions, v_distances
+  from (
+    select approximate.id,
+      approximate.version,
+      approximate.semantic_distance
+    from (
+      select process.id,
+        process.version::text as version,
+        process.embedding_ft operator(extensions.<=>) p_query_embedding
+          as semantic_distance
+      from public.processes as process
+      where process.state_code in (100, 200)
+        and process.embedding_ft is not null
+        and exists (
+          select 1
+          from private.portal_catalog_search_rows_v1 as projection
+          where projection.dataset_kind = 'process'
+            and projection.id = process.id
+            and projection.version = process.version::text
+            and not exists (
+              select 1
+              from private.portal_catalog_search_rows_v1 as newer
+              where newer.dataset_kind = projection.dataset_kind
+                and newer.id = projection.id
+                and (
+                  newer.version > projection.version
+                  or (
+                    newer.version = projection.version
+                    and newer.modified_at > projection.modified_at
+                  )
+                  or (
+                    newer.version = projection.version
+                    and newer.modified_at = projection.modified_at
+                    and newer.state_code > projection.state_code
+                  )
+                )
+            )
+        )
+      order by process.embedding_ft
+        operator(extensions.<=>) p_query_embedding
+      limit 5000
+    ) as approximate
+    where approximate.semantic_distance is not null
+      and approximate.semantic_distance >= 0::double precision
+    order by approximate.semantic_distance + 0::double precision,
+      approximate.id,
+      approximate.version desc
+    limit 200
+  ) as candidate;
+
+  if coalesce(pg_catalog.cardinality(v_ids), 0) >= 200 then
+    return query
+    select v_ids[candidate.ordinal],
+      v_versions[candidate.ordinal],
+      v_distances[candidate.ordinal]
+    from pg_catalog.generate_subscripts(v_ids, 1)
+      as candidate(ordinal)
+    where v_distances[candidate.ordinal] <= 0.5::double precision
+    order by candidate.ordinal;
+    return;
+  end if;
+
+  select pg_catalog.array_agg(
+      bounded_source.id order by bounded_source.id, bounded_source.version desc
+    ),
+    pg_catalog.array_agg(
+      bounded_source.version
+      order by bounded_source.id, bounded_source.version desc
+    ),
+    pg_catalog.array_agg(
+      bounded_source.semantic_distance
+      order by bounded_source.id, bounded_source.version desc
+    )
+  into v_source_ids, v_source_versions, v_source_distances
+  from (
+    select process.id,
+      process.version::text as version,
+      process.embedding_ft operator(extensions.<=>) p_query_embedding
+        as semantic_distance
+    from public.processes as process
+    where process.state_code in (100, 200)
+      and process.embedding_ft is not null
+    limit 200
+  ) as bounded_source;
+
+  v_source_rows := coalesce(pg_catalog.cardinality(v_source_ids), 0);
+
+  if v_source_rows < 200 then
+    return query
+    select v_source_ids[source.ordinal],
+      v_source_versions[source.ordinal],
+      v_source_distances[source.ordinal]
+    from pg_catalog.generate_subscripts(v_source_ids, 1)
+      as source(ordinal)
+    where v_source_distances[source.ordinal] is not null
+      and v_source_distances[source.ordinal] >= 0::double precision
+      and v_source_distances[source.ordinal] <= 0.5::double precision
+      and exists (
+        select 1
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'process'
+          and projection.id = v_source_ids[source.ordinal]
+          and projection.version = v_source_versions[source.ordinal]
+          and not exists (
+            select 1
+            from private.portal_catalog_search_rows_v1 as newer
+            where newer.dataset_kind = projection.dataset_kind
+              and newer.id = projection.id
+              and (
+                newer.version > projection.version
+                or (
+                  newer.version = projection.version
+                  and newer.modified_at > projection.modified_at
+                )
+                or (
+                  newer.version = projection.version
+                  and newer.modified_at = projection.modified_at
+                  and newer.state_code > projection.state_code
+                )
+              )
+          )
+        offset 0
+      )
+    order by v_source_distances[source.ordinal],
+      v_source_ids[source.ordinal],
+      v_source_versions[source.ordinal] desc;
+    return;
+  end if;
+
+  return query
+  select exact.*
+  from private.portal_projection_semantic_process_exact_v1(
+    p_query_embedding
+  ) as exact;
+  return;
+end
+$$;
+
+
+ALTER FUNCTION "private"."portal_projection_semantic_process_v1"("p_query_embedding" "extensions"."vector") OWNER TO "api_internal_executor";
+
+
 CREATE OR REPLACE FUNCTION "private"."portal_public_hybrid_card_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") RETURNS "jsonb"
     LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
@@ -42069,269 +44026,6 @@ COMMENT ON FUNCTION "private"."portal_public_hybrid_input_v1"("p_kind" "text", "
 
 
 
-CREATE OR REPLACE FUNCTION "private"."portal_public_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") RETURNS "jsonb"
-    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
-    SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
-    SET "plan_cache_mode" TO 'force_custom_plan'
-    SET "hnsw.iterative_scan" TO 'strict_order'
-    AS $$
-declare
-  v_items jsonb;
-  v_result jsonb;
-begin
-  with source_rows as materialized (
-    select
-      process.id,
-      process.version::text as version,
-      process.json as json_data,
-      process.state_code,
-      process.modified_at,
-      process.embedding_ft
-    from public.processes as process
-    where p_kind = 'process'
-      and process.state_code in (100, 200)
-      and process.modified_at is not null
-      and pg_catalog.jsonb_typeof(process.json) = 'object'
-      and pg_catalog.jsonb_typeof(process.json -> 'processDataSet') = 'object'
-    union all
-    select
-      flow.id,
-      flow.version::text as version,
-      flow.json as json_data,
-      flow.state_code,
-      flow.modified_at,
-      flow.embedding_ft
-    from public.flows as flow
-    where p_kind = 'flow'
-      and flow.state_code in (100, 200)
-      and flow.modified_at is not null
-      and pg_catalog.jsonb_typeof(flow.json) = 'object'
-      and pg_catalog.jsonb_typeof(flow.json -> 'flowDataSet') = 'object'
-  ), latest_ranked as materialized (
-    select source_rows.*,
-      pg_catalog.row_number() over (
-        partition by source_rows.id
-        order by source_rows.version desc, source_rows.modified_at desc, source_rows.state_code desc
-      ) as latest_rank
-    from source_rows
-  ), latest as materialized (
-    select latest_ranked.*
-    from latest_ranked
-    where latest_ranked.latest_rank = 1
-  ), decorated as materialized (
-    select latest.*,
-      private.portal_public_hybrid_card_v1(
-        p_kind,
-        latest.state_code,
-        latest.json_data
-      ) as card
-    from latest
-  ), lexical_counts as materialized (
-    select decorated.*,
-      (
-        select count(*)::integer
-        from pg_catalog.unnest(p_query_terms) as query_term(term)
-        where pg_catalog.strpos(
-          lower(coalesce(decorated.card ->> 'document', '')),
-          query_term.term
-        ) > 0
-      ) as lexical_hit_count
-    from decorated
-    where decorated.card is not null
-  ), lexical_candidates as materialized (
-    select lexical_counts.*
-    from lexical_counts
-    where lexical_counts.lexical_hit_count > 0
-    order by lexical_counts.lexical_hit_count desc,
-      lexical_counts.id asc,
-      lexical_counts.version desc
-    limit 200
-  ), lexical_ranked as materialized (
-    select lexical_candidates.id,
-      lexical_candidates.version,
-      pg_catalog.row_number() over (
-        order by lexical_candidates.lexical_hit_count desc,
-          lexical_candidates.id asc,
-          lexical_candidates.version desc
-      )::integer as lexical_rank
-    from lexical_candidates
-  ), semantic_distances as materialized (
-    select latest.id,
-      latest.version,
-      (
-        latest.embedding_ft operator(extensions.<=>) p_query_embedding
-      ) as semantic_distance
-    from latest
-    where latest.embedding_ft is not null
-  ), semantic_candidates as materialized (
-    select semantic_distances.*
-    from semantic_distances
-    where semantic_distances.semantic_distance is not null
-      and semantic_distances.semantic_distance >= 0::double precision
-      and semantic_distances.semantic_distance <= 0.5::double precision
-    order by semantic_distances.semantic_distance asc,
-      semantic_distances.id asc,
-      semantic_distances.version desc
-    limit 200
-  ), semantic_ranked as materialized (
-    select semantic_candidates.id,
-      semantic_candidates.version,
-      semantic_candidates.semantic_distance,
-      pg_catalog.row_number() over (
-        order by semantic_candidates.semantic_distance asc,
-          semantic_candidates.id asc,
-          semantic_candidates.version desc
-      )::integer as semantic_rank
-    from semantic_candidates
-  ), fused as materialized (
-    select
-      coalesce(lexical_ranked.id, semantic_ranked.id) as id,
-      coalesce(lexical_ranked.version, semantic_ranked.version) as version,
-      lexical_ranked.lexical_rank,
-      semantic_ranked.semantic_rank,
-      semantic_ranked.semantic_distance,
-      pg_catalog.round(
-        least(
-          1::numeric,
-          greatest(
-            0::numeric,
-            (
-              coalesce(0.5::numeric / (60 + lexical_ranked.lexical_rank), 0::numeric)
-              + coalesce(0.5::numeric / (60 + semantic_ranked.semantic_rank), 0::numeric)
-            ) * 61::numeric
-          )
-        ),
-        12
-      ) as normalized_score
-    from lexical_ranked
-    full outer join semantic_ranked
-      on semantic_ranked.id = lexical_ranked.id
-     and semantic_ranked.version = lexical_ranked.version
-  ), filtered as materialized (
-    select fused.*,
-      decorated.card,
-      decorated.modified_at
-    from fused
-    join decorated
-      on decorated.id = fused.id
-     and decorated.version = fused.version
-    where (
-        not (p_filters ? 'accessLevel')
-        or decorated.card ->> 'accessLevel' = p_filters ->> 'accessLevel'
-      )
-      and (
-        not (p_filters ? 'geography')
-        or lower(btrim(coalesce(decorated.card #>> '{geography,code}', '')))
-          = p_filters ->> 'geography'
-      )
-      and (
-        not (p_filters ? 'classification')
-        or exists (
-          select 1
-          from pg_catalog.jsonb_array_elements(
-            coalesce(decorated.card -> 'classifications', '[]'::jsonb)
-          ) as classification(item)
-          where lower(btrim(classification.item ->> 'code'))
-            = p_filters ->> 'classification'
-        )
-      )
-      and (
-        not (p_filters ? 'referenceYearFrom')
-        or (decorated.card ->> 'referenceYear')::integer
-          >= (p_filters ->> 'referenceYearFrom')::integer
-      )
-      and (
-        not (p_filters ? 'referenceYearTo')
-        or (decorated.card ->> 'referenceYear')::integer
-          <= (p_filters ->> 'referenceYearTo')::integer
-      )
-      and (
-        not (p_filters ? 'processSubtype')
-        or lower(btrim(coalesce(decorated.card ->> 'processSubtype', '')))
-          = p_filters ->> 'processSubtype'
-      )
-      and (
-        not (p_filters ? 'source')
-        or lower(btrim(coalesce(decorated.card ->> 'source', '')))
-          = p_filters ->> 'source'
-      )
-  ), ordered as materialized (
-    select filtered.*
-    from filtered
-    order by filtered.normalized_score desc,
-      filtered.id asc,
-      filtered.version desc
-    limit p_limit
-  )
-  select coalesce(
-    pg_catalog.jsonb_agg(
-      pg_catalog.jsonb_build_object(
-        'key', pg_catalog.jsonb_build_object(
-          'kind', p_kind,
-          'id', ordered.id::text,
-          'version', ordered.version
-        ),
-        'accessLevel', ordered.card -> 'accessLevel',
-        'capabilities', ordered.card -> 'capabilities',
-        'names', ordered.card -> 'names',
-        'summary', ordered.card -> 'summary',
-        'geography', ordered.card -> 'geography',
-        'referenceYear', ordered.card -> 'referenceYear',
-        'modifiedAt', pg_catalog.to_char(
-          ordered.modified_at at time zone 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
-        ),
-        'match', pg_catalog.jsonb_build_object(
-          'kind', 'hybrid',
-          'algorithmVersion', 'portal-hybrid-rank-v1',
-          'score', ordered.normalized_score,
-          'reasonCodes', pg_catalog.to_jsonb(pg_catalog.array_remove(array[
-            case when ordered.lexical_rank is not null
-              then 'lexical_public_projection'::text end,
-            case when ordered.semantic_rank is not null
-              then 'semantic_public_projection'::text end
-          ], null)),
-          'evidence', pg_catalog.jsonb_build_object(
-            'lexicalRank', ordered.lexical_rank,
-            'semanticRank', ordered.semantic_rank,
-            'semanticDistance', case
-              when ordered.semantic_distance is null then null
-              else pg_catalog.trim_scale(ordered.semantic_distance::numeric)::text
-            end
-          )
-        )
-      )
-      order by ordered.normalized_score desc,
-        ordered.id asc,
-        ordered.version desc
-    ),
-    '[]'::jsonb
-  )
-  into v_items
-  from ordered;
-
-  v_result := pg_catalog.jsonb_build_object(
-    'schemaVersion', 'portal.public-hybrid-candidate-page.v1',
-    'kind', p_kind,
-    'queryFingerprint', p_query_fingerprint,
-    'items', v_items
-  );
-  if pg_catalog.octet_length(pg_catalog.convert_to(v_result::text, 'UTF8')) > 524288 then
-    raise exception using errcode = '54000', message = 'portal hybrid response too large';
-  end if;
-  return v_result;
-end
-$$;
-
-
-ALTER FUNCTION "private"."portal_public_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") OWNER TO "api_internal_executor";
-
-
-COMMENT ON FUNCTION "private"."portal_public_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") IS 'Fixed portal-hybrid-rank-v1 exact-version candidate kernel over one 100/200 public scope.';
-
-
-
 CREATE OR REPLACE FUNCTION "private"."portal_publication_root_v1"("p_kind" "text", "p_json" "jsonb") RETURNS "jsonb"
     LANGUAGE "sql" IMMUTABLE PARALLEL SAFE
     SET "search_path" TO ''
@@ -42476,9 +44170,11 @@ declare
   v_cursor_rank text;
   v_cursor_id uuid;
   v_cursor_version text;
-  v_items jsonb;
-  v_next_cursor text;
+  v_kernel jsonb;
+  v_next_cursor_payload jsonb;
 begin
+  perform private.assert_portal_catalog_projection_contract_v1();
+
   perform private.portal_validate_search_v1(
     p_kind,
     coalesce(p_query, ''),
@@ -42486,19 +44182,25 @@ begin
     coalesce(p_sort, 'relevance'),
     v_limit
   );
-  v_query := lower(btrim(coalesce(p_query, '')));
+  v_query := pg_catalog.lower(pg_catalog.btrim(coalesce(p_query, '')));
   v_filters := private.portal_normalize_filters_v1(p_filters);
-  v_sort := lower(btrim(coalesce(p_sort, 'relevance')));
-  v_fingerprint := private.portal_query_fingerprint_v1(p_kind, v_query, v_filters, v_sort);
+  v_sort := pg_catalog.lower(pg_catalog.btrim(coalesce(p_sort, 'relevance')));
+  v_fingerprint := private.portal_query_fingerprint_v1(
+    p_kind,
+    v_query,
+    v_filters,
+    v_sort
+  );
   if p_cursor is not null then
     v_cursor := private.portal_cursor_decode_v1(p_cursor);
     if v_cursor is null
-       or (select count(*) from jsonb_object_keys(v_cursor)) <> 6
+       or (select count(*) from pg_catalog.jsonb_object_keys(v_cursor)) <> 6
        or v_cursor ->> 'v' <> '1'
        or v_cursor ->> 'fp' <> v_fingerprint
        or v_cursor ->> 'kind' <> p_kind
        or coalesce(v_cursor ->> 'rankKey', '') = ''
-       or coalesce(v_cursor ->> 'id', '') !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+       or coalesce(v_cursor ->> 'id', '')
+         !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
        or coalesce(v_cursor ->> 'version', '') !~ '^\d{2}\.\d{2}\.\d{3}$' then
       raise exception using errcode = '22023', message = 'invalid portal request';
     end if;
@@ -42506,7 +44208,7 @@ begin
     v_cursor_id := (v_cursor ->> 'id')::uuid;
     v_cursor_version := v_cursor ->> 'version';
     if v_sort = 'relevance'
-       and (v_cursor_rank !~ '^(0(\.\d+)?|1(\.0+)?)$') then
+       and v_cursor_rank !~ '^(0(\.\d+)?|1(\.0+)?)$' then
       raise exception using errcode = '22023', message = 'invalid portal request';
     elsif v_sort = 'modified_desc'
        and private.portal_datetime_v1(v_cursor_rank) is null then
@@ -42514,169 +44216,30 @@ begin
     end if;
   end if;
 
-  with latest as materialized (
-    select candidate.*
-    from (
-      select source.*,
-        row_number() over (partition by source.id order by source.version desc) as version_rank
-      from private.portal_catalog_rows_v1(p_kind) as source
-    ) as candidate
-    where candidate.version_rank = 1
-  ), decorated as materialized (
-    select latest.*,
-      private.portal_catalog_card_v1(p_kind, latest.state_code, latest.json_data) as card
-    from latest
-  ), scored as materialized (
-    select decorated.*,
-      case
-        when nullif(decorated.card #>> '{names,0,value}', '') is not null
-          and length(decorated.card #>> '{names,0,value}') <= 500
-          and pg_catalog.octet_length(decorated.card #>> '{names,0,value}') <= 2000
-          and decorated.card #>> '{names,0,value}' !~ '[[:cntrl:]]'
-          then decorated.card #>> '{names,0,value}'
-        else '~unnamed:' || decorated.id::text
-      end as name_key,
-      case
-        when v_query = '' then 0::numeric
-        when lower(decorated.id::text) = v_query then 1::numeric
-        when lower(coalesce(decorated.card ->> 'casNumber', '')) = v_query then 0.98::numeric
-        when exists (
-          select 1 from jsonb_array_elements(decorated.card -> 'names') as name(item)
-          where lower(btrim(item ->> 'value')) = v_query
-        ) then 0.95::numeric
-        when exists (
-          select 1 from jsonb_array_elements(decorated.card -> 'classifications') as classification(item)
-          where lower(btrim(item ->> 'code')) = v_query
-        ) then 0.92::numeric
-        when strpos(lower(concat_ws(' ', decorated.card ->> 'document', decorated.lexical_text)), v_query) > 0
-          then 0.70::numeric
-        else 0::numeric
-      end as score,
-      case
-        when lower(decorated.id::text) = v_query then jsonb_build_array('exact_id')
-        when lower(coalesce(decorated.card ->> 'casNumber', '')) = v_query then jsonb_build_array('cas')
-        when exists (
-          select 1 from jsonb_array_elements(decorated.card -> 'names') as name(item)
-          where lower(btrim(item ->> 'value')) = v_query
-             or strpos(lower(item ->> 'value'), v_query) > 0
-        ) then jsonb_build_array('name')
-        when exists (
-          select 1 from jsonb_array_elements(decorated.card -> 'classifications') as classification(item)
-          where lower(btrim(item ->> 'code')) = v_query
-             or strpos(lower(item ->> 'code'), v_query) > 0
-        ) then jsonb_build_array('classification')
-        when v_query <> '' then jsonb_build_array('full_text')
-        else '[]'::jsonb
-      end as reason_codes
-    from decorated
-  ), filtered as materialized (
-    select scored.*,
-      case v_sort
-        when 'relevance' then scored.score::text
-        when 'modified_desc' then private.portal_timestamp_v1(scored.modified_at)
-        else lower(scored.name_key)
-      end as rank_key
-    from scored
-    where (v_query = '' or scored.score > 0)
-      and (not (v_filters ? 'accessLevel') or scored.card ->> 'accessLevel' = v_filters ->> 'accessLevel')
-      and (not (v_filters ? 'geography') or lower(btrim(coalesce(scored.card #>> '{geography,code}', ''))) = v_filters ->> 'geography')
-      and (not (v_filters ? 'classification') or exists (
-        select 1 from jsonb_array_elements(scored.card -> 'classifications') as classification(item)
-        where lower(btrim(item ->> 'code')) = v_filters ->> 'classification'
-      ))
-      and (not (v_filters ? 'referenceYearFrom') or (scored.card ->> 'referenceYear')::integer >= (v_filters ->> 'referenceYearFrom')::integer)
-      and (not (v_filters ? 'referenceYearTo') or (scored.card ->> 'referenceYear')::integer <= (v_filters ->> 'referenceYearTo')::integer)
-      and (not (v_filters ? 'processSubtype') or lower(btrim(coalesce(scored.card ->> 'processSubtype', ''))) = v_filters ->> 'processSubtype')
-      and (not (v_filters ? 'source') or lower(btrim(coalesce(scored.card ->> 'source', ''))) = v_filters ->> 'source')
-  ), after_cursor as materialized (
-    select filtered.*
-    from filtered
-    where v_cursor is null
-      or case v_sort
-        when 'relevance' then
-          filtered.score < v_cursor_rank::numeric
-          or (
-            filtered.score = v_cursor_rank::numeric
-            and (
-              filtered.id > v_cursor_id
-              or (filtered.id = v_cursor_id and filtered.version < v_cursor_version)
-            )
-          )
-        when 'modified_desc' then
-          filtered.modified_at < v_cursor_rank::timestamptz
-          or (
-            filtered.modified_at = v_cursor_rank::timestamptz
-            and (
-              filtered.id > v_cursor_id
-              or (filtered.id = v_cursor_id and filtered.version < v_cursor_version)
-            )
-          )
-        else
-          lower(filtered.name_key) > lower(v_cursor_rank)
-          or (
-            lower(filtered.name_key) = lower(v_cursor_rank)
-            and (
-              filtered.id > v_cursor_id
-              or (filtered.id = v_cursor_id and filtered.version < v_cursor_version)
-            )
-          )
-      end
-  ), ordered as materialized (
-    select after_cursor.*,
-      row_number() over (
-        order by
-          case when v_sort = 'relevance' then after_cursor.score end desc,
-          case when v_sort = 'modified_desc' then after_cursor.modified_at end desc,
-          case when v_sort = 'name_asc' then lower(after_cursor.name_key) end asc,
-          after_cursor.id asc,
-          after_cursor.version desc
-      ) as page_rank
-    from after_cursor
-    order by
-      case when v_sort = 'relevance' then after_cursor.score end desc,
-      case when v_sort = 'modified_desc' then after_cursor.modified_at end desc,
-      case when v_sort = 'name_asc' then lower(after_cursor.name_key) end asc,
-      after_cursor.id asc,
-      after_cursor.version desc
-    limit v_limit + 1
-  )
-  select
-    coalesce(jsonb_agg(
-      jsonb_build_object(
-        'key', jsonb_build_object('kind', p_kind, 'id', ordered.id::text, 'version', ordered.version),
-        'accessLevel', ordered.card -> 'accessLevel',
-        'capabilities', ordered.card -> 'capabilities',
-        'names', ordered.card -> 'names',
-        'summary', ordered.card -> 'summary',
-        'geography', ordered.card -> 'geography',
-        'referenceYear', ordered.card -> 'referenceYear',
-        'modifiedAt', private.portal_timestamp_v1(ordered.modified_at),
-        'match', jsonb_build_object(
-          'kind', case when ordered.reason_codes ?| array['exact_id', 'cas', 'classification'] then 'identifier' else 'lexical' end,
-          'score', ordered.score,
-          'reasonCodes', ordered.reason_codes
-        )
-      ) order by ordered.page_rank
-    ) filter (where ordered.page_rank <= v_limit), '[]'::jsonb),
-    case when max(ordered.page_rank) > v_limit then private.portal_cursor_encode_v1(
-      (jsonb_agg(jsonb_build_object(
-        'v', 1,
-        'fp', v_fingerprint,
-        'rankKey', ordered.rank_key,
-        'kind', p_kind,
-        'id', ordered.id::text,
-        'version', ordered.version
-      ) order by ordered.page_rank) filter (where ordered.page_rank = v_limit)) -> 0
-    ) else null end
-  into v_items, v_next_cursor
-  from ordered;
+  v_kernel := private.catalog_portal_search_v1_impl(
+    p_kind,
+    v_query,
+    v_filters,
+    v_sort,
+    v_cursor_rank,
+    v_cursor_id,
+    v_cursor_version,
+    v_limit,
+    v_fingerprint
+  );
+  v_next_cursor_payload := nullif(
+    v_kernel -> 'nextCursorPayload',
+    'null'::jsonb
+  );
 
-  return jsonb_build_object(
+  return pg_catalog.jsonb_build_object(
     'schemaVersion', 'portal.public-search-page.v1',
     'kind', p_kind,
     'queryFingerprint', v_fingerprint,
-    'items', v_items,
-    'nextCursor', v_next_cursor
+    'items', coalesce(v_kernel -> 'items', '[]'::jsonb),
+    'nextCursor', case when v_next_cursor_payload is null then null
+      else private.portal_cursor_encode_v1(v_next_cursor_payload)
+    end
   );
 end
 $_$;
@@ -51706,6 +53269,103 @@ END;$$;
 
 
 ALTER FUNCTION "private"."sync_json_to_jsonb"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "private"."sync_portal_catalog_search_row_v1"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    SET "row_security" TO 'on'
+    AS $$
+declare
+  v_kind text := case tg_table_name
+    when 'processes' then 'process'
+    when 'flows' then 'flow'
+    else null
+  end;
+  v_root_key text := case v_kind
+    when 'process' then 'processDataSet'
+    when 'flow' then 'flowDataSet'
+    else null
+  end;
+  v_payload jsonb;
+begin
+  if v_kind is null then
+    raise exception 'unsupported Portal projection trigger source'
+      using errcode = '55000';
+  end if;
+
+  if tg_op = 'DELETE' then
+    delete from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = v_kind
+      and projection.id = old.id
+      and projection.version = old.version::text;
+    return old;
+  end if;
+
+  if tg_op = 'UPDATE'
+     and (old.id, old.version::text) is distinct from (new.id, new.version::text) then
+    delete from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = v_kind
+      and projection.id = old.id
+      and projection.version = old.version::text;
+  end if;
+
+
+  if new.state_code in (100, 200)
+     and new.modified_at is not null
+     and pg_catalog.jsonb_typeof(new.json) = 'object'
+     and pg_catalog.jsonb_typeof(new.json -> v_root_key) = 'object' then
+    v_payload := private.catalog_portal_projection_payload_v1(
+      v_kind,
+      new.state_code,
+      new.json
+    );
+    if pg_catalog.jsonb_typeof(v_payload) <> 'object' then
+      raise exception 'Portal projection payload is invalid'
+        using errcode = '55000';
+    end if;
+    insert into private.portal_catalog_search_rows_v1 (
+      dataset_kind,
+      id,
+      version,
+      state_code,
+      modified_at,
+      card,
+      document,
+      projection_contract_version
+    ) values (
+      v_kind,
+      new.id,
+      new.version::text,
+      new.state_code,
+      new.modified_at,
+      v_payload -> 'card',
+      v_payload ->> 'document',
+      1
+    )
+    on conflict (dataset_kind, id, version) do update
+    set state_code = excluded.state_code,
+        modified_at = excluded.modified_at,
+        card = excluded.card,
+        document = excluded.document,
+        projection_contract_version =
+          excluded.projection_contract_version;
+  else
+    delete from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = v_kind
+      and projection.id = new.id
+      and projection.version = new.version::text;
+  end if;
+  return new;
+end
+$$;
+
+
+ALTER FUNCTION "private"."sync_portal_catalog_search_row_v1"() OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "private"."sync_portal_catalog_search_row_v1"() IS 'NOLOGIN/NOBYPASSRLS writer maintains exact visible public-card rows; derivatives remain source-owned and do not touch the projection.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."unitgroups_sync_jsonb_version"() RETURNS "trigger"
@@ -61576,6 +63236,52 @@ CREATE TABLE IF NOT EXISTS "private"."notifications" (
 ALTER TABLE "private"."notifications" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "private"."portal_catalog_projection_contract_v1" (
+    "contract_version" smallint NOT NULL,
+    "manifest_schema" "text" NOT NULL,
+    "function_identities" "text"[] NOT NULL,
+    "manifest_sha256" "text" NOT NULL,
+    "created_by_migration" "text" NOT NULL,
+    CONSTRAINT "portal_catalog_projection_contract_v1_contract_version_check" CHECK (("contract_version" = 1)),
+    CONSTRAINT "portal_catalog_projection_contract_v1_function_identities_check" CHECK (("cardinality"("function_identities") = 11)),
+    CONSTRAINT "portal_catalog_projection_contract_v1_manifest_schema_check" CHECK (("manifest_schema" = 'portal.catalog-projection-function-manifest.v1'::"text")),
+    CONSTRAINT "portal_catalog_projection_contract_v1_manifest_sha256_check" CHECK (("manifest_sha256" = 'b5e0aff9abbffcc8d2dacaf559a5d1a8c993c20b647d0c70f0e4fa18eb06d2dc'::"text")),
+    CONSTRAINT "portal_catalog_projection_contract_v_created_by_migration_check" CHECK (("created_by_migration" = '20260826060422'::"text"))
+);
+
+ALTER TABLE ONLY "private"."portal_catalog_projection_contract_v1" FORCE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "private"."portal_catalog_projection_contract_v1" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "private"."portal_catalog_search_rows_v1" (
+    "dataset_kind" "text" NOT NULL,
+    "id" "uuid" NOT NULL,
+    "version" "text" NOT NULL,
+    "state_code" integer NOT NULL,
+    "modified_at" timestamp with time zone NOT NULL,
+    "card" "jsonb" NOT NULL,
+    "document" "text" NOT NULL,
+    "projection_contract_version" smallint NOT NULL,
+    CONSTRAINT "portal_catalog_search_rows_contract_version_v1_chk" CHECK (("projection_contract_version" = 1)),
+    CONSTRAINT "portal_catalog_search_rows_v1_card_check" CHECK (("jsonb_typeof"("card") = 'object'::"text")),
+    CONSTRAINT "portal_catalog_search_rows_v1_check" CHECK ((COALESCE(("card" ->> 'document'::"text"), ''::"text") = "document")),
+    CONSTRAINT "portal_catalog_search_rows_v1_dataset_kind_check" CHECK (("dataset_kind" = ANY (ARRAY['process'::"text", 'flow'::"text"]))),
+    CONSTRAINT "portal_catalog_search_rows_v1_state_code_check" CHECK (("state_code" = ANY (ARRAY[100, 200]))),
+    CONSTRAINT "portal_catalog_search_rows_v1_version_check" CHECK (("version" ~ '^\d{2}\.\d{2}\.\d{3}$'::"text"))
+);
+
+ALTER TABLE ONLY "private"."portal_catalog_search_rows_v1" FORCE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "private"."portal_catalog_search_rows_v1" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "private"."portal_catalog_search_rows_v1" IS 'Private synchronized, public-safe Portal card/document projection. Source embeddings and HNSW indexes remain authoritative and are not duplicated.';
+
+
+
 CREATE TABLE IF NOT EXISTS "private"."portal_lcia_projection_headers" (
     "id" "uuid" DEFAULT "gen_random_uuid"() NOT NULL,
     "build_worker_job_id" "uuid" NOT NULL,
@@ -63205,6 +64911,16 @@ ALTER TABLE ONLY "private"."notifications"
 
 
 
+ALTER TABLE ONLY "private"."portal_catalog_projection_contract_v1"
+    ADD CONSTRAINT "portal_catalog_projection_contract_v1_pkey" PRIMARY KEY ("contract_version");
+
+
+
+ALTER TABLE ONLY "private"."portal_catalog_search_rows_v1"
+    ADD CONSTRAINT "portal_catalog_search_rows_v1_pkey" PRIMARY KEY ("dataset_kind", "id", "version");
+
+
+
 ALTER TABLE ONLY "private"."portal_lcia_projection_headers"
     ADD CONSTRAINT "portal_lcia_projection_headers_job_lease_uidx" UNIQUE ("build_worker_job_id", "stage_lease_token");
 
@@ -64005,6 +65721,18 @@ CREATE INDEX "notifications_recipient_type_modified_idx" ON "private"."notificat
 
 
 CREATE INDEX "notifications_sender_user_id_idx" ON "private"."notifications" USING "btree" ("sender_user_id");
+
+
+
+CREATE INDEX "portal_catalog_search_flow_document_v1_pgroonga" ON "private"."portal_catalog_search_rows_v1" USING "pgroonga" ("document") WITH ("tokenizer"='TokenBigram', "normalizer"='NormalizerAuto') WHERE ("dataset_kind" = 'flow'::"text");
+
+
+
+CREATE INDEX "portal_catalog_search_process_document_v1_pgroonga" ON "private"."portal_catalog_search_rows_v1" USING "pgroonga" ("document") WITH ("tokenizer"='TokenBigram', "normalizer"='NormalizerAuto') WHERE ("dataset_kind" = 'process'::"text");
+
+
+
+CREATE INDEX "portal_catalog_search_rows_latest_v1_idx" ON "private"."portal_catalog_search_rows_v1" USING "btree" ("dataset_kind", "id", "version" DESC, "modified_at" DESC, "state_code" DESC);
 
 
 
@@ -65008,6 +66736,14 @@ CREATE OR REPLACE TRIGGER "lifecyclemodels_set_modified_at_trigger" BEFORE UPDAT
 
 
 
+CREATE OR REPLACE TRIGGER "portal_catalog_projection_content_sync_v1" AFTER INSERT OR DELETE OR UPDATE OF "id", "version", "json", "state_code", "modified_at" ON "public"."flows" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_catalog_search_row_v1"('content');
+
+
+
+CREATE OR REPLACE TRIGGER "portal_catalog_projection_content_sync_v1" AFTER INSERT OR DELETE OR UPDATE OF "id", "version", "json", "state_code", "modified_at" ON "public"."processes" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_catalog_search_row_v1"('content');
+
+
+
 CREATE OR REPLACE TRIGGER "process_derivative_rebuild_primary_delete_fence" BEFORE DELETE ON "public"."processes" FOR EACH ROW EXECUTE FUNCTION "util"."guard_dataset_derivative_rebuild_primary"();
 
 
@@ -65436,6 +67172,11 @@ ALTER TABLE ONLY "private"."notifications"
 
 
 
+ALTER TABLE ONLY "private"."portal_catalog_search_rows_v1"
+    ADD CONSTRAINT "portal_catalog_search_rows_contract_version_v1_fk" FOREIGN KEY ("projection_contract_version") REFERENCES "private"."portal_catalog_projection_contract_v1"("contract_version") ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+
 ALTER TABLE ONLY "private"."portal_lcia_projection_headers"
     ADD CONSTRAINT "portal_lcia_projection_headers_build_worker_job_id_fkey" FOREIGN KEY ("build_worker_job_id") REFERENCES "private"."worker_jobs"("id") ON DELETE RESTRICT;
 
@@ -65817,6 +67558,24 @@ CREATE POLICY "notifications_select_sender_or_recipient" ON "private"."notificat
 
 CREATE POLICY "notifications_update_sender" ON "private"."notifications" FOR UPDATE TO "authenticated" USING ((( SELECT "auth"."uid"() AS "uid") = "sender_user_id")) WITH CHECK ((( SELECT "auth"."uid"() AS "uid") = "sender_user_id"));
 
+
+
+CREATE POLICY "portal_catalog_projection_contract_internal_select_v1" ON "private"."portal_catalog_projection_contract_v1" FOR SELECT TO "api_internal_executor" USING (("contract_version" = 1));
+
+
+
+ALTER TABLE "private"."portal_catalog_projection_contract_v1" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "portal_catalog_search_rows_internal_all_v1" ON "private"."portal_catalog_search_rows_v1" TO "api_internal_executor" USING (("state_code" = ANY (ARRAY[100, 200]))) WITH CHECK (("state_code" = ANY (ARRAY[100, 200])));
+
+
+
+CREATE POLICY "portal_catalog_search_rows_portal_select_v1" ON "private"."portal_catalog_search_rows_v1" FOR SELECT TO "portal_public_executor" USING (("state_code" = ANY (ARRAY[100, 200])));
+
+
+
+ALTER TABLE "private"."portal_catalog_search_rows_v1" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "private"."portal_lcia_projection_headers" ENABLE ROW LEVEL SECURITY;
@@ -67833,6 +69592,52 @@ GRANT ALL ON FUNCTION "api"."unitgroups_embedding_ft_input"("proc" "public"."uni
 
 
 
+REVOKE ALL ON FUNCTION "private"."assert_portal_catalog_projection_contract_v1"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."assert_portal_catalog_projection_contract_v1"() TO "portal_public_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."catalog_portal_candidate_rows_v1"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."catalog_portal_candidate_rows_v1"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text") TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."catalog_portal_card_facts_v1"("p_card" "jsonb", "p_filters" "jsonb", "p_query" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."catalog_portal_card_facts_v1"("p_card" "jsonb", "p_filters" "jsonb", "p_query" "text") TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."catalog_portal_facet_candidate_rows_v1"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."catalog_portal_facets_v1_impl"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text", "p_filters" "jsonb", "p_query_fingerprint" "text") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_like_pattern" "text") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."catalog_portal_hybrid_pattern_matches_v1"("p_kind" "text", "p_query_terms" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."catalog_portal_hybrid_pattern_matches_v1"("p_kind" "text", "p_query_terms" "text"[]) TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."catalog_portal_process_pattern_versions_v1"("p_like_pattern" "text") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."catalog_portal_projection_payload_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."catalog_portal_projection_payload_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."catalog_portal_search_v1_impl"("p_kind" "text", "p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."catalog_portal_search_v1_impl"("p_kind" "text", "p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") TO "portal_public_executor";
+
+
+
 REVOKE ALL ON FUNCTION "private"."cmd_dataset_alias_batch_guarded"("p_batch" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."cmd_dataset_alias_batch_guarded"("p_batch" "jsonb") TO "api_internal_executor";
 
@@ -68435,6 +70240,10 @@ REVOKE ALL ON FUNCTION "private"."portal_catalog_card_v1"("p_kind" "text", "p_st
 
 
 
+REVOKE ALL ON FUNCTION "private"."portal_catalog_projection_manifest_sha256_v1"() FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "private"."portal_catalog_rows_v1"("p_kind" "text") FROM PUBLIC;
 
 
@@ -68609,17 +70418,38 @@ REVOKE ALL ON FUNCTION "private"."portal_process_reference_product_v1"("p_json" 
 
 
 
+REVOKE ALL ON FUNCTION "private"."portal_projection_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") FROM PUBLIC;
+REVOKE ALL ON FUNCTION "private"."portal_projection_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") FROM "api_internal_executor";
+GRANT ALL ON FUNCTION "private"."portal_projection_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") TO "portal_public_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_projection_semantic_candidates_v1"("p_kind" "text", "p_query_embedding" "extensions"."vector") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_projection_semantic_flow_exact_v1"("p_query_embedding" "extensions"."vector") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_projection_semantic_flow_v1"("p_query_embedding" "extensions"."vector") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_projection_semantic_process_exact_v1"("p_query_embedding" "extensions"."vector") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_projection_semantic_process_v1"("p_query_embedding" "extensions"."vector") FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "private"."portal_public_hybrid_card_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."portal_public_hybrid_card_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") TO "api_internal_executor";
 
 
 
 REVOKE ALL ON FUNCTION "private"."portal_public_hybrid_input_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) FROM PUBLIC;
-
-
-
-REVOKE ALL ON FUNCTION "private"."portal_public_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."portal_public_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") TO "portal_public_executor";
 
 
 
@@ -69083,6 +70913,11 @@ REVOKE ALL ON FUNCTION "private"."sync_auth_users_to_private_users"() FROM PUBLI
 REVOKE ALL ON FUNCTION "private"."sync_json_to_jsonb"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."sync_json_to_jsonb"() TO "service_role";
 GRANT ALL ON FUNCTION "private"."sync_json_to_jsonb"() TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."sync_portal_catalog_search_row_v1"() FROM PUBLIC;
+REVOKE ALL ON FUNCTION "private"."sync_portal_catalog_search_row_v1"() FROM "api_internal_executor";
 
 
 
@@ -69606,6 +71441,42 @@ GRANT SELECT ON TABLE "private"."lcia_scope_closure_scan_executions" TO "api_int
 
 GRANT ALL ON TABLE "private"."notifications" TO "service_role";
 GRANT SELECT ON TABLE "private"."notifications" TO "api_internal_executor";
+
+
+
+GRANT SELECT ON TABLE "private"."portal_catalog_projection_contract_v1" TO "api_internal_executor";
+
+
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "private"."portal_catalog_search_rows_v1" TO "api_internal_executor";
+
+
+
+GRANT SELECT("dataset_kind") ON TABLE "private"."portal_catalog_search_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("id") ON TABLE "private"."portal_catalog_search_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("version") ON TABLE "private"."portal_catalog_search_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("state_code") ON TABLE "private"."portal_catalog_search_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("modified_at") ON TABLE "private"."portal_catalog_search_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("card") ON TABLE "private"."portal_catalog_search_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("document") ON TABLE "private"."portal_catalog_search_rows_v1" TO "portal_public_executor";
 
 
 
