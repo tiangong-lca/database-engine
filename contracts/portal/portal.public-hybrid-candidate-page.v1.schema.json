@@ -157,6 +157,7 @@
           "const": "hybrid"
         },
         "algorithmVersion": {
+          "description": "Versioned portal-hybrid-rank-v1 contract: public latest-version identity and false-positive exclusion are exact; a filled semantic pool uses bounded filtered source-HNSW with recall@20 and recall@200 of at least 0.95, while raw ANN underfill uses exact-distance fallback. The threshold, RRF weights and constant, and score/id/version tie-break are deterministic for the candidates actually retrieved.",
           "const": "portal-hybrid-rank-v1"
         },
         "score": {
