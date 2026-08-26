@@ -104,7 +104,8 @@ fi
 
 results_log="$output_dir/portal-projection-benchmark-results.log"
 explain_log="$output_dir/portal-projection-benchmark-explain.log"
-if [[ -e "$results_log" || -e "$explain_log" ]]; then
+if [[ -e "$results_log" || -L "$results_log" \
+   || -e "$explain_log" || -L "$explain_log" ]]; then
   echo "benchmark output files already exist; use a new private directory" >&2
   exit 2
 fi
@@ -239,6 +240,7 @@ if ! grep -q "^SQL_STATUS=${expected_sql_status}$" "$results_log"; then
 fi
 
 docker cp "$container_name:$container_explain" "$explain_log" >/dev/null
+chmod 600 "$explain_log"
 
 for expected_index in \
   portal_catalog_search_process_document_v1_pgroonga \
