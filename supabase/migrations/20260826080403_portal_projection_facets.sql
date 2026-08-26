@@ -51,6 +51,12 @@ begin
 end
 $portal_projection_facets_role_guard$;
 
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+select private.assert_portal_catalog_projection_contract_v1();
+reset role;
+revoke api_internal_executor from postgres;
+
 grant portal_public_executor to postgres;
 grant create on schema private, api to portal_public_executor;
 set role portal_public_executor;
@@ -343,6 +349,8 @@ declare
   v_exact_id uuid;
   v_like_pattern text;
 begin
+  perform private.assert_portal_catalog_projection_contract_v1();
+
   if pg_catalog.octet_length(coalesce(p_kind, '')) > 32 then
     raise exception using errcode = '22023', message = 'invalid portal request';
   end if;

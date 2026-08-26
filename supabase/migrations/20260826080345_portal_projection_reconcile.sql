@@ -30,7 +30,7 @@ with missing as materialized (
 )
 insert into private.portal_catalog_search_rows_v1 (
   dataset_kind, id, version, state_code, modified_at,
-  card, document
+  card, document, projection_contract_version
 )
 select
   'process',
@@ -39,7 +39,8 @@ select
   missing.state_code,
   missing.modified_at,
   payload.value -> 'card',
-  payload.value ->> 'document'
+  payload.value ->> 'document',
+  1
 from missing
 cross join lateral (
   select private.catalog_portal_projection_payload_v1(
@@ -70,7 +71,7 @@ with missing as materialized (
 )
 insert into private.portal_catalog_search_rows_v1 (
   dataset_kind, id, version, state_code, modified_at,
-  card, document
+  card, document, projection_contract_version
 )
 select
   'flow',
@@ -79,7 +80,8 @@ select
   missing.state_code,
   missing.modified_at,
   payload.value -> 'card',
-  payload.value ->> 'document'
+  payload.value ->> 'document',
+  1
 from missing
 cross join lateral (
   select private.catalog_portal_projection_payload_v1(
@@ -175,6 +177,8 @@ begin
   end if;
 end
 $verify_portal_projection_reconciliation$;
+
+select private.assert_portal_catalog_projection_contract_v1();
 
 drop function if exists
   private.backfill_portal_catalog_search_range_v1(uuid, uuid);

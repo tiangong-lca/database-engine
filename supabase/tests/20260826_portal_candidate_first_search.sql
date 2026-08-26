@@ -91,6 +91,166 @@ select extensions.ok(
 
 select extensions.ok(
   (
+    select relation.relowner = 'postgres'::regrole
+      and relation.relrowsecurity
+      and relation.relforcerowsecurity
+    from pg_catalog.pg_class as relation
+    where relation.oid =
+      'private.portal_catalog_projection_contract_v1'::regclass
+  )
+  and (
+    select count(*) = 1
+      and min(contract_version) = 1
+      and min(manifest_schema) =
+        'portal.catalog-projection-function-manifest.v1'
+      and min(manifest_sha256) =
+        'b5e0aff9abbffcc8d2dacaf559a5d1a8c993c20b647d0c70f0e4fa18eb06d2dc'
+      and min(created_by_migration) = '20260826060422'
+    from private.portal_catalog_projection_contract_v1
+  )
+  and (
+    select function_identities = array[
+      'private.catalog_portal_projection_payload_v1(text,integer,jsonb)',
+      'private.portal_catalog_card_v1(text,integer,jsonb)',
+      'private.portal_capabilities_v1(text,integer,jsonb)',
+      'private.portal_publication_root_v1(text,jsonb)',
+      'private.portal_access_restrictions_open_v1(jsonb)',
+      'private.portal_scalar_text_v1(jsonb)',
+      'private.portal_localized_text_v1(jsonb)',
+      'private.portal_json_items_v1(jsonb)',
+      'private.portal_classifications_v1(jsonb)',
+      'private.portal_safe_year_v1(text)',
+      'private.portal_source_v1(text,jsonb)'
+    ]::text[]
+      and pg_catalog.cardinality(function_identities) = 11
+      and (
+        select count(distinct identity)
+        from pg_catalog.unnest(function_identities) as identity
+      ) = 11
+    from private.portal_catalog_projection_contract_v1
+    where contract_version = 1
+  ),
+  'the immutable private registry stores the exact 11-function v1 closure and digest literal'
+);
+
+select extensions.ok(
+  (
+    select attribute.atttypid = 'pg_catalog.int2'::regtype
+      and attribute.attnotnull
+      and not attribute.atthasdef
+    from pg_catalog.pg_attribute as attribute
+    where attribute.attrelid =
+        'private.portal_catalog_search_rows_v1'::regclass
+      and attribute.attname = 'projection_contract_version'
+      and not attribute.attisdropped
+  )
+  and exists (
+    select 1
+    from pg_catalog.pg_constraint as contract_check
+    where contract_check.conrelid =
+        'private.portal_catalog_search_rows_v1'::regclass
+      and contract_check.conname =
+        'portal_catalog_search_rows_contract_version_v1_chk'
+      and contract_check.contype = 'c'
+      and contract_check.convalidated
+      and pg_catalog.pg_get_expr(
+        contract_check.conbin,
+        contract_check.conrelid
+      ) ~ 'projection_contract_version = 1'
+  )
+  and exists (
+    select 1
+    from pg_catalog.pg_constraint as contract_fk
+    where contract_fk.conrelid =
+        'private.portal_catalog_search_rows_v1'::regclass
+      and contract_fk.confrelid =
+        'private.portal_catalog_projection_contract_v1'::regclass
+      and contract_fk.conname =
+        'portal_catalog_search_rows_contract_version_v1_fk'
+      and contract_fk.contype = 'f'
+      and contract_fk.convalidated
+      and contract_fk.confupdtype = 'r'
+      and contract_fk.confdeltype = 'r'
+  ),
+  'projection rows require an explicit validated smallint v1 RESTRICT foreign key'
+);
+
+select extensions.ok(
+  pg_catalog.has_table_privilege(
+    'api_internal_executor',
+    'private.portal_catalog_projection_contract_v1',
+    'SELECT'
+  )
+  and not pg_catalog.has_table_privilege(
+    'portal_public_executor',
+    'private.portal_catalog_projection_contract_v1',
+    'SELECT'
+  )
+  and not pg_catalog.has_table_privilege(
+    'anon', 'private.portal_catalog_projection_contract_v1', 'SELECT'
+  )
+  and not pg_catalog.has_table_privilege(
+    'authenticated',
+    'private.portal_catalog_projection_contract_v1',
+    'SELECT'
+  )
+  and not pg_catalog.has_table_privilege(
+    'service_role',
+    'private.portal_catalog_projection_contract_v1',
+    'SELECT'
+  )
+  and not pg_catalog.has_function_privilege(
+    'anon',
+    'private.portal_catalog_projection_manifest_sha256_v1()',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.portal_catalog_projection_manifest_sha256_v1()',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'service_role',
+    'private.portal_catalog_projection_manifest_sha256_v1()',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'anon',
+    'private.assert_portal_catalog_projection_contract_v1()',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.assert_portal_catalog_projection_contract_v1()',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'service_role',
+    'private.assert_portal_catalog_projection_contract_v1()',
+    'EXECUTE'
+  ),
+  'registry and manifest guards expose no external table or function ACL'
+);
+
+grant api_internal_executor to postgres;
+set local role api_internal_executor;
+
+select extensions.is(
+  private.portal_catalog_projection_manifest_sha256_v1(),
+  'b5e0aff9abbffcc8d2dacaf559a5d1a8c993c20b647d0c70f0e4fa18eb06d2dc',
+  'the live canonical 11-function manifest equals the committed digest literal'
+);
+
+select extensions.lives_ok(
+  $$select private.assert_portal_catalog_projection_contract_v1()$$,
+  'the live projection derivation contract passes before Portal reads'
+);
+
+reset role;
+revoke api_internal_executor from postgres;
+
+select extensions.ok(
+  (
     select routine.proowner = 'portal_public_executor'::regrole
       and routine.prosecdef
       and routine.provolatile = 'i'
@@ -308,6 +468,35 @@ select extensions.ok(
     where routine.oid = 'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'::regprocedure
   ),
   'Hybrid uses projection lexical/card rows and isolated source-HNSW semantic helpers before filtering'
+);
+
+select extensions.is(
+  (
+    with expected(routine_identity) as (
+      values
+        ('private.portal_search_v1(text,text,jsonb,text,text,integer)'::text),
+        ('private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'),
+        ('api.portal_facets_v1(text,text,jsonb)')
+    )
+    select count(*)
+    from expected
+    join pg_catalog.pg_proc as routine
+      on routine.oid = pg_catalog.to_regprocedure(
+        expected.routine_identity
+      )
+    where (
+      pg_catalog.length(routine.prosrc)
+      - pg_catalog.length(pg_catalog.replace(
+        routine.prosrc,
+        'assert_portal_catalog_projection_contract_v1',
+        ''
+      ))
+    ) / pg_catalog.length(
+      'assert_portal_catalog_projection_contract_v1'
+    ) = 1
+  ),
+  3::bigint,
+  'Search, Hybrid, and Facets each assert the derivation contract exactly once per request'
 );
 
 select extensions.ok(
@@ -1623,6 +1812,93 @@ select extensions.is(
   2::bigint,
   'both semantic helpers structurally return the healthy ANN arrays before exact fallback'
 );
+
+select extensions.ok(
+  exists (
+    select 1
+    from private.portal_catalog_search_rows_v1
+  )
+  and not exists (
+    select 1
+    from private.portal_catalog_search_rows_v1
+    where projection_contract_version <> 1
+  ),
+  'triggered fixtures persist only explicit projection derivation version 1'
+);
+
+grant portal_public_executor to postgres;
+grant create on schema private to portal_public_executor;
+set local role portal_public_executor;
+
+create or replace function private.portal_scalar_text_v1(p_value jsonb)
+returns text
+language sql
+immutable
+parallel safe
+set search_path = ''
+as $function$
+  select case
+    when pg_catalog.jsonb_typeof(p_value) = 'string'
+      then nullif(
+        pg_catalog.btrim(p_value #>> '{}'),
+        '__portal_projection_manifest_drift__'
+      )
+    else null
+  end
+$function$;
+
+reset role;
+revoke create on schema private from portal_public_executor;
+revoke portal_public_executor from postgres;
+
+grant api_internal_executor to postgres;
+set local role api_internal_executor;
+
+select extensions.throws_ok(
+  $$select private.assert_portal_catalog_projection_contract_v1()$$,
+  '55000',
+  'Portal projection derivation contract drifted',
+  'a rollback-only leaf projector drift fails the private live manifest guard'
+);
+
+reset role;
+revoke api_internal_executor from postgres;
+
+set local role anon;
+
+select extensions.throws_ok(
+  $$select api.portal_search_processes_v1(
+    '', '{}'::jsonb, 'relevance', null, 20
+  )$$,
+  'P0001',
+  'portal catalog unavailable',
+  'Search fails closed through its stable public error contract on projector drift'
+);
+
+select extensions.throws_ok(
+  $$select api.portal_hybrid_search_v1(
+    'process',
+    array['candidate'],
+    ('[1,' || pg_catalog.array_to_string(
+      pg_catalog.array_fill('0'::text, array[1023]),
+      ','
+    ) || ']'),
+    '{}'::jsonb,
+    20
+  )$$,
+  'P0001',
+  'portal hybrid unavailable',
+  'Hybrid fails closed through its stable public error contract on projector drift'
+);
+
+select extensions.throws_ok(
+  $$select api.portal_facets_v1('process', '', '{}'::jsonb)$$,
+  'P0001',
+  'portal catalog unavailable',
+  'Facets fail closed through its stable public error contract on projector drift'
+);
+
+reset role;
 
 select * from extensions.finish();
 

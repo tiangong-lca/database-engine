@@ -82,6 +82,68 @@ reset role;
 revoke create on schema private from portal_public_executor;
 revoke portal_public_executor from postgres;
 
+create table private.portal_catalog_projection_contract_v1 (
+  contract_version smallint primary key
+    check (contract_version = 1),
+  manifest_schema text not null
+    check (
+      manifest_schema =
+        'portal.catalog-projection-function-manifest.v1'
+    ),
+  function_identities text[] not null
+    check (pg_catalog.cardinality(function_identities) = 11),
+  manifest_sha256 text not null
+    check (
+      manifest_sha256 =
+        'b5e0aff9abbffcc8d2dacaf559a5d1a8c993c20b647d0c70f0e4fa18eb06d2dc'
+    ),
+  created_by_migration text not null
+    check (created_by_migration = '20260826060422')
+);
+
+alter table private.portal_catalog_projection_contract_v1 owner to postgres;
+alter table private.portal_catalog_projection_contract_v1
+  enable row level security;
+alter table private.portal_catalog_projection_contract_v1
+  force row level security;
+
+insert into private.portal_catalog_projection_contract_v1 (
+  contract_version,
+  manifest_schema,
+  function_identities,
+  manifest_sha256,
+  created_by_migration
+) values (
+  1,
+  'portal.catalog-projection-function-manifest.v1',
+  array[
+    'private.catalog_portal_projection_payload_v1(text,integer,jsonb)',
+    'private.portal_catalog_card_v1(text,integer,jsonb)',
+    'private.portal_capabilities_v1(text,integer,jsonb)',
+    'private.portal_publication_root_v1(text,jsonb)',
+    'private.portal_access_restrictions_open_v1(jsonb)',
+    'private.portal_scalar_text_v1(jsonb)',
+    'private.portal_localized_text_v1(jsonb)',
+    'private.portal_json_items_v1(jsonb)',
+    'private.portal_classifications_v1(jsonb)',
+    'private.portal_safe_year_v1(text)',
+    'private.portal_source_v1(text,jsonb)'
+  ]::text[],
+  'b5e0aff9abbffcc8d2dacaf559a5d1a8c993c20b647d0c70f0e4fa18eb06d2dc',
+  '20260826060422'
+);
+
+create policy portal_catalog_projection_contract_internal_select_v1
+on private.portal_catalog_projection_contract_v1
+for select
+to api_internal_executor
+using (contract_version = 1);
+
+revoke all on table private.portal_catalog_projection_contract_v1
+  from public, anon, authenticated, service_role, portal_public_executor;
+grant select on table private.portal_catalog_projection_contract_v1
+  to api_internal_executor;
+
 create table private.portal_catalog_search_rows_v1 (
   dataset_kind text not null
     check (dataset_kind in ('process', 'flow')),
@@ -94,8 +156,18 @@ create table private.portal_catalog_search_rows_v1 (
   card jsonb not null
     check (pg_catalog.jsonb_typeof(card) = 'object'),
   document text not null,
+  projection_contract_version smallint not null,
   primary key (dataset_kind, id, version),
-  check (coalesce(card ->> 'document', '') = document)
+  check (coalesce(card ->> 'document', '') = document),
+  constraint portal_catalog_search_rows_contract_version_v1_chk
+    check (projection_contract_version = 1),
+  constraint portal_catalog_search_rows_contract_version_v1_fk
+    foreign key (projection_contract_version)
+    references private.portal_catalog_projection_contract_v1(
+      contract_version
+    )
+    on update restrict
+    on delete restrict
 );
 
 alter table private.portal_catalog_search_rows_v1 owner to postgres;
@@ -138,6 +210,203 @@ create index portal_catalog_search_rows_latest_v1_idx
     modified_at desc,
     state_code desc
   );
+
+grant api_internal_executor to postgres;
+grant create on schema private to api_internal_executor;
+set role api_internal_executor;
+
+create or replace function
+private.portal_catalog_projection_manifest_sha256_v1()
+returns text
+language sql
+stable
+parallel restricted
+security definer
+set search_path = ''
+set row_security = 'on'
+as $function$
+  with expected(identity) as (
+    values
+      ('private.catalog_portal_projection_payload_v1(text,integer,jsonb)'::text),
+      ('private.portal_catalog_card_v1(text,integer,jsonb)'),
+      ('private.portal_capabilities_v1(text,integer,jsonb)'),
+      ('private.portal_publication_root_v1(text,jsonb)'),
+      ('private.portal_access_restrictions_open_v1(jsonb)'),
+      ('private.portal_scalar_text_v1(jsonb)'),
+      ('private.portal_localized_text_v1(jsonb)'),
+      ('private.portal_json_items_v1(jsonb)'),
+      ('private.portal_classifications_v1(jsonb)'),
+      ('private.portal_safe_year_v1(text)'),
+      ('private.portal_source_v1(text,jsonb)')
+  ), manifest_entries as (
+    select expected.identity,
+      pg_catalog.jsonb_build_object(
+        'identity', expected.identity,
+        'definition', pg_catalog.pg_get_functiondef(routine.oid),
+        'owner', pg_catalog.pg_get_userbyid(routine.proowner),
+        'language', language.lanname,
+        'volatility', routine.provolatile,
+        'parallel', routine.proparallel,
+        'securityDefiner', routine.prosecdef,
+        'config', coalesce(
+          pg_catalog.to_jsonb(routine.proconfig),
+          'null'::jsonb
+        )
+      )::text as entry
+    from expected
+    join pg_catalog.pg_proc as routine
+      on routine.oid = pg_catalog.to_regprocedure(expected.identity)
+    join pg_catalog.pg_language as language
+      on language.oid = routine.prolang
+  )
+  select pg_catalog.encode(
+    extensions.digest(
+      pg_catalog.convert_to(
+        pg_catalog.string_agg(
+          manifest_entries.entry,
+          E'\n'
+          order by manifest_entries.identity
+        ),
+        'UTF8'
+      ),
+      'sha256'
+    ),
+    'hex'
+  )
+  from manifest_entries
+$function$;
+
+revoke all on function
+  private.portal_catalog_projection_manifest_sha256_v1()
+from public, anon, authenticated, service_role,
+  portal_public_executor, api_internal_executor;
+grant execute on function
+  private.portal_catalog_projection_manifest_sha256_v1()
+to api_internal_executor;
+
+create or replace function
+private.assert_portal_catalog_projection_contract_v1()
+returns void
+language plpgsql
+stable
+parallel restricted
+security definer
+set search_path = ''
+set row_security = 'on'
+as $function$
+declare
+  v_expected_identities constant text[] := array[
+    'private.catalog_portal_projection_payload_v1(text,integer,jsonb)',
+    'private.portal_catalog_card_v1(text,integer,jsonb)',
+    'private.portal_capabilities_v1(text,integer,jsonb)',
+    'private.portal_publication_root_v1(text,jsonb)',
+    'private.portal_access_restrictions_open_v1(jsonb)',
+    'private.portal_scalar_text_v1(jsonb)',
+    'private.portal_localized_text_v1(jsonb)',
+    'private.portal_json_items_v1(jsonb)',
+    'private.portal_classifications_v1(jsonb)',
+    'private.portal_safe_year_v1(text)',
+    'private.portal_source_v1(text,jsonb)'
+  ]::text[];
+  v_expected_digest constant text :=
+    'b5e0aff9abbffcc8d2dacaf559a5d1a8c993c20b647d0c70f0e4fa18eb06d2dc';
+  v_live_digest text;
+begin
+  select private.portal_catalog_projection_manifest_sha256_v1()
+  into v_live_digest;
+
+  if v_live_digest is distinct from v_expected_digest
+     or (
+       select count(*)
+       from private.portal_catalog_projection_contract_v1 as contract
+       where contract.contract_version = 1
+         and contract.manifest_schema =
+           'portal.catalog-projection-function-manifest.v1'
+         and contract.function_identities = v_expected_identities
+         and contract.manifest_sha256 = v_expected_digest
+         and contract.created_by_migration = '20260826060422'
+     ) <> 1
+     or (
+       select count(*)
+       from private.portal_catalog_projection_contract_v1
+     ) <> 1
+     or (
+       select not relation.relrowsecurity
+         or not relation.relforcerowsecurity
+         or relation.relowner <> 'postgres'::regrole
+       from pg_catalog.pg_class as relation
+       where relation.oid =
+         'private.portal_catalog_projection_contract_v1'::regclass
+     ) is not false
+     or not exists (
+       select 1
+       from pg_catalog.pg_attribute as attribute
+       where attribute.attrelid =
+         'private.portal_catalog_search_rows_v1'::regclass
+         and attribute.attname = 'projection_contract_version'
+         and attribute.atttypid = 'pg_catalog.int2'::regtype
+         and attribute.attnotnull
+         and not attribute.atthasdef
+         and not attribute.attisdropped
+     )
+     or not exists (
+       select 1
+       from pg_catalog.pg_constraint as contract_check
+       where contract_check.conrelid =
+           'private.portal_catalog_search_rows_v1'::regclass
+         and contract_check.conname =
+           'portal_catalog_search_rows_contract_version_v1_chk'
+         and contract_check.contype = 'c'
+         and contract_check.convalidated
+         and pg_catalog.pg_get_expr(
+           contract_check.conbin,
+           contract_check.conrelid
+         ) ~ 'projection_contract_version = 1'
+     )
+     or not exists (
+       select 1
+       from pg_catalog.pg_constraint as contract_fk
+       where contract_fk.conrelid =
+           'private.portal_catalog_search_rows_v1'::regclass
+         and contract_fk.confrelid =
+           'private.portal_catalog_projection_contract_v1'::regclass
+         and contract_fk.conname =
+           'portal_catalog_search_rows_contract_version_v1_fk'
+         and contract_fk.contype = 'f'
+         and contract_fk.convalidated
+         and contract_fk.confupdtype = 'r'
+         and contract_fk.confdeltype = 'r'
+         and contract_fk.conkey = array[(
+           select attribute.attnum
+           from pg_catalog.pg_attribute as attribute
+           where attribute.attrelid = contract_fk.conrelid
+             and attribute.attname = 'projection_contract_version'
+         )]::smallint[]
+         and contract_fk.confkey = array[(
+           select attribute.attnum
+           from pg_catalog.pg_attribute as attribute
+           where attribute.attrelid = contract_fk.confrelid
+             and attribute.attname = 'contract_version'
+         )]::smallint[]
+     ) then
+    raise exception using
+      errcode = '55000',
+      message = 'Portal projection derivation contract drifted';
+  end if;
+end
+$function$;
+
+revoke all on function
+  private.assert_portal_catalog_projection_contract_v1()
+from public, anon, authenticated, service_role,
+  portal_public_executor, api_internal_executor;
+grant execute on function
+  private.assert_portal_catalog_projection_contract_v1()
+to portal_public_executor, api_internal_executor;
+
+reset role;
+revoke create on schema private from api_internal_executor;
+revoke api_internal_executor from postgres;
 
 create or replace function private.sync_portal_catalog_search_row_v1()
 returns trigger
@@ -201,7 +470,8 @@ begin
       state_code,
       modified_at,
       card,
-      document
+      document,
+      projection_contract_version
     ) values (
       v_kind,
       new.id,
@@ -209,13 +479,16 @@ begin
       new.state_code,
       new.modified_at,
       v_payload -> 'card',
-      v_payload ->> 'document'
+      v_payload ->> 'document',
+      1
     )
     on conflict (dataset_kind, id, version) do update
     set state_code = excluded.state_code,
         modified_at = excluded.modified_at,
         card = excluded.card,
-        document = excluded.document;
+        document = excluded.document,
+        projection_contract_version =
+          excluded.projection_contract_version;
   else
     delete from private.portal_catalog_search_rows_v1 as projection
     where projection.dataset_kind = v_kind
@@ -278,7 +551,7 @@ begin
 
   insert into private.portal_catalog_search_rows_v1 (
     dataset_kind, id, version, state_code, modified_at,
-    card, document
+    card, document, projection_contract_version
   )
   select
     'process',
@@ -287,7 +560,8 @@ begin
     process.state_code,
     process.modified_at,
     payload.value -> 'card',
-    payload.value ->> 'document'
+    payload.value ->> 'document',
+    1
   from public.processes as process
   cross join lateral (
     select private.catalog_portal_projection_payload_v1(
@@ -306,7 +580,7 @@ begin
 
   insert into private.portal_catalog_search_rows_v1 (
     dataset_kind, id, version, state_code, modified_at,
-    card, document
+    card, document, projection_contract_version
   )
   select
     'flow',
@@ -315,7 +589,8 @@ begin
     flow.state_code,
     flow.modified_at,
     payload.value -> 'card',
-    payload.value ->> 'document'
+    payload.value ->> 'document',
+    1
   from public.flows as flow
   cross join lateral (
     select private.catalog_portal_projection_payload_v1(
@@ -752,6 +1027,8 @@ declare
   v_items jsonb;
   v_result jsonb;
 begin
+  perform private.assert_portal_catalog_projection_contract_v1();
+
   with portal_lexical_matches as materialized (
     select match.id,
       match.version,

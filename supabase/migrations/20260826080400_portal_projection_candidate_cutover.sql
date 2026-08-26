@@ -119,6 +119,12 @@ begin
 end
 $portal_candidate_snapshot_guard$;
 
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+select private.assert_portal_catalog_projection_contract_v1();
+reset role;
+revoke api_internal_executor from postgres;
+
 -- Acquire the constrained owner only to add stored-card facts and fixed
 -- projection pattern helpers.
 grant portal_public_executor to postgres;
@@ -1250,6 +1256,8 @@ declare
   v_kernel jsonb;
   v_next_cursor_payload jsonb;
 begin
+  perform private.assert_portal_catalog_projection_contract_v1();
+
   perform private.portal_validate_search_v1(
     p_kind,
     coalesce(p_query, ''),
