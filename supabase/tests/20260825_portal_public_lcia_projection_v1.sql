@@ -228,6 +228,56 @@ select extensions.ok(
   'the shared exact-binding validator is an owner-only invoker with the full package evidence domains'
 );
 
+create temporary table portal_lcia_unchecked_publication_routines (
+  routine_identity text primary key
+) on commit drop;
+
+insert into portal_lcia_unchecked_publication_routines (routine_identity)
+values
+  ('private.portal_lcia_v3_publish_prepare_unchecked_v1(uuid, text)'),
+  ('private.portal_lcia_package_publish_unchecked_v1(uuid, text, text, text, jsonb)'),
+  ('private.portal_lcia_projection_prepare_unchecked_v1(uuid, uuid)'),
+  ('private.portal_lcia_projection_finalize_unchecked_v1(uuid, uuid, text, text, text, text, jsonb)');
+
+select extensions.is(
+  (
+    select count(*)
+    from portal_lcia_unchecked_publication_routines as expected
+    join pg_catalog.pg_proc as routine
+      on routine.oid = pg_catalog.to_regprocedure(expected.routine_identity)
+    where routine.proowner = 'postgres'::regrole
+      and routine.prosecdef
+      and routine.proconfig @> array['search_path=""']::text[]
+      and not pg_catalog.has_function_privilege(
+        'anon', routine.oid, 'EXECUTE'
+      )
+      and not pg_catalog.has_function_privilege(
+        'authenticated', routine.oid, 'EXECUTE'
+      )
+      and not pg_catalog.has_function_privilege(
+        'service_role', routine.oid, 'EXECUTE'
+      )
+  ),
+  4::bigint,
+  'the four retained V3 publication implementations are private owner-only security definers'
+);
+
+select extensions.is(
+  (
+    select count(*)
+    from pg_catalog.pg_proc as routine
+    where routine.oid in (
+      'private.portal_lcia_v3_package_publish_prepare_v1(uuid,text)'::regprocedure,
+      'api.cmd_portal_lcia_result_package_publish_v1(uuid,text,text,text,jsonb)'::regprocedure,
+      'api.qry_portal_lcia_projection_prepare_v1(uuid,uuid)'::regprocedure,
+      'api.cmd_portal_lcia_projection_finalize_publication_v1(uuid,uuid,text,text,text,text,jsonb)'::regprocedure
+    )
+      and routine.prosrc ~ 'portal_lcia_projection_package_binding_valid_v1'
+  ),
+  4::bigint,
+  'every V3 publication prepare or mutating wrapper invokes the authoritative package binding guard'
+);
+
 select extensions.is(
   (
     select count(*)
@@ -2344,6 +2394,192 @@ select extensions.is(
   'restart readback returns the stable 404 code before this V3 job has a committed package'
 );
 
+create or replace function pg_temp.portal_lcia_valid_package_ready_call(
+  p_package_result_hash text
+)
+returns jsonb
+language sql
+volatile
+set search_path = ''
+as $function$
+  select private.svc_portal_lcia_projection_package_mark_ready_v1(
+    (select id from pg_temp.portal_lcia_ids where label = 'stage'),
+    (select id from pg_temp.portal_lcia_ids where label = 'worker_job_v3'),
+    '52710000-0000-4000-8000-000000000420',
+    'portal-lcia-package-v3',
+    '52710000-0000-4000-8000-000000000403',
+    '52710000-0000-4000-8000-000000000430',
+    '52710000-0000-4000-8000-000000000405',
+    jsonb_build_object(
+      'artifactUrl', 's3://portal-lcia-test/private/v3-result.json',
+      'artifactSha256', repeat('b', 64),
+      'artifactByteSize', 301,
+      'artifactFormat', 'application/json'
+    ),
+    jsonb_build_object(
+      'artifactUrl', 's3://portal-lcia-test/private/v3-query.json',
+      'artifactSha256', repeat('c', 64),
+      'artifactByteSize', 302,
+      'artifactFormat', 'application/json'
+    ),
+    jsonb_build_object(
+      'bundleContentHash', repeat('d', 64),
+      'bundleManifestSha256', repeat('e', 64),
+      'lciaChunkSetSha256', repeat('f', 64),
+      'portalProjectionId',
+        (select id::text from pg_temp.portal_lcia_ids where label = 'stage'),
+      'portalProjectionContentHash',
+        (select response #>> '{data,contentHash}'
+         from pg_temp.portal_lcia_seal_response)
+    ),
+    jsonb_build_array(
+      '52710000-0000-4000-8000-000000000201',
+      '52710000-0000-4000-8000-000000000202'
+    ),
+    '52710000-0000-4000-8000-000000000201',
+    p_package_result_hash,
+    '{}'::jsonb
+  )
+$function$;
+
+create temporary table portal_lcia_v3_first_call_before (
+  job_row jsonb not null,
+  projection_row jsonb not null,
+  result_row jsonb not null,
+  latest_row jsonb not null,
+  package_count bigint not null
+) on commit drop;
+
+insert into portal_lcia_v3_first_call_before
+select
+  (select to_jsonb(job)
+   from private.worker_jobs as job
+   where job.id = (select id from portal_lcia_ids where label = 'worker_job_v3')),
+  (select to_jsonb(projection)
+   from private.portal_lcia_projection_headers as projection
+   where projection.id = (select id from portal_lcia_ids where label = 'stage')),
+  (select to_jsonb(result)
+   from private.lca_results as result
+   where result.id = '52710000-0000-4000-8000-000000000430'),
+  (select to_jsonb(latest)
+   from private.lca_latest_all_unit_results as latest
+   where latest.id = '52710000-0000-4000-8000-000000000405'),
+  (select count(*)
+   from private.lcia_result_packages as package
+   where package.build_worker_job_id =
+     (select id from portal_lcia_ids where label = 'worker_job_v3'));
+
+create temporary table portal_lcia_v3_result_sha_preflight_response (
+  response jsonb not null
+) on commit drop;
+
+insert into portal_lcia_v3_result_sha_preflight_response (response)
+values (pg_temp.portal_lcia_valid_package_ready_call(repeat('0', 64)));
+
+select extensions.ok(
+  (select response ->> 'code' = 'projection_evidence_mismatch'
+   from portal_lcia_v3_result_sha_preflight_response)
+  and (
+    select before_state.job_row = to_jsonb(job)
+    from portal_lcia_v3_first_call_before as before_state
+    join private.worker_jobs as job
+      on job.id = (select id from portal_lcia_ids where label = 'worker_job_v3')
+  )
+  and (
+    select before_state.projection_row = to_jsonb(projection)
+    from portal_lcia_v3_first_call_before as before_state
+    join private.portal_lcia_projection_headers as projection
+      on projection.id = (select id from portal_lcia_ids where label = 'stage')
+  )
+  and (
+    select before_state.result_row = to_jsonb(result)
+    from portal_lcia_v3_first_call_before as before_state
+    join private.lca_results as result
+      on result.id = '52710000-0000-4000-8000-000000000430'
+  )
+  and (
+    select before_state.latest_row = to_jsonb(latest)
+    from portal_lcia_v3_first_call_before as before_state
+    join private.lca_latest_all_unit_results as latest
+      on latest.id = '52710000-0000-4000-8000-000000000405'
+  )
+  and (
+    select before_state.package_count = count(package.id)
+    from portal_lcia_v3_first_call_before as before_state
+    left join private.lcia_result_packages as package
+      on package.build_worker_job_id =
+        (select id from portal_lcia_ids where label = 'worker_job_v3')
+    group by before_state.package_count
+  ),
+  'first-call packageResultHash drift is rejected before mutation and preserves job, projection, result, and package state'
+);
+
+create or replace function pg_temp.portal_lcia_force_late_package_drift()
+returns trigger
+language plpgsql
+set search_path = ''
+as $function$
+begin
+  update private.lca_results
+  set artifact_byte_size = artifact_byte_size + 1
+  where id = new.result_id;
+  return new;
+end
+$function$;
+
+create trigger portal_lcia_force_late_package_drift
+after insert on private.lcia_result_packages
+for each row execute function pg_temp.portal_lcia_force_late_package_drift();
+
+create temporary table portal_lcia_v3_late_insert_failure_response (
+  response jsonb not null
+) on commit drop;
+
+insert into portal_lcia_v3_late_insert_failure_response (response)
+values (pg_temp.portal_lcia_valid_package_ready_call(repeat('b', 64)));
+
+drop trigger portal_lcia_force_late_package_drift
+  on private.lcia_result_packages;
+drop function pg_temp.portal_lcia_force_late_package_drift();
+
+select extensions.ok(
+  (select response ->> 'code' = 'projection_package_binding_invalid'
+   from portal_lcia_v3_late_insert_failure_response)
+  and (
+    select before_state.job_row = to_jsonb(job)
+    from portal_lcia_v3_first_call_before as before_state
+    join private.worker_jobs as job
+      on job.id = (select id from portal_lcia_ids where label = 'worker_job_v3')
+  )
+  and (
+    select before_state.projection_row = to_jsonb(projection)
+    from portal_lcia_v3_first_call_before as before_state
+    join private.portal_lcia_projection_headers as projection
+      on projection.id = (select id from portal_lcia_ids where label = 'stage')
+  )
+  and (
+    select before_state.result_row = to_jsonb(result)
+    from portal_lcia_v3_first_call_before as before_state
+    join private.lca_results as result
+      on result.id = '52710000-0000-4000-8000-000000000430'
+  )
+  and (
+    select before_state.latest_row = to_jsonb(latest)
+    from portal_lcia_v3_first_call_before as before_state
+    join private.lca_latest_all_unit_results as latest
+      on latest.id = '52710000-0000-4000-8000-000000000405'
+  )
+  and (
+    select before_state.package_count = count(package.id)
+    from portal_lcia_v3_first_call_before as before_state
+    left join private.lcia_result_packages as package
+      on package.build_worker_job_id =
+        (select id from portal_lcia_ids where label = 'worker_job_v3')
+    group by before_state.package_count
+  ),
+  'late post-insert validation failure rolls back package insert, trigger drift, and temporary Worker job schema mutation'
+);
+
 select extensions.is(
   private.svc_portal_lcia_projection_package_mark_ready_v1(
     (select id from portal_lcia_ids where label = 'stage'),
@@ -2864,6 +3100,62 @@ select pg_catalog.set_config(
   true
 );
 
+create temporary table portal_lcia_publication_guard_before (
+  publication_rows jsonb not null,
+  result_row jsonb not null
+) on commit drop;
+
+insert into portal_lcia_publication_guard_before
+select
+  coalesce(
+    (select jsonb_agg(to_jsonb(publication) order by publication.id)
+     from private.lcia_result_publications as publication),
+    '[]'::jsonb
+  ),
+  (select to_jsonb(result)
+   from private.lca_results as result
+   where result.id = '52710000-0000-4000-8000-000000000430');
+
+update private.lca_results
+set artifact_sha256 = repeat('0', 64)
+where id = '52710000-0000-4000-8000-000000000430';
+
+create temporary table portal_lcia_publish_prepare_drift_response (
+  response jsonb not null
+) on commit drop;
+
+insert into portal_lcia_publish_prepare_drift_response (response)
+values (
+  api.qry_portal_lcia_result_package_publish_prepare_v1(
+    (select id from portal_lcia_ids where label = 'package'),
+    '52710000-0000-4000-8000-000000000201'
+  )
+);
+
+update private.lca_results
+set artifact_sha256 = repeat('b', 64)
+where id = '52710000-0000-4000-8000-000000000430';
+
+select extensions.ok(
+  (select response ->> 'code' = 'projection_package_binding_invalid'
+   from portal_lcia_publish_prepare_drift_response)
+  and (
+    select before_state.publication_rows = coalesce(
+      (select jsonb_agg(to_jsonb(publication) order by publication.id)
+       from private.lcia_result_publications as publication),
+      '[]'::jsonb
+    )
+    from portal_lcia_publication_guard_before as before_state
+  )
+  and (
+    select before_state.result_row = to_jsonb(result)
+    from portal_lcia_publication_guard_before as before_state
+    join private.lca_results as result
+      on result.id = '52710000-0000-4000-8000-000000000430'
+  ),
+  'package publish prepare rejects authoritative result drift without changing publication state'
+);
+
 create temporary table portal_lcia_v3_publication_response (
   response jsonb not null
 ) on commit drop;
@@ -2893,6 +3185,55 @@ select extensions.ok(
                where label = 'legacy_publication')
        from portal_lcia_v3_publish_prepare_response),
   'V3 package publish prepare freezes projection evidence, current Process set, and publication precondition'
+);
+
+update private.lca_results
+set artifact_sha256 = repeat('0', 64)
+where id = '52710000-0000-4000-8000-000000000430';
+
+create temporary table portal_lcia_package_publish_drift_response (
+  response jsonb not null
+) on commit drop;
+
+insert into portal_lcia_package_publish_drift_response (response)
+values (
+  api.cmd_portal_lcia_result_package_publish_v1(
+    (select id from portal_lcia_ids where label = 'package'),
+    '52710000-0000-4000-8000-000000000201',
+    (select response #>> '{data,publishPlanHash}'
+     from portal_lcia_v3_publish_prepare_response),
+    'reject drifted Portal LCIA V3 package',
+    '{}'::jsonb
+  )
+);
+
+update private.lca_results
+set artifact_sha256 = repeat('b', 64)
+where id = '52710000-0000-4000-8000-000000000430';
+
+select extensions.ok(
+  (select response ->> 'code' = 'projection_package_binding_invalid'
+   from portal_lcia_package_publish_drift_response)
+  and not exists (
+    select 1
+    from private.lcia_result_publications as publication
+    where publication.package_id =
+      (select id from portal_lcia_ids where label = 'package')
+  )
+  and (
+    select before_state.publication_rows = coalesce(
+      (select jsonb_agg(to_jsonb(publication) order by publication.id)
+       from private.lcia_result_publications as publication),
+      '[]'::jsonb
+    )
+    from portal_lcia_publication_guard_before as before_state
+  )
+  and (
+    select not result.is_pinned
+    from private.lca_results as result
+    where result.id = '52710000-0000-4000-8000-000000000430'
+  ),
+  'package publish command revalidates authoritative result evidence before any publication or pin mutation'
 );
 
 select extensions.is(
@@ -3078,6 +3419,38 @@ select pg_catalog.set_config(
   true
 );
 
+update private.lca_results
+set artifact_sha256 = repeat('0', 64)
+where id = '52710000-0000-4000-8000-000000000430';
+
+create temporary table portal_lcia_projection_prepare_drift_response (
+  response jsonb not null
+) on commit drop;
+
+insert into portal_lcia_projection_prepare_drift_response (response)
+values (
+  api.qry_portal_lcia_projection_prepare_v1(
+    (select id from portal_lcia_ids where label = 'package'),
+    (select id from portal_lcia_ids where label = 'publication')
+  )
+);
+
+update private.lca_results
+set artifact_sha256 = repeat('b', 64)
+where id = '52710000-0000-4000-8000-000000000430';
+
+select extensions.ok(
+  (select response ->> 'code' = 'projection_package_binding_invalid'
+   from portal_lcia_projection_prepare_drift_response)
+  and not exists (
+    select 1
+    from private.portal_lcia_projection_publications as binding
+    where binding.package_id =
+      (select id from portal_lcia_ids where label = 'package')
+  ),
+  'projection prepare rejects authoritative package/result drift before finalization'
+);
+
 select extensions.is(
   api.qry_portal_lcia_projection_prepare_v1(
     (select id from portal_lcia_ids where label = 'legacy_package'),
@@ -3125,6 +3498,41 @@ select extensions.ok(
                  from portal_lcia_seal_response)
        from portal_lcia_prepare_response),
   'manager prepare returns the exact current package/publication, publishedAt, and prepared hash'
+);
+
+update private.lca_results
+set artifact_sha256 = repeat('0', 64)
+where id = '52710000-0000-4000-8000-000000000430';
+
+create temporary table portal_lcia_projection_finalize_drift_response (
+  response jsonb not null
+) on commit drop;
+
+insert into portal_lcia_projection_finalize_drift_response (response)
+values (
+  api.cmd_portal_lcia_projection_finalize_publication_v1(
+    (select id from portal_lcia_ids where label = 'stage'),
+    (select id from portal_lcia_ids where label = 'publication'),
+    'portal-lcia-package-v3', repeat('b', 64),
+    (select response #>> '{data,contentHash}' from portal_lcia_seal_response),
+    'portal-lcia-finalize-drift-guard', '{}'::jsonb
+  )
+);
+
+update private.lca_results
+set artifact_sha256 = repeat('b', 64)
+where id = '52710000-0000-4000-8000-000000000430';
+
+select extensions.ok(
+  (select response ->> 'code' = 'projection_package_binding_invalid'
+   from portal_lcia_projection_finalize_drift_response)
+  and not exists (
+    select 1
+    from private.portal_lcia_projection_publications as binding
+    where binding.package_id =
+      (select id from portal_lcia_ids where label = 'package')
+  ),
+  'projection finalize revalidates authoritative result evidence before inserting any binding'
 );
 
 select extensions.is(
