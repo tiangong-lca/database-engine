@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 137ab6eebfeef199fd36b38115d0b46258f5dc33
+lastReviewedCommit: 510f70feec823f5cb519d662e4e0085807ef4601
 lastReviewedNote: "Reviewed after the persistent-Dev workflow contract gained a targeted PostgREST runtime refresh; generated-workspace paths, refresh behavior, and type ownership are unchanged."
 related:
   - ../../AGENTS.md
