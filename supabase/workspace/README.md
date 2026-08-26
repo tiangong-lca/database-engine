@@ -20,8 +20,8 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 2f46dcd
+lastReviewedAt: 2026-08-27
+lastReviewedCommit: 450c04e
 lastReviewedNote: "Reviewed for the Portal manifest and sparse benchmark tooling; generated-workspace paths, refresh behavior, and type ownership are unchanged."
 related:
   - ../../AGENTS.md

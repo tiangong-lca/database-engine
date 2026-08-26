@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-27"
-lastReviewedCommit: "70c2294ba894df3982939dec6b5e549e108f9630"
+lastReviewedCommit: "450c04e"
 lastReviewedNote: "Reviewed for the Portal projection recovery document catalog, coverage, routing intents, derivation-contract rule, and exact-head validation evidence."
 
 # Keep deterministic governance facts here.
