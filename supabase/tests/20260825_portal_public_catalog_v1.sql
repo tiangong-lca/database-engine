@@ -2552,6 +2552,56 @@ select extensions.is(
   'canonical filter normalization produces one stable facet query fingerprint'
 );
 
+select extensions.ok(
+  not exists (
+    with filter_case(label, filters, expected_count) as (
+      values
+        ('accessLevel', '{"accessLevel":"metadata_only"}'::jsonb, 2),
+        ('geography', '{"geography":"cn"}'::jsonb, 7),
+        ('classification', '{"classification":"portal-fixture"}'::jsonb, 7),
+        ('referenceYearFrom', '{"referenceYearFrom":2024}'::jsonb, 7),
+        ('referenceYearTo', '{"referenceYearTo":2024}'::jsonb, 7),
+        (
+          'processSubtype',
+          '{"processSubtype":"unit process, single operation"}'::jsonb,
+          7
+        ),
+        ('source', '{"source":"portal provider"}'::jsonb, 7),
+        (
+          'conjunction',
+          '{"accessLevel":"metadata_only","geography":"cn","classification":"portal-fixture","referenceYearFrom":2024,"referenceYearTo":2024,"processSubtype":"unit process, single operation","source":"portal provider"}'::jsonb,
+          2
+        )
+    ), response as (
+      select filter_case.*,
+        api.portal_facets_v1(
+          'process',
+          'Portal Fixture',
+          filter_case.filters
+        ) as payload
+      from filter_case
+    ), kind_count as (
+      select response.label,
+        response.expected_count,
+        (facet_value.value ->> 'count')::integer as actual_count
+      from response
+      cross join lateral pg_catalog.jsonb_array_elements(
+        response.payload -> 'groups'
+      ) as facet_group(value)
+      cross join lateral pg_catalog.jsonb_array_elements(
+        facet_group.value -> 'values'
+      ) as facet_value(value)
+      where facet_group.value ->> 'id' = 'kind'
+        and facet_value.value ->> 'value' = 'process'
+    )
+    select 1
+    from filter_case
+    left join kind_count using (label, expected_count)
+    where kind_count.actual_count is distinct from filter_case.expected_count
+  ),
+  'all seven retained facet filters and their conjunction preserve exact card-path counts'
+);
+
 reset role;
 
 alter table public.processes disable row level security;

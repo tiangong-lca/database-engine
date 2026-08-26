@@ -2425,6 +2425,243 @@ select extensions.ok(
   'triggered fixtures persist only explicit projection derivation version 1'
 );
 
+grant api_internal_executor to postgres;
+set local role api_internal_executor;
+
+select extensions.ok(
+  (
+    select relation.relowner = 'postgres'::regrole
+      and relation.relrowsecurity
+      and relation.relforcerowsecurity
+    from pg_catalog.pg_class as relation
+    where relation.oid = 'private.portal_catalog_facet_rows_v1'::regclass
+  )
+  and (
+    select pg_catalog.array_agg(
+      attribute.attname || ':' || pg_catalog.format_type(
+        attribute.atttypid,
+        attribute.atttypmod
+      ) || ':' || case when attribute.attnotnull then 'yes' else 'no' end
+      order by attribute.attname
+    )
+    from pg_catalog.pg_attribute as attribute
+    where attribute.attrelid = 'private.portal_catalog_facet_rows_v1'::regclass
+      and attribute.attnum > 0
+      and not attribute.attisdropped
+  ) = array[
+    'dataset_kind:text:yes',
+    'facet_access_level:text:no',
+    'facet_contract_version:smallint:yes',
+    'facet_geography:text:no',
+    'facet_process_subtype:text:no',
+    'facet_reference_year:text:no',
+    'facet_source:text:no',
+    'id:uuid:yes',
+    'modified_at:timestamp with time zone:yes',
+    'state_code:integer:yes',
+    'version:text:yes'
+  ]::text[]
+  and not exists (
+    select 1
+    from pg_catalog.pg_constraint as constraint_catalog
+    where constraint_catalog.conrelid in (
+        'private.portal_catalog_facet_contract_v1'::regclass,
+        'private.portal_catalog_facet_rows_v1'::regclass
+      )
+      and not constraint_catalog.convalidated
+  )
+  and exists (
+    select 1
+    from pg_catalog.pg_constraint as parent_fk
+    where parent_fk.conrelid =
+        'private.portal_catalog_facet_rows_v1'::regclass
+      and parent_fk.confrelid =
+        'private.portal_catalog_search_rows_v1'::regclass
+      and parent_fk.conname = 'portal_catalog_facet_rows_projection_v1_fk'
+      and parent_fk.confupdtype = 'r'
+      and parent_fk.confdeltype = 'c'
+  )
+  and exists (
+    select 1
+    from pg_catalog.pg_class as index_relation
+    join pg_catalog.pg_namespace as namespace
+      on namespace.oid = index_relation.relnamespace
+    join pg_catalog.pg_index as index_catalog
+      on index_catalog.indexrelid = index_relation.oid
+    where namespace.nspname = 'private'
+      and index_relation.relname = 'portal_catalog_facet_rows_latest_v1_idx'
+      and index_catalog.indisvalid
+      and index_catalog.indisready
+      and index_catalog.indislive
+      and pg_catalog.pg_get_indexdef(index_relation.oid) ~
+        'dataset_kind, id, version DESC, modified_at DESC, state_code DESC'
+  )
+  and not pg_catalog.has_table_privilege(
+    'portal_public_executor',
+    'private.portal_catalog_facet_rows_v1',
+    'SELECT'
+  )
+  and pg_catalog.has_column_privilege(
+    'portal_public_executor',
+    'private.portal_catalog_facet_rows_v1',
+    'facet_source',
+    'SELECT'
+  )
+  and not pg_catalog.has_table_privilege(
+    'anon', 'private.portal_catalog_facet_rows_v1', 'SELECT,INSERT,UPDATE,DELETE'
+  )
+  and not pg_catalog.has_table_privilege(
+    'authenticated',
+    'private.portal_catalog_facet_rows_v1',
+    'SELECT,INSERT,UPDATE,DELETE'
+  )
+  and not pg_catalog.has_table_privilege(
+    'service_role',
+    'private.portal_catalog_facet_rows_v1',
+    'SELECT,INSERT,UPDATE,DELETE'
+  ),
+  'narrow facet storage has exact columns, validated constraints, indexed ownership, forced RLS, and column-only Portal access'
+);
+
+select private.assert_portal_catalog_facet_contract_v1();
+
+select extensions.ok(
+  (
+    select contract.function_identities = array[
+        'private.portal_catalog_facet_facts_v1(text,jsonb)',
+        'private.sync_portal_catalog_facet_row_v1()'
+      ]::text[]
+      and contract.manifest_sha256 =
+        'b238e9573ef08a9339062a2fa3092c0776318d13979ec8bf54ffc7a1ba0c7e3a'
+      and contract.created_by_migration = '20260827020000'
+    from private.portal_catalog_facet_contract_v1 as contract
+    where contract.contract_version = 1
+  )
+  and private.portal_catalog_facet_manifest_sha256_v1() =
+    'b238e9573ef08a9339062a2fa3092c0776318d13979ec8bf54ffc7a1ba0c7e3a'
+  and (
+    select count(*)
+    from pg_catalog.pg_trigger as trigger
+    where trigger.tgrelid in (
+        'public.processes'::regclass,
+        'public.flows'::regclass
+      )
+      and trigger.tgname = 'portal_catalog_projection_content_sync_v1'
+      and trigger.tgtype = 29
+      and pg_catalog.pg_get_triggerdef(trigger.oid) ~ 'json_ordered'
+  ) = 2
+  and exists (
+    select 1
+    from pg_catalog.pg_trigger as trigger
+    where trigger.tgrelid =
+        'private.portal_catalog_search_rows_v1'::regclass
+      and trigger.tgname = 'portal_catalog_facet_sync_v1'
+      and trigger.tgfoid =
+        'private.sync_portal_catalog_facet_row_v1()'::regprocedure
+      and trigger.tgtype = 21
+      and trigger.tgenabled = 'O'
+  )
+  and not pg_catalog.has_function_privilege(
+    'anon', 'private.portal_catalog_facet_facts_v1(text,jsonb)', 'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.sync_portal_catalog_facet_row_v1()',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'service_role',
+    'private.portal_catalog_facet_manifest_sha256_v1()',
+    'EXECUTE'
+  ),
+  'facet facts, sync trigger, literal manifest, source trigger coverage, and private execution boundary are exact'
+);
+
+select extensions.ok(
+  (
+    select count(*)
+    from private.portal_catalog_facet_rows_v1
+  ) = (
+    select count(*)
+    from private.portal_catalog_search_rows_v1
+  )
+  and not exists (
+    select 1
+    from private.portal_catalog_search_rows_v1 as projection
+    cross join lateral private.portal_catalog_facet_facts_v1(
+      projection.dataset_kind,
+      projection.card
+    ) as facts
+    full join private.portal_catalog_facet_rows_v1 as facet
+      on facet.dataset_kind = projection.dataset_kind
+     and facet.id = projection.id
+     and facet.version = projection.version
+    where projection.id is null
+       or facet.id is null
+       or facet.state_code is distinct from projection.state_code
+       or facet.modified_at is distinct from projection.modified_at
+       or facet.facet_access_level is distinct from
+         facts.facet_access_level
+       or facet.facet_geography is distinct from facts.facet_geography
+       or facet.facet_reference_year is distinct from
+         facts.facet_reference_year
+       or facet.facet_process_subtype is distinct from
+         facts.facet_process_subtype
+       or facet.facet_source is distinct from facts.facet_source
+       or facet.facet_contract_version is distinct from 1
+  ),
+  'every narrow facet row has exact key, state, timestamp, version, and five card-derived facts with no missing or extra row'
+);
+
+reset role;
+revoke api_internal_executor from postgres;
+
+grant portal_public_executor to postgres;
+set local role portal_public_executor;
+
+select extensions.ok(
+  not exists (
+    select 1
+    from (values ('process'::text), ('flow'), ('all')) as requested(kind)
+    cross join lateral (
+      select private.portal_query_fingerprint_v1(
+        requested.kind,
+        '',
+        '{}'::jsonb,
+        'relevance'
+      ) as value
+    ) as fingerprint
+    where api.portal_facets_v1(requested.kind, '', '{}'::jsonb)
+      is distinct from private.catalog_portal_facets_v1_impl(
+        requested.kind,
+        '',
+        null::uuid,
+        null::text,
+        '{}'::jsonb,
+        fingerprint.value
+      )
+  )
+  and (
+    select routine.prosrc ~ $$v_query = '' and v_filters = '{}'::jsonb$$
+      and routine.prosrc ~ 'catalog_portal_facets_empty_v1_impl'
+      and routine.prosrc ~ 'catalog_portal_facets_v1_impl'
+    from pg_catalog.pg_proc as routine
+    where routine.oid = 'api.portal_facets_v1(text,text,jsonb)'::regprocedure
+  )
+  and (
+    select routine.prosrc ~ 'portal_catalog_facet_rows_v1'
+      and routine.prosrc !~
+        'portal_catalog_search_rows_v1|\.card|public\.processes|public\.flows'
+    from pg_catalog.pg_proc as routine
+    where routine.oid =
+      'private.catalog_portal_facets_empty_v1_impl(text,text)'::regprocedure
+  ),
+  'empty Process, Flow, and all Facets are byte-equal to the retained implementation and dispatch only through the narrow path'
+);
+
+reset role;
+revoke portal_public_executor from postgres;
+
 grant portal_public_executor to postgres;
 grant create on schema private to portal_public_executor;
 set local role portal_public_executor;
