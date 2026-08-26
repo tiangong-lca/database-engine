@@ -1230,7 +1230,9 @@ where (:'process_rows'::integer >= 10000
 create or replace function pg_temp.record_portal_search_timing(
   p_label text,
   p_kind text,
-  p_query text
+  p_query text,
+  p_filters jsonb default '{}'::jsonb,
+  p_sort text default 'relevance'
 )
 returns void
 language plpgsql
@@ -1248,14 +1250,20 @@ begin
   begin
     if p_kind = 'process' then
       v_result := api.portal_search_processes_v1(
-        p_query, '{}'::jsonb, 'relevance', null, 50
+        p_query, p_filters, p_sort, null, 50
       );
     elsif p_kind = 'flow' then
       v_result := api.portal_search_flows_v1(
-        p_query, '{}'::jsonb, 'relevance', null, 50
+        p_query, p_filters, p_sort, null, 50
       );
     else
       raise exception 'unsupported benchmark kind';
+    end if;
+    if v_result is null
+       or v_result ->> 'schemaVersion' <> 'portal.public-search-page.v1'
+       or pg_catalog.jsonb_typeof(v_result -> 'items') <> 'array'
+       or pg_catalog.jsonb_array_length(v_result -> 'items') > 50 then
+      raise exception 'invalid search result';
     end if;
     insert into pg_temp.portal_benchmark_timings values (
       p_label,
@@ -1268,6 +1276,81 @@ begin
         sqlstate,
         sqlerrm,
         1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+      ) on conflict (label) do nothing;
+  end;
+end
+$function$;
+
+create or replace function pg_temp.record_portal_search_page2_timing(
+  p_label text,
+  p_kind text,
+  p_query text,
+  p_filters jsonb,
+  p_sort text
+)
+returns void
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  v_started timestamptz;
+  v_first_page jsonb;
+  v_result jsonb;
+  v_cursor text;
+begin
+  if exists (
+    select 1 from pg_temp.portal_benchmark_failures where label = p_label
+  ) then
+    return;
+  end if;
+  begin
+    if p_kind = 'process' then
+      v_first_page := api.portal_search_processes_v1(
+        p_query, p_filters, p_sort, null, 50
+      );
+    elsif p_kind = 'flow' then
+      v_first_page := api.portal_search_flows_v1(
+        p_query, p_filters, p_sort, null, 50
+      );
+    else
+      raise exception 'unsupported benchmark kind';
+    end if;
+    v_cursor := v_first_page ->> 'nextCursor';
+    if v_first_page ->> 'schemaVersion' <> 'portal.public-search-page.v1'
+       or v_cursor is null
+       or v_cursor = '' then
+      raise exception 'invalid search first page';
+    end if;
+
+    v_started := pg_catalog.clock_timestamp();
+    if p_kind = 'process' then
+      v_result := api.portal_search_processes_v1(
+        p_query, p_filters, p_sort, v_cursor, 50
+      );
+    else
+      v_result := api.portal_search_flows_v1(
+        p_query, p_filters, p_sort, v_cursor, 50
+      );
+    end if;
+    if v_result is null
+       or v_result ->> 'schemaVersion' <> 'portal.public-search-page.v1'
+       or pg_catalog.jsonb_typeof(v_result -> 'items') <> 'array'
+       or pg_catalog.jsonb_array_length(v_result -> 'items') > 50 then
+      raise exception 'invalid search second page';
+    end if;
+    insert into pg_temp.portal_benchmark_timings values (
+      p_label,
+      1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+    );
+  exception
+    when others then
+      insert into pg_temp.portal_benchmark_failures values (
+        p_label,
+        sqlstate,
+        sqlerrm,
+        case when v_started is null then 0 else
+          1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+        end
       ) on conflict (label) do nothing;
   end;
 end
@@ -1341,6 +1424,70 @@ begin
       '{}'::jsonb,
       20
     );
+    if v_result is null
+       or v_result ->> 'schemaVersion'
+          <> 'portal.public-hybrid-candidate-page.v1'
+       or pg_catalog.jsonb_typeof(v_result -> 'items') <> 'array'
+       or pg_catalog.jsonb_array_length(v_result -> 'items') > 20
+       or pg_catalog.octet_length(
+         pg_catalog.convert_to(v_result::text, 'UTF8')
+       ) > 524288 then
+      raise exception 'invalid hybrid result';
+    end if;
+    insert into pg_temp.portal_benchmark_timings values (
+      p_label,
+      1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+    );
+  exception
+    when others then
+      insert into pg_temp.portal_benchmark_failures values (
+        p_label,
+        sqlstate,
+        sqlerrm,
+        1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+      ) on conflict (label) do nothing;
+  end;
+end
+$function$;
+
+create or replace function pg_temp.record_portal_hybrid_terms_timing(
+  p_label text,
+  p_kind text,
+  p_query_terms text[],
+  p_query_vector text,
+  p_filters jsonb default '{}'::jsonb
+)
+returns void
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  v_started timestamptz := pg_catalog.clock_timestamp();
+  v_result jsonb;
+begin
+  if exists (
+    select 1 from pg_temp.portal_benchmark_failures where label = p_label
+  ) then
+    return;
+  end if;
+  begin
+    v_result := api.portal_hybrid_search_v1(
+      p_kind,
+      p_query_terms,
+      p_query_vector,
+      p_filters,
+      20
+    );
+    if v_result is null
+       or v_result ->> 'schemaVersion'
+          <> 'portal.public-hybrid-candidate-page.v1'
+       or pg_catalog.jsonb_typeof(v_result -> 'items') <> 'array'
+       or pg_catalog.jsonb_array_length(v_result -> 'items') > 20
+       or pg_catalog.octet_length(
+         pg_catalog.convert_to(v_result::text, 'UTF8')
+       ) > 524288 then
+      raise exception 'invalid hybrid result';
+    end if;
     insert into pg_temp.portal_benchmark_timings values (
       p_label,
       1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
@@ -1409,6 +1556,50 @@ begin
     perform pg_temp.record_portal_search_timing(
       'flow_empty', 'flow', ''
     );
+    perform pg_temp.record_portal_search_timing(
+      'process_filtered_broad',
+      'process',
+      '',
+      '{"geography":"cn"}'::jsonb,
+      'relevance'
+    );
+    perform pg_temp.record_portal_search_timing(
+      'process_filtered_selective',
+      'process',
+      '',
+      '{"accessLevel":"metadata_only","geography":"cn","classification":"portal-bench","referenceYearFrom":2024,"referenceYearTo":2024,"processSubtype":"unit process, single operation","source":"synthetic benchmark provider"}'::jsonb,
+      'relevance'
+    );
+    perform pg_temp.record_portal_search_timing(
+      'flow_filtered_broad',
+      'flow',
+      '',
+      '{"geography":"cn"}'::jsonb,
+      'relevance'
+    );
+    perform pg_temp.record_portal_search_timing(
+      'flow_filtered_selective',
+      'flow',
+      '',
+      '{"accessLevel":"metadata_only","geography":"cn","classification":"portal-bench","source":"synthetic benchmark provider"}'::jsonb,
+      'relevance'
+    );
+    perform pg_temp.record_portal_search_timing(
+      'process_name_asc_empty', 'process', '', '{}'::jsonb, 'name_asc'
+    );
+    perform pg_temp.record_portal_search_timing(
+      'flow_name_asc_empty', 'flow', '', '{}'::jsonb, 'name_asc'
+    );
+    perform pg_temp.record_portal_search_page2_timing(
+      'flow_name_asc_page2', 'flow', '', '{}'::jsonb, 'name_asc'
+    );
+    perform pg_temp.record_portal_search_page2_timing(
+      'flow_filtered_relevance_page2',
+      'flow',
+      '',
+      '{"accessLevel":"metadata_only","geography":"cn","classification":"portal-bench","source":"synthetic benchmark provider"}'::jsonb,
+      'relevance'
+    );
     perform pg_temp.record_portal_hybrid_timing(
       'process_hybrid_fused',
       'process',
@@ -1456,6 +1647,26 @@ begin
       'flow',
       'portalbenchcommon electricity',
       v_zero_vector
+    );
+    perform pg_temp.record_portal_hybrid_terms_timing(
+      'process_hybrid_max_terms',
+      'process',
+      array[
+        'synthetic', 'benchmark', 'summary', 'portal-bench', 'cn',
+        '2024', 'provider', 'process', 'portalbenchnoise',
+        'portalbenchcommon', 'electricity', 'technology'
+      ],
+      v_query_vector
+    );
+    perform pg_temp.record_portal_hybrid_terms_timing(
+      'flow_hybrid_max_terms',
+      'flow',
+      array[
+        'synthetic', 'benchmark', 'summary', 'portal-bench', 'cn',
+        '50-00-0', 'provider', 'flow', 'portalbenchnoise',
+        'portalbenchcommon', 'electricity', 'synthetic benchmark provider'
+      ],
+      v_query_vector
     );
     perform pg_temp.record_portal_facet_timing(
       'process_facets_empty', 'process', '', '{}'::jsonb
@@ -1527,8 +1738,13 @@ $function$;
 grant select, insert on pg_temp.portal_benchmark_timings,
   pg_temp.portal_benchmark_failures
   to anon;
-grant execute on function pg_temp.record_portal_search_timing(text, text, text)
+grant execute on function pg_temp.record_portal_search_timing(
+  text, text, text, jsonb, text
+)
   to anon;
+grant execute on function pg_temp.record_portal_search_page2_timing(
+  text, text, text, jsonb, text
+) to anon;
 grant execute on function pg_temp.record_portal_facet_timing(
   text, text, text, jsonb
 ) to anon;
@@ -1536,6 +1752,9 @@ grant execute on function pg_temp.record_portal_hybrid_timing(
   text, text, text, text
 )
   to anon;
+grant execute on function pg_temp.record_portal_hybrid_terms_timing(
+  text, text, text[], text, jsonb
+) to anon;
 grant execute on function pg_temp.run_portal_candidate_timing(integer)
   to anon;
 grant execute on function pg_temp.portal_bench_uuid(text, integer),
@@ -1950,10 +2169,15 @@ with expected(label) as (
     ('process_identifier'), ('process_empty'),
     ('flow_exact'), ('flow_common'), ('flow_no_hit'),
     ('flow_identifier'), ('flow_empty'),
+    ('process_filtered_broad'), ('process_filtered_selective'),
+    ('flow_filtered_broad'), ('flow_filtered_selective'),
+    ('process_name_asc_empty'), ('flow_name_asc_empty'),
+    ('flow_name_asc_page2'), ('flow_filtered_relevance_page2'),
     ('process_hybrid_fused'), ('flow_hybrid_fused'),
     ('process_hybrid_semantic_only'), ('flow_hybrid_semantic_only'),
     ('process_hybrid_lexical_only'), ('flow_hybrid_lexical_only'),
     ('process_hybrid_zero_boundary'), ('flow_hybrid_zero_boundary'),
+    ('process_hybrid_max_terms'), ('flow_hybrid_max_terms'),
     ('process_facets_empty'), ('process_facets_common'),
     ('process_facets_filtered'), ('process_facets_no_hit'),
     ('flow_facets_empty'), ('flow_facets_common'),
