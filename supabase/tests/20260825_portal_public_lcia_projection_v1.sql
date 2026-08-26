@@ -2195,6 +2195,26 @@ select extensions.is(
 -- Package readiness for V3 is a separate service-only helper.  It atomically
 -- checks the prepared projection and all retained calculation evidence while
 -- leaving the established V1/V2 package routines unchanged.
+create temporary table portal_lcia_legacy_package_ready_metadata_before
+on commit drop as
+select
+  routine.oid,
+  pg_catalog.pg_get_functiondef(routine.oid) as function_definition,
+  routine.proowner,
+  routine.prosecdef,
+  routine.proconfig,
+  routine.proacl,
+  routine.provolatile,
+  routine.proparallel,
+  routine.proisstrict,
+  routine.proleakproof,
+  pg_catalog.pg_get_function_identity_arguments(routine.oid)
+    as identity_arguments,
+  pg_catalog.pg_get_function_result(routine.oid) as function_result
+from pg_catalog.pg_proc as routine
+where routine.oid =
+  'private.cmd_lcia_result_package_mark_ready_without_closure_recheck(uuid,text,uuid,uuid,uuid,jsonb,jsonb,jsonb,jsonb,text,text,jsonb)'::regprocedure;
+
 insert into private.lca_results (
   id, job_id, snapshot_id, payload, diagnostics, artifact_url,
   artifact_sha256, artifact_byte_size, artifact_format, worker_job_id,
@@ -2399,6 +2419,22 @@ where label = 'package';
 
 select extensions.ok(
   (select (response->>'ok')::boolean from portal_lcia_v3_package_response)
+  and not (select (response->>'reused')::boolean
+           from portal_lcia_v3_package_response)
+  and (select private.portal_lcia_json_object_has_keys_v1(
+         response, array['ok', 'reused', 'data']
+       ) from portal_lcia_v3_package_response)
+  and (select private.portal_lcia_json_object_has_keys_v1(
+         response -> 'data',
+         array[
+           'packageId', 'packageVersion', 'status', 'buildWorkerJobId',
+           'includedInputCount', 'projection'
+         ]
+       ) from portal_lcia_v3_package_response)
+  and (select private.portal_lcia_json_object_has_keys_v1(
+         response #> '{data,projection}',
+         array['projectionId', 'contentHash', 'hashContractVersion']
+       ) from portal_lcia_v3_package_response)
   and (select response #>> '{data,projection,projectionId}' =
                 (select id::text from portal_lcia_ids where label = 'stage')
        from portal_lcia_v3_package_response)
@@ -2416,7 +2452,7 @@ select extensions.ok(
         '52710000-0000-4000-8000-000000000202'
       )
   ),
-  'the V3-only service helper creates a package bound to the prepared projection evidence'
+  'the first V3 package-ready receipt is strict, locator-free, and bound to the prepared projection evidence'
 );
 
 select extensions.is(
@@ -2427,6 +2463,198 @@ select extensions.is(
   ),
   'lcia_result.package_build.request.v3',
   'package readiness restores the V3 payload version before returning'
+);
+
+create temporary table portal_lcia_v3_package_before_replay
+on commit drop as
+select package.id, to_jsonb(package) as package_row
+from private.lcia_result_packages as package
+where package.id = (select id from portal_lcia_ids where label = 'package');
+
+create temporary table portal_lcia_v3_package_replay_response (
+  response jsonb not null
+) on commit drop;
+
+insert into portal_lcia_v3_package_replay_response (response)
+values (
+  private.svc_portal_lcia_projection_package_mark_ready_v1(
+    (select id from portal_lcia_ids where label = 'stage'),
+    (select id from portal_lcia_ids where label = 'worker_job_v3'),
+    '52710000-0000-4000-8000-000000000420',
+    'portal-lcia-package-v3',
+    '52710000-0000-4000-8000-000000000403',
+    '52710000-0000-4000-8000-000000000430',
+    '52710000-0000-4000-8000-000000000405',
+    jsonb_build_object(
+      'artifactUrl', 's3://portal-lcia-test/private/v3-result.json',
+      'artifactSha256', repeat('b', 64),
+      'artifactByteSize', 301,
+      'artifactFormat', 'application/json'
+    ),
+    jsonb_build_object(
+      'artifactUrl', 's3://portal-lcia-test/private/v3-query.json',
+      'artifactSha256', repeat('c', 64),
+      'artifactByteSize', 302,
+      'artifactFormat', 'application/json'
+    ),
+    jsonb_build_object(
+      'bundleContentHash', repeat('d', 64),
+      'bundleManifestSha256', repeat('e', 64),
+      'lciaChunkSetSha256', repeat('f', 64),
+      'portalProjectionId',
+        (select id::text from portal_lcia_ids where label = 'stage'),
+      'portalProjectionContentHash',
+        (select response #>> '{data,contentHash}' from portal_lcia_seal_response)
+    ),
+    jsonb_build_array(
+      '52710000-0000-4000-8000-000000000201',
+      '52710000-0000-4000-8000-000000000202'
+    ),
+    '52710000-0000-4000-8000-000000000201',
+    repeat('1', 64),
+    '{}'::jsonb
+  )
+);
+
+select extensions.ok(
+  (select (response ->> 'ok')::boolean
+   from portal_lcia_v3_package_replay_response)
+  and (select (response ->> 'reused')::boolean
+       from portal_lcia_v3_package_replay_response)
+  and (select response = jsonb_set(
+         (select response from portal_lcia_v3_package_response),
+         '{reused}', 'true'::jsonb, false
+       ) from portal_lcia_v3_package_replay_response)
+  and (select private.portal_lcia_json_object_has_keys_v1(
+         response, array['ok', 'reused', 'data']
+       ) from portal_lcia_v3_package_replay_response)
+  and (select private.portal_lcia_json_object_has_keys_v1(
+         response -> 'data',
+         array[
+           'packageId', 'packageVersion', 'status', 'buildWorkerJobId',
+           'includedInputCount', 'projection'
+         ]
+       ) from portal_lcia_v3_package_replay_response)
+  and (select private.portal_lcia_json_object_has_keys_v1(
+         response #> '{data,projection}',
+         array['projectionId', 'contentHash', 'hashContractVersion']
+       ) from portal_lcia_v3_package_replay_response),
+  'an exact package-ready retry recovers the same strict receipt with reused=true'
+);
+
+select extensions.ok(
+  (
+    select count(*) = 1
+    from private.lcia_result_packages as package
+    where package.build_worker_job_id =
+      (select id from portal_lcia_ids where label = 'worker_job_v3')
+      and package.package_version = 'portal-lcia-package-v3'
+  )
+  and (
+    select before_state.package_row = to_jsonb(package)
+    from portal_lcia_v3_package_before_replay as before_state
+    join private.lcia_result_packages as package using (id)
+  ),
+  'exact replay creates no duplicate and changes no package field'
+);
+
+create temporary table portal_lcia_v3_package_conflict_response (
+  response jsonb not null
+) on commit drop;
+
+insert into portal_lcia_v3_package_conflict_response (response)
+values (
+  private.svc_portal_lcia_projection_package_mark_ready_v1(
+    (select id from portal_lcia_ids where label = 'stage'),
+    (select id from portal_lcia_ids where label = 'worker_job_v3'),
+    '52710000-0000-4000-8000-000000000420',
+    'portal-lcia-package-v3',
+    '52710000-0000-4000-8000-000000000403',
+    '52710000-0000-4000-8000-000000000430',
+    '52710000-0000-4000-8000-000000000405',
+    jsonb_build_object(
+      'artifactUrl', 's3://portal-lcia-test/private/v3-result.json',
+      'artifactSha256', repeat('b', 64),
+      'artifactByteSize', 999,
+      'artifactFormat', 'application/json'
+    ),
+    jsonb_build_object(
+      'artifactUrl', 's3://portal-lcia-test/private/v3-query.json',
+      'artifactSha256', repeat('c', 64),
+      'artifactByteSize', 302,
+      'artifactFormat', 'application/json'
+    ),
+    jsonb_build_object(
+      'bundleContentHash', repeat('d', 64),
+      'bundleManifestSha256', repeat('e', 64),
+      'lciaChunkSetSha256', repeat('f', 64),
+      'portalProjectionId',
+        (select id::text from portal_lcia_ids where label = 'stage'),
+      'portalProjectionContentHash',
+        (select response #>> '{data,contentHash}' from portal_lcia_seal_response)
+    ),
+    jsonb_build_array(
+      '52710000-0000-4000-8000-000000000201',
+      '52710000-0000-4000-8000-000000000202'
+    ),
+    '52710000-0000-4000-8000-000000000201',
+    repeat('1', 64),
+    '{}'::jsonb
+  )
+);
+
+select extensions.ok(
+  (select response ->> 'ok' = 'false'
+   from portal_lcia_v3_package_conflict_response)
+  and (select response ->> 'code' = 'package_conflict'
+       from portal_lcia_v3_package_conflict_response)
+  and (select response ->> 'status' = '409'
+       from portal_lcia_v3_package_conflict_response)
+  and (
+    select count(*) = 1
+    from private.lcia_result_packages as package
+    where package.build_worker_job_id =
+      (select id from portal_lcia_ids where label = 'worker_job_v3')
+      and package.package_version = 'portal-lcia-package-v3'
+  )
+  and (
+    select before_state.package_row = to_jsonb(package)
+    from portal_lcia_v3_package_before_replay as before_state
+    join private.lcia_result_packages as package using (id)
+  ),
+  'a same-key retry with any artifact metadata drift remains package_conflict and changes no row'
+);
+
+select extensions.ok(
+  exists (
+    select 1
+    from portal_lcia_legacy_package_ready_metadata_before as before_state
+    join pg_catalog.pg_proc as routine on routine.oid = before_state.oid
+    where before_state.function_definition =
+            pg_catalog.pg_get_functiondef(before_state.oid)
+      and before_state.proowner = routine.proowner
+      and before_state.prosecdef = routine.prosecdef
+      and before_state.proconfig is not distinct from routine.proconfig
+      and before_state.proacl is not distinct from routine.proacl
+      and before_state.provolatile = routine.provolatile
+      and before_state.proparallel = routine.proparallel
+      and before_state.proisstrict = routine.proisstrict
+      and before_state.proleakproof = routine.proleakproof
+      and before_state.identity_arguments =
+            pg_catalog.pg_get_function_identity_arguments(before_state.oid)
+      and before_state.function_result =
+            pg_catalog.pg_get_function_result(before_state.oid)
+  )
+  and (
+    select count(*) = 2
+    from portal_lcia_legacy_jobs_before as before_state
+    join private.worker_jobs as after_state using (id)
+    where before_state.payload_schema_version =
+            after_state.payload_schema_version
+      and before_state.payload_json = after_state.payload_json
+      and before_state.payload_ref is not distinct from after_state.payload_ref
+  ),
+  'recovery preserves the exact legacy package helper metadata and V1/V2 job snapshots'
 );
 
 -- The additive V3-only publisher reconciles the certificate Process set and
