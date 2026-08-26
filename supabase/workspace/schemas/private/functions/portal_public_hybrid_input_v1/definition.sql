@@ -1,5 +1,5 @@
 CREATE OR REPLACE FUNCTION "private"."portal_public_hybrid_input_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) RETURNS "jsonb"
-    LANGUAGE "plpgsql" IMMUTABLE PARALLEL SAFE
+    LANGUAGE "plpgsql" STABLE PARALLEL SAFE
     SET "search_path" TO ''
     AS $_$
 declare
