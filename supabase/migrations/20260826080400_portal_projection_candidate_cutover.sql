@@ -2,10 +2,9 @@
 --
 -- Persistent Dev has production-shaped public cardinality but almost no
 -- search_text/embedding_ft derivatives, so the existing derivative indexes
--- cannot be the completeness boundary for anonymous Portal reads.  Build one
--- narrow, Portal-only lexical expression per public dataset table from the
--- already-reviewed allowlist, then hydrate the full public card only after
--- indexed candidate and latest-visible-version reduction.  No external
+-- cannot be the completeness boundary for anonymous Portal reads.  Read the
+-- synchronized public-safe card/document/vector projection only after indexed
+-- candidate and latest-visible-version reduction.  No external
 -- signature, DTO, ACL, RLS policy, owner, function timeout, or legacy Hybrid
 -- routine changes in this migration.
 
@@ -120,9 +119,8 @@ begin
 end
 $portal_candidate_snapshot_guard$;
 
--- The document helper was installed once before the two concurrent index
--- migrations.  Acquire the constrained owner only to add the separate facts
--- helper; never replace an immutable expression function after its index build.
+-- Acquire the constrained owner only to add stored-card facts and fixed
+-- projection pattern helpers.
 grant portal_public_executor to postgres;
 grant create on schema private to portal_public_executor;
 set role portal_public_executor;
@@ -205,7 +203,7 @@ revoke all on function private.catalog_portal_card_facts_v1(jsonb, jsonb, text)
 grant execute on function private.catalog_portal_card_facts_v1(jsonb, jsonb, text)
   to api_internal_executor;
 
--- PGroonga's LIKE planner needs a Const pattern to select the expression
+-- PGroonga's LIKE planner needs a Const pattern to select the projection
 -- index.  These two helpers use fixed SQL templates: relation, columns,
 -- function, predicates, and ESCAPE are constants; only the already escaped
 -- pattern is rendered with %L.  There is no identifier interpolation.
@@ -680,7 +678,7 @@ revoke all on function private.catalog_portal_candidate_rows_v1(
 
 reset role;
 grant portal_public_executor to postgres;
-grant create on schema private to portal_public_executor;
+grant create on schema private, api to portal_public_executor;
 alter function private.catalog_portal_candidate_rows_v1(
   text, text, uuid, text
 ) owner to portal_public_executor;
@@ -1088,332 +1086,6 @@ grant execute on function private.catalog_portal_search_v1_impl(
 
 -- Rebuild only the Portal Hybrid kernel.  The eight historical raw/login
 -- Hybrid routines remain untouched and are byte-verified below.
-create or replace function private.portal_public_hybrid_search_v1_impl(
-  p_kind text,
-  p_query_terms text[],
-  p_query_embedding extensions.vector(1024),
-  p_filters jsonb,
-  p_limit integer,
-  p_query_fingerprint text
-)
-returns jsonb
-language plpgsql
-stable
-parallel restricted
-security definer
-set search_path = ''
-set statement_timeout = '8s'
-set plan_cache_mode = 'force_custom_plan'
-set hnsw.iterative_scan = 'strict_order'
-set row_security = 'on'
-as $function$
-declare
-  v_items jsonb;
-  v_result jsonb;
-begin
-  with portal_lexical_matches as materialized (
-    select match.id,
-      match.version,
-      match.term_ordinal
-    from private.catalog_portal_hybrid_pattern_matches_v1(
-      p_kind,
-      p_query_terms
-    ) as match
-  ), portal_latest_keys as materialized (
-    select distinct on (projection.id)
-      projection.id,
-      projection.version
-    from private.portal_catalog_search_rows_v1 as projection
-    where projection.dataset_kind = p_kind
-    order by projection.id,
-      projection.version desc,
-      projection.modified_at desc,
-      projection.state_code desc
-  ), portal_lexical_counts as materialized (
-    select portal_lexical_matches.id,
-      portal_lexical_matches.version,
-      pg_catalog.count(distinct portal_lexical_matches.term_ordinal)::integer
-        as lexical_hit_count
-    from portal_lexical_matches
-    join portal_latest_keys
-      on portal_latest_keys.id = portal_lexical_matches.id
-     and portal_latest_keys.version = portal_lexical_matches.version
-    group by portal_lexical_matches.id,
-      portal_lexical_matches.version
-  ), portal_lexical_candidates as materialized (
-    select portal_lexical_counts.*
-    from portal_lexical_counts
-    where portal_lexical_counts.lexical_hit_count > 0
-    order by portal_lexical_counts.lexical_hit_count desc,
-      portal_lexical_counts.id asc,
-      portal_lexical_counts.version desc
-    limit 200
-  ), portal_lexical_ranked as materialized (
-    select portal_lexical_candidates.*,
-      pg_catalog.row_number() over (
-        order by portal_lexical_candidates.lexical_hit_count desc,
-          portal_lexical_candidates.id asc,
-          portal_lexical_candidates.version desc
-      )::integer as lexical_rank
-    from portal_lexical_candidates
-  ), portal_semantic_process_pool as materialized (
-    select candidate.id,
-      candidate.version,
-      candidate.semantic_distance
-    from (
-      select projection.id,
-        projection.version,
-        projection.embedding_ft operator(extensions.<=>) p_query_embedding
-          as semantic_distance
-      from private.portal_catalog_search_rows_v1 as projection
-      where p_kind = 'process'
-        and projection.dataset_kind = 'process'
-        and projection.embedding_ft is not null
-        and not exists (
-          select 1
-          from private.portal_catalog_search_rows_v1 as newer
-          where newer.dataset_kind = projection.dataset_kind
-            and newer.id = projection.id
-            and (
-              newer.version > projection.version
-              or (
-                newer.version = projection.version
-                and newer.modified_at > projection.modified_at
-              )
-              or (
-                newer.version = projection.version
-                and newer.modified_at = projection.modified_at
-                and newer.state_code > projection.state_code
-              )
-            )
-        )
-      order by projection.embedding_ft
-        operator(extensions.<=>) p_query_embedding
-      limit 200
-    ) as candidate
-    where candidate.semantic_distance is not null
-      and candidate.semantic_distance >= 0::double precision
-      and candidate.semantic_distance <= 0.5::double precision
-  ), portal_semantic_flow_pool as materialized (
-    select candidate.id,
-      candidate.version,
-      candidate.semantic_distance
-    from (
-      select projection.id,
-        projection.version,
-        projection.embedding_ft operator(extensions.<=>) p_query_embedding
-          as semantic_distance
-      from private.portal_catalog_search_rows_v1 as projection
-      where p_kind = 'flow'
-        and projection.dataset_kind = 'flow'
-        and projection.embedding_ft is not null
-        and not exists (
-          select 1
-          from private.portal_catalog_search_rows_v1 as newer
-          where newer.dataset_kind = projection.dataset_kind
-            and newer.id = projection.id
-            and (
-              newer.version > projection.version
-              or (
-                newer.version = projection.version
-                and newer.modified_at > projection.modified_at
-              )
-              or (
-                newer.version = projection.version
-                and newer.modified_at = projection.modified_at
-                and newer.state_code > projection.state_code
-              )
-            )
-        )
-      order by projection.embedding_ft
-        operator(extensions.<=>) p_query_embedding
-      limit 200
-    ) as candidate
-    where candidate.semantic_distance is not null
-      and candidate.semantic_distance >= 0::double precision
-      and candidate.semantic_distance <= 0.5::double precision
-  ), portal_semantic_candidates as materialized (
-    select * from portal_semantic_process_pool
-    union all
-    select * from portal_semantic_flow_pool
-  ), portal_semantic_ranked as materialized (
-    select portal_semantic_candidates.*,
-      pg_catalog.row_number() over (
-        order by portal_semantic_candidates.semantic_distance asc,
-          portal_semantic_candidates.id asc,
-          portal_semantic_candidates.version desc
-      )::integer as semantic_rank
-    from portal_semantic_candidates
-  ), portal_fused as materialized (
-    select
-      coalesce(portal_lexical_ranked.id, portal_semantic_ranked.id) as id,
-      coalesce(portal_lexical_ranked.version, portal_semantic_ranked.version)
-        as version,
-      portal_lexical_ranked.lexical_rank,
-      portal_semantic_ranked.semantic_rank,
-      portal_semantic_ranked.semantic_distance,
-      pg_catalog.round(
-        least(
-          1::numeric,
-          greatest(
-            0::numeric,
-            (
-              coalesce(
-                0.5::numeric / (60 + portal_lexical_ranked.lexical_rank),
-                0::numeric
-              )
-              + coalesce(
-                0.5::numeric / (60 + portal_semantic_ranked.semantic_rank),
-                0::numeric
-              )
-            ) * 61::numeric
-          )
-        ),
-        12
-      ) as normalized_score
-    from portal_lexical_ranked
-    full outer join portal_semantic_ranked
-      on portal_semantic_ranked.id = portal_lexical_ranked.id
-     and portal_semantic_ranked.version = portal_lexical_ranked.version
-  ), portal_fused_decorated as materialized (
-    select portal_fused.*,
-      projection.card,
-      projection.state_code,
-      projection.modified_at
-    from portal_fused
-    join private.portal_catalog_search_rows_v1 as projection
-      on projection.dataset_kind = p_kind
-     and projection.id = portal_fused.id
-     and projection.version = portal_fused.version
-  ), portal_filtered as materialized (
-    select portal_fused_decorated.*
-    from portal_fused_decorated
-    where (
-        not (p_filters ? 'accessLevel')
-        or portal_fused_decorated.card ->> 'accessLevel'
-          = p_filters ->> 'accessLevel'
-      )
-      and (
-        not (p_filters ? 'geography')
-        or pg_catalog.lower(pg_catalog.btrim(coalesce(
-          portal_fused_decorated.card #>> '{geography,code}',
-          ''
-        ))) = p_filters ->> 'geography'
-      )
-      and (
-        not (p_filters ? 'classification')
-        or exists (
-          select 1
-          from pg_catalog.jsonb_array_elements(coalesce(
-            portal_fused_decorated.card -> 'classifications',
-            '[]'::jsonb
-          )) as classification(item)
-          where pg_catalog.lower(pg_catalog.btrim(classification.item ->> 'code'))
-            = p_filters ->> 'classification'
-        )
-      )
-      and (
-        not (p_filters ? 'referenceYearFrom')
-        or (portal_fused_decorated.card ->> 'referenceYear')::integer
-          >= (p_filters ->> 'referenceYearFrom')::integer
-      )
-      and (
-        not (p_filters ? 'referenceYearTo')
-        or (portal_fused_decorated.card ->> 'referenceYear')::integer
-          <= (p_filters ->> 'referenceYearTo')::integer
-      )
-      and (
-        not (p_filters ? 'processSubtype')
-        or pg_catalog.lower(pg_catalog.btrim(coalesce(
-          portal_fused_decorated.card ->> 'processSubtype',
-          ''
-        ))) = p_filters ->> 'processSubtype'
-      )
-      and (
-        not (p_filters ? 'source')
-        or pg_catalog.lower(pg_catalog.btrim(coalesce(
-          portal_fused_decorated.card ->> 'source',
-          ''
-        ))) = p_filters ->> 'source'
-      )
-  ), portal_ordered as materialized (
-    select portal_filtered.*
-    from portal_filtered
-    order by portal_filtered.normalized_score desc,
-      portal_filtered.id asc,
-      portal_filtered.version desc
-    limit p_limit
-  )
-  select coalesce(
-    pg_catalog.jsonb_agg(
-      pg_catalog.jsonb_build_object(
-        'key', pg_catalog.jsonb_build_object(
-          'kind', p_kind,
-          'id', portal_ordered.id::text,
-          'version', portal_ordered.version
-        ),
-        'accessLevel', portal_ordered.card -> 'accessLevel',
-        'capabilities', portal_ordered.card -> 'capabilities',
-        'names', portal_ordered.card -> 'names',
-        'summary', portal_ordered.card -> 'summary',
-        'geography', portal_ordered.card -> 'geography',
-        'referenceYear', portal_ordered.card -> 'referenceYear',
-        'modifiedAt', pg_catalog.to_char(
-          portal_ordered.modified_at at time zone 'UTC',
-          'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
-        ),
-        'match', pg_catalog.jsonb_build_object(
-          'kind', 'hybrid',
-          'algorithmVersion', 'portal-hybrid-rank-v1',
-          'score', portal_ordered.normalized_score,
-          'reasonCodes', pg_catalog.to_jsonb(pg_catalog.array_remove(array[
-            case when portal_ordered.lexical_rank is not null
-              then 'lexical_public_projection'::text end,
-            case when portal_ordered.semantic_rank is not null
-              then 'semantic_public_projection'::text end
-          ], null)),
-          'evidence', pg_catalog.jsonb_build_object(
-            'lexicalRank', portal_ordered.lexical_rank,
-            'semanticRank', portal_ordered.semantic_rank,
-            'semanticDistance', case
-              when portal_ordered.semantic_distance is null then null
-              else pg_catalog.trim_scale(
-                portal_ordered.semantic_distance::numeric
-              )::text
-            end
-          )
-        )
-      )
-      order by portal_ordered.normalized_score desc,
-        portal_ordered.id asc,
-        portal_ordered.version desc
-    ),
-    '[]'::jsonb
-  )
-  into v_items
-  from portal_ordered;
-
-  v_result := pg_catalog.jsonb_build_object(
-    'schemaVersion', 'portal.public-hybrid-candidate-page.v1',
-    'kind', p_kind,
-    'queryFingerprint', p_query_fingerprint,
-    'items', v_items
-  );
-  if pg_catalog.octet_length(
-    pg_catalog.convert_to(v_result::text, 'UTF8')
-  ) > 524288 then
-    raise exception using
-      errcode = '54000',
-      message = 'portal hybrid response too large';
-  end if;
-  return v_result;
-end
-$function$;
-
-comment on function private.portal_public_hybrid_search_v1_impl(
-  text, text[], extensions.vector, jsonb, integer, text
-) is
-  'Projection-backed portal-hybrid-rank-v1: exact literal lexical matches and latest-only semantic candidates use private PGroonga/HNSW indexes before fusion/card filters.';
 
 reset role;
 revoke create on schema private from api_internal_executor;
@@ -1519,17 +1191,74 @@ begin
 end
 $function$;
 
+create or replace function api.portal_hybrid_search_v1(
+  p_kind text,
+  p_query_terms text[],
+  p_query_embedding text,
+  p_filters jsonb,
+  p_limit integer
+)
+returns jsonb
+language plpgsql
+stable
+parallel restricted
+security definer
+set search_path = ''
+set statement_timeout = '8s'
+as $function$
+declare
+  v_input jsonb;
+  v_page jsonb;
+begin
+  v_input := private.portal_public_hybrid_input_v1(
+    p_kind,
+    p_query_terms,
+    p_query_embedding,
+    p_filters,
+    p_limit
+  );
+  v_page := private.portal_lcia_decorate_item_page_v1(
+    private.portal_projection_hybrid_search_v1_impl(
+      v_input ->> 'kind',
+      array(
+        select term.value
+        from pg_catalog.jsonb_array_elements_text(v_input -> 'queryTerms')
+          with ordinality as term(value, ordinality)
+        order by term.ordinality
+      ),
+      (v_input ->> 'queryEmbedding')::extensions.vector(1024),
+      v_input -> 'filters',
+      (v_input ->> 'limit')::integer,
+      v_input ->> 'queryFingerprint'
+    )
+  );
+  if v_page is null
+     or pg_catalog.octet_length(
+       pg_catalog.convert_to(v_page::text, 'UTF8')
+     ) > 524288 then
+    raise exception using
+      errcode = '54000',
+      message = 'portal hybrid response too large';
+  end if;
+  return v_page;
+exception
+  when sqlstate '22023' then
+    raise exception using errcode = '22023', message = 'invalid portal request';
+  when query_canceled then
+    raise exception using errcode = 'P0001', message = 'portal hybrid unavailable';
+  when others then
+    raise exception using errcode = 'P0001', message = 'portal hybrid unavailable';
+end
+$function$;
+
 reset role;
-revoke create on schema private from portal_public_executor;
+revoke create on schema private, api from portal_public_executor;
 revoke portal_public_executor from postgres;
 
 do $verify_portal_candidate_contract$
 declare
   v_catalog regprocedure := pg_catalog.to_regprocedure(
     'private.catalog_portal_search_v1_impl(text,text,jsonb,text,text,uuid,text,integer,text)'
-  );
-  v_document regprocedure := pg_catalog.to_regprocedure(
-    'private.catalog_portal_document_v1(text,jsonb)'
   );
   v_card_facts regprocedure := pg_catalog.to_regprocedure(
     'private.catalog_portal_card_facts_v1(jsonb,jsonb,text)'
@@ -1550,11 +1279,10 @@ declare
     'private.portal_search_v1(text,text,jsonb,text,text,integer)'
   );
   v_hybrid regprocedure := pg_catalog.to_regprocedure(
-    'private.portal_public_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'
+    'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'
   );
 begin
   if v_catalog is null
-     or v_document is null
      or v_card_facts is null
      or v_candidates is null
      or v_process_pattern is null
@@ -1563,21 +1291,6 @@ begin
      or v_search is null
      or v_hybrid is null then
     raise exception 'Portal candidate-first installation is incomplete';
-  end if;
-  if (
-    select routine.proowner = 'portal_public_executor'::regrole
-      and routine.prosecdef
-      and routine.provolatile = 'i'
-      and coalesce(routine.proconfig, '{}'::text[])
-        @> array['search_path=""']::text[]
-      and pg_catalog.md5(pg_catalog.pg_get_functiondef(routine.oid))
-        = 'cc17549d0fc9686036c35457490585c3'
-      and coalesce(routine.proacl::text, '')
-        = '{portal_public_executor=X/portal_public_executor,postgres=X/portal_public_executor}'
-    from pg_catalog.pg_proc as routine
-    where routine.oid = v_document
-  ) is not true then
-    raise exception 'Portal candidate document owner/config mismatch';
   end if;
   if (
     select routine.proowner = 'portal_public_executor'::regrole
@@ -1784,17 +1497,7 @@ begin
      or pg_catalog.has_function_privilege('anon', v_catalog, 'EXECUTE')
      or pg_catalog.has_function_privilege('authenticated', v_catalog, 'EXECUTE')
      or pg_catalog.has_function_privilege('service_role', v_catalog, 'EXECUTE')
-     or not pg_catalog.has_function_privilege(
-       'postgres', v_document, 'EXECUTE'
-     )
-     or pg_catalog.has_function_privilege(
-       'api_internal_executor', v_document, 'EXECUTE'
-     )
-     or pg_catalog.has_function_privilege('anon', v_document, 'EXECUTE')
-     or pg_catalog.has_function_privilege('authenticated', v_document, 'EXECUTE')
-     or pg_catalog.has_function_privilege(
-       'service_role', v_document, 'EXECUTE'
-     ) then
+     then
     raise exception 'Portal candidate-first private ACL mismatch';
   end if;
 end
@@ -1809,7 +1512,11 @@ begin
       on routine.oid = pg_catalog.to_regprocedure(before.routine_identity)
     join pg_catalog.pg_roles as owner_role
       on owner_role.oid = routine.proowner
-    where before.definition <> pg_catalog.pg_get_functiondef(routine.oid)
+    where (
+         before.routine_identity <>
+           'api.portal_hybrid_search_v1(text,text[],text,jsonb,integer)'
+         and before.definition <> pg_catalog.pg_get_functiondef(routine.oid)
+       )
        or before.owner_name <> owner_role.rolname
        or before.security_definer <> routine.prosecdef
        or before.proconfig <> coalesce(routine.proconfig, '{}'::text[])
@@ -1820,7 +1527,17 @@ begin
     join pg_catalog.pg_proc as routine
       on routine.oid = pg_catalog.to_regprocedure(before.routine_identity)
   ) <> 3 then
-    raise exception 'Portal external wrapper contract changed';
+    raise exception 'Portal external wrapper signature/metadata contract changed';
+  end if;
+
+  if (
+    select routine.prosrc !~ 'portal_projection_hybrid_search_v1_impl'
+      or routine.prosrc ~ 'portal_public_hybrid_search_v1_impl'
+    from pg_catalog.pg_proc as routine
+    where routine.oid =
+      'api.portal_hybrid_search_v1(text,text[],text,jsonb,integer)'::regprocedure
+  ) then
+    raise exception 'Portal Hybrid wrapper did not cut over to the projection kernel';
   end if;
 
   if exists (

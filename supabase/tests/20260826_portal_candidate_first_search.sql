@@ -54,37 +54,39 @@ select extensions.ok(
 );
 
 select extensions.ok(
-  pg_catalog.has_function_privilege(
-    'postgres',
-    'private.catalog_portal_document_v1(text,jsonb)',
-    'EXECUTE'
+  pg_catalog.to_regprocedure(
+    'private.catalog_portal_document_v1(text,jsonb)'
+  ) is null
+  and (
+    select routine.proowner = 'portal_public_executor'::regrole
+      and routine.prosecdef
+      and routine.proconfig @> array['search_path=""']::text[]
+    from pg_catalog.pg_proc as routine
+    where routine.oid = pg_catalog.to_regprocedure(
+      'private.catalog_portal_projection_payload_v1(text,integer,jsonb)'
+    )
   )
   and pg_catalog.has_function_privilege(
-    'portal_public_executor',
-    'private.catalog_portal_document_v1(text,jsonb)',
-    'EXECUTE'
-  )
-  and not pg_catalog.has_function_privilege(
     'api_internal_executor',
-    'private.catalog_portal_document_v1(text,jsonb)',
+    'private.catalog_portal_projection_payload_v1(text,integer,jsonb)',
     'EXECUTE'
   )
   and not pg_catalog.has_function_privilege(
     'service_role',
-    'private.catalog_portal_document_v1(text,jsonb)',
+    'private.catalog_portal_projection_payload_v1(text,integer,jsonb)',
     'EXECUTE'
   )
   and not pg_catalog.has_function_privilege(
     'anon',
-    'private.catalog_portal_document_v1(text,jsonb)',
+    'private.catalog_portal_projection_payload_v1(text,integer,jsonb)',
     'EXECUTE'
   )
   and not pg_catalog.has_function_privilege(
     'authenticated',
-    'private.catalog_portal_document_v1(text,jsonb)',
+    'private.catalog_portal_projection_payload_v1(text,integer,jsonb)',
     'EXECUTE'
   ),
-  'only the projection builder owner and postgres migration role can evaluate the Portal document'
+  'the projection payload has one internal writer edge and no obsolete expression helper'
 );
 
 select extensions.ok(
@@ -286,7 +288,7 @@ select extensions.ok(
       and pg_catalog.strpos(routine.prosrc, 'portal_fused')
         < pg_catalog.strpos(routine.prosrc, 'portal_fused_decorated')
     from pg_catalog.pg_proc as routine
-    where routine.oid = 'private.portal_public_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'::regprocedure
+    where routine.oid = 'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'::regprocedure
   ),
   'Hybrid uses the private lexical/vector projection and reduces candidates before stored-card filtering'
 );
@@ -374,8 +376,8 @@ select extensions.is(
   'all eight legacy raw Hybrid definitions, owners, configs, and ACLs remain byte-stable'
 );
 
--- Prove that the expression-index helper does not become a hidden write-path
--- permission requirement.  Fixture admission uses the two actual relation
+-- Prove that synchronized projection maintenance does not become a hidden
+-- write-path permission requirement. Fixture admission uses the two actual relation
 -- writers (service_role and the postgres-owned authenticated command), and all
 -- effects roll back with this suite.
 create temporary table portal_candidate_webhook_calls (
@@ -754,7 +756,7 @@ select extensions.is(
     '{"test":"portal-candidate-index"}'::jsonb
   ) ->> 'ok',
   'true',
-  'authenticated Process draft command remains writable after the expression index'
+  'authenticated Process draft command remains writable with projection triggers'
 );
 
 select extensions.is(
@@ -768,7 +770,7 @@ select extensions.is(
     '{"test":"portal-candidate-index"}'::jsonb
   ) ->> 'ok',
   'true',
-  'authenticated Flow draft command remains writable after the expression index'
+  'authenticated Flow draft command remains writable with projection triggers'
 );
 
 reset role;
@@ -929,10 +931,11 @@ select extensions.is(
 
 select extensions.is(
   (
-    select private.catalog_portal_document_v1('process', process.json)
-    from public.processes as process
-    where process.id = '53100000-0000-4000-8000-000000000102'
-      and process.version = '01.00.000'
+    select projection.document
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'process'
+      and projection.id = '53100000-0000-4000-8000-000000000102'
+      and projection.version = '01.00.000'
   ),
   (
     select private.portal_catalog_card_v1(
@@ -942,15 +945,16 @@ select extensions.is(
     where process.id = '53100000-0000-4000-8000-000000000102'
       and process.version = '01.00.000'
   ),
-  'the indexed Process document is byte-equivalent to the reviewed public-card document'
+  'the synchronized Process document is byte-equivalent to the reviewed public-card document'
 );
 
 select extensions.is(
   (
-    select private.catalog_portal_document_v1('flow', flow.json)
-    from public.flows as flow
-    where flow.id = '53100000-0000-4000-8000-000000000202'
-      and flow.version = '01.00.000'
+    select projection.document
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'flow'
+      and projection.id = '53100000-0000-4000-8000-000000000202'
+      and projection.version = '01.00.000'
   ),
   (
     select private.portal_catalog_card_v1(
@@ -960,7 +964,7 @@ select extensions.is(
     where flow.id = '53100000-0000-4000-8000-000000000202'
       and flow.version = '01.00.000'
   ),
-  'the indexed Flow document is byte-equivalent to the reviewed public-card document'
+  'the synchronized Flow document is byte-equivalent to the reviewed public-card document'
 );
 
 select extensions.ok(

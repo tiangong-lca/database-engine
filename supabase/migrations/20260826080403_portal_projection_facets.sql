@@ -1,5 +1,6 @@
--- Issue #531: keep the public facets contract byte-compatible while moving
--- full-result aggregation onto the synchronized public-safe projection.
+-- Issue #531: keep the public facets signature, DTO, metadata, and error
+-- contract compatible while moving full-result aggregation onto the
+-- synchronized public-safe projection.
 
 begin;
 
