@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."catalog_portal_facets_empty_v1_impl"("p_kind" "text", "p_query_fingerprint" "text") IS 'Empty-query, empty-filter Portal facets over the narrow latest-visible fact projection.';

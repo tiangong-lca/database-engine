@@ -18810,6 +18810,15 @@ begin
     v_filters,
     'relevance'
   );
+
+  if v_query = '' and v_filters = '{}'::jsonb then
+    perform private.assert_portal_catalog_facet_contract_v1();
+    return private.catalog_portal_facets_empty_v1_impl(
+      v_kind,
+      v_fingerprint
+    );
+  end if;
+
   if v_query ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
     v_exact_id := v_query::uuid;
   end if;
@@ -24627,6 +24636,150 @@ $$;
 ALTER FUNCTION "api"."unitgroups_embedding_ft_input"("proc" "public"."unitgroups") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "private"."assert_portal_catalog_facet_contract_v1"() RETURNS "void"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "row_security" TO 'on'
+    AS $$
+declare
+  v_expected_identities constant text[] := array[
+    'private.portal_catalog_facet_facts_v1(text,jsonb)',
+    'private.sync_portal_catalog_facet_row_v1()'
+  ]::text[];
+  v_expected_digest constant text :=
+    'b238e9573ef08a9339062a2fa3092c0776318d13979ec8bf54ffc7a1ba0c7e3a';
+  v_live_digest text;
+begin
+  select private.portal_catalog_facet_manifest_sha256_v1()
+  into v_live_digest;
+
+  if v_live_digest is distinct from v_expected_digest
+     or (
+       select count(*)
+       from private.portal_catalog_facet_contract_v1 as contract
+       where contract.contract_version = 1
+         and contract.manifest_schema =
+           'portal.catalog-facet-function-manifest.v1'
+         and contract.function_identities = v_expected_identities
+         and contract.manifest_sha256 = v_expected_digest
+         and contract.created_by_migration = '20260827020000'
+     ) <> 1
+     or (
+       select count(*)
+       from private.portal_catalog_facet_contract_v1
+     ) <> 1
+     or (
+       select not relation.relrowsecurity
+         or not relation.relforcerowsecurity
+         or relation.relowner <> 'postgres'::regrole
+       from pg_catalog.pg_class as relation
+       where relation.oid =
+         'private.portal_catalog_facet_contract_v1'::regclass
+     ) is not false
+     or (
+       select not relation.relrowsecurity
+         or not relation.relforcerowsecurity
+         or relation.relowner <> 'postgres'::regrole
+       from pg_catalog.pg_class as relation
+       where relation.oid =
+         'private.portal_catalog_facet_rows_v1'::regclass
+     ) is not false
+     or not exists (
+       select 1
+       from pg_catalog.pg_trigger as trigger
+       where trigger.tgrelid =
+           'private.portal_catalog_search_rows_v1'::regclass
+         and trigger.tgname = 'portal_catalog_facet_sync_v1'
+         and trigger.tgfoid =
+           'private.sync_portal_catalog_facet_row_v1()'::regprocedure
+         and trigger.tgenabled = 'O'
+         and not trigger.tgisinternal
+         and trigger.tgtype = 21
+         and array(
+           select attribute.attname
+           from unnest(trigger.tgattr::smallint[])
+             with ordinality as trigger_column(attnum, ordinality)
+           join pg_catalog.pg_attribute as attribute
+             on attribute.attrelid = trigger.tgrelid
+            and attribute.attnum = trigger_column.attnum
+           order by trigger_column.ordinality
+         ) = array[
+           'dataset_kind',
+           'id',
+           'version',
+           'state_code',
+           'modified_at',
+           'card'
+         ]::name[]
+     )
+     or exists (
+       select 1
+       from pg_catalog.pg_constraint as constraint_catalog
+       where constraint_catalog.conrelid in (
+           'private.portal_catalog_facet_contract_v1'::regclass,
+           'private.portal_catalog_facet_rows_v1'::regclass
+         )
+         and not constraint_catalog.convalidated
+     )
+     or not exists (
+       select 1
+       from pg_catalog.pg_constraint as parent_fk
+       where parent_fk.conrelid =
+           'private.portal_catalog_facet_rows_v1'::regclass
+         and parent_fk.confrelid =
+           'private.portal_catalog_search_rows_v1'::regclass
+         and parent_fk.conname =
+           'portal_catalog_facet_rows_projection_v1_fk'
+         and parent_fk.contype = 'f'
+         and parent_fk.convalidated
+         and parent_fk.confupdtype = 'r'
+         and parent_fk.confdeltype = 'c'
+         and parent_fk.conkey = array[
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = parent_fk.conrelid
+               and attribute.attname = 'dataset_kind'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = parent_fk.conrelid
+               and attribute.attname = 'id'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = parent_fk.conrelid
+               and attribute.attname = 'version'
+           )
+         ]::smallint[]
+     )
+     or not exists (
+       select 1
+       from pg_catalog.pg_constraint as contract_fk
+       where contract_fk.conrelid =
+           'private.portal_catalog_facet_rows_v1'::regclass
+         and contract_fk.confrelid =
+           'private.portal_catalog_facet_contract_v1'::regclass
+         and contract_fk.conname =
+           'portal_catalog_facet_rows_contract_version_v1_fk'
+         and contract_fk.contype = 'f'
+         and contract_fk.convalidated
+         and contract_fk.confupdtype = 'r'
+         and contract_fk.confdeltype = 'r'
+     ) then
+    raise exception using
+      errcode = '55000',
+      message = 'Portal facet derivation contract drifted';
+  end if;
+end
+$$;
+
+
+ALTER FUNCTION "private"."assert_portal_catalog_facet_contract_v1"() OWNER TO "api_internal_executor";
+
+
 CREATE OR REPLACE FUNCTION "private"."assert_portal_catalog_projection_contract_v1"() RETURNS "void"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
@@ -25150,6 +25303,162 @@ ALTER FUNCTION "private"."catalog_portal_facet_candidate_rows_v1"("p_kind" "text
 
 
 COMMENT ON FUNCTION "private"."catalog_portal_facet_candidate_rows_v1"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text") IS 'Exact Process/Flow/all latest-visible facet candidates over the synchronized public-safe projection.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."catalog_portal_facets_empty_v1_impl"("p_kind" "text", "p_query_fingerprint" "text") RETURNS "jsonb"
+    LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "work_mem" TO '32MB'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    SET "row_security" TO 'on'
+    AS $$
+  with latest as materialized (
+    select distinct on (facet.dataset_kind, facet.id)
+      facet.dataset_kind,
+      facet.id,
+      facet.version,
+      facet.facet_access_level,
+      facet.facet_geography,
+      facet.facet_reference_year,
+      facet.facet_process_subtype,
+      facet.facet_source
+    from private.portal_catalog_facet_rows_v1 as facet
+    where facet.facet_contract_version = 1
+      and (p_kind = 'all' or facet.dataset_kind = p_kind)
+    order by facet.dataset_kind,
+      facet.id,
+      facet.version desc,
+      facet.modified_at desc,
+      facet.state_code desc
+  ), facts as materialized (
+    select latest.dataset_kind,
+      latest.facet_access_level,
+      latest.facet_geography,
+      latest.facet_reference_year,
+      case when latest.dataset_kind = 'process' then
+        latest.facet_process_subtype
+      else null::text end as facet_process_subtype,
+      latest.facet_source
+    from latest
+  ), counts_raw as materialized (
+    select case
+        when grouping(facts.dataset_kind) = 0 then 'kind'
+        when grouping(facts.facet_access_level) = 0 then 'accessLevel'
+        when grouping(facts.facet_geography) = 0 then 'geography'
+        when grouping(facts.facet_reference_year) = 0 then 'referenceYear'
+        when grouping(facts.facet_process_subtype) = 0 then 'processSubtype'
+        else 'source'
+      end as group_id,
+      case
+        when grouping(facts.dataset_kind) = 0 then 1
+        when grouping(facts.facet_access_level) = 0 then 2
+        when grouping(facts.facet_geography) = 0 then 3
+        when grouping(facts.facet_reference_year) = 0 then 4
+        when grouping(facts.facet_process_subtype) = 0 then 5
+        else 6
+      end as group_order,
+      case
+        when grouping(facts.dataset_kind) = 0 then facts.dataset_kind
+        when grouping(facts.facet_access_level) = 0 then
+          facts.facet_access_level
+        when grouping(facts.facet_geography) = 0 then facts.facet_geography
+        when grouping(facts.facet_reference_year) = 0 then
+          facts.facet_reference_year
+        when grouping(facts.facet_process_subtype) = 0 then
+          facts.facet_process_subtype
+        else facts.facet_source
+      end as value,
+      pg_catalog.count(*) as value_count
+    from facts
+    group by grouping sets (
+      (facts.dataset_kind),
+      (facts.facet_access_level),
+      (facts.facet_geography),
+      (facts.facet_reference_year),
+      (facts.facet_process_subtype),
+      (facts.facet_source)
+    )
+  ), counts as materialized (
+    select counts_raw.group_id,
+      counts_raw.group_order,
+      counts_raw.value,
+      counts_raw.value as label,
+      counts_raw.value_count
+    from counts_raw
+    where nullif(pg_catalog.btrim(counts_raw.value), '') is not null
+      and pg_catalog.length(counts_raw.value) <= 128
+      and pg_catalog.octet_length(counts_raw.value) <= 512
+  ), ranked_counts as materialized (
+    select counts.*,
+      pg_catalog.row_number() over (
+        partition by counts.group_id
+        order by counts.value
+      ) as value_rank
+    from counts
+  ), grouped as materialized (
+    select ranked_counts.group_id,
+      ranked_counts.group_order,
+      pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+        'value', ranked_counts.value,
+        'label', pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'language', 'und', 'value', ranked_counts.label
+          )
+        ),
+        'count', ranked_counts.value_count
+      ) order by ranked_counts.value)
+        filter (where ranked_counts.value_rank <= 100) as values_json,
+      pg_catalog.bool_or(ranked_counts.value_rank > 100) as has_more
+    from ranked_counts
+    group by ranked_counts.group_id, ranked_counts.group_order
+  ), groups as (
+    select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+      'id', grouped.group_id,
+      'label', pg_catalog.jsonb_build_array(
+        pg_catalog.jsonb_build_object(
+          'language', 'en',
+          'value', case grouped.group_id
+            when 'kind' then 'Object type'
+            when 'accessLevel' then 'Access level'
+            when 'geography' then 'Geography'
+            when 'referenceYear' then 'Reference year'
+            when 'processSubtype' then 'Process subtype'
+            else 'Source'
+          end
+        ),
+        pg_catalog.jsonb_build_object(
+          'language', 'zh-CN',
+          'value', case grouped.group_id
+            when 'kind' then '对象类型'
+            when 'accessLevel' then '访问级别'
+            when 'geography' then '地区'
+            when 'referenceYear' then '参考年'
+            when 'processSubtype' then '过程类型'
+            else '数据源'
+          end
+        )
+      ),
+      'values', grouped.values_json,
+      'hasMore', grouped.has_more
+    ) order by grouped.group_order), '[]'::jsonb) as value
+    from grouped
+  )
+  select pg_catalog.jsonb_build_object(
+    'schemaVersion', 'portal.public-facets.v1',
+    'kind', p_kind,
+    'queryFingerprint', p_query_fingerprint,
+    'groups', groups.value
+  )
+  from groups
+$$;
+
+
+ALTER FUNCTION "private"."catalog_portal_facets_empty_v1_impl"("p_kind" "text", "p_query_fingerprint" "text") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."catalog_portal_facets_empty_v1_impl"("p_kind" "text", "p_query_fingerprint" "text") IS 'Empty-query, empty-filter Portal facets over the narrow latest-visible fact projection.';
 
 
 
@@ -39932,6 +40241,83 @@ $_$;
 ALTER FUNCTION "private"."portal_catalog_card_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") OWNER TO "portal_public_executor";
 
 
+CREATE OR REPLACE FUNCTION "private"."portal_catalog_facet_facts_v1"("p_kind" "text", "p_card" "jsonb") RETURNS TABLE("facet_access_level" "text", "facet_geography" "text", "facet_reference_year" "text", "facet_process_subtype" "text", "facet_source" "text")
+    LANGUAGE "sql" IMMUTABLE PARALLEL SAFE
+    SET "search_path" TO ''
+    AS $$
+  select
+    p_card ->> 'accessLevel',
+    pg_catalog.lower(pg_catalog.btrim(
+      p_card #>> '{geography,code}'
+    )),
+    pg_catalog.btrim(p_card ->> 'referenceYear'),
+    case when p_kind = 'process' then
+      pg_catalog.lower(pg_catalog.btrim(
+        p_card ->> 'processSubtype'
+      ))
+    else null::text end,
+    pg_catalog.lower(pg_catalog.btrim(p_card ->> 'source'))
+$$;
+
+
+ALTER FUNCTION "private"."portal_catalog_facet_facts_v1"("p_kind" "text", "p_card" "jsonb") OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "private"."portal_catalog_facet_facts_v1"("p_kind" "text", "p_card" "jsonb") IS 'Immutable v1 facet facts derived only from an already public-safe Portal card.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_catalog_facet_manifest_sha256_v1"() RETURNS "text"
+    LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "row_security" TO 'on'
+    AS $$
+  with expected(identity) as (
+    values
+      ('private.portal_catalog_facet_facts_v1(text,jsonb)'::text),
+      ('private.sync_portal_catalog_facet_row_v1()')
+  ), manifest_entries as (
+    select expected.identity,
+      pg_catalog.jsonb_build_object(
+        'identity', expected.identity,
+        'definition', pg_catalog.pg_get_functiondef(routine.oid),
+        'owner', pg_catalog.pg_get_userbyid(routine.proowner),
+        'language', language.lanname,
+        'volatility', routine.provolatile,
+        'parallel', routine.proparallel,
+        'securityDefiner', routine.prosecdef,
+        'config', coalesce(
+          pg_catalog.to_jsonb(routine.proconfig),
+          'null'::jsonb
+        )
+      )::text as entry
+    from expected
+    join pg_catalog.pg_proc as routine
+      on routine.oid = pg_catalog.to_regprocedure(expected.identity)
+    join pg_catalog.pg_language as language
+      on language.oid = routine.prolang
+  )
+  select pg_catalog.encode(
+    extensions.digest(
+      pg_catalog.convert_to(
+        pg_catalog.string_agg(
+          manifest_entries.entry,
+          E'\n'
+          order by manifest_entries.identity
+        ),
+        'UTF8'
+      ),
+      'sha256'
+    ),
+    'hex'
+  )
+  from manifest_entries
+$$;
+
+
+ALTER FUNCTION "private"."portal_catalog_facet_manifest_sha256_v1"() OWNER TO "api_internal_executor";
+
+
 CREATE OR REPLACE FUNCTION "private"."portal_catalog_projection_manifest_sha256_v1"() RETURNS "text"
     LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
@@ -53271,6 +53657,68 @@ END;$$;
 ALTER FUNCTION "private"."sync_json_to_jsonb"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "private"."sync_portal_catalog_facet_row_v1"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    SET "row_security" TO 'on'
+    AS $$
+declare
+  v_facts record;
+begin
+  select facts.*
+  into strict v_facts
+  from private.portal_catalog_facet_facts_v1(
+    new.dataset_kind,
+    new.card
+  ) as facts;
+
+  insert into private.portal_catalog_facet_rows_v1 (
+    dataset_kind,
+    id,
+    version,
+    state_code,
+    modified_at,
+    facet_access_level,
+    facet_geography,
+    facet_reference_year,
+    facet_process_subtype,
+    facet_source,
+    facet_contract_version
+  ) values (
+    new.dataset_kind,
+    new.id,
+    new.version,
+    new.state_code,
+    new.modified_at,
+    v_facts.facet_access_level,
+    v_facts.facet_geography,
+    v_facts.facet_reference_year,
+    v_facts.facet_process_subtype,
+    v_facts.facet_source,
+    1
+  )
+  on conflict (dataset_kind, id, version) do update
+  set state_code = excluded.state_code,
+      modified_at = excluded.modified_at,
+      facet_access_level = excluded.facet_access_level,
+      facet_geography = excluded.facet_geography,
+      facet_reference_year = excluded.facet_reference_year,
+      facet_process_subtype = excluded.facet_process_subtype,
+      facet_source = excluded.facet_source,
+      facet_contract_version = excluded.facet_contract_version;
+
+  return new;
+end
+$$;
+
+
+ALTER FUNCTION "private"."sync_portal_catalog_facet_row_v1"() OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "private"."sync_portal_catalog_facet_row_v1"() IS 'Maintains the narrow facet projection after each synchronized public-safe card write.';
+
+
+
 CREATE OR REPLACE FUNCTION "private"."sync_portal_catalog_search_row_v1"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -63236,6 +63684,50 @@ CREATE TABLE IF NOT EXISTS "private"."notifications" (
 ALTER TABLE "private"."notifications" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "private"."portal_catalog_facet_contract_v1" (
+    "contract_version" smallint NOT NULL,
+    "manifest_schema" "text" NOT NULL,
+    "function_identities" "text"[] NOT NULL,
+    "manifest_sha256" "text" NOT NULL,
+    "created_by_migration" "text" NOT NULL,
+    CONSTRAINT "portal_catalog_facet_contract_digest_v1_chk" CHECK (("manifest_sha256" = 'b238e9573ef08a9339062a2fa3092c0776318d13979ec8bf54ffc7a1ba0c7e3a'::"text")),
+    CONSTRAINT "portal_catalog_facet_contract_functions_v1_chk" CHECK (("function_identities" = ARRAY['private.portal_catalog_facet_facts_v1(text,jsonb)'::"text", 'private.sync_portal_catalog_facet_row_v1()'::"text"])),
+    CONSTRAINT "portal_catalog_facet_contract_migration_v1_chk" CHECK (("created_by_migration" = '20260827020000'::"text")),
+    CONSTRAINT "portal_catalog_facet_contract_schema_v1_chk" CHECK (("manifest_schema" = 'portal.catalog-facet-function-manifest.v1'::"text")),
+    CONSTRAINT "portal_catalog_facet_contract_version_v1_chk" CHECK (("contract_version" = 1))
+);
+
+ALTER TABLE ONLY "private"."portal_catalog_facet_contract_v1" FORCE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "private"."portal_catalog_facet_contract_v1" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "private"."portal_catalog_facet_rows_v1" (
+    "dataset_kind" "text" NOT NULL,
+    "id" "uuid" NOT NULL,
+    "version" "text" NOT NULL,
+    "state_code" integer NOT NULL,
+    "modified_at" timestamp with time zone NOT NULL,
+    "facet_access_level" "text",
+    "facet_geography" "text",
+    "facet_reference_year" "text",
+    "facet_process_subtype" "text",
+    "facet_source" "text",
+    "facet_contract_version" smallint NOT NULL,
+    CONSTRAINT "portal_catalog_facet_rows_contract_version_v1_chk" CHECK (("facet_contract_version" = 1)),
+    CONSTRAINT "portal_catalog_facet_rows_process_subtype_v1_chk" CHECK ((("dataset_kind" = 'process'::"text") OR ("facet_process_subtype" IS NULL))),
+    CONSTRAINT "portal_catalog_facet_rows_v1_dataset_kind_check" CHECK (("dataset_kind" = ANY (ARRAY['process'::"text", 'flow'::"text"]))),
+    CONSTRAINT "portal_catalog_facet_rows_v1_state_code_check" CHECK (("state_code" = ANY (ARRAY[100, 200]))),
+    CONSTRAINT "portal_catalog_facet_rows_v1_version_check" CHECK (("version" ~ '^\d{2}\.\d{2}\.\d{3}$'::"text"))
+);
+
+ALTER TABLE ONLY "private"."portal_catalog_facet_rows_v1" FORCE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "private"."portal_catalog_facet_rows_v1" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "private"."portal_catalog_projection_contract_v1" (
     "contract_version" smallint NOT NULL,
     "manifest_schema" "text" NOT NULL,
@@ -64911,6 +65403,16 @@ ALTER TABLE ONLY "private"."notifications"
 
 
 
+ALTER TABLE ONLY "private"."portal_catalog_facet_contract_v1"
+    ADD CONSTRAINT "portal_catalog_facet_contract_v1_pkey" PRIMARY KEY ("contract_version");
+
+
+
+ALTER TABLE ONLY "private"."portal_catalog_facet_rows_v1"
+    ADD CONSTRAINT "portal_catalog_facet_rows_v1_pkey" PRIMARY KEY ("dataset_kind", "id", "version");
+
+
+
 ALTER TABLE ONLY "private"."portal_catalog_projection_contract_v1"
     ADD CONSTRAINT "portal_catalog_projection_contract_v1_pkey" PRIMARY KEY ("contract_version");
 
@@ -65724,6 +66226,10 @@ CREATE INDEX "notifications_sender_user_id_idx" ON "private"."notifications" USI
 
 
 
+CREATE INDEX "portal_catalog_facet_rows_latest_v1_idx" ON "private"."portal_catalog_facet_rows_v1" USING "btree" ("dataset_kind", "id", "version" DESC, "modified_at" DESC, "state_code" DESC);
+
+
+
 CREATE INDEX "portal_catalog_search_flow_document_v1_pgroonga" ON "private"."portal_catalog_search_rows_v1" USING "pgroonga" ("document") WITH ("tokenizer"='TokenBigram', "normalizer"='NormalizerAuto') WHERE ("dataset_kind" = 'flow'::"text");
 
 
@@ -66504,6 +67010,10 @@ CREATE OR REPLACE TRIGGER "notifications_set_modified_at_trigger" BEFORE UPDATE 
 
 
 
+CREATE OR REPLACE TRIGGER "portal_catalog_facet_sync_v1" AFTER INSERT OR UPDATE OF "dataset_kind", "id", "version", "state_code", "modified_at", "card" ON "private"."portal_catalog_search_rows_v1" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_catalog_facet_row_v1"();
+
+
+
 CREATE OR REPLACE TRIGGER "portal_lcia_projection_header_guard_v1" BEFORE DELETE OR UPDATE ON "private"."portal_lcia_projection_headers" FOR EACH ROW EXECUTE FUNCTION "private"."portal_lcia_projection_header_guard_v1"();
 
 
@@ -66740,11 +67250,11 @@ CREATE OR REPLACE TRIGGER "lifecyclemodels_set_modified_at_trigger" BEFORE UPDAT
 
 
 
-CREATE OR REPLACE TRIGGER "portal_catalog_projection_content_sync_v1" AFTER INSERT OR DELETE OR UPDATE OF "id", "version", "json", "state_code", "modified_at" ON "public"."flows" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_catalog_search_row_v1"('content');
+CREATE OR REPLACE TRIGGER "portal_catalog_projection_content_sync_v1" AFTER INSERT OR DELETE OR UPDATE OF "id", "version", "json", "json_ordered", "state_code", "modified_at" ON "public"."flows" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_catalog_search_row_v1"('content');
 
 
 
-CREATE OR REPLACE TRIGGER "portal_catalog_projection_content_sync_v1" AFTER INSERT OR DELETE OR UPDATE OF "id", "version", "json", "state_code", "modified_at" ON "public"."processes" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_catalog_search_row_v1"('content');
+CREATE OR REPLACE TRIGGER "portal_catalog_projection_content_sync_v1" AFTER INSERT OR DELETE OR UPDATE OF "id", "version", "json", "json_ordered", "state_code", "modified_at" ON "public"."processes" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_catalog_search_row_v1"('content');
 
 
 
@@ -67176,6 +67686,16 @@ ALTER TABLE ONLY "private"."notifications"
 
 
 
+ALTER TABLE ONLY "private"."portal_catalog_facet_rows_v1"
+    ADD CONSTRAINT "portal_catalog_facet_rows_contract_version_v1_fk" FOREIGN KEY ("facet_contract_version") REFERENCES "private"."portal_catalog_facet_contract_v1"("contract_version") ON UPDATE RESTRICT ON DELETE RESTRICT;
+
+
+
+ALTER TABLE ONLY "private"."portal_catalog_facet_rows_v1"
+    ADD CONSTRAINT "portal_catalog_facet_rows_projection_v1_fk" FOREIGN KEY ("dataset_kind", "id", "version") REFERENCES "private"."portal_catalog_search_rows_v1"("dataset_kind", "id", "version") ON UPDATE RESTRICT ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "private"."portal_catalog_search_rows_v1"
     ADD CONSTRAINT "portal_catalog_search_rows_contract_version_v1_fk" FOREIGN KEY ("projection_contract_version") REFERENCES "private"."portal_catalog_projection_contract_v1"("contract_version") ON UPDATE RESTRICT ON DELETE RESTRICT;
 
@@ -67562,6 +68082,24 @@ CREATE POLICY "notifications_select_sender_or_recipient" ON "private"."notificat
 
 CREATE POLICY "notifications_update_sender" ON "private"."notifications" FOR UPDATE TO "authenticated" USING ((( SELECT "auth"."uid"() AS "uid") = "sender_user_id")) WITH CHECK ((( SELECT "auth"."uid"() AS "uid") = "sender_user_id"));
 
+
+
+CREATE POLICY "portal_catalog_facet_contract_internal_select_v1" ON "private"."portal_catalog_facet_contract_v1" FOR SELECT TO "api_internal_executor" USING (("contract_version" = 1));
+
+
+
+ALTER TABLE "private"."portal_catalog_facet_contract_v1" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "portal_catalog_facet_rows_internal_all_v1" ON "private"."portal_catalog_facet_rows_v1" TO "api_internal_executor" USING ((("state_code" = ANY (ARRAY[100, 200])) AND ("facet_contract_version" = 1))) WITH CHECK ((("state_code" = ANY (ARRAY[100, 200])) AND ("facet_contract_version" = 1)));
+
+
+
+CREATE POLICY "portal_catalog_facet_rows_portal_select_v1" ON "private"."portal_catalog_facet_rows_v1" FOR SELECT TO "portal_public_executor" USING ((("state_code" = ANY (ARRAY[100, 200])) AND ("facet_contract_version" = 1)));
+
+
+
+ALTER TABLE "private"."portal_catalog_facet_rows_v1" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "portal_catalog_projection_contract_internal_select_v1" ON "private"."portal_catalog_projection_contract_v1" FOR SELECT TO "api_internal_executor" USING (("contract_version" = 1));
@@ -69596,6 +70134,11 @@ GRANT ALL ON FUNCTION "api"."unitgroups_embedding_ft_input"("proc" "public"."uni
 
 
 
+REVOKE ALL ON FUNCTION "private"."assert_portal_catalog_facet_contract_v1"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."assert_portal_catalog_facet_contract_v1"() TO "portal_public_executor";
+
+
+
 REVOKE ALL ON FUNCTION "private"."assert_portal_catalog_projection_contract_v1"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."assert_portal_catalog_projection_contract_v1"() TO "portal_public_executor";
 
@@ -69612,6 +70155,10 @@ GRANT ALL ON FUNCTION "private"."catalog_portal_card_facts_v1"("p_card" "jsonb",
 
 
 REVOKE ALL ON FUNCTION "private"."catalog_portal_facet_candidate_rows_v1"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."catalog_portal_facets_empty_v1_impl"("p_kind" "text", "p_query_fingerprint" "text") FROM PUBLIC;
 
 
 
@@ -70241,6 +70788,14 @@ REVOKE ALL ON FUNCTION "private"."portal_capabilities_v1"("p_kind" "text", "p_st
 
 
 REVOKE ALL ON FUNCTION "private"."portal_catalog_card_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_catalog_facet_facts_v1"("p_kind" "text", "p_card" "jsonb") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_catalog_facet_manifest_sha256_v1"() FROM PUBLIC;
 
 
 
@@ -70920,6 +71475,10 @@ GRANT ALL ON FUNCTION "private"."sync_json_to_jsonb"() TO "api_internal_executor
 
 
 
+REVOKE ALL ON FUNCTION "private"."sync_portal_catalog_facet_row_v1"() FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "private"."sync_portal_catalog_search_row_v1"() FROM PUBLIC;
 REVOKE ALL ON FUNCTION "private"."sync_portal_catalog_search_row_v1"() FROM "api_internal_executor";
 
@@ -71445,6 +72004,58 @@ GRANT SELECT ON TABLE "private"."lcia_scope_closure_scan_executions" TO "api_int
 
 GRANT ALL ON TABLE "private"."notifications" TO "service_role";
 GRANT SELECT ON TABLE "private"."notifications" TO "api_internal_executor";
+
+
+
+GRANT SELECT ON TABLE "private"."portal_catalog_facet_contract_v1" TO "api_internal_executor";
+
+
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "private"."portal_catalog_facet_rows_v1" TO "api_internal_executor";
+
+
+
+GRANT SELECT("dataset_kind") ON TABLE "private"."portal_catalog_facet_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("id") ON TABLE "private"."portal_catalog_facet_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("version") ON TABLE "private"."portal_catalog_facet_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("state_code") ON TABLE "private"."portal_catalog_facet_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("modified_at") ON TABLE "private"."portal_catalog_facet_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("facet_access_level") ON TABLE "private"."portal_catalog_facet_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("facet_geography") ON TABLE "private"."portal_catalog_facet_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("facet_reference_year") ON TABLE "private"."portal_catalog_facet_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("facet_process_subtype") ON TABLE "private"."portal_catalog_facet_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("facet_source") ON TABLE "private"."portal_catalog_facet_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("facet_contract_version") ON TABLE "private"."portal_catalog_facet_rows_v1" TO "portal_public_executor";
 
 
 

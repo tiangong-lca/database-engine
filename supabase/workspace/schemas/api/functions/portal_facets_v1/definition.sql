@@ -32,6 +32,15 @@ begin
     v_filters,
     'relevance'
   );
+
+  if v_query = '' and v_filters = '{}'::jsonb then
+    perform private.assert_portal_catalog_facet_contract_v1();
+    return private.catalog_portal_facets_empty_v1_impl(
+      v_kind,
+      v_fingerprint
+    );
+  end if;
+
   if v_query ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
     v_exact_id := v_query::uuid;
   end if;

@@ -1,1 +1,1 @@
-CREATE OR REPLACE TRIGGER "portal_catalog_projection_content_sync_v1" AFTER INSERT OR DELETE OR UPDATE OF "id", "version", "json", "state_code", "modified_at" ON "public"."flows" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_catalog_search_row_v1"('content');
+CREATE OR REPLACE TRIGGER "portal_catalog_projection_content_sync_v1" AFTER INSERT OR DELETE OR UPDATE OF "id", "version", "json", "json_ordered", "state_code", "modified_at" ON "public"."flows" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_catalog_search_row_v1"('content');
