@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: e1f6638
+lastReviewedCommit: 7a38910
 lastReviewedNote: "Reviewed for the Portal projection manifest checker and named release/sparse benchmark profiles; schema-workspace helper behavior is unchanged."
 related:
   - ../AGENTS.md
@@ -119,8 +119,9 @@ All named gates require a clean exact HEAD. They cover the complete public
 request shapes, retain Search/Facets p95 <= 2 seconds and Hybrid p95 <= 6
 seconds with every Hybrid call below 8 seconds. Formal semantic plans must
 include parseable shared-buffer evidence, remain below 750,000 total and
-250,000 read blocks, finish within 6 seconds, and show no temp/disk spill. Use a
-new mode-0700 output directory for every run.
+250,000 read blocks, finish exact execution within 5 seconds and formal
+ANN-plus-exact phases within 6 seconds, and show no temp/disk spill. Use a new
+mode-0700 output directory for every run.
 
 ### `check_portal_projection_manifest.py`
 

@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: e1f6638
+lastReviewedCommit: 7a38910
 lastReviewedNote: "Reviewed for the synchronized Portal candidate projection, versioned ANN semantics, immutable derivation manifest, and sparse fallback gates."
 related:
   - ../../AGENTS.md
@@ -275,12 +275,13 @@ pool uses bounded filtered source-HNSW with recall@20 and recall@200 of at least
 RRF constant, and score/id/version tie-breaks are deterministic for the actual
 candidate pool. ACL-closed Process/Flow exact helpers own the full fallback:
 they use one 32-MB-per-node workspace, hash the latest projection keys against
-one source scan, disable nested/merge joins, JIT, and parallel workers, and
+one source scan, force Hash Join while disabling nested/merge joins, JIT, and parallel workers, and
 restore all caller GUCs through function configuration. The release benchmark invokes those exact
 helpers directly at full vector cardinality, while raw ANN counts separately
 record the naturally selected runtime branch. Production-cardinality release,
 zero-vector, and 199-vector profiles retain the 6-second p95, sub-8-second
-per-call, direct-exact 6-second, zero-spill, and reviewed shared-buffer ceilings; the Edge admission
+per-call, direct-exact 5-second, combined ANN-plus-exact 6-second, zero-spill,
+and reviewed shared-buffer ceilings; the Edge admission
 gate bounds concurrency before R2 is enabled.
 
 Projection rows bind an immutable v1 derivation-contract version. Its registry
