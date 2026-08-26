@@ -1000,10 +1000,13 @@ SQL
 facet_reconcile_holder_pid=$!
 wait_for_pg_sleep portal_facet_reconcile_lock_holder
 facet_reconcile_started="$(perl -MTime::HiRes=time -e 'printf "%.6f", time')"
+facet_reconcile_log_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 if apply_pending >"$race_log_dir/expected-facet-reconcile-lock-failure.log" 2>&1; then
   echo "facet reconcile unexpectedly crossed a conflicting writer lock" >&2
   exit 1
 fi
+docker logs --since "$facet_reconcile_log_since" "$container_name" \
+  >>"$race_log_dir/expected-facet-reconcile-lock-failure.log" 2>&1
 facet_reconcile_elapsed_ms="$(perl -MTime::HiRes=time -e \
   'printf "%.3f", (time - $ARGV[0]) * 1000' "$facet_reconcile_started")"
 if ! awk -v value="$facet_reconcile_elapsed_ms" \
@@ -1057,10 +1060,13 @@ facet_wrapper_before_cutover_failure="$(scalar_sql "
     'api.portal_facets_v1(text,text,jsonb)'::regprocedure
   ))
 ")"
+facet_cutover_log_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 if apply_pending >"$race_log_dir/expected-facet-cutover-failure.log" 2>&1; then
   echo "facet cutover unexpectedly accepted narrow-fact drift" >&2
   exit 1
 fi
+docker logs --since "$facet_cutover_log_since" "$container_name" \
+  >>"$race_log_dir/expected-facet-cutover-failure.log" 2>&1
 assert_log_contains \
   "$race_log_dir/expected-facet-cutover-failure.log" \
   'Portal facet cutover parity guard failed|55000' \
