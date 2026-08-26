@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: f9fe033
+lastReviewedCommit: 9d7485f
 lastReviewedNote: "Reviewed for dual Portal manifests, populated facet upgrade and recovery runners, and named performance profiles."
 related:
   - ../AGENTS.md
@@ -102,10 +102,10 @@ the complete 266-file migration tree.
 
 Rehearses the seven facet migrations verbatim over 126,246 pre-existing parent
 cards in the same explicitly isolated Issue-531 project. It requires every
-UUID-quarter backfill to retain at least 2x headroom under 120 seconds, the
-successful reconcile fence to finish within five seconds, and exact final fact
-and DTO parity. The runner always resets the isolated project to full HEAD on
-exit.
+backfill statement to retain at least 2x headroom under its 120-second timeout,
+each complete UUID-quarter file to stay below 120 seconds, the successful
+reconcile fence to finish within five seconds, and exact final fact/DTO parity.
+The runner always resets the isolated project to full HEAD on exit.
 
 ### `run_portal_projection_benchmark.sh`
 

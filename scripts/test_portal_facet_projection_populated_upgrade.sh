@@ -78,6 +78,15 @@ apply_sql_file() {
     <"$1"
 }
 
+apply_timed_sql_file() {
+  local sql_file="$1"
+  local log_file="$2"
+  docker exec -i "$container_name" \
+    psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+      -c '\timing on' -f - \
+    <"$sql_file" >"$log_file" 2>&1
+}
+
 reset_to() {
   "$supabase_cli" --workdir "$test_workdir" \
     db reset --local --no-seed --version "$1" >/dev/null 2>&1
@@ -89,9 +98,16 @@ cleanup_populated_upgrade() {
   set +e
   "$supabase_cli" --workdir "$test_workdir" \
     db reset --local --no-seed >/dev/null 2>&1
+  if [[ "$exit_code" -eq 0 ]]; then
+    rm -rf "${upgrade_log_dir:-}"
+  elif [[ -n "${upgrade_log_dir:-}" ]]; then
+    echo "retained populated-upgrade diagnostics: $upgrade_log_dir" >&2
+  fi
   exit "$exit_code"
 }
 trap cleanup_populated_upgrade EXIT INT TERM
+
+upgrade_log_dir="$(mktemp -d /tmp/database-engine-531-facet-upgrade.XXXXXX)"
 
 cd "$repo_root"
 python3 scripts/check_portal_projection_manifest.py
@@ -201,13 +217,20 @@ apply_sql_file \
 for migration_version in 20260827020001 20260827020002 20260827020003 20260827020004; do
   migration_file=("$repo_root"/supabase/migrations/${migration_version}_*.sql)
   started="$(perl -MTime::HiRes=time -e 'printf "%.6f", time')"
-  apply_sql_file "${migration_file[0]}" >/dev/null
+  migration_log="$upgrade_log_dir/${migration_version}.log"
+  apply_timed_sql_file "${migration_file[0]}" "$migration_log"
   elapsed_ms="$(perl -MTime::HiRes=time -e \
     'printf "%.3f", (time - $ARGV[0]) * 1000' "$started")"
-  echo "Facet backfill ${migration_version}: ${elapsed_ms}ms"
-  if ! awk -v value="$elapsed_ms" \
-    'BEGIN { exit !(value > 0 && value <= 60000) }'; then
-    echo "facet backfill lacks 2x headroom under its 120s timeout" >&2
+  max_statement_ms="$(awk '
+    /^Time: [0-9]+([.][0-9]+)? ms/ {
+      if ($2 > maximum) maximum = $2
+    }
+    END { printf "%.3f", maximum }
+  ' "$migration_log")"
+  echo "Facet backfill ${migration_version}: total=${elapsed_ms}ms max-statement=${max_statement_ms}ms"
+  if ! awk -v statement="$max_statement_ms" -v total="$elapsed_ms" \
+    'BEGIN { exit !(statement > 0 && statement <= 60000 && total <= 120000) }'; then
+    echo "facet backfill lacks statement headroom or exceeds 120s total" >&2
     exit 1
   fi
 done

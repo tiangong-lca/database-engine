@@ -1,6 +1,6 @@
 ---
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: f9fe033
+lastReviewedCommit: 9d7485f
 lastReviewedNote: "Reviewed for immutable card/facet manifests, the seven-migration narrow-facet sub-rollout, and fail-closed retry boundaries."
 title: Portal Projection Migration Recovery
 docType: runbook
@@ -450,10 +450,11 @@ retry, and no-op repeat without rebuilding the seven recorded indexes.
 
 The separate populated-upgrade runner resets the same kind of isolated project
 to `20260827010003`, inserts 17,299 Process plus 108,947 Flow parent cards, and
-executes the seven facet files verbatim. Each UUID-quarter backfill must finish
-within 60 seconds, preserving at least 2x headroom under its authored 120-second
-timeout; reconcile must complete within five seconds, and final row/DTO parity
-must be exact.
+executes the seven facet files verbatim. Every statement in a UUID-quarter file
+must finish within 60 seconds, preserving at least 2x headroom under its
+authored 120-second statement timeout, and each complete file must finish
+within 120 seconds. Reconcile must complete within five seconds, and final
+row/DTO parity must be exact.
 
 ```bash
 PORTAL_FACET_UPGRADE_TARGET=local-isolated \

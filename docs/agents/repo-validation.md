@@ -32,7 +32,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: f9fe033
+lastReviewedCommit: 9d7485f
 lastReviewedNote: "Reviewed for dual Portal manifests, migration-equivalent reconcile timing, populated-upgrade evidence, and promotion proof."
 related:
   - ../../AGENTS.md
@@ -105,9 +105,9 @@ need Git provenance still check out full history (`fetch-depth: 0`).
 For the narrow Portal facet projection, run both
 `scripts/test_portal_projection_upgrade_recovery.sh` and
 `scripts/test_portal_facet_projection_populated_upgrade.sh`. The latter must
-exercise 126,246 pre-existing parent cards, retain 2x per-shard timeout
-headroom, and prove a sub-five-second successful reconcile plus exact DTO
-parity.
+exercise 126,246 pre-existing parent cards, retain 2x per-statement timeout
+headroom with each shard file below 120 seconds, and prove a sub-five-second
+successful reconcile plus exact DTO parity.
 
 For the Portal Flow embedding-eligibility hotfix, sparse-zero and sparse-199
 profiles must naturally name `flows_portal_embedding_eligible_v1_idx` for the
