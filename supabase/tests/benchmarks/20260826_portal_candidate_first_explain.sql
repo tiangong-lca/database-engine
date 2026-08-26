@@ -1525,10 +1525,12 @@ where (select count(*) from pg_temp.portal_benchmark_raw_ann_counts) <> 2
    or (
      :'benchmark_sparse_profile'::boolean
      and :'benchmark_profile_name' = 'sparse-199'
+     -- Ordinal 1 is the deliberate far vector and fails the nonnegative
+     -- production ANN distance gate, leaving 198 raw candidates.
      and exists (
        select 1
        from pg_temp.portal_benchmark_raw_ann_counts
-       where raw_count <> 199
+       where raw_count <> 198
      )
    );
 
