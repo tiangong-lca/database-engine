@@ -375,8 +375,8 @@ security definer
 set search_path = ''
 set statement_timeout = '8s'
 set plan_cache_mode = 'force_custom_plan'
-set hnsw.iterative_scan = 'strict_order'
-set hnsw.ef_search = '200'
+set hnsw.iterative_scan = 'relaxed_order'
+set hnsw.ef_search = '1000'
 set hnsw.max_scan_tuples = '100000'
 set hnsw.scan_mem_multiplier = '1'
 set enable_sort = 'off'
@@ -427,11 +427,15 @@ begin
       )
     order by process.embedding_ft
       operator(extensions.<=>) p_query_embedding
-    limit 200
+    limit 400
   ) as candidate
   where candidate.semantic_distance is not null
     and candidate.semantic_distance >= 0::double precision
-    and candidate.semantic_distance <= 0.5::double precision;
+    and candidate.semantic_distance <= 0.5::double precision
+  order by candidate.semantic_distance + 0::double precision,
+    candidate.id,
+    candidate.version desc
+  limit 200;
 end
 $function$;
 
@@ -450,8 +454,8 @@ security definer
 set search_path = ''
 set statement_timeout = '8s'
 set plan_cache_mode = 'force_custom_plan'
-set hnsw.iterative_scan = 'strict_order'
-set hnsw.ef_search = '200'
+set hnsw.iterative_scan = 'relaxed_order'
+set hnsw.ef_search = '1000'
 set hnsw.max_scan_tuples = '100000'
 set hnsw.scan_mem_multiplier = '1'
 set enable_sort = 'off'
@@ -502,11 +506,15 @@ begin
       )
     order by flow.embedding_ft
       operator(extensions.<=>) p_query_embedding
-    limit 200
+    limit 400
   ) as candidate
   where candidate.semantic_distance is not null
     and candidate.semantic_distance >= 0::double precision
-    and candidate.semantic_distance <= 0.5::double precision;
+    and candidate.semantic_distance <= 0.5::double precision
+  order by candidate.semantic_distance + 0::double precision,
+    candidate.id,
+    candidate.version desc
+  limit 200;
 end
 $function$;
 
