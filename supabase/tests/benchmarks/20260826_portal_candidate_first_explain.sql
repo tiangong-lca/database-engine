@@ -1453,7 +1453,8 @@ where (select count(*) from pg_temp.portal_benchmark_raw_ann_counts) <> 2
      and exists (
        select 1
        from pg_temp.portal_benchmark_raw_ann_counts
-       where raw_count >= 200
+       where (dataset_kind = 'flow' and raw_count >= 200)
+          or (dataset_kind = 'process' and raw_count <> 200)
      )
    )
    or (
