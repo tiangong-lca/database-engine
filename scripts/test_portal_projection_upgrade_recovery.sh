@@ -90,6 +90,27 @@ scalar_sql() {
     -c "$1"
 }
 
+terminate_application() {
+  local application_name="$1"
+  local backend_pid
+  local terminated
+  backend_pid="$(scalar_sql "
+    select pid
+    from pg_catalog.pg_stat_activity
+    where application_name = '$application_name'
+      and pid <> pg_catalog.pg_backend_pid()
+    order by pid
+    limit 1
+  ")"
+  if [[ ! "$backend_pid" =~ ^[1-9][0-9]*$ ]]; then
+    return 1
+  fi
+  terminated="$(scalar_sql "
+    select pg_catalog.pg_terminate_backend($backend_pid)
+  ")"
+  [[ "$terminated" == "t" ]]
+}
+
 reset_to() {
   "$supabase_cli" --workdir "$test_workdir" \
     db reset --local --no-seed --version "$1" >/dev/null 2>&1
@@ -463,11 +484,7 @@ wait_for_pg_sleep portal_projection_reconcile_lock_holder
 reconcile_failure_started=$SECONDS
 reconcile_log_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 if apply_pending >"$race_log_dir/expected-reconcile-failure.log" 2>&1; then
-  scalar_sql "
-    select pg_catalog.pg_terminate_backend(pid)
-    from pg_catalog.pg_stat_activity
-    where application_name = 'portal_projection_reconcile_lock_holder'
-  " >/dev/null || true
+  terminate_application portal_projection_reconcile_lock_holder || true
   wait "$lock_holder_pid" || true
   echo "reconcile unexpectedly ignored the held writer lock" >&2
   exit 1
@@ -485,13 +502,7 @@ assert_log_contains \
   '55P03|lock timeout|canceling statement due to lock timeout' \
   'reconcile lock-timeout failure'
 
-terminated_lock_holder="$(scalar_sql "
-  select count(*)
-  from pg_catalog.pg_stat_activity
-  where application_name = 'portal_projection_reconcile_lock_holder'
-    and pg_catalog.pg_terminate_backend(pid)
-")"
-if [[ "$terminated_lock_holder" != "1" ]]; then
+if ! terminate_application portal_projection_reconcile_lock_holder; then
   echo "failed to terminate the exact reconcile lock holder" >&2
   exit 1
 fi
