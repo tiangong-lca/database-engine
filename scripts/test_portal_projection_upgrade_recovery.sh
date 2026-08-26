@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
 set -euo pipefail
+umask 077
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 supabase_cli="${SUPABASE_CLI:-supabase}"
@@ -23,28 +24,40 @@ if [[ ! -f "$test_workdir/supabase/config.toml" ]]; then
 fi
 
 shopt -s nullglob
-repo_issue_migrations=(
-  "$repo_root"/supabase/migrations/20260826060422_*.sql
-  "$repo_root"/supabase/migrations/2026082608*.sql
-)
-test_issue_migrations=(
-  "$test_workdir"/supabase/migrations/20260826060422_*.sql
-  "$test_workdir"/supabase/migrations/2026082608*.sql
-)
-if [[ "${#repo_issue_migrations[@]}" -ne 22 \
-   || "${#test_issue_migrations[@]}" -ne 22 ]]; then
-  echo "Issue 531 migration manifest is incomplete" >&2
+repo_migrations=("$repo_root"/supabase/migrations/*.sql)
+test_migrations=("$test_workdir"/supabase/migrations/*.sql)
+if [[ "${#repo_migrations[@]}" -ne 257 \
+   || "${#test_migrations[@]}" -ne 257 ]]; then
+  echo "complete migration tree must contain exactly 257 files" >&2
   exit 2
 fi
-for repo_migration in "${repo_issue_migrations[@]}"; do
-  migration_name="$(basename "$repo_migration")"
-  test_migration="$test_workdir/supabase/migrations/$migration_name"
-  if [[ ! -f "$test_migration" ]] \
+migration_manifest_payload=""
+for migration_index in "${!repo_migrations[@]}"; do
+  repo_migration="${repo_migrations[$migration_index]}"
+  test_migration="${test_migrations[$migration_index]}"
+  repo_name="$(basename "$repo_migration")"
+  test_name="$(basename "$test_migration")"
+  if [[ "$repo_name" != "$test_name" ]] \
      || ! cmp -s "$repo_migration" "$test_migration"; then
-    echo "isolated migration differs from repository HEAD: $migration_name" >&2
+    echo "isolated migration tree differs from repository HEAD: $repo_name/$test_name" >&2
     exit 2
   fi
+  migration_hash="$(shasum -a 256 "$repo_migration" | awk '{print $1}')"
+  migration_manifest_payload="${migration_manifest_payload}${migration_hash}  ${repo_name}\n"
 done
+migration_tree_sha256="$({
+  printf '%b' "$migration_manifest_payload" | shasum -a 256 | awk '{print $1}'
+})"
+repository_head="$(git -C "$repo_root" rev-parse HEAD)"
+if [[ ! "$repository_head" =~ ^[0-9a-f]{40}$ \
+   || ! "$migration_tree_sha256" =~ ^[0-9a-f]{64}$ ]]; then
+  echo "repository/migration aggregate identity is malformed" >&2
+  exit 2
+fi
+if [[ -n "$(git -C "$repo_root" status --porcelain)" ]]; then
+  echo "recovery evidence requires a clean exact repository HEAD" >&2
+  exit 2
+fi
 if [[ -e "$test_workdir/supabase/migrations/20260826080354_portal_projection_process_hnsw.sql" \
    || -e "$test_workdir/supabase/migrations/20260826080357_portal_projection_flow_hnsw.sql" ]]; then
   echo "isolated project retains retired projection HNSW migrations" >&2
@@ -169,8 +182,15 @@ SQL
 
 cd "$repo_root"
 python3 "$repo_root/scripts/check_portal_projection_manifest.py"
-echo "Supabase CLI: $($supabase_cli --version)"
+supabase_cli_version="$($supabase_cli --version)"
+if [[ "$supabase_cli_version" != "2.109.1" ]]; then
+  echo "Supabase CLI must be the reviewed 2.109.1, found $supabase_cli_version" >&2
+  exit 2
+fi
+echo "Supabase CLI: $supabase_cli_version"
 echo "Recovery target: $project_id"
+echo "Repository HEAD: $repository_head"
+echo "Migration tree SHA-256 (257 files): $migration_tree_sha256"
 
 # Breakpoint 1: expand plus every bounded backfill is recorded, while old API
 # wrappers remain authoritative. Exercise all five write/snapshot races before
