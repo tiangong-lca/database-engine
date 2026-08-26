@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: e7cbf5f
+lastReviewedCommit: a35fefa
 lastReviewedNote: "Reviewed for the Portal projection manifest checker and named release/sparse benchmark profiles; schema-workspace helper behavior is unchanged."
 related:
   - ../AGENTS.md
@@ -122,8 +122,9 @@ spill. Use a new mode-0700 output directory for every run.
 ### `check_portal_projection_manifest.py`
 
 Checks that the committed Portal projection-v1 digest and exact eleven-function
-closure remain present, that no later migration replaces a v1 closure member,
-and that reconcile/Search-Hybrid/Facets retain their required runtime guards.
+closure remain present, that no later migration creates, replaces, drops, or
+alters a v1 closure/control function, and that reconcile/Search-Hybrid/Facets
+retain their required runtime guards.
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py

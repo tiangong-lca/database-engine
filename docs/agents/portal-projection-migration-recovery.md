@@ -1,6 +1,6 @@
 ---
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: e7cbf5f
+lastReviewedCommit: a35fefa
 lastReviewedNote: "Reviewed for immutable v1 manifest diagnosis, fail-closed drift handling, and the required shadow-v2 semantic-change path."
 title: Portal Projection Migration Recovery
 docType: runbook
@@ -316,6 +316,14 @@ Even a claimed output-equivalent bug fix requires full source-card byte
 equivalence proof. Without that proof, treat it as v2. The static manifest check
 rejects later migrations that replace a v1 closure member; the runtime guard is
 the fail-closed defense if live catalog definitions drift.
+
+The supported safety model assumes privileged DDL runs only through governed
+migrations and CI. The live digest has no historical memory: an out-of-band
+change followed by source writes/backfill and restoration of the old definition
+can leave mixed rows while the current digest matches. If that sequence may
+have occurred, do not re-enable or retry v1, even after restoring identical
+function bytes. Treat the full v1 projection as untrusted and recover through a
+shadow v2 rebuild and cutover.
 
 Supabase CLI `2.109.1` was used for the local Issue 531 evidence. A real
 five-second reconcile lock timeout returned after eight wall-clock seconds

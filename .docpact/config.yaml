@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-26"
-lastReviewedCommit: "12f54fe1188223d434a40799466167d5dd83c48e"
+lastReviewedCommit: "a35fefa"
 lastReviewedNote: "Reviewed after the isolated PR Preview job minimized branch and key authority while retaining exact official-check/ref binding; routing and ownership are unchanged."
 
 # Keep deterministic governance facts here.

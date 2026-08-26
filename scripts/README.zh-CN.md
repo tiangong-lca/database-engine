@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: e7cbf5f
+lastReviewedCommit: a35fefa
 lastReviewedNote: "已复核 Portal projection manifest 检查器与命名 release/sparse benchmark profile；schema-workspace helper 行为不变。"
 related:
   - ../AGENTS.md
@@ -109,8 +109,8 @@ sparse fallback 临时文件 spill。每次运行必须使用新的 mode-0700 �
 ### `check_portal_projection_manifest.py`
 
 验证已提交的 Portal projection-v1 digest 与十一函数闭包仍完整，禁止后续
-migration 原地替换 v1 闭包成员，并确认 reconcile、Search/Hybrid 与 Facets
-保留所需 runtime guard。
+migration 创建、替换、删除或修改 v1 闭包/控制函数，并确认 reconcile、
+Search/Hybrid 与 Facets 保留所需 runtime guard。
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py

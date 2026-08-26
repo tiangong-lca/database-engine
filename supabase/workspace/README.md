@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: e7cbf5f
+lastReviewedCommit: a35fefa
 lastReviewedNote: "Reviewed for the Portal manifest and sparse benchmark tooling; generated-workspace paths, refresh behavior, and type ownership are unchanged."
 related:
   - ../../AGENTS.md

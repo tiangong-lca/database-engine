@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: e7cbf5f
+lastReviewedCommit: a35fefa
 lastReviewedNote: "Reviewed for the synchronized Portal candidate projection, versioned ANN semantics, immutable derivation manifest, and sparse fallback gates."
 related:
   - ../../AGENTS.md
@@ -284,6 +284,14 @@ projection. The v1 helpers and registry row are immutable: any semantic change
 requires a new helper closure, shadow projection, bounded backfill, concurrent
 indexes, short reconcile fence, and atomic read cutover. Updating a digest or
 rebuilding v1 rows in place is not a valid migration path.
+
+This contract assumes privileged DDL is delivered only through the governed
+migration and CI path. The live digest proves current definitions, not the
+historical derivation of a row after out-of-band change/write/restore. Direct or
+dynamic privileged DDL is outside the supported safety model. If it may have
+overlapped a source write or backfill, restoring old bytes does not make v1
+trusted again; reads stay disabled operationally and recovery uses a shadow v2
+rebuild/cutover.
 
 The facade never invokes or relaxes the legacy raw Hybrid or semantic helpers
 and exposes no actor, team, state, data-source, cursor, model, weight, threshold,

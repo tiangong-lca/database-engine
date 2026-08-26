@@ -27,6 +27,10 @@ FUNCTION_IDENTITIES = (
     "private.portal_safe_year_v1(text)",
     "private.portal_source_v1(text,jsonb)",
 )
+CONTROL_FUNCTION_IDENTITIES = (
+    "private.portal_catalog_projection_manifest_sha256_v1()",
+    "private.assert_portal_catalog_projection_contract_v1()",
+)
 
 
 def sql_without_comments(sql: str) -> str:
@@ -36,10 +40,14 @@ def sql_without_comments(sql: str) -> str:
     return re.sub(r"--[^\n]*", " ", without_blocks)
 
 
-def replacement_pattern(identity: str) -> re.Pattern[str]:
+def mutation_pattern(identity: str) -> re.Pattern[str]:
     function_name = identity.split(".", 1)[1].split("(", 1)[0]
     return re.compile(
-        rf"\bcreate\s+or\s+replace\s+function\s+"
+        rf"\b(?:"
+        rf"create\s+(?:or\s+replace\s+)?function"
+        rf"|drop\s+(?:function|routine)(?:\s+if\s+exists)?"
+        rf"|alter\s+(?:function|routine)"
+        rf")\s+"
         rf'(?:(?:"?private"?)\s*\.\s*)?"?{re.escape(function_name)}"?\s*\(',
         flags=re.IGNORECASE,
     )
@@ -70,9 +78,28 @@ def main() -> int:
         return 1
 
     violations: list[str] = []
-    patterns = {
-        identity: replacement_pattern(identity) for identity in FUNCTION_IDENTITIES
-    }
+    protected_identities = FUNCTION_IDENTITIES + CONTROL_FUNCTION_IDENTITIES
+    patterns = {identity: mutation_pattern(identity) for identity in protected_identities}
+    pattern_probes = (
+        "create function private.portal_scalar_text_v1(jsonb)",
+        "create or replace function private.portal_scalar_text_v1(jsonb)",
+        "drop function if exists private.portal_scalar_text_v1(jsonb)",
+        "alter routine private.portal_scalar_text_v1(jsonb) owner to postgres",
+        "execute 'drop function private.portal_scalar_text_v1(jsonb)'",
+    )
+    leaf_pattern = patterns["private.portal_scalar_text_v1(jsonb)"]
+    if any(not leaf_pattern.search(probe) for probe in pattern_probes):
+        print("Portal projection manifest mutation scanner self-test failed", file=sys.stderr)
+        return 1
+    control_probe = (
+        "alter function private.assert_portal_catalog_projection_contract_v1() "
+        "security invoker"
+    )
+    if not patterns[
+        "private.assert_portal_catalog_projection_contract_v1()"
+    ].search(control_probe):
+        print("Portal projection control-function scanner self-test failed", file=sys.stderr)
+        return 1
     for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
         if migration.name <= ANCHOR_NAME:
             continue
@@ -111,7 +138,9 @@ def main() -> int:
 
     print(
         "Portal projection-v1 manifest is immutable: "
-        f"{len(FUNCTION_IDENTITIES)} functions, sha256={MANIFEST_SHA256}"
+        f"{len(FUNCTION_IDENTITIES)} derivation functions and "
+        f"{len(CONTROL_FUNCTION_IDENTITIES)} control functions, "
+        f"sha256={MANIFEST_SHA256}"
     )
     return 0
 
