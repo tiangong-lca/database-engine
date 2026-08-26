@@ -63,6 +63,11 @@
   \set writer_samples 50
 \endif
 
+\if :{?benchmark_profile_name}
+\else
+  \set benchmark_profile_name diagnostic
+\endif
+
 select :'benchmark_target' = 'local' as benchmark_attestation_ok \gset
 \if :benchmark_attestation_ok
 \else
@@ -84,7 +89,8 @@ end as benchmark_server_is_local
 \endif
 
 select
-  :'benchmark_samples'::integer = 20
+  :'benchmark_profile_name' = 'release'
+  and :'benchmark_samples'::integer = 20
   and :'process_rows'::integer = 17299
   and :'flow_rows'::integer = 108947
   and :'process_vector_rows'::integer = 17299
@@ -97,7 +103,8 @@ select
 \gset
 
 select
-  :'benchmark_samples'::integer = 20
+  :'benchmark_profile_name' in ('sparse-zero', 'sparse-199')
+  and :'benchmark_samples'::integer = 20
   and :'process_rows'::integer = 17299
   and :'flow_rows'::integer = 108947
   and :'process_old_version_rows'::integer = 0
@@ -114,6 +121,12 @@ select
       and :'flow_vector_rows'::integer = 199
     )
   ) as benchmark_sparse_profile
+\gset
+
+select
+  :'benchmark_release_profile'::boolean
+  or :'benchmark_sparse_profile'::boolean
+  as benchmark_semantic_plan_profile
 \gset
 
 begin;
@@ -1113,8 +1126,8 @@ select pg_temp.capture_portal_benchmark_plan(
   $query$
 );
 
-\if :benchmark_sparse_profile
-\qecho profile=process-semantic-helper-sparse
+\if :benchmark_semantic_plan_profile
+\qecho profile=process-semantic-helper-candidate-path
 explain (analyze, buffers, settings, wal, summary, format json)
 select candidate.*
 from private.portal_projection_semantic_process_v1(
@@ -1122,7 +1135,7 @@ from private.portal_projection_semantic_process_v1(
 ) as candidate;
 
 select pg_temp.capture_portal_benchmark_plan(
-  'process_semantic_sparse',
+  'process_semantic_candidate_path',
   $query$
     select candidate.*
     from private.portal_projection_semantic_process_v1(
@@ -1205,8 +1218,8 @@ select pg_temp.capture_portal_benchmark_plan(
   $query$
 );
 
-\if :benchmark_sparse_profile
-\qecho profile=flow-semantic-helper-sparse
+\if :benchmark_semantic_plan_profile
+\qecho profile=flow-semantic-helper-candidate-path
 explain (analyze, buffers, settings, wal, summary, format json)
 select candidate.*
 from private.portal_projection_semantic_flow_v1(
@@ -1214,7 +1227,7 @@ from private.portal_projection_semantic_flow_v1(
 ) as candidate;
 
 select pg_temp.capture_portal_benchmark_plan(
-  'flow_semantic_sparse',
+  'flow_semantic_candidate_path',
   $query$
     select candidate.*
     from private.portal_projection_semantic_flow_v1(
@@ -1250,6 +1263,45 @@ insert into pg_temp.portal_benchmark_failures (
   label, sqlstate, message, elapsed_ms
 )
 select
+  'named_profile_fixture_cardinality',
+  'P0001',
+  'actual row/vector/old/draft cardinality differs from the named profile',
+  0
+where (
+    :'benchmark_release_profile'::boolean
+    or :'benchmark_sparse_profile'::boolean
+  )
+  and (
+    (select count(*) from public.processes)
+      <> :'process_rows'::integer
+        + :'process_old_version_rows'::integer
+        + :'draft_vector_rows'::integer
+    or (select count(*) from public.flows)
+      <> :'flow_rows'::integer
+        + :'flow_old_version_rows'::integer
+        + :'draft_vector_rows'::integer
+    or (select count(*) from public.processes where embedding_ft is not null)
+      <> :'process_vector_rows'::integer
+        + :'process_old_version_rows'::integer
+        + :'draft_vector_rows'::integer
+    or (select count(*) from public.flows where embedding_ft is not null)
+      <> :'flow_vector_rows'::integer
+        + :'flow_old_version_rows'::integer
+        + :'draft_vector_rows'::integer
+    or (select count(*) from public.processes where version = '00.99.999')
+      <> :'process_old_version_rows'::integer
+    or (select count(*) from public.flows where version = '00.99.999')
+      <> :'flow_old_version_rows'::integer
+    or (select count(*) from public.processes where version = '99.99.999')
+      <> :'draft_vector_rows'::integer
+    or (select count(*) from public.flows where version = '99.99.999')
+      <> :'draft_vector_rows'::integer
+  );
+
+insert into pg_temp.portal_benchmark_failures (
+  label, sqlstate, message, elapsed_ms
+)
+select
   'plan_index_guard',
   'P0001',
   'representative plan missed an exact PGroonga/full-source-HNSW index or used source Sort/SeqScan',
@@ -1258,7 +1310,7 @@ where (:'process_rows'::integer >= 10000
     and :'flow_rows'::integer >= 100000)
   and (
     (select count(*) from pg_temp.portal_benchmark_plans) <> case
-      when :'benchmark_sparse_profile'::boolean then 6 else 4
+      when :'benchmark_semantic_plan_profile'::boolean then 6 else 4
     end
    or not coalesce((
      select plan_text ~ 'portal_catalog_search_process_document_v1_pgroonga'
@@ -1286,20 +1338,26 @@ where (:'process_rows'::integer >= 10000
      where label = 'flow_source_hnsw'
    ), false)
    or (
-     :'benchmark_sparse_profile'::boolean
+     :'benchmark_semantic_plan_profile'::boolean
      and (
        (select count(*)
         from pg_temp.portal_benchmark_plans
         where label in (
-          'process_semantic_sparse', 'flow_semantic_sparse'
+          'process_semantic_candidate_path',
+          'flow_semantic_candidate_path'
         )) <> 2
        or exists (
          select 1
          from pg_temp.portal_benchmark_plans
-         where label in (
-             'process_semantic_sparse', 'flow_semantic_sparse'
+          where label in (
+             'process_semantic_candidate_path',
+             'flow_semantic_candidate_path'
            )
-           and plan_text ~ 'temp (read|written)='
+           and (
+             plan_text ~ 'temp (read|written)=[1-9]'
+             or plan_text ~ 'Disk:'
+             or plan_text ~ 'external merge'
+           )
        )
      )
    )
@@ -1877,6 +1935,42 @@ values
   );
 reset role;
 
+create temporary table portal_benchmark_zero_vector_probe (
+  dataset_kind text primary key,
+  payload jsonb not null
+) on commit drop;
+grant insert, select on pg_temp.portal_benchmark_zero_vector_probe to anon;
+set local role anon;
+insert into pg_temp.portal_benchmark_zero_vector_probe (dataset_kind, payload)
+values
+  (
+    'process',
+    api.portal_hybrid_search_v1(
+      'process',
+      array['portalbenchcommon electricity'],
+      '[' || pg_catalog.array_to_string(
+        pg_catalog.array_fill('0'::text, array[1024]),
+        ','
+      ) || ']',
+      '{}'::jsonb,
+      20
+    )
+  ),
+  (
+    'flow',
+    api.portal_hybrid_search_v1(
+      'flow',
+      array['portalbenchcommon electricity'],
+      '[' || pg_catalog.array_to_string(
+        pg_catalog.array_fill('0'::text, array[1024]),
+        ','
+      ) || ']',
+      '{}'::jsonb,
+      20
+    )
+  );
+reset role;
+
 create temporary table portal_benchmark_recall (
   dataset_kind text not null,
   requested_k integer not null,
@@ -2209,6 +2303,34 @@ insert into pg_temp.portal_benchmark_failures (
   label, sqlstate, message, elapsed_ms
 )
 select
+  'zero_vector_actual_evidence',
+  'P0001',
+  'zero query vector emitted semantic evidence or lost lexical evidence',
+  0
+where exists (
+  select 1
+  from pg_temp.portal_benchmark_zero_vector_probe as probe
+  where pg_catalog.jsonb_array_length(probe.payload -> 'items') = 0
+     or exists (
+       select 1
+       from pg_catalog.jsonb_array_elements(
+         probe.payload -> 'items'
+       ) as item(value)
+       where not (item.value #> '{match,reasonCodes}'
+         ? 'lexical_public_projection')
+          or item.value #> '{match,reasonCodes}'
+            ? 'semantic_public_projection'
+          or item.value #> '{match,evidence,semanticRank}'
+            is distinct from 'null'::jsonb
+          or item.value #> '{match,evidence,semanticDistance}'
+            is distinct from 'null'::jsonb
+     )
+);
+
+insert into pg_temp.portal_benchmark_failures (
+  label, sqlstate, message, elapsed_ms
+)
+select
   'semantic_ann_recall',
   'P0001',
   'source-HNSW recall/count differs from exact latest-visible top-k',
@@ -2224,6 +2346,32 @@ where exists (
        :'benchmark_release_profile'::boolean
        and requested_k = 200
        and exact_count <> 200
+     )
+     or (
+       :'benchmark_sparse_profile'::boolean
+       and :'process_vector_rows'::integer = 0
+       and dataset_kind = 'process'
+       and (exact_count <> 0 or ann_count <> 0)
+     )
+     or (
+       :'benchmark_sparse_profile'::boolean
+       and :'flow_vector_rows'::integer = 0
+       and dataset_kind = 'flow'
+       and (exact_count <> 0 or ann_count <> 0)
+     )
+     or (
+       :'benchmark_sparse_profile'::boolean
+       and requested_k = 200
+       and :'process_vector_rows'::integer = 199
+       and dataset_kind = 'process'
+       and (exact_count <> 198 or ann_count <> 198 or recall <> 1::numeric)
+     )
+     or (
+       :'benchmark_sparse_profile'::boolean
+       and requested_k = 200
+       and :'flow_vector_rows'::integer = 199
+       and dataset_kind = 'flow'
+       and (exact_count <> 198 or ann_count <> 198 or recall <> 1::numeric)
      )
 );
 
