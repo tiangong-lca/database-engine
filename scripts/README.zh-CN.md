@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 450c04e
+lastReviewedCommit: e46e205
 lastReviewedNote: "已复核 Portal projection manifest 检查器与命名 release/sparse benchmark profile；schema-workspace helper 行为不变。"
 related:
   - ../AGENTS.md
@@ -82,9 +82,9 @@ scripts/test_search_text_array_upgrade.sh
 上线。脚本使用真实并发连接覆盖有效更新、删除、状态失效、主键变更以及仅 embedding
 更新竞态；主动制造 reconcile 锁超时与 cutover guard 失败；并证明相同 migration
 history 下可重试、同名 concurrent index 可受控清理，以及已记录迁移重复执行不会重建
-索引。所需环境变量与恢复边界见
+索引，并覆盖 cutover 后 Flow eligibility guard 回滚。所需环境变量与恢复边界见
 `docs/agents/portal-projection-migration-recovery.md`。正式证据还要求干净 HEAD、
-Supabase CLI `2.109.1`，以及完整 257-file migration tree 的逐字相等和 aggregate
+Supabase CLI `2.109.1`，以及完整 259-file migration tree 的逐字相等和 aggregate
 SHA-256。
 
 ### `run_portal_projection_benchmark.sh`
@@ -115,12 +115,18 @@ temp/disk spill。每次运行必须使用新的 mode-0700 输出目录。正式
 因此记录自然成本计划而不强制某个索引，迁移期 catalog guard 负责证明其 PGroonga
 索引，命名 timing 独立覆盖 Process 性能、排序和 cursor。两类 lexical probe 都
 必须满足精确 needle fixture identity 且无 spill。
+每个 profile 还会记录精确的 Flow embedding universe probe。sparse profile 必须
+自然命中窄 partial eligibility B-tree，且不得扫描宽 Flow heap；release profile
+记录全量 vector 的自然计划，不强制使用该索引。只有 release 必须命名两个 source
+HNSW index；sparse source probe 可以选择 eligibility/empty-set plan，但仍必须提供
+buffers、execution time 且没有 temp/disk spill。
 
 ### `check_portal_projection_manifest.py`
 
 验证已提交的 Portal projection-v1 digest 与十一函数闭包仍完整，禁止后续
 migration 创建、替换、删除或修改 v1 闭包/控制函数，并确认 reconcile、
-Search/Hybrid 与 Facets 保留所需 runtime guard。
+Search/Hybrid 与 Facets 保留所需 runtime guard。它还绑定 cutover 后的 Flow
+eligibility index 及其精确 catalog guard，同时保持 v1 digest 不变。
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py

@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-27"
-lastReviewedCommit: "450c04e"
+lastReviewedCommit: "e46e205"
 lastReviewedNote: "Reviewed for the Portal projection recovery document catalog, coverage, routing intents, derivation-contract rule, and exact-head validation evidence."
 
 # Keep deterministic governance facts here.
@@ -472,6 +472,10 @@ rules:
       - path: supabase/migrations/20260826080400_portal_projection_candidate_cutover.sql
         kind: database-migration
       - path: supabase/migrations/20260826080403_portal_projection_facets.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827010000_portal_flow_embedding_eligibility_index.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827010003_portal_flow_embedding_eligibility_guard.sql
         kind: database-migration
       - path: supabase/tests/20260826_portal_candidate_first_search.sql
         kind: database-contract-test

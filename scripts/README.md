@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 450c04e
+lastReviewedCommit: e46e205
 lastReviewedNote: "Reviewed for the Portal projection manifest checker and named release/sparse benchmark profiles; schema-workspace helper behavior is unchanged."
 related:
   - ../AGENTS.md
@@ -90,11 +90,12 @@ attested, isolated local Supabase project. It uses live concurrent connections
 to prove valid-update, delete, state-invalidation, key-change, and
 embedding-only races; forces reconcile lock-timeout and cutover-guard failures;
 and verifies same-history retry, controlled same-name concurrent-index cleanup,
-and no-op repeat without index rebuild. See
+post-cutover Flow eligibility guard rollback, and no-op repeat without index
+rebuild. See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries. Formal evidence additionally requires
 clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
-the complete 257-file migration tree.
+the complete 259-file migration tree.
 
 ### `run_portal_projection_benchmark.sh`
 
@@ -130,13 +131,20 @@ the smaller Process cardinality records its natural-cost plan without forcing
 one index, while the migration catalog guard proves its PGroonga index and the
 named timings independently cover Process performance, ordering, and cursors.
 Both lexical probes require the exact needle fixture identity and no spill.
+Every profile also records the exact Flow embedding-universe probe. Sparse
+profiles must naturally use the narrow partial eligibility B-tree and may not
+scan the wide Flow heap; release records the natural full-vector plan without
+forcing that index. Only release must name both source HNSW indexes; sparse
+source probes may choose an eligibility/empty-set plan but still require
+buffers, execution time, and no temp/disk spill.
 
 ### `check_portal_projection_manifest.py`
 
 Checks that the committed Portal projection-v1 digest and exact eleven-function
 closure remain present, that no later migration creates, replaces, drops, or
 alters a v1 closure/control function, and that reconcile/Search-Hybrid/Facets
-retain their required runtime guards.
+retain their required runtime guards. It also binds the post-cutover Flow
+eligibility index and its exact catalog guard without changing the v1 digest.
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py

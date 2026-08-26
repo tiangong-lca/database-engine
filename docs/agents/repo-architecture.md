@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 450c04e
+lastReviewedCommit: e46e205
 lastReviewedNote: "Reviewed for the synchronized Portal candidate projection, versioned ANN semantics, immutable derivation manifest, and sparse fallback gates."
 related:
   - ../../AGENTS.md
@@ -87,6 +87,14 @@ Package readiness remains a service-only V3 wrapper over the frozen V1/V2 insert
 For Exchange support types whose TIDAS schemas do not carry a Process-style license field, `portal-capability-policy.v1` treats exact state-100 Flow, FlowProperty, and UnitGroup rows as the explicit support capability only after the containing Process passes the full-free license policy. State 200 never supplies numeric support. Public search matches only the projected allowlist, never `search_text`, `extracted_md`, URI, or stripped raw fields. Facet values use the same bounded normalization as filters and return at most 100 values per group with `hasMore` evidence.
 
 The Portal executor is NOLOGIN/NOBYPASSRLS and receives only the minimum object privileges required by the façades. External wrapper ACLs are revoked from `PUBLIC` and classified by exact signature in `private.api_capability_grants`; raw core tables receive no new anon policy.
+
+Flow semantic sparse-cardinality detection uses one narrow source-side partial
+B-tree on `state_code` for state-100/200 rows whose `embedding_ft` is non-null.
+It exists only to prove an exact 0..199 embedding universe without scanning the
+wide Flow heap. Its low-selectivity key avoids a covering id/version exact-join
+path. It contains no vector payload, does not replace the source HNSW ranking
+index, does not change projection semantics, and has no speculative Process
+counterpart because hosted Process evidence already meets budget.
 
 Edge consumers must obtain Data Product publication, package, and worker
 metadata through bounded `api.svc_data_product_*` projections rather than

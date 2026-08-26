@@ -26,9 +26,9 @@ fi
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 257 \
-   || "${#test_migrations[@]}" -ne 257 ]]; then
-  echo "complete migration tree must contain exactly 257 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 259 \
+   || "${#test_migrations[@]}" -ne 259 ]]; then
+  echo "complete migration tree must contain exactly 259 files" >&2
   exit 2
 fi
 migration_manifest_payload=""
@@ -211,7 +211,7 @@ fi
 echo "Supabase CLI: $supabase_cli_version"
 echo "Recovery target: $project_id"
 echo "Repository HEAD: $repository_head"
-echo "Migration tree SHA-256 (257 files): $migration_tree_sha256"
+echo "Migration tree SHA-256 (259 files): $migration_tree_sha256"
 
 # Breakpoint 1: expand plus every bounded backfill is recorded, while old API
 # wrappers remain authoritative. Exercise all five write/snapshot races before
@@ -772,6 +772,120 @@ rename to portal_catalog_search_process_document_v1_pgroonga;
 SQL
 apply_pending
 
+# Breakpoint 4: the post-cutover sparse-Flow eligibility index is an online,
+# single-statement migration with a separate transactional catalog guard.
+# Wrong-name collisions and a canonical COMMIT/history gap must require the
+# same explicit standalone cleanup before unchanged-ledger retry. A guard
+# failure must not record its migration or disturb the already-cut-over API.
+reset_to 20260826080403
+run_psql <<'SQL'
+create index flows_portal_embedding_eligible_v1_idx
+on public.flows (id, version)
+where state_code in (100, 200)
+  and embedding_ft is not null;
+SQL
+
+eligibility_name_log_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+if apply_pending >"$race_log_dir/expected-eligibility-name-failure.log" 2>&1; then
+  echo "eligibility migration unexpectedly replaced a same-name index" >&2
+  exit 1
+fi
+docker logs --since "$eligibility_name_log_since" "$container_name" \
+  >>"$race_log_dir/expected-eligibility-name-failure.log" 2>&1
+assert_log_contains \
+  "$race_log_dir/expected-eligibility-name-failure.log" \
+  '42P07|already exists|duplicate_table' \
+  'Flow eligibility same-name failure'
+assert_sql "
+  not exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version in ('20260827010000', '20260827010003')
+  )
+" "failed eligibility build unexpectedly advanced migration history"
+run_psql <<'SQL'
+drop index concurrently if exists
+  public.flows_portal_embedding_eligible_v1_idx;
+SQL
+apply_pending
+
+assert_sql "
+  exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20260827010000'
+  )
+  and exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20260827010003'
+  )
+  and (select access_method.amname = 'btree'
+       from pg_catalog.pg_class as index_relation
+       join pg_catalog.pg_am as access_method
+         on access_method.oid = index_relation.relam
+       where index_relation.oid =
+         'public.flows_portal_embedding_eligible_v1_idx'::regclass)
+" "same-name eligibility recovery did not install and guard the btree"
+
+reset_to 20260826080403
+apply_sql_file \
+  "$repo_root/supabase/migrations/20260827010000_portal_flow_embedding_eligibility_index.sql" \
+  >"$race_log_dir/eligibility-canonical-commit-gap.log" 2>&1
+assert_sql "
+  not exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20260827010000'
+  )
+  and (select index_catalog.indisvalid
+         and index_catalog.indisready
+         and index_catalog.indislive
+       from pg_catalog.pg_index as index_catalog
+       where index_catalog.indexrelid =
+         'public.flows_portal_embedding_eligible_v1_idx'::regclass)
+" "canonical eligibility commit-gap fixture is not exact"
+eligibility_commit_log_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+if apply_pending >"$race_log_dir/expected-eligibility-commit-gap-failure.log" 2>&1; then
+  echo "canonical unrecorded eligibility index unexpectedly advanced" >&2
+  exit 1
+fi
+docker logs --since "$eligibility_commit_log_since" "$container_name" \
+  >>"$race_log_dir/expected-eligibility-commit-gap-failure.log" 2>&1
+assert_log_contains \
+  "$race_log_dir/expected-eligibility-commit-gap-failure.log" \
+  '42P07|already exists|duplicate_table' \
+  'Flow eligibility canonical history-gap failure'
+run_psql <<'SQL'
+drop index concurrently if exists
+  public.flows_portal_embedding_eligible_v1_idx;
+SQL
+apply_pending
+
+reset_to 20260827010000
+run_psql <<'SQL'
+alter index public.flows_portal_embedding_eligible_v1_idx
+rename to flows_portal_embedding_eligible_v1_idx_held;
+SQL
+eligibility_guard_log_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+if apply_pending >"$race_log_dir/expected-eligibility-guard-failure.log" 2>&1; then
+  echo "eligibility guard unexpectedly accepted a missing canonical index" >&2
+  exit 1
+fi
+docker logs --since "$eligibility_guard_log_since" "$container_name" \
+  >>"$race_log_dir/expected-eligibility-guard-failure.log" 2>&1
+assert_log_contains \
+  "$race_log_dir/expected-eligibility-guard-failure.log" \
+  'Portal Flow embedding eligibility index drifted|55000|P0001' \
+  'Flow eligibility catalog-guard failure'
+assert_sql "
+  not exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20260827010003'
+  )
+" "failed eligibility guard unexpectedly advanced migration history"
+run_psql <<'SQL'
+alter index public.flows_portal_embedding_eligible_v1_idx_held
+rename to flows_portal_embedding_eligible_v1_idx;
+SQL
+apply_pending
+
 run_psql <<'SQL'
 grant api_internal_executor to postgres;
 set role api_internal_executor;
@@ -822,7 +936,8 @@ index_oids_before="$(scalar_sql "
       namespace.nspname = 'public'
       and index_relation.relname in (
         'processes_embedding_ft_hnsw_idx',
-        'flows_embedding_ft_hnsw_idx'
+        'flows_embedding_ft_hnsw_idx',
+        'flows_portal_embedding_eligible_v1_idx'
       )
     )
 ")"
@@ -841,12 +956,13 @@ index_count_before="$(scalar_sql "
       namespace.nspname = 'public'
       and index_relation.relname in (
         'processes_embedding_ft_hnsw_idx',
-        'flows_embedding_ft_hnsw_idx'
+        'flows_embedding_ft_hnsw_idx',
+        'flows_portal_embedding_eligible_v1_idx'
       )
     )
 ")"
-if [[ "$index_count_before" != "4" \
-   || ! "$index_oids_before" =~ ^[0-9]+,[0-9]+,[0-9]+,[0-9]+$ ]]; then
+if [[ "$index_count_before" != "5" \
+   || ! "$index_oids_before" =~ ^[0-9]+,[0-9]+,[0-9]+,[0-9]+,[0-9]+$ ]]; then
   echo "post-cutover index identity evidence is incomplete" >&2
   exit 1
 fi
@@ -866,7 +982,8 @@ index_oids_after="$(scalar_sql "
       namespace.nspname = 'public'
       and index_relation.relname in (
         'processes_embedding_ft_hnsw_idx',
-        'flows_embedding_ft_hnsw_idx'
+        'flows_embedding_ft_hnsw_idx',
+        'flows_portal_embedding_eligible_v1_idx'
       )
     )
 ")"

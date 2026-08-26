@@ -11,6 +11,12 @@ from pathlib import Path
 REPO_ROOT = Path(__file__).resolve().parents[1]
 MIGRATIONS_DIR = REPO_ROOT / "supabase" / "migrations"
 ANCHOR_NAME = "20260826060422_portal_candidate_first_search.sql"
+FLOW_ELIGIBILITY_INDEX_NAME = (
+    "20260827010000_portal_flow_embedding_eligibility_index.sql"
+)
+FLOW_ELIGIBILITY_GUARD_NAME = (
+    "20260827010003_portal_flow_embedding_eligibility_guard.sql"
+)
 MANIFEST_SHA256 = (
     "b5e0aff9abbffcc8d2dacaf559a5d1a8c993c20b647d0c70f0e4fa18eb06d2dc"
 )
@@ -149,6 +155,64 @@ def main() -> int:
         if not backfill_timeout_pattern.search(executable_sql):
             violations.append(
                 f"{migration.name}: missing outer 5s lock / 120s statement timeout"
+            )
+
+    eligibility_index = MIGRATIONS_DIR / FLOW_ELIGIBILITY_INDEX_NAME
+    if not eligibility_index.is_file():
+        violations.append(
+            f"missing Flow embedding eligibility migration: {FLOW_ELIGIBILITY_INDEX_NAME}"
+        )
+    else:
+        eligibility_sql = sql_without_comments(
+            eligibility_index.read_text(encoding="utf-8")
+        )
+        eligibility_pattern = re.compile(
+            r"\s*create\s+index\s+concurrently\s+"
+            r"flows_portal_embedding_eligible_v1_idx\s+"
+            r"on\s+public[.]flows\s+using\s+btree\s*"
+            r"[(]\s*state_code\s*[)]\s*"
+            r"where\s+state_code\s+in\s*[(]\s*100\s*,\s*200\s*[)]\s*"
+            r"and\s+embedding_ft\s+is\s+not\s+null\s*;\s*",
+            flags=re.IGNORECASE,
+        )
+        if not eligibility_pattern.fullmatch(eligibility_sql):
+            violations.append(
+                f"{FLOW_ELIGIBILITY_INDEX_NAME}: must be one exact concurrent "
+                "partial btree statement without IF NOT EXISTS"
+            )
+
+    eligibility_guard = MIGRATIONS_DIR / FLOW_ELIGIBILITY_GUARD_NAME
+    if not eligibility_guard.is_file():
+        violations.append(
+            f"missing Flow embedding eligibility guard: {FLOW_ELIGIBILITY_GUARD_NAME}"
+        )
+    else:
+        guard_sql = sql_without_comments(
+            eligibility_guard.read_text(encoding="utf-8")
+        ).lower()
+        required_guard_tokens = (
+            "set local lock_timeout = '5s'",
+            "set local statement_timeout = '8s'",
+            "flows_portal_embedding_eligible_v1_idx",
+            "index_catalog.indisvalid",
+            "index_catalog.indisready",
+            "index_catalog.indislive",
+            "index_catalog.indnkeyatts = 1",
+            "index_catalog.indnatts = 1",
+            "first_key.attname = 'state_code'",
+            "first_opclass_namespace.nspname = 'pg_catalog'",
+            "first_opclass.opcname = 'int4_ops'",
+            "first_opclass.opcintype = 'pg_catalog.int4'::pg_catalog.regtype",
+            "((state_code=any(array[100,200]))and(embedding_ftisnotnull))",
+            "portal flow embedding eligibility index drifted",
+        )
+        missing_guard_tokens = [
+            token for token in required_guard_tokens if token not in guard_sql
+        ]
+        if missing_guard_tokens:
+            violations.append(
+                f"{FLOW_ELIGIBILITY_GUARD_NAME}: missing guard tokens "
+                + ", ".join(missing_guard_tokens)
             )
 
     if violations:

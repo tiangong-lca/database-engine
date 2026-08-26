@@ -1,6 +1,6 @@
 ---
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 450c04e
+lastReviewedCommit: e46e205
 lastReviewedNote: "Reviewed for immutable v1 manifest diagnosis, fail-closed drift handling, and the required shadow-v2 semantic-change path."
 title: Portal Projection Migration Recovery
 docType: runbook
@@ -27,6 +27,8 @@ checkPaths:
   - supabase/migrations/20260826080351_portal_projection_flow_pgroonga.sql
   - supabase/migrations/20260826080400_portal_projection_candidate_cutover.sql
   - supabase/migrations/20260826080403_portal_projection_facets.sql
+  - supabase/migrations/20260827010000_portal_flow_embedding_eligibility_index.sql
+  - supabase/migrations/20260827010003_portal_flow_embedding_eligibility_guard.sql
 related:
   - ../../AGENTS.md
   - repo-validation.md
@@ -43,7 +45,7 @@ branch controls before any hosted action.
 
 ## Safe rollout states
 
-The rollout has four observable boundaries:
+The rollout has five observable boundaries:
 
 1. `20260826060422` installs the immutable v1 derivation-contract registry,
    private projection, dormant projection Hybrid kernel, and source-table sync
@@ -61,6 +63,13 @@ The rollout has four observable boundaries:
    existing Process/Flow source HNSW indexes and precede the
    transactional Search/Hybrid cutover at `20260826080400` and the transactional
    Facets cutover at `20260826080403`.
+5. `20260827010000` adds one narrow concurrent Flow source B-tree on
+   `state_code`, restricted to state-100/200 rows with a non-null embedding.
+   `20260827010003` transactionally verifies its exact table, keys, opclasses,
+   predicate, owner, validity, and lack of INCLUDE/expression/options drift.
+   This low-selectivity membership index accelerates the exact 0..199
+   embedding-universe probe without becoming a covering id/version join path;
+   it does not store vectors, rank semantic candidates, or alter API semantics.
 
 The expand, reconcile, Search/Hybrid cutover, and Facets cutover files are
 explicit transactions. A statement or guard failure rolls back the entire
@@ -82,7 +91,7 @@ error alone.
 ```sql
 select version
 from supabase_migrations.schema_migrations
-where version between '20260826060422' and '20260826080403'
+where version between '20260826060422' and '20260827010003'
 order by version;
 
 select contract_version,
@@ -123,7 +132,8 @@ where (
     namespace.nspname = 'public'
     and index_relation.relname in (
       'processes_embedding_ft_hnsw_idx',
-      'flows_embedding_ft_hnsw_idx'
+      'flows_embedding_ft_hnsw_idx',
+      'flows_portal_embedding_eligible_v1_idx'
     )
   )
 order by index_relation.relname;
@@ -230,6 +240,22 @@ migration command. The following cutover guard verifies the exact access
 method, indexed column, `extensions` opclass, partial predicate, validity state,
 and PGroonga options before any wrapper changes.
 
+The post-cutover Flow eligibility index uses the same controlled pattern, but
+its preconditions are different: `20260827010000` and `20260827010003` must both
+be absent, while the cutover and Facets migrations must already be recorded and
+their runtime probes healthy. Removing an unrecorded invalid, definition-drifted,
+or canonical-valid commit-gap copy restores only the pre-hotfix slow sparse
+probe; it does not revert API semantics. Run only this standalone cleanup:
+
+```sql
+drop index concurrently if exists
+  public.flows_portal_embedding_eligible_v1_idx;
+```
+
+Then rerun the normal migration command. Never drop the index when either
+post-cutover migration is recorded; diagnose or repair that state as separately
+tracked work.
+
 ## Uncertain expand commit
 
 The expand migration is transactional, so ordinary SQL failure leaves no Issue
@@ -293,7 +319,7 @@ Issue 531 Supabase project. It resets that local project and must never target a
 shared checkout, Preview, persistent Dev, or production.
 
 Formal recovery evidence requires clean HEAD, the reviewed Supabase CLI
-`2.109.1`, and byte equality plus one aggregate SHA-256 across all 257 migration
+`2.109.1`, and byte equality plus one aggregate SHA-256 across all 259 migration
 files in the repository and isolated project. Comparing only Issue 531 files is
 not sufficient because an earlier baseline change can alter recovery behavior.
 
@@ -310,7 +336,8 @@ races. Embedding-only changes remain source-HNSW owned and the final fence fills
 any independently missing card row. The regression also proves reconcile
 lock-timeout rollback, reconcile COMMIT/history retry, wrong and canonical-valid
 same-name index cleanup without history edits, cutover guard rollback,
-successful retry, and no-op repeat without rebuilding recorded indexes.
+post-cutover Flow eligibility build/guard recovery, successful retry, and no-op
+repeat without rebuilding recorded indexes.
 
 The pre-cutover raw-source
 `private.portal_public_hybrid_search_v1_impl(...)` is a rollback asset only

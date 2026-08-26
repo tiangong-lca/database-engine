@@ -51,9 +51,9 @@ fi
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 257 \
-   || "${#test_migrations[@]}" -ne 257 ]]; then
-  echo "complete migration tree must contain exactly 257 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 259 \
+   || "${#test_migrations[@]}" -ne 259 ]]; then
+  echo "complete migration tree must contain exactly 259 files" >&2
   exit 2
 fi
 migration_manifest_payload=""
@@ -265,7 +265,7 @@ echo "Supabase CLI: $supabase_cli_version" | tee "$results_log"
 echo "Benchmark target: $project_id" | tee -a "$results_log"
 echo "Benchmark profile: $profile_name" | tee -a "$results_log"
 echo "Repository HEAD: $repository_head" | tee -a "$results_log"
-echo "Migration tree SHA-256 (257 files): $migration_tree_sha256" \
+echo "Migration tree SHA-256 (259 files): $migration_tree_sha256" \
   | tee -a "$results_log"
 echo "Benchmark SQL SHA-256: $benchmark_sql_sha256" | tee -a "$results_log"
 echo "Benchmark runner SHA-256: $benchmark_runner_sha256" \
@@ -312,19 +312,35 @@ fi
 docker cp "$container_name:$container_explain" "$explain_log" >/dev/null
 chmod 600 "$explain_log"
 
-# The ~17k-row Process lexical leaf has two valid natural-cost plans.  SQL
-# records and bounds whichever the planner selects; the fresh migration guard
-# separately validates its PGroonga catalog.  Flow must name PGroonga here.
-for expected_index in \
-  portal_catalog_search_flow_document_v1_pgroonga \
-  processes_embedding_ft_hnsw_idx \
-  flows_embedding_ft_hnsw_idx
-do
+# The ~17k-row Process lexical leaf has two valid natural-cost plans. SQL
+# records and bounds whichever the planner selects; Flow must name PGroonga.
+for expected_index in portal_catalog_search_flow_document_v1_pgroonga; do
   if ! grep -q "$expected_index" "$explain_log"; then
     echo "missing representative plan index: $expected_index" >&2
     exit 1
   fi
 done
+
+# Empty/sparse source universes may naturally use an eligibility/empty-set
+# plan. The full-vector release profile must still exercise both source HNSW
+# indexes; sparse profiles separately require the Flow eligibility B-tree.
+if [[ "$release_profile" == "true" ]]; then
+  for expected_index in \
+    processes_embedding_ft_hnsw_idx \
+    flows_embedding_ft_hnsw_idx
+  do
+    if ! grep -q "$expected_index" "$explain_log"; then
+      echo "release profile missed source HNSW index: $expected_index" >&2
+      exit 1
+    fi
+  done
+fi
+
+if [[ "$sparse_profile" == "true" ]] \
+   && ! grep -q "flows_portal_embedding_eligible_v1_idx" "$explain_log"; then
+  echo "sparse profile missed Flow embedding eligibility btree" >&2
+  exit 1
+fi
 
 docker exec "$container_name" rm -f "$container_explain" >/dev/null
 "$supabase_cli" --workdir "$test_workdir" \

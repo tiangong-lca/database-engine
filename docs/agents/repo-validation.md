@@ -32,7 +32,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 450c04e
+lastReviewedCommit: e46e205
 lastReviewedNote: "Reviewed for the complete Portal request-shape, sparse semantic, immutable manifest, recovery, and promotion proof matrix."
 related:
   - ../../AGENTS.md
@@ -101,6 +101,18 @@ need Git provenance still check out full history (`fetch-depth: 0`).
 | `scripts/**` | run the touched script with `--help` when possible, or execute the narrowest safe non-destructive path | if a script changes generated workspace behavior, refresh the workspace in a safe environment and inspect git diff | Avoid remote-destructive script runs unless the task explicitly requires them. |
 | `supabase/workspace/**` | prove whether the touched file is generated or stable | if stable manual overlay files changed, explain how they feed migration generation | Generated files alone are not sufficient evidence of a durable schema change. |
 | repo docs only | `scripts/docpact lint --root . --files "<csv>" --mode enforce` | `scripts/docpact validate-config --root . --strict` when `.docpact/config.yaml` changes | Refresh review metadata even when prose stays unchanged. |
+
+For the Portal Flow embedding-eligibility hotfix, sparse-zero and sparse-199
+profiles must naturally name `flows_portal_embedding_eligible_v1_idx` for the
+exact `state_code IN (100,200) AND embedding_ft IS NOT NULL LIMIT 200` universe
+probe, expose parseable buffers/execution, and show no Flow heap Seq Scan or
+temp/disk spill. The release profile records the natural full-vector plan and
+keeps existing writer/ANN/exact budgets. After persistent Dev deploy, a
+zero-embedding Flow probe plus at least five anonymous Hybrid samples must show
+p95 <= 6 seconds, every call < 8 seconds, and no `portal hybrid unavailable`;
+record index validity/size, database size before/after when available, and both
+advisor classes. Process remains index-free unless separate hosted evidence
+justifies shared write amplification.
 
 ## SQL And Offline Node Contract Notes
 
