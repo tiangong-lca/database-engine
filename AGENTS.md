@@ -37,7 +37,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: d4c2976
+lastReviewedCommit: 09ca0d6
 lastReviewedNote: "Reviewed for the immutable Portal projection manifest, sparse performance gates, and recovery contract; repository ownership and delivery boundaries are unchanged."
 related:
   - .docpact/config.yaml
