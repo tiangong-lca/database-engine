@@ -68,8 +68,8 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  271::bigint,
-  'api contains the active cutover functions, reviewed consumer facades, Database A Search RPCs, and Portal catalog/LCIA facades'
+  272::bigint,
+  'api contains the active cutover functions, reviewed consumer facades, Database A Search RPCs, and Portal catalog/LCIA/Hybrid facades'
 );
 
 select is(
@@ -80,8 +80,8 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  252::bigint,
-  'private contains the active helpers, Database B/reuse helpers, and reviewed Portal catalog/LCIA recovery, publication, and visibility internals'
+  255::bigint,
+  'private contains the active helpers, Database B/reuse helpers, and reviewed Portal catalog/LCIA/Hybrid internals'
 );
 
 select ok(

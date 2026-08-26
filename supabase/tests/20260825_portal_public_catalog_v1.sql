@@ -348,8 +348,8 @@ select extensions.is(
       and routine.proname like 'portal\_%\_v1' escape '\'
       and routine.proowner = 'portal_public_executor'::regrole
   ),
-  37::bigint,
-  'the private executor-owned Portal helper surface contains the expected 37 v1 routines'
+  39::bigint,
+  'the private executor-owned Portal helper surface contains the expected 39 v1 routines'
 );
 
 select extensions.is(
@@ -364,8 +364,8 @@ select extensions.is(
       and not routine.prosecdef
       and routine.proconfig @> array['search_path=""']::text[]
   ),
-  36::bigint,
-  'all 36 invoker Portal helpers are executor-owned and pinned to an empty search path'
+  37::bigint,
+  'all 37 invoker Portal helpers are executor-owned and pinned to an empty search path'
 );
 
 select extensions.is(
@@ -395,9 +395,15 @@ select extensions.is(
         and acl.privilege_type = 'EXECUTE'
         and not acl.is_grantable
       )
+      and not (
+        routine.proname = 'portal_public_hybrid_card_v1'
+        and acl.grantee = 'api_internal_executor'::regrole
+        and acl.privilege_type = 'EXECUTE'
+        and not acl.is_grantable
+      )
   ),
   0::bigint,
-  'private catalogue helpers have no external grant except exact postgres use of three reviewed primitives'
+  'private catalogue helpers have only the reviewed postgres primitives and Hybrid card-bridge edge'
 );
 
 select extensions.is(

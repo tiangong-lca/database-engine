@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."portal_public_hybrid_card_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") IS 'Constrained bridge to the existing Portal public-card projector; callable only by api_internal_executor.';

@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 510f70feec823f5cb519d662e4e0085807ef4601
-lastReviewedNote: "Reviewed after Portal LCIA package-ready gained transactional rollback and publication advancement gained authoritative binding wrappers; repository ownership is unchanged."
+lastReviewedCommit: 12f54fe1188223d434a40799466167d5dd83c48e
+lastReviewedNote: "Reviewed for Issue #529 after the PR Preview path minimized branch/key authority while preserving official-check/ref binding and a credential-free anonymous runtime gate; repository ownership is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -134,7 +134,7 @@ executable by application roles.
 | `supabase/tests/preview/**` | exact-ref-bound disposable Hosted Preview mutation fixtures, cleanup, rollback-only fault assertions, and offline transport/lifecycle contracts; test-only and excluded from migrations, seeds, Dev data rehearsal, and production execution |
 | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |
 | `scripts/**` | export, refresh, change-copy, migration-generation, and workflow-contract helpers; `resolve_migration_head.py` is the single parser used to derive the current checkout's exact migration head for persistent-Dev verification |
-| `.github/workflows/supabase-dev.yml` | local-contract rebuild, database-only persistent-Dev migration deployment with `db push --include-all`, and exact hosted verification |
+| `.github/workflows/supabase-dev.yml` | local-contract rebuild, exact-check-gated PR Preview PostgREST/anonymous Hybrid verification, database-only persistent-Dev migration deployment with `db push --include-all`, and exact hosted verification |
 | `supabase/workspace/changes/**` | manual overlay area used when generating migrations from workspace files |
 | `supabase/workspace/remote_schema.sql` | generated full raw dump from the remote database |
 | `supabase/workspace/global/**` | generated split-out global objects rebuilt on workspace refresh |
@@ -148,6 +148,7 @@ executable by application roles.
 - Git `dev` is the daily integration trunk
 - Git `main` is the promoted release line
 - PR branches map to Supabase preview branches
+- the pull-request-only Preview job skips forks before authority, fails closed when a same-repository PR lacks the access token, main-parent ref, or persistent-Dev ref, requires exactly one successful check named `Supabase Preview` on the PR head from official Supabase App id `330661` and slug/owner `supabase`, captures the expected ref from its exact dashboard URL, and independently resolves one matching non-default/non-persistent BranchResponse from pinned CLI `branches list --output json`; equality plus main/Dev inequality gates the three-field PostgREST PATCH/readback. A dedicated Management API key step uses raw `disabled` state and exact public-key shape, clears its PAT/raw JSON after masked public-key export, and leaves the following anonymous Portal Hybrid step credential-free except for `apikey`; the job has no migration, Function, persistent-Dev, or production mutation path
 - `.github/workflows/supabase-dev.yml` is the sole migration deployer for Git `dev`; it gates the remote job on the local contract, issues exactly one `db push --include-all`, applies one exact Management API PATCH limited to the three PostgREST runtime fields checked into `supabase/config.toml`, and verifies the exact hosted result without Functions deployment, broad config push, or any other Management API mutation
 - after the database deployment succeeds, persistent-Dev Functions are deployed and validated through `tiangong-lca-edge-functions`; this repo contains no Function runtime source or Function deploy command
 - the production Supabase project is migrated automatically by the Supabase GitHub integration when Git `main` advances
@@ -256,6 +257,20 @@ Local seed cardinality is not index-plan evidence;
 after the migration reaches persistent `dev`, real redacted parameters must be
 measured with read-only `EXPLAIN (ANALYZE, BUFFERS)` there before adding partial
 or duplicate indexes.
+
+The anonymous Portal Hybrid facade is a separate additive boundary, not a new
+grant or parameter preset over those actor/team-aware raw Hybrid families.
+`api.portal_hybrid_search_v1` accepts only Process or Flow, one to twelve
+normalized model-generated terms, one exact finite 1024-dimensional embedding,
+the fixed public-card filters, and a limit of 1..20. Its constrained private
+kernel ranks only the latest visible state-100/state-200 exact version, uses the
+fixed `portal-hybrid-rank-v1` pool, threshold, weights, and RRF constant, then
+hydrates only the existing public catalog card before applying the authoritative
+LCIA item-page decorator. The facade never invokes or relaxes the legacy raw
+Hybrid or semantic helpers and exposes no actor, team, state, data-source,
+cursor, model, weight, threshold, raw document, embedding, or locator control.
+Representative-cardinality plans and advisor evidence remain a persistent-Dev
+gate; the additive migration deliberately creates no speculative index.
 
 ## Worker Jobs And Domain State
 

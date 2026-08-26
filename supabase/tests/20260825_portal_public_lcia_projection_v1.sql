@@ -3765,6 +3765,18 @@ values
     )
   ),
   (
+    'hybrid_processes',
+    api.portal_hybrid_search_v1(
+      'process',
+      array['open process'],
+      '[' || pg_catalog.array_to_string(
+        pg_catalog.array_fill('0'::text, array[1024]), ','
+      ) || ']',
+      '{}'::jsonb,
+      20
+    )
+  ),
+  (
     'versions_open_a',
     api.portal_list_versions_v1(
       'process', '52710000-0000-4000-8000-000000000101', null, 50
@@ -3815,6 +3827,30 @@ select extensions.ok(
       and item.value #>> '{capabilities,lciaVisible}' = 'false'
   ),
   'Process search decorates only exact members of the current projection'
+);
+
+select extensions.ok(
+  (
+    select count(*) = 2
+    from portal_lcia_catalog_pages as page
+    cross join lateral jsonb_array_elements(page.response->'items') as item(value)
+    where page.label = 'hybrid_processes'
+      and item.value #>> '{key,id}' in (
+        '52710000-0000-4000-8000-000000000101',
+        '52710000-0000-4000-8000-000000000102'
+      )
+      and item.value #>> '{capabilities,lciaVisible}' = 'true'
+  )
+  and (
+    select count(*) = 1
+    from portal_lcia_catalog_pages as page
+    cross join lateral jsonb_array_elements(page.response->'items') as item(value)
+    where page.label = 'hybrid_processes'
+      and item.value #>> '{key,id}' =
+            '52710000-0000-4000-8000-000000000105'
+      and item.value #>> '{capabilities,lciaVisible}' = 'false'
+  ),
+  'Process Hybrid reuses the exact current-publication decorator without changing ranking evidence'
 );
 
 select extensions.ok(

@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-26"
-lastReviewedCommit: "510f70feec823f5cb519d662e4e0085807ef4601"
-lastReviewedNote: "Reviewed after Portal LCIA package readiness gained transactional rollback and all V3 publication advancement paths gained the shared authoritative binding guard; routing and ownership are unchanged."
+lastReviewedCommit: "12f54fe1188223d434a40799466167d5dd83c48e"
+lastReviewedNote: "Reviewed after the isolated PR Preview job minimized branch and key authority while retaining exact official-check/ref binding; routing and ownership are unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -316,7 +316,7 @@ rules:
         mode: review_or_update
       - path: docs/agents/supabase-branching_CN.md
         mode: review_or_update
-    reason: Branch bindings, database-only persistent Dev deployment, and hosted verification change repo routing, proof, and branch-operation guidance together.
+    reason: Branch bindings, isolated PR Preview runtime repair, database-only persistent Dev deployment, and hosted verification change repo routing, proof, and branch-operation guidance together.
   - id: database-engine-migration-and-seed-contract
     scope: repo
     repo: database-engine

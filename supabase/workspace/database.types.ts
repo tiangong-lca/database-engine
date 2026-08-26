@@ -1595,6 +1595,16 @@ export type Database = {
         }
         Returns: Json
       }
+      portal_hybrid_search_v1: {
+        Args: {
+          p_filters: Json
+          p_kind: string
+          p_limit: number
+          p_query_embedding: string
+          p_query_terms: string[]
+        }
+        Returns: Json
+      }
       portal_list_process_exchanges_v1: {
         Args: {
           p_cursor?: string

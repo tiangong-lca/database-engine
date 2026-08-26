@@ -37,8 +37,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 510f70feec823f5cb519d662e4e0085807ef4601
-lastReviewedNote: "Reviewed after Portal LCIA package readiness gained write-before-mutation preflight, transactional post-insert rollback, restart readback, and publication advancement guards; ownership boundaries are unchanged."
+lastReviewedCommit: 12f54fe1188223d434a40799466167d5dd83c48e
+lastReviewedNote: "Reviewed after PR Preview verification became fail-closed on all three authority inputs, resolved the disposable branch without credential expansion, and isolated enabled-public-key selection from the anonymous transport gate; ownership boundaries are unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -119,6 +119,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - hosted mutation E2E assets under `supabase/tests/preview/**` are exact-Preview, disposable test paths; their complete actor, credential, recovery, and cleanup proof requirements live in `docs/agents/repo-validation.md`
 - migration authoring starts from Git `dev`, not GitHub default-branch UI
 - preview-branch proof belongs to the repo PR
+- PR Preview runtime verification belongs to the pull-request-only job in `.github/workflows/supabase-dev.yml`: forks skip before authority is available, while a same-repository PR fails closed unless the access token, main-parent ref, and persistent-Dev ref all exist; it waits for exactly one successful `Supabase Preview` check on the PR head from official Supabase App id `330661`, slug/owner `supabase`, captures the 20-character expected ref from that check's exact dashboard URL, and independently resolves exactly one non-default, non-persistent BranchResponse from pinned CLI `branches list --output json` by Git branch, PR number, and parent ref; the two refs must match and differ from both main and Dev before one exact three-field PostgREST PATCH/readback. A separate key step reads the raw no-reveal Management API response, accepts only an explicitly enabled, shape-valid publishable or legacy anon key, masks and exports that public key, then clears the PAT and raw JSON. The subsequent Portal Hybrid step contains no PAT, `Authorization`, `Cookie`, or service credential and never links, pushes migrations, deploys Functions, or targets persistent Dev or production
 - persistent `dev` migration deployment belongs to `.github/workflows/supabase-dev.yml`; after the local contract passes, it links the configured Dev project, runs exactly one `supabase db push --include-all`, applies only the exact `db_schema`, `db_extra_search_path`, and `max_rows` PostgREST runtime contract through one targeted Management API PATCH, derives the expected head from the checkout, reads the settings back, and probes the default `public`, explicit `api`, rejected `private`, and retired `public` RPC routes; it must never deploy or delete Edge Functions or run a broad project-configuration push
 - after the persistent `dev` database workflow succeeds, deploy and validate the intended Dev Functions through `tiangong-lca-edge-functions`; this repo does not own the Function source, function selection, or deploy command
 - production `main` proof belongs after `dev -> main` promote and should confirm Supabase GitHub integration applied migrations automatically; when `supabase/config.toml` changes, the operator must also push and verify that configuration against the production project

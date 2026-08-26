@@ -14,6 +14,36 @@ WORKFLOW = REPO_ROOT / ".github" / "workflows" / "supabase-dev.yml"
 MIGRATIONS = REPO_ROOT / "supabase" / "migrations"
 
 
+def job_sections(text: str) -> dict[str, str]:
+    """Return exact top-level job bodies without treating step mappings as jobs."""
+
+    matches = list(re.finditer(r"(?m)^  ([a-zA-Z0-9_-]+):\n", text))
+    return {
+        match.group(1): text[
+            match.start() : matches[index + 1].start()
+            if index + 1 < len(matches)
+            else len(text)
+        ]
+        for index, match in enumerate(matches)
+    }
+
+
+def management_api_mutations(text: str) -> list[tuple[str, str]]:
+    """Classify curl calls to Management API without parsing unrelated REST probes."""
+
+    calls: list[tuple[str, str]] = []
+    for url_match in re.finditer(r'"(https://api[.]supabase[.]com/[^"\n]+)"', text):
+        curl_start = text.rfind("curl ", 0, url_match.start())
+        if curl_start < 0:
+            continue
+        curl_block = text[curl_start : url_match.end()]
+        methods = re.findall(r"--request\s+([A-Z]+)", curl_block)
+        method = methods[-1] if methods else "GET"
+        if method in {"PATCH", "POST", "PUT", "DELETE"}:
+            calls.append((method, url_match.group(1)))
+    return calls
+
+
 def main() -> int:
     text = WORKFLOW.read_text(encoding="utf-8")
     lowered = text.lower()
@@ -28,7 +58,14 @@ def main() -> int:
     if re.search(r'EXPECTED_MIGRATION_HEAD:\s*["\']?\d{14}', text):
         failures.append("migration head must not be pinned manually")
 
-    hosted_workflow = text.split("  deploy-and-verify:", 1)[-1]
+    jobs = job_sections(text)
+    hosted_workflow = jobs.get("deploy-and-verify", "")
+    preview_workflow = jobs.get("preview-runtime-contract", "")
+    if not hosted_workflow:
+        failures.append("persistent-Dev job is missing")
+    if not preview_workflow:
+        failures.append("Preview runtime job is missing")
+
     hosted_required = (
         "uses: actions/checkout@v7",
         "needs: local-contract",
@@ -52,10 +89,31 @@ def main() -> int:
         '{"db_schema":"public,api,graphql_public",'
         '"db_extra_search_path":"public,api,extensions","max_rows":1000}'
     )
-    if text.count("--request PATCH") != 1:
-        failures.append("workflow must contain exactly one targeted PostgREST PATCH")
-    if exact_postgrest_patch not in text:
-        failures.append("PostgREST PATCH must contain only the exact runtime contract")
+    if hosted_workflow.count("--request PATCH") != 1:
+        failures.append("persistent-Dev job must contain exactly one PostgREST PATCH")
+    if hosted_workflow.count(exact_postgrest_patch) != 1:
+        failures.append("persistent-Dev PATCH must contain only the exact runtime contract")
+    if preview_workflow.count("--request PATCH") != 1:
+        failures.append("Preview job must contain exactly one PostgREST PATCH")
+    if preview_workflow.count(exact_postgrest_patch) != 1:
+        failures.append("Preview PATCH must contain only the exact runtime contract")
+    if text.count("--request PATCH") != 2:
+        failures.append("workflow must contain exactly two targeted PostgREST PATCH calls")
+    expected_management_mutations = {
+        (
+            "PATCH",
+            "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_ID/postgrest",
+        ),
+        (
+            "PATCH",
+            "https://api.supabase.com/v1/projects/$PREVIEW_PROJECT_REF/postgrest",
+        ),
+    }
+    actual_management_mutations = management_api_mutations(text)
+    if len(actual_management_mutations) != 2 or set(actual_management_mutations) != expected_management_mutations:
+        failures.append(
+            "Management API mutation surface must be exactly one persistent-Dev and one Preview PostgREST PATCH"
+        )
 
     deployment_order = (
         hosted_workflow.find('supabase link --project-ref "$SUPABASE_PROJECT_ID"'),
@@ -69,6 +127,156 @@ def main() -> int:
         failures.append(
             "link, migration push, PostgREST runtime PATCH, and hosted probes are out of order"
         )
+
+    preview_required = (
+        "github.event_name == 'pull_request'",
+        "github.event.pull_request.head.repo.full_name == github.repository",
+        "SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}",
+        "SUPABASE_MAIN_PROJECT_ID: ${{ vars.SUPABASE_MAIN_PROJECT_ID }}",
+        "PREVIEW_GIT_BRANCH: ${{ github.event.pull_request.head.ref }}",
+        "PREVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
+        "PREVIEW_PR_NUMBER: ${{ github.event.pull_request.number }}",
+        "steps.preview_authority.outputs.available == 'true'",
+        "Supabase Preview runtime verification requires SUPABASE_ACCESS_TOKEN, SUPABASE_MAIN_PROJECT_ID, and SUPABASE_DEV_PROJECT_ID",
+        "exit 1",
+        "uses: supabase/setup-cli@v2",
+        "version: 2.98.0",
+        "Wait for exact Supabase Preview check",
+        "check_name=Supabase%20Preview&filter=latest",
+        '.name == "Supabase Preview"',
+        '.head_sha == $head',
+        ".app.id == 330661",
+        '.app.slug == "supabase"',
+        '.app.owner.login == "supabase"',
+        '.conclusion == "success"',
+        'capture("^https://supabase[.]com/dashboard/project/(?<ref>[a-z]{20})$").ref',
+        'EXPECTED_PREVIEW_PROJECT_REF: ${{ steps.supabase_preview_check.outputs.ref }}',
+        "supabase branches list",
+        '--project-ref "$SUPABASE_MAIN_PROJECT_ID"',
+        "--output json",
+        '--arg branch "$PREVIEW_GIT_BRANCH"',
+        '--arg parent "$SUPABASE_MAIN_PROJECT_ID"',
+        '--argjson pr_number "$PREVIEW_PR_NUMBER"',
+        ".git_branch == $branch",
+        ".pr_number == $pr_number",
+        ".parent_project_ref == $parent",
+        ".is_default == false",
+        ".persistent == false",
+        '(.project_ref | test("^[a-z]{20}$"))',
+        "if length == 1 then .[0].project_ref",
+        '[[ "$preview_project_ref" == "$EXPECTED_PREVIEW_PROJECT_REF" ]]',
+        '[[ "$preview_project_ref" != "$SUPABASE_MAIN_PROJECT_ID" ]]',
+        '[[ "$preview_project_ref" != "$SUPABASE_DEV_PROJECT_ID" ]]',
+        "Read back exact Preview PostgREST runtime contract",
+        '"https://api.supabase.com/v1/projects/$PREVIEW_PROJECT_REF/api-keys"',
+        "(.disabled // false) == false",
+        '.type == "publishable"',
+        '.name == "anon"',
+        '.type == "legacy"',
+        '(.api_key | type == "string")',
+        'test("^sb_publishable_[A-Za-z0-9_-]+$")',
+        'test("^eyJ[A-Za-z0-9_-]+[.][A-Za-z0-9_-]+[.][A-Za-z0-9_-]+$")',
+        "unset api_keys SUPABASE_ACCESS_TOKEN",
+        "PREVIEW_PUBLIC_API_KEY=%s",
+        'Content-Profile: api',
+        'portal_hybrid_search_v1',
+        'portal.public-hybrid-candidate-page.v1.schema.json',
+        'assert_opaque_error 404 PGRST202',
+        'assert_opaque_error 406 PGRST106',
+        'p_actor_id p_team_id p_state_codes p_data_source',
+    )
+    failures.extend(
+        f"Preview verification missing {token}"
+        for token in preview_required
+        if token not in preview_workflow
+    )
+    for app_identity_token in (
+        ".app.id == 330661",
+        '.app.slug == "supabase"',
+        '.app.owner.login == "supabase"',
+    ):
+        if preview_workflow.count(app_identity_token) < 3:
+            failures.append(
+                "Preview exact-count, success, and failure checks must all bind "
+                f"the official Supabase App with {app_identity_token}"
+            )
+
+    preview_forbidden = (
+        "supabase link",
+        "supabase db push",
+        "supabase config push",
+        "supabase functions",
+        "SUPABASE_DB_PASSWORD",
+        "supabase branches get",
+        "supabase projects api-keys",
+        "?reveal=true",
+    )
+    failures.extend(
+        f"Preview verification must not contain {token}"
+        for token in preview_forbidden
+        if token.lower() in preview_workflow.lower()
+    )
+
+    preview_order = (
+        preview_workflow.find("- name: Wait for exact Supabase Preview check"),
+        preview_workflow.find("- name: Resolve exact Preview project"),
+        preview_workflow.find("- name: Apply exact Preview PostgREST runtime contract"),
+        preview_workflow.find("- name: Read back exact Preview PostgREST runtime contract"),
+        preview_workflow.find("- name: Verify anonymous Preview Hybrid boundary"),
+    )
+    if -1 not in preview_order and preview_order != tuple(sorted(preview_order)):
+        failures.append(
+            "Preview check, branch resolution, PATCH, readback, and anonymous probes are out of order"
+        )
+
+    preview_probe_marker = "- name: Verify anonymous Preview Hybrid boundary"
+    preview_key_marker = "- name: Read enabled Preview public API key"
+    preview_key_step = preview_workflow.split(preview_key_marker, 1)[-1].split(
+        preview_probe_marker, 1
+    )[0]
+    preview_probe = preview_workflow.split(preview_probe_marker, 1)[-1]
+    preview_job_header = preview_workflow.split("    steps:", 1)[0]
+    if "secrets.SUPABASE_ACCESS_TOKEN" in preview_job_header:
+        failures.append("Supabase access token must be scoped only to steps that require it")
+    if "available=false" in preview_workflow or "verification skipped" in preview_workflow:
+        failures.append(
+            "same-repository Preview verification must fail closed when authority is missing"
+        )
+    for forbidden_probe_credential in (
+        "Authorization:",
+        "Cookie:",
+        "SERVICE_ROLE",
+        "service_role",
+        "SUPABASE_ACCESS_TOKEN",
+        "api-keys",
+    ):
+        if forbidden_probe_credential in preview_probe:
+            failures.append(
+                "anonymous Preview Hybrid probe must not contain "
+                f"{forbidden_probe_credential}"
+            )
+    if preview_key_step.count(
+        '"https://api.supabase.com/v1/projects/$PREVIEW_PROJECT_REF/api-keys"'
+    ) != 1:
+        failures.append("Preview probe must read API keys exactly once without reveal")
+    if preview_key_step.count("(.disabled // false) == false") != 2:
+        failures.append("Preview key selector must reject disabled publishable and anon keys")
+    if preview_key_step.count('(.api_key | type == "string")') != 2:
+        failures.append("Preview key selector must require concrete string public keys")
+    if preview_key_step.find('.type == "publishable"') > preview_key_step.find('.name == "anon"'):
+        failures.append("Preview key selector must prefer publishable over legacy anon")
+    key_step_order = (
+        preview_key_step.find('echo "::add-mask::$public_api_key"'),
+        preview_key_step.find("PREVIEW_PUBLIC_API_KEY=%s"),
+        preview_key_step.find("unset api_keys SUPABASE_ACCESS_TOKEN"),
+    )
+    if -1 in key_step_order or key_step_order != tuple(sorted(key_step_order)):
+        failures.append("Preview public key must be masked, exported, then raw authority cleared")
+    for forbidden_key_output in ('echo "$api_keys"', "?reveal=true"):
+        if forbidden_key_output in preview_key_step:
+            failures.append(
+                f"Preview API-key read must not retain or print {forbidden_key_output}"
+            )
 
     required = (
         "pull_request:",
@@ -84,6 +292,7 @@ def main() -> int:
         "svc_schema_contract_status",
         "SUPABASE_ACCESS_TOKEN",
         "SUPABASE_DEV_PROJECT_ID",
+        "SUPABASE_MAIN_PROJECT_ID",
         "supabase db reset --no-seed",
         '"public", "api", "graphql_public"',
         '"public", "api", "extensions"',
@@ -100,8 +309,9 @@ def main() -> int:
         return 1
 
     print(
-        "PASS: Supabase Dev workflow deploys migrations, applies only the exact "
-        "PostgREST runtime contract, and verifies exact head "
+        "PASS: Supabase Dev workflow separately gates persistent Dev and exact "
+        "PR Preview runtime contracts, limits Management API mutation to two "
+        "three-field PostgREST PATCH calls, and verifies exact head "
         f"{expected_head}"
     )
     return 0
