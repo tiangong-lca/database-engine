@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 7a38910
+lastReviewedCommit: 5b15c95
 lastReviewedNote: "Reviewed for the synchronized Portal candidate projection, versioned ANN semantics, immutable derivation manifest, and sparse fallback gates."
 related:
   - ../../AGENTS.md
@@ -278,7 +278,9 @@ they use one 32-MB-per-node workspace, hash the latest projection keys against
 one source scan, force Hash Join while disabling nested/merge joins, JIT, and parallel workers, and
 restore all caller GUCs through function configuration. The release benchmark invokes those exact
 helpers directly at full vector cardinality, while raw ANN counts separately
-record the naturally selected runtime branch. Production-cardinality release,
+record the naturally selected runtime branch. A second formal ANN plan mirrors
+the production 5,000-candidate scan and 200-candidate rerank; its time and
+buffers are added to the direct exact plan. Production-cardinality release,
 zero-vector, and 199-vector profiles retain the 6-second p95, sub-8-second
 per-call, direct-exact 5-second, combined ANN-plus-exact 6-second, zero-spill,
 and reviewed shared-buffer ceilings; the Edge admission

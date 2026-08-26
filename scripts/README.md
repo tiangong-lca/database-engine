@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 7a38910
+lastReviewedCommit: 5b15c95
 lastReviewedNote: "Reviewed for the Portal projection manifest checker and named release/sparse benchmark profiles; schema-workspace helper behavior is unchanged."
 related:
   - ../AGENTS.md
@@ -108,8 +108,8 @@ recovery runner and additionally requires
 `PORTAL_PROJECTION_BENCHMARK_PROFILE` selects a fail-closed named profile:
 
 - `release` uses representative rows/vectors plus the 21,000-old-Flow pressure,
-  records the natural raw-ANN branch, and directly gates both full-cardinality
-  exact helpers;
+  records the natural raw-ANN branch, directly gates both full-cardinality
+  exact helpers, and captures the production 5,000-to-200 ANN phase;
 - `sparse-zero` uses representative rows with zero embeddings;
 - `sparse-199` uses representative rows with 199 embeddings per dataset;
 - `diagnostic` permits explicitly supplied smaller counts and is not release

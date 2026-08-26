@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 7a38910
+lastReviewedCommit: 5b15c95
 lastReviewedNote: "已复核 Portal projection manifest 检查器与命名 release/sparse benchmark profile；schema-workspace helper 行为不变。"
 related:
   - ../AGENTS.md
@@ -96,7 +96,8 @@ reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合�
 `PORTAL_PROJECTION_BENCHMARK_PROFILE` 用于选择 fail-closed 命名 profile：
 
 - `release` 使用代表性行数/向量数和 21,000 条旧 Flow 版本压力，记录自然
-  raw-ANN 分支，并直接验收两类完整规模 exact helper；
+  raw-ANN 分支，直接验收两类完整规模 exact helper，并捕获生产一致的
+  5,000-to-200 ANN 阶段；
 - `sparse-zero` 使用代表性行数但不写 embedding；
 - `sparse-199` 为每类数据只写 199 条 embedding；
 - `diagnostic` 允许显式传入较小规模，不能作为发布证据；`auto` 会根据
