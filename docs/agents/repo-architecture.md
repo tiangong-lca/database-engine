@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 169fc156f3915a266c10c645c419d0e75766313c
+lastReviewedCommit: 81b42263272696dc015bbd3701564bcde4d1e539
 lastReviewedNote: "Reviewed for Issue #529 after the additive anonymous Portal Hybrid facade introduced its fixed public ranking boundary; repository ownership is unchanged."
 related:
   - ../../AGENTS.md

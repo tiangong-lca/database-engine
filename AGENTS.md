@@ -37,7 +37,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 169fc156f3915a266c10c645c419d0e75766313c
+lastReviewedCommit: 81b42263272696dc015bbd3701564bcde4d1e539
 lastReviewedNote: "Reviewed after Portal LCIA package readiness gained write-before-mutation preflight, transactional post-insert rollback, restart readback, and publication advancement guards; ownership boundaries are unchanged."
 related:
   - .docpact/config.yaml
