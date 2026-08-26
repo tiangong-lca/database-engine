@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: a35fefa
+lastReviewedCommit: f17d467
 lastReviewedNote: "已复核 Portal projection manifest 检查器与命名 release/sparse benchmark profile；schema-workspace helper 行为不变。"
 related:
   - ../AGENTS.md
@@ -95,16 +95,17 @@ reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合�
 
 `PORTAL_PROJECTION_BENCHMARK_PROFILE` 用于选择 fail-closed 命名 profile：
 
-- `release` 使用代表性行数/向量数，并加入 21,000 条旧 Flow 版本的过滤
-  underfill 压力；
+- `release` 使用代表性行数/向量数和 21,000 条旧 Flow 版本压力，记录自然
+  raw-ANN 分支，并直接验收两类完整规模 exact helper；
 - `sparse-zero` 使用代表性行数但不写 embedding；
 - `sparse-199` 为每类数据只写 199 条 embedding；
 - `diagnostic` 允许显式传入较小规模，不能作为发布证据；`auto` 会根据
   精确参数识别命名 profile。
 
 所有命名 gate 都要求干净且精确的 HEAD，覆盖完整公开请求形态，保持
-Search/Facets p95 <= 2 秒、Hybrid p95 <= 6 秒、每次 Hybrid < 8 秒，并拒绝
-sparse fallback 临时文件 spill。每次运行必须使用新的 mode-0700 输出目录。
+Search/Facets p95 <= 2 秒、Hybrid p95 <= 6 秒、每次 Hybrid < 8 秒。正式
+semantic plan 必须含可解析的 shared-buffer 证据、低于 750,000 total / 250,000
+read blocks，且没有 temp/disk spill。每次运行必须使用新的 mode-0700 输出目录。
 
 ### `check_portal_projection_manifest.py`
 

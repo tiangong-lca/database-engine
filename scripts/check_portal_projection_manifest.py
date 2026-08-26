@@ -30,6 +30,8 @@ FUNCTION_IDENTITIES = (
 CONTROL_FUNCTION_IDENTITIES = (
     "private.portal_catalog_projection_manifest_sha256_v1()",
     "private.assert_portal_catalog_projection_contract_v1()",
+    "private.portal_projection_semantic_process_exact_v1(extensions.vector)",
+    "private.portal_projection_semantic_flow_exact_v1(extensions.vector)",
 )
 
 

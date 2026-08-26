@@ -1,6 +1,6 @@
 ---
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: a35fefa
+lastReviewedCommit: f17d467
 lastReviewedNote: "Reviewed for immutable v1 manifest diagnosis, fail-closed drift handling, and the required shadow-v2 semantic-change path."
 title: Portal Projection Migration Recovery
 docType: runbook
@@ -252,10 +252,6 @@ drop trigger if exists portal_catalog_projection_content_sync_v1
 drop trigger if exists portal_catalog_projection_content_sync_v1
   on public.flows;
 
-drop table if exists private.portal_catalog_search_rows_v1;
-drop function if exists private.sync_portal_catalog_search_row_v1();
-drop function if exists
-  private.backfill_portal_catalog_search_range_v1(uuid, uuid);
 drop function if exists
   private.portal_projection_hybrid_search_v1_impl(
     text, text[], extensions.vector, jsonb, integer, text
@@ -268,6 +264,18 @@ drop function if exists
   private.portal_projection_semantic_process_v1(extensions.vector);
 drop function if exists
   private.portal_projection_semantic_flow_v1(extensions.vector);
+drop function if exists
+  private.portal_projection_semantic_process_exact_v1(extensions.vector);
+drop function if exists
+  private.portal_projection_semantic_flow_exact_v1(extensions.vector);
+drop function if exists private.assert_portal_catalog_projection_contract_v1();
+drop function if exists
+  private.portal_catalog_projection_manifest_sha256_v1();
+drop function if exists
+  private.backfill_portal_catalog_search_range_v1(uuid, uuid);
+drop function if exists private.sync_portal_catalog_search_row_v1();
+drop table if exists private.portal_catalog_search_rows_v1;
+drop table if exists private.portal_catalog_projection_contract_v1;
 drop function if exists
   private.catalog_portal_projection_payload_v1(text, integer, jsonb);
 commit;

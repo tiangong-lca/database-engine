@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: a35fefa
+lastReviewedCommit: f17d467
 lastReviewedNote: "Reviewed for the Portal projection manifest checker and named release/sparse benchmark profiles; schema-workspace helper behavior is unchanged."
 related:
   - ../AGENTS.md
@@ -107,8 +107,9 @@ recovery runner and additionally requires
 
 `PORTAL_PROJECTION_BENCHMARK_PROFILE` selects a fail-closed named profile:
 
-- `release` uses representative rows/vectors plus the 21,000-old-Flow filtered
-  underfill pressure;
+- `release` uses representative rows/vectors plus the 21,000-old-Flow pressure,
+  records the natural raw-ANN branch, and directly gates both full-cardinality
+  exact helpers;
 - `sparse-zero` uses representative rows with zero embeddings;
 - `sparse-199` uses representative rows with 199 embeddings per dataset;
 - `diagnostic` permits explicitly supplied smaller counts and is not release
@@ -116,8 +117,10 @@ recovery runner and additionally requires
 
 All named gates require a clean exact HEAD. They cover the complete public
 request shapes, retain Search/Facets p95 <= 2 seconds and Hybrid p95 <= 6
-seconds with every Hybrid call below 8 seconds, and reject sparse fallback temp
-spill. Use a new mode-0700 output directory for every run.
+seconds with every Hybrid call below 8 seconds. Formal semantic plans must
+include parseable shared-buffer evidence, remain below 750,000 total and
+250,000 read blocks, and show no temp/disk spill. Use a new mode-0700 output
+directory for every run.
 
 ### `check_portal_projection_manifest.py`
 
