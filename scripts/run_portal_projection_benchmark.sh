@@ -51,9 +51,9 @@ fi
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 257 \
-   || "${#test_migrations[@]}" -ne 257 ]]; then
-  echo "complete migration tree must contain exactly 257 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 259 \
+   || "${#test_migrations[@]}" -ne 259 ]]; then
+  echo "complete migration tree must contain exactly 259 files" >&2
   exit 2
 fi
 migration_manifest_payload=""
@@ -265,7 +265,7 @@ echo "Supabase CLI: $supabase_cli_version" | tee "$results_log"
 echo "Benchmark target: $project_id" | tee -a "$results_log"
 echo "Benchmark profile: $profile_name" | tee -a "$results_log"
 echo "Repository HEAD: $repository_head" | tee -a "$results_log"
-echo "Migration tree SHA-256 (257 files): $migration_tree_sha256" \
+echo "Migration tree SHA-256 (259 files): $migration_tree_sha256" \
   | tee -a "$results_log"
 echo "Benchmark SQL SHA-256: $benchmark_sql_sha256" | tee -a "$results_log"
 echo "Benchmark runner SHA-256: $benchmark_runner_sha256" \
@@ -325,6 +325,12 @@ do
     exit 1
   fi
 done
+
+if [[ "$sparse_profile" == "true" ]] \
+   && ! grep -q "flows_portal_embedding_eligible_v1_idx" "$explain_log"; then
+  echo "sparse profile missed Flow embedding eligibility btree" >&2
+  exit 1
+fi
 
 docker exec "$container_name" rm -f "$container_explain" >/dev/null
 "$supabase_cli" --workdir "$test_workdir" \
