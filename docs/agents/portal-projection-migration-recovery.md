@@ -1,6 +1,6 @@
 ---
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 1962ab1
+lastReviewedCommit: 5939507
 lastReviewedNote: "Reviewed for immutable v1 manifest diagnosis, fail-closed drift handling, and the required shadow-v2 semantic-change path."
 title: Portal Projection Migration Recovery
 docType: runbook
