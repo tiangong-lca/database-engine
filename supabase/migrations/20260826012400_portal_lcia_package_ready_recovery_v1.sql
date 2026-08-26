@@ -241,6 +241,322 @@ begin
 end
 $function$;
 
+-- Keep every V3 publication advancement behind the same authoritative
+-- package/result/projection validator used by package-ready recovery.  The
+-- retained implementations are moved into private and keep their original
+-- logic; the replacement wrappers add one fail-closed guard without changing
+-- the public signatures or the V1/V2 publication path.
+alter function private.portal_lcia_v3_package_publish_prepare_v1(uuid, text)
+  rename to portal_lcia_v3_publish_prepare_unchecked_v1;
+
+revoke all on function
+  private.portal_lcia_v3_publish_prepare_unchecked_v1(
+    uuid, text
+  ) from public, anon, authenticated, service_role;
+
+create function private.portal_lcia_v3_package_publish_prepare_v1(
+  p_package_id uuid,
+  p_display_default_impact_category text
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $function$
+declare
+  v_result jsonb;
+  v_package private.lcia_result_packages%rowtype;
+  v_projection_id uuid;
+begin
+  v_result :=
+    private.portal_lcia_v3_publish_prepare_unchecked_v1(
+      p_package_id, p_display_default_impact_category
+    );
+  if coalesce((v_result ->> 'ok')::boolean, false) is not true then
+    return v_result;
+  end if;
+  begin
+    v_projection_id := nullif(
+      v_result #>> '{data,projection,id}', ''
+    )::uuid;
+  exception when invalid_text_representation then
+    return api.lcia_result_error(
+      'projection_package_binding_invalid', 409,
+      'Portal LCIA package binding is no longer authoritative'
+    );
+  end;
+  select package.* into v_package
+  from private.lcia_result_packages as package
+  where package.id = p_package_id;
+  if v_package.id is null
+     or v_result #>> '{data,package,id}' is distinct from v_package.id::text
+     or private.portal_lcia_projection_package_binding_valid_v1(
+       v_package.id, v_package.build_worker_job_id, v_projection_id
+     ) is not true then
+    return api.lcia_result_error(
+      'projection_package_binding_invalid', 409,
+      'Portal LCIA package binding is no longer authoritative'
+    );
+  end if;
+  return v_result;
+end
+$function$;
+
+revoke all on function private.portal_lcia_v3_package_publish_prepare_v1(
+  uuid, text
+) from public, anon, authenticated, service_role;
+
+alter function api.cmd_portal_lcia_result_package_publish_v1(
+  uuid, text, text, text, jsonb
+) set schema private;
+alter function private.cmd_portal_lcia_result_package_publish_v1(
+  uuid, text, text, text, jsonb
+) rename to portal_lcia_package_publish_unchecked_v1;
+
+revoke all on function
+  private.portal_lcia_package_publish_unchecked_v1(
+    uuid, text, text, text, jsonb
+  ) from public, anon, authenticated, service_role;
+
+create function api.cmd_portal_lcia_result_package_publish_v1(
+  p_package_id uuid,
+  p_display_default_impact_category text,
+  p_expected_publish_plan_hash text,
+  p_reason text default null::text,
+  p_audit jsonb default '{}'::jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_package private.lcia_result_packages%rowtype;
+  v_projection private.portal_lcia_projection_headers%rowtype;
+begin
+  if auth.uid() is null or not api.lcia_result_is_manager() then
+    return private.portal_lcia_package_publish_unchecked_v1(
+      p_package_id, p_display_default_impact_category,
+      p_expected_publish_plan_hash, p_reason, p_audit
+    );
+  end if;
+  select package.* into v_package
+  from private.lcia_result_packages as package
+  where package.id = p_package_id;
+  select projection.* into v_projection
+  from private.portal_lcia_projection_headers as projection
+  where projection.id::text =
+    v_package.artifact_manifest ->> 'portalProjectionId'
+    and projection.build_worker_job_id = v_package.build_worker_job_id;
+  if v_package.id is not null and v_projection.id is not null then
+    perform 1
+    from private.worker_jobs as job
+    where job.id = v_package.build_worker_job_id
+    for share;
+    perform 1
+    from private.lca_results as result
+    where result.id = v_package.result_id
+    for share;
+    if v_package.latest_all_unit_result_id is not null then
+      perform 1
+      from private.lca_latest_all_unit_results as latest
+      where latest.id = v_package.latest_all_unit_result_id
+      for share;
+    end if;
+    if private.portal_lcia_projection_package_binding_valid_v1(
+         v_package.id, v_package.build_worker_job_id, v_projection.id
+       ) is not true then
+      return api.lcia_result_error(
+        'projection_package_binding_invalid', 409,
+        'Portal LCIA package binding is no longer authoritative'
+      );
+    end if;
+  end if;
+  return private.portal_lcia_package_publish_unchecked_v1(
+    p_package_id, p_display_default_impact_category,
+    p_expected_publish_plan_hash, p_reason, p_audit
+  );
+end
+$function$;
+
+revoke all on function api.cmd_portal_lcia_result_package_publish_v1(
+  uuid, text, text, text, jsonb
+) from public, anon, authenticated, service_role;
+grant execute on function api.cmd_portal_lcia_result_package_publish_v1(
+  uuid, text, text, text, jsonb
+) to authenticated;
+
+alter function api.qry_portal_lcia_projection_prepare_v1(uuid, uuid)
+  set schema private;
+alter function private.qry_portal_lcia_projection_prepare_v1(uuid, uuid)
+  rename to portal_lcia_projection_prepare_unchecked_v1;
+
+revoke all on function
+  private.portal_lcia_projection_prepare_unchecked_v1(uuid, uuid)
+  from public, anon, authenticated, service_role;
+
+create function api.qry_portal_lcia_projection_prepare_v1(
+  p_package_id uuid,
+  p_lcia_result_publication_id uuid
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $function$
+declare
+  v_result jsonb;
+  v_package private.lcia_result_packages%rowtype;
+  v_projection_id uuid;
+begin
+  v_result :=
+    private.portal_lcia_projection_prepare_unchecked_v1(
+      p_package_id, p_lcia_result_publication_id
+    );
+  if coalesce((v_result ->> 'ok')::boolean, false) is not true then
+    return v_result;
+  end if;
+  begin
+    v_projection_id := nullif(
+      v_result #>> '{data,projectionId}', ''
+    )::uuid;
+  exception when invalid_text_representation then
+    return api.lcia_result_error(
+      'projection_package_binding_invalid', 409,
+      'Portal LCIA package binding is no longer authoritative'
+    );
+  end;
+  select package.* into v_package
+  from private.lcia_result_packages as package
+  where package.id = p_package_id;
+  if v_package.id is null
+     or v_result #>> '{data,packageId}' is distinct from v_package.id::text
+     or private.portal_lcia_projection_package_binding_valid_v1(
+       v_package.id, v_package.build_worker_job_id, v_projection_id
+     ) is not true then
+    return api.lcia_result_error(
+      'projection_package_binding_invalid', 409,
+      'Portal LCIA package binding is no longer authoritative'
+    );
+  end if;
+  return v_result;
+end
+$function$;
+
+revoke all on function api.qry_portal_lcia_projection_prepare_v1(uuid, uuid)
+  from public, anon, authenticated, service_role;
+grant execute on function api.qry_portal_lcia_projection_prepare_v1(uuid, uuid)
+  to authenticated;
+
+alter function api.cmd_portal_lcia_projection_finalize_publication_v1(
+  uuid, uuid, text, text, text, text, jsonb
+) set schema private;
+alter function private.cmd_portal_lcia_projection_finalize_publication_v1(
+  uuid, uuid, text, text, text, text, jsonb
+) rename to portal_lcia_projection_finalize_unchecked_v1;
+
+revoke all on function
+  private.portal_lcia_projection_finalize_unchecked_v1(
+    uuid, uuid, text, text, text, text, jsonb
+  ) from public, anon, authenticated, service_role;
+
+create function api.cmd_portal_lcia_projection_finalize_publication_v1(
+  p_projection_id uuid,
+  p_lcia_result_publication_id uuid,
+  p_package_version text,
+  p_package_result_hash text,
+  p_projection_content_hash text,
+  p_idempotency_key text,
+  p_audit jsonb default '{}'::jsonb
+)
+returns jsonb
+language plpgsql
+security definer
+set search_path = ''
+as $function$
+declare
+  v_projection private.portal_lcia_projection_headers%rowtype;
+  v_publication private.lcia_result_publications%rowtype;
+  v_package private.lcia_result_packages%rowtype;
+begin
+  if auth.uid() is null or not api.lcia_result_is_manager() then
+    return private.portal_lcia_projection_finalize_unchecked_v1(
+      p_projection_id, p_lcia_result_publication_id, p_package_version,
+      p_package_result_hash, p_projection_content_hash, p_idempotency_key,
+      p_audit
+    );
+  end if;
+  select projection.* into v_projection
+  from private.portal_lcia_projection_headers as projection
+  where projection.id = p_projection_id;
+  select publication.* into v_publication
+  from private.lcia_result_publications as publication
+  where publication.id = p_lcia_result_publication_id;
+  select package.* into v_package
+  from private.lcia_result_packages as package
+  where package.id = v_publication.package_id;
+  if v_projection.id is not null
+     and v_publication.id is not null
+     and v_package.id is not null
+     and v_package.build_worker_job_id = v_projection.build_worker_job_id
+     and v_package.package_version = p_package_version
+     and v_package.package_result_hash = p_package_result_hash
+     and v_projection.content_hash = p_projection_content_hash
+     and v_package.artifact_manifest ->> 'portalProjectionId'
+           = v_projection.id::text then
+    perform 1
+    from private.worker_jobs as job
+    where job.id = v_package.build_worker_job_id
+    for share;
+    perform 1
+    from private.lca_results as result
+    where result.id = v_package.result_id
+    for share;
+    if v_package.latest_all_unit_result_id is not null then
+      perform 1
+      from private.lca_latest_all_unit_results as latest
+      where latest.id = v_package.latest_all_unit_result_id
+      for share;
+    end if;
+    if private.portal_lcia_projection_package_binding_valid_v1(
+         v_package.id, v_package.build_worker_job_id, v_projection.id
+       ) is not true then
+      return api.lcia_result_error(
+        'projection_package_binding_invalid', 409,
+        'Portal LCIA package binding is no longer authoritative'
+      );
+    end if;
+  end if;
+  return private.portal_lcia_projection_finalize_unchecked_v1(
+    p_projection_id, p_lcia_result_publication_id, p_package_version,
+    p_package_result_hash, p_projection_content_hash, p_idempotency_key,
+    p_audit
+  );
+end
+$function$;
+
+revoke all on function api.cmd_portal_lcia_projection_finalize_publication_v1(
+  uuid, uuid, text, text, text, text, jsonb
+) from public, anon, authenticated, service_role;
+grant execute on function api.cmd_portal_lcia_projection_finalize_publication_v1(
+  uuid, uuid, text, text, text, text, jsonb
+) to authenticated;
+
+comment on function api.cmd_portal_lcia_result_package_publish_v1(
+  uuid, text, text, text, jsonb
+) is
+  'Publishes only an exact authoritative Portal LCIA V3 package/projection plan and reconciles response-loss retries.';
+comment on function api.qry_portal_lcia_projection_prepare_v1(uuid, uuid) is
+  'Prepares only the exact current authoritative package/projection/publication binding for finalization.';
+comment on function api.cmd_portal_lcia_projection_finalize_publication_v1(
+  uuid, uuid, text, text, text, text, jsonb
+) is
+  'Finalizes only an exact authoritative package/result/projection binding for the current LCIA result publication.';
+
+notify pgrst, 'reload schema';
+
 create function private.svc_portal_lcia_projection_package_ready_readback_v1(
   p_build_worker_job_id uuid,
   p_current_lease_token uuid
@@ -372,6 +688,11 @@ declare
   v_expected_included_input_count integer;
   v_expected_default_impact text;
   v_restart_default_impact text;
+  v_authoritative_result private.lca_results%rowtype;
+  v_authoritative_latest private.lca_latest_all_unit_results%rowtype;
+  v_expected_result_artifact_ref jsonb;
+  v_expected_query_artifact_ref jsonb;
+  v_preexisting_package boolean := false;
 begin
   if not coalesce(util.is_service_request(), false) then
     return jsonb_build_object(
@@ -469,12 +790,150 @@ begin
   from private.worker_jobs as job
   where job.id = p_build_worker_job_id
   for update;
+  select exists (
+    select 1
+    from private.lcia_result_packages as package
+    where package.build_worker_job_id = p_build_worker_job_id
+      and package.package_version = p_package_version
+  ) into v_preexisting_package;
   if v_job.payload_json ->> 'snapshot_id' is distinct from p_snapshot_id::text then
     return jsonb_build_object(
       'ok', false, 'code', 'projection_evidence_mismatch', 'status', 409
     );
   end if;
 
+  begin
+    v_expected_build_id := nullif(
+      v_job.payload_json ->> 'build_id', ''
+    )::uuid;
+    v_expected_closure_check_id := nullif(
+      v_job.payload_json ->> 'closure_check_id', ''
+    )::uuid;
+    v_expected_eligibility_resolved_at := nullif(
+      v_job.payload_json ->> 'eligibility_resolved_at', ''
+    )::timestamptz;
+    v_expected_eligible_input_count := coalesce(
+      (v_job.payload_json ->> 'eligible_input_count')::integer, 0
+    );
+    v_expected_included_input_count := coalesce(
+      (v_job.payload_json ->> 'included_input_count')::integer, 0
+    );
+  exception
+    when invalid_text_representation
+      or invalid_datetime_format
+      or datetime_field_overflow
+      or numeric_value_out_of_range then
+      if v_preexisting_package then
+        return api.lcia_result_error(
+          'package_conflict', 409,
+          'LCIA result package already exists for this build or package version'
+        );
+      end if;
+      return jsonb_build_object(
+        'ok', false, 'code', 'projection_package_binding_invalid',
+        'status', 409
+      );
+  end;
+  v_expected_default_impact := coalesce(
+    nullif(btrim(coalesce(p_default_impact_category, '')), ''),
+    nullif(btrim(coalesce(
+      v_job.payload_json ->> 'default_impact_category', ''
+    )), '')
+  );
+  v_restart_default_impact := coalesce(
+    nullif(btrim(coalesce(
+      v_job.payload_json ->> 'default_impact_category', ''
+    )), ''),
+    v_projection_impacts ->> 0
+  );
+
+  select result.* into v_authoritative_result
+  from private.lca_results as result
+  where result.id = p_result_id;
+  v_expected_result_artifact_ref := jsonb_build_object(
+    'artifactUrl', v_authoritative_result.artifact_url,
+    'artifactSha256', v_authoritative_result.artifact_sha256,
+    'artifactByteSize', v_authoritative_result.artifact_byte_size,
+    'artifactFormat', v_authoritative_result.artifact_format
+  );
+  if v_authoritative_result.id is null
+     or v_expected_build_id is distinct from v_job.subject_id
+     or v_job.subject_type <> 'lcia_result_build'
+     or v_authoritative_result.job_id is distinct from v_expected_build_id
+     or v_authoritative_result.worker_job_id is distinct from v_job.id
+     or v_authoritative_result.snapshot_id is distinct from p_snapshot_id
+     or private.portal_lcia_json_object_has_keys_v1(
+       p_result_artifact_ref,
+       array[
+         'artifactUrl', 'artifactSha256', 'artifactByteSize', 'artifactFormat'
+       ]
+     ) is not true
+     or p_result_artifact_ref is distinct from
+          v_expected_result_artifact_ref
+     or p_package_result_hash is distinct from
+          v_authoritative_result.artifact_sha256
+     or p_package_result_hash is distinct from
+          v_projection.result_artifact_sha256
+     or v_expected_default_impact is distinct from
+          v_restart_default_impact then
+    if v_preexisting_package then
+      return api.lcia_result_error(
+        'package_conflict', 409,
+        'LCIA result package already exists for this build or package version'
+      );
+    end if;
+    return jsonb_build_object(
+      'ok', false, 'code', 'projection_evidence_mismatch', 'status', 409
+    );
+  end if;
+
+  if private.portal_lcia_json_object_has_keys_v1(
+       p_query_artifact_ref,
+       array[
+         'artifactUrl', 'artifactSha256', 'artifactByteSize', 'artifactFormat'
+       ]
+     ) is not true then
+    if v_preexisting_package then
+      return api.lcia_result_error(
+        'package_conflict', 409,
+        'LCIA result package already exists for this build or package version'
+      );
+    end if;
+    return jsonb_build_object(
+      'ok', false, 'code', 'projection_evidence_mismatch', 'status', 409
+    );
+  end if;
+  if p_latest_all_unit_result_id is not null then
+    select latest.* into v_authoritative_latest
+    from private.lca_latest_all_unit_results as latest
+    where latest.id = p_latest_all_unit_result_id;
+    v_expected_query_artifact_ref := jsonb_build_object(
+      'artifactUrl', v_authoritative_latest.query_artifact_url,
+      'artifactSha256', v_authoritative_latest.query_artifact_sha256,
+      'artifactByteSize', v_authoritative_latest.query_artifact_byte_size,
+      'artifactFormat', v_authoritative_latest.query_artifact_format
+    );
+    if v_authoritative_latest.id is null
+       or v_authoritative_latest.job_id is distinct from v_expected_build_id
+       or v_authoritative_latest.worker_job_id is distinct from v_job.id
+       or v_authoritative_latest.snapshot_id is distinct from p_snapshot_id
+       or v_authoritative_latest.result_id is distinct from p_result_id
+       or v_authoritative_latest.status <> 'ready'
+       or p_query_artifact_ref is distinct from
+            v_expected_query_artifact_ref then
+      if v_preexisting_package then
+        return api.lcia_result_error(
+          'package_conflict', 409,
+          'LCIA result package already exists for this build or package version'
+        );
+      end if;
+      return jsonb_build_object(
+        'ok', false, 'code', 'projection_evidence_mismatch', 'status', 409
+      );
+    end if;
+  end if;
+
+  begin
   -- The established insert trigger applies its exact certificate binding only
   -- to request.v2.  A row lock and transaction-local compatibility value let
   -- this V3-only wrapper reuse that unchanged trigger and legacy insert helper;
@@ -512,10 +971,8 @@ begin
     begin
       v_package_id := nullif(v_result -> 'data' ->> 'packageId', '')::uuid;
     exception when invalid_text_representation then
-      return jsonb_build_object(
-        'ok', false, 'code', 'projection_package_binding_invalid',
-        'status', 409
-      );
+      raise exception 'portal_lcia_package_post_insert_validation_failed'
+        using errcode = 'P5271';
     end;
     select package.* into v_package
     from private.lcia_result_packages as package
@@ -540,48 +997,6 @@ begin
   else
     return v_result;
   end if;
-
-  begin
-    v_expected_build_id := nullif(
-      v_job.payload_json ->> 'build_id', ''
-    )::uuid;
-    v_expected_closure_check_id := nullif(
-      v_job.payload_json ->> 'closure_check_id', ''
-    )::uuid;
-    v_expected_eligibility_resolved_at := nullif(
-      v_job.payload_json ->> 'eligibility_resolved_at', ''
-    )::timestamptz;
-    v_expected_eligible_input_count := coalesce(
-      (v_job.payload_json ->> 'eligible_input_count')::integer, 0
-    );
-    v_expected_included_input_count := coalesce(
-      (v_job.payload_json ->> 'included_input_count')::integer, 0
-    );
-  exception
-    when invalid_text_representation
-      or invalid_datetime_format
-      or datetime_field_overflow
-      or numeric_value_out_of_range then
-      if v_reused then
-        return v_result;
-      end if;
-      return jsonb_build_object(
-        'ok', false, 'code', 'projection_package_binding_invalid',
-        'status', 409
-      );
-  end;
-  v_expected_default_impact := coalesce(
-    nullif(btrim(coalesce(p_default_impact_category, '')), ''),
-    nullif(btrim(coalesce(
-      v_job.payload_json ->> 'default_impact_category', ''
-    )), '')
-  );
-  v_restart_default_impact := coalesce(
-    nullif(btrim(coalesce(
-      v_job.payload_json ->> 'default_impact_category', ''
-    )), ''),
-    v_projection_impacts ->> 0
-  );
 
   if private.portal_lcia_projection_package_binding_valid_v1(
        v_package.id, v_job.id, v_projection.id
@@ -648,9 +1063,8 @@ begin
     if v_reused then
       return v_result;
     end if;
-    return jsonb_build_object(
-      'ok', false, 'code', 'projection_package_binding_invalid', 'status', 409
-    );
+    raise exception 'portal_lcia_package_post_insert_validation_failed'
+      using errcode = 'P5271';
   end if;
 
   return jsonb_build_object(
@@ -670,5 +1084,10 @@ begin
       )
     )
   );
+  exception when sqlstate 'P5271' then
+    return jsonb_build_object(
+      'ok', false, 'code', 'projection_package_binding_invalid', 'status', 409
+    );
+  end;
 end
 $function$;
