@@ -51,15 +51,17 @@ The rollout has four observable boundaries:
    but does not expose partial projection reads.
 3. `20260826080345` acquires a five-second source-write fence in one explicit
    transaction, inserts genuinely missing rows, removes stale rows, verifies
-   key/state/modified/vector parity, and removes the backfill helper.
-4. Four standalone `CREATE INDEX CONCURRENTLY` migrations precede the
+   key/state/modified parity, and removes the backfill helper.
+4. Two standalone projection `CREATE INDEX CONCURRENTLY` migrations reuse the
+   existing Process/Flow source HNSW indexes and precede the
    transactional Search/Hybrid cutover at `20260826080400` and the transactional
    Facets cutover at `20260826080403`.
 
 The expand, reconcile, Search/Hybrid cutover, and Facets cutover files are
 explicit transactions. A statement or guard failure rolls back the entire
 file. Each concurrent index file contains exactly one non-transactional
-`CREATE INDEX CONCURRENTLY` statement.
+`CREATE INDEX CONCURRENTLY` statement. Source vectors, embedding triggers, and
+duplicate projection HNSW indexes are intentionally absent.
 
 ## Read-only diagnosis
 
@@ -82,12 +84,18 @@ join pg_catalog.pg_namespace as namespace
   on namespace.oid = index_relation.relnamespace
 left join pg_catalog.pg_index as index_catalog
   on index_catalog.indexrelid = index_relation.oid
-where namespace.nspname = 'private'
-  and index_relation.relname in (
-    'portal_catalog_search_process_document_v1_pgroonga',
-    'portal_catalog_search_flow_document_v1_pgroonga',
-    'portal_catalog_search_process_embedding_v1_hnsw',
-    'portal_catalog_search_flow_embedding_v1_hnsw'
+where (
+    namespace.nspname = 'private'
+    and index_relation.relname in (
+      'portal_catalog_search_process_document_v1_pgroonga',
+      'portal_catalog_search_flow_document_v1_pgroonga'
+    )
+  ) or (
+    namespace.nspname = 'public'
+    and index_relation.relname in (
+      'processes_embedding_ft_hnsw_idx',
+      'flows_embedding_ft_hnsw_idx'
+    )
   )
 order by index_relation.relname;
 
@@ -100,10 +108,52 @@ where trigger.tgrelid in (
     'public.flows'::regclass
   )
   and trigger.tgname in (
-    'portal_catalog_projection_content_sync_v1',
-    'portal_catalog_projection_embedding_sync_v1'
+    'portal_catalog_projection_content_sync_v1'
   )
 order by source_table, trigger.tgname;
+
+select routine.oid::regprocedure as routine_identity,
+  owner_role.rolname as owner_name,
+  routine.prosecdef,
+  routine.proconfig,
+  routine.proacl,
+  routine.prosrc
+from pg_catalog.pg_proc as routine
+join pg_catalog.pg_roles as owner_role on owner_role.oid = routine.proowner
+where routine.oid in (
+  pg_catalog.to_regprocedure(
+    'api.portal_hybrid_search_v1(text,text[],text,jsonb,integer)'
+  ),
+  pg_catalog.to_regprocedure(
+    'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'
+  ),
+  pg_catalog.to_regprocedure(
+    'private.portal_public_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'
+  )
+);
+
+select dependency.classid::regclass,
+  dependency.objid,
+  dependency.refclassid::regclass,
+  dependency.refobjid,
+  dependency.deptype
+from pg_catalog.pg_depend as dependency
+where dependency.objid = any (array_remove(array[
+    pg_catalog.to_regprocedure(
+      'api.portal_hybrid_search_v1(text,text[],text,jsonb,integer)'
+    )::oid,
+    pg_catalog.to_regprocedure(
+      'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'
+    )::oid
+  ], null))
+   or dependency.refobjid = any (array_remove(array[
+     pg_catalog.to_regprocedure(
+       'api.portal_hybrid_search_v1(text,text[],text,jsonb,integer)'
+     )::oid,
+     pg_catalog.to_regprocedure(
+       'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'
+     )::oid
+   ], null));
 ```
 
 If the failed migration has no ledger row and its explicit transaction rolled
@@ -124,8 +174,9 @@ closed on retry. Confirm all of the following before cleanup:
 
 - the exact index migration version is absent from migration history;
 - `20260826080400` and `20260826080403` are absent;
-- the same-name relation is one of the four private projection indexes above;
-- its definition or validity differs from the guarded canonical definition.
+- the same-name relation is one of the two private projection PGroonga indexes;
+- it is INVALID, definition-drifted, or a canonical-valid build whose COMMIT
+  preceded its missing migration-history row.
 
 Run only the matching cleanup statement as a standalone database command. Do
 not combine it with `CREATE INDEX CONCURRENTLY`, `BEGIN`, a `DO` block, or other
@@ -137,12 +188,6 @@ drop index concurrently if exists
 
 drop index concurrently if exists
   private.portal_catalog_search_flow_document_v1_pgroonga;
-
-drop index concurrently if exists
-  private.portal_catalog_search_process_embedding_v1_hnsw;
-
-drop index concurrently if exists
-  private.portal_catalog_search_flow_embedding_v1_hnsw;
 ```
 
 Execute only the one statement for the failed migration, then repeat the normal
@@ -171,11 +216,7 @@ lock table public.processes, public.flows in share row exclusive mode;
 
 drop trigger if exists portal_catalog_projection_content_sync_v1
   on public.processes;
-drop trigger if exists portal_catalog_projection_embedding_sync_v1
-  on public.processes;
 drop trigger if exists portal_catalog_projection_content_sync_v1
-  on public.flows;
-drop trigger if exists portal_catalog_projection_embedding_sync_v1
   on public.flows;
 
 drop table if exists private.portal_catalog_search_rows_v1;
@@ -186,6 +227,14 @@ drop function if exists
   private.portal_projection_hybrid_search_v1_impl(
     text, text[], extensions.vector, jsonb, integer, text
   );
+drop function if exists
+  private.portal_projection_semantic_candidates_v1(
+    text, extensions.vector
+  );
+drop function if exists
+  private.portal_projection_semantic_process_v1(extensions.vector);
+drop function if exists
+  private.portal_projection_semantic_flow_v1(extensions.vector);
 drop function if exists
   private.catalog_portal_projection_payload_v1(text, integer, jsonb);
 commit;
@@ -209,9 +258,18 @@ scripts/test_portal_projection_upgrade_recovery.sh
 
 The regression uses two live database connections to cover valid-update,
 delete, state `100 -> 20`, id/version key-change, and embedding-only/missing-row
-races. It also proves reconcile lock-timeout rollback, controlled same-name
-index cleanup without history edits, cutover guard rollback, successful retry,
-and no-op repeat without rebuilding recorded indexes.
+races. Embedding-only changes remain source-HNSW owned and the final fence fills
+any independently missing card row. The regression also proves reconcile
+lock-timeout rollback, reconcile COMMIT/history retry, wrong and canonical-valid
+same-name index cleanup without history edits, cutover guard rollback,
+successful retry, and no-op repeat without rebuilding recorded indexes.
+
+The pre-cutover raw-source
+`private.portal_public_hybrid_search_v1_impl(...)` is a rollback asset only
+until `20260826080400` replaces the API wrapper. The same cutover transaction
+drops it with `IF EXISTS`; a failed transaction restores it, while a committed
+or commit/history-gap retry leaves it absent. The final guard requires the API
+wrapper to call only `private.portal_projection_hybrid_search_v1_impl(...)`.
 
 Supabase CLI `2.109.1` was used for the local Issue 531 evidence. A real
 five-second reconcile lock timeout returned after eight wall-clock seconds
