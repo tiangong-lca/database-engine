@@ -5,6 +5,65 @@ set local search_path = extensions, public, auth;
 
 select extensions.no_plan();
 
+-- Frozen cross-language record vectors.  Worker must frame the schema and
+-- hash-contract domains in this exact order before every record field.
+select extensions.is(
+  private.portal_lcia_projection_sha256_fields_v1(
+    'portal.lcia-projection.process.v1',
+    'portal.lcia-projection.int32be-frame-sha256.v1',
+    '0',
+    '00000000-0000-0000-0000-00000000000a',
+    '01.00.000',
+    '00000000-0000-0000-0000-000000000014',
+    '01.00.000',
+    '0',
+    '2',
+    'output',
+    '1',
+    'kg',
+    private.portal_lcia_localized_text_frame_hex_v1(
+      '[{"language":"en","value":"process-0"}]'::jsonb
+    ),
+    'CN',
+    'country',
+    '2025',
+    repeat('a', 64)
+  ),
+  '20eac36559a4bc196e480fdb4fd22acb565658de327327103ef23f9d0fce45a2',
+  'Process record hash matches the frozen Worker/Database vector'
+);
+
+select extensions.is(
+  private.portal_lcia_projection_sha256_fields_v1(
+    'portal.lcia-projection.impact.v1',
+    'portal.lcia-projection.int32be-frame-sha256.v1',
+    '0',
+    '00000000-0000-0000-0000-00000000001e',
+    '01.00.000',
+    'impact-0',
+    private.portal_lcia_localized_text_frame_hex_v1(
+      '[{"language":"en","value":"Impact 0"}]'::jsonb
+    ),
+    'kg CO2-eq',
+    repeat('b', 64)
+  ),
+  '88c852ad1c3748da26420ab5b2d96fa604977847eea44862c3f09573b4551d45',
+  'Impact record hash matches the frozen Worker/Database vector'
+);
+
+select extensions.is(
+  private.portal_lcia_projection_sha256_fields_v1(
+    'portal.lcia-projection.value.v1',
+    'portal.lcia-projection.int32be-frame-sha256.v1',
+    '1',
+    '0',
+    '0',
+    '0'
+  ),
+  '0bcbcf38ddd7c709c3e0e1e55a68226c51c5bc18be404108794f04f5a37a7879',
+  'Value record hash matches the frozen Worker/Database vector'
+);
+
 -- Portal LCIA is deliberately additive.  Keep the existing Data Product and
 -- Release control-plane entry points frozen while the projection gets its own
 -- actor, service, and anonymous-read boundaries.
