@@ -20,8 +20,8 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-26
-lastReviewedCommit: 12f54fe1188223d434a40799466167d5dd83c48e
+lastReviewedAt: 2026-08-27
+lastReviewedCommit: 70c2294ba894df3982939dec6b5e549e108f9630
 lastReviewedNote: "Reviewed after the exact PR Preview gate minimized branch/key authority and isolated public-key selection from anonymous transport; persistent Dev and production mutation boundaries remain unchanged."
 related:
   - ../../AGENTS.md
