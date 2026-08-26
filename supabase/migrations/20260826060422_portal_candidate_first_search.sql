@@ -666,6 +666,7 @@ declare
   v_ids uuid[];
   v_versions text[];
   v_distances double precision[];
+  v_source_rows integer;
 begin
   if p_query_embedding is null then
     raise exception using
@@ -747,6 +748,30 @@ begin
     return;
   end if;
 
+  select count(*)
+  into v_source_rows
+  from (
+    select process.id
+    from public.processes as process
+    where process.state_code in (100, 200)
+      and process.embedding_ft is not null
+    order by process.embedding_ft
+      operator(extensions.<=>) p_query_embedding
+    limit 200
+  ) as bounded_source;
+
+  if v_source_rows < 200 then
+    return query
+    select v_ids[candidate.ordinal],
+      v_versions[candidate.ordinal],
+      v_distances[candidate.ordinal]
+    from pg_catalog.generate_subscripts(v_ids, 1)
+      as candidate(ordinal)
+    where v_distances[candidate.ordinal] <= 0.5::double precision
+    order by candidate.ordinal;
+    return;
+  end if;
+
   return query
   select latest.id,
     latest.version,
@@ -808,6 +833,7 @@ declare
   v_ids uuid[];
   v_versions text[];
   v_distances double precision[];
+  v_source_rows integer;
 begin
   if p_query_embedding is null then
     raise exception using
@@ -878,6 +904,30 @@ begin
   ) as candidate;
 
   if coalesce(pg_catalog.cardinality(v_ids), 0) >= 200 then
+    return query
+    select v_ids[candidate.ordinal],
+      v_versions[candidate.ordinal],
+      v_distances[candidate.ordinal]
+    from pg_catalog.generate_subscripts(v_ids, 1)
+      as candidate(ordinal)
+    where v_distances[candidate.ordinal] <= 0.5::double precision
+    order by candidate.ordinal;
+    return;
+  end if;
+
+  select count(*)
+  into v_source_rows
+  from (
+    select flow.id
+    from public.flows as flow
+    where flow.state_code in (100, 200)
+      and flow.embedding_ft is not null
+    order by flow.embedding_ft
+      operator(extensions.<=>) p_query_embedding
+    limit 200
+  ) as bounded_source;
+
+  if v_source_rows < 200 then
     return query
     select v_ids[candidate.ordinal],
       v_versions[candidate.ordinal],

@@ -1465,10 +1465,10 @@ select extensions.ok(
 reset role;
 revoke portal_public_executor from postgres;
 
--- Exercise both semantic helper exits.  A two-row Flow set must take the
--- underfill exact branch and equal the exact latest-visible scan.  A separate
--- 205-row Process set must fill the bounded ANN branch and preserve the raw
--- ANN order byte-for-byte without falling through into the exact scan.
+-- Exercise the bounded semantic exits. A two-row Flow set proves that a
+-- complete (<200) source-HNSW universe returns exact latest-visible parity
+-- without scanning the whole projection. A separate 205-row Process set fills
+-- the ANN branch and preserves the raw ANN order byte-for-byte.
 create or replace function pg_temp.portal_candidate_vector(p_ordinal integer)
 returns extensions.vector(1024)
 language sql
@@ -1733,7 +1733,7 @@ revoke api_internal_executor from postgres;
 select extensions.ok(
   (select count(*) from pg_temp.portal_semantic_underfill_actual)
     between 1 and 199,
-  'the sparse Flow fixture deterministically exercises the underfill branch'
+  'the sparse Flow fixture exercises the complete-source underfill shortcut'
 );
 
 select extensions.is(
@@ -1758,7 +1758,7 @@ select extensions.is(
     ) as difference
   ),
   0::bigint,
-  'underfill fallback is a two-way exact latest-visible candidate match'
+  'complete-source underfill is a two-way exact latest-visible candidate match'
 );
 
 select extensions.is(
@@ -1772,7 +1772,7 @@ select extensions.is(
       or actual.semantic_distance is distinct from expected.semantic_distance
   ),
   0::bigint,
-  'underfill fallback preserves exact distance/id/version order positionally'
+  'complete-source underfill preserves exact distance/id/version order positionally'
 );
 
 select extensions.is(
