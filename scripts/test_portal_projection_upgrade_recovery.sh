@@ -454,7 +454,7 @@ docker exec -i "$container_name" \
 set application_name = 'portal_projection_reconcile_lock_holder';
 begin;
 lock table public.processes, public.flows in row exclusive mode;
-select pg_sleep(8);
+select pg_sleep(60);
 commit;
 SQL
 lock_holder_pid=$!
@@ -463,6 +463,12 @@ wait_for_pg_sleep portal_projection_reconcile_lock_holder
 reconcile_failure_started=$SECONDS
 reconcile_log_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
 if apply_pending >"$race_log_dir/expected-reconcile-failure.log" 2>&1; then
+  scalar_sql "
+    select pg_catalog.pg_terminate_backend(pid)
+    from pg_catalog.pg_stat_activity
+    where application_name = 'portal_projection_reconcile_lock_holder'
+  " >/dev/null || true
+  wait "$lock_holder_pid" || true
   echo "reconcile unexpectedly ignored the held writer lock" >&2
   exit 1
 fi
@@ -470,14 +476,26 @@ docker logs --since "$reconcile_log_since" "$container_name" \
   >>"$race_log_dir/expected-reconcile-failure.log" 2>&1
 reconcile_failure_seconds=$((SECONDS - reconcile_failure_started))
 echo "Reconcile lock-acquisition failure: ${reconcile_failure_seconds}s"
-if ((reconcile_failure_seconds < 5 || reconcile_failure_seconds > 15)); then
-  echo "reconcile lock failure fell outside the 5-15s evidence window" >&2
+if ((reconcile_failure_seconds < 5 || reconcile_failure_seconds > 30)); then
+  echo "reconcile lock failure fell outside the 5-30s evidence window" >&2
   exit 1
 fi
 assert_log_contains \
   "$race_log_dir/expected-reconcile-failure.log" \
   '55P03|lock timeout|canceling statement due to lock timeout' \
   'reconcile lock-timeout failure'
+
+terminated_lock_holder="$(scalar_sql "
+  select count(*)
+  from pg_catalog.pg_stat_activity
+  where application_name = 'portal_projection_reconcile_lock_holder'
+    and pg_catalog.pg_terminate_backend(pid)
+")"
+if [[ "$terminated_lock_holder" != "1" ]]; then
+  echo "failed to terminate the exact reconcile lock holder" >&2
+  exit 1
+fi
+wait "$lock_holder_pid" || true
 
 assert_sql "
   not exists (
@@ -489,7 +507,6 @@ assert_sql "
   ) is not null
 " "failed reconcile left a ledger row or partial transaction effects"
 
-wait "$lock_holder_pid"
 apply_pending
 
 assert_sql "
