@@ -1824,6 +1824,293 @@ select extensions.is(
   'both semantic helpers structurally return the healthy ANN arrays before exact fallback'
 );
 
+-- Force the source>=200/latest-eligible<200 branch for both kinds. Process
+-- keeps only 50 projected synthetic rows; Flow adds 205 public source vectors
+-- with no valid projection payload. The streaming exact path must still equal
+-- the original source-driven oracle positionally.
+grant api_internal_executor to postgres;
+set local role api_internal_executor;
+
+delete from private.portal_catalog_search_rows_v1
+where dataset_kind = 'process'
+  and id >= '53200000-0000-4000-8000-000000000051'::uuid
+  and id <= '53200000-0000-4000-8000-000000000205'::uuid;
+
+reset role;
+revoke api_internal_executor from postgres;
+
+alter table public.flows disable trigger user;
+alter table public.flows
+  enable trigger portal_catalog_projection_content_sync_v1;
+set local role service_role;
+
+insert into public.flows (
+  id, version, json, json_ordered, user_id, state_code,
+  rule_verification, modified_at, search_text, embedding_ft
+)
+select (
+    '53300000-0000-4000-8000-' ||
+    pg_catalog.lpad(series.ordinal::text, 12, '0')
+  )::uuid,
+  '01.00.000',
+  '{}'::jsonb,
+  '{}'::json,
+  '53100000-0000-4000-8000-000000000001'::uuid,
+  100,
+  true,
+  '2026-08-26 07:05:00+00'::timestamptz
+    + series.ordinal * interval '1 millisecond',
+  null,
+  pg_temp.portal_candidate_vector(series.ordinal)
+from pg_catalog.generate_series(1, 205) as series(ordinal);
+
+reset role;
+alter table public.flows enable trigger user;
+
+select extensions.ok(
+  (
+    select count(*) = 200
+    from (
+      select 1
+      from public.processes
+      where state_code in (100, 200)
+        and embedding_ft is not null
+      limit 200
+    ) as bounded_source
+  )
+  and (
+    select count(*) = 200
+    from (
+      select 1
+      from public.flows
+      where state_code in (100, 200)
+        and embedding_ft is not null
+      limit 200
+    ) as bounded_source
+  )
+  and (
+    select count(*) between 1 and 199
+    from (
+      select distinct on (projection.dataset_kind, projection.id)
+        projection.dataset_kind,
+        projection.id,
+        projection.version
+      from private.portal_catalog_search_rows_v1 as projection
+      join public.processes as process
+        on projection.dataset_kind = 'process'
+       and process.id = projection.id
+       and process.version = projection.version::character(9)
+       and process.embedding_ft is not null
+      order by projection.dataset_kind,
+        projection.id,
+        projection.version desc,
+        projection.modified_at desc,
+        projection.state_code desc
+    ) as latest
+  )
+  and (
+    select count(*) between 1 and 199
+    from (
+      select distinct on (projection.dataset_kind, projection.id)
+        projection.dataset_kind,
+        projection.id,
+        projection.version
+      from private.portal_catalog_search_rows_v1 as projection
+      join public.flows as flow
+        on projection.dataset_kind = 'flow'
+       and flow.id = projection.id
+       and flow.version = projection.version::character(9)
+       and flow.embedding_ft is not null
+      order by projection.dataset_kind,
+        projection.id,
+        projection.version desc,
+        projection.modified_at desc,
+        projection.state_code desc
+    ) as latest
+  ),
+  'both streaming fixtures have at least 200 source vectors but fewer than 200 latest projected vectors'
+);
+
+create temporary table portal_semantic_streaming_actual (
+  dataset_kind text not null,
+  row_position bigint not null,
+  id uuid not null,
+  version text not null,
+  semantic_distance double precision not null,
+  primary key (dataset_kind, row_position)
+) on commit drop;
+
+create temporary table portal_semantic_streaming_exact (
+  dataset_kind text not null,
+  row_position bigint not null,
+  id uuid not null,
+  version text not null,
+  semantic_distance double precision not null,
+  primary key (dataset_kind, row_position)
+) on commit drop;
+
+grant insert, select on pg_temp.portal_semantic_streaming_actual,
+  pg_temp.portal_semantic_streaming_exact
+to api_internal_executor;
+
+grant api_internal_executor to postgres;
+set local role api_internal_executor;
+
+insert into pg_temp.portal_semantic_streaming_actual
+select 'process',
+  pg_catalog.row_number() over (
+    order by candidate.semantic_distance, candidate.id, candidate.version desc
+  ),
+  candidate.id,
+  candidate.version,
+  candidate.semantic_distance
+from private.portal_projection_semantic_process_v1(
+  pg_temp.portal_candidate_vector(0)
+) as candidate
+union all
+select 'flow',
+  pg_catalog.row_number() over (
+    order by candidate.semantic_distance, candidate.id, candidate.version desc
+  ),
+  candidate.id,
+  candidate.version,
+  candidate.semantic_distance
+from private.portal_projection_semantic_flow_v1(
+  pg_temp.portal_candidate_vector(0)
+) as candidate;
+
+insert into pg_temp.portal_semantic_streaming_exact
+with source_rows as (
+  select 'process'::text as dataset_kind,
+    process.id,
+    process.version::text as version,
+    process.embedding_ft operator(extensions.<=>)
+      pg_temp.portal_candidate_vector(0) as semantic_distance
+  from public.processes as process
+  where process.state_code in (100, 200)
+    and process.embedding_ft is not null
+    and exists (
+      select 1
+      from private.portal_catalog_search_rows_v1 as projection
+      where projection.dataset_kind = 'process'
+        and projection.id = process.id
+        and projection.version = process.version::text
+        and not exists (
+          select 1
+          from private.portal_catalog_search_rows_v1 as newer
+          where newer.dataset_kind = projection.dataset_kind
+            and newer.id = projection.id
+            and (
+              newer.version > projection.version
+              or (
+                newer.version = projection.version
+                and newer.modified_at > projection.modified_at
+              )
+              or (
+                newer.version = projection.version
+                and newer.modified_at = projection.modified_at
+                and newer.state_code > projection.state_code
+              )
+            )
+        )
+    )
+  union all
+  select 'flow',
+    flow.id,
+    flow.version::text,
+    flow.embedding_ft operator(extensions.<=>)
+      pg_temp.portal_candidate_vector(0)
+  from public.flows as flow
+  where flow.state_code in (100, 200)
+    and flow.embedding_ft is not null
+    and exists (
+      select 1
+      from private.portal_catalog_search_rows_v1 as projection
+      where projection.dataset_kind = 'flow'
+        and projection.id = flow.id
+        and projection.version = flow.version::text
+        and not exists (
+          select 1
+          from private.portal_catalog_search_rows_v1 as newer
+          where newer.dataset_kind = projection.dataset_kind
+            and newer.id = projection.id
+            and (
+              newer.version > projection.version
+              or (
+                newer.version = projection.version
+                and newer.modified_at > projection.modified_at
+              )
+              or (
+                newer.version = projection.version
+                and newer.modified_at = projection.modified_at
+                and newer.state_code > projection.state_code
+              )
+            )
+        )
+    )
+), bounded as (
+  select source_rows.*,
+    pg_catalog.row_number() over (
+      partition by source_rows.dataset_kind
+      order by source_rows.semantic_distance,
+        source_rows.id,
+        source_rows.version desc
+    ) as row_position
+  from source_rows
+  where source_rows.semantic_distance is not null
+    and source_rows.semantic_distance >= 0::double precision
+    and source_rows.semantic_distance <= 0.5::double precision
+)
+select bounded.dataset_kind,
+  bounded.row_position,
+  bounded.id,
+  bounded.version,
+  bounded.semantic_distance
+from bounded
+where bounded.row_position <= 200;
+
+reset role;
+revoke api_internal_executor from postgres;
+
+select extensions.is(
+  (
+    select count(*)
+    from (
+      (
+        select dataset_kind, id, version, semantic_distance
+        from pg_temp.portal_semantic_streaming_actual
+        except
+        select dataset_kind, id, version, semantic_distance
+        from pg_temp.portal_semantic_streaming_exact
+      )
+      union all
+      (
+        select dataset_kind, id, version, semantic_distance
+        from pg_temp.portal_semantic_streaming_exact
+        except
+        select dataset_kind, id, version, semantic_distance
+        from pg_temp.portal_semantic_streaming_actual
+      )
+    ) as difference
+  ),
+  0::bigint,
+  'Process and Flow streaming fallback candidates equal the source exact oracle bidirectionally'
+);
+
+select extensions.is(
+  (
+    select count(*)
+    from pg_temp.portal_semantic_streaming_actual as actual
+    full join pg_temp.portal_semantic_streaming_exact as expected
+      using (dataset_kind, row_position)
+    where actual.id is distinct from expected.id
+      or actual.version is distinct from expected.version
+      or actual.semantic_distance is distinct from expected.semantic_distance
+  ),
+  0::bigint,
+  'Process and Flow streaming fallback preserve exact positional rank order'
+);
+
 -- The empty/unfiltered name_asc fast path must preserve the general kernel's
 -- validated name key, unnamed fallback, tuple order, and cursor semantics.
 create or replace function pg_temp.portal_candidate_flow_payload(p_name text)
