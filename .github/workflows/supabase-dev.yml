@@ -235,6 +235,7 @@ jobs:
       SUPABASE_MAIN_PROJECT_ID: ${{ vars.SUPABASE_MAIN_PROJECT_ID }}
       PREVIEW_GIT_BRANCH: ${{ github.event.pull_request.head.ref }}
       PREVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PREVIEW_PR_NUMBER: ${{ github.event.pull_request.number }}
 
     steps:
       - name: Check Preview verification authority
@@ -243,8 +244,8 @@ jobs:
         env:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
-          if [[ -z "$SUPABASE_ACCESS_TOKEN" || -z "$SUPABASE_MAIN_PROJECT_ID" ]]; then
-            echo "::error::Supabase Preview runtime verification requires SUPABASE_ACCESS_TOKEN and SUPABASE_MAIN_PROJECT_ID for same-repository PRs."
+          if [[ -z "$SUPABASE_ACCESS_TOKEN" || -z "$SUPABASE_MAIN_PROJECT_ID" || -z "$SUPABASE_DEV_PROJECT_ID" ]]; then
+            echo "::error::Supabase Preview runtime verification requires SUPABASE_ACCESS_TOKEN, SUPABASE_MAIN_PROJECT_ID, and SUPABASE_DEV_PROJECT_ID for same-repository PRs."
             exit 1
           fi
           echo "available=true" >> "$GITHUB_OUTPUT"
@@ -351,17 +352,33 @@ jobs:
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
           preview_project_ref="$(
-            supabase branches get "$PREVIEW_GIT_BRANCH" \
+            supabase branches list \
               --project-ref "$SUPABASE_MAIN_PROJECT_ID" \
               --output json \
-            | jq -er '
-                .SUPABASE_URL
-                | capture("^https://(?<ref>[a-z]{20})[.]supabase[.]co$").ref
+            | jq -er \
+              --arg branch "$PREVIEW_GIT_BRANCH" \
+              --arg parent "$SUPABASE_MAIN_PROJECT_ID" \
+              --argjson pr_number "$PREVIEW_PR_NUMBER" '
+                [
+                  .[]
+                  | select(
+                    .git_branch == $branch
+                    and .pr_number == $pr_number
+                    and .parent_project_ref == $parent
+                    and .is_default == false
+                    and .persistent == false
+                    and (.project_ref | type == "string")
+                    and (.project_ref | test("^[a-z]{20}$"))
+                  )
+                ]
+                | if length == 1 then .[0].project_ref
+                  else error("branches list did not resolve exactly one disposable PR Preview")
+                  end
               '
           )"
           [[ "$preview_project_ref" == "$EXPECTED_PREVIEW_PROJECT_REF" ]]
           [[ "$preview_project_ref" != "$SUPABASE_MAIN_PROJECT_ID" ]]
-          [[ -z "$SUPABASE_DEV_PROJECT_ID" || "$preview_project_ref" != "$SUPABASE_DEV_PROJECT_ID" ]]
+          [[ "$preview_project_ref" != "$SUPABASE_DEV_PROJECT_ID" ]]
           printf 'ref=%s\n' "$preview_project_ref" >> "$GITHUB_OUTPUT"
 
       - name: Apply exact Preview PostgREST runtime contract
@@ -413,27 +430,55 @@ jobs:
           echo "Preview PostgREST runtime readback did not reach the exact contract" >&2
           exit 1
 
-      - name: Verify anonymous Preview Hybrid boundary
+      - name: Read enabled Preview public API key
         if: steps.preview_authority.outputs.available == 'true'
         shell: bash
         env:
           PREVIEW_PROJECT_REF: ${{ steps.preview_project.outputs.ref }}
           SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
         run: |
+          api_keys="$(
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              "https://api.supabase.com/v1/projects/$PREVIEW_PROJECT_REF/api-keys"
+          )"
           public_api_key="$(
-            supabase projects api-keys \
-              --project-ref "$PREVIEW_PROJECT_REF" \
-              --output json \
-            | jq -er '
+            jq -er '
                 (
-                  [.[] | select((.disabled // false) == false and .type == "publishable") | .api_key]
-                  + [.[] | select((.disabled // false) == false and .name == "anon" and .type == "legacy") | .api_key]
+                  [
+                    .[]
+                    | select(
+                      (.disabled // false) == false
+                      and .type == "publishable"
+                      and (.api_key | type == "string")
+                      and (.api_key | test("^sb_publishable_[A-Za-z0-9_-]+$"))
+                    )
+                    | .api_key
+                  ]
+                  + [
+                    .[]
+                    | select(
+                      (.disabled // false) == false
+                      and .name == "anon"
+                      and .type == "legacy"
+                      and (.api_key | type == "string")
+                      and (.api_key | test("^eyJ[A-Za-z0-9_-]+[.][A-Za-z0-9_-]+[.][A-Za-z0-9_-]+$"))
+                    )
+                    | .api_key
+                  ]
                 )[0] // error("no enabled publishable or legacy anon key")
-              '
+              ' <<<"$api_keys"
           )"
           echo "::add-mask::$public_api_key"
-          unset SUPABASE_ACCESS_TOKEN
+          printf 'PREVIEW_PUBLIC_API_KEY=%s\n' "$public_api_key" >> "$GITHUB_ENV"
+          unset api_keys SUPABASE_ACCESS_TOKEN
 
+      - name: Verify anonymous Preview Hybrid boundary
+        if: steps.preview_authority.outputs.available == 'true'
+        shell: bash
+        env:
+          PREVIEW_PROJECT_REF: ${{ steps.preview_project.outputs.ref }}
+        run: |
           query_embedding="$(
             jq -nr '[range(0; 1024) | if . == 0 then 1 else 0 end] | tojson'
           )"
@@ -455,7 +500,7 @@ jobs:
                 --output "$response_file" \
                 --write-out '%{http_code}' \
                 --request POST \
-                --header "apikey: $public_api_key" \
+                --header "apikey: $PREVIEW_PUBLIC_API_KEY" \
                 --header "Content-Profile: api" \
                 --header "Content-Type: application/json" \
                 --data "$request_payload" \
@@ -522,7 +567,7 @@ jobs:
             assert_opaque_error 404 PGRST202 \
               "$RUNNER_TEMP/portal-hybrid-forged-$forged_parameter.json" \
               --request POST \
-              --header "apikey: $public_api_key" \
+              --header "apikey: $PREVIEW_PUBLIC_API_KEY" \
               --header "Content-Profile: api" \
               --header "Content-Type: application/json" \
               --data "$forged_payload" \
@@ -532,7 +577,7 @@ jobs:
           assert_opaque_error 406 PGRST106 \
             "$RUNNER_TEMP/portal-hybrid-private-profile.json" \
             --request POST \
-            --header "apikey: $public_api_key" \
+            --header "apikey: $PREVIEW_PUBLIC_API_KEY" \
             --header "Content-Profile: private" \
             --header "Content-Type: application/json" \
             --data "$request_payload" \
@@ -541,7 +586,7 @@ jobs:
           assert_opaque_error 404 PGRST202 \
             "$RUNNER_TEMP/portal-hybrid-public-profile.json" \
             --request POST \
-            --header "apikey: $public_api_key" \
+            --header "apikey: $PREVIEW_PUBLIC_API_KEY" \
             --header "Content-Profile: public" \
             --header "Content-Type: application/json" \
             --data "$request_payload" \

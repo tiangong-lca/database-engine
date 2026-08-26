@@ -135,8 +135,9 @@ def main() -> int:
         "SUPABASE_MAIN_PROJECT_ID: ${{ vars.SUPABASE_MAIN_PROJECT_ID }}",
         "PREVIEW_GIT_BRANCH: ${{ github.event.pull_request.head.ref }}",
         "PREVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
+        "PREVIEW_PR_NUMBER: ${{ github.event.pull_request.number }}",
         "steps.preview_authority.outputs.available == 'true'",
-        "Supabase Preview runtime verification requires SUPABASE_ACCESS_TOKEN and SUPABASE_MAIN_PROJECT_ID",
+        "Supabase Preview runtime verification requires SUPABASE_ACCESS_TOKEN, SUPABASE_MAIN_PROJECT_ID, and SUPABASE_DEV_PROJECT_ID",
         "exit 1",
         "uses: supabase/setup-cli@v2",
         "version: 2.98.0",
@@ -150,19 +151,33 @@ def main() -> int:
         '.conclusion == "success"',
         'capture("^https://supabase[.]com/dashboard/project/(?<ref>[a-z]{20})$").ref',
         'EXPECTED_PREVIEW_PROJECT_REF: ${{ steps.supabase_preview_check.outputs.ref }}',
-        'supabase branches get "$PREVIEW_GIT_BRANCH"',
+        "supabase branches list",
         '--project-ref "$SUPABASE_MAIN_PROJECT_ID"',
         "--output json",
-        ".SUPABASE_URL",
-        'capture("^https://(?<ref>[a-z]{20})[.]supabase[.]co$").ref',
+        '--arg branch "$PREVIEW_GIT_BRANCH"',
+        '--arg parent "$SUPABASE_MAIN_PROJECT_ID"',
+        '--argjson pr_number "$PREVIEW_PR_NUMBER"',
+        ".git_branch == $branch",
+        ".pr_number == $pr_number",
+        ".parent_project_ref == $parent",
+        ".is_default == false",
+        ".persistent == false",
+        '(.project_ref | test("^[a-z]{20}$"))',
+        "if length == 1 then .[0].project_ref",
         '[[ "$preview_project_ref" == "$EXPECTED_PREVIEW_PROJECT_REF" ]]',
         '[[ "$preview_project_ref" != "$SUPABASE_MAIN_PROJECT_ID" ]]',
-        '[[ -z "$SUPABASE_DEV_PROJECT_ID" || "$preview_project_ref" != "$SUPABASE_DEV_PROJECT_ID" ]]',
+        '[[ "$preview_project_ref" != "$SUPABASE_DEV_PROJECT_ID" ]]',
         "Read back exact Preview PostgREST runtime contract",
-        'supabase projects api-keys',
+        '"https://api.supabase.com/v1/projects/$PREVIEW_PROJECT_REF/api-keys"',
+        "(.disabled // false) == false",
         '.type == "publishable"',
-        '.name == "anon" and .type == "legacy"',
-        "unset SUPABASE_ACCESS_TOKEN",
+        '.name == "anon"',
+        '.type == "legacy"',
+        '(.api_key | type == "string")',
+        'test("^sb_publishable_[A-Za-z0-9_-]+$")',
+        'test("^eyJ[A-Za-z0-9_-]+[.][A-Za-z0-9_-]+[.][A-Za-z0-9_-]+$")',
+        "unset api_keys SUPABASE_ACCESS_TOKEN",
+        "PREVIEW_PUBLIC_API_KEY=%s",
         'Content-Profile: api',
         'portal_hybrid_search_v1',
         'portal.public-hybrid-candidate-page.v1.schema.json',
@@ -192,6 +207,9 @@ def main() -> int:
         "supabase config push",
         "supabase functions",
         "SUPABASE_DB_PASSWORD",
+        "supabase branches get",
+        "supabase projects api-keys",
+        "?reveal=true",
     )
     failures.extend(
         f"Preview verification must not contain {token}"
@@ -212,6 +230,10 @@ def main() -> int:
         )
 
     preview_probe_marker = "- name: Verify anonymous Preview Hybrid boundary"
+    preview_key_marker = "- name: Read enabled Preview public API key"
+    preview_key_step = preview_workflow.split(preview_key_marker, 1)[-1].split(
+        preview_probe_marker, 1
+    )[0]
     preview_probe = preview_workflow.split(preview_probe_marker, 1)[-1]
     preview_job_header = preview_workflow.split("    steps:", 1)[0]
     if "secrets.SUPABASE_ACCESS_TOKEN" in preview_job_header:
@@ -225,11 +247,35 @@ def main() -> int:
         "Cookie:",
         "SERVICE_ROLE",
         "service_role",
+        "SUPABASE_ACCESS_TOKEN",
+        "api-keys",
     ):
         if forbidden_probe_credential in preview_probe:
             failures.append(
                 "anonymous Preview Hybrid probe must not contain "
                 f"{forbidden_probe_credential}"
+            )
+    if preview_key_step.count(
+        '"https://api.supabase.com/v1/projects/$PREVIEW_PROJECT_REF/api-keys"'
+    ) != 1:
+        failures.append("Preview probe must read API keys exactly once without reveal")
+    if preview_key_step.count("(.disabled // false) == false") != 2:
+        failures.append("Preview key selector must reject disabled publishable and anon keys")
+    if preview_key_step.count('(.api_key | type == "string")') != 2:
+        failures.append("Preview key selector must require concrete string public keys")
+    if preview_key_step.find('.type == "publishable"') > preview_key_step.find('.name == "anon"'):
+        failures.append("Preview key selector must prefer publishable over legacy anon")
+    key_step_order = (
+        preview_key_step.find('echo "::add-mask::$public_api_key"'),
+        preview_key_step.find("PREVIEW_PUBLIC_API_KEY=%s"),
+        preview_key_step.find("unset api_keys SUPABASE_ACCESS_TOKEN"),
+    )
+    if -1 in key_step_order or key_step_order != tuple(sorted(key_step_order)):
+        failures.append("Preview public key must be masked, exported, then raw authority cleared")
+    for forbidden_key_output in ('echo "$api_keys"', "?reveal=true"):
+        if forbidden_key_output in preview_key_step:
+            failures.append(
+                f"Preview API-key read must not retain or print {forbidden_key_output}"
             )
 
     required = (
