@@ -2177,23 +2177,32 @@ insert into pg_temp.portal_benchmark_failures (
 select
   'semantic_latest_version_probe',
   'P0001',
-  'semantic-only Hybrid returned no evidence or an older visible version',
+  'semantic-only Hybrid violated the zero-vector or latest-visible contract',
   0
 where exists (
     select 1
     from pg_temp.portal_benchmark_semantic_probe as probe
-    where pg_catalog.jsonb_array_length(probe.payload -> 'items') = 0
-       or exists (
-         select 1
-         from pg_catalog.jsonb_array_elements(
-           probe.payload -> 'items'
-         ) as item(value)
-         where item.value #>> '{key,version}' = '00.99.999'
-            or item.value #>> '{key,id}' = pg_temp.portal_bench_uuid(
-              probe.dataset_kind,
-              1
-            )::text
-       )
+    where case
+      when (
+        probe.dataset_kind = 'process'
+        and :'process_vector_rows'::integer = 0
+      ) or (
+        probe.dataset_kind = 'flow'
+        and :'flow_vector_rows'::integer = 0
+      ) then pg_catalog.jsonb_array_length(probe.payload -> 'items') <> 0
+      else pg_catalog.jsonb_array_length(probe.payload -> 'items') = 0
+        or exists (
+          select 1
+          from pg_catalog.jsonb_array_elements(
+            probe.payload -> 'items'
+          ) as item(value)
+          where item.value #>> '{key,version}' = '00.99.999'
+             or item.value #>> '{key,id}' = pg_temp.portal_bench_uuid(
+               probe.dataset_kind,
+               1
+             )::text
+        )
+    end
 );
 
 insert into pg_temp.portal_benchmark_failures (
