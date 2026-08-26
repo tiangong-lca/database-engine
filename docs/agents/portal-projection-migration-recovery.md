@@ -1,6 +1,6 @@
 ---
 lastReviewedAt: 2026-08-26
-lastReviewedCommit: 10059c6
+lastReviewedCommit: 5d8e7dd
 lastReviewedNote: "Reviewed for immutable v1 manifest diagnosis, fail-closed drift handling, and the required shadow-v2 semantic-change path."
 title: Portal Projection Migration Recovery
 docType: runbook
@@ -340,7 +340,9 @@ have occurred, do not re-enable or retry v1, even after restoring identical
 function bytes. Treat the full v1 projection as untrusted and recover through a
 shadow v2 rebuild and cutover.
 
-Supabase CLI `2.109.1` was used for the local Issue 531 evidence. A real
-five-second reconcile lock timeout returned after eight wall-clock seconds
-including CLI connection/migration overhead; the migration ledger and helper
-state remained unchanged before retry.
+The recovery harness holds the conflicting writer lock for 60 seconds so CLI
+startup cannot let it expire before the migration reaches `LOCK`. After the
+expected five-second lock timeout is captured, the harness terminates exactly
+that application-name-bound backend and verifies a 5–30 second wall window,
+unchanged migration ledger/helper state, and successful retry. Formal evidence
+uses Supabase CLI `2.109.1`.
