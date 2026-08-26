@@ -94,6 +94,17 @@ and no-op repeat without index rebuild. See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries.
 
+### `run_portal_projection_benchmark.sh`
+
+Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
+fence, plan, and ANN-recall benchmark only against an explicitly attested
+Issue-531 local Supabase project. The runner byte-compares every Issue 531
+migration with the repository, writes into a new operator-selected private
+directory, and resets the isolated database before and after the run so rolled
+back HNSW pages cannot accumulate. Its environment contract mirrors the
+recovery runner and additionally requires
+`PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`.
+
 ### `resolve_migration_head.py`
 
 Prints the latest valid migration version from the checked-out

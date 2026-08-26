@@ -688,5 +688,81 @@ if [[ "$index_oids_before" != "$index_oids_after" ]]; then
   exit 1
 fi
 
+# Reverse-direction lock proof: a successful source-write fence blocks a real
+# content UPDATE until COMMIT. The fixed two-second sleep is coordination only;
+# representative fence work is measured separately by the benchmark SQL.
+run_psql <<'SQL'
+alter table public.processes disable trigger user;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v1;
+insert into public.processes (
+  id, version, json, json_ordered, user_id, state_code,
+  rule_verification, modified_at, search_text, embedding_ft, model_id
+)
+values (
+  '53190000-0000-4000-8000-000000000099',
+  '01.00.000',
+  '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"successful fence writer"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::jsonb,
+  '{"processDataSet":{"processInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"successful fence writer"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::json,
+  '53190000-0000-4000-8000-000000000010',
+  100,
+  true,
+  '2026-08-26 09:10:00+00',
+  null,
+  null,
+  null
+);
+SQL
+
+docker exec -i "$container_name" \
+  psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+  >"$race_log_dir/successful-fence-holder.log" 2>&1 <<'SQL' &
+set application_name = 'portal_projection_successful_fence_holder';
+begin;
+lock table public.processes, public.flows in share row exclusive mode;
+select pg_sleep(2);
+commit;
+SQL
+successful_fence_pid=$!
+wait_for_pg_sleep portal_projection_successful_fence_holder
+writer_started="$(perl -MTime::HiRes=time -e 'printf "%.6f", time')"
+run_psql <<'SQL'
+update public.processes
+set json = pg_catalog.jsonb_set(
+      json,
+      '{processDataSet,processInformation,dataSetInformation,name,baseName,#text}',
+      pg_catalog.to_jsonb('successful fence writer updated'::text)
+    ),
+    modified_at = '2026-08-26 09:10:01+00'
+where id = '53190000-0000-4000-8000-000000000099'
+  and version = '01.00.000';
+SQL
+writer_wait_ms="$(perl -MTime::HiRes=time -e \
+  'printf "%.3f", (time - $ARGV[0]) * 1000' "$writer_started")"
+wait "$successful_fence_pid"
+if ! awk -v value="$writer_wait_ms" \
+  'BEGIN { exit !(value >= 1000 && value <= 5000) }'; then
+  echo "successful-fence writer wait fell outside 1000-5000ms: $writer_wait_ms" >&2
+  exit 1
+fi
+assert_sql "
+  coalesce((
+    select card #>> '{names,0,value}' = 'successful fence writer updated'
+      and modified_at = '2026-08-26 09:10:01+00'::timestamptz
+    from private.portal_catalog_search_rows_v1
+    where dataset_kind = 'process'
+      and id = '53190000-0000-4000-8000-000000000099'::uuid
+      and version = '01.00.000'
+  ), false)
+" "writer did not commit exact content after successful fence release"
+echo "Successful fence blocked writer: ${writer_wait_ms}ms (includes 2s coordination hold)"
+
+run_psql <<'SQL'
+delete from public.processes
+where id = '53190000-0000-4000-8000-000000000099'
+  and version = '01.00.000';
+alter table public.processes enable trigger user;
+SQL
+
 rm -rf "$race_log_dir"
 echo "Portal projection race and partial-upgrade recovery validation passed"

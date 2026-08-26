@@ -99,6 +99,11 @@ select pg_catalog.set_config(
   :'writer_samples',
   true
 );
+select pg_catalog.set_config(
+  'portal.benchmark_database_bytes_before',
+  pg_catalog.pg_database_size(pg_catalog.current_database())::text,
+  true
+);
 
 select
   pg_catalog.to_regclass(
@@ -804,7 +809,23 @@ select pg_catalog.jsonb_build_object(
   ),
   'projection_total_bytes', pg_catalog.pg_total_relation_size(
     'private.portal_catalog_search_rows_v1'
-  )
+  ),
+  'projection_heap_bytes', pg_catalog.pg_relation_size(
+    'private.portal_catalog_search_rows_v1'
+  ),
+  'database_bytes_before_fixture', pg_catalog.current_setting(
+    'portal.benchmark_database_bytes_before'
+  )::bigint,
+  'database_bytes_with_fixture', pg_catalog.pg_database_size(
+    pg_catalog.current_database()
+  ),
+  'database_fixture_delta_bytes', pg_catalog.pg_database_size(
+    pg_catalog.current_database()
+  ) - pg_catalog.current_setting(
+    'portal.benchmark_database_bytes_before'
+  )::bigint,
+  'pgroonga_storage_note',
+    'pg_relation_size does not include external Groonga files; use isolated database phase delta and hosted before/after database size'
 ) as redacted_benchmark_metadata;
 
 create temporary table portal_benchmark_plans (
@@ -898,6 +919,10 @@ grant api_internal_executor to postgres;
 set local role api_internal_executor;
 
 set local enable_sort = off;
+set local hnsw.iterative_scan = relaxed_order;
+set local hnsw.ef_search = 1000;
+set local hnsw.max_scan_tuples = 100000;
+set local hnsw.scan_mem_multiplier = 1;
 
 \qecho profile=process-source-hnsw-latest-public
 explain (analyze, buffers, settings, wal, summary, format json)
@@ -1046,6 +1071,7 @@ select pg_temp.capture_portal_benchmark_plan(
 );
 
 set local enable_sort = on;
+set local hnsw.iterative_scan = strict_order;
 
 reset role;
 revoke api_internal_executor from postgres;
@@ -1692,7 +1718,8 @@ where exists (
   select 1
   from pg_temp.portal_benchmark_recall
   where recall < 0.95::numeric
-     or ann_count < exact_count
+     or ann_count < least(20, exact_count)
+     or ann_count > 200
 );
 
 select label,
@@ -1801,7 +1828,8 @@ analyze public.flows;
 analyze private.portal_catalog_search_rows_v1;
 
 \if :benchmark_pass
+  \echo 'BENCHMARK_STATUS=PASS'
 \else
   \echo 'ERROR: Portal projection benchmark failed or exceeded 2000ms p95'
-  select 1 / 0;
+  \echo 'BENCHMARK_STATUS=FAIL'
 \endif

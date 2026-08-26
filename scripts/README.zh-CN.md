@@ -85,6 +85,14 @@ history 下可重试、同名 concurrent index 可受控清理，以及已记录
 索引。所需环境变量与恢复边界见
 `docs/agents/portal-projection-migration-recovery.md`。
 
+### `run_portal_projection_benchmark.sh`
+
+仅在显式确认的 Issue 531 隔离本地 Supabase 项目中运行代表性 Process/Flow
+Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把全部
+Issue 531 migration 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
+reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合同与 recovery runner
+一致，另要求 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`。
+
 ### `resolve_migration_head.py`
 
 从当前 checkout 的 `supabase/migrations` 目录输出最新的有效 migration 版本。

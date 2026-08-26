@@ -21,8 +21,6 @@ checkPaths:
   - supabase/migrations/20260826080345_portal_projection_reconcile.sql
   - supabase/migrations/20260826080348_portal_projection_process_pgroonga.sql
   - supabase/migrations/20260826080351_portal_projection_flow_pgroonga.sql
-  - supabase/migrations/20260826080354_portal_projection_process_hnsw.sql
-  - supabase/migrations/20260826080357_portal_projection_flow_hnsw.sql
   - supabase/migrations/20260826080400_portal_projection_candidate_cutover.sql
   - supabase/migrations/20260826080403_portal_projection_facets.sql
 related:
