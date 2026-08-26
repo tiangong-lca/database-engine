@@ -640,6 +640,135 @@ grant api_internal_executor to postgres;
 grant create on schema private to api_internal_executor;
 set role api_internal_executor;
 
+create or replace function private.portal_projection_semantic_process_exact_v1(
+  p_query_embedding extensions.vector(1024)
+)
+returns table(
+  id uuid,
+  version text,
+  semantic_distance double precision
+)
+language sql
+stable
+parallel restricted
+security definer
+set search_path = ''
+set statement_timeout = '8s'
+set plan_cache_mode = 'force_custom_plan'
+set work_mem = '32MB'
+set enable_nestloop = 'off'
+set enable_sort = 'on'
+set max_parallel_workers_per_gather = '0'
+set jit = 'off'
+set row_security = 'on'
+as $function$
+  with latest_keys as materialized (
+    select distinct on (projection.id)
+      projection.id,
+      projection.version
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'process'
+    order by projection.id,
+      projection.version desc,
+      projection.modified_at desc,
+      projection.state_code desc
+  ), eligible as materialized (
+    select process.id,
+      process.version::text as version,
+      process.embedding_ft operator(extensions.<=>) p_query_embedding
+        as semantic_distance
+    from public.processes as process
+    join latest_keys as latest
+      on latest.id = process.id
+     and process.version = latest.version::character(9)
+    where process.state_code in (100, 200)
+      and process.embedding_ft is not null
+  )
+  select eligible.id,
+    eligible.version,
+    eligible.semantic_distance
+  from eligible
+  where eligible.semantic_distance is not null
+    and eligible.semantic_distance >= 0::double precision
+    and eligible.semantic_distance <= 0.5::double precision
+  order by eligible.semantic_distance,
+    eligible.id,
+    eligible.version desc
+  limit 200
+$function$;
+
+create or replace function private.portal_projection_semantic_flow_exact_v1(
+  p_query_embedding extensions.vector(1024)
+)
+returns table(
+  id uuid,
+  version text,
+  semantic_distance double precision
+)
+language sql
+stable
+parallel restricted
+security definer
+set search_path = ''
+set statement_timeout = '8s'
+set plan_cache_mode = 'force_custom_plan'
+set work_mem = '32MB'
+set enable_nestloop = 'off'
+set enable_sort = 'on'
+set max_parallel_workers_per_gather = '0'
+set jit = 'off'
+set row_security = 'on'
+as $function$
+  with latest_keys as materialized (
+    select distinct on (projection.id)
+      projection.id,
+      projection.version
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'flow'
+    order by projection.id,
+      projection.version desc,
+      projection.modified_at desc,
+      projection.state_code desc
+  ), eligible as materialized (
+    select flow.id,
+      flow.version::text as version,
+      flow.embedding_ft operator(extensions.<=>) p_query_embedding
+        as semantic_distance
+    from public.flows as flow
+    join latest_keys as latest
+      on latest.id = flow.id
+     and flow.version = latest.version::character(9)
+    where flow.state_code in (100, 200)
+      and flow.embedding_ft is not null
+  )
+  select eligible.id,
+    eligible.version,
+    eligible.semantic_distance
+  from eligible
+  where eligible.semantic_distance is not null
+    and eligible.semantic_distance >= 0::double precision
+    and eligible.semantic_distance <= 0.5::double precision
+  order by eligible.semantic_distance,
+    eligible.id,
+    eligible.version desc
+  limit 200
+$function$;
+
+revoke all on function private.portal_projection_semantic_process_exact_v1(
+  extensions.vector
+) from public, anon, authenticated, service_role,
+  portal_public_executor, api_internal_executor;
+grant execute on function private.portal_projection_semantic_process_exact_v1(
+  extensions.vector
+) to api_internal_executor;
+revoke all on function private.portal_projection_semantic_flow_exact_v1(
+  extensions.vector
+) from public, anon, authenticated, service_role,
+  portal_public_executor, api_internal_executor;
+grant execute on function private.portal_projection_semantic_flow_exact_v1(
+  extensions.vector
+) to api_internal_executor;
+
 create or replace function private.portal_projection_semantic_process_v1(
   p_query_embedding extensions.vector(1024)
 )
@@ -671,8 +800,6 @@ declare
   v_source_versions text[];
   v_source_distances double precision[];
   v_source_rows integer;
-  v_previous_work_mem text;
-  v_previous_enable_nestloop text;
 begin
   if p_query_embedding is null then
     raise exception using
@@ -821,65 +948,11 @@ begin
     return;
   end if;
 
-  v_previous_work_mem := pg_catalog.current_setting('work_mem');
-  v_previous_enable_nestloop := pg_catalog.current_setting('enable_nestloop');
-  begin
-    perform pg_catalog.set_config('work_mem', '32MB', true);
-    perform pg_catalog.set_config('enable_nestloop', 'off', true);
-
-    return query
-    with latest_keys as materialized (
-      select distinct on (projection.id)
-        projection.id,
-        projection.version
-      from private.portal_catalog_search_rows_v1 as projection
-      where projection.dataset_kind = 'process'
-      order by projection.id,
-        projection.version desc,
-        projection.modified_at desc,
-        projection.state_code desc
-    ), eligible as materialized (
-      select process.id,
-        process.version::text as version,
-        process.embedding_ft operator(extensions.<=>) p_query_embedding
-          as semantic_distance
-      from public.processes as process
-      join latest_keys as latest
-        on latest.id = process.id
-       and process.version = latest.version::character(9)
-      where process.state_code in (100, 200)
-        and process.embedding_ft is not null
-    )
-    select eligible.id,
-      eligible.version,
-      eligible.semantic_distance
-    from eligible
-    where eligible.semantic_distance is not null
-      and eligible.semantic_distance >= 0::double precision
-      and eligible.semantic_distance <= 0.5::double precision
-    order by eligible.semantic_distance,
-      eligible.id,
-      eligible.version desc
-    limit 200;
-
-    perform pg_catalog.set_config(
-      'enable_nestloop', v_previous_enable_nestloop, true
-    );
-    perform pg_catalog.set_config('work_mem', v_previous_work_mem, true);
-  exception
-    when query_canceled then
-      perform pg_catalog.set_config(
-        'enable_nestloop', v_previous_enable_nestloop, true
-      );
-      perform pg_catalog.set_config('work_mem', v_previous_work_mem, true);
-      raise;
-    when others then
-      perform pg_catalog.set_config(
-        'enable_nestloop', v_previous_enable_nestloop, true
-      );
-      perform pg_catalog.set_config('work_mem', v_previous_work_mem, true);
-      raise;
-  end;
+  return query
+  select exact.*
+  from private.portal_projection_semantic_process_exact_v1(
+    p_query_embedding
+  ) as exact;
   return;
 end
 $function$;
@@ -915,8 +988,6 @@ declare
   v_source_versions text[];
   v_source_distances double precision[];
   v_source_rows integer;
-  v_previous_work_mem text;
-  v_previous_enable_nestloop text;
 begin
   if p_query_embedding is null then
     raise exception using
@@ -1065,65 +1136,11 @@ begin
     return;
   end if;
 
-  v_previous_work_mem := pg_catalog.current_setting('work_mem');
-  v_previous_enable_nestloop := pg_catalog.current_setting('enable_nestloop');
-  begin
-    perform pg_catalog.set_config('work_mem', '32MB', true);
-    perform pg_catalog.set_config('enable_nestloop', 'off', true);
-
-    return query
-    with latest_keys as materialized (
-      select distinct on (projection.id)
-        projection.id,
-        projection.version
-      from private.portal_catalog_search_rows_v1 as projection
-      where projection.dataset_kind = 'flow'
-      order by projection.id,
-        projection.version desc,
-        projection.modified_at desc,
-        projection.state_code desc
-    ), eligible as materialized (
-      select flow.id,
-        flow.version::text as version,
-        flow.embedding_ft operator(extensions.<=>) p_query_embedding
-          as semantic_distance
-      from public.flows as flow
-      join latest_keys as latest
-        on latest.id = flow.id
-       and flow.version = latest.version::character(9)
-      where flow.state_code in (100, 200)
-        and flow.embedding_ft is not null
-    )
-    select eligible.id,
-      eligible.version,
-      eligible.semantic_distance
-    from eligible
-    where eligible.semantic_distance is not null
-      and eligible.semantic_distance >= 0::double precision
-      and eligible.semantic_distance <= 0.5::double precision
-    order by eligible.semantic_distance,
-      eligible.id,
-      eligible.version desc
-    limit 200;
-
-    perform pg_catalog.set_config(
-      'enable_nestloop', v_previous_enable_nestloop, true
-    );
-    perform pg_catalog.set_config('work_mem', v_previous_work_mem, true);
-  exception
-    when query_canceled then
-      perform pg_catalog.set_config(
-        'enable_nestloop', v_previous_enable_nestloop, true
-      );
-      perform pg_catalog.set_config('work_mem', v_previous_work_mem, true);
-      raise;
-    when others then
-      perform pg_catalog.set_config(
-        'enable_nestloop', v_previous_enable_nestloop, true
-      );
-      perform pg_catalog.set_config('work_mem', v_previous_work_mem, true);
-      raise;
-  end;
+  return query
+  select exact.*
+  from private.portal_projection_semantic_flow_exact_v1(
+    p_query_embedding
+  ) as exact;
   return;
 end
 $function$;

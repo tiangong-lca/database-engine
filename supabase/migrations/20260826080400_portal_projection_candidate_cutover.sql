@@ -1471,6 +1471,12 @@ declare
   v_semantic_flow regprocedure := pg_catalog.to_regprocedure(
     'private.portal_projection_semantic_flow_v1(extensions.vector)'
   );
+  v_semantic_process_exact regprocedure := pg_catalog.to_regprocedure(
+    'private.portal_projection_semantic_process_exact_v1(extensions.vector)'
+  );
+  v_semantic_flow_exact regprocedure := pg_catalog.to_regprocedure(
+    'private.portal_projection_semantic_flow_exact_v1(extensions.vector)'
+  );
   v_semantic_dispatch regprocedure := pg_catalog.to_regprocedure(
     'private.portal_projection_semantic_candidates_v1(text,extensions.vector)'
   );
@@ -1485,6 +1491,8 @@ begin
      or v_hybrid is null
      or v_semantic_process is null
      or v_semantic_flow is null
+     or v_semantic_process_exact is null
+     or v_semantic_flow_exact is null
      or v_semantic_dispatch is null then
     raise exception 'Portal candidate-first installation is incomplete';
   end if;
@@ -1522,6 +1530,37 @@ begin
     where routine.oid = v_candidates
   ) is not true then
     raise exception 'Portal candidate rows owner/config/ACL mismatch';
+  end if;
+  if exists (
+    select 1
+    from pg_catalog.pg_proc as routine
+    where routine.oid = any (array[
+        v_semantic_process_exact::oid,
+        v_semantic_flow_exact::oid
+      ])
+      and not (
+        routine.proowner = 'api_internal_executor'::regrole
+        and routine.prosecdef
+        and coalesce(routine.proconfig, '{}'::text[]) @> array[
+          'search_path=""',
+          'statement_timeout=8s',
+          'plan_cache_mode=force_custom_plan',
+          'work_mem=32MB',
+          'enable_nestloop=off',
+          'enable_sort=on',
+          'max_parallel_workers_per_gather=0',
+          'jit=off',
+          'row_security=on'
+        ]::text[]
+        and coalesce(routine.proacl::text, '')
+          = '{api_internal_executor=X/api_internal_executor}'
+        and routine.prosrc ~ 'latest_keys as materialized'
+        and routine.prosrc ~ 'eligible as materialized'
+        and routine.prosrc ~ 'embedding_ft'
+        and routine.prosrc !~ '\.json|search_text|extracted_md|portal_catalog_card'
+      )
+  ) then
+    raise exception 'Portal exact semantic helper owner/config/scope mismatch';
   end if;
   if exists (
     select 1

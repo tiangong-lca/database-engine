@@ -531,6 +531,34 @@ select extensions.ok(
         and routine.prosrc ~ 'embedding_ft'
       )
   )
+  and not exists (
+    select 1
+    from pg_catalog.pg_proc as routine
+    where routine.oid = any (array[
+        'private.portal_projection_semantic_process_exact_v1(extensions.vector)'::regprocedure::oid,
+        'private.portal_projection_semantic_flow_exact_v1(extensions.vector)'::regprocedure::oid
+      ])
+      and not (
+        routine.proowner = 'api_internal_executor'::regrole
+        and routine.prosecdef
+        and coalesce(routine.proconfig, '{}'::text[]) @> array[
+          'search_path=""',
+          'statement_timeout=8s',
+          'plan_cache_mode=force_custom_plan',
+          'work_mem=32MB',
+          'enable_nestloop=off',
+          'enable_sort=on',
+          'max_parallel_workers_per_gather=0',
+          'jit=off',
+          'row_security=on'
+        ]::text[]
+        and coalesce(routine.proacl::text, '')
+          = '{api_internal_executor=X/api_internal_executor}'
+        and routine.prosrc ~ 'latest_keys as materialized'
+        and routine.prosrc ~ 'eligible as materialized'
+        and routine.prosrc ~ 'embedding_ft'
+      )
+  )
   and (
     select routine.prosrc ~ 'portal_projection_semantic_process_v1'
       and routine.prosrc ~ 'portal_projection_semantic_flow_v1'
@@ -1811,14 +1839,14 @@ select extensions.is(
         'from pg_catalog.generate_subscripts(v_ids, 1)'
       ) < pg_catalog.strpos(
         routine.prosrc,
-        'with latest_keys as materialized'
+        'exact_v1'
       )
       and pg_catalog.strpos(
         routine.prosrc,
         E'    return;\n  end if;'
       ) < pg_catalog.strpos(
         routine.prosrc,
-        'with latest_keys as materialized'
+        'exact_v1'
       )
   ),
   2::bigint,
