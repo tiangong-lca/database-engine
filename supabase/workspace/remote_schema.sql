@@ -20075,6 +20075,7 @@ CREATE OR REPLACE FUNCTION "api"."portal_sitemap_shard_v1"("p_shard_cursor" "tex
     AS $_$
 declare
   v_cursor jsonb;
+  v_expected_cursor jsonb;
   v_bucket integer;
   v_items jsonb;
   v_result jsonb;
@@ -20093,14 +20094,16 @@ begin
     raise exception using errcode = '22023', message = 'invalid portal request';
   end if;
   v_bucket := (v_cursor ->> 'bucket')::integer;
+  v_expected_cursor := pg_catalog.jsonb_build_object(
+    'v', 1,
+    'scope', 'sitemap-shard',
+    'bucket', v_bucket,
+    'shardCount', 64
+  );
 
-  if v_cursor is distinct from pg_catalog.jsonb_build_object(
-       'v', 1,
-       'scope', 'sitemap-shard',
-       'bucket', v_bucket,
-       'shardCount', 64
-     )
-     or private.portal_cursor_encode_v1(v_cursor) <> p_shard_cursor then
+  if v_cursor is distinct from v_expected_cursor
+     or private.portal_cursor_encode_v1(v_expected_cursor) <>
+       p_shard_cursor then
     raise exception using errcode = '22023', message = 'invalid portal request';
   end if;
 
@@ -20109,15 +20112,18 @@ begin
   perform private.assert_portal_sitemap_projection_v1();
 
   with latest as materialized (
-    select projection.dataset_kind,
+    select distinct on (projection.dataset_kind, projection.id)
+      projection.dataset_kind,
       projection.id,
       projection.version,
       projection.modified_at
-    from private.portal_sitemap_latest_rows_v1 as projection
+    from private.portal_sitemap_rows_v1 as projection
     where projection.shard_no = v_bucket
       and projection.contract_version = 1
     order by projection.dataset_kind,
-      projection.id
+      projection.id,
+      projection.version desc,
+      projection.modified_at desc
     limit 4097
   )
   select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
@@ -20166,7 +20172,7 @@ $_$;
 ALTER FUNCTION "api"."portal_sitemap_shard_v1"("p_shard_cursor" "text") OWNER TO "portal_public_executor";
 
 
-COMMENT ON FUNCTION "api"."portal_sitemap_shard_v1"("p_shard_cursor" "text") IS 'Bounded latest-visible Process/Flow sitemap page for one opaque stable-hash shard cursor.';
+COMMENT ON FUNCTION "api"."portal_sitemap_shard_v1"("p_shard_cursor" "text") IS 'Output-bounded latest-visible Process/Flow sitemap page over exact-version rows for one opaque stable-hash shard cursor.';
 
 
 
@@ -25408,22 +25414,70 @@ CREATE OR REPLACE FUNCTION "private"."assert_portal_sitemap_projection_v1"() RET
     AS $$
 declare
   v_index regclass :=
-    pg_catalog.to_regclass('private.portal_sitemap_latest_shard_v1_idx');
+    pg_catalog.to_regclass('private.portal_sitemap_rows_shard_v1_idx');
 begin
   if v_index is null
+     or pg_catalog.to_regclass(
+       'private.portal_sitemap_latest_rows_v1'
+     ) is not null
+     or pg_catalog.to_regprocedure(
+       'private.sync_portal_sitemap_latest_delete_v1()'
+     ) is not null
+     or pg_catalog.to_regprocedure(
+       'private.sync_portal_sitemap_latest_row_v1()'
+     ) is not null
+     or not exists (
+       select 1
+       from pg_catalog.pg_class as relation
+       where relation.oid = 'private.portal_sitemap_rows_v1'::regclass
+         and relation.relowner = 'postgres'::regrole
+         and relation.relrowsecurity
+         and relation.relforcerowsecurity
+     )
+     or not exists (
+       select 1
+       from pg_catalog.pg_constraint as constraint_catalog
+       where constraint_catalog.conrelid =
+         'private.portal_sitemap_rows_v1'::regclass
+         and constraint_catalog.contype = 'p'
+         and constraint_catalog.conkey = array[
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = constraint_catalog.conrelid
+               and attribute.attname = 'dataset_kind'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = constraint_catalog.conrelid
+               and attribute.attname = 'id'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = constraint_catalog.conrelid
+               and attribute.attname = 'version'
+           )
+         ]::smallint[]
+     )
      or not exists (
        select 1
        from pg_catalog.pg_index as index_catalog
        where index_catalog.indexrelid = v_index
          and index_catalog.indrelid =
-           'private.portal_sitemap_latest_rows_v1'::regclass
+           'private.portal_sitemap_rows_v1'::regclass
          and index_catalog.indisvalid
          and index_catalog.indisready
          and index_catalog.indislive
-         and index_catalog.indnkeyatts = 3
+         and index_catalog.indnkeyatts = 6
          and index_catalog.indnatts = 6
          and index_catalog.indpred is null
          and index_catalog.indexprs is null
+         and pg_catalog.string_to_array(
+           index_catalog.indoption::text,
+           ' '
+         )::smallint[] = array[0, 0, 0, 0, 3, 3]::smallint[]
          and pg_catalog.string_to_array(
            index_catalog.indkey::text,
            ' '
@@ -25433,6 +25487,12 @@ begin
              from pg_catalog.pg_attribute as attribute
              where attribute.attrelid = index_catalog.indrelid
                and attribute.attname = 'shard_no'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = index_catalog.indrelid
+               and attribute.attname = 'contract_version'
            ),
            (
              select attribute.attnum
@@ -25457,12 +25517,6 @@ begin
              from pg_catalog.pg_attribute as attribute
              where attribute.attrelid = index_catalog.indrelid
                and attribute.attname = 'modified_at'
-           ),
-           (
-             select attribute.attnum
-             from pg_catalog.pg_attribute as attribute
-             where attribute.attrelid = index_catalog.indrelid
-               and attribute.attname = 'contract_version'
            )
          ]::smallint[]
          and array(
@@ -25472,21 +25526,75 @@ begin
            join pg_catalog.pg_opclass as operator_class
              on operator_class.oid = class_oid.oid
            order by class_oid.ordinality
-         ) = array['int2_ops', 'text_ops', 'uuid_ops']::name[]
+         ) = array[
+           'int2_ops',
+           'int2_ops',
+           'text_ops',
+           'uuid_ops',
+           'text_ops',
+           'timestamptz_ops'
+         ]::name[]
      )
-     or exists (
+     or not exists (
        select 1
        from pg_catalog.pg_constraint as constraint_catalog
        where constraint_catalog.conrelid =
-         'private.portal_sitemap_latest_rows_v1'::regclass
+         'private.portal_sitemap_rows_v1'::regclass
+         and constraint_catalog.confrelid =
+           'private.portal_catalog_facet_rows_v1'::regclass
+         and constraint_catalog.conname =
+           'portal_sitemap_rows_source_v1_fk'
          and constraint_catalog.contype = 'f'
+         and constraint_catalog.convalidated
+         and constraint_catalog.confupdtype = 'r'
+         and constraint_catalog.confdeltype = 'c'
+         and constraint_catalog.conkey = array[
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = constraint_catalog.conrelid
+               and attribute.attname = 'dataset_kind'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = constraint_catalog.conrelid
+               and attribute.attname = 'id'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = constraint_catalog.conrelid
+               and attribute.attname = 'version'
+           )
+         ]::smallint[]
+         and constraint_catalog.confkey = array[
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = constraint_catalog.confrelid
+               and attribute.attname = 'dataset_kind'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = constraint_catalog.confrelid
+               and attribute.attname = 'id'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = constraint_catalog.confrelid
+               and attribute.attname = 'version'
+           )
+         ]::smallint[]
      )
      or not exists (
        select 1
        from pg_catalog.pg_trigger as trigger
        where trigger.tgrelid =
          'private.portal_catalog_facet_rows_v1'::regclass
-         and trigger.tgname = 'portal_sitemap_latest_sync_v1'
+         and trigger.tgname = 'portal_sitemap_rows_sync_v1'
          and not trigger.tgisinternal
          and trigger.tgenabled = 'O'
          and trigger.tgtype = 21
@@ -25532,25 +25640,21 @@ begin
            )
          ]::smallint[]
          and trigger.tgfoid =
-           'private.sync_portal_sitemap_latest_row_v1()'::regprocedure
+           'private.sync_portal_sitemap_row_v1()'::regprocedure
      )
-     or not exists (
+     or exists (
        select 1
        from pg_catalog.pg_trigger as trigger
        where trigger.tgrelid =
          'private.portal_catalog_facet_rows_v1'::regclass
          and trigger.tgname = 'portal_sitemap_latest_delete_v1'
          and not trigger.tgisinternal
-         and trigger.tgenabled = 'O'
-         and trigger.tgtype = 11
-         and trigger.tgfoid =
-           'private.sync_portal_sitemap_latest_delete_v1()'::regprocedure
      )
      or not exists (
        select 1
        from pg_catalog.pg_proc as routine
        where routine.oid =
-         'private.sync_portal_sitemap_latest_row_v1()'::regprocedure
+         'private.sync_portal_sitemap_row_v1()'::regprocedure
          and routine.proowner = 'api_internal_executor'::regrole
          and routine.prosecdef
          and routine.provolatile = 'v'
@@ -25560,23 +25664,7 @@ begin
            'row_security=on'
          ]::text[]
          and pg_catalog.md5(routine.prosrc) =
-           '45503a8c8455b9ae9e69bc15d150d97f'
-     )
-     or not exists (
-       select 1
-       from pg_catalog.pg_proc as routine
-       where routine.oid =
-         'private.sync_portal_sitemap_latest_delete_v1()'::regprocedure
-         and routine.proowner = 'api_internal_executor'::regrole
-         and routine.prosecdef
-         and routine.provolatile = 'v'
-         and routine.proparallel = 'u'
-         and coalesce(routine.proconfig, '{}'::text[]) @> array[
-           'search_path=""',
-           'row_security=on'
-         ]::text[]
-         and pg_catalog.md5(routine.prosrc) =
-           '4278224e16a7f1932d0f3debbc245b2b'
+           '9bc7007c0e8fef48c75d997ea8ef96d8'
      ) then
     raise exception using
       errcode = 'P0001',
@@ -55003,82 +55091,13 @@ COMMENT ON FUNCTION "private"."sync_portal_catalog_search_row_v1"() IS 'NOLOGIN/
 
 
 
-CREATE OR REPLACE FUNCTION "private"."sync_portal_sitemap_latest_delete_v1"() RETURNS "trigger"
-    LANGUAGE "plpgsql" SECURITY DEFINER
-    SET "search_path" TO ''
-    SET "row_security" TO 'on'
-    AS $$
-declare
-  v_current_version text;
-  v_fallback record;
-begin
-  perform pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtextextended(
-      old.dataset_kind || ':'::text || old.id::text,
-      539
-    )
-  );
-
-  select latest.version
-  into v_current_version
-  from private.portal_sitemap_latest_rows_v1 as latest
-  where latest.dataset_kind = old.dataset_kind
-    and latest.id = old.id
-  for update;
-
-  if not found or v_current_version <> old.version then
-    return old;
-  end if;
-
-  select facet.version,
-    facet.modified_at
-  into v_fallback
-  from private.portal_catalog_facet_rows_v1 as facet
-  where facet.dataset_kind = old.dataset_kind
-    and facet.id = old.id
-    and facet.version <> old.version
-    and facet.state_code in (100, 200)
-    and facet.facet_contract_version = 1
-  order by facet.version desc,
-    facet.modified_at desc,
-    facet.state_code desc
-  limit 1;
-
-  if found then
-    update private.portal_sitemap_latest_rows_v1 as latest
-    set version = v_fallback.version,
-        modified_at = v_fallback.modified_at
-    where latest.dataset_kind = old.dataset_kind
-      and latest.id = old.id
-      and latest.version = old.version;
-  else
-    delete from private.portal_sitemap_latest_rows_v1 as latest
-    where latest.dataset_kind = old.dataset_kind
-      and latest.id = old.id
-      and latest.version = old.version;
-  end if;
-  return old;
-end
-$$;
-
-
-ALTER FUNCTION "private"."sync_portal_sitemap_latest_delete_v1"() OWNER TO "api_internal_executor";
-
-
-CREATE OR REPLACE FUNCTION "private"."sync_portal_sitemap_latest_row_v1"() RETURNS "trigger"
+CREATE OR REPLACE FUNCTION "private"."sync_portal_sitemap_row_v1"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     SET "row_security" TO 'on'
     AS $$
 begin
-  perform pg_catalog.pg_advisory_xact_lock(
-    pg_catalog.hashtextextended(
-      new.dataset_kind || ':'::text || new.id::text,
-      539
-    )
-  );
-
-  insert into private.portal_sitemap_latest_rows_v1 (
+  insert into private.portal_sitemap_rows_v1 (
     dataset_kind,
     id,
     version,
@@ -55103,30 +55122,25 @@ begin
     )::smallint,
     1
   )
-  on conflict (dataset_kind, id) do update
-  set version = excluded.version,
-      modified_at = excluded.modified_at,
+  on conflict (dataset_kind, id, version) do update
+  set modified_at = excluded.modified_at,
       shard_no = excluded.shard_no,
       contract_version = excluded.contract_version
-  where excluded.version > portal_sitemap_latest_rows_v1.version
-     or (
-       excluded.version = portal_sitemap_latest_rows_v1.version
-       and (
-         portal_sitemap_latest_rows_v1.modified_at,
-         portal_sitemap_latest_rows_v1.shard_no,
-         portal_sitemap_latest_rows_v1.contract_version
-       ) is distinct from (
-         excluded.modified_at,
-         excluded.shard_no,
-         excluded.contract_version
-       )
-     );
+  where (
+    portal_sitemap_rows_v1.modified_at,
+    portal_sitemap_rows_v1.shard_no,
+    portal_sitemap_rows_v1.contract_version
+  ) is distinct from (
+    excluded.modified_at,
+    excluded.shard_no,
+    excluded.contract_version
+  );
   return null;
 end
 $$;
 
 
-ALTER FUNCTION "private"."sync_portal_sitemap_latest_row_v1"() OWNER TO "api_internal_executor";
+ALTER FUNCTION "private"."sync_portal_sitemap_row_v1"() OWNER TO "api_internal_executor";
 
 
 CREATE OR REPLACE FUNCTION "private"."unitgroups_sync_jsonb_version"() RETURNS "trigger"
@@ -65247,26 +65261,26 @@ COMMENT ON TABLE "private"."portal_lcia_projection_values" IS 'Dense canonical-d
 
 
 
-CREATE TABLE IF NOT EXISTS "private"."portal_sitemap_latest_rows_v1" (
+CREATE TABLE IF NOT EXISTS "private"."portal_sitemap_rows_v1" (
     "dataset_kind" "text" NOT NULL,
     "id" "uuid" NOT NULL,
     "version" "text" NOT NULL,
     "modified_at" timestamp with time zone NOT NULL,
     "shard_no" smallint NOT NULL,
     "contract_version" smallint NOT NULL,
-    CONSTRAINT "portal_sitemap_latest_rows_v1_contract_version_check" CHECK (("contract_version" = 1)),
-    CONSTRAINT "portal_sitemap_latest_rows_v1_dataset_kind_check" CHECK (("dataset_kind" = ANY (ARRAY['process'::"text", 'flow'::"text"]))),
-    CONSTRAINT "portal_sitemap_latest_rows_v1_shard_no_check" CHECK ((("shard_no" >= 0) AND ("shard_no" <= 63))),
-    CONSTRAINT "portal_sitemap_latest_rows_v1_version_check" CHECK (("version" ~ '^\d{2}\.\d{2}\.\d{3}$'::"text"))
+    CONSTRAINT "portal_sitemap_rows_v1_contract_version_check" CHECK (("contract_version" = 1)),
+    CONSTRAINT "portal_sitemap_rows_v1_dataset_kind_check" CHECK (("dataset_kind" = ANY (ARRAY['process'::"text", 'flow'::"text"]))),
+    CONSTRAINT "portal_sitemap_rows_v1_shard_no_check" CHECK ((("shard_no" >= 0) AND ("shard_no" <= 63))),
+    CONSTRAINT "portal_sitemap_rows_v1_version_check" CHECK (("version" ~ '^\d{2}\.\d{2}\.\d{3}$'::"text"))
 );
 
-ALTER TABLE ONLY "private"."portal_sitemap_latest_rows_v1" FORCE ROW LEVEL SECURITY;
+ALTER TABLE ONLY "private"."portal_sitemap_rows_v1" FORCE ROW LEVEL SECURITY;
 
 
-ALTER TABLE "private"."portal_sitemap_latest_rows_v1" OWNER TO "postgres";
+ALTER TABLE "private"."portal_sitemap_rows_v1" OWNER TO "postgres";
 
 
-COMMENT ON TABLE "private"."portal_sitemap_latest_rows_v1" IS 'Latest visible exact Process/Flow identity and stable 64-way sitemap bucket; contains no card, document, actor, credential, or locator.';
+COMMENT ON TABLE "private"."portal_sitemap_rows_v1" IS 'Exact public Process/Flow version and stable 64-way sitemap bucket; contains no card, document, actor, credential, or locator.';
 
 
 
@@ -66809,8 +66823,8 @@ ALTER TABLE ONLY "private"."portal_lcia_projection_values"
 
 
 
-ALTER TABLE ONLY "private"."portal_sitemap_latest_rows_v1"
-    ADD CONSTRAINT "portal_sitemap_latest_rows_v1_pkey" PRIMARY KEY ("dataset_kind", "id");
+ALTER TABLE ONLY "private"."portal_sitemap_rows_v1"
+    ADD CONSTRAINT "portal_sitemap_rows_v1_pkey" PRIMARY KEY ("dataset_kind", "id", "version");
 
 
 
@@ -67599,11 +67613,11 @@ CREATE INDEX "portal_lcia_projection_values_impact_rank_idx" ON "private"."porta
 
 
 
-CREATE INDEX "portal_sitemap_latest_shard_v1_idx" ON "private"."portal_sitemap_latest_rows_v1" USING "btree" ("shard_no", "dataset_kind", "id") INCLUDE ("version", "modified_at", "contract_version");
+CREATE INDEX "portal_sitemap_rows_shard_v1_idx" ON "private"."portal_sitemap_rows_v1" USING "btree" ("shard_no", "contract_version", "dataset_kind", "id", "version" DESC, "modified_at" DESC);
 
 
 
-COMMENT ON INDEX "private"."portal_sitemap_latest_shard_v1_idx" IS 'Bounded sitemap shard order over the latest-only locator-free projection.';
+COMMENT ON INDEX "private"."portal_sitemap_rows_shard_v1_idx" IS 'Latest-version sitemap shard order over the exact-version locator-free projection.';
 
 
 
@@ -68391,19 +68405,11 @@ CREATE OR REPLACE TRIGGER "portal_lcia_projection_value_row_guard_v1" BEFORE DEL
 
 
 
-CREATE OR REPLACE TRIGGER "portal_sitemap_latest_delete_v1" BEFORE DELETE ON "private"."portal_catalog_facet_rows_v1" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_sitemap_latest_delete_v1"();
+CREATE OR REPLACE TRIGGER "portal_sitemap_rows_sync_v1" AFTER INSERT OR UPDATE OF "dataset_kind", "id", "version", "state_code", "modified_at", "facet_contract_version" ON "private"."portal_catalog_facet_rows_v1" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_sitemap_row_v1"();
 
 
 
-COMMENT ON TRIGGER "portal_sitemap_latest_delete_v1" ON "private"."portal_catalog_facet_rows_v1" IS 'Serializes one facet identity before DELETE and rebinds its latest sitemap row to the visible predecessor.';
-
-
-
-CREATE OR REPLACE TRIGGER "portal_sitemap_latest_sync_v1" AFTER INSERT OR UPDATE OF "dataset_kind", "id", "version", "state_code", "modified_at", "facet_contract_version" ON "private"."portal_catalog_facet_rows_v1" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_sitemap_latest_row_v1"();
-
-
-
-COMMENT ON TRIGGER "portal_sitemap_latest_sync_v1" ON "private"."portal_catalog_facet_rows_v1" IS 'Upserts only the affected latest sitemap identity after a governed facet INSERT or UPDATE converges.';
+COMMENT ON TRIGGER "portal_sitemap_rows_sync_v1" ON "private"."portal_catalog_facet_rows_v1" IS 'Upserts only the affected exact sitemap version after a governed facet INSERT or UPDATE converges; DELETE follows the exact FK cascade.';
 
 
 
@@ -69119,6 +69125,11 @@ ALTER TABLE ONLY "private"."portal_lcia_projection_values"
 
 
 
+ALTER TABLE ONLY "private"."portal_sitemap_rows_v1"
+    ADD CONSTRAINT "portal_sitemap_rows_source_v1_fk" FOREIGN KEY ("dataset_kind", "id", "version") REFERENCES "private"."portal_catalog_facet_rows_v1"("dataset_kind", "id", "version") ON UPDATE RESTRICT ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "private"."roles"
     ADD CONSTRAINT "roles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id");
 
@@ -69528,15 +69539,15 @@ CREATE POLICY "portal_public_executor_select_lcia_projection_values_v1" ON "priv
 
 
 
-CREATE POLICY "portal_sitemap_latest_internal_all_v1" ON "private"."portal_sitemap_latest_rows_v1" TO "api_internal_executor" USING ((("contract_version" = 1) AND (("shard_no" >= 0) AND ("shard_no" <= 63)))) WITH CHECK ((("contract_version" = 1) AND (("shard_no" >= 0) AND ("shard_no" <= 63))));
+CREATE POLICY "portal_sitemap_rows_internal_all_v1" ON "private"."portal_sitemap_rows_v1" TO "api_internal_executor" USING ((("contract_version" = 1) AND (("shard_no" >= 0) AND ("shard_no" <= 63)))) WITH CHECK ((("contract_version" = 1) AND (("shard_no" >= 0) AND ("shard_no" <= 63))));
 
 
 
-CREATE POLICY "portal_sitemap_latest_portal_select_v1" ON "private"."portal_sitemap_latest_rows_v1" FOR SELECT TO "portal_public_executor" USING ((("contract_version" = 1) AND (("shard_no" >= 0) AND ("shard_no" <= 63))));
+CREATE POLICY "portal_sitemap_rows_portal_select_v1" ON "private"."portal_sitemap_rows_v1" FOR SELECT TO "portal_public_executor" USING ((("contract_version" = 1) AND (("shard_no" >= 0) AND ("shard_no" <= 63))));
 
 
 
-ALTER TABLE "private"."portal_sitemap_latest_rows_v1" ENABLE ROW LEVEL SECURITY;
+ALTER TABLE "private"."portal_sitemap_rows_v1" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "private"."reviews" ENABLE ROW LEVEL SECURITY;
@@ -72914,11 +72925,7 @@ REVOKE ALL ON FUNCTION "private"."sync_portal_catalog_search_row_v1"() FROM "api
 
 
 
-REVOKE ALL ON FUNCTION "private"."sync_portal_sitemap_latest_delete_v1"() FROM PUBLIC;
-
-
-
-REVOKE ALL ON FUNCTION "private"."sync_portal_sitemap_latest_row_v1"() FROM PUBLIC;
+REVOKE ALL ON FUNCTION "private"."sync_portal_sitemap_row_v1"() FROM PUBLIC;
 
 
 
@@ -73689,31 +73696,31 @@ GRANT SELECT("value_numeric") ON TABLE "private"."portal_lcia_projection_values"
 
 
 
-GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "private"."portal_sitemap_latest_rows_v1" TO "api_internal_executor";
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "private"."portal_sitemap_rows_v1" TO "api_internal_executor";
 
 
 
-GRANT SELECT("dataset_kind") ON TABLE "private"."portal_sitemap_latest_rows_v1" TO "portal_public_executor";
+GRANT SELECT("dataset_kind") ON TABLE "private"."portal_sitemap_rows_v1" TO "portal_public_executor";
 
 
 
-GRANT SELECT("id") ON TABLE "private"."portal_sitemap_latest_rows_v1" TO "portal_public_executor";
+GRANT SELECT("id") ON TABLE "private"."portal_sitemap_rows_v1" TO "portal_public_executor";
 
 
 
-GRANT SELECT("version") ON TABLE "private"."portal_sitemap_latest_rows_v1" TO "portal_public_executor";
+GRANT SELECT("version") ON TABLE "private"."portal_sitemap_rows_v1" TO "portal_public_executor";
 
 
 
-GRANT SELECT("modified_at") ON TABLE "private"."portal_sitemap_latest_rows_v1" TO "portal_public_executor";
+GRANT SELECT("modified_at") ON TABLE "private"."portal_sitemap_rows_v1" TO "portal_public_executor";
 
 
 
-GRANT SELECT("shard_no") ON TABLE "private"."portal_sitemap_latest_rows_v1" TO "portal_public_executor";
+GRANT SELECT("shard_no") ON TABLE "private"."portal_sitemap_rows_v1" TO "portal_public_executor";
 
 
 
-GRANT SELECT("contract_version") ON TABLE "private"."portal_sitemap_latest_rows_v1" TO "portal_public_executor";
+GRANT SELECT("contract_version") ON TABLE "private"."portal_sitemap_rows_v1" TO "portal_public_executor";
 
 
 

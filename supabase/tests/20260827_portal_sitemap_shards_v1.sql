@@ -117,12 +117,12 @@ select extensions.is(
 select extensions.is(
   (
     select pg_catalog.count(*)
-    from private.portal_sitemap_latest_rows_v1
+    from private.portal_sitemap_rows_v1
     where shard_no = 0
       and contract_version = 1
   ),
   4096::bigint,
-  'the latest-only sitemap projection contains one row per visible identity'
+  'the exact-version sitemap projection contains one row per visible version'
 );
 
 select extensions.is(
@@ -264,12 +264,12 @@ select extensions.is(
 select extensions.is(
   (
     select pg_catalog.count(*)
-    from private.portal_sitemap_latest_rows_v1
+    from private.portal_sitemap_rows_v1
     where shard_no = 0
       and contract_version = 1
   ),
-  4097::bigint,
-  'capacity overflow is recorded in the latest projection without blocking its writer'
+  4098::bigint,
+  'capacity overflow and retained history are recorded without blocking writers'
 );
 
 select extensions.throws_ok(
@@ -351,7 +351,7 @@ select extensions.is(
     )
   ),
   '01.00.000',
-  'deleting the latest visible version synchronously restores its visible predecessor'
+  'deleting the latest visible version exposes its retained exact predecessor'
 );
 
 select extensions.ok(

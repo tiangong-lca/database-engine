@@ -2,7 +2,7 @@ version: 1
 layout: repo
 lastReviewedAt: "2026-08-27"
 lastReviewedCommit: "712558e"
-lastReviewedNote: "Reviewed for Issue #539: 274 migrations, 13 generated Portal modules, fixed 64-shard sitemap DTO/RPC gates, and no-FK same-identity advisory-fenced latest writers."
+lastReviewedNote: "Reviewed for Issue #539: 274 migrations, 13 generated Portal modules, fixed 64-shard sitemap DTO/RPC gates, exact-version FK-cascaded child, and history-density reader gate."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

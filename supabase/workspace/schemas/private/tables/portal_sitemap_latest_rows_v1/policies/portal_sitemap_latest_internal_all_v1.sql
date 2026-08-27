@@ -1,1 +1,0 @@
-CREATE POLICY "portal_sitemap_latest_internal_all_v1" ON "private"."portal_sitemap_latest_rows_v1" TO "api_internal_executor" USING ((("contract_version" = 1) AND (("shard_no" >= 0) AND ("shard_no" <= 63)))) WITH CHECK ((("contract_version" = 1) AND (("shard_no" >= 0) AND ("shard_no" <= 63))));

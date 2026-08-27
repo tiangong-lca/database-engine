@@ -10,6 +10,7 @@ CREATE OR REPLACE FUNCTION "api"."portal_sitemap_shard_v1"("p_shard_cursor" "tex
     AS $_$
 declare
   v_cursor jsonb;
+  v_expected_cursor jsonb;
   v_bucket integer;
   v_items jsonb;
   v_result jsonb;
@@ -28,14 +29,16 @@ begin
     raise exception using errcode = '22023', message = 'invalid portal request';
   end if;
   v_bucket := (v_cursor ->> 'bucket')::integer;
+  v_expected_cursor := pg_catalog.jsonb_build_object(
+    'v', 1,
+    'scope', 'sitemap-shard',
+    'bucket', v_bucket,
+    'shardCount', 64
+  );
 
-  if v_cursor is distinct from pg_catalog.jsonb_build_object(
-       'v', 1,
-       'scope', 'sitemap-shard',
-       'bucket', v_bucket,
-       'shardCount', 64
-     )
-     or private.portal_cursor_encode_v1(v_cursor) <> p_shard_cursor then
+  if v_cursor is distinct from v_expected_cursor
+     or private.portal_cursor_encode_v1(v_expected_cursor) <>
+       p_shard_cursor then
     raise exception using errcode = '22023', message = 'invalid portal request';
   end if;
 
@@ -44,15 +47,18 @@ begin
   perform private.assert_portal_sitemap_projection_v1();
 
   with latest as materialized (
-    select projection.dataset_kind,
+    select distinct on (projection.dataset_kind, projection.id)
+      projection.dataset_kind,
       projection.id,
       projection.version,
       projection.modified_at
-    from private.portal_sitemap_latest_rows_v1 as projection
+    from private.portal_sitemap_rows_v1 as projection
     where projection.shard_no = v_bucket
       and projection.contract_version = 1
     order by projection.dataset_kind,
-      projection.id
+      projection.id,
+      projection.version desc,
+      projection.modified_at desc
     limit 4097
   )
   select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(

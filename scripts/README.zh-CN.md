@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
 lastReviewedCommit: 712558e
-lastReviewedNote: "已复核 Issue #539：274-file recovery/benchmark、固定 sitemap shards、无 FK 且按同 identity advisory fence 串行的 latest writer pair、匿名 Preview gates 与 13-module Portal 生成均为当前状态。"
+lastReviewedNote: "已复核 Issue #539：274-file recovery/benchmark、固定 sitemap shards、exact-version FK cascade child、history-density plan gate、匿名 Preview gates 与 13-module Portal 生成均为当前状态。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -83,10 +83,11 @@ scripts/test_search_text_array_upgrade.sh
 更新竞态；主动制造 card/facet reconcile 锁超时与 cutover guard 失败；证明 facet
 expand COMMIT/history 缺口、四分片幂等重试、同名 concurrent index 受控清理、Flow
 eligibility guard 回滚、事务性 sitemap expand COMMIT-gap/reset、public cutover 与
-concurrency repair 的回滚/重试、普通 latest 回退、latest table 无 FK 的 catalog
-合同，以及两个 helper 完全相同的同 identity advisory fence。真实 delete/delete 与
-lower-insert/current-delete 锁队列交错必须无 deadlock 完成并收敛到已提交的 facet
-winner；脚本还证明已记录迁移重复执行不会重建八个索引。
+forward repair 的回滚/重试、exact-version child 的 PK/FK/index、唯一 same-key upsert
+trigger，以及所有旧 winner 对象均被移除。同一 identity 不同 version 的真实
+insert/update/delete 必须全部提交，无 writer 侧 retry，并让 child rows 与已提交公开
+facet version 集精确相等。脚本还证明已记录迁移重复执行不会重建八个索引，并拒绝
+非 canonical 的 cursor numeric scale。
 所需环境变量与恢复边界见
 `docs/agents/portal-projection-migration-recovery.md`。正式证据还要求干净 HEAD、
 Supabase CLI `2.109.1`，以及完整 274-file migration tree 的逐字相等和 aggregate
@@ -99,10 +100,9 @@ Facet migration。每条 backfill statement 必须在 120 秒门下保留至少 
 每个完整 UUID-quarter 文件必须低于 120 秒；成功 reconcile fence 必须在 5 秒内
 完成，并要求 key coverage、确定性抽样 facts 与 DTO 聚合计数精确一致。runner
 随后在全部 126,246 行上按 60/15/15 秒证据预算（120/30/30 秒外层超时）计时三条
-sitemap migration，并要求 latest/facet 双向相等、shard capacity、latest table
-无 FK、两个 helper 使用完全相同的 transaction identity advisory fence，以及两个
-trigger 与两个 public RPC 精确一致。runner 退出时总会把隔离项目重置到完整
-HEAD。
+sitemap migration，并要求 facet/sitemap exact-version rows 双向相等、复合 PK/FK、
+history-order index、唯一 same-key trigger、shard capacity 与两个 public RPC 精确
+一致。runner 退出时总会把隔离项目重置到完整 HEAD。
 
 ### `run_portal_projection_benchmark.sh`
 
@@ -152,6 +152,13 @@ Search-50/Hybrid-20 label 必须分别返回准确 50/20 个完整 item、20 个
 因为它是代表性的过滤最坏路径；对应 timing label 也必须准确返回 50 个完整 item，
 避免空结果或过窄结果让性能门假绿。
 
+sitemap profile 的 126,246-row 单版本 fixture 保持最大 shard 为 2,066 个 identity，
+记录的 shard-read p95 约为 11 ms。独立 history-density probe 将 2,048 个 identity
+各扩展为 64 个 version，共 131,072 行；其自然 `DISTINCT ON` 计划必须通过精确
+history-order index 走 index-only path，不得出现 `Sort` / `Incremental Sort`，不得
+产生 temp spill，并须在 4 秒内完成。响应数量、字节与 timeout 仍有界，但扫描行数
+会随保留 version 历史增长。
+
 ### `check_portal_projection_manifest.py`
 
 同时验证三个已提交的 Portal digest：十一函数 stored-card 闭包、两函数窄 Facet
@@ -162,14 +169,14 @@ Search-50/Hybrid-20 label 必须分别返回准确 50/20 个完整 item、20 个
 单一 query-only kernel replacement，不得新增 table/index/trigger 或改写 writer；
 runtime 在读取该 child projection 前还必须独立验证 Facet manifest。
 
-它还会冻结 Issue #539 的无 FK 64-bucket latest-only table、空表 covering index
-和精确的双 writer trigger。两个 helper 都先取得完全相同的
-`pg_advisory_xact_lock(hashtextextended(dataset_kind || ':' || id, 539))`
-transaction identity fence；随后 `AFTER INSERT OR UPDATE` 路径 direct upsert，
-serialized `BEFORE DELETE` 路径则锁定 latest row 并选择剩余最新可见版本作为
-fallback。它同时冻结 `134103` concurrency forward repair、事务性 public guard、
-4,096-item 读取上限以及旧 sitemap façade 逐字不变。advisory key 碰撞最多只会
-额外串行；精确 kind/id 条件仍保证正确性。
+它还会冻结 Issue #539 的 64-bucket exact-version child：table/PK、带
+`ON UPDATE RESTRICT` / `ON DELETE CASCADE` 的 facet exact FK、history-order index，
+以及唯一的 `AFTER INSERT OR UPDATE` same-key upsert trigger。公开 shard reader 必须
+保留 index-ordered `DISTINCT ON (dataset_kind,id)` 选择、4,096-item / 2-MiB / 4 秒
+边界和显式 history-density plan gate。`134103` forward repair 必须在一个事务内锁定
+facet writer、建立并完整 backfill shadow child、替换 assertion/reader，并移除旧
+winner table/helpers。shard cursor 字节必须等于精确期望对象的新编码，因此 JSONB
+等价的 `1.0` / `64.0` numeric scale 也会被拒绝；旧 sitemap façade 仍逐字不变。
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py

@@ -71,7 +71,7 @@ do $empty_projection_guard$
 begin
   if (select count(*) from private.portal_catalog_search_rows_v1) <> 0
      or (select count(*) from private.portal_catalog_facet_rows_v1) <> 0
-     or (select count(*) from private.portal_sitemap_latest_rows_v1) <> 0 then
+     or (select count(*) from private.portal_sitemap_rows_v1) <> 0 then
     raise exception
       'Portal sitemap benchmark requires an empty local projection'
       using errcode = '55000';
@@ -159,7 +159,7 @@ revoke api_internal_executor from postgres;
 
 analyze private.portal_catalog_search_rows_v1;
 analyze private.portal_catalog_facet_rows_v1;
-analyze private.portal_sitemap_latest_rows_v1;
+analyze private.portal_sitemap_rows_v1;
 
 select
   (
@@ -168,16 +168,16 @@ select
   ) = :'process_rows'::integer + :'flow_rows'::integer
   and (
     select count(*)
-    from private.portal_sitemap_latest_rows_v1
+    from private.portal_sitemap_rows_v1
   ) = :'process_rows'::integer + :'flow_rows'::integer
   and (
     select count(*)
-    from private.portal_sitemap_latest_rows_v1
+    from private.portal_sitemap_rows_v1
     where dataset_kind = 'process'
   ) = :'process_rows'::integer
   and (
     select count(*)
-    from private.portal_sitemap_latest_rows_v1
+    from private.portal_sitemap_rows_v1
     where dataset_kind = 'flow'
   ) = :'flow_rows'::integer
   as benchmark_cardinality_ok
@@ -188,7 +188,7 @@ select
   \quit 3
 \endif
 
--- Measure the real incremental latest-sync trigger on the existing projection
+-- Measure the real incremental exact-version sync trigger on the existing projection
 -- writer path. Every sample restores the original timestamp, so disabling the
 -- new trigger for the baseline leaves no projection drift.
 create temporary table portal_sitemap_trigger_writer_timings (
@@ -259,22 +259,22 @@ grant execute on function
   to api_internal_executor;
 
 alter table private.portal_catalog_facet_rows_v1
-  disable trigger portal_sitemap_latest_sync_v1;
+  disable trigger portal_sitemap_rows_sync_v1;
 grant api_internal_executor to postgres;
 set local role api_internal_executor;
 select pg_temp.measure_portal_sitemap_trigger_writes(
-  'baseline-without-latest-sync',
+  'baseline-without-version-sync',
   :'benchmark_samples'::integer
 );
 reset role;
 revoke api_internal_executor from postgres;
 alter table private.portal_catalog_facet_rows_v1
-  enable trigger portal_sitemap_latest_sync_v1;
+  enable trigger portal_sitemap_rows_sync_v1;
 
 grant api_internal_executor to postgres;
 set local role api_internal_executor;
 select pg_temp.measure_portal_sitemap_trigger_writes(
-  'with-latest-sync',
+  'with-version-sync',
   :'benchmark_samples'::integer
 );
 reset role;
@@ -303,13 +303,13 @@ begin
     order by writer.elapsed_ms
   ) into v_baseline_p95
   from portal_sitemap_trigger_writer_timings as writer
-  where writer.profile = 'baseline-without-latest-sync';
+  where writer.profile = 'baseline-without-version-sync';
 
   select pg_catalog.percentile_cont(0.95) within group (
     order by writer.elapsed_ms
   ) into v_enabled_p95
   from portal_sitemap_trigger_writer_timings as writer
-  where writer.profile = 'with-latest-sync';
+  where writer.profile = 'with-version-sync';
 
   if v_baseline_p95 is null
      or v_enabled_p95 is null
@@ -319,14 +319,14 @@ begin
      )
      or exists (
        select 1
-       from private.portal_sitemap_latest_rows_v1 as latest
+       from private.portal_sitemap_rows_v1 as latest
        join private.portal_catalog_facet_rows_v1 as facet
          on facet.dataset_kind = latest.dataset_kind
         and facet.id = latest.id
         and facet.version = latest.version
        where latest.modified_at <> facet.modified_at
      ) then
-    raise exception 'Portal sitemap latest-sync writer budget failed'
+    raise exception 'Portal sitemap version-sync writer budget failed'
       using errcode = '54000';
   end if;
 end
@@ -341,7 +341,7 @@ create temporary table portal_sitemap_writer_probe (
   modified_at timestamptz not null,
   shard_no smallint not null,
   contract_version smallint not null,
-  primary key (dataset_kind, id)
+  primary key (dataset_kind, id, version)
 ) on commit drop;
 
 insert into portal_sitemap_writer_probe (
@@ -359,7 +359,7 @@ select
   projection.modified_at,
   projection.shard_no,
   projection.contract_version
-from private.portal_sitemap_latest_rows_v1 as projection;
+from private.portal_sitemap_rows_v1 as projection;
 
 create temporary table portal_sitemap_writer_timings (
   profile text not null,
@@ -398,19 +398,23 @@ begin
     update pg_temp.portal_sitemap_writer_probe
     set modified_at = modified_at + interval '1 microsecond'
     where dataset_kind = 'flow'
-      and id = v_flow_id;
+      and id = v_flow_id
+      and version = '01.00.000';
     update pg_temp.portal_sitemap_writer_probe
     set modified_at = modified_at - interval '1 microsecond'
     where dataset_kind = 'flow'
-      and id = v_flow_id;
+      and id = v_flow_id
+      and version = '01.00.000';
     update pg_temp.portal_sitemap_writer_probe
     set modified_at = modified_at + interval '1 microsecond'
     where dataset_kind = 'process'
-      and id = v_process_id;
+      and id = v_process_id
+      and version = '01.00.000';
     update pg_temp.portal_sitemap_writer_probe
     set modified_at = modified_at - interval '1 microsecond'
     where dataset_kind = 'process'
-      and id = v_process_id;
+      and id = v_process_id
+      and version = '01.00.000';
 
     insert into pg_temp.portal_sitemap_writer_timings (
       profile,
@@ -439,9 +443,12 @@ begin
   create index portal_sitemap_writer_probe_idx
   on pg_temp.portal_sitemap_writer_probe (
     shard_no,
+    contract_version,
     dataset_kind,
-    id
-  ) include (version, modified_at, contract_version);
+    id,
+    version desc,
+    modified_at desc
+  );
 
   insert into pg_temp.portal_sitemap_index_build (
     elapsed_ms,
@@ -619,6 +626,24 @@ begin
 end
 $portal_sitemap_manifest_rows_guard$;
 
+create temporary table portal_sitemap_expected_latest on commit drop as
+select distinct on (projection.dataset_kind, projection.id)
+  projection.dataset_kind,
+  projection.id,
+  projection.version,
+  projection.modified_at,
+  projection.shard_no,
+  projection.contract_version
+from private.portal_sitemap_rows_v1 as projection
+where projection.contract_version = 1
+order by projection.dataset_kind,
+  projection.id,
+  projection.version desc,
+  projection.modified_at desc;
+
+alter table portal_sitemap_expected_latest
+  add primary key (dataset_kind, id);
+
 create temporary table portal_sitemap_bucket_stats (
   bucket integer primary key,
   item_count bigint not null
@@ -629,7 +654,7 @@ with bucket_counts as (
   select
     projection.shard_no::integer as bucket,
     count(*) as item_count
-  from private.portal_sitemap_latest_rows_v1 as projection
+  from portal_sitemap_expected_latest as projection
   where projection.contract_version = 1
   group by 1
 )
@@ -783,7 +808,7 @@ begin
      or exists (
        select 1
        from portal_sitemap_union_entries as union_entry
-       left join private.portal_sitemap_latest_rows_v1 as projection
+       left join portal_sitemap_expected_latest as projection
          on projection.dataset_kind = union_entry.dataset_kind
         and projection.id = union_entry.id
         and projection.version = union_entry.version
@@ -800,7 +825,7 @@ begin
              projection.dataset_kind,
              projection.id,
              projection.version
-           from private.portal_sitemap_latest_rows_v1 as projection
+           from portal_sitemap_expected_latest as projection
            where projection.contract_version = 1
            except
            select
@@ -821,7 +846,7 @@ begin
              projection.dataset_kind,
              projection.id,
              projection.version
-           from private.portal_sitemap_latest_rows_v1 as projection
+           from portal_sitemap_expected_latest as projection
            where projection.contract_version = 1
          )
        ) as difference
@@ -829,7 +854,7 @@ begin
      or exists (
        select 1
        from portal_sitemap_union_entries as union_entry
-       join private.portal_sitemap_latest_rows_v1 as projection
+       join portal_sitemap_expected_latest as projection
          on projection.dataset_kind = union_entry.dataset_kind
         and projection.id = union_entry.id
         and projection.version = union_entry.version
@@ -1014,8 +1039,8 @@ end
 $portal_sitemap_request_performance_guard$;
 
 -- Capture the exact shard query without disabling sequential scans or forcing
--- an index. The installed latest-only covering B-tree must win naturally at
--- release cardinality and the latest projection must not be scanned sequentially.
+-- an index. The installed exact-version covering B-tree must win naturally at
+-- release cardinality and the projection must not be scanned sequentially.
 set local work_mem = '8MB';
 select
   pg_catalog.current_setting('enable_seqscan') = 'on'
@@ -1028,6 +1053,90 @@ select
 \if :natural_plan_settings_ok
 \else
   \echo 'ERROR: restore natural planner scan settings before benchmarking'
+  \quit 3
+\endif
+
+-- Exercise the exact read shape with 64 retained public versions for 2,048
+-- identities in one shard (131,072 rows). This isolates history-density cost
+-- without creating wide parent cards or changing the durable projection.
+create temporary table portal_sitemap_history_probe (
+  dataset_kind text not null,
+  id uuid not null,
+  version text not null,
+  modified_at timestamptz not null,
+  shard_no smallint not null,
+  contract_version smallint not null,
+  primary key (dataset_kind, id, version)
+) on commit drop;
+
+alter table portal_sitemap_history_probe enable row level security;
+alter table portal_sitemap_history_probe force row level security;
+create policy portal_sitemap_history_probe_select
+on portal_sitemap_history_probe
+for select
+to portal_public_executor
+using (contract_version = 1 and shard_no between 0 and 63);
+
+insert into portal_sitemap_history_probe (
+  dataset_kind,
+  id,
+  version,
+  modified_at,
+  shard_no,
+  contract_version
+)
+select identity.dataset_kind,
+  identity.id,
+  pg_catalog.lpad(version.ordinal::text, 2, '0') || '.00.000',
+  identity.modified_at + version.ordinal * interval '1 microsecond',
+  identity.shard_no,
+  1
+from (
+  select expected.dataset_kind,
+    expected.id,
+    expected.modified_at,
+    expected.shard_no
+  from portal_sitemap_expected_latest as expected
+  where expected.shard_no = :largest_bucket::integer
+  order by expected.dataset_kind, expected.id
+  limit 2048
+) as identity
+cross join pg_catalog.generate_series(1, 64) as version(ordinal);
+
+create index portal_sitemap_history_probe_idx
+on portal_sitemap_history_probe (
+  shard_no,
+  contract_version,
+  dataset_kind,
+  id,
+  version desc,
+  modified_at desc
+);
+
+analyze portal_sitemap_history_probe;
+
+select
+  (select pg_catalog.count(*) from portal_sitemap_history_probe) = 131072
+  and (
+    select pg_catalog.count(*)
+    from (
+      select distinct on (history.dataset_kind, history.id)
+        history.dataset_kind,
+        history.id
+      from portal_sitemap_history_probe as history
+      where history.shard_no = :largest_bucket::integer
+        and history.contract_version = 1
+      order by history.dataset_kind,
+        history.id,
+        history.version desc,
+        history.modified_at desc
+      limit 4097
+    ) as latest
+  ) = 2048 as history_probe_cardinality_ok
+\gset
+\if :history_probe_cardinality_ok
+\else
+  \echo 'ERROR: Portal sitemap history-density fixture is incomplete'
   \quit 3
 \endif
 
@@ -1049,15 +1158,18 @@ begin
   execute pg_catalog.format($query$
     explain (analyze, buffers, settings, summary, format json)
     with latest as materialized (
-      select projection.dataset_kind,
+      select distinct on (projection.dataset_kind, projection.id)
+        projection.dataset_kind,
         projection.id,
         projection.version,
         projection.modified_at
-      from private.portal_sitemap_latest_rows_v1 as projection
+      from private.portal_sitemap_rows_v1 as projection
       where projection.shard_no = %s
         and projection.contract_version = 1
       order by projection.dataset_kind,
-        projection.id
+        projection.id,
+        projection.version desc,
+        projection.modified_at desc
       limit 4097
     )
     select coalesce(pg_catalog.jsonb_agg(
@@ -1077,6 +1189,50 @@ begin
 end
 $function$;
 
+create function pg_temp.capture_portal_sitemap_history_plan(
+  p_bucket integer
+)
+returns jsonb
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  v_plan jsonb;
+begin
+  execute pg_catalog.format($query$
+    explain (analyze, buffers, settings, summary, format json)
+    with latest as materialized (
+      select distinct on (projection.dataset_kind, projection.id)
+        projection.dataset_kind,
+        projection.id,
+        projection.version,
+        projection.modified_at
+      from pg_temp.portal_sitemap_history_probe as projection
+      where projection.shard_no = %s
+        and projection.contract_version = 1
+      order by projection.dataset_kind,
+        projection.id,
+        projection.version desc,
+        projection.modified_at desc
+      limit 4097
+    )
+    select coalesce(pg_catalog.jsonb_agg(
+      pg_catalog.jsonb_build_object(
+        'kind', latest.dataset_kind,
+        'id', latest.id::text,
+        'version', latest.version,
+        'modifiedAt', private.portal_timestamp_v1(latest.modified_at)
+      ) order by latest.dataset_kind, latest.id
+    ), '[]'::jsonb)
+    from latest
+  $query$, p_bucket)
+  into v_plan;
+
+  return v_plan;
+end
+$function$;
+
 create temporary table portal_sitemap_plans (
   profile text primary key,
   plan jsonb not null
@@ -1084,18 +1240,36 @@ create temporary table portal_sitemap_plans (
 
 grant execute on function pg_temp.capture_portal_sitemap_plan(integer)
 to portal_public_executor;
+grant execute on function pg_temp.capture_portal_sitemap_history_plan(integer)
+to portal_public_executor;
+grant select on table portal_sitemap_history_probe
+to portal_public_executor;
 grant insert, select on table portal_sitemap_plans
 to portal_public_executor;
 grant portal_public_executor to postgres;
 set local role portal_public_executor;
 
 insert into portal_sitemap_plans (profile, plan)
-values (
-  'largest-shard-natural-index',
-  pg_temp.capture_portal_sitemap_plan(:largest_bucket::integer)
-);
+values
+  (
+    'largest-shard-natural-index',
+    pg_temp.capture_portal_sitemap_plan(:largest_bucket::integer)
+  ),
+  (
+    'history-dense-natural-index',
+    pg_temp.capture_portal_sitemap_history_plan(:largest_bucket::integer)
+  );
 
 reset role;
+
+select benchmark.profile,
+  pg_catalog.round(
+    (benchmark.plan #>> '{0,Execution Time}')::numeric,
+    3
+  ) as execution_ms,
+  benchmark.plan #>> '{0,Plan,Actual Rows}' as top_actual_rows
+from portal_sitemap_plans as benchmark
+order by benchmark.profile;
 
 create temporary table portal_sitemap_plan_nodes on commit drop as
 with recursive plan_nodes as (
@@ -1138,20 +1312,44 @@ begin
        from portal_sitemap_plan_nodes as plan_node
        where plan_node.profile = 'largest-shard-natural-index'
          and plan_node.node ->> 'Index Name' =
-           'portal_sitemap_latest_shard_v1_idx'
+           'portal_sitemap_rows_shard_v1_idx'
+     )
+     or not exists (
+       select 1
+       from portal_sitemap_plan_nodes as plan_node
+       where plan_node.profile = 'history-dense-natural-index'
+         and plan_node.node ->> 'Index Name' =
+           'portal_sitemap_history_probe_idx'
      )
      or exists (
        select 1
        from portal_sitemap_plan_nodes as plan_node
        where plan_node.profile = 'largest-shard-natural-index'
          and plan_node.node ->> 'Relation Name' =
-           'portal_sitemap_latest_rows_v1'
+           'portal_sitemap_rows_v1'
          and plan_node.node ->> 'Node Type' = 'Seq Scan'
      )
      or exists (
        select 1
        from portal_sitemap_plan_nodes as plan_node
-       where plan_node.profile = 'largest-shard-natural-index'
+       where plan_node.profile = 'history-dense-natural-index'
+         and plan_node.node ->> 'Node Type' in ('Sort', 'Incremental Sort')
+     )
+     or exists (
+       select 1
+       from portal_sitemap_plan_nodes as plan_node
+       where plan_node.profile = 'history-dense-natural-index'
+         and plan_node.node ->> 'Relation Name' =
+           'portal_sitemap_history_probe'
+         and plan_node.node ->> 'Node Type' = 'Seq Scan'
+     )
+     or exists (
+       select 1
+       from portal_sitemap_plan_nodes as plan_node
+       where plan_node.profile in (
+           'largest-shard-natural-index',
+           'history-dense-natural-index'
+         )
          and (
            coalesce(
              (plan_node.node ->> 'Temp Read Blocks')::bigint,
@@ -1166,7 +1364,17 @@ begin
          )
      ) then
     raise exception
-      'Portal sitemap largest shard did not use its natural latest-only index'
+      'Portal sitemap largest shard did not use its natural exact-version index'
+      using errcode = '54000';
+  end if;
+
+  if coalesce((
+       select (benchmark.plan #>> '{0,Execution Time}')::numeric
+       from portal_sitemap_plans as benchmark
+       where benchmark.profile = 'history-dense-natural-index'
+     ), 4000) >= 4000 then
+    raise exception
+      'Portal sitemap history-density query exceeded four seconds'
       using errcode = '54000';
   end if;
 end
@@ -1176,15 +1384,18 @@ set local role portal_public_executor;
 
 explain (analyze, buffers, settings, summary, format text)
 with latest as materialized (
-  select projection.dataset_kind,
+  select distinct on (projection.dataset_kind, projection.id)
+    projection.dataset_kind,
     projection.id,
     projection.version,
     projection.modified_at
-  from private.portal_sitemap_latest_rows_v1 as projection
+  from private.portal_sitemap_rows_v1 as projection
   where projection.shard_no = :largest_bucket::integer
     and projection.contract_version = 1
   order by projection.dataset_kind,
-    projection.id
+    projection.id,
+    projection.version desc,
+    projection.modified_at desc
   limit 4097
 )
 select coalesce(pg_catalog.jsonb_agg(

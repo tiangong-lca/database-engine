@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
 lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for Issue #539: 274-file recovery/benchmark runners, fixed sitemap shards, the no-FK same-identity advisory-fenced latest writer pair, anonymous Preview gates, and 13-module Portal generation are current."
+lastReviewedNote: "Reviewed for Issue #539: 274-file recovery/benchmark runners, fixed sitemap shards, exact-version FK-cascaded child, history-density plan gate, anonymous Preview gates, and 13-module Portal generation are current."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -92,11 +92,13 @@ embedding-only races; forces card/facet reconcile lock-timeout and cutover-guard
 failures; verifies facet expand COMMIT/history failure, four-shard idempotent
 retry, controlled same-name concurrent-index cleanup, post-cutover Flow
 eligibility guard rollback, transactional sitemap expand COMMIT-gap/reset and
-public-cutover/concurrency-repair rollback and retry, ordinary latest fallback,
-the no-FK catalog contract, and the identical same-identity advisory fence on
-both helpers. Real delete/delete plus lower-insert/current-delete lock
-interleavings must finish without deadlock and converge to the committed facet
-winner. The runner also proves a no-op repeat does not rebuild eight indexes.
+public-cutover/forward-repair rollback and retry, the exact-version child
+PK/FK/index, the sole exact-key upsert trigger, and retirement of every obsolete
+winner object. Real same-identity exact-version inserts, updates, and deletes
+must all commit without a writer-side retry while child rows remain exactly
+equal to the committed public facet-version set. The runner also proves a no-op
+repeat does not rebuild eight indexes and rejects noncanonical cursor numeric
+scales.
 See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries. Formal evidence additionally requires
@@ -113,9 +115,9 @@ reconcile fence to finish within five seconds, plus exact key coverage,
 deterministic sampled facts, and aggregate DTO counts.
 It then times the three sitemap migrations over all 126,246 rows against exact
 60/15/15-second evidence budgets (120/30/30-second outer timeouts) and requires
-latest/facet two-way parity, shard capacity, no latest-table FK, the identical
-transaction identity advisory fence on both helpers, and exact trigger and
-public-RPC parity.
+facet/sitemap exact-version row parity, composite PK/FK parity, the ordered
+history index, the sole exact-key trigger, shard capacity, and exact public-RPC
+parity.
 The runner always resets the isolated project to full HEAD on exit.
 
 ### `run_portal_projection_benchmark.sh`
@@ -177,6 +179,14 @@ The evidence file also carries a dedicated full plan for empty-query,
 timing label must also return exactly 50 complete cards so an empty or narrowed
 result cannot make the performance gate pass.
 
+The sitemap profile keeps the 126,246-row single-version fixture at a maximum
+2,066 identities in one shard and records roughly 11 ms shard-read p95. A
+separate history-density probe expands 2,048 identities to 64 versions each
+(131,072 rows). Its natural `DISTINCT ON` plan must use the exact history-order
+index as an index-only path, contain no `Sort` or `Incremental Sort`, spill no
+temp data, and finish below four seconds. Response cardinality, bytes, and
+timeout remain bounded even though scanned rows grow with retained versions.
+
 ### `check_portal_projection_manifest.py`
 
 Checks all three committed Portal digests: the exact eleven-function stored-card
@@ -190,15 +200,16 @@ query-only kernel replacement with no table/index/trigger/writer rewrite. The
 runtime path independently validates the Facet manifest before reading that
 child projection.
 
-It also freezes the Issue #539 no-FK 64-bucket latest-only table, empty-table
-covering index, and exact writer pair. Both helpers first acquire the identical
-`pg_advisory_xact_lock(hashtextextended(dataset_kind || ':' || id, 539))`
-transaction identity fence; the `AFTER INSERT OR UPDATE` path then directly
-upserts, while the serialized `BEFORE DELETE` path locks the latest row and
-selects the visible-version fallback. It also freezes the `134103` concurrency
-forward repair, transactional public guard, 4,096-item read cap, and
-byte-identical retained sitemap façade. Advisory-key collisions may only add
-serialization; exact kind/id predicates preserve correctness.
+It also freezes the Issue #539 64-bucket exact-version child: table/PK, exact
+facet FK with `ON UPDATE RESTRICT`/`ON DELETE CASCADE`, history-order index, and
+sole `AFTER INSERT OR UPDATE` same-key upsert trigger. The public shard reader
+must retain its index-ordered `DISTINCT ON (dataset_kind,id)` selection,
+4,096-item/2-MiB/four-second bounds, and explicit history-density plan gate.
+The `134103` forward repair must atomically lock the facet writer, build and
+fully backfill the shadow child, replace the assertion/reader, and retire the
+obsolete winner table/helpers. Shard cursor bytes must equal a fresh encoding
+of the exact expected object, so JSONB-equivalent numeric scales such as `1.0`
+and `64.0` are rejected. The retained sitemap façade remains byte-identical.
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py

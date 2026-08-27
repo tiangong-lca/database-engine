@@ -31,7 +31,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
 lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for Issue #539 fixed sitemap shards, the intentionally no-FK latest table, same-identity advisory writer fence, and the 134103 concurrency repair."
+lastReviewedNote: "Reviewed for Issue #539 fixed sitemap shards, the exact-version FK-cascaded child, history-ordered shard reader, and atomic 134103 forward replacement."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -121,44 +121,44 @@ classification bounds, labels, and exact latest identity before returning a
 value. It adds no source-table scan, new projection table, existing-index
 change, or trigger/writer branch.
 
-The bounded sitemap surface derives one latest-only, locator-free row per
-Process/Flow identity from the synchronized narrow facet projection. Its
-manifest always emits exactly 64
-ordered opaque shard cursors, so manifest work is constant and never scans or
-counts catalog rows. Each identity is assigned by the stable high six bits of
-`MD5(dataset_kind || ':' || id)`; MD5 is only a deterministic distribution
-primitive here, never an authorization or integrity decision. The latest table
-intentionally has no foreign key to the exact-version facet row. An
-exact-version FK with cascade is prohibited because concurrent deletes of two
-versions of the same identity can acquire parent/cascade/latest locks in
-opposite order and form a real deadlock.
+The bounded sitemap surface stores one locator-free row for every public facet
+version in `private.portal_sitemap_rows_v1`. Its primary key is
+`(dataset_kind,id,version)`, and the same exact key references
+`private.portal_catalog_facet_rows_v1` with `ON UPDATE RESTRICT` and
+`ON DELETE CASCADE`. One `AFTER INSERT OR UPDATE` facet trigger performs an
+exact-key upsert; DELETE maintenance belongs only to the FK cascade. Each
+identity version receives the same stable six-bit bucket derived from
+`MD5(dataset_kind || ':' || id)`; MD5 is only a distribution primitive, never
+an authorization or integrity decision.
 
-The table and its `(shard_no,dataset_kind,id)` covering B-tree are created empty
-before one set-based backfill. Both writer helpers first take the same
-transaction-scoped identity fence:
-`pg_advisory_xact_lock(hashtextextended(dataset_kind || ':' || id, 539))`.
-One `AFTER INSERT OR UPDATE` facet trigger then directly upserts a new/current
-version. A separate `BEFORE DELETE` trigger takes that same advisory fence,
-locks the latest identity row `FOR UPDATE`, and rebinds a deleted current
-version to the highest remaining visible facet version or removes it when no
-fallback exists. An advisory-hash collision can only serialize unrelated
-identities unnecessarily; the exact kind/id predicates still determine every
-effect, so correctness is unchanged. The public RLS path filters a physical
-smallint column and naturally uses the covering index without privileged or
-leakproof-function assumptions. Migration
-`20260827134103_portal_sitemap_concurrency_repair.sql` is the forward repair for
-the earlier PR Preview head: it reinstalls the advisory-fenced two-helper and
-two-trigger writer contract, reconciles existing latest rows, refreshes the
-guarded function digests, and verifies the no-FK catalog state without editing
-applied migration history.
-Each shard returns at most 4,096 latest visible exact identities and fails
-closed before returning a partial page if capacity is exceeded. Current
-production evidence has 122,176 identities with a largest shard of 1,991, more
-than 2x headroom; the representative local fixture's maximum is 2,066.
-Capacity never constrains a source, card, facet, or latest writer: an overfull
-shard alone becomes unavailable until a separately versioned reshard. No
-counter row, source-table index, existing card/facet semantics, or existing
-Portal façade changes; `portal_sitemap_entries_v1` remains byte-identical.
+The history-covering B-tree is ordered by
+`(shard_no,contract_version,dataset_kind,id,version DESC,modified_at DESC)`.
+The shard reader filters one bucket and contract version, then uses
+`DISTINCT ON (dataset_kind,id)` in that index order to select the current
+version of each identity. Output remains fail-closed at 4,096 identities,
+2 MiB, and the four-second function timeout, but physical scan work grows with
+the number of retained public versions. The representative single-version
+fixture contains 126,246 rows, has a largest shard of 2,066 identities, and
+measured about 11 ms p95. The history-density probe expands 2,048 identities
+to 64 versions each, or 131,072 exact rows; its natural plan must use the
+history index as an index-only path, contain no `Sort` or `Incremental Sort`,
+spill no temporary data, and finish below four seconds.
+
+The manifest still emits exactly 64 ordered opaque shard cursors without
+scanning or counting catalog rows. A shard cursor is accepted only when its
+input bytes equal a fresh encoding of the exact expected four-field object, so
+JSONB-equivalent numeric scales such as `1.0` or `64.0` fail with `22023`.
+Capacity never constrains facet or sitemap-child writes: an overfull shard alone
+becomes unavailable until a separately versioned reshard. No counter row,
+source-table index, existing card/facet semantics, or retained
+`portal_sitemap_entries_v1` façade changes.
+
+Migration `20260827134103_portal_sitemap_concurrency_repair.sql` is the atomic
+forward path for an earlier PR Preview winner-table shape. It locks the sole
+facet writer, creates and fully backfills the exact-version shadow child,
+rebinds the assertion and shard reader, and drops the obsolete winner table and
+helpers in one transaction. Fresh databases already create the final child and
+take the repair's no-drift path.
 
 Edge consumers must obtain Data Product publication, package, and worker
 metadata through bounded `api.svc_data_product_*` projections rather than

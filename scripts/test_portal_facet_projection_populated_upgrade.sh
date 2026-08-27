@@ -314,7 +314,7 @@ select private.assert_portal_catalog_facet_contract_v1();
 do $verify_populated_facet_upgrade$
 begin
   if (select count(*) from private.portal_catalog_facet_rows_v1) <> 126246
-     or (select count(*) from private.portal_sitemap_latest_rows_v1) <> 126246
+     or (select count(*) from private.portal_sitemap_rows_v1) <> 126246
      or (
        select count(*)
        from private.portal_catalog_search_rows_v1
@@ -353,7 +353,7 @@ begin
      )
      or exists (
        with expected as (
-         select distinct on (facet.dataset_kind, facet.id)
+         select
            facet.dataset_kind,
            facet.id,
            facet.version,
@@ -373,17 +373,12 @@ begin
          from private.portal_catalog_facet_rows_v1 as facet
          where facet.state_code in (100, 200)
            and facet.facet_contract_version = 1
-         order by facet.dataset_kind,
-           facet.id,
-           facet.version desc,
-           facet.modified_at desc,
-           facet.state_code desc
        )
        (select * from expected
         except
-        select * from private.portal_sitemap_latest_rows_v1)
+        select * from private.portal_sitemap_rows_v1)
        union all
-       (select * from private.portal_sitemap_latest_rows_v1
+       (select * from private.portal_sitemap_rows_v1
         except
         select * from expected)
      )
@@ -391,44 +386,44 @@ begin
        select pg_catalog.max(shard.item_count)
        from (
          select count(*) as item_count
-         from private.portal_sitemap_latest_rows_v1
-         where contract_version = 1
+         from (
+           select shard_no, dataset_kind, id
+           from private.portal_sitemap_rows_v1
+           where contract_version = 1
+           group by shard_no, dataset_kind, id
+         ) as identity
          group by shard_no
        ) as shard
      ), 0) > 4096
-     or exists (
+     or not exists (
        select 1
        from pg_catalog.pg_constraint as constraint_catalog
        where constraint_catalog.conrelid =
-         'private.portal_sitemap_latest_rows_v1'::regclass
+         'private.portal_sitemap_rows_v1'::regclass
+         and constraint_catalog.confrelid =
+           'private.portal_catalog_facet_rows_v1'::regclass
+         and constraint_catalog.conname =
+           'portal_sitemap_rows_source_v1_fk'
          and constraint_catalog.contype = 'f'
+         and constraint_catalog.convalidated
+         and constraint_catalog.confupdtype = 'r'
+         and constraint_catalog.confdeltype = 'c'
      )
      or (
        select count(*)
        from pg_catalog.pg_trigger as trigger
        where trigger.tgrelid =
          'private.portal_catalog_facet_rows_v1'::regclass
-         and trigger.tgname in (
-           'portal_sitemap_latest_sync_v1',
-           'portal_sitemap_latest_delete_v1'
-         )
+         and trigger.tgname = 'portal_sitemap_rows_sync_v1'
          and not trigger.tgisinternal
          and trigger.tgenabled = 'O'
-         and (
-           (
-             trigger.tgname = 'portal_sitemap_latest_sync_v1'
-             and trigger.tgtype = 21
-             and trigger.tgfoid =
-               'private.sync_portal_sitemap_latest_row_v1()'::regprocedure
-           )
-           or (
-             trigger.tgname = 'portal_sitemap_latest_delete_v1'
-             and trigger.tgtype = 11
-             and trigger.tgfoid =
-               'private.sync_portal_sitemap_latest_delete_v1()'::regprocedure
-           )
-         )
-     ) <> 2
+         and trigger.tgtype = 21
+         and trigger.tgfoid =
+           'private.sync_portal_sitemap_row_v1()'::regprocedure
+     ) <> 1
+     or pg_catalog.to_regclass(
+       'private.portal_sitemap_latest_rows_v1'
+     ) is not null
      or pg_catalog.to_regprocedure(
        'api.portal_sitemap_manifest_v1()'
      ) is null

@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "portal_sitemap_rows_sync_v1" AFTER INSERT OR UPDATE OF "dataset_kind", "id", "version", "state_code", "modified_at", "facet_contract_version" ON "private"."portal_catalog_facet_rows_v1" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_sitemap_row_v1"();

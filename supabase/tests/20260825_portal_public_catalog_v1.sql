@@ -397,20 +397,20 @@ select extensions.ok(
     join pg_catalog.pg_am as access_method
       on access_method.oid = index_relation.relam
     where index_catalog.indexrelid =
-      'private.portal_sitemap_latest_shard_v1_idx'::regclass
+      'private.portal_sitemap_rows_shard_v1_idx'::regclass
       and index_catalog.indrelid =
-        'private.portal_sitemap_latest_rows_v1'::regclass
+        'private.portal_sitemap_rows_v1'::regclass
       and index_relation.relowner = 'postgres'::regrole
       and access_method.amname = 'btree'
       and index_catalog.indisvalid
       and index_catalog.indisready
       and index_catalog.indislive
-      and index_catalog.indnkeyatts = 3
+      and index_catalog.indnkeyatts = 6
       and index_catalog.indnatts = 6
       and index_catalog.indpred is null
       and index_catalog.indexprs is null
   ),
-  'the sitemap shard index is the exact healthy latest-only covering index'
+  'the sitemap shard index is the exact healthy latest-version covering index'
 );
 
 select extensions.is(
@@ -421,23 +421,13 @@ select extensions.is(
       'private.portal_catalog_facet_rows_v1'::regclass
       and not trigger.tgisinternal
       and trigger.tgenabled = 'O'
-      and (
-        (
-          trigger.tgname = 'portal_sitemap_latest_sync_v1'
-          and trigger.tgtype = 21
-          and trigger.tgfoid =
-            'private.sync_portal_sitemap_latest_row_v1()'::regprocedure
-        )
-        or (
-          trigger.tgname = 'portal_sitemap_latest_delete_v1'
-          and trigger.tgtype = 11
-          and trigger.tgfoid =
-            'private.sync_portal_sitemap_latest_delete_v1()'::regprocedure
-        )
-      )
+      and trigger.tgname = 'portal_sitemap_rows_sync_v1'
+      and trigger.tgtype = 21
+      and trigger.tgfoid =
+        'private.sync_portal_sitemap_row_v1()'::regprocedure
   ),
-  2::bigint,
-  'the governed facet writer has exact INSERT/UPDATE and serialized BEFORE DELETE sitemap triggers'
+  1::bigint,
+  'the governed facet writer has one exact INSERT/UPDATE sitemap trigger'
 );
 
 select extensions.is(
@@ -445,11 +435,41 @@ select extensions.is(
     select pg_catalog.count(*)
     from pg_catalog.pg_constraint as constraint_catalog
     where constraint_catalog.conrelid =
-      'private.portal_sitemap_latest_rows_v1'::regclass
+      'private.portal_sitemap_rows_v1'::regclass
+      and constraint_catalog.confrelid =
+        'private.portal_catalog_facet_rows_v1'::regclass
+      and constraint_catalog.conname = 'portal_sitemap_rows_source_v1_fk'
       and constraint_catalog.contype = 'f'
+      and constraint_catalog.convalidated
+      and constraint_catalog.confupdtype = 'r'
+      and constraint_catalog.confdeltype = 'c'
   ),
-  0::bigint,
-  'the latest sitemap table has no exact-version FK that can deadlock concurrent version deletes'
+  1::bigint,
+  'each sitemap version is exact-FK fenced to its facet row with delete cascade'
+);
+
+select extensions.is(
+  (
+    select pg_catalog.count(*)
+    from pg_catalog.pg_constraint as constraint_catalog
+    where constraint_catalog.conrelid =
+      'private.portal_sitemap_rows_v1'::regclass
+      and constraint_catalog.contype = 'p'
+      and pg_catalog.pg_get_constraintdef(
+        constraint_catalog.oid,
+        false
+      ) = 'PRIMARY KEY (dataset_kind, id, version)'
+  ),
+  1::bigint,
+  'the sitemap child primary key is the exact version identity'
+);
+
+select extensions.is(
+  pg_catalog.to_regclass(
+    'private.portal_sitemap_latest_rows_v1'
+  )::text,
+  null::text,
+  'the retired shared latest-winner table is absent'
 );
 
 select extensions.is(
@@ -485,37 +505,26 @@ select extensions.is(
     select pg_catalog.count(*)
     from pg_catalog.pg_proc as routine
     where routine.oid =
-      'private.sync_portal_sitemap_latest_row_v1()'::regprocedure
+      'private.sync_portal_sitemap_row_v1()'::regprocedure
       and routine.proowner = 'api_internal_executor'::regrole
       and routine.prosecdef
       and routine.provolatile = 'v'
       and routine.proparallel = 'u'
       and pg_catalog.md5(routine.prosrc) =
-        '45503a8c8455b9ae9e69bc15d150d97f'
+        '9bc7007c0e8fef48c75d997ea8ef96d8'
       and coalesce(routine.proacl::text, '') =
         '{api_internal_executor=X/api_internal_executor}'
   ),
   1::bigint,
-  'the latest sitemap sync helper is exact, owner-only, and security-definer fenced'
+  'the exact-version sitemap sync helper is owner-only and security-definer fenced'
 );
 
 select extensions.is(
-  (
-    select pg_catalog.count(*)
-    from pg_catalog.pg_proc as routine
-    where routine.oid =
-      'private.sync_portal_sitemap_latest_delete_v1()'::regprocedure
-      and routine.proowner = 'api_internal_executor'::regrole
-      and routine.prosecdef
-      and routine.provolatile = 'v'
-      and routine.proparallel = 'u'
-      and pg_catalog.md5(routine.prosrc) =
-        '4278224e16a7f1932d0f3debbc245b2b'
-      and coalesce(routine.proacl::text, '') =
-        '{api_internal_executor=X/api_internal_executor}'
-  ),
-  1::bigint,
-  'the BEFORE DELETE sitemap helper is exact, owner-only, and identity-fence serialized'
+  pg_catalog.to_regprocedure(
+    'private.sync_portal_sitemap_latest_delete_v1()'
+  )::text,
+  null::text,
+  'the retired shared-winner DELETE helper is absent'
 );
 
 select extensions.is(
@@ -533,7 +542,7 @@ select extensions.is(
       from information_schema.column_privileges as privilege
       where privilege.grantee = 'portal_public_executor'
         and privilege.table_schema = 'private'
-        and privilege.table_name = 'portal_sitemap_latest_rows_v1'
+        and privilege.table_name = 'portal_sitemap_rows_v1'
         and privilege.privilege_type = 'SELECT'
     )
     select pg_catalog.count(*)
@@ -544,7 +553,7 @@ select extensions.is(
     ) as symmetric_difference
   ),
   0::bigint,
-  'the Portal executor can read only the six locator-free latest sitemap columns'
+  'the Portal executor can read only the six locator-free exact sitemap columns'
 );
 
 select extensions.is(
@@ -2787,6 +2796,10 @@ from (values
   (
     '{"v":"1","scope":"sitemap-shard","bucket":"0","shardCount":"64"}'::jsonb,
     'a canonical shard cursor with string-typed numeric fields fails closed'
+  ),
+  (
+    '{"v":1.0,"scope":"sitemap-shard","bucket":0,"shardCount":64.0}'::jsonb,
+    'a noncanonical numeric-scale shard cursor fails closed'
   )
 ) as forgery(payload, description);
 
