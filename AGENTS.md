@@ -37,8 +37,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: a9c4f79
-lastReviewedNote: "Reviewed for Issue #543 summary-selected classification and exact Flow CAS execution, unchanged Search/timeout budgets, and bounded query/index repair; ownership boundaries remain unchanged."
+lastReviewedCommit: d21600b
+lastReviewedNote: "Reviewed for Issue #543 summary-selected classification and exact Flow CAS execution, summary-plan isolation, unchanged Search/timeout budgets, and bounded forward repair; ownership boundaries remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

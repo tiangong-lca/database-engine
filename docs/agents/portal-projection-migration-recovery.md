@@ -1,7 +1,7 @@
 ---
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: a9c4f79
-lastReviewedNote: "Reviewed for Issue #543: the 276-file tree retains exact-version sitemap recovery and adds bounded classification plus exact Flow CAS example repairs without changing projection recovery ownership."
+lastReviewedCommit: d21600b
+lastReviewedNote: "Reviewed for Issue #543: the 277-file tree retains exact-version sitemap recovery and adds bounded classification plus summary-isolated exact Flow CAS repairs without changing projection recovery ownership."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -485,6 +485,17 @@ index build, function prerequisite, public-example smoke, or contract assertion
 rolls back atomically; do not retain a manual index or bypass the forward
 migration after an uncertain hosted outcome.
 
+`20260827223000_isolate_portal_flow_cas_index.sql` is the forward repair for a
+cold persistent-Dev summary timeout discovered after `210000`. It atomically
+recreates the same index with an explicit 7..12 CAS-length predicate and adds
+the identical predicate to the exact candidate branch. That discriminator is
+redundant for valid CAS values but deliberately prevents the unconstrained
+summary selector from choosing the CAS-leading index; summary selection
+returns to the retained id-ordered eligibility index. The migration must prove
+the exact `210000` function/index predecessor, run the real summary smoke inside
+its two-second budget, preserve exact-CAS/latest behavior, and roll back both
+index and function on any failure.
+
 ## Uncertain expand commit
 
 The expand migration is transactional, so ordinary SQL failure leaves no Issue
@@ -581,7 +592,7 @@ Issue 531 Supabase project. It resets that local project and must never target a
 shared checkout, Preview, persistent Dev, or production.
 
 Formal recovery evidence requires clean HEAD, the reviewed Supabase CLI
-`2.109.1`, and byte equality plus one aggregate SHA-256 across all 276 migration
+`2.109.1`, and byte equality plus one aggregate SHA-256 across all 277 migration
 files in the repository and isolated project. Comparing only Issue 531 files is
 not sufficient because an earlier baseline change can alter recovery behavior.
 

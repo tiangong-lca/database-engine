@@ -25840,6 +25840,9 @@ begin
         ) = 'string'
         and projection.card ->> 'casNumber' ~
           '^[0-9]{2,7}-[0-9]{2}-[0-9]$'
+        and pg_catalog.length(
+          projection.card ->> 'casNumber'
+        ) between 7 and 12
         and projection.card ->> 'casNumber' = p_query
     ), latest_rows as materialized (
       select latest.id,
@@ -25996,7 +25999,7 @@ $_$;
 ALTER FUNCTION "private"."catalog_portal_candidate_rows_v1"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text") OWNER TO "portal_public_executor";
 
 
-COMMENT ON FUNCTION "private"."catalog_portal_candidate_rows_v1"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text") IS 'Seven static kind/query branches: valid Flow CAS uses exact partial-index keys with latest-version recheck; all empty, UUID, and ordinary lexical paths retain their existing behavior.';
+COMMENT ON FUNCTION "private"."catalog_portal_candidate_rows_v1"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text") IS 'Seven static kind/query branches: valid Flow CAS uses length-isolated exact partial-index keys with latest-version recheck; all empty, UUID, and ordinary lexical paths retain their existing behavior.';
 
 
 
@@ -67627,11 +67630,11 @@ CREATE INDEX "portal_catalog_facet_rows_latest_v1_idx" ON "private"."portal_cata
 
 
 
-CREATE INDEX "portal_catalog_search_flow_cas_v1_idx" ON "private"."portal_catalog_search_rows_v1" USING "btree" ((("card" ->> 'casNumber'::"text")), "id", "version" DESC, "modified_at" DESC, "state_code" DESC) WHERE (("dataset_kind" = 'flow'::"text") AND ("jsonb_typeof"(("card" -> 'casNumber'::"text")) = 'string'::"text") AND (("card" ->> 'casNumber'::"text") ~ '^[0-9]{2,7}-[0-9]{2}-[0-9]$'::"text"));
+CREATE INDEX "portal_catalog_search_flow_cas_v1_idx" ON "private"."portal_catalog_search_rows_v1" USING "btree" ((("card" ->> 'casNumber'::"text")), "id", "version" DESC, "modified_at" DESC, "state_code" DESC) WHERE (("dataset_kind" = 'flow'::"text") AND ("jsonb_typeof"(("card" -> 'casNumber'::"text")) = 'string'::"text") AND (("card" ->> 'casNumber'::"text") ~ '^[0-9]{2,7}-[0-9]{2}-[0-9]$'::"text") AND (("length"(("card" ->> 'casNumber'::"text")) >= 7) AND ("length"(("card" ->> 'casNumber'::"text")) <= 12)));
 
 
 
-COMMENT ON INDEX "private"."portal_catalog_search_flow_cas_v1_idx" IS 'Exact public Flow CAS candidate keys; partial card expression only, with no raw document or private source payload.';
+COMMENT ON INDEX "private"."portal_catalog_search_flow_cas_v1_idx" IS 'Exact public Flow CAS candidate keys with an explicit 7..12 length discriminator that isolates the index from unconstrained summary selection.';
 
 
 

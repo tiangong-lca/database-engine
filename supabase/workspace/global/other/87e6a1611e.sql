@@ -1,0 +1,1 @@
+COMMENT ON INDEX "private"."portal_catalog_search_flow_cas_v1_idx" IS 'Exact public Flow CAS candidate keys with an explicit 7..12 length discriminator that isolates the index from unconstrained summary selection.';

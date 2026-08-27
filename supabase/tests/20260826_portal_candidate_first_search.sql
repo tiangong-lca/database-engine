@@ -397,6 +397,7 @@ select extensions.ok(
       and routine.prosrc ~ 'catalog_portal_flow_pattern_versions_v1'
       and routine.prosrc ~ 'portal_catalog_summary_valid_cas_v1'
       and routine.prosrc ~ 'latest_rows as materialized'
+      and routine.prosrc ~ 'between 7 and 12'
       and routine.prosrc !~* '[[:space:]]execute[[:space:]]'
       and (
         pg_catalog.length(routine.prosrc)
@@ -463,6 +464,11 @@ select extensions.ok(
         index_record.indrelid,
         true
       ) ~ 'casNumber'
+      and pg_catalog.pg_get_expr(
+        index_record.indpred,
+        index_record.indrelid,
+        true
+      ) ~ 'length.*casNumber.*7.*12'
       and pg_catalog.pg_get_indexdef(index_record.indexrelid) ~
         'casNumber.*id.*version DESC.*modified_at DESC.*state_code DESC'
     from pg_catalog.pg_index as index_record
@@ -473,7 +479,7 @@ select extensions.ok(
     where index_record.indexrelid =
       'private.portal_catalog_search_flow_cas_v1_idx'::regclass
   ),
-  'valid Flow CAS candidates use one live five-key partial expression btree'
+  'valid Flow CAS candidates use one live length-isolated five-key partial expression btree'
 );
 
 select extensions.ok(
