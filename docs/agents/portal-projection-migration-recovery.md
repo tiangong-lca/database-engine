@@ -1,7 +1,7 @@
 ---
-lastReviewedAt: 2026-08-27
-lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for Issue #539: the 274-file tree, exact-version FK-cascaded sitemap child, history-ordered reader, and atomic 134103 forward replacement are explicit."
+lastReviewedAt: 2026-08-28
+lastReviewedCommit: 63e790a
+lastReviewedNote: "Reviewed for Issue #543: the 275-file tree retains the exact-version sitemap recovery and adds a function-only catalog-summary example repair with no projection or writer recovery surface."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -467,6 +467,15 @@ atomic commit. Preserve and escalate any prerequisite or convergence failure;
 do not expose a partially backfilled child, retain an obsolete helper, split the
 reader swap from old-object retirement, or edit history to force the repair.
 
+`20260827193451_repair_portal_classification_example.sql` changes only the
+existing summary function's optional example selection. It filters broad
+classification codes, prefers Process evidence, preserves the function owner,
+ACL, RLS and two-second summary budget, and adds no projection row, index,
+Trigger, or writer path. An uncertain commit follows the normal unchanged
+migration retry: `CREATE OR REPLACE FUNCTION` is idempotent after its strict
+prerequisite/definition checks, and no data cleanup or projection recovery is
+authorized.
+
 ## Uncertain expand commit
 
 The expand migration is transactional, so ordinary SQL failure leaves no Issue
@@ -563,7 +572,7 @@ Issue 531 Supabase project. It resets that local project and must never target a
 shared checkout, Preview, persistent Dev, or production.
 
 Formal recovery evidence requires clean HEAD, the reviewed Supabase CLI
-`2.109.1`, and byte equality plus one aggregate SHA-256 across all 274 migration
+`2.109.1`, and byte equality plus one aggregate SHA-256 across all 275 migration
 files in the repository and isolated project. Comparing only Issue 531 files is
 not sufficient because an earlier baseline change can alter recovery behavior.
 

@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-27
-lastReviewedCommit: 712558e
-lastReviewedNote: "已复核 Issue #539：274-file recovery/benchmark、固定 sitemap shards、exact-version FK cascade child、history-density plan gate、匿名 Preview gates 与 13-module Portal 生成均为当前状态。"
+lastReviewedAt: 2026-08-28
+lastReviewedCommit: 63e790a
+lastReviewedNote: "已复核 Issue #543：275-file recovery/benchmark、可执行 summary classification example gate、固定 sitemap shards、匿名 Preview gates 与 13-module Portal 生成均为当前状态。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -78,7 +78,7 @@ scripts/test_search_text_array_upgrade.sh
 
 ### `test_portal_projection_upgrade_recovery.sh`
 
-在显式确认且隔离的本地 Supabase 项目中验证 Issue 531/532/539 Portal projection
+在显式确认且隔离的本地 Supabase 项目中验证 Issue 531/532/539/543 Portal projection
 上线。脚本使用真实并发连接覆盖有效更新、删除、状态失效、主键变更以及仅 embedding
 更新竞态；主动制造 card/facet reconcile 锁超时与 cutover guard 失败；证明 facet
 expand COMMIT/history 缺口、四分片幂等重试、同名 concurrent index 受控清理、Flow
@@ -91,12 +91,12 @@ facet version 集精确相等。脚本还证明已记录迁移重复执行不会
 证明 populated 且已记录的 `134101`/`134102` 状态只应用 `134103` 即可收敛。
 所需环境变量与恢复边界见
 `docs/agents/portal-projection-migration-recovery.md`。正式证据还要求干净 HEAD、
-Supabase CLI `2.109.1`，以及完整 274-file migration tree 的逐字相等和 aggregate
+Supabase CLI `2.109.1`，以及完整 275-file migration tree 的逐字相等和 aggregate
 SHA-256。
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
-在同一类显式隔离的 Issue-531/532/539 项目中，对 126,246 条既有 parent card 逐字执行七个
+在同一类显式隔离的 Issue-531/532/539/543 项目中，对 126,246 条既有 parent card 逐字执行七个
 Facet migration。每条 backfill statement 必须在 120 秒门下保留至少 2 倍余量，
 每个完整 UUID-quarter 文件必须低于 120 秒；成功 reconcile fence 必须在 5 秒内
 完成，并要求 key coverage、确定性抽样 facts 与 DTO 聚合计数精确一致。runner
@@ -107,9 +107,9 @@ history-order index、唯一 same-key trigger、shard capacity 与两个 public 
 
 ### `run_portal_projection_benchmark.sh`
 
-仅在显式确认的 Issue 531/532/539 隔离本地 Supabase 项目中运行代表性 Process/Flow
+仅在显式确认的 Issue 531/532/539/543 隔离本地 Supabase 项目中运行代表性 Process/Flow
 Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把完整
-274-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
+275-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
 reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合同与 recovery runner
 一致，另要求 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`。
 
