@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 27dadfa0f5529e16043ccebce7e615a228b136cc
-lastReviewedNote: "已在准确 PR Preview 门最小化 branch/key 权限并把公共 key 选择与匿名传输隔离后复核；持久化 Dev 与生产的修改边界不变。"
+lastReviewedCommit: 2f207a3a17d798a4464a670a5f9ef2ccc026f0ae
+lastReviewedNote: "已为 Issue #532 的生成类型与 Preview 合同门复核；PR、持久化 Dev、生产和跨仓修改边界均保持不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

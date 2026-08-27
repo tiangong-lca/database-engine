@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 27dadfa0f5529e16043ccebce7e615a228b136cc
-lastReviewedNote: "Reviewed after the exact PR Preview gate minimized branch/key authority and isolated public-key selection from anonymous transport; persistent Dev and production mutation boundaries remain unchanged."
+lastReviewedCommit: 2f207a3a17d798a4464a670a5f9ef2ccc026f0ae
+lastReviewedNote: "Reviewed for Issue #532 generated-type and Preview contract gates; PR, persistent Dev, production, and cross-repository mutation boundaries remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

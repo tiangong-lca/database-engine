@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: e4693674f56a4bea65a0507e0832a360effbc66c
-lastReviewedNote: "已复核 Portal 双 manifest、既有数据 Facet upgrade/recovery runner 与命名性能 profile。"
+lastReviewedCommit: 2f207a3a17d798a4464a670a5f9ef2ccc026f0ae
+lastReviewedNote: "已为 Issue #532 复核 Portal 类型生成、card-context manifest/parity 检查、隔离 proof 目标与保留的命名 benchmark profile。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

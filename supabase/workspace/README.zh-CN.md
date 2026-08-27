@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: e4693674f56a4bea65a0507e0832a360effbc66c
-lastReviewedNote: "已为 Issue #532 复核；确定性的 267-migration 快照与 public/api 类型所有权不变。"
+lastReviewedCommit: 2f207a3a17d798a4464a670a5f9ef2ccc026f0ae
+lastReviewedNote: "已为 Issue #532 的 exact-local 重建与生成 Portal façade 函数复核；确定性的 267-migration 快照与 public/api 类型所有权不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

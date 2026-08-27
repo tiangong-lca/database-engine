@@ -37,8 +37,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: e4693674f56a4bea65a0507e0832a360effbc66c
-lastReviewedNote: "Reviewed for the narrow Portal facet projection and populated-upgrade proof; repository ownership and delivery boundaries are unchanged."
+lastReviewedCommit: 2f207a3a17d798a4464a670a5f9ef2ccc026f0ae
+lastReviewedNote: "Reviewed for Issue #532 selected-row Portal card context and generated DTO types; repository ownership, no-writer-expansion, and delivery boundaries are unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: e4693674f56a4bea65a0507e0832a360effbc66c
-lastReviewedNote: "Reviewed for Issue #532; the deterministic 267-migration snapshot and public/api type ownership are unchanged."
+lastReviewedCommit: 2f207a3a17d798a4464a670a5f9ef2ccc026f0ae
+lastReviewedNote: "Reviewed for Issue #532 exact-local reconstruction and generated Portal facade functions; the deterministic 267-migration snapshot and public/api type ownership are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
