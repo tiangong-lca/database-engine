@@ -78,7 +78,7 @@ scripts/test_search_text_array_upgrade.sh
 
 ### `test_portal_projection_upgrade_recovery.sh`
 
-在显式确认且隔离的本地 Supabase 项目中验证 Issue 531 Portal projection
+在显式确认且隔离的本地 Supabase 项目中验证 Issue 531/532/539 Portal projection
 上线。脚本使用真实并发连接覆盖有效更新、删除、状态失效、主键变更以及仅 embedding
 更新竞态；主动制造 card/facet reconcile 锁超时与 cutover guard 失败；证明 facet
 expand COMMIT/history 缺口、四分片幂等重试、同名 concurrent index 受控清理、Flow
@@ -90,7 +90,7 @@ SHA-256。
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
-在同一类显式隔离的 Issue-531 项目中，对 126,246 条既有 parent card 逐字执行七个
+在同一类显式隔离的 Issue-531/532/539 项目中，对 126,246 条既有 parent card 逐字执行七个
 Facet migration。每条 backfill statement 必须在 120 秒门下保留至少 2 倍余量，
 每个完整 UUID-quarter 文件必须低于 120 秒；成功 reconcile fence 必须在 5 秒内
 完成，并要求 key coverage、确定性抽样 facts 与 DTO 聚合计数精确一致。runner
@@ -98,7 +98,7 @@ Facet migration。每条 backfill statement 必须在 120 秒门下保留至少 
 
 ### `run_portal_projection_benchmark.sh`
 
-仅在显式确认的 Issue 531 隔离本地 Supabase 项目中运行代表性 Process/Flow
+仅在显式确认的 Issue 531/532/539 隔离本地 Supabase 项目中运行代表性 Process/Flow
 Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把完整
 273-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
 reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合同与 recovery runner

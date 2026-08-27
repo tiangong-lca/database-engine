@@ -43,8 +43,8 @@ project_id="$({
   sed -n 's/^project_id = "\([^"]*\)"$/\1/p' \
     "$test_workdir/supabase/config.toml" | head -n 1
 })"
-if [[ ! "$project_id" =~ ^database-engine-(531|532)-[a-z0-9-]+$ ]]; then
-  echo "refusing non-Issue-531/532 Supabase project_id: $project_id" >&2
+if [[ ! "$project_id" =~ ^database-engine-(531|532|539)-[a-z0-9-]+$ ]]; then
+  echo "refusing non-Issue-531/532/539 Supabase project_id: $project_id" >&2
   exit 2
 fi
 
