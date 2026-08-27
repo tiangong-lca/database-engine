@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 9cf96265b8aec53b5c686c4b1c3c338fd93ece50
-lastReviewedNote: "已为 Issue #532 复核 Portal 类型生成、card-context manifest/parity 检查、隔离 proof 目标与保留的命名 benchmark profile。"
+lastReviewedCommit: b7ffb20
+lastReviewedNote: "已为 Issue #532 复核 Portal 类型生成、runtime Facet/card-context manifest 检查、filtered Search exact-50 proof 与隔离命名 benchmark profile。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -140,7 +140,8 @@ Search-50/Hybrid-20 label 必须分别返回准确 50/20 个完整 item、20 个
 拒绝字段缺失、超过 750,000 total / 250,000 read shared blocks，以及超过既有 Search 2 秒 / Hybrid
 6 秒门槛的结果。
 证据文件还会单独保存空 query、`geography=cn` Flow Search-50 的完整计划，
-因为它是代表性的过滤最坏路径。
+因为它是代表性的过滤最坏路径；对应 timing label 也必须准确返回 50 个完整 item，
+避免空结果或过窄结果让性能门假绿。
 
 ### `check_portal_projection_manifest.py`
 
@@ -149,7 +150,8 @@ Search-50/Hybrid-20 label 必须分别返回准确 50/20 个完整 item、20 个
 闭包/控制函数，校验四个 Facet 分片、reconcile/cutover，要求 context migration
 不新增 table/index/trigger，并保留 Flow eligibility index 的精确 catalog guard，
 同时不改变两个 #531 digest。它还要求 Flow geography Search follow-up 只能是
-单一 query-only kernel replacement，不得新增 table/index/trigger 或改写 writer。
+单一 query-only kernel replacement，不得新增 table/index/trigger 或改写 writer；
+runtime 在读取该 child projection 前还必须独立验证 Facet manifest。
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py

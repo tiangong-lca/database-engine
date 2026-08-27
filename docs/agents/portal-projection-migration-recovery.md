@@ -1,7 +1,7 @@
 ---
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 9cf96265b8aec53b5c686c4b1c3c338fd93ece50
-lastReviewedNote: "Reviewed for the Issue #532 independent card-context manifest and explicit absence of a new rollout or writer-recovery boundary; Issue #531 recovery remains unchanged."
+lastReviewedCommit: b7ffb20
+lastReviewedNote: "Reviewed for the Issue #532 per-request Facet-manifest guard, independent card-context manifest, and explicit absence of a new rollout or writer-recovery boundary; Issue #531 recovery remains unchanged."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -111,7 +111,10 @@ one shared exact-key decorator reads at most 50 Process/Flow source rows and
 derives only the exhaustive public card context. Its later query-only Flow
 geography Search repair reuses the already synchronized facet child for
 latest/filter/order/limit before hydrating 51 parent cards; it adds no relation,
-index, Trigger, or writer work. The decorator has its own live transitive
+index, Trigger, or writer work. Every matching request validates the independent
+Facet manifest before reading the child, so helper/trigger drift fails through
+the public Search error contract rather than returning stale derived facts. The
+decorator has its own live transitive
 manifest because it stores no historical rows; drift or an exact source miss
 fails closed. There is no backfill, reconcile, concurrent index, COMMIT/history
 cleanup, or writer recovery action for either layer.

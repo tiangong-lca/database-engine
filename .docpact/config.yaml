@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-27"
-lastReviewedCommit: "9cf96265b8aec53b5c686c4b1c3c338fd93ece50"
-lastReviewedNote: "Reviewed for Issue #532 exact-key Search/Hybrid card context, generated Portal types, isolated 268-migration proof, and the unchanged Issue #531 writer graph."
+lastReviewedCommit: "b7ffb20"
+lastReviewedNote: "Reviewed for Issue #532 runtime Facet-manifest fail-closed Search, exact-50 filtered benchmark evidence, generated Portal types, isolated 268-migration proof, and the unchanged Issue #531 writer graph."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

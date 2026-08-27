@@ -32,8 +32,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 9cf96265b8aec53b5c686c4b1c3c338fd93ece50
-lastReviewedNote: "Reviewed for Issue #532 exact-key 50/20 decoration, deterministic Portal types, isolated SQL proof, and retained representative benchmark evidence."
+lastReviewedCommit: b7ffb20
+lastReviewedNote: "Reviewed for Issue #532 exact-key 50/20 decoration, exact-50 filtered Search proof, Facet-manifest drift failure, deterministic Portal types, and isolated release evidence."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -126,9 +126,10 @@ keep each plan below 750,000 total and 250,000 read shared blocks, and apply the
 2-second Search / 6-second Hybrid budgets to both plans and 20-sample p95.
 The Flow empty-query `geography=cn` Search-50 path must have its own full plan
 artifact because it is the representative filtered worst case.
-Its repair must prove latest-version and relevance-cursor equality against the
-synchronized facet child, preserve the general path for every other filter,
-and add no index or writer work.
+Its timing label must return exactly 50 complete cards, and its repair must
+prove latest-version and relevance-cursor equality against the synchronized
+facet child, fail closed on live Facet-manifest drift, preserve the general path
+for every other filter, and add no index or writer work.
 
 When the anonymous PR Preview probe fails, CI may log only the HTTP status and
 a response-shape-validated PostgREST or SQLSTATE code. It must not print the

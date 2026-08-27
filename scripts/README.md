@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 9cf96265b8aec53b5c686c4b1c3c338fd93ece50
-lastReviewedNote: "Reviewed for Issue #532 Portal type generation, card-context manifest/parity checks, isolated proof targeting, and retained named benchmark profiles."
+lastReviewedCommit: b7ffb20
+lastReviewedNote: "Reviewed for Issue #532 Portal type generation, runtime Facet/card-context manifest checks, exact-50 filtered Search proof, and isolated named benchmark profiles."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -163,7 +163,9 @@ records temp-buffer use, rejects more than 750,000 total or 250,000 read shared
 blocks, and applies the existing
 2-second Search / 6-second Hybrid budgets.
 The evidence file also carries a dedicated full plan for empty-query,
-`geography=cn` Flow Search-50, the representative filtered worst case.
+`geography=cn` Flow Search-50, the representative filtered worst case; its
+timing label must also return exactly 50 complete cards so an empty or narrowed
+result cannot make the performance gate pass.
 
 ### `check_portal_projection_manifest.py`
 
@@ -174,7 +176,9 @@ closure/control set, validates the four facet shards plus reconcile/cutover,
 requires the context migration to add no table/index/trigger, and retains the
 Flow eligibility index catalog guard without changing either #531 digest. It
 also requires the Flow geography Search follow-up to remain a single
-query-only kernel replacement with no table/index/trigger/writer rewrite.
+query-only kernel replacement with no table/index/trigger/writer rewrite. The
+runtime path independently validates the Facet manifest before reading that
+child projection.
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py
