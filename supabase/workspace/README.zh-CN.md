@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
 lastReviewedCommit: 712558e
-lastReviewedNote: "已为 274-migration Issue #539 exact-version FK cascade sitemap child 与 history-order reader 快照复核；generated workspace 与 public/api 类型所有权不变。"
+lastReviewedNote: "已为 274-migration Issue #539 exact-version sitemap child、history reader 与 SHA-pinned 旧 Preview fixture 复核；generated workspace/type 所有权不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

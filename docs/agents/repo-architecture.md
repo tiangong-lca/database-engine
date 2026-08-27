@@ -31,7 +31,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
 lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for Issue #539 fixed sitemap shards, the exact-version FK-cascaded child, history-ordered shard reader, and atomic 134103 forward replacement."
+lastReviewedNote: "Reviewed for Issue #539 fixed sitemap shards, exact-version FK-cascaded child, history-ordered reader, atomic 134103 replacement, and its SHA-pinned old-Preview fixture."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

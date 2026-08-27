@@ -49,6 +49,7 @@ checkPaths:
   - supabase/migrations/20260827050002_portal_catalog_summary_v1.sql
   - supabase/tests/benchmarks/20260827_portal_catalog_summary_cardinality.sql
   - supabase/tests/20260827_portal_sitemap_shards_v1.sql
+  - supabase/tests/upgrade/20260827_portal_sitemap_preview_winner_fixture.sql
   - supabase/tests/benchmarks/20260827_portal_sitemap_shards_cardinality.sql
 related:
   - ../../AGENTS.md
@@ -597,6 +598,10 @@ writer-side retry, while the sitemap child remains exactly equal to the
 committed public facet-version set. Its no-op pass includes the history index
 OID so a recorded retry cannot rebuild it. Canonical cursor evidence also
 rejects alternate numeric scales such as `1.0` and `64.0`.
+It separately loads the SHA-pinned exact `343b7a1` two-migration Preview fixture
+over a populated v1/v2 identity, records only those two isolated ledger rows,
+and proves `20260827134103` alone preserves both exact versions while switching
+the public reader to v2 and retiring every old winner object.
 
 The separate populated-upgrade runner resets the same kind of isolated project
 to `20260827010003`, inserts 17,299 Process plus 108,947 Flow parent cards, and

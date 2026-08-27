@@ -98,7 +98,8 @@ winner object. Real same-identity exact-version inserts, updates, and deletes
 must all commit without a writer-side retry while child rows remain exactly
 equal to the committed public facet-version set. The runner also proves a no-op
 repeat does not rebuild eight indexes and rejects noncanonical cursor numeric
-scales.
+scales. A SHA-pinned exact old-Preview fixture additionally proves a populated,
+recorded `134101`/`134102` state converges by applying only `134103`.
 See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries. Formal evidence additionally requires

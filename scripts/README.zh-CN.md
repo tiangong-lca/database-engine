@@ -87,7 +87,8 @@ forward repair 的回滚/重试、exact-version child 的 PK/FK/index、唯一 s
 trigger，以及所有旧 winner 对象均被移除。同一 identity 不同 version 的真实
 insert/update/delete 必须全部提交，无 writer 侧 retry，并让 child rows 与已提交公开
 facet version 集精确相等。脚本还证明已记录迁移重复执行不会重建八个索引，并拒绝
-非 canonical 的 cursor numeric scale。
+非 canonical 的 cursor numeric scale；SHA-pinned 的准确旧 Preview fixture 还必须
+证明 populated 且已记录的 `134101`/`134102` 状态只应用 `134103` 即可收敛。
 所需环境变量与恢复边界见
 `docs/agents/portal-projection-migration-recovery.md`。正式证据还要求干净 HEAD、
 Supabase CLI `2.109.1`，以及完整 274-file migration tree 的逐字相等和 aggregate

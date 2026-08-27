@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
 lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for the 274-migration Issue #539 exact-version FK-cascaded sitemap child and history-ordered reader snapshot; generated workspace and public/api type ownership are unchanged."
+lastReviewedNote: "Reviewed for the 274-migration Issue #539 exact-version sitemap child, history reader, and SHA-pinned old-Preview fixture; generated workspace/type ownership is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

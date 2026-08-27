@@ -38,7 +38,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
 lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for Issue #539 exact-version sitemap child plus bounded independent Hybrid/sitemap Preview verification; repository ownership, branch workflow, and delivery boundaries remain unchanged."
+lastReviewedNote: "Reviewed for Issue #539 exact-version sitemap child, SHA-pinned old-Preview forward fixture, and bounded independent Preview verification; ownership and delivery boundaries remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

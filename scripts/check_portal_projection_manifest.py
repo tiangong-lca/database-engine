@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import sys
 from pathlib import Path
@@ -31,6 +32,16 @@ SITEMAP_SHARD_CONTRACT_NAME = (
     "20260827134102_portal_sitemap_shard_contract.sql"
 )
 SITEMAP_REPAIR_NAME = "20260827134103_portal_sitemap_concurrency_repair.sql"
+SITEMAP_PREVIEW_FIXTURE = (
+    REPO_ROOT
+    / "supabase"
+    / "tests"
+    / "upgrade"
+    / "20260827_portal_sitemap_preview_winner_fixture.sql"
+)
+SITEMAP_PREVIEW_FIXTURE_SHA256 = (
+    "bbdfa95524e1d47c85a8072737c676961f8285ed8054d8e9dec7fdd9499efb98"
+)
 MANIFEST_SHA256 = (
     "b5e0aff9abbffcc8d2dacaf559a5d1a8c993c20b647d0c70f0e4fa18eb06d2dc"
 )
@@ -638,6 +649,19 @@ def main() -> int:
         ):
             violations.append(
                 f"{SITEMAP_SHARD_CONTRACT_NAME}: retained sitemap v1 must stay unchanged"
+            )
+
+    if not SITEMAP_PREVIEW_FIXTURE.is_file():
+        violations.append(
+            f"missing Portal sitemap Preview fixture: {SITEMAP_PREVIEW_FIXTURE.name}"
+        )
+    else:
+        fixture_sha256 = hashlib.sha256(
+            SITEMAP_PREVIEW_FIXTURE.read_bytes()
+        ).hexdigest()
+        if fixture_sha256 != SITEMAP_PREVIEW_FIXTURE_SHA256:
+            violations.append(
+                f"{SITEMAP_PREVIEW_FIXTURE.name}: old Preview fixture digest drifted"
             )
 
     sitemap_repair = MIGRATIONS_DIR / SITEMAP_REPAIR_NAME

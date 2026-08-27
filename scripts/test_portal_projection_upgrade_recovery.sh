@@ -422,7 +422,8 @@ where dataset_kind = 'process'
     '53990000-0000-4000-8000-000000000001'::uuid,
     '53990000-0000-4000-8000-000000000002'::uuid,
     '53990000-0000-4000-8000-000000000003'::uuid,
-    '53990000-0000-4000-8000-000000000004'::uuid
+    '53990000-0000-4000-8000-000000000004'::uuid,
+    '53990000-0000-4000-8000-000000000005'::uuid
   );
 revoke api_internal_executor from postgres;
 SQL
@@ -1890,6 +1891,177 @@ assert_sql "
     )
   )
 " "exact-version sitemap recovery fixtures did not cleanly converge"
+
+# Breakpoint 10: reproduce the first PR Preview exactly. Its recorded 134101
+# and 134102 own only one latest-winner row. Register those two historical
+# versions, then prove that migration up executes only the checked-in 134103
+# forward repair, recovers both exact versions, and keeps the public shard on v2.
+reset_to 20260827134100
+run_psql <<'SQL'
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+insert into private.portal_catalog_search_rows_v1 (
+  dataset_kind, id, version, state_code, modified_at,
+  card, document, projection_contract_version
+)
+values
+  (
+    'process', '53990000-0000-4000-8000-000000000005',
+    '01.00.000', 100, '2026-08-27 15:40:00+00',
+    '{"document":"sitemap Preview winner v1","accessLevel":"metadata_only","geography":{"code":null},"classifications":[]}'::jsonb,
+    'sitemap Preview winner v1', 1
+  ),
+  (
+    'process', '53990000-0000-4000-8000-000000000005',
+    '02.00.000', 100, '2026-08-27 15:40:01+00',
+    '{"document":"sitemap Preview winner v2","accessLevel":"metadata_only","geography":{"code":null},"classifications":[]}'::jsonb,
+    'sitemap Preview winner v2', 1
+  );
+reset role;
+revoke api_internal_executor from postgres;
+SQL
+
+apply_sql_file \
+  "$repo_root/supabase/tests/upgrade/20260827_portal_sitemap_preview_winner_fixture.sql" \
+  >"$race_log_dir/sitemap-preview-winner-fixture.log" 2>&1
+
+assert_sql "
+  pg_catalog.to_regclass(
+    'private.portal_sitemap_latest_rows_v1'
+  ) is not null
+  and pg_catalog.to_regclass(
+    'private.portal_sitemap_rows_v1'
+  ) is null
+  and pg_catalog.to_regprocedure(
+    'private.sync_portal_sitemap_latest_row_v1()'
+  ) is not null
+  and (
+    select pg_catalog.string_agg(version, ',' order by version)
+    from private.portal_sitemap_latest_rows_v1
+    where dataset_kind = 'process'
+      and id = '53990000-0000-4000-8000-000000000005'::uuid
+  ) = '02.00.000'
+  and pg_catalog.jsonb_array_length(
+    api.portal_sitemap_manifest_v1() -> 'shards'
+  ) = 64
+  and not exists (
+    select 1
+    from supabase_migrations.schema_migrations
+    where version in ('20260827134101', '20260827134102', '20260827134103')
+  )
+" "historical Preview winner fixture is not exact"
+
+run_psql <<'SQL'
+insert into supabase_migrations.schema_migrations (
+  version, statements, name
+)
+values
+  (
+    '20260827134101',
+    array['recovery-only historical Preview fixture']::text[],
+    'portal_sitemap_latest_projection'
+  ),
+  (
+    '20260827134102',
+    array['recovery-only historical Preview fixture']::text[],
+    'portal_sitemap_shard_contract'
+  );
+SQL
+
+assert_sql "
+  (
+    select count(*)
+    from supabase_migrations.schema_migrations
+    where version in ('20260827134101', '20260827134102')
+  ) = 2
+  and not exists (
+    select 1
+    from supabase_migrations.schema_migrations
+    where version = '20260827134103'
+  )
+" "historical Preview migration ledger was not recorded exactly"
+
+apply_pending
+
+assert_sql "
+  (
+    select count(*)
+    from supabase_migrations.schema_migrations
+    where version in (
+      '20260827134101', '20260827134102', '20260827134103'
+    )
+  ) = 3
+  and pg_catalog.to_regclass(
+    'private.portal_sitemap_latest_rows_v1'
+  ) is null
+  and pg_catalog.to_regprocedure(
+    'private.sync_portal_sitemap_latest_row_v1()'
+  ) is null
+  and pg_catalog.to_regprocedure(
+    'private.sync_portal_sitemap_latest_delete_v1()'
+  ) is null
+  and (
+    select pg_catalog.string_agg(version, ',' order by version)
+    from private.portal_sitemap_rows_v1
+    where dataset_kind = 'process'
+      and id = '53990000-0000-4000-8000-000000000005'::uuid
+  ) = '01.00.000,02.00.000'
+  and pg_catalog.jsonb_array_length(
+    api.portal_sitemap_manifest_v1() -> 'shards'
+  ) = 64
+  and (
+    select count(*)
+    from pg_catalog.jsonb_array_elements(
+      api.portal_sitemap_manifest_v1() -> 'shards'
+    ) as descriptor(value)
+    cross join lateral pg_catalog.jsonb_array_elements(
+      api.portal_sitemap_shard_v1(
+        descriptor.value ->> 'shardCursor'
+      ) -> 'items'
+    ) as item(value)
+    where item.value #>> '{key,id}' =
+      '53990000-0000-4000-8000-000000000005'
+  ) = 1
+  and (
+    select count(*)
+    from pg_catalog.jsonb_array_elements(
+      api.portal_sitemap_manifest_v1() -> 'shards'
+    ) as descriptor(value)
+    cross join lateral pg_catalog.jsonb_array_elements(
+      api.portal_sitemap_shard_v1(
+        descriptor.value ->> 'shardCursor'
+      ) -> 'items'
+    ) as item(value)
+    where item.value #>> '{key,id}' =
+      '53990000-0000-4000-8000-000000000005'
+      and item.value #>> '{key,version}' = '02.00.000'
+  ) = 1
+" "historical Preview forward repair did not recover both versions and publish only v2"
+
+run_psql <<'SQL'
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+delete from private.portal_catalog_search_rows_v1
+where dataset_kind = 'process'
+  and id = '53990000-0000-4000-8000-000000000005'::uuid;
+reset role;
+revoke api_internal_executor from postgres;
+SQL
+
+assert_sql "
+  not exists (
+    select 1 from private.portal_catalog_search_rows_v1
+    where id = '53990000-0000-4000-8000-000000000005'::uuid
+  )
+  and not exists (
+    select 1 from private.portal_catalog_facet_rows_v1
+    where id = '53990000-0000-4000-8000-000000000005'::uuid
+  )
+  and not exists (
+    select 1 from private.portal_sitemap_rows_v1
+    where id = '53990000-0000-4000-8000-000000000005'::uuid
+  )
+" "historical Preview forward-repair fixture did not cleanly converge"
 
 # Reverse-direction lock proof: a successful source-write fence blocks a real
 # content UPDATE until COMMIT. The fixed two-second sleep is coordination only;

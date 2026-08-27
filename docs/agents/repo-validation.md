@@ -205,7 +205,9 @@ that scanned rows grow with retained version history.
 
 The `20260827134103` recovery proof must show one atomic facet-writer fence,
 shadow creation, full backfill, assertion/reader replacement, and retirement of
-the obsolete winner table/helpers. Real same-identity exact-version concurrency
+the obsolete winner table/helpers. The checked-in SHA-pinned old-Preview fixture
+must prove an already-recorded populated `134101`/`134102` shape advances by
+applying only `134103`. Real same-identity exact-version concurrency
 must leave exact facet/child parity with every writer committed and no writer
 retry. Preview then uses only the enabled publishable or legacy anon `apikey`,
 polls no longer than 300 seconds, strictly validates both new JSON Schemas, and
