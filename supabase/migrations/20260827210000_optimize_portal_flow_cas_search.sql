@@ -402,6 +402,11 @@ begin
 end
 $$;
 
+comment on function private.catalog_portal_candidate_rows_v1(
+  text, text, uuid, text
+) is
+  'Seven static kind/query branches: valid Flow CAS uses exact partial-index keys with latest-version recheck; all empty, UUID, and ordinary lexical paths retain their existing behavior.';
+
 reset role;
 revoke create on schema private from portal_public_executor;
 set role portal_public_executor;

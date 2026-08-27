@@ -68,7 +68,7 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  275::bigint,
+  276::bigint,
   'api contains the active cutover functions, reviewed consumer facades, Database A Search RPCs, and Portal catalog/LCIA/Hybrid/sitemap facades'
 );
 
