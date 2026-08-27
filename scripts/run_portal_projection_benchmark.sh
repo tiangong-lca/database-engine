@@ -51,9 +51,9 @@ fi
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 259 \
-   || "${#test_migrations[@]}" -ne 259 ]]; then
-  echo "complete migration tree must contain exactly 259 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 266 \
+   || "${#test_migrations[@]}" -ne 266 ]]; then
+  echo "complete migration tree must contain exactly 266 files" >&2
   exit 2
 fi
 migration_manifest_payload=""
@@ -265,7 +265,7 @@ echo "Supabase CLI: $supabase_cli_version" | tee "$results_log"
 echo "Benchmark target: $project_id" | tee -a "$results_log"
 echo "Benchmark profile: $profile_name" | tee -a "$results_log"
 echo "Repository HEAD: $repository_head" | tee -a "$results_log"
-echo "Migration tree SHA-256 (259 files): $migration_tree_sha256" \
+echo "Migration tree SHA-256 (266 files): $migration_tree_sha256" \
   | tee -a "$results_log"
 echo "Benchmark SQL SHA-256: $benchmark_sql_sha256" | tee -a "$results_log"
 echo "Benchmark runner SHA-256: $benchmark_runner_sha256" \

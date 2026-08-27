@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: e46e205
-lastReviewedNote: "已复核 Portal projection manifest 检查器与命名 release/sparse benchmark profile；schema-workspace helper 行为不变。"
+lastReviewedCommit: 8ca5fba
+lastReviewedNote: "已复核 Portal 双 manifest、既有数据 Facet upgrade/recovery runner 与命名性能 profile。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -80,18 +80,26 @@ scripts/test_search_text_array_upgrade.sh
 
 在显式确认且隔离的本地 Supabase 项目中验证 Issue 531 Portal projection
 上线。脚本使用真实并发连接覆盖有效更新、删除、状态失效、主键变更以及仅 embedding
-更新竞态；主动制造 reconcile 锁超时与 cutover guard 失败；并证明相同 migration
-history 下可重试、同名 concurrent index 可受控清理，以及已记录迁移重复执行不会重建
-索引，并覆盖 cutover 后 Flow eligibility guard 回滚。所需环境变量与恢复边界见
+更新竞态；主动制造 card/facet reconcile 锁超时与 cutover guard 失败；证明 facet
+expand COMMIT/history 缺口、四分片幂等重试、同名 concurrent index 受控清理、Flow
+eligibility guard 回滚，以及已记录迁移重复执行不会重建七个索引。所需环境变量与恢复边界见
 `docs/agents/portal-projection-migration-recovery.md`。正式证据还要求干净 HEAD、
-Supabase CLI `2.109.1`，以及完整 259-file migration tree 的逐字相等和 aggregate
+Supabase CLI `2.109.1`，以及完整 266-file migration tree 的逐字相等和 aggregate
 SHA-256。
+
+### `test_portal_facet_projection_populated_upgrade.sh`
+
+在同一类显式隔离的 Issue-531 项目中，对 126,246 条既有 parent card 逐字执行七个
+Facet migration。每条 backfill statement 必须在 120 秒门下保留至少 2 倍余量，
+每个完整 UUID-quarter 文件必须低于 120 秒；成功 reconcile fence 必须在 5 秒内
+完成，并要求 key coverage、确定性抽样 facts 与 DTO 聚合计数精确一致。runner
+退出时总会把隔离项目重置到完整 HEAD。
 
 ### `run_portal_projection_benchmark.sh`
 
 仅在显式确认的 Issue 531 隔离本地 Supabase 项目中运行代表性 Process/Flow
-Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把全部
-Issue 531 migration 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
+Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把完整
+266-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
 reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合同与 recovery runner
 一致，另要求 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`。
 
@@ -114,7 +122,10 @@ temp/disk spill。每次运行必须使用新的 mode-0700 输出目录。正式
 路径开启。代表性 Flow 基数必须自然命中其 PGroonga scan node；Process 基数较小，
 因此记录自然成本计划而不强制某个索引，迁移期 catalog guard 负责证明其 PGroonga
 索引，命名 timing 独立覆盖 Process 性能、排序和 cursor。两类 lexical probe 都
-必须满足精确 needle fixture identity 且无 spill。
+必须满足精确 needle fixture identity 且无 spill。基准还会捕获匿名 Process/Flow
+空 Facets 与过滤 Facets 计划，要求独立空路径在固定 32-MB 工作区内零 temp/disk
+spill，测量 parent-first facet reconcile fence，并把 facet child upsert 纳入现有
+writer delta/ratio 门。
 每个 profile 还会记录精确的 Flow embedding universe probe。sparse profile 必须
 自然命中窄 partial eligibility B-tree，且不得扫描宽 Flow heap；release profile
 记录全量 vector 的自然计划，不强制使用该索引。只有 release 必须命名两个 source
@@ -123,10 +134,10 @@ buffers、execution time 且没有 temp/disk spill。
 
 ### `check_portal_projection_manifest.py`
 
-验证已提交的 Portal projection-v1 digest 与十一函数闭包仍完整，禁止后续
-migration 创建、替换、删除或修改 v1 闭包/控制函数，并确认 reconcile、
-Search/Hybrid 与 Facets 保留所需 runtime guard。它还绑定 cutover 后的 Flow
-eligibility index 及其精确 catalog guard，同时保持 v1 digest 不变。
+同时验证两个已提交的 Portal digest：十一函数 card 闭包与两函数窄 Facet 闭包。
+它禁止后续 mutation 任一闭包/控制函数，校验四个 Facet 分片、reconcile 与严格
+cutover dispatch，并保留 Flow eligibility index 的精确 catalog guard，同时不改变
+card-v1 digest。
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py

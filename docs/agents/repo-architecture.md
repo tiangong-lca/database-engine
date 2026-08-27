@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: e46e205
-lastReviewedNote: "Reviewed for the synchronized Portal candidate projection, versioned ANN semantics, immutable derivation manifest, and sparse fallback gates."
+lastReviewedCommit: 8ca5fba
+lastReviewedNote: "Reviewed for narrow facet facts, strict empty-request dispatch, and populated-upgrade proof; the architecture boundary is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -95,6 +95,18 @@ wide Flow heap. Its low-selectivity key avoids a covering id/version exact-join
 path. It contains no vector payload, does not replace the source HNSW ranking
 index, does not change projection semantics, and has no speculative Process
 counterpart because hosted Process evidence already meets budget.
+
+Empty-query, empty-filter Portal Facets aggregate from an independent narrow
+`private.portal_catalog_facet_rows_v1` projection keyed to the immutable
+public-safe card row. Its own literal two-function manifest binds the exact five
+emitted facet facts, while a parent trigger and `ON DELETE CASCADE` maintain the
+child transactionally. Four UUID-quarter inserts and a short parent-first
+reconcile fence populate existing rows without updating the wide card heap or
+its PGroonga indexes. Only normalized `query = ''` and `filters = {}` dispatch
+to the 32-MB bounded `GROUPING SETS` helper; every query or filter, including
+classification and year ranges, retains the established card implementation.
+The API signature, DTO, value ordering, 100-value cap, `hasMore`, owner, ACL,
+and error contract are unchanged.
 
 Edge consumers must obtain Data Product publication, package, and worker
 metadata through bounded `api.svc_data_product_*` projections rather than

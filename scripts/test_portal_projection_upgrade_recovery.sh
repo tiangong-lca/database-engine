@@ -26,9 +26,9 @@ fi
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 259 \
-   || "${#test_migrations[@]}" -ne 259 ]]; then
-  echo "complete migration tree must contain exactly 259 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 266 \
+   || "${#test_migrations[@]}" -ne 266 ]]; then
+  echo "complete migration tree must contain exactly 266 files" >&2
   exit 2
 fi
 migration_manifest_payload=""
@@ -211,7 +211,7 @@ fi
 echo "Supabase CLI: $supabase_cli_version"
 echo "Recovery target: $project_id"
 echo "Repository HEAD: $repository_head"
-echo "Migration tree SHA-256 (259 files): $migration_tree_sha256"
+echo "Migration tree SHA-256 (266 files): $migration_tree_sha256"
 
 # Breakpoint 1: expand plus every bounded backfill is recorded, while old API
 # wrappers remain authoritative. Exercise all five write/snapshot races before
@@ -331,6 +331,31 @@ cross join lateral (
 SQL
 
 race_log_dir="$(mktemp -d /tmp/database-engine-531-race.XXXXXX)"
+facet_reconcile_holder_pid=""
+successful_fence_pid=""
+
+cleanup_recovery() {
+  local exit_code=$?
+  trap - EXIT INT TERM
+  set +e
+  terminate_application portal_projection_reconcile_lock_holder
+  terminate_application portal_facet_reconcile_lock_holder
+  terminate_application portal_projection_successful_fence_holder
+  for holder_pid in \
+    "${facet_reconcile_holder_pid:-}" \
+    "${successful_fence_pid:-}"; do
+    if [[ "$holder_pid" =~ ^[1-9][0-9]*$ ]]; then
+      wait "$holder_pid" >/dev/null 2>&1 || true
+    fi
+  done
+  if [[ "$exit_code" -eq 0 ]]; then
+    rm -rf "$race_log_dir"
+  else
+    echo "retained recovery diagnostics: $race_log_dir" >&2
+  fi
+  exit "$exit_code"
+}
+trap cleanup_recovery EXIT INT TERM
 
 run_stale_snapshot \
   portal_projection_race_valid \
@@ -886,10 +911,204 @@ rename to flows_portal_embedding_eligible_v1_idx;
 SQL
 apply_pending
 
+# Breakpoint 5: the facet expand is transactional but intentionally not a
+# blind-idempotent DDL file. A COMMIT/history gap must expose existing objects,
+# fail the normal retry, and leave recovery to an explicit reset/operator path.
+reset_to 20260827010003
+facet_wrapper_before_expand_gap="$(scalar_sql "
+  select pg_catalog.md5(pg_catalog.pg_get_functiondef(
+    'api.portal_facets_v1(text,text,jsonb)'::regprocedure
+  ))
+")"
+apply_sql_file \
+  "$repo_root/supabase/migrations/20260827020000_portal_facet_projection_expand.sql" \
+  >"$race_log_dir/facet-expand-commit-gap.log" 2>&1
+assert_sql "
+  not exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20260827020000'
+  )
+  and pg_catalog.to_regclass(
+    'private.portal_catalog_facet_rows_v1'
+  ) is not null
+  and pg_catalog.to_regprocedure(
+    'private.assert_portal_catalog_facet_contract_v1()'
+  ) is not null
+" "facet expand commit-gap fixture is not exact"
+facet_expand_gap_log_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+if apply_pending >"$race_log_dir/expected-facet-expand-gap-failure.log" 2>&1; then
+  echo "facet expand unexpectedly ignored an unrecorded committed copy" >&2
+  exit 1
+fi
+docker logs --since "$facet_expand_gap_log_since" "$container_name" \
+  >>"$race_log_dir/expected-facet-expand-gap-failure.log" 2>&1
+assert_log_contains \
+  "$race_log_dir/expected-facet-expand-gap-failure.log" \
+  'already exists|duplicate_(table|function|object)|42P07|42723' \
+  'facet expand commit/history-gap failure'
+facet_wrapper_after_expand_gap="$(scalar_sql "
+  select pg_catalog.md5(pg_catalog.pg_get_functiondef(
+    'api.portal_facets_v1(text,text,jsonb)'::regprocedure
+  ))
+")"
+if [[ "$facet_wrapper_before_expand_gap" != "$facet_wrapper_after_expand_gap" ]]; then
+  echo "unrecorded facet expand changed the public Facets wrapper" >&2
+  exit 1
+fi
+
+# Breakpoint 6: every facet shard is retry-safe after an ambiguous COMMIT.
+# Disable only the new child trigger to construct one historical parent row,
+# apply the first shard without history, then let normal migration-up repeat it.
+reset_to 20260827020000
+run_psql <<'SQL'
+alter table private.portal_catalog_search_rows_v1
+  disable trigger portal_catalog_facet_sync_v1;
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+insert into private.portal_catalog_search_rows_v1 (
+  dataset_kind, id, version, state_code, modified_at,
+  card, document, projection_contract_version
+) values (
+  'process',
+  '13190000-0000-4000-8000-000000000001',
+  '01.00.000',
+  100,
+  '2026-08-27 02:00:00+00',
+  '{"document":"facet recovery","accessLevel":"open","geography":{"code":"CN"},"referenceYear":2024,"processSubtype":"unit process","source":"Recovery"}'::jsonb,
+  'facet recovery',
+  1
+);
+reset role;
+revoke api_internal_executor from postgres;
+alter table private.portal_catalog_search_rows_v1
+  enable trigger portal_catalog_facet_sync_v1;
+SQL
+apply_sql_file \
+  "$repo_root/supabase/migrations/20260827020001_portal_facet_projection_backfill_00_3f.sql" \
+  >"$race_log_dir/facet-shard-commit-gap.log" 2>&1
+assert_sql "
+  not exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20260827020001'
+  )
+  and coalesce((
+    select facet_geography = 'cn'
+      and facet_reference_year = '2024'
+      and facet_source = 'recovery'
+      and facet_contract_version = 1
+    from private.portal_catalog_facet_rows_v1
+    where dataset_kind = 'process'
+      and id = '13190000-0000-4000-8000-000000000001'
+      and version = '01.00.000'
+  ), false)
+" "facet shard commit-gap did not persist exact narrow facts"
+apply_pending
+assert_sql "
+  (select count(*) = 6
+   from supabase_migrations.schema_migrations
+   where version between '20260827020001' and '20260827020006')
+  and (select count(*) from private.portal_catalog_facet_rows_v1) = 1
+" "facet shard retry did not complete exactly once"
+
+# Breakpoint 7: the short parent-first reconcile fence fails closed under a
+# concurrent projection writer and succeeds unchanged after that writer exits.
+reset_to 20260827020004
+docker exec -i "$container_name" \
+  psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+  >"$race_log_dir/facet-reconcile-lock-holder.log" 2>&1 <<'SQL' &
+set application_name = 'portal_facet_reconcile_lock_holder';
+begin;
+lock table private.portal_catalog_search_rows_v1 in row exclusive mode;
+select pg_sleep(60);
+commit;
+SQL
+facet_reconcile_holder_pid=$!
+wait_for_pg_sleep portal_facet_reconcile_lock_holder
+facet_reconcile_started="$(perl -MTime::HiRes=time -e 'printf "%.6f", time')"
+facet_reconcile_log_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+if apply_pending >"$race_log_dir/expected-facet-reconcile-lock-failure.log" 2>&1; then
+  echo "facet reconcile unexpectedly crossed a conflicting writer lock" >&2
+  exit 1
+fi
+docker logs --since "$facet_reconcile_log_since" "$container_name" \
+  >>"$race_log_dir/expected-facet-reconcile-lock-failure.log" 2>&1
+facet_reconcile_elapsed_ms="$(perl -MTime::HiRes=time -e \
+  'printf "%.3f", (time - $ARGV[0]) * 1000' "$facet_reconcile_started")"
+if ! awk -v value="$facet_reconcile_elapsed_ms" \
+  'BEGIN { exit !(value >= 5000 && value <= 30000) }'; then
+  echo "facet reconcile lock timeout fell outside 5-30s: $facet_reconcile_elapsed_ms" >&2
+  exit 1
+fi
+assert_log_contains \
+  "$race_log_dir/expected-facet-reconcile-lock-failure.log" \
+  'lock timeout|55P03|canceling statement due to lock timeout' \
+  'facet reconcile lock failure'
+assert_sql "
+  not exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version in ('20260827020005', '20260827020006')
+  )
+" "failed facet reconcile unexpectedly advanced migration history"
+terminate_application portal_facet_reconcile_lock_holder
+wait "$facet_reconcile_holder_pid" || true
+apply_pending
+
+# Breakpoint 8: a post-DDL metadata guard failure rolls back both the newly
+# created fast helper and the replaced wrapper. The pre-cutover wrapper keeps
+# one deliberate extra GUC so the final metadata comparison fails only after
+# CREATE FUNCTION / CREATE OR REPLACE FUNCTION have executed.
+reset_to 20260827020005
+run_psql <<'SQL'
+grant portal_public_executor to postgres;
+set role portal_public_executor;
+alter function api.portal_facets_v1(text, text, jsonb)
+  set work_mem = '64MB';
+reset role;
+revoke portal_public_executor from postgres;
+SQL
+facet_wrapper_before_cutover_failure="$(scalar_sql "
+  select pg_catalog.md5(pg_catalog.pg_get_functiondef(
+    'api.portal_facets_v1(text,text,jsonb)'::regprocedure
+  ))
+")"
+facet_cutover_log_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+if apply_pending >"$race_log_dir/expected-facet-cutover-failure.log" 2>&1; then
+  echo "facet cutover unexpectedly accepted external metadata drift" >&2
+  exit 1
+fi
+docker logs --since "$facet_cutover_log_since" "$container_name" \
+  >>"$race_log_dir/expected-facet-cutover-failure.log" 2>&1
+assert_log_contains \
+  "$race_log_dir/expected-facet-cutover-failure.log" \
+  'Portal facet cutover contract drifted|55000' \
+  'facet cutover post-DDL metadata failure'
+facet_wrapper_after_cutover_failure="$(scalar_sql "
+  select pg_catalog.md5(pg_catalog.pg_get_functiondef(
+    'api.portal_facets_v1(text,text,jsonb)'::regprocedure
+  ))
+")"
+if [[ "$facet_wrapper_before_cutover_failure" != "$facet_wrapper_after_cutover_failure" ]]; then
+  echo "failed facet cutover changed the public wrapper" >&2
+  exit 1
+fi
+assert_sql "
+  not exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20260827020006'
+  )
+  and pg_catalog.to_regprocedure(
+    'private.catalog_portal_facets_empty_v1_impl(text,text)'
+  ) is null
+" "failed facet cutover unexpectedly recorded migration history"
+
+reset_to 20260827020005
+apply_pending
+
 run_psql <<'SQL'
 grant api_internal_executor to postgres;
 set role api_internal_executor;
 select private.assert_portal_catalog_projection_contract_v1();
+select private.assert_portal_catalog_facet_contract_v1();
 reset role;
 revoke api_internal_executor from postgres;
 SQL
@@ -919,6 +1138,25 @@ assert_sql "
         'assert_portal_catalog_projection_contract_v1'
       ) = 1
   ) = 3
+  and (
+    select (
+      pg_catalog.length(routine.prosrc)
+      - pg_catalog.length(pg_catalog.replace(
+          routine.prosrc,
+          'assert_portal_catalog_facet_contract_v1',
+          ''
+        ))
+    ) / pg_catalog.length(
+      'assert_portal_catalog_facet_contract_v1'
+    ) = 1
+    from pg_catalog.pg_proc as routine
+    where routine.oid = 'api.portal_facets_v1(text,text,jsonb)'::regprocedure
+  )
+  and (
+    select count(*) from private.portal_catalog_facet_rows_v1
+  ) = (
+    select count(*) from private.portal_catalog_search_rows_v1
+  )
 " "completed cutovers lost projection versions or per-request contract guards"
 
 index_oids_before="$(scalar_sql "
@@ -930,7 +1168,9 @@ index_oids_before="$(scalar_sql "
       namespace.nspname = 'private'
       and index_relation.relname in (
         'portal_catalog_search_process_document_v1_pgroonga',
-        'portal_catalog_search_flow_document_v1_pgroonga'
+        'portal_catalog_search_flow_document_v1_pgroonga',
+        'portal_catalog_facet_rows_v1_pkey',
+        'portal_catalog_facet_rows_latest_v1_idx'
       )
     ) or (
       namespace.nspname = 'public'
@@ -950,7 +1190,9 @@ index_count_before="$(scalar_sql "
       namespace.nspname = 'private'
       and index_relation.relname in (
         'portal_catalog_search_process_document_v1_pgroonga',
-        'portal_catalog_search_flow_document_v1_pgroonga'
+        'portal_catalog_search_flow_document_v1_pgroonga',
+        'portal_catalog_facet_rows_v1_pkey',
+        'portal_catalog_facet_rows_latest_v1_idx'
       )
     ) or (
       namespace.nspname = 'public'
@@ -961,8 +1203,8 @@ index_count_before="$(scalar_sql "
       )
     )
 ")"
-if [[ "$index_count_before" != "5" \
-   || ! "$index_oids_before" =~ ^[0-9]+,[0-9]+,[0-9]+,[0-9]+,[0-9]+$ ]]; then
+if [[ "$index_count_before" != "7" \
+   || ! "$index_oids_before" =~ ^[0-9]+(,[0-9]+){6}$ ]]; then
   echo "post-cutover index identity evidence is incomplete" >&2
   exit 1
 fi
@@ -976,7 +1218,9 @@ index_oids_after="$(scalar_sql "
       namespace.nspname = 'private'
       and index_relation.relname in (
         'portal_catalog_search_process_document_v1_pgroonga',
-        'portal_catalog_search_flow_document_v1_pgroonga'
+        'portal_catalog_search_flow_document_v1_pgroonga',
+        'portal_catalog_facet_rows_v1_pkey',
+        'portal_catalog_facet_rows_latest_v1_idx'
       )
     ) or (
       namespace.nspname = 'public'
@@ -1058,6 +1302,14 @@ assert_sql "
       and id = '53190000-0000-4000-8000-000000000099'::uuid
       and version = '01.00.000'
   ), false)
+  and coalesce((
+    select modified_at = '2026-08-26 09:10:01+00'::timestamptz
+      and facet_contract_version = 1
+    from private.portal_catalog_facet_rows_v1
+    where dataset_kind = 'process'
+      and id = '53190000-0000-4000-8000-000000000099'::uuid
+      and version = '01.00.000'
+  ), false)
 " "writer did not commit exact content after successful fence release"
 echo "Successful fence blocked writer: ${writer_wait_ms}ms (includes 2s coordination hold)"
 
@@ -1068,5 +1320,14 @@ where id = '53190000-0000-4000-8000-000000000099'
 alter table public.processes enable trigger user;
 SQL
 
-rm -rf "$race_log_dir"
+assert_sql "
+  not exists (
+    select 1
+    from private.portal_catalog_facet_rows_v1
+    where dataset_kind = 'process'
+      and id = '53190000-0000-4000-8000-000000000099'::uuid
+      and version = '01.00.000'
+  )
+" "facet child survived parent/source deletion"
+
 echo "Portal projection race and partial-upgrade recovery validation passed"

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: e46e205
-lastReviewedNote: "Reviewed for the Portal projection manifest checker and named release/sparse benchmark profiles; schema-workspace helper behavior is unchanged."
+lastReviewedCommit: 8ca5fba
+lastReviewedNote: "Reviewed for dual Portal manifests, populated facet upgrade and recovery runners, and named performance profiles."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -88,21 +88,32 @@ scripts/test_search_text_array_upgrade.sh
 Exercises the Issue 531 Portal projection rollout against an explicitly
 attested, isolated local Supabase project. It uses live concurrent connections
 to prove valid-update, delete, state-invalidation, key-change, and
-embedding-only races; forces reconcile lock-timeout and cutover-guard failures;
-and verifies same-history retry, controlled same-name concurrent-index cleanup,
-post-cutover Flow eligibility guard rollback, and no-op repeat without index
-rebuild. See
+embedding-only races; forces card/facet reconcile lock-timeout and cutover-guard
+failures; verifies facet expand COMMIT/history failure, four-shard idempotent
+retry, controlled same-name concurrent-index cleanup, post-cutover Flow
+eligibility guard rollback, and no-op repeat without rebuilding seven indexes.
+See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries. Formal evidence additionally requires
 clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
-the complete 259-file migration tree.
+the complete 266-file migration tree.
+
+### `test_portal_facet_projection_populated_upgrade.sh`
+
+Rehearses the seven facet migrations verbatim over 126,246 pre-existing parent
+cards in the same explicitly isolated Issue-531 project. It requires every
+backfill statement to retain at least 2x headroom under its 120-second timeout,
+each complete UUID-quarter file to stay below 120 seconds, the successful
+reconcile fence to finish within five seconds, plus exact key coverage,
+deterministic sampled facts, and aggregate DTO counts.
+The runner always resets the isolated project to full HEAD on exit.
 
 ### `run_portal_projection_benchmark.sh`
 
 Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
 fence, plan, and ANN-recall benchmark only against an explicitly attested
-Issue-531 local Supabase project. The runner byte-compares every Issue 531
-migration with the repository, writes into a new operator-selected private
+Issue-531 local Supabase project. The runner byte-compares the complete
+266-file migration tree with the repository, writes into a new operator-selected private
 directory, and resets the isolated database before and after the run so rolled
 back HNSW pages cannot accumulate. Its environment contract mirrors the
 recovery runner and additionally requires
@@ -131,6 +142,10 @@ the smaller Process cardinality records its natural-cost plan without forcing
 one index, while the migration catalog guard proves its PGroonga index and the
 named timings independently cover Process performance, ordering, and cursors.
 Both lexical probes require the exact needle fixture identity and no spill.
+The benchmark also captures anonymous Process/Flow empty and filtered Facets
+plans, requires the independent empty path to use its 32-MB workspace without
+temp/disk spill, measures the parent-first facet reconcile fence, and includes
+the facet child upsert in the existing writer delta/ratio gate.
 Every profile also records the exact Flow embedding-universe probe. Sparse
 profiles must naturally use the narrow partial eligibility B-tree and may not
 scan the wide Flow heap; release records the natural full-vector plan without
@@ -140,11 +155,11 @@ buffers, execution time, and no temp/disk spill.
 
 ### `check_portal_projection_manifest.py`
 
-Checks that the committed Portal projection-v1 digest and exact eleven-function
-closure remain present, that no later migration creates, replaces, drops, or
-alters a v1 closure/control function, and that reconcile/Search-Hybrid/Facets
-retain their required runtime guards. It also binds the post-cutover Flow
-eligibility index and its exact catalog guard without changing the v1 digest.
+Checks both committed Portal digests: the exact eleven-function card closure
+and the exact two-function narrow-facet closure. It rejects later mutation of
+either closure/control set, validates the four facet shards plus reconcile/
+cutover dispatch, and retains the Flow eligibility index catalog guard without
+changing the card-v1 digest.
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py

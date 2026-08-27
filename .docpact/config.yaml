@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-27"
-lastReviewedCommit: "e46e205"
-lastReviewedNote: "Reviewed for the Portal projection recovery document catalog, coverage, routing intents, derivation-contract rule, and exact-head validation evidence."
+lastReviewedCommit: "8ca5fba"
+lastReviewedNote: "Reviewed for the seven-migration narrow Portal facet sub-rollout, recovery coverage, and exact-head validation evidence."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -477,11 +477,27 @@ rules:
         kind: database-migration
       - path: supabase/migrations/20260827010003_portal_flow_embedding_eligibility_guard.sql
         kind: database-migration
+      - path: supabase/migrations/20260827020000_portal_facet_projection_expand.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827020001_portal_facet_projection_backfill_00_3f.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827020002_portal_facet_projection_backfill_40_7f.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827020003_portal_facet_projection_backfill_80_bf.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827020004_portal_facet_projection_backfill_c0_ff.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827020005_portal_facet_projection_reconcile.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827020006_portal_facet_projection_cutover.sql
+        kind: database-migration
       - path: supabase/tests/20260826_portal_candidate_first_search.sql
         kind: database-contract-test
       - path: supabase/tests/benchmarks/20260826_portal_candidate_first_explain.sql
         kind: database-benchmark
       - path: scripts/test_portal_projection_upgrade_recovery.sh
+        kind: migration-recovery
+      - path: scripts/test_portal_facet_projection_populated_upgrade.sh
         kind: migration-recovery
       - path: scripts/check_portal_projection_manifest.py
         kind: contract-check
@@ -494,4 +510,4 @@ rules:
         mode: review_or_update
       - path: docs/agents/portal-projection-migration-recovery.md
         mode: review_or_update
-    reason: The immutable projection manifest, online expand/backfill/reconcile/index/cutover sequence, recovery procedure, and representative performance gates must change together.
+    reason: The immutable card and facet manifests, online expand/backfill/reconcile/index/cutover sequences, recovery procedure, and representative performance gates must change together.

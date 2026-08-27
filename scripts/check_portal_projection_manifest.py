@@ -17,6 +17,9 @@ FLOW_ELIGIBILITY_INDEX_NAME = (
 FLOW_ELIGIBILITY_GUARD_NAME = (
     "20260827010003_portal_flow_embedding_eligibility_guard.sql"
 )
+FACET_ANCHOR_NAME = "20260827020000_portal_facet_projection_expand.sql"
+FACET_RECONCILE_NAME = "20260827020005_portal_facet_projection_reconcile.sql"
+FACET_CUTOVER_NAME = "20260827020006_portal_facet_projection_cutover.sql"
 MANIFEST_SHA256 = (
     "b5e0aff9abbffcc8d2dacaf559a5d1a8c993c20b647d0c70f0e4fa18eb06d2dc"
 )
@@ -38,6 +41,17 @@ CONTROL_FUNCTION_IDENTITIES = (
     "private.assert_portal_catalog_projection_contract_v1()",
     "private.portal_projection_semantic_process_exact_v1(extensions.vector)",
     "private.portal_projection_semantic_flow_exact_v1(extensions.vector)",
+)
+FACET_MANIFEST_SHA256 = (
+    "b238e9573ef08a9339062a2fa3092c0776318d13979ec8bf54ffc7a1ba0c7e3a"
+)
+FACET_FUNCTION_IDENTITIES = (
+    "private.portal_catalog_facet_facts_v1(text,jsonb)",
+    "private.sync_portal_catalog_facet_row_v1()",
+)
+FACET_CONTROL_FUNCTION_IDENTITIES = (
+    "private.portal_catalog_facet_manifest_sha256_v1()",
+    "private.assert_portal_catalog_facet_contract_v1()",
 )
 
 
@@ -116,6 +130,35 @@ def main() -> int:
             if pattern.search(executable_sql):
                 violations.append(f"{migration.name}: {identity}")
 
+    facet_anchor = MIGRATIONS_DIR / FACET_ANCHOR_NAME
+    if not facet_anchor.is_file():
+        violations.append(f"missing Portal facet manifest anchor: {FACET_ANCHOR_NAME}")
+    else:
+        facet_anchor_sql = facet_anchor.read_text(encoding="utf-8")
+        if FACET_MANIFEST_SHA256 not in facet_anchor_sql:
+            violations.append("Portal facet manifest digest literal is absent")
+        for identity in FACET_FUNCTION_IDENTITIES + FACET_CONTROL_FUNCTION_IDENTITIES:
+            if identity not in facet_anchor_sql:
+                violations.append(f"Portal facet manifest anchor omits: {identity}")
+
+    facet_protected = FACET_FUNCTION_IDENTITIES + FACET_CONTROL_FUNCTION_IDENTITIES
+    facet_patterns = {
+        identity: mutation_pattern(identity) for identity in facet_protected
+    }
+    facet_probe = (
+        "create or replace function "
+        "private.portal_catalog_facet_facts_v1(text,jsonb)"
+    )
+    if not facet_patterns[FACET_FUNCTION_IDENTITIES[0]].search(facet_probe):
+        violations.append("Portal facet manifest mutation scanner self-test failed")
+    for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        if migration.name <= FACET_ANCHOR_NAME:
+            continue
+        executable_sql = sql_without_comments(migration.read_text(encoding="utf-8"))
+        for identity, pattern in facet_patterns.items():
+            if pattern.search(executable_sql):
+                violations.append(f"{migration.name}: {identity}")
+
     required_guard_counts = {
         "20260826080345_portal_projection_reconcile.sql": 1,
         "20260826080400_portal_projection_candidate_cutover.sql": 2,
@@ -155,6 +198,89 @@ def main() -> int:
         if not backfill_timeout_pattern.search(executable_sql):
             violations.append(
                 f"{migration.name}: missing outer 5s lock / 120s statement timeout"
+            )
+
+    facet_backfills = sorted(
+        MIGRATIONS_DIR.glob("2026082702000[1-4]_portal_facet_projection_backfill_*.sql")
+    )
+    if len(facet_backfills) != 4:
+        violations.append(
+            "expected exactly four Portal facet projection backfills, "
+            f"found {len(facet_backfills)}"
+        )
+    expected_facet_ranges = (
+        ("00000000-0000-0000-0000-000000000000", "40000000-0000-0000-0000-000000000000"),
+        ("40000000-0000-0000-0000-000000000000", "80000000-0000-0000-0000-000000000000"),
+        ("80000000-0000-0000-0000-000000000000", "c0000000-0000-0000-0000-000000000000"),
+        ("c0000000-0000-0000-0000-000000000000", None),
+    )
+    for migration, (lower, upper) in zip(facet_backfills, expected_facet_ranges):
+        executable_sql = sql_without_comments(
+            migration.read_text(encoding="utf-8")
+        ).lower()
+        required_tokens = (
+            "set local lock_timeout = '5s'",
+            "set local statement_timeout = '120s'",
+            "grant api_internal_executor to postgres",
+            "set role api_internal_executor",
+            "reset role",
+            "revoke api_internal_executor from postgres",
+            "assert_portal_catalog_projection_contract_v1",
+            "assert_portal_catalog_facet_contract_v1",
+            "portal_catalog_facet_facts_v1",
+            "on conflict (dataset_kind, id, version) do nothing",
+            "where projection.dataset_kind = 'process'",
+            "where projection.dataset_kind = 'flow'",
+            "where facet.dataset_kind = 'process'",
+            "where facet.dataset_kind = 'flow'",
+            "select count(*)",
+            lower,
+        )
+        missing = [token for token in required_tokens if token not in executable_sql]
+        if upper is not None and upper not in executable_sql:
+            missing.append(upper)
+        if missing:
+            violations.append(
+                f"{migration.name}: missing facet backfill tokens "
+                + ", ".join(missing)
+            )
+        if re.search(
+            r"(?:insert\s+into|update|delete\s+from)\s+"
+            r"private[.]portal_catalog_search_rows_v1",
+            executable_sql,
+        ):
+            violations.append(
+                f"{migration.name}: must not mutate the immutable parent projection"
+            )
+
+    for migration_name, required_tokens in {
+        FACET_RECONCILE_NAME: (
+            "lock table private.portal_catalog_search_rows_v1",
+            "lock table private.portal_catalog_facet_rows_v1",
+            "on conflict (dataset_kind, id, version) do nothing",
+            "portal facet projection reconciliation failed",
+        ),
+        FACET_CUTOVER_NAME: (
+            "v_query = '' and v_filters = '{}'::jsonb",
+            "catalog_portal_facets_empty_v1_impl",
+            "catalog_portal_facets_v1_impl",
+            "portal_catalog_facet_rows_v1",
+            "set work_mem = '32mb'",
+            "portal facet cutover contract drifted",
+        ),
+    }.items():
+        migration = MIGRATIONS_DIR / migration_name
+        if not migration.is_file():
+            violations.append(f"missing Portal facet migration: {migration_name}")
+            continue
+        executable_sql = sql_without_comments(
+            migration.read_text(encoding="utf-8")
+        ).lower()
+        missing = [token for token in required_tokens if token not in executable_sql]
+        if missing:
+            violations.append(
+                f"{migration_name}: missing facet rollout tokens "
+                + ", ".join(missing)
             )
 
     eligibility_index = MIGRATIONS_DIR / FLOW_ELIGIBILITY_INDEX_NAME
@@ -227,7 +353,10 @@ def main() -> int:
         "Portal projection-v1 manifest is immutable: "
         f"{len(FUNCTION_IDENTITIES)} derivation functions and "
         f"{len(CONTROL_FUNCTION_IDENTITIES)} control functions, "
-        f"sha256={MANIFEST_SHA256}"
+        f"sha256={MANIFEST_SHA256}; facet closure "
+        f"{len(FACET_FUNCTION_IDENTITIES)} derivation functions and "
+        f"{len(FACET_CONTROL_FUNCTION_IDENTITIES)} controls, "
+        f"sha256={FACET_MANIFEST_SHA256}"
     )
     return 0
 

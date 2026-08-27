@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: e46e205
-lastReviewedNote: "已复核 Portal manifest 与 sparse benchmark 工具；生成 workspace 路径、刷新行为与类型所有权不变。"
+lastReviewedCommit: 8ca5fba
+lastReviewedNote: "已在既有数据 upgrade 证明后复核；确定性的 266-migration 快照与 public/api 类型所有权不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -171,6 +171,22 @@ select
   and pg_catalog.to_regprocedure(
     'private.catalog_portal_search_v1_impl(text,text,jsonb,text,text,uuid,text,integer,text)'
   ) is not null
+  and pg_catalog.to_regclass(
+    'private.portal_catalog_facet_rows_v1'
+  ) is not null
+  and pg_catalog.to_regclass(
+    'private.portal_catalog_facet_rows_latest_v1_idx'
+  ) is not null
+  and pg_catalog.to_regprocedure(
+    'private.catalog_portal_facets_empty_v1_impl(text,text)'
+  ) is not null
+  and (
+    select routine.prosrc ~ $$v_query = '' and v_filters = '{}'::jsonb$$
+      and routine.prosrc ~ 'catalog_portal_facets_empty_v1_impl'
+      and routine.prosrc ~ 'catalog_portal_facets_v1_impl'
+    from pg_catalog.pg_proc as routine
+    where routine.oid = 'api.portal_facets_v1(text,text,jsonb)'::regprocedure
+  )
   and (
     select routine.prosrc ~ 'portal_catalog_search_rows_v1'
       and routine.prosrc ~ 'portal_fused_decorated'
@@ -811,6 +827,7 @@ alter table public.flows enable trigger user;
 analyze public.processes;
 analyze public.flows;
 analyze private.portal_catalog_search_rows_v1;
+analyze private.portal_catalog_facet_rows_v1;
 
 create temporary table portal_benchmark_fence_metrics (
   metric text primary key,
@@ -885,6 +902,95 @@ begin
 end
 $measure_portal_projection_fence$;
 
+grant insert, select on pg_temp.portal_benchmark_fence_metrics
+  to api_internal_executor;
+grant api_internal_executor to postgres;
+set local role api_internal_executor;
+
+do $measure_portal_facet_reconcile_fence$
+declare
+  v_started timestamptz := pg_catalog.clock_timestamp();
+  v_probe bigint;
+begin
+  lock table private.portal_catalog_search_rows_v1
+    in share row exclusive mode;
+  lock table private.portal_catalog_facet_rows_v1
+    in share row exclusive mode;
+
+  perform private.assert_portal_catalog_projection_contract_v1();
+  perform private.assert_portal_catalog_facet_contract_v1();
+
+  insert into private.portal_catalog_facet_rows_v1 (
+    dataset_kind,
+    id,
+    version,
+    state_code,
+    modified_at,
+    facet_access_level,
+    facet_geography,
+    facet_reference_year,
+    facet_process_subtype,
+    facet_source,
+    facet_contract_version
+  )
+  select
+    projection.dataset_kind,
+    projection.id,
+    projection.version,
+    projection.state_code,
+    projection.modified_at,
+    facts.facet_access_level,
+    facts.facet_geography,
+    facts.facet_reference_year,
+    facts.facet_process_subtype,
+    facts.facet_source,
+    1
+  from private.portal_catalog_search_rows_v1 as projection
+  cross join lateral private.portal_catalog_facet_facts_v1(
+    projection.dataset_kind,
+    projection.card
+  ) as facts
+  where not exists (
+    select 1
+    from private.portal_catalog_facet_rows_v1 as facet
+    where facet.dataset_kind = projection.dataset_kind
+      and facet.id = projection.id
+      and facet.version = projection.version
+  )
+  on conflict (dataset_kind, id, version) do nothing;
+
+  select count(*) into v_probe
+  from private.portal_catalog_search_rows_v1
+  where dataset_kind = 'process';
+  if v_probe <> (
+    select count(*)
+    from private.portal_catalog_facet_rows_v1
+    where dataset_kind = 'process'
+  ) then
+    raise exception 'representative Process facet reconcile parity failed';
+  end if;
+
+  select count(*) into v_probe
+  from private.portal_catalog_search_rows_v1
+  where dataset_kind = 'flow';
+  if v_probe <> (
+    select count(*)
+    from private.portal_catalog_facet_rows_v1
+    where dataset_kind = 'flow'
+  ) then
+    raise exception 'representative Flow facet reconcile parity failed';
+  end if;
+
+  insert into pg_temp.portal_benchmark_fence_metrics values (
+    'facet_reconcile_fence_work',
+    1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
+  );
+end
+$measure_portal_facet_reconcile_fence$;
+
+reset role;
+revoke api_internal_executor from postgres;
+
 select metric,
   pg_catalog.round(elapsed_ms::numeric, 3) as elapsed_ms
 from pg_temp.portal_benchmark_fence_metrics;
@@ -901,6 +1007,9 @@ select pg_catalog.jsonb_build_object(
   ),
   'projection_rows', (
     select count(*) from private.portal_catalog_search_rows_v1
+  ),
+  'facet_projection_rows', (
+    select count(*) from private.portal_catalog_facet_rows_v1
   ),
   'process_latest_cards', (
     select count(distinct id)
@@ -945,6 +1054,18 @@ select pg_catalog.jsonb_build_object(
   ),
   'projection_heap_bytes', pg_catalog.pg_relation_size(
     'private.portal_catalog_search_rows_v1'
+  ),
+  'facet_projection_total_bytes', pg_catalog.pg_total_relation_size(
+    'private.portal_catalog_facet_rows_v1'
+  ),
+  'facet_projection_heap_bytes', pg_catalog.pg_relation_size(
+    'private.portal_catalog_facet_rows_v1'
+  ),
+  'facet_projection_pkey_bytes', pg_catalog.pg_relation_size(
+    'private.portal_catalog_facet_rows_v1_pkey'
+  ),
+  'facet_projection_latest_index_bytes', pg_catalog.pg_relation_size(
+    'private.portal_catalog_facet_rows_latest_v1_idx'
   ),
   'database_bytes_before_fixture', pg_catalog.current_setting(
     'portal.benchmark_database_bytes_before'
@@ -1108,11 +1229,11 @@ end
 $function$;
 
 grant insert, select on pg_temp.portal_benchmark_plans
-  to portal_public_executor, api_internal_executor;
+  to portal_public_executor, api_internal_executor, anon;
 grant insert, select on pg_temp.portal_benchmark_raw_ann_counts
   to api_internal_executor;
 grant execute on function pg_temp.capture_portal_benchmark_plan(text, text)
-  to portal_public_executor, api_internal_executor;
+  to portal_public_executor, api_internal_executor, anon;
 grant execute on function pg_temp.portal_raw_ann_count(
   text, extensions.vector
 ) to api_internal_executor;
@@ -1508,6 +1629,41 @@ set local hnsw.iterative_scan = strict_order;
 reset role;
 revoke api_internal_executor from postgres;
 
+grant anon to postgres;
+set local role anon;
+
+select pg_temp.capture_portal_benchmark_plan(
+  'process_facets_empty_plan',
+  $query$
+    select api.portal_facets_v1('process', '', '{}'::jsonb)
+  $query$
+);
+select pg_temp.capture_portal_benchmark_plan(
+  'process_facets_filtered_plan',
+  $query$
+    select api.portal_facets_v1(
+      'process', '', '{"geography":"cn"}'::jsonb
+    )
+  $query$
+);
+select pg_temp.capture_portal_benchmark_plan(
+  'flow_facets_empty_plan',
+  $query$
+    select api.portal_facets_v1('flow', '', '{}'::jsonb)
+  $query$
+);
+select pg_temp.capture_portal_benchmark_plan(
+  'flow_facets_filtered_plan',
+  $query$
+    select api.portal_facets_v1(
+      'flow', '', '{"geography":"cn"}'::jsonb
+    )
+  $query$
+);
+
+reset role;
+revoke anon from postgres;
+
 \o
 \pset format aligned
 \pset tuples_only off
@@ -1561,6 +1717,8 @@ where (
       <> :'draft_vector_rows'::integer
     or (select count(*) from public.flows where version = '99.99.999')
       <> :'draft_vector_rows'::integer
+    or (select count(*) from private.portal_catalog_facet_rows_v1)
+      <> (select count(*) from private.portal_catalog_search_rows_v1)
   );
 
 insert into pg_temp.portal_benchmark_failures (
@@ -1654,8 +1812,47 @@ where (:'process_rows'::integer >= 10000
     and :'flow_rows'::integer >= 100000)
   and (
     (select count(*) from pg_temp.portal_benchmark_plans) <> case
-      when :'benchmark_semantic_plan_profile'::boolean then 9 else 5
+      when :'benchmark_semantic_plan_profile'::boolean then 13 else 9
     end
+   or (
+     select count(*)
+     from pg_temp.portal_benchmark_plans
+     where label in (
+       'process_facets_empty_plan',
+       'process_facets_filtered_plan',
+       'flow_facets_empty_plan',
+       'flow_facets_filtered_plan'
+     )
+   ) <> 4
+   or exists (
+     select 1
+     from pg_temp.portal_benchmark_plans
+     where label in (
+         'process_facets_empty_plan',
+         'process_facets_filtered_plan',
+         'flow_facets_empty_plan',
+         'flow_facets_filtered_plan'
+       )
+       and (
+         plan_text !~ 'Buffers: shared'
+         or plan_text !~ 'Execution Time: [0-9]'
+         or plan_text ~ 'Disk:'
+         or plan_text ~ 'external merge'
+         or (
+           label like '%_empty_plan'
+           and (
+             plan_text ~ 'temp read=[1-9]'
+             or plan_text ~ 'temp (read=[0-9]+ )?written=[1-9]'
+           )
+         )
+         or coalesce((
+           pg_catalog.regexp_match(
+             plan_text,
+             'Execution Time: ([0-9]+[.][0-9]+|[0-9]+) ms'
+           )
+         )[1]::numeric, 999999) > 2000
+       )
+   )
    or not coalesce((
      select plan_text ~ 'Buffers: shared'
        and plan_text ~ 'Execution Time: [0-9]'
@@ -3059,9 +3256,12 @@ with expected(label) as (
 )
 select not exists (select 1 from portal_benchmark_failures)
   and coalesce((
-    select elapsed_ms <= 5000
+    select count(*) = 2 and pg_catalog.bool_and(elapsed_ms <= 5000)
     from pg_temp.portal_benchmark_fence_metrics
-    where metric = 'representative_fence_work'
+    where metric in (
+      'representative_fence_work',
+      'facet_reconcile_fence_work'
+    )
   ), false)
   and not exists (
     select 1
@@ -3112,6 +3312,7 @@ rollback;
 analyze public.processes;
 analyze public.flows;
 analyze private.portal_catalog_search_rows_v1;
+analyze private.portal_catalog_facet_rows_v1;
 
 \if :benchmark_pass
   \if :benchmark_release_profile

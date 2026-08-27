@@ -1,7 +1,7 @@
 ---
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: e46e205
-lastReviewedNote: "Reviewed for immutable v1 manifest diagnosis, fail-closed drift handling, and the required shadow-v2 semantic-change path."
+lastReviewedCommit: 8ca5fba
+lastReviewedNote: "Reviewed for immutable card/facet manifests, the seven-migration narrow-facet sub-rollout, and fail-closed retry boundaries."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -18,6 +18,7 @@ whenToUpdate:
 checkPaths:
   - docs/agents/portal-projection-migration-recovery.md
   - scripts/test_portal_projection_upgrade_recovery.sh
+  - scripts/test_portal_facet_projection_populated_upgrade.sh
   - scripts/check_portal_projection_manifest.py
   - supabase/migrations/20260826060422_portal_candidate_first_search.sql
   - supabase/migrations/20260826080257_portal_projection_backfill_0.sql
@@ -29,6 +30,13 @@ checkPaths:
   - supabase/migrations/20260826080403_portal_projection_facets.sql
   - supabase/migrations/20260827010000_portal_flow_embedding_eligibility_index.sql
   - supabase/migrations/20260827010003_portal_flow_embedding_eligibility_guard.sql
+  - supabase/migrations/20260827020000_portal_facet_projection_expand.sql
+  - supabase/migrations/20260827020001_portal_facet_projection_backfill_00_3f.sql
+  - supabase/migrations/20260827020002_portal_facet_projection_backfill_40_7f.sql
+  - supabase/migrations/20260827020003_portal_facet_projection_backfill_80_bf.sql
+  - supabase/migrations/20260827020004_portal_facet_projection_backfill_c0_ff.sql
+  - supabase/migrations/20260827020005_portal_facet_projection_reconcile.sql
+  - supabase/migrations/20260827020006_portal_facet_projection_cutover.sql
 related:
   - ../../AGENTS.md
   - repo-validation.md
@@ -45,7 +53,7 @@ branch controls before any hosted action.
 
 ## Safe rollout states
 
-The rollout has five observable boundaries:
+The rollout has six observable boundaries:
 
 1. `20260826060422` installs the immutable v1 derivation-contract registry,
    private projection, dormant projection Hybrid kernel, and source-table sync
@@ -70,12 +78,23 @@ The rollout has five observable boundaries:
    This low-selectivity membership index accelerates the exact 0..199
    embedding-universe probe without becoming a covering id/version join path;
    it does not store vectors, rank semantic candidates, or alter API semantics.
+6. `20260827020000` creates a separate narrow facet contract/table, adds
+   `json_ordered` to both existing source projection trigger event lists, and
+   installs one parent-to-facet trigger without changing a read path. Four
+   UUID-quarter files through `20260827020004` insert child facts with the old
+   Facets implementation still authoritative. `20260827020005` takes a
+   five-second parent-first write fence, fills only genuinely missing children,
+   and fails unless the validated child-FK subset has exact per-kind cardinality.
+   `20260827020006` then dispatches only normalized
+   empty-query/empty-filter requests to the 32-MB bounded narrow helper. Every
+   query or filter retains the unchanged card implementation.
 
-The expand, reconcile, Search/Hybrid cutover, and Facets cutover files are
-explicit transactions. A statement or guard failure rolls back the entire
-file. Each concurrent index file contains exactly one non-transactional
-`CREATE INDEX CONCURRENTLY` statement. Source vectors, embedding triggers, and
-duplicate projection HNSW indexes are intentionally absent.
+The card expand/reconcile/cutovers and all facet expand/backfill/reconcile/
+cutover files are explicit transactions. A statement or guard failure rolls
+back the entire file. Each concurrent index file contains exactly one
+non-transactional `CREATE INDEX CONCURRENTLY` statement. Source vectors,
+embedding triggers, and duplicate projection HNSW indexes are intentionally
+absent.
 
 Search, Hybrid, and Facets call the v1 manifest guard once per request. The
 guard compares the committed registry SHA-256 with the live definitions,
@@ -91,7 +110,7 @@ error alone.
 ```sql
 select version
 from supabase_migrations.schema_migrations
-where version between '20260826060422' and '20260827010003'
+where version between '20260826060422' and '20260827020006'
 order by version;
 
 select contract_version,
@@ -112,6 +131,24 @@ order by projection_contract_version;
 
 select private.assert_portal_catalog_projection_contract_v1();
 
+select contract_version,
+  manifest_schema,
+  function_identities,
+  manifest_sha256,
+  created_by_migration
+from private.portal_catalog_facet_contract_v1;
+
+select private.portal_catalog_facet_manifest_sha256_v1()
+  as live_facet_manifest_sha256;
+
+select facet_contract_version,
+  count(*)
+from private.portal_catalog_facet_rows_v1
+group by facet_contract_version
+order by facet_contract_version;
+
+select private.assert_portal_catalog_facet_contract_v1();
+
 select index_relation.oid::regclass as index_name,
   index_catalog.indisvalid,
   index_catalog.indisready,
@@ -126,7 +163,9 @@ where (
     namespace.nspname = 'private'
     and index_relation.relname in (
       'portal_catalog_search_process_document_v1_pgroonga',
-      'portal_catalog_search_flow_document_v1_pgroonga'
+      'portal_catalog_search_flow_document_v1_pgroonga',
+      'portal_catalog_facet_rows_v1_pkey',
+      'portal_catalog_facet_rows_latest_v1_idx'
     )
   ) or (
     namespace.nspname = 'public'
@@ -140,14 +179,19 @@ order by index_relation.relname;
 
 select trigger.tgrelid::regclass as source_table,
   trigger.tgname,
-  trigger.tgenabled
+  trigger.tgenabled,
+  trigger.tgtype,
+  trigger.tgattr,
+  pg_catalog.pg_get_triggerdef(trigger.oid) as definition
 from pg_catalog.pg_trigger as trigger
 where trigger.tgrelid in (
     'public.processes'::regclass,
-    'public.flows'::regclass
+    'public.flows'::regclass,
+    'private.portal_catalog_search_rows_v1'::regclass
   )
   and trigger.tgname in (
-    'portal_catalog_projection_content_sync_v1'
+    'portal_catalog_projection_content_sync_v1',
+    'portal_catalog_facet_sync_v1'
   )
 order by source_table, trigger.tgname;
 
@@ -168,6 +212,27 @@ where routine.oid in (
   ),
   pg_catalog.to_regprocedure(
     'private.portal_public_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'
+  ),
+  pg_catalog.to_regprocedure(
+    'api.portal_facets_v1(text,text,jsonb)'
+  ),
+  pg_catalog.to_regprocedure(
+    'private.catalog_portal_facets_v1_impl(text,text,uuid,text,jsonb,text)'
+  ),
+  pg_catalog.to_regprocedure(
+    'private.catalog_portal_facets_empty_v1_impl(text,text)'
+  ),
+  pg_catalog.to_regprocedure(
+    'private.portal_catalog_facet_facts_v1(text,jsonb)'
+  ),
+  pg_catalog.to_regprocedure(
+    'private.portal_catalog_facet_manifest_sha256_v1()'
+  ),
+  pg_catalog.to_regprocedure(
+    'private.assert_portal_catalog_facet_contract_v1()'
+  ),
+  pg_catalog.to_regprocedure(
+    'private.sync_portal_catalog_facet_row_v1()'
   )
 );
 
@@ -183,6 +248,15 @@ where dependency.objid = any (array_remove(array[
     )::oid,
     pg_catalog.to_regprocedure(
       'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'
+    )::oid,
+    pg_catalog.to_regprocedure(
+      'api.portal_facets_v1(text,text,jsonb)'
+    )::oid,
+    pg_catalog.to_regprocedure(
+      'private.catalog_portal_facets_empty_v1_impl(text,text)'
+    )::oid,
+    pg_catalog.to_regprocedure(
+      'private.catalog_portal_facets_v1_impl(text,text,uuid,text,jsonb,text)'
     )::oid
   ], null))
    or dependency.refobjid = any (array_remove(array[
@@ -191,6 +265,15 @@ where dependency.objid = any (array_remove(array[
      )::oid,
      pg_catalog.to_regprocedure(
        'private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'
+     )::oid,
+     pg_catalog.to_regprocedure(
+       'api.portal_facets_v1(text,text,jsonb)'
+     )::oid,
+     pg_catalog.to_regprocedure(
+       'private.catalog_portal_facets_empty_v1_impl(text,text)'
+     )::oid,
+     pg_catalog.to_regprocedure(
+       'private.catalog_portal_facets_v1_impl(text,text,uuid,text,jsonb,text)'
      )::oid
    ], null));
 ```
@@ -312,6 +395,39 @@ commit;
 If any precondition is false, do not run cleanup. Escalate with the exact ledger,
 index, trigger, and wrapper evidence.
 
+## Facet projection recovery
+
+The facet expand is transactional but intentionally not blind-idempotent. If
+its database COMMIT succeeds before the migration ledger is recorded, normal
+retry fails on the existing function/table. Stop and obtain operator review;
+do not edit history or drop any subset of the contract. This runbook authorizes
+only a full reset of the explicitly disposable isolated recovery project. It
+does not authorize cleanup on Preview, persistent Dev, or production. For any
+hosted COMMIT/history gap, retain the ledger/object/wrapper evidence and
+escalate for a separately reviewed forward-repair migration.
+
+Each of the four facet backfills is idempotent. It uses `ON CONFLICT DO NOTHING`
+and verifies exact per-kind/range cardinality before recording history. The
+validated composite child FK proves the child key set is a subset of the parent
+key set, so equal cardinality proves exact key coverage. A COMMIT/history gap
+may therefore use the normal unchanged migration retry. The shard files never
+update or delete `private.portal_catalog_search_rows_v1`.
+
+The reconcile migration locks the parent before the child with a five-second
+timeout. Lock failure leaves both ledger and API unchanged; retry only after the
+conflicting writer finishes. It inserts missing children only and treats any
+existing mismatch as contract drift. The cutover separately rechecks full
+parity before replacing the wrapper. A cutover guard failure must leave
+`20260827020006` absent and the old wrapper byte-identical. Do not repair drift
+by editing the literal facet digest or silently updating child facts.
+
+The migration-time guards deliberately do not detoast every wide parent card or
+repeat state/timestamp comparisons while holding deployment transactions or the
+reconcile fence. The immutable helper, validated FK/checks, and only two
+governed writers establish row provenance; the pgTAP suite and populated-upgrade
+runner perform the complete key/state/timestamp/five-fact comparison outside
+the short migration fence.
+
 ## Local recovery regression
 
 The checked-in recovery regression requires an explicitly attested, isolated
@@ -319,7 +435,7 @@ Issue 531 Supabase project. It resets that local project and must never target a
 shared checkout, Preview, persistent Dev, or production.
 
 Formal recovery evidence requires clean HEAD, the reviewed Supabase CLI
-`2.109.1`, and byte equality plus one aggregate SHA-256 across all 259 migration
+`2.109.1`, and byte equality plus one aggregate SHA-256 across all 266 migration
 files in the repository and isolated project. Comparing only Issue 531 files is
 not sufficient because an earlier baseline change can alter recovery behavior.
 
@@ -336,8 +452,26 @@ races. Embedding-only changes remain source-HNSW owned and the final fence fills
 any independently missing card row. The regression also proves reconcile
 lock-timeout rollback, reconcile COMMIT/history retry, wrong and canonical-valid
 same-name index cleanup without history edits, cutover guard rollback,
-post-cutover Flow eligibility build/guard recovery, successful retry, and no-op
-repeat without rebuilding recorded indexes.
+post-cutover Flow eligibility build/guard recovery, facet expand COMMIT/history
+failure, facet shard idempotent retry, facet reconcile lock rollback, facet
+cutover parity rollback, parent-trigger/FK-cascade convergence, successful
+retry, and no-op repeat without rebuilding the seven recorded indexes.
+
+The separate populated-upgrade runner resets the same kind of isolated project
+to `20260827010003`, inserts 17,299 Process plus 108,947 Flow parent cards, and
+executes the seven facet files verbatim. Every statement in a UUID-quarter file
+must finish within 60 seconds, preserving at least 2x headroom under its
+authored 120-second statement timeout, and each complete file must finish
+within 120 seconds. Reconcile must complete within five seconds, and final
+key coverage, deterministic sampled fact parity, and aggregate DTO counts must
+be exact. The pgTAP suite remains the exhaustive semantic equality oracle.
+
+```bash
+PORTAL_FACET_UPGRADE_TARGET=local-isolated \
+PORTAL_FACET_UPGRADE_SUPABASE_WORKDIR=/absolute/path/to/database-engine-531-project \
+SUPABASE_CLI=/absolute/path/to/supabase \
+scripts/test_portal_facet_projection_populated_upgrade.sh
+```
 
 The pre-cutover raw-source
 `private.portal_public_hybrid_search_v1_impl(...)` is a rollback asset only
@@ -353,6 +487,12 @@ label are immutable. A card/document semantic change must create a new helper
 closure and shadow projection, then use bounded backfill, a short source-write
 reconcile fence, concurrent lexical indexes, and an atomic read cutover. Never
 update the v1 registry row or perform a long in-place mixed-semantics backfill.
+
+The two-function facet manifest is independently immutable. Its v1 facts are
+derived only from the already public-safe card, and its storage is a child
+projection rather than a rewrite of card/document rows. A facet-fact semantic
+change requires a new literal facet contract and an additive child rollout;
+never modify the v1 digest or mix fact versions in the current child table.
 
 Even a claimed output-equivalent bug fix requires full source-card byte
 equivalence proof. Without that proof, treat it as v2. The static manifest check
