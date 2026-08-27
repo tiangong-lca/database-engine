@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: b7ffb20
-lastReviewedNote: "Reviewed for Issue #532 Portal type generation, runtime Facet/card-context manifest checks, exact-50 filtered Search proof, and isolated named benchmark profiles."
+lastReviewedCommit: ac64c51
+lastReviewedNote: "Reviewed after combining Issue #532/#533: 271-file recovery/benchmark runners, runtime manifests, exact-50 Search, summary performance, and 11-module Portal generation are current."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

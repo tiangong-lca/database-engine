@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: b7ffb20
+lastReviewedCommit: ac64c51
 lastReviewedNote: "Reviewed for the combined 271-migration Issue #532 card-context/Flow-geography and Issue #533 catalog-summary snapshot; generated workspace and public/api type ownership are unchanged."
 related:
   - ../../AGENTS.md

@@ -1,7 +1,7 @@
 ---
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: b7ffb20
-lastReviewedNote: "Reviewed for the Issue #532 per-request Facet-manifest guard, independent card-context manifest, and explicit absence of a new rollout or writer-recovery boundary; Issue #531 recovery remains unchanged."
+lastReviewedCommit: ac64c51
+lastReviewedNote: "Reviewed after combining Issue #532 with the three Issue #533 summary migrations: the 271-file tree, concurrent-index recovery, runtime manifests, and Issue #531 recovery boundary are explicit."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo

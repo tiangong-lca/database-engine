@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: b7ffb20
-lastReviewedNote: "Reviewed for Issue #532 exact-key 50/20 card decoration, per-request Facet-manifest validation, and generated DTO ownership; stored projection, index, trigger, and writer boundaries are unchanged."
+lastReviewedCommit: ac64c51
+lastReviewedNote: "Reviewed for the combined Issue #532/#533 card decoration, per-request Facet-manifest validation, bounded catalog summary, and generated DTO ownership; writer boundaries remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

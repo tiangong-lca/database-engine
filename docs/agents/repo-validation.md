@@ -32,8 +32,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: b7ffb20
-lastReviewedNote: "Reviewed for Issue #532 exact-key 50/20 decoration, exact-50 filtered Search proof, Facet-manifest drift failure, deterministic Portal types, and isolated release evidence."
+lastReviewedCommit: ac64c51
+lastReviewedNote: "Reviewed for the combined Issue #532/#533 271-migration reset, 11-module generation, Portal pgTAP, exact-50 Search, Facet-manifest drift, and catalog-summary performance evidence."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
