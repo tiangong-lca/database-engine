@@ -68,8 +68,8 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  273::bigint,
-  'api contains the active cutover functions, reviewed consumer facades, Database A Search RPCs, and Portal catalog/LCIA/Hybrid facades'
+  275::bigint,
+  'api contains the active cutover functions, reviewed consumer facades, Database A Search RPCs, and Portal catalog/LCIA/Hybrid/sitemap facades'
 );
 
 select is(
@@ -80,8 +80,8 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  283::bigint,
-  'private contains the active helpers, Database B/reuse helpers, and reviewed Portal catalog/LCIA/Hybrid internals'
+  285::bigint,
+  'private contains the active helpers, Database B/reuse helpers, and reviewed Portal catalog/LCIA/Hybrid/sitemap internals'
 );
 
 select ok(
@@ -112,7 +112,7 @@ select is(
     from pg_trigger trigger_record
     where not trigger_record.tgisinternal
   ),
-  114::bigint,
+  115::bigint,
   'all active application triggers remain present'
 );
 
@@ -121,7 +121,7 @@ select is(
     select count(*)
     from pg_policy
   ),
-  76::bigint,
+  78::bigint,
   'all RLS policies remain present'
 );
 
@@ -136,7 +136,7 @@ select is(
       'util'::regnamespace
     )
   ),
-  535::bigint,
+  540::bigint,
   'all application constraints remain present'
 );
 
@@ -165,7 +165,7 @@ select is(
       and class.relkind in ('r', 'p')
       and class.relrowsecurity
   ),
-  65::bigint,
+  66::bigint,
   'RLS enablement is preserved across moved tables'
 );
 
