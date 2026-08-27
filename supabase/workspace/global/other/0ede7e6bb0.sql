@@ -1,0 +1,1 @@
+COMMENT ON TRIGGER "portal_sitemap_rows_sync_v1" ON "private"."portal_catalog_facet_rows_v1" IS 'Upserts only the affected exact sitemap version after a governed facet INSERT or UPDATE converges; DELETE follows the exact FK cascade.';

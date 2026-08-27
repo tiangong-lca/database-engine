@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."portal_sitemap_shard_v1"("p_shard_cursor" "text") IS 'Output-bounded latest-visible Process/Flow sitemap page over exact-version rows for one opaque stable-hash shard cursor.';

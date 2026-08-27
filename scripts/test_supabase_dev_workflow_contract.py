@@ -193,6 +193,7 @@ def main() -> int:
         'test("^eyJ[A-Za-z0-9_-]+[.][A-Za-z0-9_-]+[.][A-Za-z0-9_-]+$")',
         "unset api_keys SUPABASE_ACCESS_TOKEN",
         "PREVIEW_PUBLIC_API_KEY=%s",
+        "id: preview_api_key",
         'Content-Profile: api',
         'portal_hybrid_search_v1',
         'portal.public-hybrid-candidate-page.v1.schema.json',
@@ -202,12 +203,33 @@ def main() -> int:
         'assert_opaque_error 404 PGRST202',
         'assert_opaque_error 406 PGRST106',
         'p_actor_id p_team_id p_state_codes p_data_source',
+        'Verify anonymous Preview sitemap shard boundary',
+        'portal_sitemap_manifest_v1',
+        'portal_sitemap_shard_v1',
+        'portal.public-sitemap-manifest.v1.schema.json',
+        'portal.public-sitemap-shard.v1.schema.json',
+        'probe_deadline=$((SECONDS + 300))',
+        '--connect-timeout 5',
+        '--max-time "$request_timeout"',
+        "steps.preview_api_key.outcome == 'success'",
+        'always()',
+        '(.shards | length) == 64',
+        'all(.shards[]; .maxItems == 4096)',
+        '.code == "22023"',
     )
     failures.extend(
         f"Preview verification missing {token}"
         for token in preview_required
         if token not in preview_workflow
     )
+    if preview_workflow.count("probe_deadline=$((SECONDS + 300))") != 2:
+        failures.append(
+            "Hybrid and sitemap Preview readiness probes must each use one exact 300-second deadline"
+        )
+    if preview_workflow.count('--max-time "$request_timeout"') != 2:
+        failures.append(
+            "Hybrid and sitemap readiness curl calls must be bounded by their remaining deadline"
+        )
     for app_identity_token in (
         ".app.id == 330661",
         '.app.slug == "supabase"',
@@ -241,6 +263,7 @@ def main() -> int:
         preview_workflow.find("- name: Apply exact Preview PostgREST runtime contract"),
         preview_workflow.find("- name: Read back exact Preview PostgREST runtime contract"),
         preview_workflow.find("- name: Verify anonymous Preview Hybrid boundary"),
+        preview_workflow.find("- name: Verify anonymous Preview sitemap shard boundary"),
     )
     if -1 not in preview_order and preview_order != tuple(sorted(preview_order)):
         failures.append(
@@ -270,7 +293,7 @@ def main() -> int:
     ):
         if forbidden_probe_credential in preview_probe:
             failures.append(
-                "anonymous Preview Hybrid probe must not contain "
+                "anonymous Preview probes must not contain "
                 f"{forbidden_probe_credential}"
             )
     for forbidden_probe_output in (
@@ -280,7 +303,7 @@ def main() -> int:
     ):
         if forbidden_probe_output in preview_probe:
             failures.append(
-                "anonymous Preview Hybrid diagnostics must not print the raw "
+                "anonymous Preview diagnostics must not print the raw "
                 f"response body via {forbidden_probe_output}"
             )
     if preview_key_step.count(
@@ -322,6 +345,7 @@ def main() -> int:
         "SUPABASE_DEV_PROJECT_ID",
         "SUPABASE_MAIN_PROJECT_ID",
         "supabase db reset --no-seed",
+        "supabase test db supabase/tests/20260827_portal_sitemap_shards_v1.sql",
         '"public", "api", "graphql_public"',
         '"public", "api", "extensions"',
         '"max_rows":1000',

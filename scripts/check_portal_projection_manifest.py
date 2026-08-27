@@ -3,6 +3,7 @@
 
 from __future__ import annotations
 
+import hashlib
 import re
 import sys
 from pathlib import Path
@@ -23,6 +24,23 @@ FACET_CUTOVER_NAME = "20260827020006_portal_facet_projection_cutover.sql"
 CARD_CONTEXT_ANCHOR_NAME = "20260827021441_portal_card_context_decorator.sql"
 FLOW_GEOGRAPHY_SEARCH_NAME = (
     "20260827134100_optimize_portal_flow_geography_search.sql"
+)
+SITEMAP_LATEST_PROJECTION_NAME = (
+    "20260827134101_portal_sitemap_latest_projection.sql"
+)
+SITEMAP_SHARD_CONTRACT_NAME = (
+    "20260827134102_portal_sitemap_shard_contract.sql"
+)
+SITEMAP_REPAIR_NAME = "20260827134103_portal_sitemap_concurrency_repair.sql"
+SITEMAP_PREVIEW_FIXTURE = (
+    REPO_ROOT
+    / "supabase"
+    / "tests"
+    / "upgrade"
+    / "20260827_portal_sitemap_preview_winner_fixture.sql"
+)
+SITEMAP_PREVIEW_FIXTURE_SHA256 = (
+    "bbdfa95524e1d47c85a8072737c676961f8285ed8054d8e9dec7fdd9499efb98"
 )
 MANIFEST_SHA256 = (
     "b5e0aff9abbffcc8d2dacaf559a5d1a8c993c20b647d0c70f0e4fa18eb06d2dc"
@@ -83,6 +101,14 @@ CARD_CONTEXT_CONTROL_FUNCTION_IDENTITIES = (
     "private.portal_card_context_manifest_sha256_v1()",
     "private.assert_portal_card_context_contract_v1()",
 )
+SITEMAP_SHARD_FUNCTION_IDENTITIES = (
+    "private.sync_portal_sitemap_row_v1()",
+    "private.sync_portal_sitemap_latest_row_v1()",
+    "private.sync_portal_sitemap_latest_delete_v1()",
+    "private.assert_portal_sitemap_projection_v1()",
+    "api.portal_sitemap_manifest_v1()",
+    "api.portal_sitemap_shard_v1(text)",
+)
 
 
 def sql_without_comments(sql: str) -> str:
@@ -93,6 +119,7 @@ def sql_without_comments(sql: str) -> str:
 
 
 def mutation_pattern(identity: str) -> re.Pattern[str]:
+    schema_name = identity.split(".", 1)[0]
     function_name = identity.split(".", 1)[1].split("(", 1)[0]
     return re.compile(
         rf"\b(?:"
@@ -100,7 +127,8 @@ def mutation_pattern(identity: str) -> re.Pattern[str]:
         rf"|drop\s+(?:function|routine)(?:\s+if\s+exists)?"
         rf"|alter\s+(?:function|routine)"
         rf")\s+"
-        rf'(?:(?:"?private"?)\s*\.\s*)?"?{re.escape(function_name)}"?\s*\(',
+        rf'(?:(?:"?{re.escape(schema_name)}"?)\s*\.\s*)?'
+        rf'"?{re.escape(function_name)}"?\s*\(',
         flags=re.IGNORECASE,
     )
 
@@ -509,6 +537,201 @@ def main() -> int:
                 + ", ".join(missing_guard_tokens)
             )
 
+    sitemap_latest = MIGRATIONS_DIR / SITEMAP_LATEST_PROJECTION_NAME
+    if not sitemap_latest.is_file():
+        violations.append(
+            "missing Portal sitemap latest projection: "
+            f"{SITEMAP_LATEST_PROJECTION_NAME}"
+        )
+    else:
+        sitemap_latest_sql = sql_without_comments(
+            sitemap_latest.read_text(encoding="utf-8")
+        ).lower()
+        required_latest_tokens = (
+            "create table private.portal_sitemap_rows_v1",
+            "primary key (dataset_kind, id, version)",
+            "constraint portal_sitemap_rows_source_v1_fk",
+            "on delete cascade",
+            "shard_no smallint not null",
+            "check (shard_no between 0 and 63)",
+            "create index portal_sitemap_rows_shard_v1_idx",
+            "version desc",
+            "modified_at desc",
+            "create function private.sync_portal_sitemap_row_v1()",
+            "security definer",
+            "portal_sitemap_rows_sync_v1",
+            "on conflict (dataset_kind, id, version) do update",
+            "pg_catalog.md5(",
+            ") / 4",
+            "portal sitemap version projection reconciliation failed",
+        )
+        missing_latest_tokens = [
+            token
+            for token in required_latest_tokens
+            if token not in sitemap_latest_sql
+        ]
+        if missing_latest_tokens:
+            violations.append(
+                f"{SITEMAP_LATEST_PROJECTION_NAME}: missing latest projection tokens "
+                + ", ".join(missing_latest_tokens)
+            )
+        if "advisory" in sitemap_latest_sql or "hashtextextended" in sitemap_latest_sql:
+            violations.append(
+                f"{SITEMAP_LATEST_PROJECTION_NAME}: row triggers must not wait on a second application lock after source/facet row locking"
+            )
+        if "sync_portal_sitemap_latest_delete_v1" in sitemap_latest_sql \
+           or "portal_sitemap_latest_delete_v1" in sitemap_latest_sql:
+            violations.append(
+                f"{SITEMAP_LATEST_PROJECTION_NAME}: exact-version DELETE must use only the FK cascade"
+            )
+        if "create index concurrently" in sitemap_latest_sql:
+            violations.append(
+                f"{SITEMAP_LATEST_PROJECTION_NAME}: the new index must be created "
+                "on the empty latest table before its set-based backfill"
+            )
+        if "portal_sitemap_entries_v1" in sitemap_latest_sql:
+            violations.append(
+                f"{SITEMAP_LATEST_PROJECTION_NAME}: expand must not change a public RPC"
+            )
+
+    sitemap_contract = MIGRATIONS_DIR / SITEMAP_SHARD_CONTRACT_NAME
+    if not sitemap_contract.is_file():
+        violations.append(
+            f"missing Portal sitemap shard contract: {SITEMAP_SHARD_CONTRACT_NAME}"
+        )
+    else:
+        sitemap_contract_sql = sql_without_comments(
+            sitemap_contract.read_text(encoding="utf-8")
+        )
+        sitemap_contract_lower = sitemap_contract_sql.lower()
+        required_contract_tokens = (
+            "api.portal_sitemap_manifest_v1()",
+            "api.portal_sitemap_shard_v1(text)",
+            "private.assert_portal_sitemap_projection_v1()",
+            "generate_series(0, 63)",
+            "'maxitems', 4096",
+            "limit 4097",
+            "jsonb_array_length(v_items) > 4096",
+            "portal.public-sitemap-manifest.v1",
+            "portal.public-sitemap-shard.v1",
+            "03dd37bd0871c220fcd94cb2dec203ed",
+            "9bc7007c0e8fef48c75d997ea8ef96d8",
+            "portal_sitemap_rows_v1",
+            "projection.shard_no = v_bucket",
+            "select distinct on (projection.dataset_kind, projection.id)",
+            "v_expected_cursor := pg_catalog.jsonb_build_object",
+            "private.portal_cursor_encode_v1(v_expected_cursor)",
+        )
+        missing_contract_tokens = [
+            token
+            for token in required_contract_tokens
+            if token not in sitemap_contract_lower
+        ]
+        if missing_contract_tokens:
+            violations.append(
+                f"{SITEMAP_SHARD_CONTRACT_NAME}: missing bounded shard tokens "
+                + ", ".join(missing_contract_tokens)
+            )
+        if re.search(
+            r"\b(?:create\s+(?:unlogged\s+)?table|create\s+trigger|alter\s+table)\b",
+            sitemap_contract_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{SITEMAP_SHARD_CONTRACT_NAME}: sitemap shards must not add "
+                "a writer table, trigger, or table rewrite"
+            )
+        if re.search(
+            r"create\s+(?:or\s+replace\s+)?function\s+"
+            r"api[.]portal_sitemap_entries_v1\s*[(]",
+            sitemap_contract_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{SITEMAP_SHARD_CONTRACT_NAME}: retained sitemap v1 must stay unchanged"
+            )
+
+    if not SITEMAP_PREVIEW_FIXTURE.is_file():
+        violations.append(
+            f"missing Portal sitemap Preview fixture: {SITEMAP_PREVIEW_FIXTURE.name}"
+        )
+    else:
+        fixture_sha256 = hashlib.sha256(
+            SITEMAP_PREVIEW_FIXTURE.read_bytes()
+        ).hexdigest()
+        if fixture_sha256 != SITEMAP_PREVIEW_FIXTURE_SHA256:
+            violations.append(
+                f"{SITEMAP_PREVIEW_FIXTURE.name}: old Preview fixture digest drifted"
+            )
+
+    sitemap_repair = MIGRATIONS_DIR / SITEMAP_REPAIR_NAME
+    if not sitemap_repair.is_file():
+        violations.append(
+            f"missing Portal sitemap forward repair: {SITEMAP_REPAIR_NAME}"
+        )
+    else:
+        sitemap_repair_sql = sql_without_comments(
+            sitemap_repair.read_text(encoding="utf-8")
+        ).lower()
+        required_repair_tokens = (
+            "lock table private.portal_catalog_facet_rows_v1",
+            "create table if not exists private.portal_sitemap_rows_v1",
+            "constraint portal_sitemap_rows_source_v1_fk",
+            "on delete cascade",
+            "create or replace function private.sync_portal_sitemap_row_v1()",
+            "create trigger portal_sitemap_rows_sync_v1",
+            "create or replace function private.assert_portal_sitemap_projection_v1()",
+            "create or replace function api.portal_sitemap_shard_v1",
+            "9bc7007c0e8fef48c75d997ea8ef96d8",
+            "v_expected_cursor := pg_catalog.jsonb_build_object",
+            "private.portal_cursor_encode_v1(v_expected_cursor)",
+            "on conflict (dataset_kind, id, version) do update",
+            "drop function if exists private.sync_portal_sitemap_latest_delete_v1()",
+            "drop table if exists private.portal_sitemap_latest_rows_v1",
+            "portal sitemap version repair did not converge",
+        )
+        missing_repair_tokens = [
+            token
+            for token in required_repair_tokens
+            if token not in sitemap_repair_sql
+        ]
+        if missing_repair_tokens:
+            violations.append(
+                f"{SITEMAP_REPAIR_NAME}: missing forward repair tokens "
+                + ", ".join(missing_repair_tokens)
+            )
+        if "advisory" in sitemap_repair_sql or "hashtextextended" in sitemap_repair_sql:
+            violations.append(
+                f"{SITEMAP_REPAIR_NAME}: repair must not add application locks to exact-version writers"
+            )
+        if "create trigger portal_sitemap_latest_delete_v1" in sitemap_repair_sql \
+           or "create or replace function private.sync_portal_sitemap_latest_delete_v1" in sitemap_repair_sql:
+            violations.append(
+                f"{SITEMAP_REPAIR_NAME}: repair must retire rather than recreate the shared-winner DELETE path"
+            )
+        for identity in (
+            "private.sync_portal_sitemap_row_v1()",
+            "private.assert_portal_sitemap_projection_v1()",
+            "api.portal_sitemap_shard_v1(text)",
+        ):
+            function_name = identity.split(".", 1)[1].split("(", 1)[0]
+            if sitemap_repair_sql.count(function_name) == 0:
+                violations.append(
+                    f"{SITEMAP_REPAIR_NAME}: repair omits {identity}"
+                )
+
+    sitemap_patterns = {
+        identity: mutation_pattern(identity)
+        for identity in SITEMAP_SHARD_FUNCTION_IDENTITIES
+    }
+    for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        if migration.name <= SITEMAP_REPAIR_NAME:
+            continue
+        executable_sql = sql_without_comments(migration.read_text(encoding="utf-8"))
+        for identity, pattern in sitemap_patterns.items():
+            if pattern.search(executable_sql):
+                violations.append(f"{migration.name}: {identity}")
+
     if violations:
         print(
             "Portal projection-v1 manifest governance failed:\n- "
@@ -528,7 +751,10 @@ def main() -> int:
         f"{len(CARD_CONTEXT_FUNCTION_IDENTITIES)} derivation functions and "
         f"{len(CARD_CONTEXT_CONTROL_FUNCTION_IDENTITIES)} controls, "
         f"sha256={CARD_CONTEXT_MANIFEST_SHA256}; Flow geography Search "
-        "repair remains query-only"
+        "repair remains query-only; sitemap shards remain fixed at 64 with "
+        "an exact-version FK child/index, one AFTER INSERT/UPDATE direct-upsert "
+        "trigger, FK-cascade DELETE, the 134103 forward repair, and a "
+        "4096-item fail-closed output cap"
     )
     return 0
 

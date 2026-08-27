@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: ac64c51
-lastReviewedNote: "已复核 Issue #532/#533 合并结果：271-file recovery/benchmark、runtime manifests、filtered Search exact-50、summary 性能与 11-module Portal 生成均为当前状态。"
+lastReviewedCommit: 712558e
+lastReviewedNote: "已复核 Issue #539：274-file recovery/benchmark、固定 sitemap shards、exact-version FK cascade child、history-density plan gate、匿名 Preview gates 与 13-module Portal 生成均为当前状态。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -78,28 +78,38 @@ scripts/test_search_text_array_upgrade.sh
 
 ### `test_portal_projection_upgrade_recovery.sh`
 
-在显式确认且隔离的本地 Supabase 项目中验证 Issue 531 Portal projection
+在显式确认且隔离的本地 Supabase 项目中验证 Issue 531/532/539 Portal projection
 上线。脚本使用真实并发连接覆盖有效更新、删除、状态失效、主键变更以及仅 embedding
 更新竞态；主动制造 card/facet reconcile 锁超时与 cutover guard 失败；证明 facet
 expand COMMIT/history 缺口、四分片幂等重试、同名 concurrent index 受控清理、Flow
-eligibility guard 回滚，以及已记录迁移重复执行不会重建七个索引。所需环境变量与恢复边界见
+eligibility guard 回滚、事务性 sitemap expand COMMIT-gap/reset、public cutover 与
+forward repair 的回滚/重试、exact-version child 的 PK/FK/index、唯一 same-key upsert
+trigger，以及所有旧 winner 对象均被移除。同一 identity 不同 version 的真实
+insert/update/delete 必须全部提交，无 writer 侧 retry，并让 child rows 与已提交公开
+facet version 集精确相等。脚本还证明已记录迁移重复执行不会重建八个索引，并拒绝
+非 canonical 的 cursor numeric scale；SHA-pinned 的准确旧 Preview fixture 还必须
+证明 populated 且已记录的 `134101`/`134102` 状态只应用 `134103` 即可收敛。
+所需环境变量与恢复边界见
 `docs/agents/portal-projection-migration-recovery.md`。正式证据还要求干净 HEAD、
-Supabase CLI `2.109.1`，以及完整 271-file migration tree 的逐字相等和 aggregate
+Supabase CLI `2.109.1`，以及完整 274-file migration tree 的逐字相等和 aggregate
 SHA-256。
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
-在同一类显式隔离的 Issue-531 项目中，对 126,246 条既有 parent card 逐字执行七个
+在同一类显式隔离的 Issue-531/532/539 项目中，对 126,246 条既有 parent card 逐字执行七个
 Facet migration。每条 backfill statement 必须在 120 秒门下保留至少 2 倍余量，
 每个完整 UUID-quarter 文件必须低于 120 秒；成功 reconcile fence 必须在 5 秒内
 完成，并要求 key coverage、确定性抽样 facts 与 DTO 聚合计数精确一致。runner
-退出时总会把隔离项目重置到完整 HEAD。
+随后在全部 126,246 行上按 60/15/15 秒证据预算（120/30/30 秒外层超时）计时三条
+sitemap migration，并要求 facet/sitemap exact-version rows 双向相等、复合 PK/FK、
+history-order index、唯一 same-key trigger、shard capacity 与两个 public RPC 精确
+一致。runner 退出时总会把隔离项目重置到完整 HEAD。
 
 ### `run_portal_projection_benchmark.sh`
 
-仅在显式确认的 Issue 531 隔离本地 Supabase 项目中运行代表性 Process/Flow
+仅在显式确认的 Issue 531/532/539 隔离本地 Supabase 项目中运行代表性 Process/Flow
 Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把完整
-271-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
+274-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
 reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合同与 recovery runner
 一致，另要求 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`。
 
@@ -143,6 +153,13 @@ Search-50/Hybrid-20 label 必须分别返回准确 50/20 个完整 item、20 个
 因为它是代表性的过滤最坏路径；对应 timing label 也必须准确返回 50 个完整 item，
 避免空结果或过窄结果让性能门假绿。
 
+sitemap profile 的 126,246-row 单版本 fixture 保持最大 shard 为 2,066 个 identity，
+记录的 shard-read p95 约为 11 ms。独立 history-density probe 将 2,048 个 identity
+各扩展为 64 个 version，共 131,072 行；其自然 `DISTINCT ON` 计划必须通过精确
+history-order index 走 index-only path，不得出现 `Sort` / `Incremental Sort`，不得
+产生 temp spill，并须在 4 秒内完成。响应数量、字节与 timeout 仍有界，但扫描行数
+会随保留 version 历史增长。
+
 ### `check_portal_projection_manifest.py`
 
 同时验证三个已提交的 Portal digest：十一函数 stored-card 闭包、两函数窄 Facet
@@ -152,6 +169,15 @@ Search-50/Hybrid-20 label 必须分别返回准确 50/20 个完整 item、20 个
 同时不改变两个 #531 digest。它还要求 Flow geography Search follow-up 只能是
 单一 query-only kernel replacement，不得新增 table/index/trigger 或改写 writer；
 runtime 在读取该 child projection 前还必须独立验证 Facet manifest。
+
+它还会冻结 Issue #539 的 64-bucket exact-version child：table/PK、带
+`ON UPDATE RESTRICT` / `ON DELETE CASCADE` 的 facet exact FK、history-order index，
+以及唯一的 `AFTER INSERT OR UPDATE` same-key upsert trigger。公开 shard reader 必须
+保留 index-ordered `DISTINCT ON (dataset_kind,id)` 选择、4,096-item / 2-MiB / 4 秒
+边界和显式 history-density plan gate。`134103` forward repair 必须在一个事务内锁定
+facet writer、建立并完整 backfill shadow child、替换 assertion/reader，并移除旧
+winner table/helpers。shard cursor 字节必须等于精确期望对象的新编码，因此 JSONB
+等价的 `1.0` / `64.0` numeric scale 也会被拒绝；旧 sitemap façade 仍逐字不变。
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py
@@ -204,6 +230,10 @@ Management API 修改，是持久化 Dev 与 Preview 各一次 PostgREST PATCH�
 合同还要求失败诊断只能输出 HTTP status 与通过响应形态校验的
 PostgREST/SQLSTATE code；禁止打印原始 response body，形态异常或包含额外字段的
 错误 envelope 必须统一记为 `unclassified`。
+
+同一匿名凭据边界还会在最多 300 秒内轮询 sitemap manifest，验证准确 64 个不透明
+descriptor，把其中一个 cursor 逐字传给 shard RPC，严格校验两个 exhaustive JSON
+Schema，并要求伪造 cursor 只返回受限的 `22023` envelope。
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py

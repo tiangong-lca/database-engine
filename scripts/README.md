@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: ac64c51
-lastReviewedNote: "Reviewed after combining Issue #532/#533: 271-file recovery/benchmark runners, runtime manifests, exact-50 Search, summary performance, and 11-module Portal generation are current."
+lastReviewedCommit: 712558e
+lastReviewedNote: "Reviewed for Issue #539: 274-file recovery/benchmark runners, fixed sitemap shards, exact-version FK-cascaded child, history-density plan gate, anonymous Preview gates, and 13-module Portal generation are current."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -85,35 +85,48 @@ scripts/test_search_text_array_upgrade.sh
 
 ### `test_portal_projection_upgrade_recovery.sh`
 
-Exercises the Issue 531 Portal projection rollout against an explicitly
+Exercises the Issue 531/532/539 Portal projection rollout against an explicitly
 attested, isolated local Supabase project. It uses live concurrent connections
 to prove valid-update, delete, state-invalidation, key-change, and
 embedding-only races; forces card/facet reconcile lock-timeout and cutover-guard
 failures; verifies facet expand COMMIT/history failure, four-shard idempotent
 retry, controlled same-name concurrent-index cleanup, post-cutover Flow
-eligibility guard rollback, and no-op repeat without rebuilding seven indexes.
+eligibility guard rollback, transactional sitemap expand COMMIT-gap/reset and
+public-cutover/forward-repair rollback and retry, the exact-version child
+PK/FK/index, the sole exact-key upsert trigger, and retirement of every obsolete
+winner object. Real same-identity exact-version inserts, updates, and deletes
+must all commit without a writer-side retry while child rows remain exactly
+equal to the committed public facet-version set. The runner also proves a no-op
+repeat does not rebuild eight indexes and rejects noncanonical cursor numeric
+scales. A SHA-pinned exact old-Preview fixture additionally proves a populated,
+recorded `134101`/`134102` state converges by applying only `134103`.
 See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries. Formal evidence additionally requires
 clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
-the complete 271-file migration tree.
+the complete 274-file migration tree.
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
 Rehearses the seven facet migrations verbatim over 126,246 pre-existing parent
-cards in the same explicitly isolated Issue-531 project. It requires every
+cards in the same explicitly isolated Issue-531/532/539 project. It requires every
 backfill statement to retain at least 2x headroom under its 120-second timeout,
 each complete UUID-quarter file to stay below 120 seconds, the successful
 reconcile fence to finish within five seconds, plus exact key coverage,
 deterministic sampled facts, and aggregate DTO counts.
+It then times the three sitemap migrations over all 126,246 rows against exact
+60/15/15-second evidence budgets (120/30/30-second outer timeouts) and requires
+facet/sitemap exact-version row parity, composite PK/FK parity, the ordered
+history index, the sole exact-key trigger, shard capacity, and exact public-RPC
+parity.
 The runner always resets the isolated project to full HEAD on exit.
 
 ### `run_portal_projection_benchmark.sh`
 
 Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
 fence, plan, and ANN-recall benchmark only against an explicitly attested
-Issue-531 local Supabase project. The runner byte-compares the complete
-271-file migration tree with the repository, writes into a new operator-selected private
+Issue-531/532/539 local Supabase project. The runner byte-compares the complete
+274-file migration tree with the repository, writes into a new operator-selected private
 directory, and resets the isolated database before and after the run so rolled
 back HNSW pages cannot accumulate. Its environment contract mirrors the
 recovery runner and additionally requires
@@ -167,6 +180,14 @@ The evidence file also carries a dedicated full plan for empty-query,
 timing label must also return exactly 50 complete cards so an empty or narrowed
 result cannot make the performance gate pass.
 
+The sitemap profile keeps the 126,246-row single-version fixture at a maximum
+2,066 identities in one shard and records roughly 11 ms shard-read p95. A
+separate history-density probe expands 2,048 identities to 64 versions each
+(131,072 rows). Its natural `DISTINCT ON` plan must use the exact history-order
+index as an index-only path, contain no `Sort` or `Incremental Sort`, spill no
+temp data, and finish below four seconds. Response cardinality, bytes, and
+timeout remain bounded even though scanned rows grow with retained versions.
+
 ### `check_portal_projection_manifest.py`
 
 Checks all three committed Portal digests: the exact eleven-function stored-card
@@ -179,6 +200,17 @@ also requires the Flow geography Search follow-up to remain a single
 query-only kernel replacement with no table/index/trigger/writer rewrite. The
 runtime path independently validates the Facet manifest before reading that
 child projection.
+
+It also freezes the Issue #539 64-bucket exact-version child: table/PK, exact
+facet FK with `ON UPDATE RESTRICT`/`ON DELETE CASCADE`, history-order index, and
+sole `AFTER INSERT OR UPDATE` same-key upsert trigger. The public shard reader
+must retain its index-ordered `DISTINCT ON (dataset_kind,id)` selection,
+4,096-item/2-MiB/four-second bounds, and explicit history-density plan gate.
+The `134103` forward repair must atomically lock the facet writer, build and
+fully backfill the shadow child, replace the assertion/reader, and retire the
+obsolete winner table/helpers. Shard cursor bytes must equal a fresh encoding
+of the exact expected object, so JSONB-equivalent numeric scales such as `1.0`
+and `64.0` are rejected. The retained sitemap façade remains byte-identical.
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py
@@ -236,6 +268,11 @@ other mutation remain rejected.
 The contract also requires failure diagnostics to emit only the HTTP status
 and a shape-validated PostgREST/SQLSTATE code. It rejects raw response-body
 printing; malformed or unexpected error envelopes must become `unclassified`.
+
+The same anonymous credential boundary polls the sitemap manifest for no more
+than 300 seconds, validates exactly 64 opaque descriptors, passes one cursor
+byte-for-byte into the shard RPC, validates both exhaustive JSON Schemas, and
+requires a forged cursor to return only the bounded `22023` envelope.
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py

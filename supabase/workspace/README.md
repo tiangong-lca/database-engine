@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: ac64c51
-lastReviewedNote: "Reviewed for the combined 271-migration Issue #532 card-context/Flow-geography and Issue #533 catalog-summary snapshot; generated workspace and public/api type ownership are unchanged."
+lastReviewedCommit: 712558e
+lastReviewedNote: "Reviewed for the 274-migration Issue #539 exact-version sitemap child, history reader, and SHA-pinned old-Preview fixture; generated workspace/type ownership is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
