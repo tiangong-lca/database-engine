@@ -202,6 +202,16 @@ def main() -> int:
         'assert_opaque_error 404 PGRST202',
         'assert_opaque_error 406 PGRST106',
         'p_actor_id p_team_id p_state_codes p_data_source',
+        'Verify anonymous Preview sitemap shard boundary',
+        'portal_sitemap_manifest_v1',
+        'portal_sitemap_shard_v1',
+        'portal.public-sitemap-manifest.v1.schema.json',
+        'portal.public-sitemap-shard.v1.schema.json',
+        'for _ in {1..60}',
+        'sleep 5',
+        '(.shards | length) == 64',
+        'all(.shards[]; .maxItems == 4096)',
+        '.code == "22023"',
     )
     failures.extend(
         f"Preview verification missing {token}"
@@ -241,6 +251,7 @@ def main() -> int:
         preview_workflow.find("- name: Apply exact Preview PostgREST runtime contract"),
         preview_workflow.find("- name: Read back exact Preview PostgREST runtime contract"),
         preview_workflow.find("- name: Verify anonymous Preview Hybrid boundary"),
+        preview_workflow.find("- name: Verify anonymous Preview sitemap shard boundary"),
     )
     if -1 not in preview_order and preview_order != tuple(sorted(preview_order)):
         failures.append(
@@ -270,7 +281,7 @@ def main() -> int:
     ):
         if forbidden_probe_credential in preview_probe:
             failures.append(
-                "anonymous Preview Hybrid probe must not contain "
+                "anonymous Preview probes must not contain "
                 f"{forbidden_probe_credential}"
             )
     for forbidden_probe_output in (
@@ -280,7 +291,7 @@ def main() -> int:
     ):
         if forbidden_probe_output in preview_probe:
             failures.append(
-                "anonymous Preview Hybrid diagnostics must not print the raw "
+                "anonymous Preview diagnostics must not print the raw "
                 f"response body via {forbidden_probe_output}"
             )
     if preview_key_step.count(
@@ -322,6 +333,7 @@ def main() -> int:
         "SUPABASE_DEV_PROJECT_ID",
         "SUPABASE_MAIN_PROJECT_ID",
         "supabase db reset --no-seed",
+        "supabase test db supabase/tests/20260827_portal_sitemap_shards_v1.sql",
         '"public", "api", "graphql_public"',
         '"public", "api", "extensions"',
         '"max_rows":1000',
