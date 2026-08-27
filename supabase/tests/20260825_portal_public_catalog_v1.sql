@@ -4221,7 +4221,6 @@ create temporary table portal_summary_search_cards_original on commit drop as
 select dataset_kind, id, version, card
 from private.portal_catalog_search_rows_v1;
 
-set local role api_internal_executor;
 update private.portal_catalog_search_rows_v1
 set card = card - 'classifications'
 where dataset_kind = 'process';
@@ -4234,7 +4233,6 @@ set card = pg_catalog.jsonb_set(
   true
 )
 where dataset_kind = 'flow';
-reset role;
 
 set local role anon;
 insert into portal_test_results (label, payload)
@@ -4253,14 +4251,12 @@ select extensions.ok(
   'summary omits one-character classification evidence instead of advertising a broad timeout-prone query'
 );
 
-set local role api_internal_executor;
 update private.portal_catalog_search_rows_v1 as target
 set card = original.card
 from portal_summary_search_cards_original as original
 where target.dataset_kind = original.dataset_kind
   and target.id = original.id
   and target.version = original.version;
-reset role;
 
 create temporary table portal_flow_201_original on commit drop as
 select json, json_ordered

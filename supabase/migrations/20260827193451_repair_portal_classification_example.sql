@@ -365,7 +365,7 @@ begin
          and routine.provolatile = 's'
          and routine.proparallel = 'r'
          and coalesce(routine.proconfig, '{}'::text[]) @> array[
-           'search_path=',
+           'search_path=""',
            'statement_timeout=2s',
            'work_mem=32MB',
            'plan_cache_mode=force_custom_plan',
