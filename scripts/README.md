@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-27
-lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for Issue #539: 274-file recovery/benchmark runners, fixed sitemap shards, exact-version FK-cascaded child, history-density plan gate, anonymous Preview gates, and 13-module Portal generation are current."
+lastReviewedAt: 2026-08-28
+lastReviewedCommit: ae3420a
+lastReviewedNote: "Reviewed for Issue #543: 275-file recovery/benchmark runners, executable summary classification example gate, fixed sitemap shards, anonymous Preview gates, and 13-module Portal generation are current."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -85,7 +85,7 @@ scripts/test_search_text_array_upgrade.sh
 
 ### `test_portal_projection_upgrade_recovery.sh`
 
-Exercises the Issue 531/532/539 Portal projection rollout against an explicitly
+Exercises the Issue 531/532/539/543 Portal projection rollout against an explicitly
 attested, isolated local Supabase project. It uses live concurrent connections
 to prove valid-update, delete, state-invalidation, key-change, and
 embedding-only races; forces card/facet reconcile lock-timeout and cutover-guard
@@ -104,12 +104,12 @@ See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries. Formal evidence additionally requires
 clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
-the complete 274-file migration tree.
+the complete 275-file migration tree.
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
 Rehearses the seven facet migrations verbatim over 126,246 pre-existing parent
-cards in the same explicitly isolated Issue-531/532/539 project. It requires every
+cards in the same explicitly isolated Issue-531/532/539/543 project. It requires every
 backfill statement to retain at least 2x headroom under its 120-second timeout,
 each complete UUID-quarter file to stay below 120 seconds, the successful
 reconcile fence to finish within five seconds, plus exact key coverage,
@@ -125,8 +125,8 @@ The runner always resets the isolated project to full HEAD on exit.
 
 Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
 fence, plan, and ANN-recall benchmark only against an explicitly attested
-Issue-531/532/539 local Supabase project. The runner byte-compares the complete
-274-file migration tree with the repository, writes into a new operator-selected private
+Issue-531/532/539/543 local Supabase project. The runner byte-compares the complete
+275-file migration tree with the repository, writes into a new operator-selected private
 directory, and resets the isolated database before and after the run so rolled
 back HNSW pages cannot accumulate. Its environment contract mirrors the
 recovery runner and additionally requires

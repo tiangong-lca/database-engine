@@ -1,13 +1,62 @@
-CREATE OR REPLACE FUNCTION "api"."portal_catalog_summary_v1"() RETURNS "jsonb"
-    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
-    SET "search_path" TO ''
-    SET "statement_timeout" TO '2s'
-    SET "work_mem" TO '32MB'
-    SET "plan_cache_mode" TO 'force_custom_plan'
-    SET "max_parallel_workers_per_gather" TO '0'
-    SET "jit" TO 'off'
-    SET "row_security" TO 'on'
-    AS $_$
+-- Issue #543: do not advertise a broad classification token that the public
+-- Search facade cannot execute inside its existing latency and timeout gates.
+
+begin;
+
+set local lock_timeout = '5s';
+set local statement_timeout = '30s';
+
+do $portal_catalog_summary_example_repair_prerequisite_guard$
+declare
+  v_summary regprocedure := pg_catalog.to_regprocedure(
+    'api.portal_catalog_summary_v1()'
+  );
+begin
+  if v_summary is null
+     or pg_catalog.to_regprocedure(
+       'private.portal_catalog_summary_label_v1(jsonb)'
+     ) is null
+     or pg_catalog.to_regprocedure(
+       'private.portal_catalog_summary_valid_cas_v1(text)'
+     ) is null
+     or pg_catalog.to_regclass(
+       'private.portal_catalog_summary_eligibility_v1_idx'
+     ) is null
+     or not exists (
+       select 1
+       from pg_catalog.pg_proc as routine
+       where routine.oid = v_summary
+         and routine.proowner = 'portal_public_executor'::regrole
+         and routine.prosecdef
+         and routine.provolatile = 's'
+     ) then
+    raise exception 'Portal catalog summary example repair prerequisites drifted'
+      using errcode = '55000';
+  end if;
+end
+$portal_catalog_summary_example_repair_prerequisite_guard$;
+
+grant portal_public_executor to postgres;
+grant create on schema api to portal_public_executor;
+set role portal_public_executor;
+
+select private.assert_portal_catalog_projection_contract_v1();
+select private.assert_portal_catalog_facet_contract_v1();
+
+create or replace function api.portal_catalog_summary_v1()
+returns jsonb
+language plpgsql
+stable
+parallel restricted
+security definer
+set search_path = ''
+set statement_timeout = '2s'
+set work_mem = '32MB'
+set plan_cache_mode = 'force_custom_plan'
+set max_parallel_workers_per_gather = '0'
+set jit = 'off'
+set row_security = 'on'
+as $function$
 declare
   v_counts jsonb;
   v_latest_modified_at text;
@@ -291,12 +340,81 @@ exception
   when others then
     raise exception using errcode = 'P0001', message = 'portal catalog unavailable';
 end
-$_$;
+$function$;
 
-ALTER FUNCTION "api"."portal_catalog_summary_v1"() OWNER TO "portal_public_executor";
+comment on function api.portal_catalog_summary_v1() is
+  'Bounded latest-visible public Process/Flow counts, timestamp, and deterministic executable R1 examples; classification examples require a non-broad code and prefer Process evidence.';
 
-REVOKE ALL ON FUNCTION "api"."portal_catalog_summary_v1"() FROM PUBLIC;
+reset role;
+revoke create on schema api from portal_public_executor;
+revoke portal_public_executor from postgres;
 
-GRANT ALL ON FUNCTION "api"."portal_catalog_summary_v1"() TO "anon";
+do $verify_portal_catalog_summary_example_repair$
+declare
+  v_routine regprocedure := 'api.portal_catalog_summary_v1()'::regprocedure;
+  v_summary jsonb;
+  v_classification jsonb;
+  v_search jsonb;
+begin
+  if not exists (
+       select 1
+       from pg_catalog.pg_proc as routine
+       where routine.oid = v_routine
+         and routine.proowner = 'portal_public_executor'::regrole
+         and routine.prosecdef
+         and routine.provolatile = 's'
+         and routine.proparallel = 'r'
+         and coalesce(routine.proconfig, '{}'::text[]) @> array[
+           'search_path=""',
+           'statement_timeout=2s',
+           'work_mem=32MB',
+           'plan_cache_mode=force_custom_plan',
+           'max_parallel_workers_per_gather=0',
+           'jit=off',
+           'row_security=on'
+         ]::text[]
+         and routine.prosrc ~ 'between 4 and 128'
+         and routine.prosrc ~ 'dataset_kind = ''process'''
+     )
+     or not pg_catalog.has_function_privilege(
+       'anon', v_routine, 'EXECUTE'
+     )
+     or not pg_catalog.has_function_privilege(
+       'authenticated', v_routine, 'EXECUTE'
+     )
+     or pg_catalog.has_function_privilege(
+       'service_role', v_routine, 'EXECUTE'
+     ) then
+    raise exception 'Portal catalog summary example repair contract drifted'
+      using errcode = '55000';
+  end if;
 
-GRANT ALL ON FUNCTION "api"."portal_catalog_summary_v1"() TO "authenticated";
+  v_summary := api.portal_catalog_summary_v1();
+  select example.value
+  into v_classification
+  from pg_catalog.jsonb_array_elements(v_summary -> 'examples') as example(value)
+  where example.value ->> 'queryKind' = 'classification';
+
+  if v_classification is not null then
+    if pg_catalog.length(v_classification ->> 'query') < 4 then
+      raise exception 'Portal summary emitted a broad classification example'
+        using errcode = '55000';
+    end if;
+    if v_classification ->> 'datasetKind' = 'process' then
+      v_search := api.portal_search_processes_v1(
+        v_classification ->> 'query', '{}'::jsonb, 'relevance', null, 20
+      );
+    else
+      v_search := api.portal_search_flows_v1(
+        v_classification ->> 'query', '{}'::jsonb, 'relevance', null, 20
+      );
+    end if;
+    if pg_catalog.jsonb_array_length(v_search -> 'items') = 0 then
+      raise exception 'Portal summary classification example is not executable'
+        using errcode = '55000';
+    end if;
+  end if;
+end
+$verify_portal_catalog_summary_example_repair$;
+
+commit;

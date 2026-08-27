@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."portal_catalog_summary_v1"() IS 'Bounded latest-visible public Process/Flow counts, timestamp, and deterministic executable R1 examples; classification examples require a non-broad code and prefer Process evidence.';

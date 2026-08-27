@@ -297,6 +297,8 @@ begin
 end
 $function$;
 
+grant portal_public_executor to postgres;
+
 select pg_temp.measure_portal_summary_writes(
   'baseline-without-index', 50
 );
@@ -409,6 +411,15 @@ create temporary table portal_summary_timings (
   primary key (profile, sample)
 ) on commit drop;
 
+create temporary table portal_summary_example_timings (
+  profile text not null,
+  sample integer not null,
+  dataset_kind text not null,
+  elapsed_ms numeric not null,
+  item_count integer not null,
+  primary key (profile, sample)
+) on commit drop;
+
 create function pg_temp.measure_portal_summary(
   p_profile text,
   p_samples integer
@@ -446,6 +457,70 @@ begin
 end
 $function$;
 
+create function pg_temp.measure_portal_summary_classification_example(
+  p_profile text,
+  p_samples integer
+)
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  v_sample integer;
+  v_started_at timestamptz;
+  v_summary jsonb;
+  v_example jsonb;
+  v_page jsonb;
+begin
+  v_summary := api.portal_catalog_summary_v1();
+  select example.value
+  into v_example
+  from pg_catalog.jsonb_array_elements(v_summary -> 'examples') as example(value)
+  where example.value ->> 'queryKind' = 'classification';
+  if v_example is null
+     or pg_catalog.length(v_example ->> 'query') < 4 then
+    raise exception 'Portal summary classification benchmark example is missing or broad'
+      using errcode = '54000';
+  end if;
+
+  for v_sample in 1..p_samples loop
+    v_started_at := pg_catalog.clock_timestamp();
+    if v_example ->> 'datasetKind' = 'process' then
+      v_page := private.portal_search_v1(
+        'process', v_example ->> 'query', '{}'::jsonb, 'relevance', null, 50
+      );
+    else
+      v_page := private.portal_search_v1(
+        'flow', v_example ->> 'query', '{}'::jsonb, 'relevance', null, 50
+      );
+    end if;
+    insert into pg_temp.portal_summary_example_timings (
+      profile,
+      sample,
+      dataset_kind,
+      elapsed_ms,
+      item_count
+    ) values (
+      p_profile,
+      v_sample,
+      v_example ->> 'datasetKind',
+      extract(
+        epoch from pg_catalog.clock_timestamp() - v_started_at
+      ) * 1000,
+      pg_catalog.jsonb_array_length(v_page -> 'items')
+    );
+  end loop;
+end
+$function$;
+
+grant execute on function pg_temp.measure_portal_summary_classification_example(
+  text,
+  integer
+) to portal_public_executor;
+grant insert, select on table pg_temp.portal_summary_example_timings
+to portal_public_executor;
+
 select pg_temp.measure_portal_summary(
   'no-cas-classification-evidence', :'benchmark_samples'::integer
 );
@@ -468,12 +543,18 @@ where dataset_kind = 'flow'
   );
 
 update private.portal_catalog_search_rows_v1
-set card = pg_catalog.jsonb_set(
-  card,
-  '{classifications}',
-  '[{"system":"benchmark","code":"SUMMARY-TAIL","label":[{"language":"en","value":"Tail classification"}]}]'::jsonb,
-  false
-)
+set document = document || E'\nsummary-tail',
+  card = pg_catalog.jsonb_set(
+    pg_catalog.jsonb_set(
+      card,
+      '{classifications}',
+      '[{"system":"benchmark","code":"SUMMARY-TAIL","label":[{"language":"en","value":"Tail classification"}]}]'::jsonb,
+      false
+    ),
+    '{document}',
+    pg_catalog.to_jsonb(document || E'\nsummary-tail'),
+    false
+  )
 where dataset_kind = 'process'
   and id = (
     select id
@@ -487,6 +568,11 @@ reset role;
 select pg_temp.measure_portal_summary(
   'tail-evidence', :'benchmark_samples'::integer
 );
+set local role portal_public_executor;
+select pg_temp.measure_portal_summary_classification_example(
+  'tail-evidence', :'benchmark_samples'::integer
+);
+reset role;
 
 set local role api_internal_executor;
 update private.portal_catalog_search_rows_v1
@@ -506,12 +592,18 @@ where dataset_kind = 'flow'
   );
 
 update private.portal_catalog_search_rows_v1
-set card = pg_catalog.jsonb_set(
-  card,
-  '{classifications}',
-  '[{"system":"benchmark","code":"SUMMARY-NORMAL","label":[{"language":"en","value":"Normal classification"}]}]'::jsonb,
-  false
-)
+set document = document || E'\nsummary-normal',
+  card = pg_catalog.jsonb_set(
+    pg_catalog.jsonb_set(
+      card,
+      '{classifications}',
+      '[{"system":"benchmark","code":"SUMMARY-NORMAL","label":[{"language":"en","value":"Normal classification"}]}]'::jsonb,
+      false
+    ),
+    '{document}',
+    pg_catalog.to_jsonb(document || E'\nsummary-normal'),
+    false
+  )
 where dataset_kind = 'process'
   and id = (
     select id
@@ -525,6 +617,11 @@ reset role;
 select pg_temp.measure_portal_summary(
   'normal', :'benchmark_samples'::integer
 );
+set local role portal_public_executor;
+select pg_temp.measure_portal_summary_classification_example(
+  'normal', :'benchmark_samples'::integer
+);
+reset role;
 
 select
   profile,
@@ -576,6 +673,50 @@ begin
   end loop;
 end
 $portal_summary_performance_guard$;
+
+select
+  profile,
+  pg_catalog.min(dataset_kind) as dataset_kind,
+  pg_catalog.round(
+    (
+      pg_catalog.percentile_cont(0.95) within group (order by elapsed_ms)
+    )::numeric,
+    3
+  ) as p95_ms,
+  pg_catalog.round(pg_catalog.max(elapsed_ms), 3) as maximum_ms,
+  pg_catalog.min(item_count) as minimum_items,
+  pg_catalog.max(item_count) as maximum_items
+from portal_summary_example_timings
+group by profile
+order by profile;
+
+do $portal_summary_example_performance_guard$
+declare
+  v_profile record;
+begin
+  for v_profile in
+    select profile,
+      pg_catalog.min(dataset_kind) as minimum_kind,
+      pg_catalog.max(dataset_kind) as maximum_kind,
+      pg_catalog.percentile_cont(0.95) within group (
+        order by elapsed_ms
+      ) as p95_ms,
+      pg_catalog.max(elapsed_ms) as maximum_ms,
+      pg_catalog.min(item_count) as minimum_items
+    from portal_summary_example_timings
+    group by profile
+  loop
+    if v_profile.minimum_kind <> 'process'
+       or v_profile.maximum_kind <> 'process'
+       or v_profile.p95_ms > 2000
+       or v_profile.maximum_ms > 8000
+       or v_profile.minimum_items < 1 then
+      raise exception 'Portal summary example benchmark failed for %', v_profile.profile
+        using errcode = '54000';
+    end if;
+  end loop;
+end
+$portal_summary_example_performance_guard$;
 
 explain (analyze, buffers, settings, format text)
 select distinct on (facet.dataset_kind, facet.id)
@@ -674,5 +815,23 @@ limit 1;
 
 explain (analyze, buffers, settings, format text)
 select api.portal_catalog_summary_v1();
+
+set local role portal_public_executor;
+explain (analyze, buffers, settings, format text)
+select private.portal_search_v1(
+  'process',
+  (
+    select example.value ->> 'query'
+    from pg_catalog.jsonb_array_elements(
+      api.portal_catalog_summary_v1() -> 'examples'
+    ) as example(value)
+    where example.value ->> 'queryKind' = 'classification'
+  ),
+  '{}'::jsonb,
+  'relevance',
+  null,
+  50
+);
+reset role;
 
 rollback;

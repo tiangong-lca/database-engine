@@ -29,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-27
-lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for Issue #539 fixed sitemap shards, exact-version FK-cascaded child, history-ordered reader, atomic 134103 replacement, and its SHA-pinned old-Preview fixture."
+lastReviewedAt: 2026-08-28
+lastReviewedCommit: ae3420a
+lastReviewedNote: "Reviewed for Issue #543 optional non-broad classification examples, Process-first selection, dynamic public-Search benchmark, and no new projection/writer surface."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -402,6 +402,17 @@ the independent live Facet manifest on every matching request. It does not add a
 geography index—the representative filter matches the full Flow universe, so
 such an index would add writer/storage cost without selectivity—and all other
 Search filters continue through the general exhaustive card-facts path.
+
+The catalog summary is a bounded consumer of the same synchronized projections,
+not a separate search index. UUID and CAS examples keep their exact evidence
+rules. A classification example is optional, requires a trimmed public code of
+at least four characters, and prefers Process evidence before Flow evidence so
+the homepage does not advertise a one-character near-universe query. The
+representative benchmark resolves that emitted example dynamically and executes
+it through the matching public Search wrapper for 20 samples under the existing
+2-second p95 and 8-second hard timeout. Missing eligible evidence omits the
+example; it never authorizes a placeholder, private fallback, timeout increase,
+new writer path, or unmeasured index.
 
 This contract assumes privileged DDL is delivered only through the governed
 migration and CI path. The live digest proves current definitions, not the

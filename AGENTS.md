@@ -36,9 +36,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-27
-lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for Issue #539 exact-version sitemap child, SHA-pinned old-Preview forward fixture, and bounded independent Preview verification; ownership and delivery boundaries remain unchanged."
+lastReviewedAt: 2026-08-28
+lastReviewedCommit: 9e1304e
+lastReviewedNote: "Reviewed for Issue #543 summary-selected classification execution, unchanged Search/timeout budgets, and function-only repair; ownership and delivery boundaries remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -116,6 +116,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - PostgREST exposes `public` and `api`; entity access keeps `public` as the default profile, while RPC callers must select the `api` profile explicitly
 - anonymous Portal numerics come only from immutable publication-bound typed projections; Search, Detail, and Versions derive `lciaVisible` and Detail publication context from the same current finalized non-revoked predicate as the numeric reader; Search and Hybrid add their shared public card context only after ordering and limit by exact `kind/id/version` source lookup through one manifest-guarded allowlist helper, with no second projection or writer hook; V3 Worker staging and package readiness are service-only and lease-fenced, predictable package/result/projection drift is rejected before insert, every unexpected post-insert validation failure rolls back the insert and temporary job-schema mutation, an immediate exact retry may recover only a fully matching committed package, and a reclaimed Worker may use the current job lease for locator-free readback of the immutable package/old prepared projection without reusing the old projection lease; package publish prepare/command and projection prepare/finalize re-run the same authoritative binding guard before advancement, while raw projection/artifact tables never gain browser access
 - empty-query, geography-only Flow Search reuses the synchronized narrow Facet child for latest/filter/cursor/order/limit before hydrating at most 51 parent cards; it adds no index, relation, Trigger, or writer work and every other Search shape retains the general card-facts path
+- Portal catalog-summary classification examples require a public code of at least four characters and prefer Process evidence; the representative benchmark must execute the emitted example through its declared public Search RPC for 20 samples under the unchanged 2-second p95 and 8-second hard timeout
 - `supabase/seed.sql` must remain an executable SQL batch even when it seeds no rows; retain a data-neutral no-op rather than comments only
 - hosted mutation E2E assets under `supabase/tests/preview/**` are exact-Preview, disposable test paths; their complete actor, credential, recovery, and cleanup proof requirements live in `docs/agents/repo-validation.md`
 - migration authoring starts from Git `dev`, not GitHub default-branch UI
