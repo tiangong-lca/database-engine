@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: 9e1304e
+lastReviewedCommit: ae3420a
 lastReviewedNote: "已为 275-migration Issue #543 function-only Portal catalog-summary example repair 复核；generated workspace/type 所有权保持不变。"
 related:
   - ../../AGENTS.md

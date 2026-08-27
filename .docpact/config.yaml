@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-28"
-lastReviewedCommit: "9e1304e"
+lastReviewedCommit: "ae3420a"
 lastReviewedNote: "Reviewed for Issue #543: 275 migrations, executable Portal summary example gates, 13 generated modules, retained sitemap recovery, and representative Search budgets."
 
 # Keep deterministic governance facts here.

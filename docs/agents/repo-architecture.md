@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: 9e1304e
+lastReviewedCommit: ae3420a
 lastReviewedNote: "Reviewed for Issue #543 optional non-broad classification examples, Process-first selection, dynamic public-Search benchmark, and no new projection/writer surface."
 related:
   - ../../AGENTS.md
