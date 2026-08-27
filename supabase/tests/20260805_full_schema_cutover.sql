@@ -68,7 +68,7 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  272::bigint,
+  273::bigint,
   'api contains the active cutover functions, reviewed consumer facades, Database A Search RPCs, and Portal catalog/LCIA/Hybrid facades'
 );
 
@@ -80,7 +80,7 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  281::bigint,
+  283::bigint,
   'private contains the active helpers, Database B/reuse helpers, and reviewed Portal catalog/LCIA/Hybrid internals'
 );
 
