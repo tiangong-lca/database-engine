@@ -61,6 +61,7 @@ jobs:
           supabase test db supabase/tests/20260826_portal_public_hybrid_search_v1.sql
           supabase test db supabase/tests/20260826_portal_candidate_first_search.sql
           supabase test db supabase/tests/20260827_portal_card_context_v1.sql
+          supabase test db supabase/tests/20260827_portal_sitemap_shards_v1.sql
           supabase test db supabase/tests/20260623_data_product_publication_mvp.sql
           supabase test db supabase/tests/20260716_lci_lcia_release_control_plane.sql
           scripts/test_full_schema_cutover_upgrade.sh
@@ -436,6 +437,7 @@ jobs:
           exit 1
 
       - name: Read enabled Preview public API key
+        id: preview_api_key
         if: steps.preview_authority.outputs.available == 'true'
         shell: bash
         env:
@@ -499,9 +501,17 @@ jobs:
           rest_url="https://$PREVIEW_PROJECT_REF.supabase.co/rest/v1"
           response_file="$RUNNER_TEMP/portal-hybrid-preview-response.json"
 
-          for _ in {1..30}; do
-            response_status="$(
+          probe_deadline=$((SECONDS + 300))
+          response_status=000
+          while (( SECONDS < probe_deadline )); do
+            remaining_seconds=$((probe_deadline - SECONDS))
+            request_timeout=15
+            (( remaining_seconds < request_timeout )) \
+              && request_timeout="$remaining_seconds"
+            if ! response_status="$(
               curl --silent --show-error \
+                --connect-timeout 5 \
+                --max-time "$request_timeout" \
                 --output "$response_file" \
                 --write-out '%{http_code}' \
                 --request POST \
@@ -510,9 +520,16 @@ jobs:
                 --header "Content-Type: application/json" \
                 --data "$request_payload" \
                 "$rest_url/rpc/portal_hybrid_search_v1"
-            )"
+            )"; then
+              response_status=000
+            fi
             [[ "$response_status" == "200" ]] && break
-            sleep 2
+            remaining_seconds=$((probe_deadline - SECONDS))
+            (( remaining_seconds > 0 )) || break
+            sleep_seconds=5
+            (( remaining_seconds < sleep_seconds )) \
+              && sleep_seconds="$remaining_seconds"
+            sleep "$sleep_seconds"
           done
           if [[ "$response_status" != "200" ]]; then
             sanitized_error_code="$(
@@ -546,6 +563,8 @@ jobs:
             shift 3
             response_status="$(
               curl --silent --show-error \
+                --connect-timeout 5 \
+                --max-time 30 \
                 --output "$response_file" \
                 --write-out '%{http_code}' \
                 "$@"
@@ -607,3 +626,140 @@ jobs:
             --header "Content-Type: application/json" \
             --data "$request_payload" \
             "$rest_url/rpc/portal_hybrid_search_v1"
+
+      - name: Verify anonymous Preview sitemap shard boundary
+        if: >-
+          always()
+          && steps.preview_authority.outputs.available == 'true'
+          && steps.preview_api_key.outcome == 'success'
+        shell: bash
+        env:
+          PREVIEW_PROJECT_REF: ${{ steps.preview_project.outputs.ref }}
+        run: |
+          rest_url="https://$PREVIEW_PROJECT_REF.supabase.co/rest/v1"
+          manifest_file="$RUNNER_TEMP/portal-sitemap-manifest-preview.json"
+          shard_file="$RUNNER_TEMP/portal-sitemap-shard-preview.json"
+
+          sanitize_error_code() {
+            local response_file="$1"
+            jq -er '
+              select(
+                type == "object"
+                and ((keys - ["code", "details", "hint", "message"]) | length == 0)
+                and (.code | type == "string")
+                and (.code | test("^(PGRST[0-9]{3}|[0-9A-Z]{5})$"))
+              )
+              | .code
+            ' "$response_file" 2>/dev/null || printf '%s' unclassified
+          }
+
+          probe_deadline=$((SECONDS + 300))
+          manifest_status=000
+          while (( SECONDS < probe_deadline )); do
+            remaining_seconds=$((probe_deadline - SECONDS))
+            request_timeout=15
+            (( remaining_seconds < request_timeout )) \
+              && request_timeout="$remaining_seconds"
+            if ! manifest_status="$(
+              curl --silent --show-error \
+                --connect-timeout 5 \
+                --max-time "$request_timeout" \
+                --output "$manifest_file" \
+                --write-out '%{http_code}' \
+                --request POST \
+                --header "apikey: $PREVIEW_PUBLIC_API_KEY" \
+                --header "Content-Profile: api" \
+                --header "Content-Type: application/json" \
+                --data '{}' \
+                "$rest_url/rpc/portal_sitemap_manifest_v1"
+            )"; then
+              manifest_status=000
+            fi
+            [[ "$manifest_status" == "200" ]] && break
+            remaining_seconds=$((probe_deadline - SECONDS))
+            (( remaining_seconds > 0 )) || break
+            sleep_seconds=5
+            (( remaining_seconds < sleep_seconds )) \
+              && sleep_seconds="$remaining_seconds"
+            sleep "$sleep_seconds"
+          done
+          if [[ "$manifest_status" != "200" ]]; then
+            sanitized_error_code="$(sanitize_error_code "$manifest_file")"
+            echo "anonymous sitemap manifest probe returned HTTP $manifest_status with sanitized code $sanitized_error_code" >&2
+            exit 1
+          fi
+
+          npx --yes \
+            --package ajv-cli@5.0.0 \
+            --package ajv-formats@3.0.1 \
+            ajv validate --spec=draft2020 --strict=true -c ajv-formats \
+            -s contracts/portal/portal.public-sitemap-manifest.v1.schema.json \
+            -d "$manifest_file"
+          jq -e '
+            .schemaVersion == "portal.public-sitemap-manifest.v1"
+            and (.shards | length) == 64
+            and ([.shards[].shardCursor] | unique | length) == 64
+            and all(.shards[]; .maxItems == 4096)
+          ' "$manifest_file" >/dev/null
+
+          shard_cursor="$(jq -er '.shards[0].shardCursor' "$manifest_file")"
+          shard_payload="$(
+            jq -cn --arg shard_cursor "$shard_cursor" '{
+              p_shard_cursor: $shard_cursor
+            }'
+          )"
+          shard_status="$(
+            curl --silent --show-error \
+              --connect-timeout 5 \
+              --max-time 30 \
+              --output "$shard_file" \
+              --write-out '%{http_code}' \
+              --request POST \
+              --header "apikey: $PREVIEW_PUBLIC_API_KEY" \
+              --header "Content-Profile: api" \
+              --header "Content-Type: application/json" \
+              --data "$shard_payload" \
+              "$rest_url/rpc/portal_sitemap_shard_v1"
+          )"
+          if [[ "$shard_status" != "200" ]]; then
+            sanitized_error_code="$(sanitize_error_code "$shard_file")"
+            echo "anonymous sitemap shard probe returned HTTP $shard_status with sanitized code $sanitized_error_code" >&2
+            exit 1
+          fi
+
+          npx --yes \
+            --package ajv-cli@5.0.0 \
+            --package ajv-formats@3.0.1 \
+            ajv validate --spec=draft2020 --strict=true -c ajv-formats \
+            -r contracts/portal/portal.common-types.v1.schema.json \
+            -r contracts/portal/portal.public-sitemap-page.v1.schema.json \
+            -s contracts/portal/portal.public-sitemap-shard.v1.schema.json \
+            -d "$shard_file"
+          jq -e --arg shard_cursor "$shard_cursor" '
+            .schemaVersion == "portal.public-sitemap-shard.v1"
+            and .shardCursor == $shard_cursor
+            and (.items | length) <= 4096
+          ' "$shard_file" >/dev/null
+
+          invalid_file="$RUNNER_TEMP/portal-sitemap-invalid-cursor.json"
+          invalid_status="$(
+            curl --silent --show-error \
+              --connect-timeout 5 \
+              --max-time 30 \
+              --output "$invalid_file" \
+              --write-out '%{http_code}' \
+              --request POST \
+              --header "apikey: $PREVIEW_PUBLIC_API_KEY" \
+              --header "Content-Profile: api" \
+              --header "Content-Type: application/json" \
+              --data '{"p_shard_cursor":"not-a-cursor"}' \
+              "$rest_url/rpc/portal_sitemap_shard_v1"
+          )"
+          [[ "$invalid_status" == "400" ]]
+          jq -e '
+            type == "object"
+            and .code == "22023"
+            and ((keys - ["code", "details", "hint", "message"]) | length == 0)
+            and (has("schemaVersion") | not)
+            and (has("items") | not)
+          ' "$invalid_file" >/dev/null

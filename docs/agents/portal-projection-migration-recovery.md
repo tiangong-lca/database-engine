@@ -1,7 +1,7 @@
 ---
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: ac64c51
-lastReviewedNote: "Reviewed after combining Issue #532 with the three Issue #533 summary migrations: the 271-file tree, concurrent-index recovery, runtime manifests, and Issue #531 recovery boundary are explicit."
+lastReviewedCommit: 712558e
+lastReviewedNote: "Reviewed for Issue #539: the 274-file tree, exact-version FK-cascaded sitemap child, history-ordered reader, and atomic 134103 forward replacement are explicit."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -14,6 +14,7 @@ whenToUse:
   - when a concurrent Portal projection index is INVALID or exists without migration history
   - when validating retry safety for the Portal projection rollout
   - when an Issue 533 Portal catalog-summary eligibility index stops before its guard or façade migration completes
+  - when an Issue 539 Portal sitemap exact-version child rollout stops before its public façade migration completes
 whenToUpdate:
   - when the Portal projection migration sequence or recovery test changes
 checkPaths:
@@ -40,10 +41,16 @@ checkPaths:
   - supabase/migrations/20260827020006_portal_facet_projection_cutover.sql
   - supabase/migrations/20260827021441_portal_card_context_decorator.sql
   - supabase/migrations/20260827134100_optimize_portal_flow_geography_search.sql
+  - supabase/migrations/20260827134101_portal_sitemap_latest_projection.sql
+  - supabase/migrations/20260827134102_portal_sitemap_shard_contract.sql
+  - supabase/migrations/20260827134103_portal_sitemap_concurrency_repair.sql
   - supabase/migrations/20260827050000_portal_catalog_summary_eligibility_index.sql
   - supabase/migrations/20260827050001_portal_catalog_summary_eligibility_guard.sql
   - supabase/migrations/20260827050002_portal_catalog_summary_v1.sql
   - supabase/tests/benchmarks/20260827_portal_catalog_summary_cardinality.sql
+  - supabase/tests/20260827_portal_sitemap_shards_v1.sql
+  - supabase/tests/upgrade/20260827_portal_sitemap_preview_winner_fixture.sql
+  - supabase/tests/benchmarks/20260827_portal_sitemap_shards_cardinality.sql
 related:
   - ../../AGENTS.md
   - repo-validation.md
@@ -53,15 +60,16 @@ related:
 
 # Portal Projection Migration Recovery
 
-This runbook covers only the additive Issue 531 Portal projection rollout and
-the narrow Issue 533 catalog-summary eligibility index layered on top of it. It
-does not authorize production mutation, migration-history edits, or deletion
-of an applied migration. Use the repository's normal tracked-delivery and
-Supabase branch controls before any hosted action.
+This runbook covers only the additive Issue 531 Portal projection rollout, the
+narrow Issue 533 catalog-summary eligibility index, and the Issue 539 sitemap
+exact-version child layered on top of the same synchronized facet projection.
+It does not authorize production mutation, migration-history edits, or
+deletion of an applied migration. Use the repository's normal tracked-delivery
+and Supabase branch controls before any hosted action.
 
 ## Safe rollout states
 
-The rollout has six observable boundaries:
+The rollout has nine observable boundaries:
 
 1. `20260826060422` installs the immutable v1 derivation-contract registry,
    private projection, dormant projection Hybrid kernel, and source-table sync
@@ -106,13 +114,38 @@ The rollout has six observable boundaries:
    its two ACL-closed validation helpers. Counts and latest timestamp continue
    reading the narrow facet projection; no existing card/facet manifest,
    source trigger, table, or index changes.
+8. `20260827134101` transactionally creates
+   `private.portal_sitemap_rows_v1` with one row per public facet version, the
+   primary key `(dataset_kind,id,version)`, and an exact-key FK to the facet
+   child with `ON UPDATE RESTRICT` and `ON DELETE CASCADE`. Its sole
+   `AFTER INSERT OR UPDATE` trigger upserts only the affected exact version;
+   DELETE requires no sitemap trigger because the FK cascade removes that exact
+   child. One set-based backfill proves exact row parity. The ordered index
+   `(shard_no,contract_version,dataset_kind,id,version DESC,modified_at DESC)`
+   supplies both the physical bucket filter and current-version selection.
+   `20260827134102` then exposes the constant 64-row opaque manifest and the
+   output/timeout-bounded shard reader. The reader uses
+   `DISTINCT ON (dataset_kind,id)` in index order, so scan work grows with
+   retained version history even though the response remains capped at 4,096
+   identities and 2 MiB. The retained `portal_sitemap_entries_v1` function
+   remains byte-identical.
+9. `20260827134103_portal_sitemap_concurrency_repair.sql` is the atomic forward
+   repair for the first PR Preview winner-table shape. It locks the sole facet
+   writer, creates and fully backfills an exact-version shadow child, rebinds
+   the assertion and public shard reader, then drops the obsolete winner table,
+   delete/upsert helpers, and triggers before committing. Fresh databases
+   already receive the final exact-version child from `20260827134101` and take
+   the no-drift path. The rebound reader also compares cursor bytes with a fresh
+   encoding of the exact expected object, rejecting JSONB-equivalent
+   numeric-scale variants.
 
 The card expand/reconcile/cutovers and all facet expand/backfill/reconcile/
 cutover files are explicit transactions. A statement or guard failure rolls
-back the entire file. Each concurrent index file contains exactly one
+back the entire file. Each pre-existing concurrent index file contains exactly one
 non-transactional `CREATE INDEX CONCURRENTLY` statement. Source vectors,
 embedding triggers, and duplicate projection HNSW indexes are intentionally
-absent.
+absent. The sitemap covering index is created normally while its new table is
+empty, so it has no INVALID live-index recovery state.
 
 Search, Hybrid, and Facets call the v1 manifest guard once per request. The
 guard compares the committed registry SHA-256 with the live definitions,
@@ -205,7 +238,8 @@ where (
       'portal_catalog_search_process_document_v1_pgroonga',
       'portal_catalog_search_flow_document_v1_pgroonga',
       'portal_catalog_facet_rows_v1_pkey',
-      'portal_catalog_facet_rows_latest_v1_idx'
+      'portal_catalog_facet_rows_latest_v1_idx',
+      'portal_sitemap_rows_shard_v1_idx'
     )
   ) or (
     namespace.nspname = 'public'
@@ -227,11 +261,13 @@ from pg_catalog.pg_trigger as trigger
 where trigger.tgrelid in (
     'public.processes'::regclass,
     'public.flows'::regclass,
-    'private.portal_catalog_search_rows_v1'::regclass
+    'private.portal_catalog_search_rows_v1'::regclass,
+    'private.portal_catalog_facet_rows_v1'::regclass
   )
   and trigger.tgname in (
     'portal_catalog_projection_content_sync_v1',
-    'portal_catalog_facet_sync_v1'
+    'portal_catalog_facet_sync_v1',
+    'portal_sitemap_rows_sync_v1'
   )
 order by source_table, trigger.tgname;
 
@@ -397,6 +433,40 @@ already recorded, do not drop or rename the index and do not edit migration
 history. Preserve the exact ledger/index/function evidence and repair through
 a separately reviewed forward migration.
 
+The Portal sitemap rollout has a three-file transactional boundary. The expand
+file creates the exact-version child, composite primary/FK keys, ordered shard
+index, one exact-key `AFTER INSERT OR UPDATE` upsert trigger, full backfill, and
+row-parity proof in one transaction. Exact-version DELETE cleanup is owned by
+the FK cascade. Ordinary failure rolls all of them back.
+A database COMMIT followed by a missing `20260827134101` ledger row is not
+blind-idempotent: normal retry must fail on the existing table/function. On a
+hosted branch, do not delete a subset or edit history; retain the exact ledger,
+table/index/FK, sole trigger/helper, row parity, and public-RPC absence evidence,
+then use a separately reviewed forward repair. Only the explicitly disposable
+isolated recovery project may reset to `20260827134100` and repeat the unchanged
+expand.
+
+The `20260827134102` public cutover is also transactional. A missing or disabled
+exact-key trigger, missing/invalid history-order index, PK/FK/helper drift, or an
+initial shard above 4,096 fails before exposing either RPC. The shard function
+must retain exact canonical cursor re-encoding, `DISTINCT ON` current-version
+selection, the 4,096-item and 2-MiB response limits, and its four-second timeout.
+Restoring an unrecorded metadata rename inside the isolated recovery fixture and
+repeating the unchanged migration is valid; an applied hosted expand with real
+definition/data drift requires forward repair. Capacity overflow after cutover
+is never migration or index corruption and never authorizes cleanup: facet and
+sitemap-child writes continue, only the affected shard remains fail closed, and
+expansion requires a separately versioned reshard contract.
+
+`20260827134103_portal_sitemap_concurrency_repair.sql` is that checked-in
+Preview forward repair, not permission for manual cleanup. While holding the
+sole facet-writer fence, it creates the shadow exact-version child and index,
+fully backfills it, installs the sole exact-key upsert trigger, rebinds the
+assertion and reader, and drops the obsolete winner table/helpers before one
+atomic commit. Preserve and escalate any prerequisite or convergence failure;
+do not expose a partially backfilled child, retain an obsolete helper, split the
+reader swap from old-object retirement, or edit history to force the repair.
+
 ## Uncertain expand commit
 
 The expand migration is transactional, so ordinary SQL failure leaves no Issue
@@ -493,7 +563,7 @@ Issue 531 Supabase project. It resets that local project and must never target a
 shared checkout, Preview, persistent Dev, or production.
 
 Formal recovery evidence requires clean HEAD, the reviewed Supabase CLI
-`2.109.1`, and byte equality plus one aggregate SHA-256 across all 271 migration
+`2.109.1`, and byte equality plus one aggregate SHA-256 across all 274 migration
 files in the repository and isolated project. Comparing only Issue 531 files is
 not sufficient because an earlier baseline change can alter recovery behavior.
 
@@ -513,7 +583,25 @@ same-name index cleanup without history edits, cutover guard rollback,
 post-cutover Flow eligibility build/guard recovery, facet expand COMMIT/history
 failure, facet shard idempotent retry, facet reconcile lock rollback, facet
 cutover parity rollback, parent-trigger/FK-cascade convergence, successful
-retry, and no-op repeat without rebuilding the seven recorded indexes.
+retry, and no-op repeat without rebuilding the eight recorded indexes.
+
+The same runner also resets to `20260827134100` and proves the sitemap expand
+COMMIT/history gap requires an explicit disposable-project reset. It then
+renames the recorded covering index to force public-cutover rollback, proves
+both RPCs remain absent, restores the unrecorded metadata name, applies the
+unchanged cutover plus `20260827134103` forward repair, and validates the exact
+exact-version child PK/FK/index, sole trigger/helper, absence of obsolete winner
+objects, and final 64-descriptor manifest. It then exercises exact concurrent
+inserts, updates, and deletes across versions of the same identity. Every writer
+must commit through the parent/facet transaction and FK cascade without a
+writer-side retry, while the sitemap child remains exactly equal to the
+committed public facet-version set. Its no-op pass includes the history index
+OID so a recorded retry cannot rebuild it. Canonical cursor evidence also
+rejects alternate numeric scales such as `1.0` and `64.0`.
+It separately loads the SHA-pinned exact `343b7a1` two-migration Preview fixture
+over a populated v1/v2 identity, records only those two isolated ledger rows,
+and proves `20260827134103` alone preserves both exact versions while switching
+the public reader to v2 and retiring every old winner object.
 
 The separate populated-upgrade runner resets the same kind of isolated project
 to `20260827010003`, inserts 17,299 Process plus 108,947 Flow parent cards, and
@@ -522,7 +610,21 @@ must finish within 60 seconds, preserving at least 2x headroom under its
 authored 120-second statement timeout, and each complete file must finish
 within 120 seconds. Reconcile must complete within five seconds, and final
 key coverage, deterministic sampled fact parity, and aggregate DTO counts must
-be exact. The pgTAP suite remains the exhaustive semantic equality oracle.
+be exact. The runner then applies `20260827134101`, `20260827134102`, and
+`20260827134103` over all 126,246 rows with 60/15/15-second evidence budgets and
+120/30/30-second outer timeouts. It requires exact facet/sitemap version-row
+parity, the composite PK and exact `ON UPDATE RESTRICT`/`ON DELETE CASCADE` FK,
+the ordered history index, the sole exact-key trigger, the 4,096-identity shard
+cap, and both public sitemap RPCs. The pgTAP suite remains the exhaustive
+semantic equality oracle.
+
+The representative single-version benchmark retains 126,246 exact rows, a
+largest shard of 2,066 identities, and roughly 11 ms shard-read p95. Its
+history-density probe materializes 2,048 identities with 64 versions each
+(131,072 rows). The natural `DISTINCT ON` plan must use the history-order index
+as an index-only path, contain no `Sort` or `Incremental Sort`, spill no temp
+data, and finish below four seconds. These gates make the retained-history scan
+cost explicit rather than describing the reader as constant-cost.
 
 ```bash
 PORTAL_FACET_UPGRADE_TARGET=local-isolated \

@@ -32,8 +32,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: ac64c51
-lastReviewedNote: "Reviewed for the combined Issue #532/#533 271-migration reset, 11-module generation, Portal pgTAP, exact-50 Search, Facet-manifest drift, and catalog-summary performance evidence."
+lastReviewedCommit: 712558e
+lastReviewedNote: "Reviewed for Issue #539: 274-migration reset, 13-module generation, exact-version FK-cascaded sitemap child, history-density plan gate, and anonymous Preview transport gates."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -169,6 +169,53 @@ time. The benchmark's separate temporary writer probe must compare 50
 four-update samples before and after only the combined eligibility index; it
 must not drop, rebuild, truncate, or rewrite the real Portal projection while
 collecting incremental writer evidence.
+
+For the bounded Portal sitemap shards, run
+`supabase/tests/20260827_portal_sitemap_shards_v1.sql` and the existing
+`20260825_portal_public_catalog_v1.sql` after a blank reset. The manifest must
+return exactly 64 byte-stable, unique opaque cursors with a fixed 4,096-item
+limit. Calling every descriptor must produce a globally disjoint union equal
+to the retained latest-visible sitemap set; the legacy façade remains
+byte-identical. A 4,097th latest identity must still commit to the synchronized
+exact-version child while only that shard read fails closed, and removing it
+must restore the page immediately. Prove the child has one row per public facet
+version, primary key `(dataset_kind,id,version)`, an exact-key FK with
+`ON UPDATE RESTRICT`/`ON DELETE CASCADE`, one `AFTER INSERT OR UPDATE` exact-key
+upsert trigger, and no DELETE-side sitemap helper.
+
+Run `supabase/tests/benchmarks/20260827_portal_sitemap_shards_cardinality.sql`
+only on a uniquely named isolated local project with exactly 17,299 Process
+rows, 108,947 Flow rows, and 20 samples. Require all 126,246 identities exactly
+once, every shard at or below 4,096, manifest p95 at or below 250 ms, largest
+shard p95 at or below 2 seconds, each call below the function's four-second
+timeout, response JSON below 2 MiB, and a conservative rendered-XML estimate
+below 6 MiB. The base 126,246-row single-version fixture must retain a largest
+shard of 2,066 identities; the recorded shard-read p95 is approximately 11 ms.
+The production-shape plan must naturally name
+`portal_sitemap_rows_shard_v1_idx`, avoid a full child-table sequential scan,
+and spill no temp data. Record index build time/bytes plus 20-sample writer p95
+before/after the physical index and sole exact-version upsert trigger.
+
+Add the history-density proof with exactly 2,048 identities and 64 versions per
+identity (131,072 rows). Its natural `DISTINCT ON (dataset_kind,id)` plan must
+use the exact history-order index as an index-only path, contain no `Sort` or
+`Incremental Sort`, spill no temp data, and finish below four seconds. The
+reader's output and timeout remain bounded, but the plan evidence must state
+that scanned rows grow with retained version history.
+
+The `20260827134103` recovery proof must show one atomic facet-writer fence,
+shadow creation, full backfill, assertion/reader replacement, and retirement of
+the obsolete winner table/helpers. The checked-in SHA-pinned old-Preview fixture
+must prove an already-recorded populated `134101`/`134102` shape advances by
+applying only `134103`. Real same-identity exact-version concurrency
+must leave exact facet/child parity with every writer committed and no writer
+retry. Preview then uses only the enabled publishable or legacy anon `apikey`,
+polls no longer than 300 seconds, strictly validates both new JSON Schemas, and
+passes one manifest cursor back byte-for-byte; Portal #12 owns final Next/CDN
+XML and five-minute visibility proof. Canonical-cursor tests must also reject
+JSONB-equivalent alternate numeric
+scales (`1.0`, `64.0`) by comparing input with the freshly encoded expected
+object, not JSONB equality alone.
 
 ## SQL And Offline Node Contract Notes
 

@@ -1649,6 +1649,11 @@ export type Database = {
         Args: { p_cursor?: string; p_kind: string; p_limit?: number }
         Returns: Json
       }
+      portal_sitemap_manifest_v1: { Args: never; Returns: Json }
+      portal_sitemap_shard_v1: {
+        Args: { p_shard_cursor: string }
+        Returns: Json
+      }
       processes_embedding_ft_input: {
         Args: { proc: Database["public"]["Tables"]["processes"]["Row"] }
         Returns: string
