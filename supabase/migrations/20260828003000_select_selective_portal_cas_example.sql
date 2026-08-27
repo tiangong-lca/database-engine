@@ -410,7 +410,7 @@ comment on function api.portal_catalog_summary_v1() is
 
 reset role;
 revoke create on schema api from portal_public_executor;
-revoke portal_public_executor from postgres;
+set role portal_public_executor;
 
 do $verify_portal_catalog_summary_selective_cas$
 declare
@@ -516,5 +516,8 @@ begin
   end if;
 end
 $verify_portal_catalog_summary_selective_cas$;
+
+reset role;
+revoke portal_public_executor from postgres;
 
 commit;
