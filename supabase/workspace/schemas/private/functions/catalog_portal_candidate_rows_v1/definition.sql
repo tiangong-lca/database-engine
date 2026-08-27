@@ -167,6 +167,9 @@ begin
         ) = 'string'
         and projection.card ->> 'casNumber' ~
           '^[0-9]{2,7}-[0-9]{2}-[0-9]$'
+        and pg_catalog.length(
+          projection.card ->> 'casNumber'
+        ) between 7 and 12
         and projection.card ->> 'casNumber' = p_query
     ), latest_rows as materialized (
       select latest.id,

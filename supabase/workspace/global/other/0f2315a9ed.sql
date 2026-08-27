@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."catalog_portal_candidate_rows_v1"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text") IS 'Seven static kind/query branches: valid Flow CAS uses length-isolated exact partial-index keys with latest-version recheck; all empty, UUID, and ordinary lexical paths retain their existing behavior.';
