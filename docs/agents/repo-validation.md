@@ -156,6 +156,20 @@ record index validity/size, database size before/after when available, and both
 advisor classes. Process remains index-free unless separate hosted evidence
 justifies shared write amplification.
 
+For the Portal catalog summary, run
+`supabase/tests/benchmarks/20260827_portal_catalog_summary_cardinality.sql`
+only against a uniquely named isolated local project with
+`benchmark_target=local`, exactly 17,299 Process rows, 108,947 Flow rows, and
+20 samples per profile. `normal`, `tail-evidence`, and
+`no-cas-classification-evidence` must each keep p95 at or below 250 ms and the
+response below 16 KiB. The CAS and classification plans must naturally name
+`portal_catalog_summary_eligibility_v1_idx`, with no sequential card scan or
+temp spill under the façade's 32-MB workspace. Record the index bytes and build
+time. The benchmark's separate temporary writer probe must compare 50
+four-update samples before and after only the combined eligibility index; it
+must not drop, rebuild, truncate, or rewrite the real Portal projection while
+collecting incremental writer evidence.
+
 ## SQL And Offline Node Contract Notes
 
 The repo stores SQL assertions and narrow offline Node contracts under `supabase/tests/**`.

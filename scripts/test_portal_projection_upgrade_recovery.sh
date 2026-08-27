@@ -26,9 +26,9 @@ fi
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 268 \
-   || "${#test_migrations[@]}" -ne 268 ]]; then
-  echo "complete migration tree must contain exactly 268 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 271 \
+   || "${#test_migrations[@]}" -ne 271 ]]; then
+  echo "complete migration tree must contain exactly 271 files" >&2
   exit 2
 fi
 migration_manifest_payload=""
@@ -211,7 +211,7 @@ fi
 echo "Supabase CLI: $supabase_cli_version"
 echo "Recovery target: $project_id"
 echo "Repository HEAD: $repository_head"
-echo "Migration tree SHA-256 (268 files): $migration_tree_sha256"
+echo "Migration tree SHA-256 (271 files): $migration_tree_sha256"
 
 # Breakpoint 1: expand plus every bounded backfill is recorded, while old API
 # wrappers remain authoritative. Exercise all five write/snapshot races before

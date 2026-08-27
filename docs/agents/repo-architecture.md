@@ -108,6 +108,19 @@ classification and year ranges, retains the established card implementation.
 The API signature, DTO, value ordering, 100-value cap, `hasMore`, owner, ACL,
 and error contract are unchanged.
 
+The anonymous homepage summary is a separate bounded read façade over those
+same synchronized projections. Exact latest-visible counts and
+`latestModifiedAt` come from the narrow facet rows. UUID, CAS, and
+classification examples join one materialized latest-identity set back to the
+exact public-safe card; their ordered scans use one combined partial B-tree
+whose keys contain only dataset kind, identity, version, timestamp, and state.
+The index predicate observes whether a card has regex-shaped Flow CAS or a
+nonempty classification array, but neither the card nor any example value is
+stored or included in the index. The façade revalidates CAS check digits,
+classification bounds, labels, and exact latest identity before returning a
+value. It adds no source-table scan, new projection table, existing-index
+change, or trigger/writer branch.
+
 Edge consumers must obtain Data Product publication, package, and worker
 metadata through bounded `api.svc_data_product_*` projections rather than
 reading private relations. TIDAS package reads and import admission likewise
