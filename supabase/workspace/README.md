@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
 lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for the 273-migration Issue #539 sitemap shard snapshot; generated workspace and public/api type ownership are unchanged."
+lastReviewedNote: "Reviewed for the 274-migration Issue #539 no-FK, same-identity advisory-fenced sitemap writer snapshot; generated workspace and public/api type ownership are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

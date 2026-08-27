@@ -33,7 +33,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
 lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for Issue #539: 273-migration reset, 13-module generation, fixed 64-shard parity/capacity, bounded latest-sync cost, and anonymous Preview transport gates."
+lastReviewedNote: "Reviewed for Issue #539: 274-migration reset, 13-module generation, fixed 64-shard parity/capacity, no-FK advisory-fenced latest writers, and anonymous Preview transport gates."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -189,10 +189,18 @@ timeout, response JSON below 2 MiB, and a conservative rendered-XML estimate
 below 6 MiB. The largest-shard plan must naturally name
 `portal_sitemap_latest_shard_v1_idx`, scan no full latest-projection heap, and
 spill no temp data. Record the covering-index build time/bytes plus 20-sample
-writer p95 before/after both the physical index and the real facet-to-latest
-sync trigger. Preview then uses only the enabled publishable or
-legacy anon `apikey`, polls no longer than 300 seconds, strictly validates both
-new JSON Schemas, and passes one manifest cursor back byte-for-byte; Portal #12
+writer p95 before/after both the physical index and the real
+`AFTER INSERT OR UPDATE` facet-to-latest direct-upsert trigger. Separately prove
+the latest table has no FK; both helpers begin with the identical
+`pg_advisory_xact_lock(hashtextextended(dataset_kind || ':' || id, 539))`
+transaction identity fence. The serialized `BEFORE DELETE` path then locks the
+latest row `FOR UPDATE` and chooses the correct fallback. The `20260827134103`
+concurrency repair and real delete/delete plus lower-insert/current-delete
+sessions must converge without deadlock. A deliberate advisory-hash collision
+may add serialization but may not change exact-identity results. Preview then
+uses only the enabled publishable or legacy anon `apikey`, polls no longer than
+300 seconds, strictly validates both new JSON Schemas, and passes one manifest
+cursor back byte-for-byte; Portal #12
 owns final Next/CDN XML and five-minute visibility proof.
 
 ## SQL And Offline Node Contract Notes

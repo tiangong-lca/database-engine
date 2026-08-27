@@ -22,7 +22,7 @@ checkPaths:
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-27
 lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for Issue #539 anonymous sitemap Preview probes; PR, persistent Dev, production, and cross-repository mutation boundaries remain unchanged."
+lastReviewedNote: "Reviewed for Issue #539 bounded independent Hybrid/sitemap Preview probes; PR, persistent Dev, production, and cross-repository mutation boundaries remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -77,7 +77,7 @@ When review changes an already-applied PR migration, add a later migration that 
 - Treat committed files in `supabase/migrations/` as the schema source of truth for production, `dev`, and preview branches.
 - Keep branch-specific overrides in `[remotes.<branch>]` inside `supabase/config.toml`.
 - Do not create a separate `supabase/` directory per Git branch.
-- Keep the pull-request-only Preview runtime job isolated from deployment. Fork PRs skip before authority is available; a same-repository PR missing the access token, main-parent ref, or persistent-Dev ref fails closed. The job requires exactly one successful `Supabase Preview` check on that PR head from official Supabase App id `330661`, slug/owner `supabase`, captures the expected ref from its exact dashboard URL, independently resolves exactly one matching non-default/non-persistent BranchResponse through pinned CLI `branches list --output json`, requires equality and main/Dev inequality, applies and reads back one three-field PostgREST PATCH, and probes Portal Hybrid with only an enabled publishable or legacy anon key. It must not link, push migrations, deploy Functions/configuration, or target persistent Dev or production.
+- Keep the pull-request-only Preview runtime job isolated from deployment. Fork PRs skip before authority is available; a same-repository PR missing the access token, main-parent ref, or persistent-Dev ref fails closed. The job requires exactly one successful `Supabase Preview` check on that PR head from official Supabase App id `330661`, slug/owner `supabase`, captures the expected ref from its exact dashboard URL, independently resolves exactly one matching non-default/non-persistent BranchResponse through pinned CLI `branches list --output json`, requires equality and main/Dev inequality, applies and reads back one three-field PostgREST PATCH, and probes Portal Hybrid plus sitemap with only an enabled publishable or legacy anon key. Each readiness poll has one 300-second deadline, and sitemap verification remains independent after Hybrid failure once the key step succeeded. The job must not link, push migrations, deploy Functions/configuration, or target persistent Dev or production.
 - Keep `.github/workflows/supabase-dev.yml` as the sole persistent-`dev` migration deployer. It may run `supabase link`, exactly one `supabase db push --include-all`, and one Management API PATCH limited to `db_schema`, `db_extra_search_path`, and `max_rows` so the running PostgREST instance matches the checked-in contract; it must not deploy/delete Edge Functions, run `supabase config push`, or mutate any other project setting.
 - After the database workflow succeeds, deploy and validate the intended persistent-Dev Functions through `tiangong-lca-edge-functions`. Function source, function selection, deployment commands, and runtime validation remain owned by that repository.
 - Do not add a checked-in GitHub Actions production deploy for Git `main`; the production project is migrated by the Supabase GitHub integration bound to this repository.
@@ -160,7 +160,10 @@ Normal PR path:
    `db_extra_search_path=public,api,extensions`, and `max_rows=1000`, then uses
    only a publishable or legacy anon `apikey`—without `Authorization` or
    `Cookie`—to validate the strict explicit-`api` Portal Hybrid response,
-   forged-parameter opacity, and rejected `private`/`public` profiles.
+   forged-parameter opacity, rejected `private`/`public` profiles, and the
+   fixed sitemap manifest/shard contract. Hybrid and sitemap readiness each
+   stop at one 300-second deadline; sitemap still runs after Hybrid failure so
+   the hosted evidence is not coupled.
 6. After merge, `.github/workflows/supabase-dev.yml` performs a blank local
    rebuild, links the configured persistent Dev project, and runs
    `supabase db push --include-all` after the local contract passes.
@@ -210,6 +213,10 @@ discard and rebuild that disposable branch state.
   the selected public key is masked/exported, then the PAT and raw JSON are
   cleared. The following REST step has no PAT or service credential and uses
   `apikey` only, never `Authorization` or `Cookie`.
+- Hybrid and sitemap readiness each use one 300-second wall-clock deadline.
+  Once the public-key step succeeds, the sitemap step runs independently even
+  if Hybrid fails; the overall job still fails when either required boundary
+  fails.
 - If the anonymous explicit-`api` probe fails, the job may print only its HTTP
   status and a shape-validated PostgREST or SQLSTATE code. Raw response bodies,
   messages, details, hints, request payloads, and public keys remain unlogged;

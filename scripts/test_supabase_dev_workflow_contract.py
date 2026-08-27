@@ -193,6 +193,7 @@ def main() -> int:
         'test("^eyJ[A-Za-z0-9_-]+[.][A-Za-z0-9_-]+[.][A-Za-z0-9_-]+$")',
         "unset api_keys SUPABASE_ACCESS_TOKEN",
         "PREVIEW_PUBLIC_API_KEY=%s",
+        "id: preview_api_key",
         'Content-Profile: api',
         'portal_hybrid_search_v1',
         'portal.public-hybrid-candidate-page.v1.schema.json',
@@ -207,8 +208,11 @@ def main() -> int:
         'portal_sitemap_shard_v1',
         'portal.public-sitemap-manifest.v1.schema.json',
         'portal.public-sitemap-shard.v1.schema.json',
-        'for _ in {1..60}',
-        'sleep 5',
+        'probe_deadline=$((SECONDS + 300))',
+        '--connect-timeout 5',
+        '--max-time "$request_timeout"',
+        "steps.preview_api_key.outcome == 'success'",
+        'always()',
         '(.shards | length) == 64',
         'all(.shards[]; .maxItems == 4096)',
         '.code == "22023"',
@@ -218,6 +222,14 @@ def main() -> int:
         for token in preview_required
         if token not in preview_workflow
     )
+    if preview_workflow.count("probe_deadline=$((SECONDS + 300))") != 2:
+        failures.append(
+            "Hybrid and sitemap Preview readiness probes must each use one exact 300-second deadline"
+        )
+    if preview_workflow.count('--max-time "$request_timeout"') != 2:
+        failures.append(
+            "Hybrid and sitemap readiness curl calls must be bounded by their remaining deadline"
+        )
     for app_identity_token in (
         ".app.id == 330661",
         '.app.slug == "supabase"',

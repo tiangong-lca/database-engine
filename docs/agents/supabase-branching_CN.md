@@ -22,7 +22,7 @@ checkPaths:
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-27
 lastReviewedCommit: 712558e
-lastReviewedNote: "已为 Issue #539 的匿名 sitemap Preview 探测复核；PR、持久化 Dev、生产和跨仓修改边界均保持不变。"
+lastReviewedNote: "已为 Issue #539 的有界且相互独立的 Hybrid/sitemap Preview 探测复核；PR、持久化 Dev、生产和跨仓修改边界均保持不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -69,13 +69,17 @@ related:
 - `dev -> main` 是正式晋升路径。
 - 不要只根据 GitHub default-branch UI 推断实际工作 trunk。
 
+如果 review 修改了 PR Preview 已记录的 migration，必须增加一条更晚的 migration，
+把最终权威 schema/function 前向应用到该现有 Preview。仍须保留并运行真实的 populated
+canonical-base-to-head upgrade；追加的 Preview repair 本身不能证明首次生产升级安全。
+
 ## 仓库契约
 
 - 在 Git 中只维护一套共享的 `supabase/` 目录。
 - 把 `supabase/migrations/` 中已提交的文件视为 production、`dev` 和 preview 分支共同遵循的 schema 真相源。
 - 分支差异放在 `supabase/config.toml` 的 `[remotes.<branch>]` 中。
 - 不要为不同 Git 分支复制多套 `supabase/` 目录。
-- pull-request-only Preview 运行态 job 必须与部署隔离。fork PR 在获得授权前跳过；同仓 PR 缺少 access token、main-parent ref 或 persistent-Dev ref 任一项时 fail closed。job 要求该 PR head 上恰有一个来自官方 Supabase App（id `330661`、slug/owner `supabase`）的成功 `Supabase Preview` check，并从其准确 dashboard URL 捕获期望 ref；随后通过固定版本 CLI `branches list --output json`，按 Git branch、PR number、parent ref、`is_default=false` 与 `persistent=false` 独立解析唯一 BranchResponse，要求 ref 与 check 相等且无条件不同于 main/Dev，才应用并回读一次三字段 PostgREST PATCH。独立 key step 依据原始 `disabled` 状态与 key 形态选择并 mask 公共 key，清除 PAT/原始 JSON 后，匿名 Portal Hybrid step 仅使用 `apikey`。不得 link、push migration、部署 Function/config，也不得指向持久化 Dev 或生产。
+- pull-request-only Preview 运行态 job 必须与部署隔离。fork PR 在获得授权前跳过；同仓 PR 缺少 access token、main-parent ref 或 persistent-Dev ref 任一项时 fail closed。job 要求该 PR head 上恰有一个来自官方 Supabase App（id `330661`、slug/owner `supabase`）的成功 `Supabase Preview` check，并从其准确 dashboard URL 捕获期望 ref；随后通过固定版本 CLI `branches list --output json`，按 Git branch、PR number、parent ref、`is_default=false` 与 `persistent=false` 独立解析唯一 BranchResponse，要求 ref 与 check 相等且无条件不同于 main/Dev，才应用并回读一次三字段 PostgREST PATCH。独立 key step 依据原始 `disabled` 状态与 key 形态选择并 mask 公共 key，清除 PAT/原始 JSON 后，匿名 Portal Hybrid 与 sitemap probe 仅使用 `apikey`。两类 readiness poll 各自只有一个 300 秒总期限；公共 key 已成功取得后，即使 Hybrid 失败，sitemap 仍独立运行以保留其 hosted 证据。不得 link、push migration、部署 Function/config，也不得指向持久化 Dev 或生产。
 - 把 `.github/workflows/supabase-dev.yml` 作为持久化 `dev` 的唯一 migration 部署者；它可以执行 `supabase link`、准确一次 `supabase db push --include-all`，以及一次仅包含 `db_schema`、`db_extra_search_path`、`max_rows` 的 Management API PATCH，让运行中的 PostgREST 与 checked-in 合同一致；但不得部署/删除 Edge Functions、执行 `supabase config push` 或修改其他项目设置。
 - 数据库 workflow 成功后，通过 `tiangong-lca-edge-functions` 部署并验证持久化 Dev 所需的 Functions。Function 源码、函数选择、部署命令和运行时验证仍由 Edge 仓负责。
 - 不要为 Git `main` 增加 checked-in 的 GitHub Actions 生产部署流程；生产项目由绑定到本仓的 Supabase GitHub integration 自动迁移。
@@ -152,7 +156,10 @@ push-only 的持久化 Dev job。
    解析该准确 Git 分支，只应用并回读 `db_schema=public,api,graphql_public`、
    `db_extra_search_path=public,api,extensions` 和 `max_rows=1000`，随后仅用
    publishable 或 legacy anon `apikey`（不带 `Authorization`/`Cookie`）验证显式
-   `api` Portal Hybrid 严格响应、伪造参数不透明性以及被拒绝的 `private`/`public` profile。
+   `api` Portal Hybrid 严格响应、伪造参数不透明性、被拒绝的 `private`/`public`
+   profile，以及固定 sitemap manifest/shard 合同。Hybrid 与 sitemap readiness
+   各自在一个 300 秒总期限内结束；Hybrid 失败后 sitemap 仍独立运行，因此 hosted
+   证据不会相互耦合。
 6. 合并后，`.github/workflows/supabase-dev.yml` 先完成本地空库重建；本地合同通过后，绑定配置的持久化 Dev 项目并执行 `supabase db push --include-all`。
 7. workflow 从当前 checkout 的 migration 目录推导期望 head，再等待 service-only readback 报告该准确 head；workflow 中不手工固定 migration head。
 8. workflow 在第一次托管 RPC 探测前，通过一次定向 Management API PATCH
@@ -174,6 +181,9 @@ migration 的提交，因此必须使用该参数；已经存在于远端 histor
 - 解析出的 ref 必须同时不同于 main parent 与持久化 Dev；job 不执行 `supabase link`、`db push`、Functions 命令、广义 `config push`、seed 或 migration。
 - Management API 修改准确为对该 disposable ref 的一次 PATCH，且只含 checked-in PostgREST schema、search path 与 row limit；传输探测前必须再通过独立 GET 回读三项。
 - 独立 key step 只做一次不带 `reveal` 的 Management API GET，并使用原始 `disabled` 字段；只接受非空、形态正确且启用的 publishable key，缺少时才回退到形态正确且启用的 legacy `anon`。选择出的公共 key 先 mask/export，随后清除 PAT 与原始 JSON；后续 REST step 不含 PAT/service credential，只带 `apikey`，绝不带 `Authorization` 或 `Cookie`。
+- Hybrid 与 sitemap readiness 各自使用一个 300 秒 wall-clock deadline。公共 key
+  step 成功后，即使 Hybrid 失败，sitemap step 仍独立运行；任一必需边界失败时，
+  整体 job 仍然失败。
 - 匿名显式 `api` probe 失败时，job 只能输出 HTTP status 与通过严格响应形态校验的 PostgREST/SQLSTATE code；不得输出原始 response body、`message`、`details`、`hint`、请求 payload 或公共 key。形态异常时统一记录为 `unclassified`。
 
 ### Issue #474 一次性持久化 Dev 账本修复

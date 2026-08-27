@@ -972,6 +972,7 @@ begin
       pg_catalog.percentile_cont(0.95) within group (
         order by timing.elapsed_ms
       ) as p95_ms,
+      pg_catalog.max(timing.elapsed_ms) as maximum_ms,
       pg_catalog.max(timing.response_bytes) as maximum_response_bytes,
       pg_catalog.min(timing.item_count) as minimum_items,
       pg_catalog.max(timing.item_count) as maximum_items
@@ -984,6 +985,7 @@ begin
          v_profile.profile = 'manifest'
          and (
            v_profile.p95_ms > 250
+           or v_profile.maximum_ms >= 2000
            or v_profile.maximum_response_bytes > 64 * 1024
            or v_profile.minimum_items <> 64
          )
@@ -992,6 +994,7 @@ begin
          v_profile.profile = 'largest-shard'
          and (
            v_profile.p95_ms > 2000
+           or v_profile.maximum_ms >= 4000
            or v_profile.maximum_response_bytes > 2 * 1024 * 1024
            or v_profile.minimum_items <>
              (select max(item_count) from portal_sitemap_bucket_stats)
@@ -1013,11 +1016,13 @@ $portal_sitemap_request_performance_guard$;
 -- Capture the exact shard query without disabling sequential scans or forcing
 -- an index. The installed latest-only covering B-tree must win naturally at
 -- release cardinality and the latest projection must not be scanned sequentially.
+set local work_mem = '8MB';
 select
   pg_catalog.current_setting('enable_seqscan') = 'on'
   and pg_catalog.current_setting('enable_indexscan') = 'on'
   and pg_catalog.current_setting('enable_indexonlyscan') = 'on'
   and pg_catalog.current_setting('enable_bitmapscan') = 'on'
+  and pg_catalog.current_setting('work_mem') = '8MB'
   as natural_plan_settings_ok
 \gset
 \if :natural_plan_settings_ok
@@ -1119,7 +1124,10 @@ select
   plan_node.node ->> 'Actual Rows' as actual_rows,
   plan_node.node ->> 'Actual Loops' as actual_loops,
   plan_node.node ->> 'Shared Hit Blocks' as shared_hit_blocks,
-  plan_node.node ->> 'Shared Read Blocks' as shared_read_blocks
+  plan_node.node ->> 'Shared Read Blocks' as shared_read_blocks,
+  plan_node.node ->> 'Temp Read Blocks' as temp_read_blocks,
+  plan_node.node ->> 'Temp Written Blocks' as temp_written_blocks,
+  plan_node.node ->> 'Sort Method' as sort_method
 from portal_sitemap_plan_nodes as plan_node
 order by node_type, index_name nulls last;
 
@@ -1139,6 +1147,23 @@ begin
          and plan_node.node ->> 'Relation Name' =
            'portal_sitemap_latest_rows_v1'
          and plan_node.node ->> 'Node Type' = 'Seq Scan'
+     )
+     or exists (
+       select 1
+       from portal_sitemap_plan_nodes as plan_node
+       where plan_node.profile = 'largest-shard-natural-index'
+         and (
+           coalesce(
+             (plan_node.node ->> 'Temp Read Blocks')::bigint,
+             0
+           ) > 0
+           or coalesce(
+             (plan_node.node ->> 'Temp Written Blocks')::bigint,
+             0
+           ) > 0
+           or coalesce(plan_node.node ->> 'Sort Method', '') ~*
+             'external|disk'
+         )
      ) then
     raise exception
       'Portal sitemap largest shard did not use its natural latest-only index'

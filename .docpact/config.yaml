@@ -2,7 +2,7 @@ version: 1
 layout: repo
 lastReviewedAt: "2026-08-27"
 lastReviewedCommit: "712558e"
-lastReviewedNote: "Reviewed for Issue #539: 273 migrations, 13 generated Portal modules, fixed 64-shard sitemap DTO/RPC gates, and one bounded latest-sync writer extension."
+lastReviewedNote: "Reviewed for Issue #539: 274 migrations, 13 generated Portal modules, fixed 64-shard sitemap DTO/RPC gates, and no-FK same-identity advisory-fenced latest writers."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -498,6 +498,8 @@ rules:
       - path: supabase/migrations/20260827134101_portal_sitemap_latest_projection.sql
         kind: database-migration
       - path: supabase/migrations/20260827134102_portal_sitemap_shard_contract.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827134103_portal_sitemap_concurrency_repair.sql
         kind: database-migration
       - path: supabase/tests/20260826_portal_candidate_first_search.sql
         kind: database-contract-test

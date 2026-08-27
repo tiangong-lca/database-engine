@@ -33,13 +33,17 @@ if ! docker inspect "$container_name" >/dev/null 2>&1; then
   echo "isolated database container is not running: $container_name" >&2
   exit 2
 fi
+if ! docker exec "$container_name" test -x /usr/bin/timeout; then
+  echo "isolated database container lacks /usr/bin/timeout" >&2
+  exit 2
+fi
 
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 273 \
-   || "${#test_migrations[@]}" -ne 273 ]]; then
-  echo "complete migration tree must contain exactly 273 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 274 \
+   || "${#test_migrations[@]}" -ne 274 ]]; then
+  echo "complete migration tree must contain exactly 274 files" >&2
   exit 2
 fi
 for migration_index in "${!repo_migrations[@]}"; do
@@ -81,10 +85,19 @@ apply_sql_file() {
 apply_timed_sql_file() {
   local sql_file="$1"
   local log_file="$2"
-  docker exec -i "$container_name" \
-    psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
-      -c '\timing on' -f - \
-    <"$sql_file" >"$log_file" 2>&1
+  local timeout_seconds="${3:-0}"
+  if [[ "$timeout_seconds" -gt 0 ]]; then
+    docker exec -i "$container_name" \
+      /usr/bin/timeout -s TERM -k 5 "$timeout_seconds" \
+        psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+          -c '\timing on' -f - \
+      <"$sql_file" >"$log_file" 2>&1
+  else
+    docker exec -i "$container_name" \
+      psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+        -c '\timing on' -f - \
+      <"$sql_file" >"$log_file" 2>&1
+  fi
 }
 
 reset_to() {
@@ -252,6 +265,47 @@ apply_sql_file \
   "$repo_root/supabase/migrations/20260827020006_portal_facet_projection_cutover.sql" \
   >/dev/null
 
+sitemap_versions=(20260827134101 20260827134102 20260827134103)
+sitemap_budgets_ms=(60000 15000 15000)
+sitemap_timeouts_seconds=(120 30 30)
+for sitemap_index in "${!sitemap_versions[@]}"; do
+  sitemap_version="${sitemap_versions[$sitemap_index]}"
+  sitemap_budget_ms="${sitemap_budgets_ms[$sitemap_index]}"
+  sitemap_timeout_seconds="${sitemap_timeouts_seconds[$sitemap_index]}"
+  sitemap_file=("$repo_root"/supabase/migrations/${sitemap_version}_*.sql)
+  if [[ "${#sitemap_file[@]}" -ne 1 ]]; then
+    echo "expected one sitemap migration for $sitemap_version" >&2
+    exit 1
+  fi
+  sitemap_log="$upgrade_log_dir/${sitemap_version}.log"
+  sitemap_started="$(perl -MTime::HiRes=time -e 'printf "%.6f", time')"
+  if ! apply_timed_sql_file \
+    "${sitemap_file[0]}" \
+    "$sitemap_log" \
+    "$sitemap_timeout_seconds"; then
+    echo "sitemap migration $sitemap_version failed or exceeded its ${sitemap_timeout_seconds}s outer timeout" >&2
+    echo "retained log: $sitemap_log" >&2
+    exit 1
+  fi
+  sitemap_elapsed_ms="$(perl -MTime::HiRes=time -e \
+    'printf "%.3f", (time - $ARGV[0]) * 1000' "$sitemap_started")"
+  sitemap_max_statement_ms="$(awk '
+    /^Time: [0-9]+([.][0-9]+)? ms/ {
+      if ($2 > maximum) maximum = $2
+    }
+    END { printf "%.3f", maximum }
+  ' "$sitemap_log")"
+  echo "Sitemap migration ${sitemap_version}: total=${sitemap_elapsed_ms}ms max-statement=${sitemap_max_statement_ms}ms"
+  if ! awk \
+    -v statement="$sitemap_max_statement_ms" \
+    -v total="$sitemap_elapsed_ms" \
+    -v budget="$sitemap_budget_ms" \
+    'BEGIN { exit !(statement > 0 && statement <= budget && total <= budget) }'; then
+    echo "sitemap migration $sitemap_version exceeded its ${sitemap_budget_ms}ms evidence budget" >&2
+    exit 1
+  fi
+done
+
 run_psql <<'SQL'
 grant api_internal_executor to postgres;
 set role api_internal_executor;
@@ -260,6 +314,7 @@ select private.assert_portal_catalog_facet_contract_v1();
 do $verify_populated_facet_upgrade$
 begin
   if (select count(*) from private.portal_catalog_facet_rows_v1) <> 126246
+     or (select count(*) from private.portal_sitemap_latest_rows_v1) <> 126246
      or (
        select count(*)
        from private.portal_catalog_search_rows_v1
@@ -295,7 +350,91 @@ begin
           or facet.facet_source is distinct from facts.facet_source
           or facet.facet_contract_version is distinct from 1
          )
-     ) then
+     )
+     or exists (
+       with expected as (
+         select distinct on (facet.dataset_kind, facet.id)
+           facet.dataset_kind,
+           facet.id,
+           facet.version,
+           facet.modified_at,
+           (
+             pg_catalog.get_byte(
+               pg_catalog.decode(
+                 pg_catalog.md5(
+                   facet.dataset_kind || ':'::text || facet.id::text
+                 ),
+                 'hex'::text
+               ),
+               0
+             ) / 4
+           )::smallint as shard_no,
+           1::smallint as contract_version
+         from private.portal_catalog_facet_rows_v1 as facet
+         where facet.state_code in (100, 200)
+           and facet.facet_contract_version = 1
+         order by facet.dataset_kind,
+           facet.id,
+           facet.version desc,
+           facet.modified_at desc,
+           facet.state_code desc
+       )
+       (select * from expected
+        except
+        select * from private.portal_sitemap_latest_rows_v1)
+       union all
+       (select * from private.portal_sitemap_latest_rows_v1
+        except
+        select * from expected)
+     )
+     or coalesce((
+       select pg_catalog.max(shard.item_count)
+       from (
+         select count(*) as item_count
+         from private.portal_sitemap_latest_rows_v1
+         where contract_version = 1
+         group by shard_no
+       ) as shard
+     ), 0) > 4096
+     or exists (
+       select 1
+       from pg_catalog.pg_constraint as constraint_catalog
+       where constraint_catalog.conrelid =
+         'private.portal_sitemap_latest_rows_v1'::regclass
+         and constraint_catalog.contype = 'f'
+     )
+     or (
+       select count(*)
+       from pg_catalog.pg_trigger as trigger
+       where trigger.tgrelid =
+         'private.portal_catalog_facet_rows_v1'::regclass
+         and trigger.tgname in (
+           'portal_sitemap_latest_sync_v1',
+           'portal_sitemap_latest_delete_v1'
+         )
+         and not trigger.tgisinternal
+         and trigger.tgenabled = 'O'
+         and (
+           (
+             trigger.tgname = 'portal_sitemap_latest_sync_v1'
+             and trigger.tgtype = 21
+             and trigger.tgfoid =
+               'private.sync_portal_sitemap_latest_row_v1()'::regprocedure
+           )
+           or (
+             trigger.tgname = 'portal_sitemap_latest_delete_v1'
+             and trigger.tgtype = 11
+             and trigger.tgfoid =
+               'private.sync_portal_sitemap_latest_delete_v1()'::regprocedure
+           )
+         )
+     ) <> 2
+     or pg_catalog.to_regprocedure(
+       'api.portal_sitemap_manifest_v1()'
+     ) is null
+     or pg_catalog.to_regprocedure(
+       'api.portal_sitemap_shard_v1(text)'
+     ) is null then
     raise exception 'populated facet upgrade parity failed';
   end if;
 end
@@ -311,6 +450,18 @@ declare
   v_process_count integer;
   v_flow_count integer;
 begin
+  if pg_catalog.jsonb_array_length(
+       api.portal_sitemap_manifest_v1() -> 'shards'
+     ) <> 64
+     or pg_catalog.jsonb_array_length(
+       api.portal_sitemap_shard_v1(
+         api.portal_sitemap_manifest_v1() #>>
+           '{shards,0,shardCursor}'
+       ) -> 'items'
+     ) > 4096 then
+    raise exception 'populated sitemap API contract drifted';
+  end if;
+
   foreach v_payload in array array[
     api.portal_facets_v1('process', '', '{}'::jsonb),
     api.portal_facets_v1('flow', '', '{}'::jsonb),
@@ -355,4 +506,4 @@ reset role;
 revoke portal_public_executor from postgres;
 SQL
 
-echo "Portal facet populated 126246-row upgrade validation passed"
+echo "Portal facet/sitemap populated 126246-row upgrade validation passed"

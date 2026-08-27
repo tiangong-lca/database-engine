@@ -1,8 +1,11 @@
 -- Issue #539: materialize only the latest public sitemap identity and its
 -- stable hash bucket. The new table and index are empty before backfill, so no
--- live-table concurrent index is required. One narrow trigger follows the
--- already synchronized facet projection; existing source/API semantics remain
--- unchanged and sitemap capacity never constrains a writer.
+-- live-table concurrent index is required. A transaction-scoped identity
+-- fence plus split INSERT/UPDATE and serialized BEFORE DELETE triggers follow
+-- the already synchronized facet projection; existing source/API semantics
+-- remain unchanged and sitemap capacity never constrains a writer.
+-- The latest table intentionally has no exact-version FK: rebinding such an FK
+-- to a fallback row can deadlock concurrent deletes of different versions.
 
 begin;
 
@@ -19,6 +22,9 @@ begin
      ) is not null
      or pg_catalog.to_regprocedure(
        'private.sync_portal_sitemap_latest_row_v1()'
+     ) is not null
+     or pg_catalog.to_regprocedure(
+       'private.sync_portal_sitemap_latest_delete_v1()'
      ) is not null
      or pg_catalog.to_regprocedure(
        'private.assert_portal_catalog_projection_contract_v1()'
@@ -126,95 +132,143 @@ security definer
 set search_path = ''
 set row_security = 'on'
 as $function$
-declare
-  v_fallback record;
 begin
-  if tg_op in ('INSERT', 'UPDATE') then
-    insert into private.portal_sitemap_latest_rows_v1 (
-      dataset_kind,
-      id,
-      version,
-      modified_at,
-      shard_no,
-      contract_version
-    ) values (
-      new.dataset_kind,
-      new.id,
-      new.version,
-      new.modified_at,
-      (
-        pg_catalog.get_byte(
-          pg_catalog.decode(
-            pg_catalog.md5(
-              new.dataset_kind || ':'::text || new.id::text
-            ),
-            'hex'::text
-          ),
-          0
-        ) / 4
-      )::smallint,
-      1
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      new.dataset_kind || ':'::text || new.id::text,
+      539
     )
-    on conflict (dataset_kind, id) do update
-    set version = excluded.version,
-        modified_at = excluded.modified_at,
-        shard_no = excluded.shard_no,
-        contract_version = excluded.contract_version
-    where excluded.version > portal_sitemap_latest_rows_v1.version
-       or (
-         excluded.version = portal_sitemap_latest_rows_v1.version
-         and (
-           portal_sitemap_latest_rows_v1.modified_at,
-           portal_sitemap_latest_rows_v1.shard_no,
-           portal_sitemap_latest_rows_v1.contract_version
-         ) is distinct from (
-           excluded.modified_at,
-           excluded.shard_no,
-           excluded.contract_version
-         )
-       );
-  else
-    select facet.version,
-      facet.modified_at
-    into v_fallback
-    from private.portal_catalog_facet_rows_v1 as facet
-    where facet.dataset_kind = old.dataset_kind
-      and facet.id = old.id
-      and facet.state_code in (100, 200)
-      and facet.facet_contract_version = 1
-    order by facet.version desc,
-      facet.modified_at desc,
-      facet.state_code desc
-    limit 1;
+  );
 
-    if found then
-      update private.portal_sitemap_latest_rows_v1 as latest
-      set version = v_fallback.version,
-          modified_at = v_fallback.modified_at
-      where latest.dataset_kind = old.dataset_kind
-        and latest.id = old.id
-        and latest.version = old.version;
-    else
-      delete from private.portal_sitemap_latest_rows_v1 as latest
-      where latest.dataset_kind = old.dataset_kind
-        and latest.id = old.id
-        and latest.version = old.version;
-    end if;
-  end if;
+  insert into private.portal_sitemap_latest_rows_v1 (
+    dataset_kind,
+    id,
+    version,
+    modified_at,
+    shard_no,
+    contract_version
+  ) values (
+    new.dataset_kind,
+    new.id,
+    new.version,
+    new.modified_at,
+    (
+      pg_catalog.get_byte(
+        pg_catalog.decode(
+          pg_catalog.md5(
+            new.dataset_kind || ':'::text || new.id::text
+          ),
+          'hex'::text
+        ),
+        0
+      ) / 4
+    )::smallint,
+    1
+  )
+  on conflict (dataset_kind, id) do update
+  set version = excluded.version,
+      modified_at = excluded.modified_at,
+      shard_no = excluded.shard_no,
+      contract_version = excluded.contract_version
+  where excluded.version > portal_sitemap_latest_rows_v1.version
+     or (
+       excluded.version = portal_sitemap_latest_rows_v1.version
+       and (
+         portal_sitemap_latest_rows_v1.modified_at,
+         portal_sitemap_latest_rows_v1.shard_no,
+         portal_sitemap_latest_rows_v1.contract_version
+       ) is distinct from (
+         excluded.modified_at,
+         excluded.shard_no,
+         excluded.contract_version
+       )
+     );
   return null;
 end
 $function$;
 
+create function private.sync_portal_sitemap_latest_delete_v1()
+returns trigger
+language plpgsql
+volatile
+parallel unsafe
+security definer
+set search_path = ''
+set row_security = 'on'
+as $function$
+declare
+  v_current_version text;
+  v_fallback record;
+begin
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      old.dataset_kind || ':'::text || old.id::text,
+      539
+    )
+  );
+
+  select latest.version
+  into v_current_version
+  from private.portal_sitemap_latest_rows_v1 as latest
+  where latest.dataset_kind = old.dataset_kind
+    and latest.id = old.id
+  for update;
+
+  if not found or v_current_version <> old.version then
+    return old;
+  end if;
+
+  select facet.version,
+    facet.modified_at
+  into v_fallback
+  from private.portal_catalog_facet_rows_v1 as facet
+  where facet.dataset_kind = old.dataset_kind
+    and facet.id = old.id
+    and facet.version <> old.version
+    and facet.state_code in (100, 200)
+    and facet.facet_contract_version = 1
+  order by facet.version desc,
+    facet.modified_at desc,
+    facet.state_code desc
+  limit 1;
+
+  if found then
+    update private.portal_sitemap_latest_rows_v1 as latest
+    set version = v_fallback.version,
+        modified_at = v_fallback.modified_at
+    where latest.dataset_kind = old.dataset_kind
+      and latest.id = old.id
+      and latest.version = old.version;
+  else
+    delete from private.portal_sitemap_latest_rows_v1 as latest
+    where latest.dataset_kind = old.dataset_kind
+      and latest.id = old.id
+      and latest.version = old.version;
+  end if;
+  return old;
+end
+$function$;
+
+revoke all on function private.sync_portal_sitemap_latest_delete_v1()
+  from public, anon, authenticated, service_role, portal_public_executor;
+
+/*
+ * The INSERT/UPDATE trigger uses the function above. DELETE is split into a
+ * BEFORE trigger below so every writer for one dataset identity shares the
+ * same transaction-scoped advisory fence before latest is inspected.
+ */
 revoke all on function private.sync_portal_sitemap_latest_row_v1()
   from public, anon, authenticated, service_role, portal_public_executor;
 grant execute on function private.sync_portal_sitemap_latest_row_v1()
+  to postgres;
+grant execute on function private.sync_portal_sitemap_latest_delete_v1()
   to postgres;
 
 reset role;
 revoke create on schema private from api_internal_executor;
 
 create trigger portal_sitemap_latest_sync_v1
-after insert or delete or update of
+after insert or update of
   dataset_kind,
   id,
   version,
@@ -225,8 +279,16 @@ on private.portal_catalog_facet_rows_v1
 for each row
 execute function private.sync_portal_sitemap_latest_row_v1();
 
+create trigger portal_sitemap_latest_delete_v1
+before delete
+on private.portal_catalog_facet_rows_v1
+for each row
+execute function private.sync_portal_sitemap_latest_delete_v1();
+
 set role api_internal_executor;
 revoke execute on function private.sync_portal_sitemap_latest_row_v1()
+  from postgres;
+revoke execute on function private.sync_portal_sitemap_latest_delete_v1()
   from postgres;
 reset role;
 revoke api_internal_executor from postgres;
@@ -321,6 +383,9 @@ comment on index private.portal_sitemap_latest_shard_v1_idx is
   'Bounded sitemap shard order over the latest-only locator-free projection.';
 comment on trigger portal_sitemap_latest_sync_v1
   on private.portal_catalog_facet_rows_v1 is
-  'Synchronizes only the affected latest sitemap identity after the governed facet writer converges.';
+  'Upserts only the affected latest sitemap identity after a governed facet INSERT or UPDATE converges.';
+comment on trigger portal_sitemap_latest_delete_v1
+  on private.portal_catalog_facet_rows_v1 is
+  'Serializes one facet identity behind a transaction advisory fence before DELETE and rebinds its latest sitemap row to the visible predecessor.';
 
 commit;

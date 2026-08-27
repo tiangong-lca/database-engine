@@ -1,80 +1,293 @@
--- Issue #539: expose a constant-cost sitemap manifest plus 64 deterministic,
--- globally disjoint, bounded shard pages over the synchronized latest-only
--- sitemap projection. Existing Portal sitemap/search consumers remain unchanged.
+-- Issue #539 Preview concurrency forward repair: the first PR head exposed the
+-- latest-only projection before its same-identity writers were transactionally
+-- serialized.
+-- Fresh databases already receive the final advisory fence from 20260827134101;
+-- an existing PR Preview receives and validates it here without editing history.
+-- The latest table remains deliberately FK-free so serialized version deletes
+-- never acquire a reverse dependency on another transaction's facet row lock.
 
 begin;
 
 set local lock_timeout = '5s';
 set local statement_timeout = '30s';
 
-do $portal_sitemap_shard_prerequisite_guard$
+do $portal_sitemap_latest_concurrency_prerequisite_guard$
 begin
-  if pg_catalog.to_regprocedure(
-       'api.portal_sitemap_manifest_v1()'
-     ) is not null
-     or pg_catalog.to_regprocedure(
-       'api.portal_sitemap_shard_v1(text)'
-     ) is not null
-     or pg_catalog.to_regprocedure(
-       'private.assert_portal_sitemap_projection_v1()'
-     ) is not null
-     or pg_catalog.to_regprocedure(
-       'private.assert_portal_catalog_projection_contract_v1()'
+  if pg_catalog.to_regclass(
+       'private.portal_sitemap_latest_rows_v1'
      ) is null
-     or pg_catalog.to_regprocedure(
-       'private.assert_portal_catalog_facet_contract_v1()'
+     or pg_catalog.to_regclass(
+       'private.portal_catalog_facet_rows_v1'
      ) is null
      or pg_catalog.to_regprocedure(
        'private.sync_portal_sitemap_latest_row_v1()'
      ) is null
      or pg_catalog.to_regprocedure(
-       'private.sync_portal_sitemap_latest_delete_v1()'
+       'private.assert_portal_sitemap_projection_v1()'
      ) is null
-     or pg_catalog.to_regclass(
-       'private.portal_sitemap_latest_rows_v1'
+     or pg_catalog.to_regprocedure(
+       'api.portal_sitemap_manifest_v1()'
      ) is null
-     or pg_catalog.to_regclass(
-       'private.portal_sitemap_latest_shard_v1_idx'
+     or pg_catalog.to_regprocedure(
+       'api.portal_sitemap_shard_v1(text)'
      ) is null
-     or not exists (
+     or exists (
        select 1
-       from pg_catalog.pg_roles as role
-       where role.rolname = 'portal_public_executor'
-         and not role.rolcanlogin
-         and not role.rolinherit
-         and not role.rolbypassrls
-         and not role.rolsuper
-     )
-     or (
-       select pg_catalog.md5(routine.prosrc)
-       from pg_catalog.pg_proc as routine
-       where routine.oid =
-         'api.portal_sitemap_entries_v1(text,text,integer)'::regprocedure
-     ) <> '03dd37bd0871c220fcd94cb2dec203ed' then
-    raise exception 'Portal sitemap shard prerequisites are unsafe'
+       from pg_catalog.pg_constraint as constraint_catalog
+       where constraint_catalog.conrelid =
+         'private.portal_sitemap_latest_rows_v1'::regclass
+         and constraint_catalog.contype = 'f'
+     ) then
+    raise exception 'Portal sitemap latest concurrency prerequisites are unsafe'
       using errcode = '55000';
   end if;
 end
-$portal_sitemap_shard_prerequisite_guard$;
+$portal_sitemap_latest_concurrency_prerequisite_guard$;
+
+grant api_internal_executor to postgres;
+grant create on schema private to api_internal_executor;
+set role api_internal_executor;
+
+create or replace function private.sync_portal_sitemap_latest_row_v1()
+returns trigger
+language plpgsql
+volatile
+parallel unsafe
+security definer
+set search_path = ''
+set row_security = 'on'
+as $function$
+begin
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      new.dataset_kind || ':'::text || new.id::text,
+      539
+    )
+  );
+
+  insert into private.portal_sitemap_latest_rows_v1 (
+    dataset_kind,
+    id,
+    version,
+    modified_at,
+    shard_no,
+    contract_version
+  ) values (
+    new.dataset_kind,
+    new.id,
+    new.version,
+    new.modified_at,
+    (
+      pg_catalog.get_byte(
+        pg_catalog.decode(
+          pg_catalog.md5(
+            new.dataset_kind || ':'::text || new.id::text
+          ),
+          'hex'::text
+        ),
+        0
+      ) / 4
+    )::smallint,
+    1
+  )
+  on conflict (dataset_kind, id) do update
+  set version = excluded.version,
+      modified_at = excluded.modified_at,
+      shard_no = excluded.shard_no,
+      contract_version = excluded.contract_version
+  where excluded.version > portal_sitemap_latest_rows_v1.version
+     or (
+       excluded.version = portal_sitemap_latest_rows_v1.version
+       and (
+         portal_sitemap_latest_rows_v1.modified_at,
+         portal_sitemap_latest_rows_v1.shard_no,
+         portal_sitemap_latest_rows_v1.contract_version
+       ) is distinct from (
+         excluded.modified_at,
+         excluded.shard_no,
+         excluded.contract_version
+       )
+     );
+  return null;
+end
+$function$;
+
+create or replace function private.sync_portal_sitemap_latest_delete_v1()
+returns trigger
+language plpgsql
+volatile
+parallel unsafe
+security definer
+set search_path = ''
+set row_security = 'on'
+as $function$
+declare
+  v_current_version text;
+  v_fallback record;
+begin
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      old.dataset_kind || ':'::text || old.id::text,
+      539
+    )
+  );
+
+  select latest.version
+  into v_current_version
+  from private.portal_sitemap_latest_rows_v1 as latest
+  where latest.dataset_kind = old.dataset_kind
+    and latest.id = old.id
+  for update;
+
+  if not found or v_current_version <> old.version then
+    return old;
+  end if;
+
+  select facet.version,
+    facet.modified_at
+  into v_fallback
+  from private.portal_catalog_facet_rows_v1 as facet
+  where facet.dataset_kind = old.dataset_kind
+    and facet.id = old.id
+    and facet.version <> old.version
+    and facet.state_code in (100, 200)
+    and facet.facet_contract_version = 1
+  order by facet.version desc,
+    facet.modified_at desc,
+    facet.state_code desc
+  limit 1;
+
+  if found then
+    update private.portal_sitemap_latest_rows_v1 as latest
+    set version = v_fallback.version,
+        modified_at = v_fallback.modified_at
+    where latest.dataset_kind = old.dataset_kind
+      and latest.id = old.id
+      and latest.version = old.version;
+  else
+    delete from private.portal_sitemap_latest_rows_v1 as latest
+    where latest.dataset_kind = old.dataset_kind
+      and latest.id = old.id
+      and latest.version = old.version;
+  end if;
+  return old;
+end
+$function$;
+
+revoke all on function private.sync_portal_sitemap_latest_row_v1()
+  from public, anon, authenticated, service_role, portal_public_executor;
+revoke all on function private.sync_portal_sitemap_latest_delete_v1()
+  from public, anon, authenticated, service_role, portal_public_executor;
+grant execute on function private.sync_portal_sitemap_latest_row_v1()
+  to postgres;
+grant execute on function private.sync_portal_sitemap_latest_delete_v1()
+  to postgres;
+
+reset role;
+revoke create on schema private from api_internal_executor;
+
+drop trigger if exists portal_sitemap_latest_sync_v1
+  on private.portal_catalog_facet_rows_v1;
+drop trigger if exists portal_sitemap_latest_delete_v1
+  on private.portal_catalog_facet_rows_v1;
+
+create trigger portal_sitemap_latest_sync_v1
+after insert or update of
+  dataset_kind,
+  id,
+  version,
+  state_code,
+  modified_at,
+  facet_contract_version
+on private.portal_catalog_facet_rows_v1
+for each row
+execute function private.sync_portal_sitemap_latest_row_v1();
+
+create trigger portal_sitemap_latest_delete_v1
+before delete
+on private.portal_catalog_facet_rows_v1
+for each row
+execute function private.sync_portal_sitemap_latest_delete_v1();
+
+comment on trigger portal_sitemap_latest_sync_v1
+  on private.portal_catalog_facet_rows_v1 is
+  'Upserts only the affected latest sitemap identity after a governed facet INSERT or UPDATE converges.';
+comment on trigger portal_sitemap_latest_delete_v1
+  on private.portal_catalog_facet_rows_v1 is
+  'Serializes one facet identity before DELETE and rebinds its latest sitemap row to the visible predecessor.';
+
+set role api_internal_executor;
+revoke execute on function private.sync_portal_sitemap_latest_row_v1()
+  from postgres;
+revoke execute on function private.sync_portal_sitemap_latest_delete_v1()
+  from postgres;
+reset role;
+revoke api_internal_executor from postgres;
 
 grant api_internal_executor to postgres;
 set role api_internal_executor;
-select private.assert_portal_catalog_projection_contract_v1();
-select private.assert_portal_catalog_facet_contract_v1();
-do $portal_sitemap_initial_capacity_guard$
-begin
-  if exists (
-    select latest.shard_no
-    from private.portal_sitemap_latest_rows_v1 as latest
-    where latest.contract_version = 1
-    group by latest.shard_no
-    having pg_catalog.count(*) > 4096
-  ) then
-    raise exception 'Portal sitemap initial shard capacity is unsafe'
-      using errcode = '54000';
-  end if;
-end
-$portal_sitemap_initial_capacity_guard$;
+
+insert into private.portal_sitemap_latest_rows_v1 (
+  dataset_kind,
+  id,
+  version,
+  modified_at,
+  shard_no,
+  contract_version
+)
+select distinct on (facet.dataset_kind, facet.id)
+  facet.dataset_kind,
+  facet.id,
+  facet.version,
+  facet.modified_at,
+  (
+    pg_catalog.get_byte(
+      pg_catalog.decode(
+        pg_catalog.md5(
+          facet.dataset_kind || ':'::text || facet.id::text
+        ),
+        'hex'::text
+      ),
+      0
+    ) / 4
+  )::smallint,
+  1
+from private.portal_catalog_facet_rows_v1 as facet
+where facet.state_code in (100, 200)
+  and facet.facet_contract_version = 1
+order by facet.dataset_kind,
+  facet.id,
+  facet.version desc,
+  facet.modified_at desc,
+  facet.state_code desc
+on conflict (dataset_kind, id) do update
+set version = excluded.version,
+    modified_at = excluded.modified_at,
+    shard_no = excluded.shard_no,
+    contract_version = excluded.contract_version
+where (
+  portal_sitemap_latest_rows_v1.version,
+  portal_sitemap_latest_rows_v1.modified_at,
+  portal_sitemap_latest_rows_v1.shard_no,
+  portal_sitemap_latest_rows_v1.contract_version
+) is distinct from (
+  excluded.version,
+  excluded.modified_at,
+  excluded.shard_no,
+  excluded.contract_version
+);
+
+delete from private.portal_sitemap_latest_rows_v1 as latest
+where not exists (
+  select 1
+  from private.portal_catalog_facet_rows_v1 as facet
+  where facet.dataset_kind = latest.dataset_kind
+    and facet.id = latest.id
+    and facet.version = latest.version
+    and facet.state_code in (100, 200)
+    and facet.facet_contract_version = 1
+);
+
 reset role;
 revoke api_internal_executor from postgres;
 
@@ -82,10 +295,7 @@ grant portal_public_executor to postgres;
 grant create on schema private, api to portal_public_executor;
 set role portal_public_executor;
 
-select private.assert_portal_catalog_projection_contract_v1();
-select private.assert_portal_catalog_facet_contract_v1();
-
-create function private.assert_portal_sitemap_projection_v1()
+create or replace function private.assert_portal_sitemap_projection_v1()
 returns void
 language plpgsql
 stable
@@ -271,61 +481,7 @@ begin
 end
 $function$;
 
-revoke all on function private.assert_portal_sitemap_projection_v1()
-  from public, anon, authenticated, service_role, api_internal_executor;
-
-create function api.portal_sitemap_manifest_v1()
-returns jsonb
-language plpgsql
-stable
-parallel restricted
-security definer
-set search_path = ''
-set statement_timeout = '2s'
-set max_parallel_workers_per_gather = '0'
-set jit = 'off'
-set row_security = 'on'
-as $function$
-declare
-  v_shards jsonb;
-begin
-  perform private.assert_portal_catalog_projection_contract_v1();
-  perform private.assert_portal_catalog_facet_contract_v1();
-  perform private.assert_portal_sitemap_projection_v1();
-
-  select pg_catalog.jsonb_agg(
-    pg_catalog.jsonb_build_object(
-      'shardCursor',
-      private.portal_cursor_encode_v1(pg_catalog.jsonb_build_object(
-        'v', 1,
-        'scope', 'sitemap-shard',
-        'bucket', shard.bucket,
-        'shardCount', 64
-      )),
-      'maxItems', 4096
-    )
-    order by shard.bucket
-  )
-  into v_shards
-  from pg_catalog.generate_series(0, 63) as shard(bucket);
-
-  return pg_catalog.jsonb_build_object(
-    'schemaVersion', 'portal.public-sitemap-manifest.v1',
-    'shards', v_shards
-  );
-exception
-  when query_canceled then
-    raise exception using
-      errcode = 'P0001',
-      message = 'portal sitemap unavailable';
-  when others then
-    raise exception using
-      errcode = 'P0001',
-      message = 'portal sitemap unavailable';
-end
-$function$;
-
-create function api.portal_sitemap_shard_v1(p_shard_cursor text)
+create or replace function api.portal_sitemap_shard_v1(p_shard_cursor text)
 returns jsonb
 language plpgsql
 stable
@@ -428,224 +584,125 @@ exception
 end
 $function$;
 
-comment on function api.portal_sitemap_manifest_v1() is
-  'Constant-cost ordered manifest of 64 opaque, globally disjoint Portal sitemap shard cursors.';
-comment on function api.portal_sitemap_shard_v1(text) is
-  'Bounded latest-visible Process/Flow sitemap page for one opaque stable-hash shard cursor.';
-
-revoke all on function api.portal_sitemap_manifest_v1()
-  from public, anon, authenticated, service_role;
-revoke all on function api.portal_sitemap_shard_v1(text)
-  from public, anon, authenticated, service_role;
-grant execute on function api.portal_sitemap_manifest_v1()
-  to anon, authenticated;
-grant execute on function api.portal_sitemap_shard_v1(text)
-  to anon, authenticated;
+select private.assert_portal_sitemap_projection_v1();
 
 reset role;
 revoke create on schema private, api from portal_public_executor;
 revoke portal_public_executor from postgres;
 
-insert into private.api_capability_grants (
-  routine_identity,
-  capability_id,
-  allow_anon,
-  allow_authenticated,
-  allow_service_role
-)
-values
-  (
-    'api.portal_sitemap_manifest_v1()',
-    'PORTAL-CATALOG-01',
-    true,
-    true,
-    false
-  ),
-  (
-    'api.portal_sitemap_shard_v1(text)',
-    'PORTAL-CATALOG-01',
-    true,
-    true,
-    false
-  )
-on conflict (routine_identity) do update
-set capability_id = excluded.capability_id,
-    allow_anon = excluded.allow_anon,
-    allow_authenticated = excluded.allow_authenticated,
-    allow_service_role = excluded.allow_service_role;
+grant api_internal_executor to postgres;
+set role api_internal_executor;
 
-do $verify_portal_sitemap_shard_contract_v1$
-declare
-  v_manifest regprocedure :=
-    'api.portal_sitemap_manifest_v1()'::regprocedure;
-  v_shard regprocedure :=
-    'api.portal_sitemap_shard_v1(text)'::regprocedure;
-  v_assert regprocedure :=
-    'private.assert_portal_sitemap_projection_v1()'::regprocedure;
-  v_sync regprocedure :=
-    'private.sync_portal_sitemap_latest_row_v1()'::regprocedure;
-  v_delete regprocedure :=
-    'private.sync_portal_sitemap_latest_delete_v1()'::regprocedure;
+do $verify_portal_sitemap_latest_concurrency_repair$
 begin
-  if (
-    select not (
-      routine.proowner = 'portal_public_executor'::regrole
-      and routine.prosecdef
-      and routine.provolatile = 's'
-      and routine.proparallel = 'r'
-      and routine.prorettype = 'pg_catalog.jsonb'::regtype
-      and coalesce(routine.proconfig, '{}'::text[]) @> array[
-        'search_path=""',
-        'statement_timeout=2s',
-        'max_parallel_workers_per_gather=0',
-        'jit=off',
-        'row_security=on'
-      ]::text[]
-    )
+  if exists (
+    select 1
+    from pg_catalog.pg_constraint as constraint_catalog
+    where constraint_catalog.conrelid =
+      'private.portal_sitemap_latest_rows_v1'::regclass
+      and constraint_catalog.contype = 'f'
+  )
+  or not exists (
+    select 1
     from pg_catalog.pg_proc as routine
-    where routine.oid = v_manifest
-  ) is not false
-  or (
-    select not (
-      routine.proowner = 'portal_public_executor'::regrole
-      and routine.prosecdef
-      and routine.provolatile = 's'
-      and routine.proparallel = 'r'
-      and routine.prorettype = 'pg_catalog.jsonb'::regtype
-      and coalesce(routine.proconfig, '{}'::text[]) @> array[
-        'search_path=""',
-        'statement_timeout=4s',
-        'work_mem=8MB',
-        'plan_cache_mode=force_custom_plan',
-        'max_parallel_workers_per_gather=0',
-        'jit=off',
-        'row_security=on'
-      ]::text[]
-    )
-    from pg_catalog.pg_proc as routine
-    where routine.oid = v_shard
-  ) is not false
-  or (
-    select not (
-      routine.proowner = 'portal_public_executor'::regrole
-      and not routine.prosecdef
-      and routine.provolatile = 's'
-      and routine.proparallel = 'r'
-      and routine.prorettype = 'pg_catalog.void'::regtype
-      and coalesce(routine.proconfig, '{}'::text[]) @>
-        array['search_path=""']::text[]
-    )
-    from pg_catalog.pg_proc as routine
-    where routine.oid = v_assert
-  ) is not false
-  or (
-    select not (
-      routine.proowner = 'api_internal_executor'::regrole
-      and routine.prosecdef
-      and routine.provolatile = 'v'
-      and routine.proparallel = 'u'
+    where routine.oid =
+      'private.sync_portal_sitemap_latest_row_v1()'::regprocedure
+      and routine.proowner = 'api_internal_executor'::regrole
       and pg_catalog.md5(routine.prosrc) =
         '45503a8c8455b9ae9e69bc15d150d97f'
       and coalesce(routine.proacl::text, '') =
         '{api_internal_executor=X/api_internal_executor}'
-    )
+  )
+  or not exists (
+    select 1
     from pg_catalog.pg_proc as routine
-    where routine.oid = v_sync
-  ) is not false
-  or (
-    select not (
-      routine.proowner = 'api_internal_executor'::regrole
-      and routine.prosecdef
-      and routine.provolatile = 'v'
-      and routine.proparallel = 'u'
+    where routine.oid =
+      'private.sync_portal_sitemap_latest_delete_v1()'::regprocedure
+      and routine.proowner = 'api_internal_executor'::regrole
       and pg_catalog.md5(routine.prosrc) =
         '4278224e16a7f1932d0f3debbc245b2b'
       and coalesce(routine.proacl::text, '') =
         '{api_internal_executor=X/api_internal_executor}'
-    )
-    from pg_catalog.pg_proc as routine
-    where routine.oid = v_delete
-  ) is not false
-  or (
-    select pg_catalog.md5(routine.prosrc)
-    from pg_catalog.pg_proc as routine
-    where routine.oid =
-      'api.portal_sitemap_entries_v1(text,text,integer)'::regprocedure
-  ) <> '03dd37bd0871c220fcd94cb2dec203ed'
+  )
   or (
     select pg_catalog.count(*)
-    from private.api_capability_grants as manifest
-    where manifest.routine_identity in (
-      'api.portal_sitemap_manifest_v1()',
-      'api.portal_sitemap_shard_v1(text)'
-    )
-      and manifest.capability_id = 'PORTAL-CATALOG-01'
-      and manifest.allow_anon
-      and manifest.allow_authenticated
-      and not manifest.allow_service_role
+    from pg_catalog.pg_trigger as trigger
+    where trigger.tgrelid =
+      'private.portal_catalog_facet_rows_v1'::regclass
+      and not trigger.tgisinternal
+      and trigger.tgenabled = 'O'
+      and (
+        (
+          trigger.tgname = 'portal_sitemap_latest_sync_v1'
+          and trigger.tgtype = 21
+          and trigger.tgfoid =
+            'private.sync_portal_sitemap_latest_row_v1()'::regprocedure
+        )
+        or (
+          trigger.tgname = 'portal_sitemap_latest_delete_v1'
+          and trigger.tgtype = 11
+          and trigger.tgfoid =
+            'private.sync_portal_sitemap_latest_delete_v1()'::regprocedure
+        )
+      )
   ) <> 2
-  or not pg_catalog.has_function_privilege('anon', v_manifest, 'EXECUTE')
-  or not pg_catalog.has_function_privilege(
-    'authenticated', v_manifest, 'EXECUTE'
+  or (
+    select routine.prosrc !~ '45503a8c8455b9ae9e69bc15d150d97f'
+      or routine.prosrc !~ '4278224e16a7f1932d0f3debbc245b2b'
+    from pg_catalog.pg_proc as routine
+    where routine.oid =
+      'private.assert_portal_sitemap_projection_v1()'::regprocedure
   )
-  or pg_catalog.has_function_privilege('service_role', v_manifest, 'EXECUTE')
-  or not pg_catalog.has_function_privilege('anon', v_shard, 'EXECUTE')
-  or not pg_catalog.has_function_privilege(
-    'authenticated', v_shard, 'EXECUTE'
-  )
-  or pg_catalog.has_function_privilege('service_role', v_shard, 'EXECUTE')
-  or pg_catalog.has_function_privilege('anon', v_assert, 'EXECUTE')
-  or pg_catalog.has_function_privilege('authenticated', v_assert, 'EXECUTE')
-  or pg_catalog.has_function_privilege('service_role', v_assert, 'EXECUTE')
-  or pg_catalog.has_function_privilege(
-    'api_internal_executor', v_assert, 'EXECUTE'
-  )
-  or pg_catalog.has_function_privilege('anon', v_sync, 'EXECUTE')
-  or pg_catalog.has_function_privilege('authenticated', v_sync, 'EXECUTE')
-  or pg_catalog.has_function_privilege('service_role', v_sync, 'EXECUTE')
-  or pg_catalog.has_function_privilege(
-    'portal_public_executor', v_sync, 'EXECUTE'
-  )
-  or pg_catalog.has_function_privilege('anon', v_delete, 'EXECUTE')
-  or pg_catalog.has_function_privilege(
-    'authenticated', v_delete, 'EXECUTE'
-  )
-  or pg_catalog.has_function_privilege('service_role', v_delete, 'EXECUTE')
-  or pg_catalog.has_function_privilege(
-    'portal_public_executor', v_delete, 'EXECUTE'
+  or (
+    select routine.prosrc !~
+      'v_cursor is distinct from pg_catalog.jsonb_build_object'
+    from pg_catalog.pg_proc as routine
+    where routine.oid =
+      'api.portal_sitemap_shard_v1(text)'::regprocedure
   )
   or exists (
-    select 1
-    from pg_catalog.pg_proc as routine
-    cross join lateral pg_catalog.aclexplode(
-      coalesce(
-        routine.proacl,
-        pg_catalog.acldefault('f', routine.proowner)
-      )
-    ) as acl
-    where routine.oid in (v_manifest::oid, v_shard::oid)
-      and acl.grantee = 0
-      and acl.privilege_type = 'EXECUTE'
-  )
-  or (
-    select routine.prosrc !~ 'generate_series\(0, 63\)'
-      or routine.prosrc ~
-        'portal_sitemap_latest_rows_v1|portal_catalog_(facet|search)_rows_v1|public\.(processes|flows)'
-    from pg_catalog.pg_proc as routine
-    where routine.oid = v_manifest
-  )
-  or (
-    select routine.prosrc !~ 'portal_sitemap_latest_rows_v1'
-      or routine.prosrc !~ 'projection.shard_no = v_bucket'
-      or routine.prosrc ~
-        'portal_catalog_(facet|search)_rows_v1|public\.(processes|flows)|card|document|json_data|search_text|extracted_md|embedding_ft|team_id|user_id|review_id|privateLocator|objectLocator'
-    from pg_catalog.pg_proc as routine
-    where routine.oid = v_shard
+    with expected as (
+      select distinct on (facet.dataset_kind, facet.id)
+        facet.dataset_kind,
+        facet.id,
+        facet.version,
+        facet.modified_at,
+        (
+          pg_catalog.get_byte(
+            pg_catalog.decode(
+              pg_catalog.md5(
+                facet.dataset_kind || ':'::text || facet.id::text
+              ),
+              'hex'::text
+            ),
+            0
+          ) / 4
+        )::smallint as shard_no,
+        1::smallint as contract_version
+      from private.portal_catalog_facet_rows_v1 as facet
+      where facet.state_code in (100, 200)
+        and facet.facet_contract_version = 1
+      order by facet.dataset_kind,
+        facet.id,
+        facet.version desc,
+        facet.modified_at desc,
+        facet.state_code desc
+    )
+    (select * from expected
+     except
+     select * from private.portal_sitemap_latest_rows_v1)
+    union all
+    (select * from private.portal_sitemap_latest_rows_v1
+     except
+     select * from expected)
   ) then
-    raise exception 'Portal sitemap shard contract drifted'
+    raise exception 'Portal sitemap latest concurrency repair did not converge'
       using errcode = '55000';
   end if;
 end
-$verify_portal_sitemap_shard_contract_v1$;
+$verify_portal_sitemap_latest_concurrency_repair$;
+
+reset role;
+revoke api_internal_executor from postgres;
 
 commit;

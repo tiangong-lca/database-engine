@@ -26,9 +26,9 @@ fi
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 273 \
-   || "${#test_migrations[@]}" -ne 273 ]]; then
-  echo "complete migration tree must contain exactly 273 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 274 \
+   || "${#test_migrations[@]}" -ne 274 ]]; then
+  echo "complete migration tree must contain exactly 274 files" >&2
   exit 2
 fi
 migration_manifest_payload=""
@@ -158,6 +158,51 @@ wait_for_pg_sleep() {
   return 1
 }
 
+wait_for_application_lock() {
+  local application_name="$1"
+  local observed="0"
+  for _ in {1..50}; do
+    observed="$(scalar_sql "
+      select count(*)
+      from pg_catalog.pg_stat_activity
+      where application_name = '$application_name'
+        and wait_event_type = 'Lock'
+    ")"
+    if [[ "$observed" == "1" ]]; then
+      return 0
+    fi
+    sleep 0.1
+  done
+  echo "timed out waiting for $application_name to block on a lock" >&2
+  return 1
+}
+
+wait_for_application_exit() {
+  local application_name="$1"
+  local process_id="$2"
+  local output_file="$3"
+  local observed="1"
+  for _ in {1..150}; do
+    observed="$(scalar_sql "
+      select count(*)
+      from pg_catalog.pg_stat_activity
+      where application_name = '$application_name'
+    ")"
+    if [[ "$observed" == "0" ]]; then
+      if ! wait "$process_id"; then
+        echo "$application_name failed; retained log: $output_file" >&2
+        return 1
+      fi
+      return 0
+    fi
+    sleep 0.1
+  done
+  terminate_application "$application_name" || true
+  wait "$process_id" >/dev/null 2>&1 || true
+  echo "timed out waiting for $application_name; retained log: $output_file" >&2
+  return 1
+}
+
 run_stale_snapshot() {
   local application_name="$1"
   local fixture_id="$2"
@@ -211,7 +256,7 @@ fi
 echo "Supabase CLI: $supabase_cli_version"
 echo "Recovery target: $project_id"
 echo "Repository HEAD: $repository_head"
-echo "Migration tree SHA-256 (273 files): $migration_tree_sha256"
+echo "Migration tree SHA-256 (274 files): $migration_tree_sha256"
 
 # Breakpoint 1: expand plus every bounded backfill is recorded, while old API
 # wrappers remain authoritative. Exercise all five write/snapshot races before
@@ -333,6 +378,12 @@ SQL
 race_log_dir="$(mktemp -d /tmp/database-engine-531-race.XXXXXX)"
 facet_reconcile_holder_pid=""
 successful_fence_pid=""
+sitemap_delete_holder_pid=""
+sitemap_delete_current_pid=""
+sitemap_delete_fallback_pid=""
+sitemap_insert_holder_pid=""
+sitemap_insert_lower_pid=""
+sitemap_insert_delete_pid=""
 
 cleanup_recovery() {
   local exit_code=$?
@@ -341,13 +392,35 @@ cleanup_recovery() {
   terminate_application portal_projection_reconcile_lock_holder
   terminate_application portal_facet_reconcile_lock_holder
   terminate_application portal_projection_successful_fence_holder
+  terminate_application portal_sitemap_delete_holder
+  terminate_application portal_sitemap_delete_current
+  terminate_application portal_sitemap_delete_fallback
+  terminate_application portal_sitemap_insert_holder
+  terminate_application portal_sitemap_insert_lower
+  terminate_application portal_sitemap_insert_delete
   for holder_pid in \
     "${facet_reconcile_holder_pid:-}" \
-    "${successful_fence_pid:-}"; do
+    "${successful_fence_pid:-}" \
+    "${sitemap_delete_holder_pid:-}" \
+    "${sitemap_delete_current_pid:-}" \
+    "${sitemap_delete_fallback_pid:-}" \
+    "${sitemap_insert_holder_pid:-}" \
+    "${sitemap_insert_lower_pid:-}" \
+    "${sitemap_insert_delete_pid:-}"; do
     if [[ "$holder_pid" =~ ^[1-9][0-9]*$ ]]; then
       wait "$holder_pid" >/dev/null 2>&1 || true
     fi
   done
+  run_psql >/dev/null 2>&1 <<'SQL'
+delete from private.portal_catalog_search_rows_v1
+where dataset_kind = 'process'
+  and id in (
+    '53990000-0000-4000-8000-000000000001'::uuid,
+    '53990000-0000-4000-8000-000000000002'::uuid,
+    '53990000-0000-4000-8000-000000000003'::uuid
+  );
+revoke api_internal_executor from postgres;
+SQL
   if [[ "$exit_code" -eq 0 ]]; then
     rm -rf "$race_log_dir"
   else
@@ -1240,7 +1313,8 @@ if [[ "$index_oids_before" != "$index_oids_after" ]]; then
 fi
 
 # Breakpoint 9: the latest-only sitemap projection is one transactional expand
-# over a new empty table/index, followed by one transactional public cutover.
+# over a new empty table/index, followed by one transactional public cutover
+# and the idempotent Preview forward repair.
 # A COMMIT/history gap is never repaired by deleting a subset on a hosted
 # branch; the isolated recovery project proves the explicit reset path. A
 # cutover prerequisite failure leaves both public RPCs absent.
@@ -1309,14 +1383,393 @@ rename to portal_sitemap_latest_shard_v1_idx;
 SQL
 apply_pending
 assert_sql "
-  exists (
-    select 1 from supabase_migrations.schema_migrations
-    where version = '20260827134102'
-  )
+  (
+    select count(*)
+    from supabase_migrations.schema_migrations
+    where version in ('20260827134102', '20260827134103')
+  ) = 2
   and pg_catalog.jsonb_array_length(
     api.portal_sitemap_manifest_v1() -> 'shards'
   ) = 64
-" "sitemap cutover recovery did not reach the exact 64-shard contract"
+  and not exists (
+    select 1
+    from pg_catalog.pg_constraint as constraint_catalog
+    where constraint_catalog.conrelid =
+      'private.portal_sitemap_latest_rows_v1'::regclass
+      and constraint_catalog.contype = 'f'
+  )
+  and (
+    select count(*)
+    from pg_catalog.pg_trigger as trigger
+    where trigger.tgrelid =
+      'private.portal_catalog_facet_rows_v1'::regclass
+      and trigger.tgname in (
+        'portal_sitemap_latest_sync_v1',
+        'portal_sitemap_latest_delete_v1'
+      )
+      and not trigger.tgisinternal
+      and trigger.tgenabled = 'O'
+      and (
+        (
+          trigger.tgname = 'portal_sitemap_latest_sync_v1'
+          and trigger.tgtype = 21
+          and trigger.tgfoid =
+            'private.sync_portal_sitemap_latest_row_v1()'::regprocedure
+        )
+        or (
+          trigger.tgname = 'portal_sitemap_latest_delete_v1'
+          and trigger.tgtype = 11
+          and trigger.tgfoid =
+            'private.sync_portal_sitemap_latest_delete_v1()'::regprocedure
+        )
+      )
+  ) = 2
+" "sitemap cutover/forward repair did not reach the exact advisory-fenced 64-shard contract"
+
+# The current version must synchronously rebind to its committed predecessor.
+# The fixture is independent from every earlier recovery race and is removed
+# before the multi-session cases start.
+run_psql <<'SQL'
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+insert into private.portal_catalog_search_rows_v1 (
+  dataset_kind, id, version, state_code, modified_at,
+  card, document, projection_contract_version
+)
+values
+  (
+    'process', '53990000-0000-4000-8000-000000000001',
+    '01.00.000', 100, '2026-08-27 15:00:00+00',
+    '{"document":"sitemap sequential v1","accessLevel":"metadata_only","geography":{"code":null},"classifications":[]}'::jsonb,
+    'sitemap sequential v1', 1
+  ),
+  (
+    'process', '53990000-0000-4000-8000-000000000001',
+    '02.00.000', 100, '2026-08-27 15:00:01+00',
+    '{"document":"sitemap sequential v2","accessLevel":"metadata_only","geography":{"code":null},"classifications":[]}'::jsonb,
+    'sitemap sequential v2', 1
+  );
+delete from private.portal_catalog_search_rows_v1
+where dataset_kind = 'process'
+  and id = '53990000-0000-4000-8000-000000000001'::uuid
+  and version = '02.00.000';
+reset role;
+revoke api_internal_executor from postgres;
+SQL
+
+assert_sql "
+  (
+    select pg_catalog.string_agg(version, ',' order by version)
+    from private.portal_catalog_search_rows_v1
+    where dataset_kind = 'process'
+      and id = '53990000-0000-4000-8000-000000000001'::uuid
+  ) = '01.00.000'
+  and (
+    select pg_catalog.string_agg(version, ',' order by version)
+    from private.portal_catalog_facet_rows_v1
+    where dataset_kind = 'process'
+      and id = '53990000-0000-4000-8000-000000000001'::uuid
+  ) = '01.00.000'
+  and coalesce((
+    select version = '01.00.000'
+      and modified_at = '2026-08-27 15:00:00+00'::timestamptz
+    from private.portal_sitemap_latest_rows_v1
+    where dataset_kind = 'process'
+      and id = '53990000-0000-4000-8000-000000000001'::uuid
+  ), false)
+" "sequential sitemap latest deletion did not rebind v2 to v1"
+
+run_psql <<'SQL'
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+delete from private.portal_catalog_search_rows_v1
+where dataset_kind = 'process'
+  and id = '53990000-0000-4000-8000-000000000001'::uuid;
+reset role;
+revoke api_internal_executor from postgres;
+SQL
+
+assert_sql "
+  not exists (
+    select 1 from private.portal_catalog_search_rows_v1
+    where id = '53990000-0000-4000-8000-000000000001'::uuid
+  )
+  and not exists (
+    select 1 from private.portal_catalog_facet_rows_v1
+    where id = '53990000-0000-4000-8000-000000000001'::uuid
+  )
+  and not exists (
+    select 1 from private.portal_sitemap_latest_rows_v1
+    where id = '53990000-0000-4000-8000-000000000001'::uuid
+  )
+" "sequential sitemap fallback fixture did not cleanly converge"
+
+# Serialize two real deletes behind the exact latest row. The current delete
+# must commit first, after which the predecessor delete must observe the new
+# latest row and remove it instead of resurrecting either deleted version.
+run_psql <<'SQL'
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+insert into private.portal_catalog_search_rows_v1 (
+  dataset_kind, id, version, state_code, modified_at,
+  card, document, projection_contract_version
+)
+values
+  (
+    'process', '53990000-0000-4000-8000-000000000002',
+    '01.00.000', 100, '2026-08-27 15:10:00+00',
+    '{"document":"sitemap concurrent delete v1","accessLevel":"metadata_only","geography":{"code":null},"classifications":[]}'::jsonb,
+    'sitemap concurrent delete v1', 1
+  ),
+  (
+    'process', '53990000-0000-4000-8000-000000000002',
+    '02.00.000', 100, '2026-08-27 15:10:01+00',
+    '{"document":"sitemap concurrent delete v2","accessLevel":"metadata_only","geography":{"code":null},"classifications":[]}'::jsonb,
+    'sitemap concurrent delete v2', 1
+  );
+reset role;
+revoke api_internal_executor from postgres;
+SQL
+
+run_psql <<'SQL'
+grant api_internal_executor to postgres;
+SQL
+docker exec -i "$container_name" \
+  psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+  >"$race_log_dir/sitemap-delete-holder.log" 2>&1 <<'SQL' &
+set application_name = 'portal_sitemap_delete_holder';
+begin;
+set local statement_timeout = '20s';
+set role api_internal_executor;
+select version
+from private.portal_sitemap_latest_rows_v1
+where dataset_kind = 'process'
+  and id = '53990000-0000-4000-8000-000000000002'::uuid
+for update;
+select pg_sleep(12);
+commit;
+SQL
+sitemap_delete_holder_pid=$!
+wait_for_pg_sleep portal_sitemap_delete_holder
+
+docker exec -i "$container_name" \
+  psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+  >"$race_log_dir/sitemap-delete-current.log" 2>&1 <<'SQL' &
+set application_name = 'portal_sitemap_delete_current';
+begin;
+set local lock_timeout = '15s';
+set local statement_timeout = '20s';
+set role api_internal_executor;
+delete from private.portal_catalog_search_rows_v1
+where dataset_kind = 'process'
+  and id = '53990000-0000-4000-8000-000000000002'::uuid
+  and version = '02.00.000';
+commit;
+SQL
+sitemap_delete_current_pid=$!
+wait_for_application_lock portal_sitemap_delete_current
+
+docker exec -i "$container_name" \
+  psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+  >"$race_log_dir/sitemap-delete-fallback.log" 2>&1 <<'SQL' &
+set application_name = 'portal_sitemap_delete_fallback';
+begin;
+set local lock_timeout = '15s';
+set local statement_timeout = '20s';
+set role api_internal_executor;
+delete from private.portal_catalog_search_rows_v1
+where dataset_kind = 'process'
+  and id = '53990000-0000-4000-8000-000000000002'::uuid
+  and version = '01.00.000';
+commit;
+SQL
+sitemap_delete_fallback_pid=$!
+wait_for_application_lock portal_sitemap_delete_fallback
+
+wait_for_application_exit \
+  portal_sitemap_delete_holder \
+  "$sitemap_delete_holder_pid" \
+  "$race_log_dir/sitemap-delete-holder.log"
+wait_for_application_exit \
+  portal_sitemap_delete_current \
+  "$sitemap_delete_current_pid" \
+  "$race_log_dir/sitemap-delete-current.log"
+wait_for_application_exit \
+  portal_sitemap_delete_fallback \
+  "$sitemap_delete_fallback_pid" \
+  "$race_log_dir/sitemap-delete-fallback.log"
+sitemap_delete_holder_pid=""
+sitemap_delete_current_pid=""
+sitemap_delete_fallback_pid=""
+run_psql <<'SQL'
+revoke api_internal_executor from postgres;
+SQL
+
+assert_sql "
+  not exists (
+    select 1 from private.portal_catalog_search_rows_v1
+    where id = '53990000-0000-4000-8000-000000000002'::uuid
+  )
+  and not exists (
+    select 1 from private.portal_catalog_facet_rows_v1
+    where id = '53990000-0000-4000-8000-000000000002'::uuid
+  )
+  and not exists (
+    select 1 from private.portal_sitemap_latest_rows_v1
+    where id = '53990000-0000-4000-8000-000000000002'::uuid
+  )
+" "concurrent sitemap deletes resurrected a removed version"
+
+# Queue a lower insert before deletion of the current version. Once the row
+# lock is released, the lower insert commits first and the current delete must
+# rebind latest to that now-committed predecessor rather than leaving a gap.
+run_psql <<'SQL'
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+insert into private.portal_catalog_search_rows_v1 (
+  dataset_kind, id, version, state_code, modified_at,
+  card, document, projection_contract_version
+)
+values (
+  'process', '53990000-0000-4000-8000-000000000003',
+  '02.00.000', 100, '2026-08-27 15:20:01+00',
+  '{"document":"sitemap concurrent insert v2","accessLevel":"metadata_only","geography":{"code":null},"classifications":[]}'::jsonb,
+  'sitemap concurrent insert v2', 1
+);
+reset role;
+SQL
+
+docker exec -i "$container_name" \
+  psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+  >"$race_log_dir/sitemap-insert-holder.log" 2>&1 <<'SQL' &
+set application_name = 'portal_sitemap_insert_holder';
+begin;
+set local statement_timeout = '20s';
+set role api_internal_executor;
+select version
+from private.portal_sitemap_latest_rows_v1
+where dataset_kind = 'process'
+  and id = '53990000-0000-4000-8000-000000000003'::uuid
+for update;
+select pg_sleep(12);
+commit;
+SQL
+sitemap_insert_holder_pid=$!
+wait_for_pg_sleep portal_sitemap_insert_holder
+
+docker exec -i "$container_name" \
+  psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+  >"$race_log_dir/sitemap-insert-lower.log" 2>&1 <<'SQL' &
+set application_name = 'portal_sitemap_insert_lower';
+begin;
+set local lock_timeout = '15s';
+set local statement_timeout = '20s';
+set role api_internal_executor;
+insert into private.portal_catalog_search_rows_v1 (
+  dataset_kind, id, version, state_code, modified_at,
+  card, document, projection_contract_version
+)
+values (
+  'process', '53990000-0000-4000-8000-000000000003',
+  '01.00.000', 100, '2026-08-27 15:20:00+00',
+  '{"document":"sitemap concurrent insert v1","accessLevel":"metadata_only","geography":{"code":null},"classifications":[]}'::jsonb,
+  'sitemap concurrent insert v1', 1
+);
+commit;
+SQL
+sitemap_insert_lower_pid=$!
+wait_for_application_lock portal_sitemap_insert_lower
+
+docker exec -i "$container_name" \
+  psql -X -v ON_ERROR_STOP=1 -U postgres -d postgres \
+  >"$race_log_dir/sitemap-insert-delete.log" 2>&1 <<'SQL' &
+set application_name = 'portal_sitemap_insert_delete';
+begin;
+set local lock_timeout = '15s';
+set local statement_timeout = '20s';
+set role api_internal_executor;
+delete from private.portal_catalog_search_rows_v1
+where dataset_kind = 'process'
+  and id = '53990000-0000-4000-8000-000000000003'::uuid
+  and version = '02.00.000';
+commit;
+SQL
+sitemap_insert_delete_pid=$!
+wait_for_application_lock portal_sitemap_insert_delete
+
+wait_for_application_exit \
+  portal_sitemap_insert_holder \
+  "$sitemap_insert_holder_pid" \
+  "$race_log_dir/sitemap-insert-holder.log"
+wait_for_application_exit \
+  portal_sitemap_insert_lower \
+  "$sitemap_insert_lower_pid" \
+  "$race_log_dir/sitemap-insert-lower.log"
+wait_for_application_exit \
+  portal_sitemap_insert_delete \
+  "$sitemap_insert_delete_pid" \
+  "$race_log_dir/sitemap-insert-delete.log"
+sitemap_insert_holder_pid=""
+sitemap_insert_lower_pid=""
+sitemap_insert_delete_pid=""
+run_psql <<'SQL'
+revoke api_internal_executor from postgres;
+SQL
+
+assert_sql "
+  coalesce((
+    select version = '01.00.000'
+      and modified_at = '2026-08-27 15:20:00+00'::timestamptz
+    from private.portal_sitemap_latest_rows_v1
+    where dataset_kind = 'process'
+      and id = '53990000-0000-4000-8000-000000000003'::uuid
+  ), false)
+  and not exists (
+    with expected as (
+      select distinct on (facet.dataset_kind, facet.id)
+        facet.dataset_kind, facet.id, facet.version, facet.modified_at
+      from private.portal_catalog_facet_rows_v1 as facet
+      where facet.dataset_kind = 'process'
+        and facet.id = '53990000-0000-4000-8000-000000000003'::uuid
+      order by facet.dataset_kind, facet.id,
+        facet.version desc, facet.modified_at desc, facet.state_code desc
+    ), actual as (
+      select latest.dataset_kind, latest.id,
+        latest.version, latest.modified_at
+      from private.portal_sitemap_latest_rows_v1 as latest
+      where latest.dataset_kind = 'process'
+        and latest.id = '53990000-0000-4000-8000-000000000003'::uuid
+    )
+    (select * from expected except select * from actual)
+    union all
+    (select * from actual except select * from expected)
+  )
+" "lower insert/current delete did not converge latest to the exact facet winner"
+
+run_psql <<'SQL'
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+delete from private.portal_catalog_search_rows_v1
+where dataset_kind = 'process'
+  and id = '53990000-0000-4000-8000-000000000003'::uuid;
+reset role;
+revoke api_internal_executor from postgres;
+SQL
+
+assert_sql "
+  not exists (
+    select 1 from private.portal_catalog_search_rows_v1
+    where id = '53990000-0000-4000-8000-000000000003'::uuid
+  )
+  and not exists (
+    select 1 from private.portal_catalog_facet_rows_v1
+    where id = '53990000-0000-4000-8000-000000000003'::uuid
+  )
+  and not exists (
+    select 1 from private.portal_sitemap_latest_rows_v1
+    where id = '53990000-0000-4000-8000-000000000003'::uuid
+  )
+" "concurrent sitemap insert/delete fixture did not cleanly converge"
 
 # Reverse-direction lock proof: a successful source-write fence blocks a real
 # content UPDATE until COMMIT. The fixed two-second sleep is coordination only;

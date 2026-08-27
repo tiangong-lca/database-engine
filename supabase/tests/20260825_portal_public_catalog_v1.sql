@@ -5,6 +5,36 @@ set local search_path = extensions, public, auth;
 
 select extensions.no_plan();
 
+create function pg_temp.portal_test_cursor_v1(p_payload jsonb)
+returns text
+language sql
+immutable
+parallel safe
+set search_path = ''
+as $function$
+  select pg_catalog.rtrim(
+    pg_catalog.translate(
+      pg_catalog.replace(
+        pg_catalog.replace(
+          pg_catalog.encode(
+            pg_catalog.convert_to(p_payload::text, 'UTF8'),
+            'base64'
+          ),
+          E'\n',
+          ''
+        ),
+        E'\r',
+        ''
+      ),
+      '+/',
+      '-_'
+    ),
+    '='
+  )
+$function$;
+
+grant execute on function pg_temp.portal_test_cursor_v1(jsonb) to anon;
+
 create temporary table portal_expected_routines (
   routine_identity text primary key
 ) on commit drop;
@@ -383,19 +413,43 @@ select extensions.ok(
   'the sitemap shard index is the exact healthy latest-only covering index'
 );
 
-select extensions.ok(
-  exists (
-    select 1
+select extensions.is(
+  (
+    select pg_catalog.count(*)
     from pg_catalog.pg_trigger as trigger
     where trigger.tgrelid =
       'private.portal_catalog_facet_rows_v1'::regclass
-      and trigger.tgname = 'portal_sitemap_latest_sync_v1'
       and not trigger.tgisinternal
       and trigger.tgenabled = 'O'
-      and trigger.tgfoid =
-        'private.sync_portal_sitemap_latest_row_v1()'::regprocedure
+      and (
+        (
+          trigger.tgname = 'portal_sitemap_latest_sync_v1'
+          and trigger.tgtype = 21
+          and trigger.tgfoid =
+            'private.sync_portal_sitemap_latest_row_v1()'::regprocedure
+        )
+        or (
+          trigger.tgname = 'portal_sitemap_latest_delete_v1'
+          and trigger.tgtype = 11
+          and trigger.tgfoid =
+            'private.sync_portal_sitemap_latest_delete_v1()'::regprocedure
+        )
+      )
   ),
-  'the governed facet writer has exactly one enabled sitemap latest sync trigger'
+  2::bigint,
+  'the governed facet writer has exact INSERT/UPDATE and serialized BEFORE DELETE sitemap triggers'
+);
+
+select extensions.is(
+  (
+    select pg_catalog.count(*)
+    from pg_catalog.pg_constraint as constraint_catalog
+    where constraint_catalog.conrelid =
+      'private.portal_sitemap_latest_rows_v1'::regclass
+      and constraint_catalog.contype = 'f'
+  ),
+  0::bigint,
+  'the latest sitemap table has no exact-version FK that can deadlock concurrent version deletes'
 );
 
 select extensions.is(
@@ -437,12 +491,31 @@ select extensions.is(
       and routine.provolatile = 'v'
       and routine.proparallel = 'u'
       and pg_catalog.md5(routine.prosrc) =
-        '91af513bb8fed85bd4f8a1999c30cfbc'
+        '45503a8c8455b9ae9e69bc15d150d97f'
       and coalesce(routine.proacl::text, '') =
         '{api_internal_executor=X/api_internal_executor}'
   ),
   1::bigint,
   'the latest sitemap sync helper is exact, owner-only, and security-definer fenced'
+);
+
+select extensions.is(
+  (
+    select pg_catalog.count(*)
+    from pg_catalog.pg_proc as routine
+    where routine.oid =
+      'private.sync_portal_sitemap_latest_delete_v1()'::regprocedure
+      and routine.proowner = 'api_internal_executor'::regrole
+      and routine.prosecdef
+      and routine.provolatile = 'v'
+      and routine.proparallel = 'u'
+      and pg_catalog.md5(routine.prosrc) =
+        '4278224e16a7f1932d0f3debbc245b2b'
+      and coalesce(routine.proacl::text, '') =
+        '{api_internal_executor=X/api_internal_executor}'
+  ),
+  1::bigint,
+  'the BEFORE DELETE sitemap helper is exact, owner-only, and identity-fence serialized'
 );
 
 select extensions.is(
@@ -2688,6 +2761,34 @@ select extensions.throws_ok(
   'invalid portal request',
   'a malformed sitemap shard cursor fails closed without SQL detail'
 );
+
+select extensions.throws_ok(
+  pg_catalog.format(
+    'select api.portal_sitemap_shard_v1(%L)',
+    pg_temp.portal_test_cursor_v1(forgery.payload)
+  ),
+  '22023',
+  'invalid portal request',
+  forgery.description
+)
+from (values
+  (
+    '{"scope":"sitemap-shard","bucket":0,"shardCount":64,"extra":true}'::jsonb,
+    'a canonical four-key shard cursor missing v fails closed'::text
+  ),
+  (
+    '{"v":1,"bucket":0,"shardCount":64,"extra":true}'::jsonb,
+    'a canonical four-key shard cursor missing scope fails closed'
+  ),
+  (
+    '{"v":1,"scope":"sitemap-shard","bucket":0,"extra":true}'::jsonb,
+    'a canonical four-key shard cursor missing shardCount fails closed'
+  ),
+  (
+    '{"v":"1","scope":"sitemap-shard","bucket":"0","shardCount":"64"}'::jsonb,
+    'a canonical shard cursor with string-typed numeric fields fails closed'
+  )
+) as forgery(payload, description);
 
 select extensions.throws_ok(
   pg_catalog.format(

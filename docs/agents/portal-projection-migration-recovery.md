@@ -1,7 +1,7 @@
 ---
 lastReviewedAt: 2026-08-27
 lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for Issue #539: the 273-file tree, transactional latest-only rollout/recovery, runtime capacity guard, and bounded sync writer extension are explicit."
+lastReviewedNote: "Reviewed for Issue #539: the 274-file tree, intentionally no-FK latest table, same-identity advisory writer fence, and 134103 concurrency repair are explicit."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -43,6 +43,7 @@ checkPaths:
   - supabase/migrations/20260827134100_optimize_portal_flow_geography_search.sql
   - supabase/migrations/20260827134101_portal_sitemap_latest_projection.sql
   - supabase/migrations/20260827134102_portal_sitemap_shard_contract.sql
+  - supabase/migrations/20260827134103_portal_sitemap_concurrency_repair.sql
   - supabase/migrations/20260827050000_portal_catalog_summary_eligibility_index.sql
   - supabase/migrations/20260827050001_portal_catalog_summary_eligibility_guard.sql
   - supabase/migrations/20260827050002_portal_catalog_summary_v1.sql
@@ -67,7 +68,7 @@ Supabase branch controls before any hosted action.
 
 ## Safe rollout states
 
-The rollout has six observable boundaries:
+The rollout has nine observable boundaries:
 
 1. `20260826060422` installs the immutable v1 derivation-contract registry,
    private projection, dormant projection Hybrid kernel, and source-table sync
@@ -112,17 +113,34 @@ The rollout has six observable boundaries:
    its two ACL-closed validation helpers. Counts and latest timestamp continue
    reading the narrow facet projection; no existing card/facet manifest,
    source trigger, table, or index changes.
-8. `20260827134101` transactionally creates an empty latest-only table and its
-   `(shard_no,dataset_kind,id)` covering B-tree, installs one ACL-closed facet
-   sync trigger, performs one set-based backfill, and proves exact equality
-   with the current latest-visible facet set. The physical smallint bucket
-   avoids non-leakproof expression filtering through forced RLS. Inserts and
-   updates use one direct latest upsert; only deletion of a current version
-   looks up its visible predecessor. `20260827134102` then verifies initial
-   capacity and exposes a constant 64-row opaque manifest plus one bounded
-   shard read with a 4,096-identity hard cap. The capacity guard is read-only:
-   it never rejects, delays, or changes source/facet/latest writes, and the
-   retained `portal_sitemap_entries_v1` function remains byte-identical.
+8. `20260827134101` transactionally creates an empty latest-only table with no
+   foreign key to an exact-version facet row, then builds its
+   `(shard_no,dataset_kind,id)` covering B-tree. Both ACL-closed writer helpers
+   first take the same transaction-scoped identity advisory lock:
+   `pg_advisory_xact_lock(hashtextextended(dataset_kind || ':' || id, 539))`.
+   The `AFTER INSERT OR UPDATE` trigger directly upserts the new/current
+   version.
+   The separate `BEFORE DELETE` trigger takes the same advisory fence, locks the
+   latest identity row `FOR UPDATE`, and rebinds a deleted current version to
+   the highest remaining visible facet version or removes the latest row when
+   no fallback exists. An exact-version FK is deliberately absent: cascade and
+   trigger locks formed a real cycle when different versions of one identity
+   were deleted concurrently. A hash collision may serialize unrelated
+   identities but cannot change the exact kind/id effects. After the writer pair
+   is installed, one set-based backfill proves exact equality with the current
+   latest-visible facet set. The physical smallint bucket avoids non-leakproof
+   expression filtering through forced RLS. `20260827134102` then verifies
+   initial capacity and exposes a constant 64-row opaque manifest plus one
+   bounded shard read with a 4,096-identity hard cap. The capacity guard is
+   read-only: it never rejects, delays, or changes source/facet/latest writes,
+   and the retained `portal_sitemap_entries_v1` function remains byte-identical.
+9. `20260827134103_portal_sitemap_concurrency_repair.sql` is the
+   transactionally guarded forward repair for the first PR Preview head that
+   lacked same-identity writer serialization. Fresh databases already receive
+   the final no-FK advisory-fenced design from `20260827134101`; the repair
+   rejects any latest-table FK, reinstalls both advisory-fenced writer functions
+   and triggers, reconciles existing latest rows, refreshes the assertion and
+   shard-reader digests, and fails unless the repaired projection converges.
 
 The card expand/reconcile/cutovers and all facet expand/backfill/reconcile/
 cutover files are explicit transactions. A statement or guard failure rolls
@@ -416,25 +434,41 @@ already recorded, do not drop or rename the index and do not edit migration
 history. Preserve the exact ledger/index/function evidence and repair through
 a separately reviewed forward migration.
 
-The Portal sitemap rollout has a two-file transactional boundary. The expand
-file creates the latest table, its empty-table index, helper, trigger, backfill,
-and parity proof in one transaction. Ordinary failure rolls all of them back.
+The Portal sitemap rollout has a three-file transactional boundary. The expand
+file creates the intentionally no-FK latest table, its empty-table index, and
+two helpers that take the same transaction identity advisory lock before other
+writer work. The `AFTER INSERT OR UPDATE` path performs a direct upsert; the
+`BEFORE DELETE` path additionally locks the latest row `FOR UPDATE` before
+fallback/removal. The backfill and parity proof run in the same transaction.
+Ordinary failure rolls all of them back.
 A database COMMIT followed by a missing `20260827134101` ledger row is not
 blind-idempotent: normal retry must fail on the existing table/function. On a
 hosted branch, do not delete a subset or edit history; retain the exact ledger,
-table/index, trigger, helper digest, and public-RPC absence evidence, then use a
-separately reviewed forward repair. Only the explicitly disposable isolated
-recovery project may reset to `20260827134100` and repeat the unchanged expand.
+table/index/no-FK catalog state, two-trigger writer pair, helper digests, and
+public-RPC absence evidence, then use a separately reviewed forward repair.
+Only the explicitly disposable isolated recovery project may reset to
+`20260827134100` and repeat the unchanged expand.
 
-The `20260827134102` public cutover is also transactional. A missing/disabled
-trigger, missing/invalid covering index, helper digest drift, or initial shard
-above 4,096 fails before exposing either RPC. Restoring an unrecorded metadata
-rename inside the isolated recovery fixture and repeating the unchanged
-migration is valid; an applied hosted expand with real definition/data drift
-requires forward repair. Capacity overflow after cutover is never migration or
-index corruption and never authorizes cleanup: source/facet/latest writes
-continue, only the affected shard remains fail closed, and expansion requires
-a separately versioned reshard contract.
+The `20260827134102` public cutover is also transactional. A missing or disabled
+writer trigger, missing/invalid covering index, helper digest/advisory-fence
+drift, any latest-table FK, or an initial shard above 4,096 fails before
+exposing either RPC. Restoring an unrecorded metadata rename inside the
+isolated recovery fixture and repeating the unchanged migration is valid; an
+applied hosted expand with real definition/data drift requires forward repair.
+Capacity overflow after cutover is never migration or index corruption and
+never authorizes cleanup: source/facet/latest writes continue, only the
+affected shard remains fail closed, and expansion requires a separately
+versioned reshard contract.
+
+`20260827134103_portal_sitemap_concurrency_repair.sql` is that checked-in
+Preview forward repair, not permission for manual cleanup. It fails if the
+latest table has any FK, replaces the exact two writer functions and triggers
+with their identical advisory-lock prefix, reconciles the latest set, and
+refreshes the assertion/shard-reader guards in one transaction. Preserve and
+escalate any prerequisite or convergence failure; do not add an exact-version
+FK, remove either advisory fence, skip the serialized delete fallback, or edit
+history to force the repair. Advisory-key collisions are conservative: they
+only add serialization and do not change exact-identity correctness.
 
 ## Uncertain expand commit
 
@@ -532,7 +566,7 @@ Issue 531 Supabase project. It resets that local project and must never target a
 shared checkout, Preview, persistent Dev, or production.
 
 Formal recovery evidence requires clean HEAD, the reviewed Supabase CLI
-`2.109.1`, and byte equality plus one aggregate SHA-256 across all 273 migration
+`2.109.1`, and byte equality plus one aggregate SHA-256 across all 274 migration
 files in the repository and isolated project. Comparing only Issue 531 files is
 not sufficient because an earlier baseline change can alter recovery behavior.
 
@@ -558,9 +592,14 @@ The same runner also resets to `20260827134100` and proves the sitemap expand
 COMMIT/history gap requires an explicit disposable-project reset. It then
 renames the recorded covering index to force public-cutover rollback, proves
 both RPCs remain absent, restores the unrecorded metadata name, applies the
-unchanged cutover, and validates the final 64-descriptor manifest. Its final
-no-op pass includes the latest covering-index OID so a recorded retry cannot
-rebuild it.
+unchanged cutover plus `20260827134103` forward repair, and validates the exact
+no-FK catalog state, identical advisory-lock prefix on both helpers,
+two-trigger writer contract, and final 64-descriptor manifest. It then proves
+ordinary current-version deletion rebinds to its predecessor and uses real
+lock-queued sessions for delete/delete and lower-insert/current-delete
+interleavings. Those sessions must complete without deadlock, and the final
+latest rows must exactly match the committed facet winners. Its no-op pass
+includes the latest covering-index OID so a recorded retry cannot rebuild it.
 
 The separate populated-upgrade runner resets the same kind of isolated project
 to `20260827010003`, inserts 17,299 Process plus 108,947 Flow parent cards, and
@@ -569,7 +608,12 @@ must finish within 60 seconds, preserving at least 2x headroom under its
 authored 120-second statement timeout, and each complete file must finish
 within 120 seconds. Reconcile must complete within five seconds, and final
 key coverage, deterministic sampled fact parity, and aggregate DTO counts must
-be exact. The pgTAP suite remains the exhaustive semantic equality oracle.
+be exact. The runner then applies `20260827134101`, `20260827134102`, and
+`20260827134103` over all 126,246 rows with 60/15/15-second evidence budgets and
+120/30/30-second outer timeouts. It requires exact two-way latest/facet parity,
+the 4,096-row shard cap, zero latest-table FKs, the identical transaction
+identity advisory fence on both helpers, both exact triggers, and both public
+sitemap RPCs. The pgTAP suite remains the exhaustive semantic equality oracle.
 
 ```bash
 PORTAL_FACET_UPGRADE_TARGET=local-isolated \

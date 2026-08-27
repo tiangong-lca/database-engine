@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
 lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for Issue #539: 273-file recovery/benchmark runners, fixed sitemap shards, bounded latest sync, anonymous Preview gates, and 13-module Portal generation are current."
+lastReviewedNote: "Reviewed for Issue #539: 274-file recovery/benchmark runners, fixed sitemap shards, the no-FK same-identity advisory-fenced latest writer pair, anonymous Preview gates, and 13-module Portal generation are current."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -92,12 +92,16 @@ embedding-only races; forces card/facet reconcile lock-timeout and cutover-guard
 failures; verifies facet expand COMMIT/history failure, four-shard idempotent
 retry, controlled same-name concurrent-index cleanup, post-cutover Flow
 eligibility guard rollback, transactional sitemap expand COMMIT-gap/reset and
-public-cutover rollback/retry, and no-op repeat without rebuilding eight indexes.
+public-cutover/concurrency-repair rollback and retry, ordinary latest fallback,
+the no-FK catalog contract, and the identical same-identity advisory fence on
+both helpers. Real delete/delete plus lower-insert/current-delete lock
+interleavings must finish without deadlock and converge to the committed facet
+winner. The runner also proves a no-op repeat does not rebuild eight indexes.
 See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries. Formal evidence additionally requires
 clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
-the complete 273-file migration tree.
+the complete 274-file migration tree.
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
@@ -107,6 +111,11 @@ backfill statement to retain at least 2x headroom under its 120-second timeout,
 each complete UUID-quarter file to stay below 120 seconds, the successful
 reconcile fence to finish within five seconds, plus exact key coverage,
 deterministic sampled facts, and aggregate DTO counts.
+It then times the three sitemap migrations over all 126,246 rows against exact
+60/15/15-second evidence budgets (120/30/30-second outer timeouts) and requires
+latest/facet two-way parity, shard capacity, no latest-table FK, the identical
+transaction identity advisory fence on both helpers, and exact trigger and
+public-RPC parity.
 The runner always resets the isolated project to full HEAD on exit.
 
 ### `run_portal_projection_benchmark.sh`
@@ -114,7 +123,7 @@ The runner always resets the isolated project to full HEAD on exit.
 Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
 fence, plan, and ANN-recall benchmark only against an explicitly attested
 Issue-531/532/539 local Supabase project. The runner byte-compares the complete
-273-file migration tree with the repository, writes into a new operator-selected private
+274-file migration tree with the repository, writes into a new operator-selected private
 directory, and resets the isolated database before and after the run so rolled
 back HNSW pages cannot accumulate. Its environment contract mirrors the
 recovery runner and additionally requires
@@ -181,9 +190,15 @@ query-only kernel replacement with no table/index/trigger/writer rewrite. The
 runtime path independently validates the Facet manifest before reading that
 child projection.
 
-It also freezes the Issue #539 64-bucket latest-only table, empty-table covering
-index, direct-upsert/delete-fallback sync trigger, transactional public guard,
-4,096-item read cap, and byte-identical retained sitemap façade.
+It also freezes the Issue #539 no-FK 64-bucket latest-only table, empty-table
+covering index, and exact writer pair. Both helpers first acquire the identical
+`pg_advisory_xact_lock(hashtextextended(dataset_kind || ':' || id, 539))`
+transaction identity fence; the `AFTER INSERT OR UPDATE` path then directly
+upserts, while the serialized `BEFORE DELETE` path locks the latest row and
+selects the visible-version fallback. It also freezes the `134103` concurrency
+forward repair, transactional public guard, 4,096-item read cap, and
+byte-identical retained sitemap façade. Advisory-key collisions may only add
+serialization; exact kind/id predicates preserve correctness.
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py

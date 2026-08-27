@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
 lastReviewedCommit: 712558e
-lastReviewedNote: "已复核 Issue #539：273-file recovery/benchmark、固定 sitemap shards、bounded latest sync、匿名 Preview gates 与 13-module Portal 生成均为当前状态。"
+lastReviewedNote: "已复核 Issue #539：274-file recovery/benchmark、固定 sitemap shards、无 FK 且按同 identity advisory fence 串行的 latest writer pair、匿名 Preview gates 与 13-module Portal 生成均为当前状态。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -82,10 +82,14 @@ scripts/test_search_text_array_upgrade.sh
 上线。脚本使用真实并发连接覆盖有效更新、删除、状态失效、主键变更以及仅 embedding
 更新竞态；主动制造 card/facet reconcile 锁超时与 cutover guard 失败；证明 facet
 expand COMMIT/history 缺口、四分片幂等重试、同名 concurrent index 受控清理、Flow
-eligibility guard 回滚、事务性 sitemap expand COMMIT-gap/reset 与 public cutover
-回滚/重试，以及已记录迁移重复执行不会重建八个索引。所需环境变量与恢复边界见
+eligibility guard 回滚、事务性 sitemap expand COMMIT-gap/reset、public cutover 与
+concurrency repair 的回滚/重试、普通 latest 回退、latest table 无 FK 的 catalog
+合同，以及两个 helper 完全相同的同 identity advisory fence。真实 delete/delete 与
+lower-insert/current-delete 锁队列交错必须无 deadlock 完成并收敛到已提交的 facet
+winner；脚本还证明已记录迁移重复执行不会重建八个索引。
+所需环境变量与恢复边界见
 `docs/agents/portal-projection-migration-recovery.md`。正式证据还要求干净 HEAD、
-Supabase CLI `2.109.1`，以及完整 273-file migration tree 的逐字相等和 aggregate
+Supabase CLI `2.109.1`，以及完整 274-file migration tree 的逐字相等和 aggregate
 SHA-256。
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
@@ -94,13 +98,17 @@ SHA-256。
 Facet migration。每条 backfill statement 必须在 120 秒门下保留至少 2 倍余量，
 每个完整 UUID-quarter 文件必须低于 120 秒；成功 reconcile fence 必须在 5 秒内
 完成，并要求 key coverage、确定性抽样 facts 与 DTO 聚合计数精确一致。runner
-退出时总会把隔离项目重置到完整 HEAD。
+随后在全部 126,246 行上按 60/15/15 秒证据预算（120/30/30 秒外层超时）计时三条
+sitemap migration，并要求 latest/facet 双向相等、shard capacity、latest table
+无 FK、两个 helper 使用完全相同的 transaction identity advisory fence，以及两个
+trigger 与两个 public RPC 精确一致。runner 退出时总会把隔离项目重置到完整
+HEAD。
 
 ### `run_portal_projection_benchmark.sh`
 
 仅在显式确认的 Issue 531/532/539 隔离本地 Supabase 项目中运行代表性 Process/Flow
 Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把完整
-273-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
+274-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
 reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合同与 recovery runner
 一致，另要求 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`。
 
@@ -154,9 +162,14 @@ Search-50/Hybrid-20 label 必须分别返回准确 50/20 个完整 item、20 个
 单一 query-only kernel replacement，不得新增 table/index/trigger 或改写 writer；
 runtime 在读取该 child projection 前还必须独立验证 Facet manifest。
 
-它还会冻结 Issue #539 的 64-bucket latest-only table、空表 covering index、
-direct-upsert/delete-fallback sync trigger、事务性 public guard、4,096-item 读取
-上限，以及旧 sitemap façade 逐字不变。
+它还会冻结 Issue #539 的无 FK 64-bucket latest-only table、空表 covering index
+和精确的双 writer trigger。两个 helper 都先取得完全相同的
+`pg_advisory_xact_lock(hashtextextended(dataset_kind || ':' || id, 539))`
+transaction identity fence；随后 `AFTER INSERT OR UPDATE` 路径 direct upsert，
+serialized `BEFORE DELETE` 路径则锁定 latest row 并选择剩余最新可见版本作为
+fallback。它同时冻结 `134103` concurrency forward repair、事务性 public guard、
+4,096-item 读取上限以及旧 sitemap façade 逐字不变。advisory key 碰撞最多只会
+额外串行；精确 kind/id 条件仍保证正确性。
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py

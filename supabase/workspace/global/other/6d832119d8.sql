@@ -1,0 +1,1 @@
+COMMENT ON TRIGGER "portal_sitemap_latest_delete_v1" ON "private"."portal_catalog_facet_rows_v1" IS 'Serializes one facet identity before DELETE and rebinds its latest sitemap row to the visible predecessor.';

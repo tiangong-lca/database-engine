@@ -80,7 +80,7 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  285::bigint,
+  286::bigint,
   'private contains the active helpers, Database B/reuse helpers, and reviewed Portal catalog/LCIA/Hybrid/sitemap internals'
 );
 
@@ -112,7 +112,7 @@ select is(
     from pg_trigger trigger_record
     where not trigger_record.tgisinternal
   ),
-  115::bigint,
+  116::bigint,
   'all active application triggers remain present'
 );
 

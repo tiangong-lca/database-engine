@@ -24,14 +24,20 @@ begin
   if v_cursor is null
      or pg_catalog.jsonb_typeof(v_cursor) <> 'object'
      or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(v_cursor)) <> 4
-     or v_cursor ->> 'v' <> '1'
-     or v_cursor ->> 'scope' <> 'sitemap-shard'
-     or v_cursor ->> 'shardCount' <> '64'
-     or coalesce(v_cursor ->> 'bucket', '') !~ '^([0-9]|[1-5][0-9]|6[0-3])$'
-     or private.portal_cursor_encode_v1(v_cursor) <> p_shard_cursor then
+     or coalesce(v_cursor ->> 'bucket', '') !~ '^([0-9]|[1-5][0-9]|6[0-3])$' then
     raise exception using errcode = '22023', message = 'invalid portal request';
   end if;
   v_bucket := (v_cursor ->> 'bucket')::integer;
+
+  if v_cursor is distinct from pg_catalog.jsonb_build_object(
+       'v', 1,
+       'scope', 'sitemap-shard',
+       'bucket', v_bucket,
+       'shardCount', 64
+     )
+     or private.portal_cursor_encode_v1(v_cursor) <> p_shard_cursor then
+    raise exception using errcode = '22023', message = 'invalid portal request';
+  end if;
 
   perform private.assert_portal_catalog_projection_contract_v1();
   perform private.assert_portal_catalog_facet_contract_v1();

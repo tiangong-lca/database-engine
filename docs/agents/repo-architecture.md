@@ -31,7 +31,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
 lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for Issue #539 fixed sitemap shards, exact opaque-cursor DTO ownership, and the bounded latest-only sync extension."
+lastReviewedNote: "Reviewed for Issue #539 fixed sitemap shards, the intentionally no-FK latest table, same-identity advisory writer fence, and the 134103 concurrency repair."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -127,12 +127,30 @@ manifest always emits exactly 64
 ordered opaque shard cursors, so manifest work is constant and never scans or
 counts catalog rows. Each identity is assigned by the stable high six bits of
 `MD5(dataset_kind || ':' || id)`; MD5 is only a deterministic distribution
-primitive here, never an authorization or integrity decision. The new table
-and its `(shard_no,dataset_kind,id)` covering B-tree are created empty before
-one set-based backfill. One bounded facet trigger directly upserts a new/current
-version and performs a latest-index lookup only when a version is deleted, so
-the public RLS path filters a physical smallint column and naturally uses the
-covering index without privileged or leakproof-function assumptions.
+primitive here, never an authorization or integrity decision. The latest table
+intentionally has no foreign key to the exact-version facet row. An
+exact-version FK with cascade is prohibited because concurrent deletes of two
+versions of the same identity can acquire parent/cascade/latest locks in
+opposite order and form a real deadlock.
+
+The table and its `(shard_no,dataset_kind,id)` covering B-tree are created empty
+before one set-based backfill. Both writer helpers first take the same
+transaction-scoped identity fence:
+`pg_advisory_xact_lock(hashtextextended(dataset_kind || ':' || id, 539))`.
+One `AFTER INSERT OR UPDATE` facet trigger then directly upserts a new/current
+version. A separate `BEFORE DELETE` trigger takes that same advisory fence,
+locks the latest identity row `FOR UPDATE`, and rebinds a deleted current
+version to the highest remaining visible facet version or removes it when no
+fallback exists. An advisory-hash collision can only serialize unrelated
+identities unnecessarily; the exact kind/id predicates still determine every
+effect, so correctness is unchanged. The public RLS path filters a physical
+smallint column and naturally uses the covering index without privileged or
+leakproof-function assumptions. Migration
+`20260827134103_portal_sitemap_concurrency_repair.sql` is the forward repair for
+the earlier PR Preview head: it reinstalls the advisory-fenced two-helper and
+two-trigger writer contract, reconciles existing latest rows, refreshes the
+guarded function digests, and verifies the no-FK catalog state without editing
+applied migration history.
 Each shard returns at most 4,096 latest visible exact identities and fails
 closed before returning a partial page if capacity is exceeded. Current
 production evidence has 122,176 identities with a largest shard of 1,991, more

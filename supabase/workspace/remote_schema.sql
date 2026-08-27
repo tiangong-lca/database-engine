@@ -20089,14 +20089,20 @@ begin
   if v_cursor is null
      or pg_catalog.jsonb_typeof(v_cursor) <> 'object'
      or (select pg_catalog.count(*) from pg_catalog.jsonb_object_keys(v_cursor)) <> 4
-     or v_cursor ->> 'v' <> '1'
-     or v_cursor ->> 'scope' <> 'sitemap-shard'
-     or v_cursor ->> 'shardCount' <> '64'
-     or coalesce(v_cursor ->> 'bucket', '') !~ '^([0-9]|[1-5][0-9]|6[0-3])$'
-     or private.portal_cursor_encode_v1(v_cursor) <> p_shard_cursor then
+     or coalesce(v_cursor ->> 'bucket', '') !~ '^([0-9]|[1-5][0-9]|6[0-3])$' then
     raise exception using errcode = '22023', message = 'invalid portal request';
   end if;
   v_bucket := (v_cursor ->> 'bucket')::integer;
+
+  if v_cursor is distinct from pg_catalog.jsonb_build_object(
+       'v', 1,
+       'scope', 'sitemap-shard',
+       'bucket', v_bucket,
+       'shardCount', 64
+     )
+     or private.portal_cursor_encode_v1(v_cursor) <> p_shard_cursor then
+    raise exception using errcode = '22023', message = 'invalid portal request';
+  end if;
 
   perform private.assert_portal_catalog_projection_contract_v1();
   perform private.assert_portal_catalog_facet_contract_v1();
@@ -25418,6 +25424,62 @@ begin
          and index_catalog.indnatts = 6
          and index_catalog.indpred is null
          and index_catalog.indexprs is null
+         and pg_catalog.string_to_array(
+           index_catalog.indkey::text,
+           ' '
+         )::smallint[] = array[
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = index_catalog.indrelid
+               and attribute.attname = 'shard_no'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = index_catalog.indrelid
+               and attribute.attname = 'dataset_kind'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = index_catalog.indrelid
+               and attribute.attname = 'id'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = index_catalog.indrelid
+               and attribute.attname = 'version'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = index_catalog.indrelid
+               and attribute.attname = 'modified_at'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = index_catalog.indrelid
+               and attribute.attname = 'contract_version'
+           )
+         ]::smallint[]
+         and array(
+           select operator_class.opcname
+           from pg_catalog.unnest(index_catalog.indclass::oid[])
+             with ordinality as class_oid(oid, ordinality)
+           join pg_catalog.pg_opclass as operator_class
+             on operator_class.oid = class_oid.oid
+           order by class_oid.ordinality
+         ) = array['int2_ops', 'text_ops', 'uuid_ops']::name[]
+     )
+     or exists (
+       select 1
+       from pg_catalog.pg_constraint as constraint_catalog
+       where constraint_catalog.conrelid =
+         'private.portal_sitemap_latest_rows_v1'::regclass
+         and constraint_catalog.contype = 'f'
      )
      or not exists (
        select 1
@@ -25427,8 +25489,62 @@ begin
          and trigger.tgname = 'portal_sitemap_latest_sync_v1'
          and not trigger.tgisinternal
          and trigger.tgenabled = 'O'
+         and trigger.tgtype = 21
+         and pg_catalog.string_to_array(
+           trigger.tgattr::text,
+           ' '
+         )::smallint[] = array[
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = trigger.tgrelid
+               and attribute.attname = 'dataset_kind'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = trigger.tgrelid
+               and attribute.attname = 'id'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = trigger.tgrelid
+               and attribute.attname = 'version'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = trigger.tgrelid
+               and attribute.attname = 'state_code'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = trigger.tgrelid
+               and attribute.attname = 'modified_at'
+           ),
+           (
+             select attribute.attnum
+             from pg_catalog.pg_attribute as attribute
+             where attribute.attrelid = trigger.tgrelid
+               and attribute.attname = 'facet_contract_version'
+           )
+         ]::smallint[]
          and trigger.tgfoid =
            'private.sync_portal_sitemap_latest_row_v1()'::regprocedure
+     )
+     or not exists (
+       select 1
+       from pg_catalog.pg_trigger as trigger
+       where trigger.tgrelid =
+         'private.portal_catalog_facet_rows_v1'::regclass
+         and trigger.tgname = 'portal_sitemap_latest_delete_v1'
+         and not trigger.tgisinternal
+         and trigger.tgenabled = 'O'
+         and trigger.tgtype = 11
+         and trigger.tgfoid =
+           'private.sync_portal_sitemap_latest_delete_v1()'::regprocedure
      )
      or not exists (
        select 1
@@ -25444,7 +25560,23 @@ begin
            'row_security=on'
          ]::text[]
          and pg_catalog.md5(routine.prosrc) =
-           '91af513bb8fed85bd4f8a1999c30cfbc'
+           '45503a8c8455b9ae9e69bc15d150d97f'
+     )
+     or not exists (
+       select 1
+       from pg_catalog.pg_proc as routine
+       where routine.oid =
+         'private.sync_portal_sitemap_latest_delete_v1()'::regprocedure
+         and routine.proowner = 'api_internal_executor'::regrole
+         and routine.prosecdef
+         and routine.provolatile = 'v'
+         and routine.proparallel = 'u'
+         and coalesce(routine.proconfig, '{}'::text[]) @> array[
+           'search_path=""',
+           'row_security=on'
+         ]::text[]
+         and pg_catalog.md5(routine.prosrc) =
+           '4278224e16a7f1932d0f3debbc245b2b'
      ) then
     raise exception using
       errcode = 'P0001',
@@ -54871,86 +55003,124 @@ COMMENT ON FUNCTION "private"."sync_portal_catalog_search_row_v1"() IS 'NOLOGIN/
 
 
 
-CREATE OR REPLACE FUNCTION "private"."sync_portal_sitemap_latest_row_v1"() RETURNS "trigger"
+CREATE OR REPLACE FUNCTION "private"."sync_portal_sitemap_latest_delete_v1"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
     SET "row_security" TO 'on'
     AS $$
 declare
+  v_current_version text;
   v_fallback record;
 begin
-  if tg_op in ('INSERT', 'UPDATE') then
-    insert into private.portal_sitemap_latest_rows_v1 (
-      dataset_kind,
-      id,
-      version,
-      modified_at,
-      shard_no,
-      contract_version
-    ) values (
-      new.dataset_kind,
-      new.id,
-      new.version,
-      new.modified_at,
-      (
-        pg_catalog.get_byte(
-          pg_catalog.decode(
-            pg_catalog.md5(
-              new.dataset_kind || ':'::text || new.id::text
-            ),
-            'hex'::text
-          ),
-          0
-        ) / 4
-      )::smallint,
-      1
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      old.dataset_kind || ':'::text || old.id::text,
+      539
     )
-    on conflict (dataset_kind, id) do update
-    set version = excluded.version,
-        modified_at = excluded.modified_at,
-        shard_no = excluded.shard_no,
-        contract_version = excluded.contract_version
-    where excluded.version > portal_sitemap_latest_rows_v1.version
-       or (
-         excluded.version = portal_sitemap_latest_rows_v1.version
-         and (
-           portal_sitemap_latest_rows_v1.modified_at,
-           portal_sitemap_latest_rows_v1.shard_no,
-           portal_sitemap_latest_rows_v1.contract_version
-         ) is distinct from (
-           excluded.modified_at,
-           excluded.shard_no,
-           excluded.contract_version
-         )
-       );
-  else
-    select facet.version,
-      facet.modified_at
-    into v_fallback
-    from private.portal_catalog_facet_rows_v1 as facet
-    where facet.dataset_kind = old.dataset_kind
-      and facet.id = old.id
-      and facet.state_code in (100, 200)
-      and facet.facet_contract_version = 1
-    order by facet.version desc,
-      facet.modified_at desc,
-      facet.state_code desc
-    limit 1;
+  );
 
-    if found then
-      update private.portal_sitemap_latest_rows_v1 as latest
-      set version = v_fallback.version,
-          modified_at = v_fallback.modified_at
-      where latest.dataset_kind = old.dataset_kind
-        and latest.id = old.id
-        and latest.version = old.version;
-    else
-      delete from private.portal_sitemap_latest_rows_v1 as latest
-      where latest.dataset_kind = old.dataset_kind
-        and latest.id = old.id
-        and latest.version = old.version;
-    end if;
+  select latest.version
+  into v_current_version
+  from private.portal_sitemap_latest_rows_v1 as latest
+  where latest.dataset_kind = old.dataset_kind
+    and latest.id = old.id
+  for update;
+
+  if not found or v_current_version <> old.version then
+    return old;
   end if;
+
+  select facet.version,
+    facet.modified_at
+  into v_fallback
+  from private.portal_catalog_facet_rows_v1 as facet
+  where facet.dataset_kind = old.dataset_kind
+    and facet.id = old.id
+    and facet.version <> old.version
+    and facet.state_code in (100, 200)
+    and facet.facet_contract_version = 1
+  order by facet.version desc,
+    facet.modified_at desc,
+    facet.state_code desc
+  limit 1;
+
+  if found then
+    update private.portal_sitemap_latest_rows_v1 as latest
+    set version = v_fallback.version,
+        modified_at = v_fallback.modified_at
+    where latest.dataset_kind = old.dataset_kind
+      and latest.id = old.id
+      and latest.version = old.version;
+  else
+    delete from private.portal_sitemap_latest_rows_v1 as latest
+    where latest.dataset_kind = old.dataset_kind
+      and latest.id = old.id
+      and latest.version = old.version;
+  end if;
+  return old;
+end
+$$;
+
+
+ALTER FUNCTION "private"."sync_portal_sitemap_latest_delete_v1"() OWNER TO "api_internal_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."sync_portal_sitemap_latest_row_v1"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    SET "row_security" TO 'on'
+    AS $$
+begin
+  perform pg_catalog.pg_advisory_xact_lock(
+    pg_catalog.hashtextextended(
+      new.dataset_kind || ':'::text || new.id::text,
+      539
+    )
+  );
+
+  insert into private.portal_sitemap_latest_rows_v1 (
+    dataset_kind,
+    id,
+    version,
+    modified_at,
+    shard_no,
+    contract_version
+  ) values (
+    new.dataset_kind,
+    new.id,
+    new.version,
+    new.modified_at,
+    (
+      pg_catalog.get_byte(
+        pg_catalog.decode(
+          pg_catalog.md5(
+            new.dataset_kind || ':'::text || new.id::text
+          ),
+          'hex'::text
+        ),
+        0
+      ) / 4
+    )::smallint,
+    1
+  )
+  on conflict (dataset_kind, id) do update
+  set version = excluded.version,
+      modified_at = excluded.modified_at,
+      shard_no = excluded.shard_no,
+      contract_version = excluded.contract_version
+  where excluded.version > portal_sitemap_latest_rows_v1.version
+     or (
+       excluded.version = portal_sitemap_latest_rows_v1.version
+       and (
+         portal_sitemap_latest_rows_v1.modified_at,
+         portal_sitemap_latest_rows_v1.shard_no,
+         portal_sitemap_latest_rows_v1.contract_version
+       ) is distinct from (
+         excluded.modified_at,
+         excluded.shard_no,
+         excluded.contract_version
+       )
+     );
   return null;
 end
 $$;
@@ -68221,11 +68391,19 @@ CREATE OR REPLACE TRIGGER "portal_lcia_projection_value_row_guard_v1" BEFORE DEL
 
 
 
-CREATE OR REPLACE TRIGGER "portal_sitemap_latest_sync_v1" AFTER INSERT OR DELETE OR UPDATE OF "dataset_kind", "id", "version", "state_code", "modified_at", "facet_contract_version" ON "private"."portal_catalog_facet_rows_v1" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_sitemap_latest_row_v1"();
+CREATE OR REPLACE TRIGGER "portal_sitemap_latest_delete_v1" BEFORE DELETE ON "private"."portal_catalog_facet_rows_v1" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_sitemap_latest_delete_v1"();
 
 
 
-COMMENT ON TRIGGER "portal_sitemap_latest_sync_v1" ON "private"."portal_catalog_facet_rows_v1" IS 'Synchronizes only the affected latest sitemap identity after the governed facet writer converges.';
+COMMENT ON TRIGGER "portal_sitemap_latest_delete_v1" ON "private"."portal_catalog_facet_rows_v1" IS 'Serializes one facet identity before DELETE and rebinds its latest sitemap row to the visible predecessor.';
+
+
+
+CREATE OR REPLACE TRIGGER "portal_sitemap_latest_sync_v1" AFTER INSERT OR UPDATE OF "dataset_kind", "id", "version", "state_code", "modified_at", "facet_contract_version" ON "private"."portal_catalog_facet_rows_v1" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_sitemap_latest_row_v1"();
+
+
+
+COMMENT ON TRIGGER "portal_sitemap_latest_sync_v1" ON "private"."portal_catalog_facet_rows_v1" IS 'Upserts only the affected latest sitemap identity after a governed facet INSERT or UPDATE converges.';
 
 
 
@@ -72733,6 +72911,10 @@ REVOKE ALL ON FUNCTION "private"."sync_portal_catalog_facet_row_v1"() FROM PUBLI
 
 REVOKE ALL ON FUNCTION "private"."sync_portal_catalog_search_row_v1"() FROM PUBLIC;
 REVOKE ALL ON FUNCTION "private"."sync_portal_catalog_search_row_v1"() FROM "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."sync_portal_sitemap_latest_delete_v1"() FROM PUBLIC;
 
 
 
