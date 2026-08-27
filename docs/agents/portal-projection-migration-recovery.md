@@ -1,6 +1,6 @@
 ---
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 117b188e343b2422c0a18bc15aaad9d5c93a3a48
+lastReviewedCommit: bfd0f1cf3c439e20cefe0d6bf73c71e037c8898d
 lastReviewedNote: "Reviewed for the Issue #532 independent card-context manifest and explicit absence of a new rollout or writer-recovery boundary; Issue #531 recovery remains unchanged."
 title: Portal Projection Migration Recovery
 docType: runbook

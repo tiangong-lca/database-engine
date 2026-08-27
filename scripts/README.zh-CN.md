@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 2e128536bf4665afd911a1b844a0c0727eccb428
+lastReviewedCommit: bfd0f1cf3c439e20cefe0d6bf73c71e037c8898d
 lastReviewedNote: "已为 Issue #532 复核 Portal 类型生成、card-context manifest/parity 检查、隔离 proof 目标与保留的命名 benchmark profile。"
 related:
   - ../AGENTS.md
@@ -131,6 +131,14 @@ writer delta/ratio 门。
 记录全量 vector 的自然计划，不强制使用该索引。只有 release 必须命名两个 source
 HNSW index；sparse source probe 可以选择 eligibility/empty-set plan，但仍必须提供
 buffers、execution time 且没有 temp/disk spill。
+
+所有命名 profile 都会构造 evidence-complete card context：每个 Process 都解析准确
+公开 reference Flow 与真实 FlowProperty/UnitGroup functional-unit 支撑链，Process/Flow
+还包含公开 source/database，Process 另包含 review/technology 字段。四个专用
+Search-50/Hybrid-20 label 必须分别返回准确 50/20 个完整 item、20 个 timing sample，
+并输出完整 wrapper `EXPLAIN (ANALYZE, BUFFERS)`。runner 会拒绝字段缺失、spill、
+超过 750,000 total / 250,000 read shared blocks，以及超过既有 Search 2 秒 / Hybrid
+6 秒门槛的结果。
 
 ### `check_portal_projection_manifest.py`
 

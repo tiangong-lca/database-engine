@@ -312,6 +312,30 @@ fi
 docker cp "$container_name:$container_explain" "$explain_log" >/dev/null
 chmod 600 "$explain_log"
 
+for expected_wrapper_profile in \
+  process-search50-evidence-complete-wrapper \
+  flow-search50-evidence-complete-wrapper \
+  process-hybrid20-evidence-complete-wrapper \
+  flow-hybrid20-evidence-complete-wrapper
+do
+  if ! grep -q "profile=$expected_wrapper_profile" "$explain_log"; then
+    echo "missing evidence-complete wrapper plan: $expected_wrapper_profile" >&2
+    exit 1
+  fi
+done
+
+for expected_wrapper_timing in \
+  process_context_search_50 \
+  flow_context_search_50 \
+  process_context_hybrid_20 \
+  flow_context_hybrid_20
+do
+  if ! grep -q "$expected_wrapper_timing" "$results_log"; then
+    echo "missing evidence-complete wrapper p95: $expected_wrapper_timing" >&2
+    exit 1
+  fi
+done
+
 # The ~17k-row Process lexical leaf has two valid natural-cost plans. SQL
 # records and bounds whichever the planner selects; Flow must name PGroonga.
 for expected_index in portal_catalog_search_flow_document_v1_pgroonga; do

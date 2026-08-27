@@ -32,7 +32,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 2e128536bf4665afd911a1b844a0c0727eccb428
+lastReviewedCommit: bfd0f1cf3c439e20cefe0d6bf73c71e037c8898d
 lastReviewedNote: "Reviewed for Issue #532 exact-key 50/20 decoration, deterministic Portal types, isolated SQL proof, and retained representative benchmark evidence."
 related:
   - ../../AGENTS.md
@@ -113,6 +113,17 @@ Portal performance profile. Search remains <= 2 seconds; Hybrid remains <= 6
 seconds p95 and < 8 seconds per call. Preview must validate the strict response
 schemas with a publishable key. Any later change to the stored v1 card/document
 still requires the shadow-v2 rollout described above.
+
+The named benchmark fixture must exercise the complete expensive path rather
+than context shape alone: every Process card carries a real quantitative
+reference Exchange to an exact public Flow, complete FlowProperty/UnitGroup
+support, technology, source/database identity, and dataset-authored review
+status; every Flow card resolves the same public FlowProperty and source
+identity while retaining explicit Process-only nulls. Require exactly 50/20
+items for the four dedicated wrapper labels, capture full
+`EXPLAIN (ANALYZE, BUFFERS)` for each wrapper, reject temp/disk spill, keep each
+plan below 750,000 total and 250,000 read shared blocks, and apply the same
+2-second Search / 6-second Hybrid budgets to both plans and 20-sample p95.
 
 When the anonymous PR Preview probe fails, CI may log only the HTTP status and
 a response-shape-validated PostgREST or SQLSTATE code. It must not print the

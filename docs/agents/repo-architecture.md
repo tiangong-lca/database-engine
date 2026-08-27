@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 2e128536bf4665afd911a1b844a0c0727eccb428
+lastReviewedCommit: bfd0f1cf3c439e20cefe0d6bf73c71e037c8898d
 lastReviewedNote: "Reviewed for Issue #532 exact-key 50/20 card decoration and generated DTO ownership; stored projection, index, trigger, and writer boundaries are unchanged."
 related:
   - ../../AGENTS.md
@@ -331,6 +331,15 @@ manifest protects that helper/decorator closure. It creates no second
 full-cardinality projection, index, policy, source trigger, or writer work;
 missing source identity or helper drift fails the wrapper closed. A future
 change to stored v1 card/document semantics still requires shadow-v2 rollout.
+
+The representative benchmark exercises this composition with complete
+evidence, not placeholder nulls: exact Process→Flow and shared
+Flow→FlowProperty→UnitGroup support, public source/database identity,
+technology, and review status are all present. Dedicated Search-50 and
+Hybrid-20 labels record 20-sample p95 plus full wrapper
+`EXPLAIN (ANALYZE, BUFFERS)` under the existing time, shared-buffer, and
+zero-spill ceilings. These fixtures remain rollback-only test data and add no
+runtime relation, index, trigger, or writer path.
 
 This contract assumes privileged DDL is delivered only through the governed
 migration and CI path. The live digest proves current definitions, not the
