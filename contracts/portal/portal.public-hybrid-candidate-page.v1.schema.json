@@ -1,0 +1,326 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "portal.public-hybrid-candidate-page.v1.schema.json",
+  "title": "TianGong Portal public Hybrid candidate page v1",
+  "description": "Strict locator-free Database result consumed by portal_hybrid_search_v1. Exact candidate identities are unique and every evidence field comes from the retrieval branch named by reasonCodes.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "queryFingerprint",
+    "items"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "portal.public-hybrid-candidate-page.v1"
+    },
+    "kind": {
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/DatasetKind"
+    },
+    "queryFingerprint": {
+      "description": "Lowercase SHA-256 binding normalized kind/terms, the embedding digest, normalized filters, limit, and portal-hybrid-rank-v1.",
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/Sha256"
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/Candidate"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "process"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "process"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "flow"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "flow"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "Candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "accessLevel",
+        "capabilities",
+        "names",
+        "summary",
+        "geography",
+        "referenceYear",
+        "modifiedAt",
+        "match"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicDatasetKey"
+        },
+        "accessLevel": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/AccessLevel"
+        },
+        "capabilities": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicCapabilities"
+        },
+        "names": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "summary": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "geography": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/Geography"
+        },
+        "referenceYear": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableYear"
+        },
+        "modifiedAt": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/DateTime"
+        },
+        "match": {
+          "$ref": "#/$defs/HybridMatch"
+        }
+      }
+    },
+    "HybridMatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "algorithmVersion",
+        "score",
+        "reasonCodes",
+        "evidence"
+      ],
+      "properties": {
+        "kind": {
+          "const": "hybrid"
+        },
+        "algorithmVersion": {
+          "description": "Versioned portal-hybrid-rank-v1 contract: public latest-version identity and false-positive exclusion are exact; a filled semantic pool uses bounded filtered source-HNSW with recall@20 and recall@200 of at least 0.95, while raw ANN underfill uses exact-distance fallback. The threshold, RRF weights and constant, and score/id/version tie-break are deterministic for the candidates actually retrieved.",
+          "const": "portal-hybrid-rank-v1"
+        },
+        "score": {
+          "description": "Finite normalized ranking explanation, never a domain quantity.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "reasonCodes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "lexical_public_projection",
+              "semantic_public_projection"
+            ]
+          }
+        },
+        "evidence": {
+          "$ref": "#/$defs/HybridEvidence"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "evidence": {
+                "type": "object",
+                "properties": {
+                  "lexicalRank": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reasonCodes": {
+                "type": "array",
+                "contains": {
+                  "const": "lexical_public_projection"
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "reasonCodes": {
+                "not": {
+                  "type": "array",
+                  "contains": {
+                    "const": "lexical_public_projection"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "evidence": {
+                "type": "object",
+                "properties": {
+                  "semanticRank": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reasonCodes": {
+                "type": "array",
+                "contains": {
+                  "const": "semantic_public_projection"
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "reasonCodes": {
+                "not": {
+                  "type": "array",
+                  "contains": {
+                    "const": "semantic_public_projection"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "HybridEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lexicalRank",
+        "semanticRank",
+        "semanticDistance"
+      ],
+      "properties": {
+        "lexicalRank": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "semanticRank": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1
+        },
+        "semanticDistance": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/NonNegativeCanonicalDecimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "semanticRank": {
+                "type": "integer"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "semanticDistance": {
+                "$ref": "#/$defs/NonNegativeCanonicalDecimal"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "semanticDistance": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "NonNegativeCanonicalDecimal": {
+      "type": "string",
+      "pattern": "^(?=(?:[^0-9]*[0-9]){1,38}[^0-9]*$)(?:0|(?:[1-9]\\d*(?:\\.\\d*[1-9])?|0\\.\\d*[1-9]))$"
+    }
+  }
+}

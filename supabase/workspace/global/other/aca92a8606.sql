@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."svc_portal_lcia_projection_stage_seal_v1"("p_projection_id" "uuid", "p_stage_lease_token" "uuid") IS 'Rejects holes and recomputes every int32be-framed record, relation, and content hash before preparing a projection.';

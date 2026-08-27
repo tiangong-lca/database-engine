@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."portal_sitemap_entries_v1"("p_kind" "text", "p_cursor" "text", "p_limit" integer) IS 'Bounded keyset page of the latest visible exact Process/Flow identities for Portal sitemap generation.';

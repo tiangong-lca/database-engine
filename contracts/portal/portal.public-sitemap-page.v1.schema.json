@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "portal.public-sitemap-page.v1.schema.json",
+  "title": "TianGong Portal public sitemap page v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "items",
+    "nextCursor"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "portal.public-sitemap-page.v1"
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 1000,
+      "items": {
+        "$ref": "#/$defs/SitemapItem"
+      }
+    },
+    "nextCursor": {
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableCursor"
+    }
+  },
+  "$defs": {
+    "SitemapItem": {
+      "description": "A locator-free sitemap identity from which the Portal derives its canonical URL.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "modifiedAt"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicDatasetKey"
+        },
+        "modifiedAt": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/DateTime"
+        }
+      }
+    }
+  }
+}

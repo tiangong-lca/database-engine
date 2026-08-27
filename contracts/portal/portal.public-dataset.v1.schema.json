@@ -1,0 +1,324 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "portal.public-dataset.v1.schema.json",
+  "title": "TianGong Portal public data-set envelope v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "key",
+    "accessLevel",
+    "capabilities",
+    "metadata",
+    "provenance",
+    "publication",
+    "modifiedAt"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "portal.public-dataset.v1"
+    },
+    "key": {
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicDatasetKey"
+    },
+    "accessLevel": {
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/AccessLevel"
+    },
+    "capabilities": {
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicCapabilities"
+    },
+    "metadata": {
+      "oneOf": [
+        {
+          "$ref": "#/$defs/PublicProcessMetadata"
+        },
+        {
+          "$ref": "#/$defs/PublicFlowMetadata"
+        }
+      ]
+    },
+    "provenance": {
+      "$ref": "#/$defs/PublicProvenance"
+    },
+    "publication": {
+      "anyOf": [
+        {
+          "$ref": "#/$defs/PublicPublication"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "modifiedAt": {
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/DateTime"
+    }
+  },
+  "$defs": {
+    "PublicProcessMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "names",
+        "generalComment",
+        "referenceProduct",
+        "functionalUnit",
+        "classifications",
+        "geography",
+        "referenceYear",
+        "validUntilYear",
+        "technology",
+        "dataSetType",
+        "allocationAndModeling",
+        "cutoffRules",
+        "quality",
+        "source",
+        "compliance",
+        "administration"
+      ],
+      "properties": {
+        "kind": {
+          "const": "process"
+        },
+        "names": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "generalComment": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "referenceProduct": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "functionalUnit": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/FunctionalUnit"
+        },
+        "classifications": {
+          "type": "array",
+          "items": {
+            "$ref": "./portal.common-types.v1.schema.json#/$defs/Classification"
+          }
+        },
+        "geography": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/Geography"
+        },
+        "referenceYear": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableYear"
+        },
+        "validUntilYear": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableYear"
+        },
+        "technology": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "dataSetType": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableNonEmptyString"
+        },
+        "allocationAndModeling": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "cutoffRules": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "quality": {
+          "$ref": "#/$defs/PublicQuality"
+        },
+        "source": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicSource"
+        },
+        "compliance": {
+          "type": "array",
+          "items": {
+            "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicComplianceDeclaration"
+          }
+        },
+        "administration": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicAdministration"
+        }
+      }
+    },
+    "PublicQuality": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewStatus",
+        "timeRepresentativeness",
+        "geographyRepresentativeness",
+        "technologyRepresentativeness",
+        "completeness",
+        "uncertainty"
+      ],
+      "properties": {
+        "reviewStatus": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableNonEmptyString"
+        },
+        "timeRepresentativeness": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableNonEmptyString"
+        },
+        "geographyRepresentativeness": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableNonEmptyString"
+        },
+        "technologyRepresentativeness": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableNonEmptyString"
+        },
+        "completeness": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableNonEmptyString"
+        },
+        "uncertainty": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableNonEmptyString"
+        }
+      }
+    },
+    "PublicFlowMetadata": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "names",
+        "synonyms",
+        "generalComment",
+        "casNumber",
+        "flowType",
+        "classifications",
+        "locationOfSupply",
+        "referenceFlowProperty",
+        "source",
+        "compliance",
+        "administration"
+      ],
+      "properties": {
+        "kind": {
+          "const": "flow"
+        },
+        "names": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "synonyms": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "generalComment": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "casNumber": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[0-9]{2,7}-[0-9]{2}-[0-9]$"
+        },
+        "flowType": {
+          "type": "string",
+          "enum": [
+            "product",
+            "elementary",
+            "waste",
+            "other",
+            "unknown"
+          ]
+        },
+        "classifications": {
+          "type": "array",
+          "items": {
+            "$ref": "./portal.common-types.v1.schema.json#/$defs/Classification"
+          }
+        },
+        "locationOfSupply": {
+          "$ref": "#/$defs/LocationOfSupply"
+        },
+        "referenceFlowProperty": {
+          "anyOf": [
+            {
+              "$ref": "./portal.common-types.v1.schema.json#/$defs/ExactNamedDatasetIdentity"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "source": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicSource"
+        },
+        "compliance": {
+          "type": "array",
+          "items": {
+            "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicComplianceDeclaration"
+          }
+        },
+        "administration": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicAdministration"
+        }
+      }
+    },
+    "LocationOfSupply": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "code",
+        "label"
+      ],
+      "properties": {
+        "code": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableNonEmptyString"
+        },
+        "label": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        }
+      }
+    },
+    "PublicProvenance": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "importBatchId",
+        "normalizationRuleVersion",
+        "fieldOrigins"
+      ],
+      "properties": {
+        "importBatchId": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableNonEmptyString"
+        },
+        "normalizationRuleVersion": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableNonEmptyString"
+        },
+        "fieldOrigins": {
+          "type": "array",
+          "items": {
+            "$ref": "./portal.common-types.v1.schema.json#/$defs/FieldOrigin"
+          }
+        }
+      }
+    },
+    "PublicPublication": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "publicationId",
+        "packageId",
+        "packageVersion",
+        "publishedAt",
+        "lciaMethods"
+      ],
+      "properties": {
+        "publicationId": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/UUID"
+        },
+        "packageId": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/UUID"
+        },
+        "packageVersion": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NonEmptyString"
+        },
+        "publishedAt": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/DateTime"
+        },
+        "lciaMethods": {
+          "type": "array",
+          "items": {
+            "$ref": "./portal.common-types.v1.schema.json#/$defs/ExactDatasetIdentity"
+          },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

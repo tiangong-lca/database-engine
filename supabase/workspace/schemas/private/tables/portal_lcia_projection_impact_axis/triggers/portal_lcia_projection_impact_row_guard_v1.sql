@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "portal_lcia_projection_impact_row_guard_v1" BEFORE DELETE OR UPDATE ON "private"."portal_lcia_projection_impact_axis" FOR EACH ROW EXECUTE FUNCTION "private"."portal_lcia_projection_row_guard_v1"();

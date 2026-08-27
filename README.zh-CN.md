@@ -17,9 +17,9 @@ checkPaths:
   - AGENTS.md
   - .docpact/config.yaml
   - docs/agents/**
-lastReviewedAt: 2026-08-08
-lastReviewedCommit: 1d1d153edb92aa01dd5fb7717441b16bedc4a96b
-lastReviewedNote: "已为 Issue #422 复核：README 只保留当前仓库目的、边界、分支模型和入口。"
+lastReviewedAt: 2026-08-26
+lastReviewedCommit: 12f54fe1188223d434a40799466167d5dd83c48e
+lastReviewedNote: "已为 Issue #529 复核：README 补充最小权限且 fail-closed 的 PR Preview 运行态门，以及隔离的持久化 Dev 部署边界。"
 related:
   - AGENTS.md
   - .docpact/config.yaml
@@ -41,7 +41,7 @@ related:
 - `.env.supabase.dev.local.example`
 - `.env.supabase.main.local.example`
 - Supabase 分支与运维文档
-- 将已提交 migration 推送到持久化 Supabase `dev` 分支的 GitHub Actions 流程
+- 不部署 schema 地修复并验证准确 PR Preview 的 PostgREST/匿名 Portal Hybrid 边界，并在合并后另行把已提交 migration 推送到持久化 Supabase `dev` 分支的 GitHub Actions 流程
 - 自动应用 Git `main` migrations 的生产 Supabase GitHub integration 契约
 
 它**不**负责以下内容：
@@ -70,7 +70,7 @@ related:
 3. 使用本地 Supabase 进行 schema 编写和验证。
 4. 将 migrations、seeds、tests 和 config 变更一起提交。
 5. 向 `dev` 发起 PR。
-6. 验证 PR 对应创建的 Supabase 预览分支。
+6. 验证 PR 对应创建的 Supabase 预览分支；同仓且具备仓库配置授权的 PR 会等待准确的 Supabase integration check，只修复该 Preview 的 PostgREST 运行态字段，并验证匿名显式 `api` Portal Hybrid 合同。
 7. 合并后，验证持久化 `dev` 数据库，再通过 `tiangong-lca-edge-functions` 部署并验证目标 Dev Functions。
 8. 准备发布时，将 `dev` 提升到 `main`，随后验证生产 Supabase 自动迁移。
 
@@ -84,6 +84,11 @@ related:
 可将它们复制为 `.env.supabase.dev.local` 或 `.env.supabase.main.local`，用于本地私有凭据配置。
 这些真实的 `.local` 文件会被 Git 忽略，因为其中可能包含远程数据库密码。
 前端运行时环境文件应保留在 `tiangong-lca-next` 中。
+
+仓库自动化使用 `SUPABASE_MAIN_PROJECT_ID` 准确解析 PR Preview 分支，并使用
+`SUPABASE_DEV_PROJECT_ID` 完成隔离的持久化 Dev 部署与排除保护。同仓 Preview 门还
+要求仓库管理的 `SUPABASE_ACCESS_TOKEN`；三项任一缺失都会 fail closed。secret 不进入
+运维模板或 checked-in workflow payload。
 
 ## 文档
 

@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."svc_portal_lcia_projection_stage_begin_v1"("p_build_worker_job_id" "uuid", "p_stage_lease_token" "uuid", "p_process_count" integer, "p_impact_count" integer, "p_source" "jsonb") IS 'Begins one V3 Worker lease-fenced, locator-free Portal LCIA projection attempt.';

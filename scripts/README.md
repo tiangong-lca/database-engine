@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 98d3a6ceeaaf12f124d4effcb9b5fc3e1462fabc
-lastReviewedNote: "Reviewed for Issue #327 canonical active-fence naming; the exact-local workspace rebuild command and script invocation contract remain unchanged."
+lastReviewedAt: 2026-08-27
+lastReviewedCommit: 8ca5fba
+lastReviewedNote: "Reviewed for dual Portal manifests, populated facet upgrade and recovery runners, and named performance profiles."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -83,6 +83,88 @@ script finishes with a clean reset to the checked-out migration head.
 scripts/test_search_text_array_upgrade.sh
 ```
 
+### `test_portal_projection_upgrade_recovery.sh`
+
+Exercises the Issue 531 Portal projection rollout against an explicitly
+attested, isolated local Supabase project. It uses live concurrent connections
+to prove valid-update, delete, state-invalidation, key-change, and
+embedding-only races; forces card/facet reconcile lock-timeout and cutover-guard
+failures; verifies facet expand COMMIT/history failure, four-shard idempotent
+retry, controlled same-name concurrent-index cleanup, post-cutover Flow
+eligibility guard rollback, and no-op repeat without rebuilding seven indexes.
+See
+`docs/agents/portal-projection-migration-recovery.md` for the required
+environment and recovery boundaries. Formal evidence additionally requires
+clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
+the complete 266-file migration tree.
+
+### `test_portal_facet_projection_populated_upgrade.sh`
+
+Rehearses the seven facet migrations verbatim over 126,246 pre-existing parent
+cards in the same explicitly isolated Issue-531 project. It requires every
+backfill statement to retain at least 2x headroom under its 120-second timeout,
+each complete UUID-quarter file to stay below 120 seconds, the successful
+reconcile fence to finish within five seconds, plus exact key coverage,
+deterministic sampled facts, and aggregate DTO counts.
+The runner always resets the isolated project to full HEAD on exit.
+
+### `run_portal_projection_benchmark.sh`
+
+Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
+fence, plan, and ANN-recall benchmark only against an explicitly attested
+Issue-531 local Supabase project. The runner byte-compares the complete
+266-file migration tree with the repository, writes into a new operator-selected private
+directory, and resets the isolated database before and after the run so rolled
+back HNSW pages cannot accumulate. Its environment contract mirrors the
+recovery runner and additionally requires
+`PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`.
+
+`PORTAL_PROJECTION_BENCHMARK_PROFILE` selects a fail-closed named profile:
+
+- `release` uses representative rows/vectors plus the 21,000-old-Flow pressure,
+  records the natural raw-ANN branch, directly gates both full-cardinality
+  exact helpers, and captures the production 5,000-to-200 ANN phase;
+- `sparse-zero` uses representative rows with zero embeddings;
+- `sparse-199` uses representative rows with 199 embeddings per dataset;
+- `diagnostic` permits explicitly supplied smaller counts and is not release
+  evidence; `auto` recognizes an exact named profile from its counts.
+
+All named gates require a clean exact HEAD. They cover the complete public
+request shapes, retain Search/Facets p95 <= 2 seconds and Hybrid p95 <= 6
+seconds with every Hybrid call below 8 seconds. Formal semantic plans must
+include parseable shared-buffer evidence, remain below 750,000 total and
+250,000 read blocks, finish exact execution within 5 seconds and formal
+ANN-plus-exact phases within 6 seconds, and show no temp/disk spill. Use a new
+mode-0700 output directory for every run. Formal lexical plans use the exact
+Process/Flow pattern-helper leaf with every normal planner path enabled. The
+representative Flow cardinality must naturally select its PGroonga scan node;
+the smaller Process cardinality records its natural-cost plan without forcing
+one index, while the migration catalog guard proves its PGroonga index and the
+named timings independently cover Process performance, ordering, and cursors.
+Both lexical probes require the exact needle fixture identity and no spill.
+The benchmark also captures anonymous Process/Flow empty and filtered Facets
+plans, requires the independent empty path to use its 32-MB workspace without
+temp/disk spill, measures the parent-first facet reconcile fence, and includes
+the facet child upsert in the existing writer delta/ratio gate.
+Every profile also records the exact Flow embedding-universe probe. Sparse
+profiles must naturally use the narrow partial eligibility B-tree and may not
+scan the wide Flow heap; release records the natural full-vector plan without
+forcing that index. Only release must name both source HNSW indexes; sparse
+source probes may choose an eligibility/empty-set plan but still require
+buffers, execution time, and no temp/disk spill.
+
+### `check_portal_projection_manifest.py`
+
+Checks both committed Portal digests: the exact eleven-function card closure
+and the exact two-function narrow-facet closure. It rejects later mutation of
+either closure/control set, validates the four facet shards plus reconcile/
+cutover dispatch, and retains the Flow eligibility index catalog guard without
+changing the card-v1 digest.
+
+```bash
+python3 scripts/check_portal_projection_manifest.py
+```
+
 ### `resolve_migration_head.py`
 
 Prints the latest valid migration version from the checked-out
@@ -102,11 +184,25 @@ python scripts/test_resolve_migration_head.py
 
 ### `test_supabase_dev_workflow_contract.py`
 
-Fails closed unless the persistent-Dev workflow performs exactly one database
-deployment with `supabase db push --include-all` after linking the configured
-project. It rejects Functions deploy/delete, `config push`, Management API
-mutation, and a manually pinned migration head, then requires exact-head
-readback from the same checkout.
+Fails closed unless `.github/workflows/supabase-dev.yml` keeps two isolated
+hosted paths. The push-only persistent-Dev job must link the configured Dev
+project, run exactly one `supabase db push --include-all`, derive its migration
+head, and apply exactly one three-field PostgREST PATCH. The pull-request-only
+Preview job must skip forks but fail a same-repository PR when its access token,
+main-parent ref, or persistent-Dev ref is absent. It binds one successful check
+from the exact official Supabase App/head to a unique non-default,
+non-persistent `branches list` row for the same Git branch, PR number, and
+parent; the check ref and BranchResponse ref must match and differ from both
+main and Dev before the Preview's one identical PATCH/readback.
+
+The contract also requires one separate no-reveal Management API key read using
+the raw `disabled` state and exact public-key shape. Only a masked enabled
+publishable or legacy anon key crosses into the next step; raw JSON and PAT are
+cleared first. The anonymous Hybrid step itself may contain no PAT,
+`Authorization`, `Cookie`, or service credential. Across the workflow, the only
+Management API mutations are the one persistent-Dev and one Preview PostgREST
+PATCH; Functions commands, broad `config push`, pinned migration heads, and any
+other mutation remain rejected.
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py

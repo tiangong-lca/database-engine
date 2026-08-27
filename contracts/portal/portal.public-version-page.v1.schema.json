@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "portal.public-version-page.v1.schema.json",
+  "title": "TianGong Portal public data-set version page v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "dataset",
+    "items",
+    "nextCursor"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "portal.public-version-page.v1"
+    },
+    "dataset": {
+      "$ref": "#/$defs/DatasetSeries"
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "$ref": "#/$defs/VersionItem"
+      }
+    },
+    "nextCursor": {
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableCursor"
+    }
+  },
+  "$defs": {
+    "DatasetSeries": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "id"
+      ],
+      "properties": {
+        "kind": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/DatasetKind"
+        },
+        "id": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/UUID"
+        }
+      }
+    },
+    "VersionItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "accessLevel",
+        "capabilities",
+        "modifiedAt",
+        "isLatest"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicDatasetKey"
+        },
+        "accessLevel": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/AccessLevel"
+        },
+        "capabilities": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicCapabilities"
+        },
+        "modifiedAt": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/DateTime"
+        },
+        "isLatest": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

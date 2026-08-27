@@ -32,3 +32,13 @@ GRANT SELECT,REFERENCES,TRIGGER,TRUNCATE ON TABLE "public"."flowproperties" TO "
 GRANT ALL ON TABLE "public"."flowproperties" TO "service_role";
 
 GRANT SELECT ON TABLE "public"."flowproperties" TO "api_internal_executor";
+
+GRANT SELECT("id") ON TABLE "public"."flowproperties" TO "portal_public_executor";
+
+GRANT SELECT("json") ON TABLE "public"."flowproperties" TO "portal_public_executor";
+
+GRANT SELECT("state_code") ON TABLE "public"."flowproperties" TO "portal_public_executor";
+
+GRANT SELECT("version") ON TABLE "public"."flowproperties" TO "portal_public_executor";
+
+GRANT SELECT("modified_at") ON TABLE "public"."flowproperties" TO "portal_public_executor";

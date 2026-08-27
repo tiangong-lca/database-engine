@@ -1,0 +1,1 @@
+CREATE POLICY "portal_public_executor_select_lcia_projection_values_v1" ON "private"."portal_lcia_projection_values" FOR SELECT TO "portal_public_executor" USING ("private"."portal_lcia_projection_is_public_v1"("projection_id"));

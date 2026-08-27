@@ -20,9 +20,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-12
-lastReviewedCommit: f9973d9b16c5b4a7391fd0d5aa5e8695fd9a5da3
-lastReviewedNote: "Reviewed for Issue #474: document the one-time persistent Dev migration-ledger repair for the duplicate 20260810170000 version."
+lastReviewedAt: 2026-08-27
+lastReviewedCommit: 70c2294ba894df3982939dec6b5e549e108f9630
+lastReviewedNote: "Reviewed after the exact PR Preview gate minimized branch/key authority and isolated public-key selection from anonymous transport; persistent Dev and production mutation boundaries remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -77,7 +77,8 @@ When review changes an already-applied PR migration, add a later migration that 
 - Treat committed files in `supabase/migrations/` as the schema source of truth for production, `dev`, and preview branches.
 - Keep branch-specific overrides in `[remotes.<branch>]` inside `supabase/config.toml`.
 - Do not create a separate `supabase/` directory per Git branch.
-- Keep `.github/workflows/supabase-dev.yml` as the sole persistent-`dev` migration deployer. It may run `supabase link` and exactly one `supabase db push --include-all`, but must not deploy/delete Edge Functions or push project configuration.
+- Keep the pull-request-only Preview runtime job isolated from deployment. Fork PRs skip before authority is available; a same-repository PR missing the access token, main-parent ref, or persistent-Dev ref fails closed. The job requires exactly one successful `Supabase Preview` check on that PR head from official Supabase App id `330661`, slug/owner `supabase`, captures the expected ref from its exact dashboard URL, independently resolves exactly one matching non-default/non-persistent BranchResponse through pinned CLI `branches list --output json`, requires equality and main/Dev inequality, applies and reads back one three-field PostgREST PATCH, and probes Portal Hybrid with only an enabled publishable or legacy anon key. It must not link, push migrations, deploy Functions/configuration, or target persistent Dev or production.
+- Keep `.github/workflows/supabase-dev.yml` as the sole persistent-`dev` migration deployer. It may run `supabase link`, exactly one `supabase db push --include-all`, and one Management API PATCH limited to `db_schema`, `db_extra_search_path`, and `max_rows` so the running PostgREST instance matches the checked-in contract; it must not deploy/delete Edge Functions, run `supabase config push`, or mutate any other project setting.
 - After the database workflow succeeds, deploy and validate the intended persistent-Dev Functions through `tiangong-lca-edge-functions`. Function source, function selection, deployment commands, and runtime validation remain owned by that repository.
 - Do not add a checked-in GitHub Actions production deploy for Git `main`; the production project is migrated by the Supabase GitHub integration bound to this repository.
 - Do not author normal schema changes by editing the remote database first and reconstructing migrations later.
@@ -91,7 +92,7 @@ When review changes an already-applied PR migration, add a later migration that 
 ## Files to maintain
 
 - `supabase/config.toml`: shared baseline plus `[remotes.dev]`
-- `.github/workflows/supabase-dev.yml`: rebuilds the local contract, deploys committed migrations to persistent `dev`, and verifies the exact hosted result
+- `.github/workflows/supabase-dev.yml`: rebuilds the local contract, repairs and verifies the exact PR Preview runtime without schema deployment, deploys committed migrations to persistent `dev`, and verifies the exact hosted result
 - `supabase/migrations/*.sql`: committed migration history
 - `supabase/seed.sql`: shared seed data
 - `supabase/seeds/dev.sql`: optional persistent-dev-only seed data
@@ -130,9 +131,15 @@ when Git `main` advances. Absence of a checked-in GitHub Actions workflow for
 
 Repository configuration expected by `.github/workflows/supabase-dev.yml`:
 
+- variable `SUPABASE_MAIN_PROJECT_ID`, set to the parent production project ref used by Supabase Branching
 - variable `SUPABASE_DEV_PROJECT_ID`
 - secret `SUPABASE_ACCESS_TOKEN`
 - secret `SUPABASE_DEV_DB_PASSWORD`
+
+The Preview job uses `SUPABASE_MAIN_PROJECT_ID` only as the Branching parent,
+`SUPABASE_DEV_PROJECT_ID` only as an exclusion guard, and
+`SUPABASE_ACCESS_TOKEN` only in the branch/config/public-key Management steps.
+`SUPABASE_DEV_DB_PASSWORD` remains exclusive to the push-only persistent-Dev job.
 
 ## PR to Supabase migration path
 
@@ -147,16 +154,25 @@ Normal PR path:
    the checked-in `supabase/` directory.
 4. The preview branch is PR-scoped proof only; it is not the persistent
    Supabase `dev` branch.
-5. After merge, `.github/workflows/supabase-dev.yml` performs a blank local
+5. After the exact `Supabase Preview` check succeeds for the current PR head,
+   the same-repository Preview runtime job resolves that exact Git branch,
+   applies and reads back only `db_schema=public,api,graphql_public`,
+   `db_extra_search_path=public,api,extensions`, and `max_rows=1000`, then uses
+   only a publishable or legacy anon `apikey`—without `Authorization` or
+   `Cookie`—to validate the strict explicit-`api` Portal Hybrid response,
+   forged-parameter opacity, and rejected `private`/`public` profiles.
+6. After merge, `.github/workflows/supabase-dev.yml` performs a blank local
    rebuild, links the configured persistent Dev project, and runs
    `supabase db push --include-all` after the local contract passes.
-6. The workflow derives the expected head from the checked-out migration
+7. The workflow derives the expected head from the checked-out migration
    directory and waits until a service-only readback reports that exact head;
    it never carries a manually pinned head.
-7. The workflow reads `public,api,graphql_public` and
-   `public,api,extensions` through the Management API and probes the hosted
-   Data API boundary. After `db push`, these checks are read-only.
-8. After the database workflow succeeds, deploy and validate the intended Dev
+8. The workflow applies one targeted Management API PATCH containing only
+   `db_schema=public,api,graphql_public`,
+   `db_extra_search_path=public,api,extensions`, and `max_rows=1000` before
+   the first hosted RPC probe. It then reads all three values back and probes
+   the hosted Data API boundary; the remaining verification is read-only.
+9. After the database workflow succeeds, deploy and validate the intended Dev
    Functions through `tiangong-lca-edge-functions`.
 
 An existing Preview branch applies newly added migration files on later PR
@@ -164,6 +180,36 @@ pushes. Editing a migration already recorded in that Preview's migration
 history does not reapply it. Ship an additive follow-up migration for forward
 changes; use explicit Preview branch reprovision only when the intent is to
 discard and rebuild that disposable branch state.
+
+### Pull-request Preview runtime verification
+
+- This job runs only for `pull_request` events from the same repository and
+  depends on the local contract. Fork PRs skip before receiving authority.
+- Missing `SUPABASE_ACCESS_TOKEN`, `SUPABASE_MAIN_PROJECT_ID`, or
+  `SUPABASE_DEV_PROJECT_ID` fails a same-repository PR closed instead of
+  guessing a project ref or using persistent Dev as fallback.
+- The accepted check must be from official Supabase App id `330661`, slug/owner
+  `supabase`; the job captures the expected ref from its exact dashboard
+  `details_url`. The pinned CLI then uses `branches list --output json` and
+  requires exactly one row matching the Git branch, PR number, parent project,
+  `is_default=false`, and `persistent=false`; it reads only BranchResponse
+  metadata, captures the strict 20-character `.project_ref`, and requires both
+  refs to match plus unconditional inequality with main and persistent Dev. It
+  does so only after exactly one `Supabase Preview`
+  check has succeeded for the event's exact PR-head SHA. A failed, cancelled,
+  skipped, stale, neutral, timed-out, or ambiguous check fails closed.
+- The resolved ref must differ from both the configured main parent and
+  persistent Dev refs. The job performs no `supabase link`, `db push`,
+  Functions command, broad `config push`, seed, or migration operation.
+- The Management API mutation is exactly one PATCH to that disposable ref and
+  contains only the checked-in PostgREST schema, search-path, and row-limit
+  fields. A separate GET must read all three values back before transport proof.
+- A separate key step performs one no-reveal Management API GET and examines
+  the raw `disabled` field. It accepts only a nonempty, shape-valid enabled
+  publishable key, falling back only to a shape-valid enabled legacy `anon`;
+  the selected public key is masked/exported, then the PAT and raw JSON are
+  cleared. The following REST step has no PAT or service credential and uses
+  `apikey` only, never `Authorization` or `Cookie`.
 
 `--include-all` means every committed migration absent from remote history is
 eligible for application. It is required when a governed `main -> dev`
@@ -269,11 +315,14 @@ Rules:
 - The workflow first rebuilds and verifies the complete migration history
   locally. The hosted job depends on that success, links the configured Dev
   project, and runs exactly one `supabase db push --include-all`.
-- It then derives the expected head from its checkout and fails unless the
-  exact-head readback, Management API readback, and REST profile probes match
-  the checked-in contract.
-- The workflow owns database migrations only. It must not run `supabase
-  functions deploy`, `supabase functions delete`, or `supabase config push`.
+- It then applies the exact three-field PostgREST runtime PATCH, derives the
+  expected head from its checkout, and fails unless the exact-head readback,
+  Management API readback, and REST profile probes match the checked-in
+  contract.
+- The workflow owns database migrations and the narrow PostgREST runtime
+  refresh only. It must not run `supabase functions deploy`, `supabase
+  functions delete`, `supabase config push`, or any other Management API
+  mutation.
 - After the database workflow succeeds, use the Edge repository's current Dev
   deployment and validation procedure. Do not reproduce its function inventory
   or deployment flags in this repository.

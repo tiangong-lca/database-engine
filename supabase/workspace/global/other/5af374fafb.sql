@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."portal_lcia_decorate_dataset_v1"("p_envelope" "jsonb") IS 'Preserves the strict dataset envelope while projecting authoritative LCIA capability and publication context.';

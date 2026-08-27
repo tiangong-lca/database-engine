@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."portal_current_lcia_publication_for_process_v1"("p_process_id" "uuid", "p_process_version" "text") IS 'Returns locator-free current finalized non-revoked publication context for one exact open Process by reusing portal_lcia_projection_is_public_v1.';

@@ -1,0 +1,1 @@
+CREATE POLICY "portal_catalog_facet_rows_portal_select_v1" ON "private"."portal_catalog_facet_rows_v1" FOR SELECT TO "portal_public_executor" USING ((("state_code" = ANY (ARRAY[100, 200])) AND ("facet_contract_version" = 1)));

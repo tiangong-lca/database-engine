@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."qry_portal_lcia_projection_prepare_v1"("p_package_id" "uuid", "p_lcia_result_publication_id" "uuid") IS 'Prepares only the exact current authoritative package/projection/publication binding for finalization.';

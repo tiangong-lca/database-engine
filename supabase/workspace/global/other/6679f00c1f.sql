@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."portal_hybrid_search_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) IS 'Bounded locator-free Process/Flow Hybrid candidate page over fixed public 100/200 scope and portal-hybrid-rank-v1.';

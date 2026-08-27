@@ -1,0 +1,120 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "portal.public-search-page.v1.schema.json",
+  "title": "TianGong Portal public search page v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "queryFingerprint",
+    "items",
+    "nextCursor"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "portal.public-search-page.v1"
+    },
+    "kind": {
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/DatasetKind"
+    },
+    "queryFingerprint": {
+      "description": "Lowercase hexadecimal SHA-256 over the UTF-8 canonical JSON object {kind,query,filters,sort}.",
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/Sha256"
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 50,
+      "items": {
+        "$ref": "#/$defs/SearchItem"
+      }
+    },
+    "nextCursor": {
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableCursor"
+    }
+  },
+  "$defs": {
+    "SearchItem": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "accessLevel",
+        "capabilities",
+        "names",
+        "summary",
+        "geography",
+        "referenceYear",
+        "modifiedAt",
+        "match"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicDatasetKey"
+        },
+        "accessLevel": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/AccessLevel"
+        },
+        "capabilities": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicCapabilities"
+        },
+        "names": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "summary": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "geography": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/Geography"
+        },
+        "referenceYear": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableYear"
+        },
+        "modifiedAt": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/DateTime"
+        },
+        "match": {
+          "$ref": "#/$defs/SearchMatch"
+        }
+      }
+    },
+    "SearchMatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "score",
+        "reasonCodes"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "identifier",
+            "lexical"
+          ]
+        },
+        "score": {
+          "description": "Finite normalized ranking explanation only; never a domain quantity.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "reasonCodes": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": [
+              "exact_id",
+              "name",
+              "classification",
+              "cas",
+              "full_text"
+            ]
+          },
+          "uniqueItems": true
+        }
+      }
+    }
+  }
+}

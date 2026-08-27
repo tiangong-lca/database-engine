@@ -35,6 +35,7 @@ jobs:
         run: |
           python scripts/test_resolve_migration_head.py
           python scripts/test_supabase_dev_workflow_contract.py
+          python scripts/check_portal_projection_manifest.py
 
       - name: Rebuild migration history
         run: supabase start && supabase db reset --no-seed
@@ -53,7 +54,22 @@ jobs:
           supabase test db supabase/tests/20260806_api_contract_closure.sql
           supabase test db supabase/tests/20260806_identity_center_facades.sql
           supabase test db supabase/tests/20260806_lca_package_capability_facades.sql
+          supabase test db supabase/tests/20260825_portal_public_catalog_v1.sql
+          supabase test db supabase/tests/20260825_portal_public_lcia_projection_v1.sql
+          supabase test db supabase/tests/20260826_portal_lcia_catalog_visibility_v1.sql
+          supabase test db supabase/tests/20260826_portal_public_hybrid_search_v1.sql
+          supabase test db supabase/tests/20260826_portal_candidate_first_search.sql
+          supabase test db supabase/tests/20260623_data_product_publication_mvp.sql
+          supabase test db supabase/tests/20260716_lci_lcia_release_control_plane.sql
           scripts/test_full_schema_cutover_upgrade.sh
+
+      - name: Verify Portal JSON Schemas
+        run: |
+          npx --yes \
+            --package ajv-cli@5.0.0 \
+            --package ajv-formats@3.0.1 \
+            ajv compile --spec=draft2020 --strict=true -c ajv-formats \
+            -s 'contracts/portal/*.schema.json'
 
       - name: Stop local Supabase
         if: always()
@@ -86,6 +102,25 @@ jobs:
 
       - name: Push migrations to Supabase Dev branch
         run: supabase db push --include-all
+
+      - name: Apply exact PostgREST runtime contract
+        shell: bash
+        run: |
+          patch_payload='{"db_schema":"public,api,graphql_public","db_extra_search_path":"public,api,extensions","max_rows":1000}'
+          postgrest_config="$(
+            curl --fail-with-body --silent --show-error \
+              --request PATCH \
+              --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data "$patch_payload" \
+              "https://api.supabase.com/v1/projects/$SUPABASE_PROJECT_ID/postgrest"
+          )"
+          jq -e '
+            def csv_list: split(",") | map(gsub("^\\s+|\\s+$"; ""));
+            (.db_schema | csv_list) == ["public", "api", "graphql_public"]
+            and (.db_extra_search_path | csv_list) == ["public", "api", "extensions"]
+            and .max_rows == 1000
+          ' <<<"$postgrest_config" >/dev/null
 
       - name: Resolve expected migration head
         id: migration_head
@@ -145,6 +180,7 @@ jobs:
             def csv_list: split(",") | map(gsub("^\\s+|\\s+$"; ""));
             (.db_schema | csv_list) == ["public", "api", "graphql_public"]
             and (.db_extra_search_path | csv_list) == ["public", "api", "extensions"]
+            and .max_rows == 1000
           ' <<<"$postgrest_config" >/dev/null
 
           rest_url="https://$SUPABASE_PROJECT_ID.supabase.co/rest/v1"
@@ -184,3 +220,376 @@ jobs:
             --header "Content-Type: application/json" \
             --data '{}' \
             "$rest_url/rpc/svc_schema_contract_status"
+
+  preview-runtime-contract:
+    name: Verify Supabase Preview runtime
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    needs: local-contract
+    runs-on: ubuntu-latest
+    permissions:
+      checks: read
+      contents: read
+    env:
+      FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: "true"
+      SUPABASE_DEV_PROJECT_ID: ${{ vars.SUPABASE_DEV_PROJECT_ID }}
+      SUPABASE_MAIN_PROJECT_ID: ${{ vars.SUPABASE_MAIN_PROJECT_ID }}
+      PREVIEW_GIT_BRANCH: ${{ github.event.pull_request.head.ref }}
+      PREVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+      PREVIEW_PR_NUMBER: ${{ github.event.pull_request.number }}
+
+    steps:
+      - name: Check Preview verification authority
+        id: preview_authority
+        shell: bash
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          if [[ -z "$SUPABASE_ACCESS_TOKEN" || -z "$SUPABASE_MAIN_PROJECT_ID" || -z "$SUPABASE_DEV_PROJECT_ID" ]]; then
+            echo "::error::Supabase Preview runtime verification requires SUPABASE_ACCESS_TOKEN, SUPABASE_MAIN_PROJECT_ID, and SUPABASE_DEV_PROJECT_ID for same-repository PRs."
+            exit 1
+          fi
+          echo "available=true" >> "$GITHUB_OUTPUT"
+
+      - name: Checkout exact PR head
+        if: steps.preview_authority.outputs.available == 'true'
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Setup pinned Supabase CLI
+        if: steps.preview_authority.outputs.available == 'true'
+        uses: supabase/setup-cli@v2
+        with:
+          version: 2.98.0
+
+      - name: Wait for exact Supabase Preview check
+        if: steps.preview_authority.outputs.available == 'true'
+        id: supabase_preview_check
+        shell: bash
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          for _ in {1..60}; do
+            check_runs="$(
+              gh api \
+                --header "Accept: application/vnd.github+json" \
+                --header "X-GitHub-Api-Version: 2022-11-28" \
+                "/repos/$GITHUB_REPOSITORY/commits/$PREVIEW_HEAD_SHA/check-runs?check_name=Supabase%20Preview&filter=latest&per_page=100"
+            )"
+            exact_count="$(
+              jq -r --arg head "$PREVIEW_HEAD_SHA" \
+                '[.check_runs[] | select(
+                  .name == "Supabase Preview"
+                  and .head_sha == $head
+                  and .app.id == 330661
+                  and .app.slug == "supabase"
+                  and .app.owner.login == "supabase"
+                )] | length' \
+                <<<"$check_runs"
+            )"
+            if [[ "$exact_count" == "1" ]] && jq -e --arg head "$PREVIEW_HEAD_SHA" '
+              any(
+                .check_runs[];
+                .name == "Supabase Preview"
+                and .head_sha == $head
+                and .app.id == 330661
+                and .app.slug == "supabase"
+                and .app.owner.login == "supabase"
+                and .status == "completed"
+                and .conclusion == "success"
+              )
+            ' <<<"$check_runs" >/dev/null; then
+              preview_check_ref="$(
+                jq -er --arg head "$PREVIEW_HEAD_SHA" '
+                  [
+                    .check_runs[]
+                    | select(
+                      .name == "Supabase Preview"
+                      and .head_sha == $head
+                      and .app.id == 330661
+                      and .app.slug == "supabase"
+                      and .app.owner.login == "supabase"
+                      and .status == "completed"
+                      and .conclusion == "success"
+                    )
+                  ][0].details_url
+                  | capture("^https://supabase[.]com/dashboard/project/(?<ref>[a-z]{20})$").ref
+                ' <<<"$check_runs"
+              )"
+              printf 'ref=%s\n' "$preview_check_ref" >> "$GITHUB_OUTPUT"
+              exit 0
+            fi
+            if jq -e --arg head "$PREVIEW_HEAD_SHA" '
+              any(
+                .check_runs[];
+                .name == "Supabase Preview"
+                and .head_sha == $head
+                and .app.id == 330661
+                and .app.slug == "supabase"
+                and .app.owner.login == "supabase"
+                and .status == "completed"
+                and (.conclusion | IN(
+                  "action_required", "cancelled", "failure", "neutral",
+                  "skipped", "stale", "timed_out"
+                ))
+              )
+            ' <<<"$check_runs" >/dev/null; then
+              echo "Supabase Preview did not succeed for the exact PR head" >&2
+              exit 1
+            fi
+            sleep 10
+          done
+          echo "timed out waiting for exact Supabase Preview success" >&2
+          exit 1
+
+      - name: Resolve exact Preview project
+        if: steps.preview_authority.outputs.available == 'true'
+        id: preview_project
+        shell: bash
+        env:
+          EXPECTED_PREVIEW_PROJECT_REF: ${{ steps.supabase_preview_check.outputs.ref }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          preview_project_ref="$(
+            supabase branches list \
+              --project-ref "$SUPABASE_MAIN_PROJECT_ID" \
+              --output json \
+            | jq -er \
+              --arg branch "$PREVIEW_GIT_BRANCH" \
+              --arg parent "$SUPABASE_MAIN_PROJECT_ID" \
+              --argjson pr_number "$PREVIEW_PR_NUMBER" '
+                [
+                  .[]
+                  | select(
+                    .git_branch == $branch
+                    and .pr_number == $pr_number
+                    and .parent_project_ref == $parent
+                    and .is_default == false
+                    and .persistent == false
+                    and (.project_ref | type == "string")
+                    and (.project_ref | test("^[a-z]{20}$"))
+                  )
+                ]
+                | if length == 1 then .[0].project_ref
+                  else error("branches list did not resolve exactly one disposable PR Preview")
+                  end
+              '
+          )"
+          [[ "$preview_project_ref" == "$EXPECTED_PREVIEW_PROJECT_REF" ]]
+          [[ "$preview_project_ref" != "$SUPABASE_MAIN_PROJECT_ID" ]]
+          [[ "$preview_project_ref" != "$SUPABASE_DEV_PROJECT_ID" ]]
+          printf 'ref=%s\n' "$preview_project_ref" >> "$GITHUB_OUTPUT"
+
+      - name: Apply exact Preview PostgREST runtime contract
+        if: steps.preview_authority.outputs.available == 'true'
+        shell: bash
+        env:
+          PREVIEW_PROJECT_REF: ${{ steps.preview_project.outputs.ref }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          patch_payload='{"db_schema":"public,api,graphql_public","db_extra_search_path":"public,api,extensions","max_rows":1000}'
+          postgrest_config="$(
+            curl --fail-with-body --silent --show-error \
+              --request PATCH \
+              --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              --header "Content-Type: application/json" \
+              --data "$patch_payload" \
+              "https://api.supabase.com/v1/projects/$PREVIEW_PROJECT_REF/postgrest"
+          )"
+          jq -e '
+            def csv_list: split(",") | map(gsub("^\\s+|\\s+$"; ""));
+            (.db_schema | csv_list) == ["public", "api", "graphql_public"]
+            and (.db_extra_search_path | csv_list) == ["public", "api", "extensions"]
+            and .max_rows == 1000
+          ' <<<"$postgrest_config" >/dev/null
+
+      - name: Read back exact Preview PostgREST runtime contract
+        if: steps.preview_authority.outputs.available == 'true'
+        shell: bash
+        env:
+          PREVIEW_PROJECT_REF: ${{ steps.preview_project.outputs.ref }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          for _ in {1..30}; do
+            postgrest_config="$(
+              curl --fail-with-body --silent --show-error \
+                --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+                "https://api.supabase.com/v1/projects/$PREVIEW_PROJECT_REF/postgrest"
+            )"
+            if jq -e '
+              def csv_list: split(",") | map(gsub("^\\s+|\\s+$"; ""));
+              (.db_schema | csv_list) == ["public", "api", "graphql_public"]
+              and (.db_extra_search_path | csv_list) == ["public", "api", "extensions"]
+              and .max_rows == 1000
+            ' <<<"$postgrest_config" >/dev/null; then
+              exit 0
+            fi
+            sleep 2
+          done
+          echo "Preview PostgREST runtime readback did not reach the exact contract" >&2
+          exit 1
+
+      - name: Read enabled Preview public API key
+        if: steps.preview_authority.outputs.available == 'true'
+        shell: bash
+        env:
+          PREVIEW_PROJECT_REF: ${{ steps.preview_project.outputs.ref }}
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+        run: |
+          api_keys="$(
+            curl --fail-with-body --silent --show-error \
+              --header "Authorization: Bearer $SUPABASE_ACCESS_TOKEN" \
+              "https://api.supabase.com/v1/projects/$PREVIEW_PROJECT_REF/api-keys"
+          )"
+          public_api_key="$(
+            jq -er '
+                (
+                  [
+                    .[]
+                    | select(
+                      (.disabled // false) == false
+                      and .type == "publishable"
+                      and (.api_key | type == "string")
+                      and (.api_key | test("^sb_publishable_[A-Za-z0-9_-]+$"))
+                    )
+                    | .api_key
+                  ]
+                  + [
+                    .[]
+                    | select(
+                      (.disabled // false) == false
+                      and .name == "anon"
+                      and .type == "legacy"
+                      and (.api_key | type == "string")
+                      and (.api_key | test("^eyJ[A-Za-z0-9_-]+[.][A-Za-z0-9_-]+[.][A-Za-z0-9_-]+$"))
+                    )
+                    | .api_key
+                  ]
+                )[0] // error("no enabled publishable or legacy anon key")
+              ' <<<"$api_keys"
+          )"
+          echo "::add-mask::$public_api_key"
+          printf 'PREVIEW_PUBLIC_API_KEY=%s\n' "$public_api_key" >> "$GITHUB_ENV"
+          unset api_keys SUPABASE_ACCESS_TOKEN
+
+      - name: Verify anonymous Preview Hybrid boundary
+        if: steps.preview_authority.outputs.available == 'true'
+        shell: bash
+        env:
+          PREVIEW_PROJECT_REF: ${{ steps.preview_project.outputs.ref }}
+        run: |
+          query_embedding="$(
+            jq -nr '[range(0; 1024) | if . == 0 then 1 else 0 end] | tojson'
+          )"
+          request_payload="$(
+            jq -cn --arg embedding "$query_embedding" '{
+              p_kind: "process",
+              p_query_terms: ["portal-preview-contract-probe"],
+              p_query_embedding: $embedding,
+              p_filters: {},
+              p_limit: 1
+            }'
+          )"
+          rest_url="https://$PREVIEW_PROJECT_REF.supabase.co/rest/v1"
+          response_file="$RUNNER_TEMP/portal-hybrid-preview-response.json"
+
+          for _ in {1..30}; do
+            response_status="$(
+              curl --silent --show-error \
+                --output "$response_file" \
+                --write-out '%{http_code}' \
+                --request POST \
+                --header "apikey: $PREVIEW_PUBLIC_API_KEY" \
+                --header "Content-Profile: api" \
+                --header "Content-Type: application/json" \
+                --data "$request_payload" \
+                "$rest_url/rpc/portal_hybrid_search_v1"
+            )"
+            [[ "$response_status" == "200" ]] && break
+            sleep 2
+          done
+          [[ "$response_status" == "200" ]] || {
+            echo "anonymous explicit-api Hybrid probe returned HTTP $response_status" >&2
+            exit 1
+          }
+
+          npx --yes \
+            --package ajv-cli@5.0.0 \
+            --package ajv-formats@3.0.1 \
+            ajv validate --spec=draft2020 --strict=true -c ajv-formats \
+            -r contracts/portal/portal.common-types.v1.schema.json \
+            -s contracts/portal/portal.public-hybrid-candidate-page.v1.schema.json \
+            -d "$response_file"
+
+          assert_opaque_error() {
+            local expected_status="$1"
+            local expected_code="$2"
+            local response_status
+            local response_file="$3"
+            shift 3
+            response_status="$(
+              curl --silent --show-error \
+                --output "$response_file" \
+                --write-out '%{http_code}' \
+                "$@"
+            )"
+            [[ "$response_status" == "$expected_status" ]]
+            jq -e --arg code "$expected_code" '
+              type == "object"
+              and .code == $code
+              and ((keys - ["code", "details", "hint", "message"]) | length == 0)
+              and (has("schemaVersion") | not)
+              and (has("items") | not)
+              and (has("queryFingerprint") | not)
+            ' "$response_file" >/dev/null
+          }
+
+          for forged_parameter in p_actor_id p_team_id p_state_codes p_data_source; do
+            case "$forged_parameter" in
+              p_actor_id|p_team_id)
+                forged_value='"00000000-0000-0000-0000-000000000000"'
+                ;;
+              p_state_codes)
+                forged_value='[0]'
+                ;;
+              p_data_source)
+                forged_value='"tg"'
+                ;;
+            esac
+            forged_payload="$(
+              jq -c \
+                --arg key "$forged_parameter" \
+                --argjson value "$forged_value" \
+                '. + {($key): $value}' \
+                <<<"$request_payload"
+            )"
+            assert_opaque_error 404 PGRST202 \
+              "$RUNNER_TEMP/portal-hybrid-forged-$forged_parameter.json" \
+              --request POST \
+              --header "apikey: $PREVIEW_PUBLIC_API_KEY" \
+              --header "Content-Profile: api" \
+              --header "Content-Type: application/json" \
+              --data "$forged_payload" \
+              "$rest_url/rpc/portal_hybrid_search_v1"
+          done
+
+          assert_opaque_error 406 PGRST106 \
+            "$RUNNER_TEMP/portal-hybrid-private-profile.json" \
+            --request POST \
+            --header "apikey: $PREVIEW_PUBLIC_API_KEY" \
+            --header "Content-Profile: private" \
+            --header "Content-Type: application/json" \
+            --data "$request_payload" \
+            "$rest_url/rpc/portal_hybrid_search_v1"
+
+          assert_opaque_error 404 PGRST202 \
+            "$RUNNER_TEMP/portal-hybrid-public-profile.json" \
+            --request POST \
+            --header "apikey: $PREVIEW_PUBLIC_API_KEY" \
+            --header "Content-Profile: public" \
+            --header "Content-Type: application/json" \
+            --data "$request_payload" \
+            "$rest_url/rpc/portal_hybrid_search_v1"

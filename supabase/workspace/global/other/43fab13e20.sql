@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."portal_public_hybrid_input_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) IS 'Owner-only normalization and fingerprinting for the fixed Portal Database Hybrid request.';

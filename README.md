@@ -22,7 +22,7 @@ It owns the checked-in database source of truth:
 - `.env.supabase.dev.local.example`
 - `.env.supabase.main.local.example`
 - Supabase branching and operations docs
-- the GitHub Actions flow that pushes committed migrations to the persistent Supabase `dev` branch
+- the GitHub Actions flow that repairs and verifies the exact PR Preview PostgREST/anonymous Portal Hybrid boundary without schema deployment, then separately pushes committed migrations to the persistent Supabase `dev` branch after merge
 - the production Supabase GitHub integration contract that applies Git `main` migrations automatically
 
 It does **not** own:
@@ -51,7 +51,7 @@ Those stay in consumer repos such as:
 3. Use local Supabase for schema authoring and validation.
 4. Commit migrations, seeds, tests, and config changes together.
 5. Open the PR into `dev`.
-6. Validate the Supabase preview branch created for the PR.
+6. Validate the Supabase preview branch created for the PR; on same-repository PRs with configured authority, the workflow waits for the exact Supabase integration check, repairs only that Preview's PostgREST runtime fields, and proves the anonymous explicit-`api` Portal Hybrid contract.
 7. After merge, validate the persistent `dev` database, then deploy and validate
    the intended Dev Functions through `tiangong-lca-edge-functions`.
 8. Promote `dev` to `main` when ready to release, then validate the production Supabase auto migration.
@@ -66,6 +66,13 @@ This repository keeps the operator-side Supabase branch-binding templates:
 Copy them to `.env.supabase.dev.local` or `.env.supabase.main.local` for local-only credentials.
 Those real `.local` files are ignored by Git because they may contain remote database passwords.
 Frontend runtime env files stay in `tiangong-lca-next`.
+
+Repository automation expects `SUPABASE_MAIN_PROJECT_ID` for exact PR Preview
+branch resolution and `SUPABASE_DEV_PROJECT_ID` for the separate persistent-Dev
+deployment/exclusion guard. The same-repository Preview gate also requires the
+repository-managed `SUPABASE_ACCESS_TOKEN`; absence of any of these three values
+fails closed. Secrets are not stored in operator templates or checked-in
+workflow payloads.
 
 ## Docs
 

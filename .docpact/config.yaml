@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-25"
-lastReviewedCommit: "98d3a6ceeaaf12f124d4effcb9b5fc3e1462fabc"
-lastReviewedNote: "Reviewed for Issue #520 AI worker queue contract: existing migration, SQL-test, and service-RPC routing already covers the new AI job contract."
+lastReviewedAt: "2026-08-27"
+lastReviewedCommit: "8ca5fba"
+lastReviewedNote: "Reviewed for the seven-migration narrow Portal facet sub-rollout, recovery coverage, and exact-head validation evidence."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -17,6 +17,7 @@ catalog:
       workflowDocs:
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
+        - docs/agents/portal-projection-migration-recovery.md
       workspaceIntegrationRequired: true
 
 ownership:
@@ -49,6 +50,11 @@ ownership:
           - scripts/**
           - supabase/workspace/**
       ownerRepo: database-engine
+    - id: portal-public-contracts
+      paths:
+        include:
+          - contracts/portal/**
+      ownerRepo: database-engine
 
     - id: local-docpact-push-gate
       paths:
@@ -71,6 +77,7 @@ coverage:
     - .docpact/**
     - docs/agents/repo-validation.md
     - docs/agents/repo-architecture.md
+    - docs/agents/portal-projection-migration-recovery.md
     - docs/agents/supabase-branching.md
     - docs/agents/supabase-branching_CN.md
     - scripts/README.md
@@ -88,6 +95,7 @@ coverage:
     - .env.supabase.main.local.example
     - .github/workflows/ai-doc-lint.yml
     - .github/workflows/supabase-dev.yml
+    - contracts/portal/**
   exclude:
     - .git/**
     - .github/scripts/**
@@ -122,6 +130,14 @@ routing:
         - supabase/seed.sql
         - supabase/seeds/**
         - supabase/tests/**
+    portal-public-contract:
+      paths:
+        - contracts/portal/**
+        - supabase/migrations/*portal_*.sql
+        - supabase/tests/*portal_*.sql
+        - docs/agents/repo-architecture.md
+        - docs/agents/repo-validation.md
+        - docs/agents/portal-projection-migration-recovery.md
     hybrid-search-performance:
       paths:
         - supabase/migrations/*hybrid_search*.sql
@@ -134,6 +150,7 @@ routing:
         - supabase/tests/benchmarks/README.md
         - docs/agents/repo-validation.md
         - docs/agents/repo-architecture.md
+        - docs/agents/portal-projection-migration-recovery.md
     review-submission-quality-diagnostic:
       paths:
         - supabase/migrations/*review_quality_diagnostic*.sql
@@ -214,6 +231,7 @@ routing:
         - supabase/seeds/**
         - supabase/tests/**
         - .github/workflows/supabase-dev.yml
+        - docs/agents/portal-projection-migration-recovery.md
     root-integration:
       paths:
         - AGENTS.md
@@ -228,6 +246,7 @@ docInventory:
     - .docpact/config.yaml
     - docs/agents/repo-validation.md
     - docs/agents/repo-architecture.md
+    - docs/agents/portal-projection-migration-recovery.md
     - docs/agents/supabase-branching.md
     - docs/agents/supabase-branching_CN.md
     - scripts/README.md
@@ -303,7 +322,7 @@ rules:
         mode: review_or_update
       - path: docs/agents/supabase-branching_CN.md
         mode: review_or_update
-    reason: Branch bindings, database-only persistent Dev deployment, and hosted verification change repo routing, proof, and branch-operation guidance together.
+    reason: Branch bindings, isolated PR Preview runtime repair, database-only persistent Dev deployment, and hosted verification change repo routing, proof, and branch-operation guidance together.
   - id: database-engine-migration-and-seed-contract
     scope: repo
     repo: database-engine
@@ -422,3 +441,73 @@ rules:
       - path: docs/agents/repo-validation.md
         mode: review_or_update
     reason: Local push documentation governance gates must stay aligned with repo validation guidance and docpact configuration.
+  - id: database-engine-portal-public-contracts
+    scope: repo
+    repo: database-engine
+    triggers:
+      - path: contracts/portal/**
+        kind: public-api-contract
+      - path: supabase/migrations/*portal_*.sql
+        kind: database-migration
+      - path: supabase/tests/*portal_*.sql
+        kind: database-contract-test
+    requiredDocs:
+      - path: .docpact/config.yaml
+        mode: review_or_update
+      - path: docs/agents/repo-validation.md
+        mode: review_or_update
+      - path: docs/agents/repo-architecture.md
+        mode: review_or_update
+    reason: Portal schemas are the exhaustive locator-free public DTO boundary shared by Database, Edge, and the anonymous Portal consumer.
+  - id: database-engine-portal-projection-derivation-contract
+    scope: repo
+    repo: database-engine
+    triggers:
+      - path: docs/agents/portal-projection-migration-recovery.md
+        kind: deep-doc
+      - path: supabase/migrations/20260826060422_portal_candidate_first_search.sql
+        kind: database-migration
+      - path: supabase/migrations/20260826080345_portal_projection_reconcile.sql
+        kind: database-migration
+      - path: supabase/migrations/20260826080400_portal_projection_candidate_cutover.sql
+        kind: database-migration
+      - path: supabase/migrations/20260826080403_portal_projection_facets.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827010000_portal_flow_embedding_eligibility_index.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827010003_portal_flow_embedding_eligibility_guard.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827020000_portal_facet_projection_expand.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827020001_portal_facet_projection_backfill_00_3f.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827020002_portal_facet_projection_backfill_40_7f.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827020003_portal_facet_projection_backfill_80_bf.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827020004_portal_facet_projection_backfill_c0_ff.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827020005_portal_facet_projection_reconcile.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827020006_portal_facet_projection_cutover.sql
+        kind: database-migration
+      - path: supabase/tests/20260826_portal_candidate_first_search.sql
+        kind: database-contract-test
+      - path: supabase/tests/benchmarks/20260826_portal_candidate_first_explain.sql
+        kind: database-benchmark
+      - path: scripts/test_portal_projection_upgrade_recovery.sh
+        kind: migration-recovery
+      - path: scripts/test_portal_facet_projection_populated_upgrade.sh
+        kind: migration-recovery
+      - path: scripts/check_portal_projection_manifest.py
+        kind: contract-check
+    requiredDocs:
+      - path: .docpact/config.yaml
+        mode: review_or_update
+      - path: docs/agents/repo-architecture.md
+        mode: review_or_update
+      - path: docs/agents/repo-validation.md
+        mode: review_or_update
+      - path: docs/agents/portal-projection-migration-recovery.md
+        mode: review_or_update
+    reason: The immutable card and facet manifests, online expand/backfill/reconcile/index/cutover sequences, recovery procedure, and representative performance gates must change together.

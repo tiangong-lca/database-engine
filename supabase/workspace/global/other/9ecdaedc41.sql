@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."cmd_portal_lcia_result_package_publish_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text", "p_expected_publish_plan_hash" "text", "p_reason" "text", "p_audit" "jsonb") IS 'Publishes only an exact authoritative Portal LCIA V3 package/projection plan and reconciles response-loss retries.';

@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 98d3a6ceeaaf12f124d4effcb9b5fc3e1462fabc
-lastReviewedNote: "已为 Issue #327 规范 active-fence 命名复核；exact-local workspace 重建命令和脚本调用契约无需改变。"
+lastReviewedAt: 2026-08-27
+lastReviewedCommit: 8ca5fba
+lastReviewedNote: "已复核 Portal 双 manifest、既有数据 Facet upgrade/recovery runner 与命名性能 profile。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -76,6 +76,73 @@ migration，并证明七张表的 OID 与 heap relfilenode 都不变，同时代
 scripts/test_search_text_array_upgrade.sh
 ```
 
+### `test_portal_projection_upgrade_recovery.sh`
+
+在显式确认且隔离的本地 Supabase 项目中验证 Issue 531 Portal projection
+上线。脚本使用真实并发连接覆盖有效更新、删除、状态失效、主键变更以及仅 embedding
+更新竞态；主动制造 card/facet reconcile 锁超时与 cutover guard 失败；证明 facet
+expand COMMIT/history 缺口、四分片幂等重试、同名 concurrent index 受控清理、Flow
+eligibility guard 回滚，以及已记录迁移重复执行不会重建七个索引。所需环境变量与恢复边界见
+`docs/agents/portal-projection-migration-recovery.md`。正式证据还要求干净 HEAD、
+Supabase CLI `2.109.1`，以及完整 266-file migration tree 的逐字相等和 aggregate
+SHA-256。
+
+### `test_portal_facet_projection_populated_upgrade.sh`
+
+在同一类显式隔离的 Issue-531 项目中，对 126,246 条既有 parent card 逐字执行七个
+Facet migration。每条 backfill statement 必须在 120 秒门下保留至少 2 倍余量，
+每个完整 UUID-quarter 文件必须低于 120 秒；成功 reconcile fence 必须在 5 秒内
+完成，并要求 key coverage、确定性抽样 facts 与 DTO 聚合计数精确一致。runner
+退出时总会把隔离项目重置到完整 HEAD。
+
+### `run_portal_projection_benchmark.sh`
+
+仅在显式确认的 Issue 531 隔离本地 Supabase 项目中运行代表性 Process/Flow
+Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把完整
+266-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
+reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合同与 recovery runner
+一致，另要求 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`。
+
+`PORTAL_PROJECTION_BENCHMARK_PROFILE` 用于选择 fail-closed 命名 profile：
+
+- `release` 使用代表性行数/向量数和 21,000 条旧 Flow 版本压力，记录自然
+  raw-ANN 分支，直接验收两类完整规模 exact helper，并捕获生产一致的
+  5,000-to-200 ANN 阶段；
+- `sparse-zero` 使用代表性行数但不写 embedding；
+- `sparse-199` 为每类数据只写 199 条 embedding；
+- `diagnostic` 允许显式传入较小规模，不能作为发布证据；`auto` 会根据
+  精确参数识别命名 profile。
+
+所有命名 gate 都要求干净且精确的 HEAD，覆盖完整公开请求形态，保持
+Search/Facets p95 <= 2 秒、Hybrid p95 <= 6 秒、每次 Hybrid < 8 秒。正式
+semantic plan 必须含可解析的 shared-buffer 证据、低于 750,000 total / 250,000
+read blocks、exact 在 5 秒内完成、formal ANN+exact 合计不超过 6 秒，且没有
+temp/disk spill。每次运行必须使用新的 mode-0700 输出目录。正式 lexical plan
+使用与 Process/Flow pattern helper 完全一致的 leaf，并保持所有常规 planner
+路径开启。代表性 Flow 基数必须自然命中其 PGroonga scan node；Process 基数较小，
+因此记录自然成本计划而不强制某个索引，迁移期 catalog guard 负责证明其 PGroonga
+索引，命名 timing 独立覆盖 Process 性能、排序和 cursor。两类 lexical probe 都
+必须满足精确 needle fixture identity 且无 spill。基准还会捕获匿名 Process/Flow
+空 Facets 与过滤 Facets 计划，要求独立空路径在固定 32-MB 工作区内零 temp/disk
+spill，测量 parent-first facet reconcile fence，并把 facet child upsert 纳入现有
+writer delta/ratio 门。
+每个 profile 还会记录精确的 Flow embedding universe probe。sparse profile 必须
+自然命中窄 partial eligibility B-tree，且不得扫描宽 Flow heap；release profile
+记录全量 vector 的自然计划，不强制使用该索引。只有 release 必须命名两个 source
+HNSW index；sparse source probe 可以选择 eligibility/empty-set plan，但仍必须提供
+buffers、execution time 且没有 temp/disk spill。
+
+### `check_portal_projection_manifest.py`
+
+同时验证两个已提交的 Portal digest：十一函数 card 闭包与两函数窄 Facet 闭包。
+它禁止后续 mutation 任一闭包/控制函数，校验四个 Facet 分片、reconcile 与严格
+cutover dispatch，并保留 Flow eligibility index 的精确 catalog guard，同时不改变
+card-v1 digest。
+
+```bash
+python3 scripts/check_portal_projection_manifest.py
+```
+
 ### `resolve_migration_head.py`
 
 从当前 checkout 的 `supabase/migrations` 目录输出最新的有效 migration 版本。
@@ -94,10 +161,21 @@ python scripts/test_resolve_migration_head.py
 
 ### `test_supabase_dev_workflow_contract.py`
 
-除非持久化 Dev workflow 在绑定目标项目后准确执行一次
-`supabase db push --include-all`，否则立即失败。该契约同时拒绝 Functions
-deploy/delete、`config push`、Management API 写操作和手工固定 migration head，
-并要求 Hosted job 使用同一 checkout 完成 exact-head readback。
+除非 `.github/workflows/supabase-dev.yml` 保持两条相互隔离的托管路径，否则立即
+失败。push-only 持久化 Dev job 必须绑定配置的 Dev 项目，准确执行一次
+`supabase db push --include-all`，从 checkout 推导 migration head，并执行准确一次
+三字段 PostgREST PATCH。pull-request-only Preview job 对 fork 跳过，但同仓 PR 缺少
+access token、main-parent ref 或 persistent-Dev ref 任一项时 fail closed。它必须把
+准确 head 上来自官方 Supabase App 的唯一成功 check，与 `branches list` 中按 Git
+branch、PR number、parent 匹配的唯一 non-default/non-persistent BranchResponse 绑定；
+两个 ref 必须相等且都不同于 main/Dev，才能执行 Preview 的一次相同 PATCH 与回读。
+
+合同还要求通过独立且不带 `reveal` 的 Management API key 读取，使用原始
+`disabled` 状态与准确公共 key 形态筛选。只有已 mask 的启用 publishable 或 legacy
+anon key 能进入下一 step；此前必须清除原始 JSON 与 PAT。匿名 Hybrid step 本身不得
+包含 PAT、`Authorization`、`Cookie` 或 service credential。整个 workflow 唯一允许的
+Management API 修改，是持久化 Dev 与 Preview 各一次 PostgREST PATCH；Functions
+命令、广义 `config push`、手工固定 migration head 及其他修改仍全部拒绝。
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py

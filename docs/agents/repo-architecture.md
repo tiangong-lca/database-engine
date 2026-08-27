@@ -10,6 +10,7 @@ whenToUse:
   - when you need a compact mental model before editing SQL, config, or schema-workspace tooling
   - when deciding whether a path is stable source of truth or generated inspection output
   - when the task mentions workspace-based migration authoring, remote schema export, or branch-specific database behavior
+  - when adding or consuming the anonymous Portal public DTO boundary
 whenToUpdate:
   - when major repo paths or authoring workflows change
   - when the generated schema workspace contract changes
@@ -17,6 +18,7 @@ whenToUpdate:
 checkPaths:
   - docs/agents/repo-architecture.md
   - .docpact/config.yaml
+  - contracts/portal/**
   - supabase/config.toml
   - supabase/migrations/**
   - supabase/tests/**
@@ -27,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-25
-lastReviewedCommit: 98d3a6ceeaaf12f124d4effcb9b5fc3e1462fabc
-lastReviewedNote: "Added the dedicated ai queue, versioned ai.tidas_suggestion registry entry, and requester-scoped service facades for Database Issue #520."
+lastReviewedAt: 2026-08-27
+lastReviewedCommit: 8ca5fba
+lastReviewedNote: "Reviewed for narrow facet facts, strict empty-request dispatch, and populated-upgrade proof; the architecture boundary is unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -71,6 +73,40 @@ in `private.api_capability_grants`. That table records the owning capability ID
 and admitted caller roles; migrations first remove inherited grants and then
 rebuild the external ACL from this closed manifest. New or overloaded RPCs are
 therefore denied until their exact signature is deliberately classified.
+
+## Portal Public Read Boundary
+
+`contracts/portal/**` owns the exhaustive versioned JSON Schemas for the anonymous Portal DTOs. The matching `api.portal_*_v1` functions are additive façades: they fix visibility to public states 100/200, use stable keyset cursors, return canonical decimal strings, and recursively exclude actor/team/review fields, embeddings, credentials, private artifact locators, and database error detail. They do not replace or change legacy Search, raw-table RLS, Data Product, or Release consumers.
+
+Portal capability policy is fail closed. State 200 and unknown, missing, exclusive, or conflicting license evidence remain metadata-only. Exchange values require an exact public Process/Flow/FlowProperty/UnitGroup support chain plus an explicitly open capability. LCIA values come only from typed Process/Impact/Value rows staged by an exact V3 Worker job under its active lease. Database independently binds the ordered certificate Process/Method axes, dense Cartesian grid, canonical decimals, int32be UTF-8 record/relation/content hashes, source artifact hashes, and the package's exact `portalProjectionId`/`portalProjectionContentHash`. Batches are capped at 500 records and 1 MiB serialized UTF-8 JSON; terminal rows are immutable and raw tables remain private.
+
+Process Search, exact Detail, and Versions do not infer LCIA availability from state or metadata alone. A constrained decorator resolves the exact Process against the same current, finalized, non-revoked projection predicate used by the anonymous numeric reader. Search and Versions change only `capabilities.lciaVisible` while preserving strict item order and cursor; Detail also returns the locator-free publication/package/version/time and distinct sorted Method identities already allowed by `portal.public-dataset.v1`. Flow, state 200, unrelated, unprepared, unpublished, or revoked evidence remains `false`/`null`. One narrow executor-owned boolean definer reuses the existing license capability dependency graph without granting those helpers or raw tables to browser roles or postgres.
+
+Package readiness remains a service-only V3 wrapper over the frozen V1/V2 insert helper. It parses the job contract and verifies authoritative result/latest ownership, strict artifact refs, packageResultHash/result/projection SHA equality, and deterministic default Impact before the compatibility schema switch or insert. The legacy call plus all post-insert checks execute inside a PL/pgSQL subtransaction: an invalid returned identity or any unexpected binding failure raises an internal condition that rolls back the new package, Worker resultRef, trigger effects, and temporary request-v2 schema mutation before the wrapper converts it to stable `projection_package_binding_invalid`. If the legacy insert instead reports `package_conflict` after an ambiguous response, the wrapper reads only the same build-job/package-version row and exact equality returns the same locator-free receipt with `reused=true`; any difference remains conflict, and the legacy helper bytes are unchanged. A process-restart readback uses the reclaimed job's current lease and the existing V3 job/closure predicate, then resolves the committed manifest's projection ID/content hash back to the same prepared projection. It reuses the same full binding validator, including authoritative result/latest rows and deterministic default Impact selection, but deliberately never requires the prior projection lease; missing packages return one stable 404 and drift returns conflict without package/projection mutation. Package publication is a separate authenticated-manager plan/command pair. Its prepare and command wrappers, plus projection prepare and finalize, invoke the same authoritative package binding validator before advancement; their retained V3 implementations are private owner-only functions, so an authoritative result drift cannot create a publication, pin the result, or finalize a projection binding. The read-only prepare result freezes the V3 package, projection axes/counts/hashes, current eligible Process-set hash, selected display default, and current-publication predecessor into `publishPlanHash`; the command locks publication state, recomputes and requires that exact hash, then records it for response-loss reconciliation. Projection finalization independently recomputes typed evidence and binds the exact current package publication. Anonymous visibility uses the same full predicate returned by manager readback as `isPubliclyVisible`; supersede, unpublish, or projection revoke makes the public RPC return unavailable rather than a synthetic zero. The public RPC is bounded and locator-free, while Calculation Bundle/result artifact storage remains private.
+
+For Exchange support types whose TIDAS schemas do not carry a Process-style license field, `portal-capability-policy.v1` treats exact state-100 Flow, FlowProperty, and UnitGroup rows as the explicit support capability only after the containing Process passes the full-free license policy. State 200 never supplies numeric support. Public search matches only the projected allowlist, never `search_text`, `extracted_md`, URI, or stripped raw fields. Facet values use the same bounded normalization as filters and return at most 100 values per group with `hasMore` evidence.
+
+The Portal executor is NOLOGIN/NOBYPASSRLS and receives only the minimum object privileges required by the façades. External wrapper ACLs are revoked from `PUBLIC` and classified by exact signature in `private.api_capability_grants`; raw core tables receive no new anon policy.
+
+Flow semantic sparse-cardinality detection uses one narrow source-side partial
+B-tree on `state_code` for state-100/200 rows whose `embedding_ft` is non-null.
+It exists only to prove an exact 0..199 embedding universe without scanning the
+wide Flow heap. Its low-selectivity key avoids a covering id/version exact-join
+path. It contains no vector payload, does not replace the source HNSW ranking
+index, does not change projection semantics, and has no speculative Process
+counterpart because hosted Process evidence already meets budget.
+
+Empty-query, empty-filter Portal Facets aggregate from an independent narrow
+`private.portal_catalog_facet_rows_v1` projection keyed to the immutable
+public-safe card row. Its own literal two-function manifest binds the exact five
+emitted facet facts, while a parent trigger and `ON DELETE CASCADE` maintain the
+child transactionally. Four UUID-quarter inserts and a short parent-first
+reconcile fence populate existing rows without updating the wide card heap or
+its PGroonga indexes. Only normalized `query = ''` and `filters = {}` dispatch
+to the 32-MB bounded `GROUPING SETS` helper; every query or filter, including
+classification and year ranges, retains the established card implementation.
+The API signature, DTO, value ordering, 100-value cap, `hasMore`, owner, ACL,
+and error contract are unchanged.
 
 Edge consumers must obtain Data Product publication, package, and worker
 metadata through bounded `api.svc_data_product_*` projections rather than
@@ -118,7 +154,7 @@ executable by application roles.
 | `supabase/tests/preview/**` | exact-ref-bound disposable Hosted Preview mutation fixtures, cleanup, rollback-only fault assertions, and offline transport/lifecycle contracts; test-only and excluded from migrations, seeds, Dev data rehearsal, and production execution |
 | `.env.supabase.dev.local.example`, `.env.supabase.main.local.example` | operator branch-binding templates |
 | `scripts/**` | export, refresh, change-copy, migration-generation, and workflow-contract helpers; `resolve_migration_head.py` is the single parser used to derive the current checkout's exact migration head for persistent-Dev verification |
-| `.github/workflows/supabase-dev.yml` | local-contract rebuild, database-only persistent-Dev migration deployment with `db push --include-all`, and exact hosted verification |
+| `.github/workflows/supabase-dev.yml` | local-contract rebuild, exact-check-gated PR Preview PostgREST/anonymous Hybrid verification, database-only persistent-Dev migration deployment with `db push --include-all`, and exact hosted verification |
 | `supabase/workspace/changes/**` | manual overlay area used when generating migrations from workspace files |
 | `supabase/workspace/remote_schema.sql` | generated full raw dump from the remote database |
 | `supabase/workspace/global/**` | generated split-out global objects rebuilt on workspace refresh |
@@ -132,7 +168,8 @@ executable by application roles.
 - Git `dev` is the daily integration trunk
 - Git `main` is the promoted release line
 - PR branches map to Supabase preview branches
-- `.github/workflows/supabase-dev.yml` is the sole migration deployer for Git `dev`; it gates the remote job on the local contract, issues exactly one `db push --include-all`, and verifies the exact hosted result without Functions deployment, config push, or Management API mutations
+- the pull-request-only Preview job skips forks before authority, fails closed when a same-repository PR lacks the access token, main-parent ref, or persistent-Dev ref, requires exactly one successful check named `Supabase Preview` on the PR head from official Supabase App id `330661` and slug/owner `supabase`, captures the expected ref from its exact dashboard URL, and independently resolves one matching non-default/non-persistent BranchResponse from pinned CLI `branches list --output json`; equality plus main/Dev inequality gates the three-field PostgREST PATCH/readback. A dedicated Management API key step uses raw `disabled` state and exact public-key shape, clears its PAT/raw JSON after masked public-key export, and leaves the following anonymous Portal Hybrid step credential-free except for `apikey`; the job has no migration, Function, persistent-Dev, or production mutation path
+- `.github/workflows/supabase-dev.yml` is the sole migration deployer for Git `dev`; it gates the remote job on the local contract, issues exactly one `db push --include-all`, applies one exact Management API PATCH limited to the three PostgREST runtime fields checked into `supabase/config.toml`, and verifies the exact hosted result without Functions deployment, broad config push, or any other Management API mutation
 - after the database deployment succeeds, persistent-Dev Functions are deployed and validated through `tiangong-lca-edge-functions`; this repo contains no Function runtime source or Function deploy command
 - the production Supabase project is migrated automatically by the Supabase GitHub integration when Git `main` advances
 
@@ -240,6 +277,56 @@ Local seed cardinality is not index-plan evidence;
 after the migration reaches persistent `dev`, real redacted parameters must be
 measured with read-only `EXPLAIN (ANALYZE, BUFFERS)` there before adding partial
 or duplicate indexes.
+
+The anonymous Portal Hybrid facade is a separate additive boundary, not a new
+grant or parameter preset over those actor/team-aware raw Hybrid families.
+`api.portal_hybrid_search_v1` accepts only Process or Flow, one to twelve
+normalized model-generated terms, one exact finite 1024-dimensional embedding,
+the fixed public-card filters, and a limit of 1..20. Search, Facets, and Hybrid
+read one synchronized private card/document projection maintained from exact
+Process/Flow content writes. Two projection PGroonga indexes serve lexical
+candidates; semantic retrieval reuses the existing full source HNSW indexes and
+never duplicates vectors or HNSW storage in the projection.
+
+The `portal-hybrid-rank-v1` contract binds the latest visible state-100/200
+identity exactly and excludes every false-positive identity. A filled semantic
+pool uses bounded filtered source-HNSW with recall@20 and recall@200 of at least
+0.95; raw ANN underfill takes an exact-distance fallback. Threshold, weights,
+RRF constant, and score/id/version tie-breaks are deterministic for the actual
+candidate pool. ACL-closed Process/Flow exact helpers own the full fallback:
+they use one 32-MB-per-node workspace, hash the latest projection keys against
+one source scan, force Hash Join while disabling nested/merge joins, JIT, and parallel workers, and
+restore all caller GUCs through function configuration. The release benchmark invokes those exact
+helpers directly at full vector cardinality, while raw ANN counts separately
+record the naturally selected runtime branch. A second formal ANN plan mirrors
+the production 5,000-candidate scan and 200-candidate rerank; its time and
+buffers are added to the direct exact plan. Production-cardinality release,
+zero-vector, and 199-vector profiles retain the 6-second p95, sub-8-second
+per-call, direct-exact 5-second, combined ANN-plus-exact 6-second, zero-spill,
+and reviewed shared-buffer ceilings; the Edge admission
+gate bounds concurrency before R2 is enabled.
+
+Projection rows bind an immutable v1 derivation-contract version. Its registry
+stores a committed SHA-256 over the exact transitive card/document helper
+closure, and each Portal read checks the live manifest once before using the
+projection. The v1 helpers and registry row are immutable: any semantic change
+requires a new helper closure, shadow projection, bounded backfill, concurrent
+indexes, short reconcile fence, and atomic read cutover. Updating a digest or
+rebuilding v1 rows in place is not a valid migration path.
+
+This contract assumes privileged DDL is delivered only through the governed
+migration and CI path. The live digest proves current definitions, not the
+historical derivation of a row after out-of-band change/write/restore. Direct or
+dynamic privileged DDL is outside the supported safety model. If it may have
+overlapped a source write or backfill, restoring old bytes does not make v1
+trusted again; reads stay disabled operationally and recovery uses a shadow v2
+rebuild/cutover.
+
+The facade never invokes or relaxes the legacy raw Hybrid or semantic helpers
+and exposes no actor, team, state, data-source, cursor, model, weight, threshold,
+raw document, embedding, or locator control. Representative-cardinality plans,
+advisors, and the complete one-to-twelve-term/filter/sort/cursor input matrix
+remain promotion gates.
 
 ## Worker Jobs And Domain State
 

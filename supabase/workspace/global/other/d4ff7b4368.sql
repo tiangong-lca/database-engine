@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."qry_portal_lcia_result_package_publish_prepare_v1"("p_package_id" "uuid", "p_display_default_impact_category" "text") IS 'Returns the locator-free, exact-hash V3 package/projection/current-publication precondition required before approval.';

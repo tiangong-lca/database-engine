@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."portal_list_process_exchanges_v1"("p_process_id" "uuid", "p_process_version" "text", "p_exchange_kind" "text", "p_cursor" "text", "p_limit" integer) IS 'Locator-free Process Exchange page. Numeric rows require an exact state-100 Process/Flow/FlowProperty/UnitGroup support chain.';
