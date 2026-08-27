@@ -1,6 +1,7 @@
 #!/usr/bin/env bash
 set -euo pipefail
 umask 077
+export SUPABASE_TELEMETRY_DISABLED=1
 
 repo_root="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 supabase_cli="${SUPABASE_CLI:-supabase}"
