@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-27"
-lastReviewedCommit: "2f207a3a17d798a4464a670a5f9ef2ccc026f0ae"
+lastReviewedCommit: "117b188e343b2422c0a18bc15aaad9d5c93a3a48"
 lastReviewedNote: "Reviewed for Issue #532 exact-key Search/Hybrid card context, generated Portal types, isolated 267-migration proof, and the unchanged Issue #531 writer graph."
 
 # Keep deterministic governance facts here.

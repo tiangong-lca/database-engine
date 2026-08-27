@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 2f207a3a17d798a4464a670a5f9ef2ccc026f0ae
+lastReviewedCommit: 117b188e343b2422c0a18bc15aaad9d5c93a3a48
 lastReviewedNote: "Reviewed for Issue #532 exact-key 50/20 card decoration and generated DTO ownership; stored projection, index, trigger, and writer boundaries are unchanged."
 related:
   - ../../AGENTS.md
