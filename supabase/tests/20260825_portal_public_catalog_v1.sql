@@ -17,7 +17,8 @@ values
   ('api.portal_list_versions_v1(text, uuid, text, integer)'),
   ('api.portal_list_process_exchanges_v1(uuid, text, text, text, integer)'),
   ('api.portal_facets_v1(text, text, jsonb)'),
-  ('api.portal_sitemap_entries_v1(text, text, integer)');
+  ('api.portal_sitemap_entries_v1(text, text, integer)'),
+  ('api.portal_catalog_summary_v1()');
 
 create temporary table portal_legacy_search_acl_snapshot (
   routine_identity text primary key
@@ -54,11 +55,11 @@ select extensions.is(
         'portal_search_processes_v1', 'portal_search_flows_v1',
         'portal_get_dataset_v1', 'portal_list_versions_v1',
         'portal_list_process_exchanges_v1', 'portal_facets_v1',
-        'portal_sitemap_entries_v1'
+        'portal_sitemap_entries_v1', 'portal_catalog_summary_v1'
       )
   ),
-  7::bigint,
-  'exactly seven Portal catalogue routines exist without overloads'
+  8::bigint,
+  'exactly eight Portal catalogue routines exist without overloads'
 );
 
 select extensions.is(
@@ -78,7 +79,7 @@ select extensions.is(
           'portal_search_processes_v1', 'portal_search_flows_v1',
           'portal_get_dataset_v1', 'portal_list_versions_v1',
           'portal_list_process_exchanges_v1', 'portal_facets_v1',
-          'portal_sitemap_entries_v1'
+          'portal_sitemap_entries_v1', 'portal_catalog_summary_v1'
         )
     )
     select count(*)
@@ -93,7 +94,7 @@ select extensions.is(
     ) as symmetric_difference
   ),
   0::bigint,
-  'Portal catalogue routines have the seven exact frozen regprocedure signatures'
+  'Portal catalogue routines have the eight exact frozen regprocedure signatures'
 );
 
 select extensions.is(
@@ -116,7 +117,7 @@ select extensions.is(
       and routine.proconfig @> array['search_path=""']::text[]
       and owner_role.rolname = 'portal_public_executor'
   ),
-  7::bigint,
+  8::bigint,
   'all Portal catalogue routines return jsonb and use the hardened executor boundary'
 );
 
@@ -135,7 +136,7 @@ select extensions.is(
       )
     where routine.prosrc like '%when query_canceled then%'
   ),
-  7::bigint,
+  8::bigint,
   'all public Portal routines converge statement cancellation to the generic unavailable error'
 );
 
@@ -238,8 +239,8 @@ select extensions.is(
     from private.api_capability_grants as manifest
     where manifest.capability_id = 'PORTAL-CATALOG-01'
   ),
-  7::bigint,
-  'PORTAL-CATALOG-01 contains exactly the seven frozen Portal catalogue routines'
+  8::bigint,
+  'PORTAL-CATALOG-01 contains exactly the eight frozen Portal catalogue routines'
 );
 
 select extensions.is(
@@ -253,7 +254,7 @@ select extensions.is(
       and manifest.allow_authenticated
       and not manifest.allow_service_role
   ),
-  7::bigint,
+  8::bigint,
   'PORTAL-CATALOG-01 grants only anon and authenticated in the manifest'
 );
 
@@ -285,7 +286,7 @@ select extensions.is(
           and acl.privilege_type = 'EXECUTE'
       )
   ),
-  7::bigint,
+  8::bigint,
   'runtime ACLs grant anon/authenticated while revoking service_role and PUBLIC'
 );
 
@@ -324,7 +325,7 @@ select extensions.is(
           'portal_search_processes_v1', 'portal_search_flows_v1',
           'portal_get_dataset_v1', 'portal_list_versions_v1',
           'portal_list_process_exchanges_v1', 'portal_facets_v1',
-          'portal_sitemap_entries_v1'
+          'portal_sitemap_entries_v1', 'portal_catalog_summary_v1'
         )
     )
     select count(*)
@@ -2186,6 +2187,10 @@ values
   (
     'all_sitemap_page_1',
     api.portal_sitemap_entries_v1('all', null, 1)
+  ),
+  (
+    'catalog_summary_initial',
+    api.portal_catalog_summary_v1()
   );
 
 insert into portal_test_results (label, payload)
@@ -3681,6 +3686,122 @@ select extensions.ok(
   'combined sitemap keyset cursor advances without overlap'
 );
 
+select extensions.is(
+  (
+    select payload -> 'counts'
+    from portal_test_results
+    where label = 'catalog_summary_initial'
+  ),
+  '{"process":7,"flow":3,"total":10}'::jsonb,
+  'catalog summary counts each latest-visible state-100/200 Process and Flow id exactly once'
+);
+
+select extensions.is(
+  (
+    select payload -> 'latestModifiedAt'
+    from portal_test_results
+    where label = 'catalog_summary_initial'
+  ),
+  '"2026-08-25T10:00:00.000000Z"'::jsonb,
+  'catalog summary latestModifiedAt ignores newer hidden state-0/20 rows'
+);
+
+select extensions.is(
+  (
+    select pg_catalog.jsonb_agg(example.value -> 'queryKind' order by example.ordinality)
+    from portal_test_results as result
+    cross join lateral pg_catalog.jsonb_array_elements(result.payload -> 'examples')
+      with ordinality as example(value, ordinality)
+    where result.label = 'catalog_summary_initial'
+  ),
+  '["uuid","cas","classification"]'::jsonb,
+  'catalog summary emits at most one example in fixed UUID/CAS/classification order'
+);
+
+select extensions.ok(
+  (
+    select result.payload #>> '{examples,0,datasetKind}' = 'process'
+      and result.payload #>> '{examples,0,query}' =
+        '52700000-0000-4000-8000-000000000101'
+      and result.payload #>> '{examples,1,datasetKind}' = 'flow'
+      and result.payload #>> '{examples,1,query}' = '50-00-0'
+      and result.payload #>> '{examples,2,query}' = 'PORTAL-FIXTURE'
+    from portal_test_results as result
+    where result.label = 'catalog_summary_initial'
+  ),
+  'catalog examples are selected deterministically from latest-visible card evidence'
+);
+
+select extensions.ok(
+  not exists (
+    select 1
+    from portal_test_results as result
+    cross join lateral pg_catalog.jsonb_array_elements(result.payload -> 'examples')
+      as example(value)
+    cross join lateral pg_catalog.jsonb_array_elements(example.value -> 'label')
+      as label_item(value)
+    where result.label = 'catalog_summary_initial'
+      and (
+        pg_catalog.jsonb_array_length(example.value -> 'label') not between 1 and 2
+        or (select count(*) from pg_catalog.jsonb_object_keys(example.value)) <> 4
+        or (select count(*) from pg_catalog.jsonb_object_keys(label_item.value)) <> 2
+        or pg_catalog.length(label_item.value ->> 'language') > 35
+        or pg_catalog.length(label_item.value ->> 'value') > 160
+        or pg_catalog.octet_length(label_item.value ->> 'value') > 640
+      )
+  ),
+  'catalog examples contain only the bounded query kind, dataset kind, query, and allowlisted label'
+);
+
+select extensions.ok(
+  (
+    select pg_catalog.bool_and(
+      case example.value ->> 'datasetKind'
+        when 'process' then pg_catalog.jsonb_array_length(
+          api.portal_search_processes_v1(
+            example.value ->> 'query', '{}'::jsonb, 'relevance', null, 20
+          ) -> 'items'
+        ) > 0
+        else pg_catalog.jsonb_array_length(
+          api.portal_search_flows_v1(
+            example.value ->> 'query', '{}'::jsonb, 'relevance', null, 20
+          ) -> 'items'
+        ) > 0
+      end
+    )
+    from portal_test_results as result
+    cross join lateral pg_catalog.jsonb_array_elements(result.payload -> 'examples')
+      as example(value)
+    where result.label = 'catalog_summary_initial'
+  ),
+  'every returned catalog example succeeds through the current anonymous lexical facade'
+);
+
+select extensions.is(
+  (
+    select payload
+    from portal_test_results
+    where label = 'catalog_summary_initial'
+  ),
+  api.portal_catalog_summary_v1(),
+  'catalog summary is deterministic across repeated calls with unchanged projection data'
+);
+
+select extensions.ok(
+  (
+    select pg_catalog.octet_length(payload::text) <= 16384
+      and (select count(*) from pg_catalog.jsonb_object_keys(payload)) = 4
+      and not (payload::text like any (array[
+        '%52700000-0000-4000-8000-000000000106%',
+        '%52700000-0000-4000-8000-000000000107%',
+        '%52700000-0000-4000-8000-000000000204%'
+      ]))
+    from portal_test_results
+    where label = 'catalog_summary_initial'
+  ),
+  'catalog summary is bounded and excludes hidden draft/review identities'
+);
+
 create temporary table portal_flow_201_original on commit drop as
 select json, json_ordered
 from public.flows
@@ -4193,6 +4314,22 @@ select
   )
 from portal_test_results as second_page
 where second_page.label = 'flow_geography_fast_page_2';
+
+reset role;
+
+set local role anon;
+insert into portal_test_results (label, payload)
+values ('catalog_summary_before_withdraw', api.portal_catalog_summary_v1());
+reset role;
+
+update public.flows
+set state_code = 20
+where id = '52700000-0000-4000-8000-000000000203'
+  and version = '01.00.000';
+
+set local role anon;
+insert into portal_test_results (label, payload)
+values ('catalog_summary_after_withdraw', api.portal_catalog_summary_v1());
 reset role;
 
 select extensions.ok(
@@ -4254,6 +4391,121 @@ select extensions.ok(
     cross join actual
   ),
   'geography-only Flow Search filters latest narrow facts before exact ordered card hydration and cursor continuation'
+);
+
+select extensions.ok(
+  (
+    select
+      (after_summary.payload #>> '{counts,flow}')::bigint =
+        (before_summary.payload #>> '{counts,flow}')::bigint - 1
+      and (after_summary.payload #>> '{counts,total}')::bigint =
+        (before_summary.payload #>> '{counts,total}')::bigint - 1
+      and after_summary.payload -> 'latestModifiedAt' =
+        before_summary.payload -> 'latestModifiedAt'
+    from portal_test_results as before_summary
+    join portal_test_results as after_summary
+      on after_summary.label = 'catalog_summary_after_withdraw'
+    where before_summary.label = 'catalog_summary_before_withdraw'
+  ),
+  'a public-to-state-20 transition changes summary counts synchronously without exposing the withdrawn row'
+);
+
+update public.flows
+set state_code = 200
+where id = '52700000-0000-4000-8000-000000000203'
+  and version = '01.00.000';
+
+set local role anon;
+insert into portal_test_results (label, payload)
+values ('catalog_summary_after_restore', api.portal_catalog_summary_v1());
+reset role;
+
+select extensions.is(
+  (
+    select payload
+    from portal_test_results
+    where label = 'catalog_summary_after_restore'
+  ),
+  (
+    select payload
+    from portal_test_results
+    where label = 'catalog_summary_before_withdraw'
+  ),
+  'restoring the same public state restores the deterministic summary exactly'
+);
+
+update public.flows
+set
+  json = pg_catalog.jsonb_set(
+    json,
+    '{flowDataSet,flowInformation,dataSetInformation,CASNumber}',
+    '"50-00-1"'::jsonb,
+    false
+  ),
+  json_ordered = pg_catalog.jsonb_set(
+    json_ordered::jsonb,
+    '{flowDataSet,flowInformation,dataSetInformation,CASNumber}',
+    '"50-00-1"'::jsonb,
+    false
+  )::json
+where state_code in (100, 200)
+  and pg_catalog.jsonb_typeof(json) = 'object'
+  and pg_catalog.jsonb_typeof(json -> 'flowDataSet') = 'object';
+
+set local role anon;
+insert into portal_test_results (label, payload)
+values ('catalog_summary_invalid_cas', api.portal_catalog_summary_v1());
+reset role;
+
+select extensions.ok(
+  not exists (
+    select 1
+    from portal_test_results as result
+    cross join lateral pg_catalog.jsonb_array_elements(result.payload -> 'examples')
+      as example(value)
+    where result.label = 'catalog_summary_invalid_cas'
+      and example.value ->> 'queryKind' = 'cas'
+  ),
+  'a regex-shaped CAS with an invalid check digit is not returned as an executable example'
+);
+
+update public.flows
+set
+  json = json #- '{flowDataSet,flowInformation,dataSetInformation,CASNumber}',
+  json_ordered = (
+    json_ordered::jsonb #- '{flowDataSet,flowInformation,dataSetInformation,CASNumber}'
+  )::json
+where state_code in (100, 200)
+  and pg_catalog.jsonb_typeof(json) = 'object'
+  and pg_catalog.jsonb_typeof(json -> 'flowDataSet') = 'object';
+
+update public.processes
+set
+  json = json #-
+    '{processDataSet,processInformation,dataSetInformation,classificationInformation}',
+  json_ordered = (
+    json_ordered::jsonb #-
+      '{processDataSet,processInformation,dataSetInformation,classificationInformation}'
+  )::json
+where state_code in (100, 200)
+  and pg_catalog.jsonb_typeof(json) = 'object'
+  and pg_catalog.jsonb_typeof(json -> 'processDataSet') = 'object';
+
+set local role anon;
+insert into portal_test_results (label, payload)
+values ('catalog_summary_without_optional_examples', api.portal_catalog_summary_v1());
+reset role;
+
+select extensions.is(
+  (
+    select pg_catalog.jsonb_agg(example.value -> 'queryKind' order by example.ordinality)
+    from portal_test_results as result
+    cross join lateral pg_catalog.jsonb_array_elements(result.payload -> 'examples')
+      with ordinality as example(value, ordinality)
+    where result.label = 'catalog_summary_without_optional_examples'
+  ),
+  '["uuid"]'::jsonb,
+  'missing CAS and classification evidence omits those examples without placeholders'
 );
 
 select extensions.ok(
