@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: ae3420a
-lastReviewedNote: "Reviewed for Issue #543 optional non-broad classification examples, Process-first selection, dynamic public-Search benchmark, and no new projection/writer surface."
+lastReviewedCommit: 7e093de
+lastReviewedNote: "Reviewed for Issue #543 non-broad classification examples plus an exact partial-index Flow CAS branch; projection semantics, ordinary PGroonga Search, and writer ownership remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

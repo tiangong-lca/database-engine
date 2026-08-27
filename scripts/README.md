@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: ae3420a
-lastReviewedNote: "Reviewed for Issue #543: 275-file recovery/benchmark runners, executable summary classification example gate, fixed sitemap shards, anonymous Preview gates, and 13-module Portal generation are current."
+lastReviewedCommit: 7e093de
+lastReviewedNote: "Reviewed for Issue #543: 276-file recovery/benchmark runners, executable UUID/CAS/classification example gates, bounded Flow CAS index evidence, fixed sitemap shards, and 13-module Portal generation are current."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -104,7 +104,7 @@ See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries. Formal evidence additionally requires
 clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
-the complete 275-file migration tree.
+the complete 276-file migration tree.
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
@@ -126,11 +126,17 @@ The runner always resets the isolated project to full HEAD on exit.
 Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
 fence, plan, and ANN-recall benchmark only against an explicitly attested
 Issue-531/532/539/543 local Supabase project. The runner byte-compares the complete
-275-file migration tree with the repository, writes into a new operator-selected private
+276-file migration tree with the repository, writes into a new operator-selected private
 directory, and resets the isolated database before and after the run so rolled
 back HNSW pages cannot accumulate. Its environment contract mirrors the
 recovery runner and additionally requires
 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`.
+
+The separate catalog-summary cardinality SQL also measures the dynamically
+selected classification and Flow CAS examples for 20 samples. Its temporary
+writer clone records the combined eligibility index and exact Flow CAS index
+independently, including build time, bytes, and incremental four-update p95;
+the real projection and its indexes are never dropped or rebuilt by that probe.
 
 `PORTAL_PROJECTION_BENCHMARK_PROFILE` selects a fail-closed named profile:
 

@@ -1,7 +1,7 @@
 ---
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: 9e1304e
-lastReviewedNote: "Reviewed for Issue #543: the 275-file tree retains the exact-version sitemap recovery and adds a function-only catalog-summary example repair with no projection or writer recovery surface."
+lastReviewedCommit: 7e093de
+lastReviewedNote: "Reviewed for Issue #543: the 276-file tree retains exact-version sitemap recovery and adds bounded classification plus exact Flow CAS example repairs without changing projection recovery ownership."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -476,6 +476,15 @@ migration retry: `CREATE OR REPLACE FUNCTION` is idempotent after its strict
 prerequisite/definition checks, and no data cleanup or projection recovery is
 authorized.
 
+`20260827210000_optimize_portal_flow_cas_search.sql` adds one partial expression
+B-tree over valid public Flow CAS card values and one exact-CAS candidate branch.
+It preserves the existing PGroonga path for ordinary lexical, UUID, and invalid
+CAS-shaped text, rechecks the exact latest version before returning a candidate,
+and changes no projection row, Trigger, RLS policy, cursor, or timeout. A failed
+index build, function prerequisite, public-example smoke, or contract assertion
+rolls back atomically; do not retain a manual index or bypass the forward
+migration after an uncertain hosted outcome.
+
 ## Uncertain expand commit
 
 The expand migration is transactional, so ordinary SQL failure leaves no Issue
@@ -572,7 +581,7 @@ Issue 531 Supabase project. It resets that local project and must never target a
 shared checkout, Preview, persistent Dev, or production.
 
 Formal recovery evidence requires clean HEAD, the reviewed Supabase CLI
-`2.109.1`, and byte equality plus one aggregate SHA-256 across all 275 migration
+`2.109.1`, and byte equality plus one aggregate SHA-256 across all 276 migration
 files in the repository and isolated project. Comparing only Issue 531 files is
 not sufficient because an earlier baseline change can alter recovery behavior.
 

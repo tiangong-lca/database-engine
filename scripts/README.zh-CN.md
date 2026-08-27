@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: ae3420a
-lastReviewedNote: "已复核 Issue #543：275-file recovery/benchmark、可执行 summary classification example gate、固定 sitemap shards、匿名 Preview gates 与 13-module Portal 生成均为当前状态。"
+lastReviewedCommit: 7e093de
+lastReviewedNote: "已复核 Issue #543：276-file recovery/benchmark、可执行 UUID/CAS/classification example gates、受限 Flow CAS index 证据、固定 sitemap shards 与 13-module Portal 生成均为当前状态。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -91,7 +91,7 @@ facet version 集精确相等。脚本还证明已记录迁移重复执行不会
 证明 populated 且已记录的 `134101`/`134102` 状态只应用 `134103` 即可收敛。
 所需环境变量与恢复边界见
 `docs/agents/portal-projection-migration-recovery.md`。正式证据还要求干净 HEAD、
-Supabase CLI `2.109.1`，以及完整 275-file migration tree 的逐字相等和 aggregate
+Supabase CLI `2.109.1`，以及完整 276-file migration tree 的逐字相等和 aggregate
 SHA-256。
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
@@ -109,9 +109,14 @@ history-order index、唯一 same-key trigger、shard capacity 与两个 public 
 
 仅在显式确认的 Issue 531/532/539/543 隔离本地 Supabase 项目中运行代表性 Process/Flow
 Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把完整
-275-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
+276-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
 reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合同与 recovery runner
 一致，另要求 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`。
+
+独立的 catalog-summary cardinality SQL 还会对动态选出的 classification 与 Flow
+CAS example 各执行 20 个样本。它在临时 writer clone 上分别记录 combined
+eligibility index 与 exact Flow CAS index 的 build time、bytes 和增量四次更新 p95；
+该探针不会 drop 或 rebuild 真实 projection/index。
 
 `PORTAL_PROJECTION_BENCHMARK_PROFILE` 用于选择 fail-closed 命名 profile：
 
