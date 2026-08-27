@@ -156,7 +156,7 @@ begin
       cross join lateral pg_catalog.jsonb_array_elements(
         candidate.card -> 'classifications'
       ) with ordinality as classification(value, ordinality)
-      where candidate.dataset_kind = 'flow'
+      where candidate.dataset_kind = 'process'
         and pg_catalog.jsonb_typeof(
           candidate.card -> 'classifications'
         ) = 'array'
@@ -165,12 +165,9 @@ begin
         ) > 0
         and pg_catalog.jsonb_typeof(classification.value) = 'object'
         and pg_catalog.jsonb_typeof(classification.value -> 'code') = 'string'
-        and nullif(
-          pg_catalog.btrim(classification.value ->> 'code'), ''
-        ) is not null
         and pg_catalog.length(
           pg_catalog.btrim(classification.value ->> 'code')
-        ) <= 128
+        ) between 4 and 128
         and pg_catalog.octet_length(
           pg_catalog.btrim(classification.value ->> 'code')
         ) <= 512
@@ -209,7 +206,7 @@ begin
       cross join lateral pg_catalog.jsonb_array_elements(
         candidate.card -> 'classifications'
       ) with ordinality as classification(value, ordinality)
-      where candidate.dataset_kind = 'process'
+      where candidate.dataset_kind = 'flow'
         and pg_catalog.jsonb_typeof(
           candidate.card -> 'classifications'
         ) = 'array'
@@ -218,12 +215,9 @@ begin
         ) > 0
         and pg_catalog.jsonb_typeof(classification.value) = 'object'
         and pg_catalog.jsonb_typeof(classification.value -> 'code') = 'string'
-        and nullif(
-          pg_catalog.btrim(classification.value ->> 'code'), ''
-        ) is not null
         and pg_catalog.length(
           pg_catalog.btrim(classification.value ->> 'code')
-        ) <= 128
+        ) between 4 and 128
         and pg_catalog.octet_length(
           pg_catalog.btrim(classification.value ->> 'code')
         ) <= 512
