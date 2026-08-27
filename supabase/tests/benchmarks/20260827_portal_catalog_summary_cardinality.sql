@@ -297,6 +297,8 @@ begin
 end
 $function$;
 
+grant portal_public_executor to postgres;
+
 select pg_temp.measure_portal_summary_writes(
   'baseline-without-index', 50
 );
@@ -485,12 +487,12 @@ begin
   for v_sample in 1..p_samples loop
     v_started_at := pg_catalog.clock_timestamp();
     if v_example ->> 'datasetKind' = 'process' then
-      v_page := api.portal_search_processes_v1(
-        v_example ->> 'query', '{}'::jsonb, 'relevance', null, 50
+      v_page := private.portal_search_v1(
+        'process', v_example ->> 'query', '{}'::jsonb, 'relevance', null, 50
       );
     else
-      v_page := api.portal_search_flows_v1(
-        v_example ->> 'query', '{}'::jsonb, 'relevance', null, 50
+      v_page := private.portal_search_v1(
+        'flow', v_example ->> 'query', '{}'::jsonb, 'relevance', null, 50
       );
     end if;
     insert into pg_temp.portal_summary_example_timings (
@@ -511,6 +513,13 @@ begin
   end loop;
 end
 $function$;
+
+grant execute on function pg_temp.measure_portal_summary_classification_example(
+  text,
+  integer
+) to portal_public_executor;
+grant insert, select on table pg_temp.portal_summary_example_timings
+to portal_public_executor;
 
 select pg_temp.measure_portal_summary(
   'no-cas-classification-evidence', :'benchmark_samples'::integer
@@ -534,12 +543,18 @@ where dataset_kind = 'flow'
   );
 
 update private.portal_catalog_search_rows_v1
-set card = pg_catalog.jsonb_set(
-  card,
-  '{classifications}',
-  '[{"system":"benchmark","code":"SUMMARY-TAIL","label":[{"language":"en","value":"Tail classification"}]}]'::jsonb,
-  false
-)
+set document = document || E'\nsummary-tail',
+  card = pg_catalog.jsonb_set(
+    pg_catalog.jsonb_set(
+      card,
+      '{classifications}',
+      '[{"system":"benchmark","code":"SUMMARY-TAIL","label":[{"language":"en","value":"Tail classification"}]}]'::jsonb,
+      false
+    ),
+    '{document}',
+    pg_catalog.to_jsonb(document || E'\nsummary-tail'),
+    false
+  )
 where dataset_kind = 'process'
   and id = (
     select id
@@ -553,9 +568,11 @@ reset role;
 select pg_temp.measure_portal_summary(
   'tail-evidence', :'benchmark_samples'::integer
 );
+set local role portal_public_executor;
 select pg_temp.measure_portal_summary_classification_example(
   'tail-evidence', :'benchmark_samples'::integer
 );
+reset role;
 
 set local role api_internal_executor;
 update private.portal_catalog_search_rows_v1
@@ -575,12 +592,18 @@ where dataset_kind = 'flow'
   );
 
 update private.portal_catalog_search_rows_v1
-set card = pg_catalog.jsonb_set(
-  card,
-  '{classifications}',
-  '[{"system":"benchmark","code":"SUMMARY-NORMAL","label":[{"language":"en","value":"Normal classification"}]}]'::jsonb,
-  false
-)
+set document = document || E'\nsummary-normal',
+  card = pg_catalog.jsonb_set(
+    pg_catalog.jsonb_set(
+      card,
+      '{classifications}',
+      '[{"system":"benchmark","code":"SUMMARY-NORMAL","label":[{"language":"en","value":"Normal classification"}]}]'::jsonb,
+      false
+    ),
+    '{document}',
+    pg_catalog.to_jsonb(document || E'\nsummary-normal'),
+    false
+  )
 where dataset_kind = 'process'
   and id = (
     select id
@@ -594,9 +617,11 @@ reset role;
 select pg_temp.measure_portal_summary(
   'normal', :'benchmark_samples'::integer
 );
+set local role portal_public_executor;
 select pg_temp.measure_portal_summary_classification_example(
   'normal', :'benchmark_samples'::integer
 );
+reset role;
 
 select
   profile,
@@ -791,8 +816,10 @@ limit 1;
 explain (analyze, buffers, settings, format text)
 select api.portal_catalog_summary_v1();
 
+set local role portal_public_executor;
 explain (analyze, buffers, settings, format text)
-select api.portal_search_processes_v1(
+select private.portal_search_v1(
+  'process',
   (
     select example.value ->> 'query'
     from pg_catalog.jsonb_array_elements(
@@ -805,5 +832,6 @@ select api.portal_search_processes_v1(
   null,
   50
 );
+reset role;
 
 rollback;
