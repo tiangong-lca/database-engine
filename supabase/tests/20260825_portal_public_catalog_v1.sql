@@ -365,8 +365,8 @@ select extensions.is(
       and not routine.prosecdef
       and routine.proconfig @> array['search_path=""']::text[]
   ),
-  37::bigint,
-  'all 37 invoker Portal helpers are executor-owned and pinned to an empty search path'
+  39::bigint,
+  'all 39 invoker Portal helpers are executor-owned and pinned to an empty search path'
 );
 
 select extensions.is(
