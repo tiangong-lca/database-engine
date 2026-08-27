@@ -2667,7 +2667,11 @@ begin
          where not pg_temp.portal_bench_context_complete(p_kind, item.value)
        )
        or (
-         p_label in ('process_context_search_50', 'flow_context_search_50')
+         p_label in (
+           'process_context_search_50',
+           'flow_context_search_50',
+           'flow_filtered_broad'
+         )
          and pg_catalog.jsonb_array_length(v_result -> 'items') <> 50
        ) then
       raise exception 'invalid search result';
