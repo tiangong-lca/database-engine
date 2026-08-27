@@ -320,6 +320,23 @@ python scripts/build_database_types.py --environment local
 
 Use `--environment linked` only when the linked Supabase target is intentionally the source. CI regenerates the local contract and fails when `supabase/workspace/database.types.ts` drifts.
 
+### `build_portal_contract_types.py`
+
+Generates one committed TypeScript module per exhaustive Portal JSON Schema.
+The repository has no Node package manifest, so the script follows the existing
+CI dependency policy and invokes exact-pinned
+`json-schema-to-typescript@15.0.4` through `npx`.
+
+```bash
+python3 scripts/build_portal_contract_types.py
+python3 scripts/build_portal_contract_types.py --check
+```
+
+Normal generation synchronizes `contracts/portal/generated/*.d.ts` with the
+sorted `contracts/portal/*.schema.json` source set. `--check` renders into a
+temporary directory and fails on missing, changed, or unexpected generated
+modules without modifying the checkout. CI uses the read-only check.
+
 ### `check_generated_workspace_legacy_tables.py`
 
 Checks that generated schema workspace output no longer advertises retired public legacy job tables:

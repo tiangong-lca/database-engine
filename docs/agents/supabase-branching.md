@@ -21,7 +21,7 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 70c2294ba894df3982939dec6b5e549e108f9630
+lastReviewedCommit: bf1e49bc1011a548f2c1ac86f38242e0b820cea3
 lastReviewedNote: "Reviewed after the exact PR Preview gate minimized branch/key authority and isolated public-key selection from anonymous transport; persistent Dev and production mutation boundaries remain unchanged."
 related:
   - ../../AGENTS.md

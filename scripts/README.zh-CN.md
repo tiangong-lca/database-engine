@@ -289,6 +289,21 @@ python scripts/build_database_types.py --environment local
 
 只有在刻意以已链接的 Supabase 项目为来源时才使用 `--environment linked`。CI 会从本地完整 migration 状态重新生成，并在 `supabase/workspace/database.types.ts` 漂移时失败。
 
+### `build_portal_contract_types.py`
+
+为每个 exhaustive Portal JSON Schema 生成一个纳入版本控制的 TypeScript module。
+本仓没有 Node package manifest，因此脚本遵循既有 CI 依赖政策，通过 `npx`
+调用精确固定的 `json-schema-to-typescript@15.0.4`。
+
+```bash
+python3 scripts/build_portal_contract_types.py
+python3 scripts/build_portal_contract_types.py --check
+```
+
+普通生成会让 `contracts/portal/generated/*.d.ts` 与按名称排序的
+`contracts/portal/*.schema.json` source set 同步。`--check` 只在临时目录渲染，
+若 module 缺失、变化或多余则失败，且不修改 checkout；CI 使用该只读检查。
+
 ### `check_generated_workspace_legacy_tables.py`
 
 检查生成的 schema workspace 是否仍在展示已退休的 public legacy job 表：
