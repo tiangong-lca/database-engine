@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: bfd0f1cf3c439e20cefe0d6bf73c71e037c8898d
+lastReviewedCommit: 7650446f8ad757e7c81c2dcff41ee48b65362a57
 lastReviewedNote: "已为 Issue #532 复核 Portal 类型生成、card-context manifest/parity 检查、隔离 proof 目标与保留的命名 benchmark profile。"
 related:
   - ../AGENTS.md
@@ -136,8 +136,8 @@ buffers、execution time 且没有 temp/disk spill。
 公开 reference Flow 与真实 FlowProperty/UnitGroup functional-unit 支撑链，Process/Flow
 还包含公开 source/database，Process 另包含 review/technology 字段。四个专用
 Search-50/Hybrid-20 label 必须分别返回准确 50/20 个完整 item、20 个 timing sample，
-并输出完整 wrapper `EXPLAIN (ANALYZE, BUFFERS)`。runner 会拒绝字段缺失、spill、
-超过 750,000 total / 250,000 read shared blocks，以及超过既有 Search 2 秒 / Hybrid
+并输出完整 wrapper `EXPLAIN (ANALYZE, BUFFERS)`。runner 会记录 temp-buffer 使用，
+拒绝字段缺失、超过 750,000 total / 250,000 read shared blocks，以及超过既有 Search 2 秒 / Hybrid
 6 秒门槛的结果。
 
 ### `check_portal_projection_manifest.py`

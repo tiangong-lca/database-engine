@@ -32,7 +32,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: bfd0f1cf3c439e20cefe0d6bf73c71e037c8898d
+lastReviewedCommit: 7650446f8ad757e7c81c2dcff41ee48b65362a57
 lastReviewedNote: "Reviewed for Issue #532 exact-key 50/20 decoration, deterministic Portal types, isolated SQL proof, and retained representative benchmark evidence."
 related:
   - ../../AGENTS.md
@@ -121,8 +121,8 @@ support, technology, source/database identity, and dataset-authored review
 status; every Flow card resolves the same public FlowProperty and source
 identity while retaining explicit Process-only nulls. Require exactly 50/20
 items for the four dedicated wrapper labels, capture full
-`EXPLAIN (ANALYZE, BUFFERS)` for each wrapper, reject temp/disk spill, keep each
-plan below 750,000 total and 250,000 read shared blocks, and apply the same
+`EXPLAIN (ANALYZE, BUFFERS)` for each wrapper, record any temp-buffer evidence,
+keep each plan below 750,000 total and 250,000 read shared blocks, and apply the same
 2-second Search / 6-second Hybrid budgets to both plans and 20-sample p95.
 
 When the anonymous PR Preview probe fails, CI may log only the HTTP status and

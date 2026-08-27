@@ -37,7 +37,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: bfd0f1cf3c439e20cefe0d6bf73c71e037c8898d
+lastReviewedCommit: 7650446f8ad757e7c81c2dcff41ee48b65362a57
 lastReviewedNote: "Reviewed for Issue #532 selected-row Portal card context and generated DTO types; repository ownership, no-writer-expansion, and delivery boundaries are unchanged."
 related:
   - .docpact/config.yaml

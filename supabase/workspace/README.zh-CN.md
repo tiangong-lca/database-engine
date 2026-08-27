@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: bfd0f1cf3c439e20cefe0d6bf73c71e037c8898d
+lastReviewedCommit: 7650446f8ad757e7c81c2dcff41ee48b65362a57
 lastReviewedNote: "已为 Issue #532 的 exact-local 重建与生成 Portal façade 函数复核；确定性的 267-migration 快照与 public/api 类型所有权不变。"
 related:
   - ../../AGENTS.md

@@ -298,6 +298,11 @@ docker exec -i "$container_name" \
   <"$repo_root/supabase/tests/benchmarks/20260826_portal_candidate_first_explain.sql" \
   2>&1 | tee -a "$results_log"
 
+# Preserve the complete plan artifact even when a gate fails so the failed
+# exact-head run remains diagnosable without repeating the representative load.
+docker cp "$container_name:$container_explain" "$explain_log" >/dev/null
+chmod 600 "$explain_log"
+
 expected_sql_status=DIAGNOSTIC_PASS
 if [[ "$release_profile" == "true" ]]; then
   expected_sql_status=RELEASE_PASS
@@ -308,9 +313,6 @@ if ! grep -q "^SQL_STATUS=${expected_sql_status}$" "$results_log"; then
   echo "benchmark SQL reported failure" >&2
   exit 1
 fi
-
-docker cp "$container_name:$container_explain" "$explain_log" >/dev/null
-chmod 600 "$explain_log"
 
 for expected_wrapper_profile in \
   process-search50-evidence-complete-wrapper \

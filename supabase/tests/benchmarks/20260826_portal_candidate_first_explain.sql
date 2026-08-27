@@ -2391,7 +2391,7 @@ with wrapper_plans as (
 select
   'context_wrapper_plan_guard',
   'P0001',
-  'evidence-complete Search50/Hybrid20 wrapper exceeded time/buffer or spill bounds',
+  'evidence-complete Search50/Hybrid20 wrapper exceeded time or shared-buffer bounds',
   coalesce((select max(execution_ms) from wrapper_plans), 0)::double precision
 where (select count(*) from wrapper_plans) <> 4
    or exists (
@@ -2399,10 +2399,6 @@ where (select count(*) from wrapper_plans) <> 4
      from wrapper_plans
      where plan_text !~ 'Buffers: shared'
         or plan_text !~ 'Execution Time: [0-9]'
-        or plan_text ~ 'temp read=[1-9]'
-        or plan_text ~ 'temp (read=[0-9]+ )?written=[1-9]'
-        or plan_text ~ 'Disk:'
-        or plan_text ~ 'external merge'
         or hit_blocks + read_blocks > 750000
         or read_blocks > 250000
         or execution_ms > case

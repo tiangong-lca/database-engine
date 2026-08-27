@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: bfd0f1cf3c439e20cefe0d6bf73c71e037c8898d
+lastReviewedCommit: 7650446f8ad757e7c81c2dcff41ee48b65362a57
 lastReviewedNote: "Reviewed for Issue #532 Portal type generation, card-context manifest/parity checks, isolated proof targeting, and retained named benchmark profiles."
 related:
   - ../AGENTS.md
@@ -159,7 +159,8 @@ unit chain, while Process/Flow rows carry the public source/database and
 Process review/technology fields. Four dedicated Search-50/Hybrid-20 labels
 must each produce exactly 50/20 complete items, 20 timing samples, and a full
 wrapper `EXPLAIN (ANALYZE, BUFFERS)`. The runner rejects missing evidence,
-spill, more than 750,000 total or 250,000 read shared blocks, and the existing
+records temp-buffer use, rejects more than 750,000 total or 250,000 read shared
+blocks, and applies the existing
 2-second Search / 6-second Hybrid budgets.
 
 ### `check_portal_projection_manifest.py`

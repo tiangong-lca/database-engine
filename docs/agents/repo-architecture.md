@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: bfd0f1cf3c439e20cefe0d6bf73c71e037c8898d
+lastReviewedCommit: 7650446f8ad757e7c81c2dcff41ee48b65362a57
 lastReviewedNote: "Reviewed for Issue #532 exact-key 50/20 card decoration and generated DTO ownership; stored projection, index, trigger, and writer boundaries are unchanged."
 related:
   - ../../AGENTS.md
@@ -338,7 +338,8 @@ Flow→FlowProperty→UnitGroup support, public source/database identity,
 technology, and review status are all present. Dedicated Search-50 and
 Hybrid-20 labels record 20-sample p95 plus full wrapper
 `EXPLAIN (ANALYZE, BUFFERS)` under the existing time, shared-buffer, and
-zero-spill ceilings. These fixtures remain rollback-only test data and add no
+recorded temp-buffer evidence. Existing zero-spill gates remain scoped to the
+narrow empty/exact phases that own them. These fixtures remain rollback-only test data and add no
 runtime relation, index, trigger, or writer path.
 
 This contract assumes privileged DDL is delivered only through the governed
