@@ -1,0 +1,51 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "portal.public-sitemap-manifest.v1.schema.json",
+  "title": "TianGong Portal public sitemap manifest v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "shards"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "portal.public-sitemap-manifest.v1"
+    },
+    "shards": {
+      "description": "The complete fixed set of opaque and globally disjoint sitemap shards. Empty shards remain listed so manifest work never scales with catalog cardinality.",
+      "type": "array",
+      "minItems": 64,
+      "maxItems": 64,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/ShardDescriptor"
+      }
+    }
+  },
+  "$defs": {
+    "ShardCursor": {
+      "description": "Opaque, version-bound shard cursor. Consumers pass it back byte-for-byte and never decode or synthesize it.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "ShardDescriptor": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "shardCursor",
+        "maxItems"
+      ],
+      "properties": {
+        "shardCursor": {
+          "$ref": "#/$defs/ShardCursor"
+        },
+        "maxItems": {
+          "const": 4096
+        }
+      }
+    }
+  }
+}

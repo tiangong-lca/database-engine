@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "portal.public-sitemap-shard.v1.schema.json",
+  "title": "TianGong Portal public sitemap shard v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "shardCursor",
+    "items"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "portal.public-sitemap-shard.v1"
+    },
+    "shardCursor": {
+      "description": "The exact opaque cursor supplied by the manifest and passed to this shard request byte-for-byte.",
+      "type": "string",
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 4096,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "./portal.public-sitemap-page.v1.schema.json#/$defs/SitemapItem"
+      }
+    }
+  }
+}

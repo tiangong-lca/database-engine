@@ -18,6 +18,8 @@ values
   ('api.portal_list_process_exchanges_v1(uuid, text, text, text, integer)'),
   ('api.portal_facets_v1(text, text, jsonb)'),
   ('api.portal_sitemap_entries_v1(text, text, integer)'),
+  ('api.portal_sitemap_manifest_v1()'),
+  ('api.portal_sitemap_shard_v1(text)'),
   ('api.portal_catalog_summary_v1()');
 
 create temporary table portal_legacy_search_acl_snapshot (
@@ -55,11 +57,12 @@ select extensions.is(
         'portal_search_processes_v1', 'portal_search_flows_v1',
         'portal_get_dataset_v1', 'portal_list_versions_v1',
         'portal_list_process_exchanges_v1', 'portal_facets_v1',
-        'portal_sitemap_entries_v1', 'portal_catalog_summary_v1'
+        'portal_sitemap_entries_v1', 'portal_sitemap_manifest_v1',
+        'portal_sitemap_shard_v1', 'portal_catalog_summary_v1'
       )
   ),
-  8::bigint,
-  'exactly eight Portal catalogue routines exist without overloads'
+  10::bigint,
+  'exactly ten Portal catalogue routines exist without overloads'
 );
 
 select extensions.is(
@@ -79,7 +82,8 @@ select extensions.is(
           'portal_search_processes_v1', 'portal_search_flows_v1',
           'portal_get_dataset_v1', 'portal_list_versions_v1',
           'portal_list_process_exchanges_v1', 'portal_facets_v1',
-          'portal_sitemap_entries_v1', 'portal_catalog_summary_v1'
+          'portal_sitemap_entries_v1', 'portal_sitemap_manifest_v1',
+          'portal_sitemap_shard_v1', 'portal_catalog_summary_v1'
         )
     )
     select count(*)
@@ -94,7 +98,7 @@ select extensions.is(
     ) as symmetric_difference
   ),
   0::bigint,
-  'Portal catalogue routines have the eight exact frozen regprocedure signatures'
+  'Portal catalogue routines have the ten exact frozen regprocedure signatures'
 );
 
 select extensions.is(
@@ -117,7 +121,7 @@ select extensions.is(
       and routine.proconfig @> array['search_path=""']::text[]
       and owner_role.rolname = 'portal_public_executor'
   ),
-  8::bigint,
+  10::bigint,
   'all Portal catalogue routines return jsonb and use the hardened executor boundary'
 );
 
@@ -136,7 +140,7 @@ select extensions.is(
       )
     where routine.prosrc like '%when query_canceled then%'
   ),
-  8::bigint,
+  10::bigint,
   'all public Portal routines converge statement cancellation to the generic unavailable error'
 );
 
@@ -239,8 +243,8 @@ select extensions.is(
     from private.api_capability_grants as manifest
     where manifest.capability_id = 'PORTAL-CATALOG-01'
   ),
-  8::bigint,
-  'PORTAL-CATALOG-01 contains exactly the eight frozen Portal catalogue routines'
+  10::bigint,
+  'PORTAL-CATALOG-01 contains exactly the ten frozen Portal catalogue routines'
 );
 
 select extensions.is(
@@ -254,7 +258,7 @@ select extensions.is(
       and manifest.allow_authenticated
       and not manifest.allow_service_role
   ),
-  8::bigint,
+  10::bigint,
   'PORTAL-CATALOG-01 grants only anon and authenticated in the manifest'
 );
 
@@ -286,7 +290,7 @@ select extensions.is(
           and acl.privilege_type = 'EXECUTE'
       )
   ),
-  8::bigint,
+  10::bigint,
   'runtime ACLs grant anon/authenticated while revoking service_role and PUBLIC'
 );
 
@@ -325,7 +329,8 @@ select extensions.is(
           'portal_search_processes_v1', 'portal_search_flows_v1',
           'portal_get_dataset_v1', 'portal_list_versions_v1',
           'portal_list_process_exchanges_v1', 'portal_facets_v1',
-          'portal_sitemap_entries_v1', 'portal_catalog_summary_v1'
+          'portal_sitemap_entries_v1', 'portal_sitemap_manifest_v1',
+          'portal_sitemap_shard_v1', 'portal_catalog_summary_v1'
         )
     )
     select count(*)
@@ -351,6 +356,62 @@ select extensions.is(
   ),
   44::bigint,
   'the private executor-owned Portal helper surface contains the expected 44 v1 routines'
+);
+
+select extensions.ok(
+  exists (
+    select 1
+    from pg_catalog.pg_index as index_catalog
+    join pg_catalog.pg_class as index_relation
+      on index_relation.oid = index_catalog.indexrelid
+    join pg_catalog.pg_am as access_method
+      on access_method.oid = index_relation.relam
+    where index_catalog.indexrelid =
+      'private.portal_sitemap_shard_v1_idx'::regclass
+      and index_catalog.indrelid =
+        'private.portal_catalog_facet_rows_v1'::regclass
+      and index_relation.relowner = 'postgres'::regrole
+      and access_method.amname = 'btree'
+      and index_catalog.indisvalid
+      and index_catalog.indisready
+      and index_catalog.indislive
+      and index_catalog.indnkeyatts = 7
+      and index_catalog.indnatts = 7
+      and index_catalog.indpred is null
+      and pg_catalog.pg_get_expr(
+        index_catalog.indexprs,
+        index_catalog.indrelid
+      ) = $$(get_byte(decode(md5(((dataset_kind || ':'::text) || (id)::text)), 'hex'::text), 0) / 4)$$
+  ),
+  'the sitemap shard index is the exact healthy narrow 64-bucket facet index'
+);
+
+select extensions.is(
+  (
+    select pg_catalog.md5(routine.prosrc)
+    from pg_catalog.pg_proc as routine
+    where routine.oid =
+      'api.portal_sitemap_entries_v1(text,text,integer)'::regprocedure
+  ),
+  '03dd37bd0871c220fcd94cb2dec203ed',
+  'the retained legacy sitemap façade remains byte-identical'
+);
+
+select extensions.is(
+  (
+    select pg_catalog.count(*)
+    from pg_catalog.pg_proc as routine
+    where routine.oid =
+      'private.assert_portal_sitemap_shard_index_v1()'::regprocedure
+      and routine.proowner = 'portal_public_executor'::regrole
+      and not routine.prosecdef
+      and routine.provolatile = 's'
+      and routine.proparallel = 'r'
+      and coalesce(routine.proacl::text, '') =
+        '{portal_public_executor=X/portal_public_executor}'
+  ),
+  1::bigint,
+  'the sitemap index assertion is ACL-closed and owned by the constrained executor'
 );
 
 select extensions.is(
@@ -2189,9 +2250,38 @@ values
     api.portal_sitemap_entries_v1('all', null, 1)
   ),
   (
+    'sitemap_manifest',
+    api.portal_sitemap_manifest_v1()
+  ),
+  (
     'catalog_summary_initial',
     api.portal_catalog_summary_v1()
   );
+
+insert into portal_test_results (label, payload)
+select
+  'sitemap_shards_union',
+  pg_catalog.jsonb_build_object(
+    'items',
+    coalesce(
+      pg_catalog.jsonb_agg(
+        item.value
+        order by item.value #>> '{key,kind}',
+          item.value #>> '{key,id}'
+      ),
+      '[]'::jsonb
+    )
+  )
+from portal_test_results as manifest
+cross join lateral pg_catalog.jsonb_array_elements(
+  manifest.payload -> 'shards'
+) as descriptor(value)
+cross join lateral pg_catalog.jsonb_array_elements(
+  api.portal_sitemap_shard_v1(
+    descriptor.value ->> 'shardCursor'
+  ) -> 'items'
+) as item(value)
+where manifest.label = 'sitemap_manifest';
 
 insert into portal_test_results (label, payload)
 select
@@ -2533,6 +2623,25 @@ select extensions.throws_ok(
 );
 
 select extensions.throws_ok(
+  $$select api.portal_sitemap_shard_v1('not-a-cursor')$$,
+  '22023',
+  'invalid portal request',
+  'a malformed sitemap shard cursor fails closed without SQL detail'
+);
+
+select extensions.throws_ok(
+  pg_catalog.format(
+    'select api.portal_sitemap_shard_v1(%L)',
+    first_page.payload ->> 'nextCursor'
+  ),
+  '22023',
+  'invalid portal request',
+  'an opaque cursor from the legacy sitemap scope cannot cross into a shard'
+)
+from portal_test_results as first_page
+where first_page.label = 'all_sitemap_page_1';
+
+select extensions.throws_ok(
   pg_catalog.format(
     'select api.portal_list_versions_v1(%L, %L::uuid, %L, 1)',
     'process',
@@ -2704,6 +2813,134 @@ alter table public.processes enable row level security;
 alter table public.flows enable row level security;
 alter table public.flowproperties enable row level security;
 alter table public.unitgroups enable row level security;
+
+select extensions.is(
+  (
+    select pg_catalog.jsonb_array_length(payload -> 'shards')
+    from portal_test_results
+    where label = 'sitemap_manifest'
+  ),
+  64,
+  'the sitemap manifest always contains the complete fixed 64-shard boundary set'
+);
+
+select extensions.is(
+  (
+    select pg_catalog.count(distinct descriptor.value ->> 'shardCursor')
+    from portal_test_results as result
+    cross join lateral pg_catalog.jsonb_array_elements(
+      result.payload -> 'shards'
+    ) as descriptor(value)
+    where result.label = 'sitemap_manifest'
+      and pg_catalog.jsonb_typeof(descriptor.value) = 'object'
+      and (
+        select pg_catalog.count(*)
+        from pg_catalog.jsonb_object_keys(descriptor.value)
+      ) = 2
+      and descriptor.value -> 'maxItems' = '4096'::jsonb
+      and descriptor.value ->> 'shardCursor' ~ '^[A-Za-z0-9_-]+$'
+  ),
+  64::bigint,
+  'all sitemap descriptors are exhaustive, unique, bounded, and opaque'
+);
+
+select extensions.is(
+  api.portal_sitemap_manifest_v1(),
+  (
+    select payload
+    from portal_test_results
+    where label = 'sitemap_manifest'
+  ),
+  'the constant-cost sitemap manifest is byte-stable across repeated reads'
+);
+
+select extensions.is(
+  (
+    select pg_catalog.count(*)
+    from portal_test_results as manifest
+    cross join lateral pg_catalog.jsonb_array_elements(
+      manifest.payload -> 'shards'
+    ) as descriptor(value)
+    cross join lateral (
+      select api.portal_sitemap_shard_v1(
+        descriptor.value ->> 'shardCursor'
+      ) as payload
+    ) as shard
+    where manifest.label = 'sitemap_manifest'
+      and shard.payload ->> 'schemaVersion' =
+        'portal.public-sitemap-shard.v1'
+      and shard.payload ->> 'shardCursor' =
+        descriptor.value ->> 'shardCursor'
+      and pg_catalog.jsonb_array_length(shard.payload -> 'items') <= 4096
+      and (
+        select pg_catalog.count(*)
+        from pg_catalog.jsonb_object_keys(shard.payload)
+      ) = 3
+  ),
+  64::bigint,
+  'every manifest descriptor resolves to one strict bounded shard page'
+);
+
+select extensions.is(
+  (
+    select payload -> 'items'
+    from portal_test_results
+    where label = 'sitemap_shards_union'
+  ),
+  api.portal_sitemap_entries_v1('all', null, 1000) -> 'items',
+  'the ordered union of all 64 shards equals the complete legacy latest-visible sitemap set'
+);
+
+select extensions.is(
+  (
+    select pg_catalog.jsonb_array_length(payload -> 'items')
+    from portal_test_results
+    where label = 'sitemap_shards_union'
+  ),
+  (
+    select pg_catalog.count(distinct (
+      item.value #>> '{key,kind}',
+      item.value #>> '{key,id}',
+      item.value #>> '{key,version}'
+    ))::integer
+    from portal_test_results as result
+    cross join lateral pg_catalog.jsonb_array_elements(
+      result.payload -> 'items'
+    ) as item(value)
+    where result.label = 'sitemap_shards_union'
+  ),
+  'the globally disjoint shard union contains no duplicate exact identity'
+);
+
+select extensions.is(
+  (
+    select pg_catalog.count(*)
+    from portal_test_results as manifest
+    cross join lateral pg_catalog.jsonb_array_elements(
+      manifest.payload -> 'shards'
+    ) with ordinality as descriptor(value, ordinality)
+    cross join lateral pg_catalog.jsonb_array_elements(
+      api.portal_sitemap_shard_v1(
+        descriptor.value ->> 'shardCursor'
+      ) -> 'items'
+    ) as item(value)
+    where manifest.label = 'sitemap_manifest'
+      and (descriptor.ordinality - 1)::integer <> (
+        pg_catalog.get_byte(
+          pg_catalog.decode(
+            pg_catalog.md5(
+              (item.value #>> '{key,kind}') || ':'::text ||
+              (item.value #>> '{key,id}')
+            ),
+            'hex'::text
+          ),
+          0
+        ) / 4
+      )
+  ),
+  0::bigint,
+  'every emitted identity belongs to exactly the opaque shard bucket that returned it'
+);
 
 select extensions.is(
   (
