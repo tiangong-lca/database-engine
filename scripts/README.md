@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 2f207a3a17d798a4464a670a5f9ef2ccc026f0ae
+lastReviewedCommit: 2e128536bf4665afd911a1b844a0c0727eccb428
 lastReviewedNote: "Reviewed for Issue #532 Portal type generation, card-context manifest/parity checks, isolated proof targeting, and retained named benchmark profiles."
 related:
   - ../AGENTS.md
@@ -214,6 +214,10 @@ cleared first. The anonymous Hybrid step itself may contain no PAT,
 Management API mutations are the one persistent-Dev and one Preview PostgREST
 PATCH; Functions commands, broad `config push`, pinned migration heads, and any
 other mutation remain rejected.
+
+The contract also requires failure diagnostics to emit only the HTTP status
+and a shape-validated PostgREST/SQLSTATE code. It rejects raw response-body
+printing; malformed or unexpected error envelopes must become `unclassified`.
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py

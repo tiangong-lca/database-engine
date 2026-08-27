@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 117b188e343b2422c0a18bc15aaad9d5c93a3a48
+lastReviewedCommit: 2e128536bf4665afd911a1b844a0c0727eccb428
 lastReviewedNote: "Reviewed for Issue #532 exact-key 50/20 card decoration and generated DTO ownership; stored projection, index, trigger, and writer boundaries are unchanged."
 related:
   - ../../AGENTS.md
@@ -184,6 +184,12 @@ Hosted proof or independent Auth/SQL readback. Hosted mutation fixtures must be
 bound to the intended disposable Preview and clean up only their own actors and
 effects. The exact proof required for each capability lives in
 `docs/agents/repo-validation.md`.
+
+The PR Preview transport probe keeps failure evidence deliberately narrow: it
+may report the HTTP status and a strict shape-validated PostgREST or SQLSTATE
+code, but never the raw response body, error prose, request payload, or public
+API key. This preserves enough evidence to distinguish schema-cache failures
+from database exceptions without widening the credential or data boundary.
 
 ## Hybrid Search Plan Boundary
 

@@ -514,10 +514,21 @@ jobs:
             [[ "$response_status" == "200" ]] && break
             sleep 2
           done
-          [[ "$response_status" == "200" ]] || {
-            echo "anonymous explicit-api Hybrid probe returned HTTP $response_status" >&2
+          if [[ "$response_status" != "200" ]]; then
+            sanitized_error_code="$(
+              jq -er '
+                select(
+                  type == "object"
+                  and ((keys - ["code", "details", "hint", "message"]) | length == 0)
+                  and (.code | type == "string")
+                  and (.code | test("^(PGRST[0-9]{3}|[0-9A-Z]{5})$"))
+                )
+                | .code
+              ' "$response_file" 2>/dev/null || printf '%s' unclassified
+            )"
+            echo "anonymous explicit-api Hybrid probe returned HTTP $response_status with sanitized code $sanitized_error_code" >&2
             exit 1
-          }
+          fi
 
           npx --yes \
             --package ajv-cli@5.0.0 \

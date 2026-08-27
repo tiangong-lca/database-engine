@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 2f207a3a17d798a4464a670a5f9ef2ccc026f0ae
+lastReviewedCommit: 2e128536bf4665afd911a1b844a0c0727eccb428
 lastReviewedNote: "已为 Issue #532 复核 Portal 类型生成、card-context manifest/parity 检查、隔离 proof 目标与保留的命名 benchmark profile。"
 related:
   - ../AGENTS.md
@@ -187,6 +187,10 @@ anon key 能进入下一 step；此前必须清除原始 JSON 与 PAT。匿名 H
 包含 PAT、`Authorization`、`Cookie` 或 service credential。整个 workflow 唯一允许的
 Management API 修改，是持久化 Dev 与 Preview 各一次 PostgREST PATCH；Functions
 命令、广义 `config push`、手工固定 migration head 及其他修改仍全部拒绝。
+
+合同还要求失败诊断只能输出 HTTP status 与通过响应形态校验的
+PostgREST/SQLSTATE code；禁止打印原始 response body，形态异常或包含额外字段的
+错误 envelope 必须统一记为 `unclassified`。
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py

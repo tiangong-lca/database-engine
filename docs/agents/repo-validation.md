@@ -32,7 +32,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 117b188e343b2422c0a18bc15aaad9d5c93a3a48
+lastReviewedCommit: 2e128536bf4665afd911a1b844a0c0727eccb428
 lastReviewedNote: "Reviewed for Issue #532 exact-key 50/20 decoration, deterministic Portal types, isolated SQL proof, and retained representative benchmark evidence."
 related:
   - ../../AGENTS.md
@@ -113,6 +113,12 @@ Portal performance profile. Search remains <= 2 seconds; Hybrid remains <= 6
 seconds p95 and < 8 seconds per call. Preview must validate the strict response
 schemas with a publishable key. Any later change to the stored v1 card/document
 still requires the shadow-v2 rollout described above.
+
+When the anonymous PR Preview probe fails, CI may log only the HTTP status and
+a response-shape-validated PostgREST or SQLSTATE code. It must not print the
+raw response body, `message`, `details`, `hint`, request payload, or public key.
+An `unclassified` code preserves that boundary when the response is malformed
+or carries unexpected fields.
 
 For the narrow Portal facet projection, run both
 `scripts/test_portal_projection_upgrade_recovery.sh` and
