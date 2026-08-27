@@ -252,6 +252,8 @@ begin
      and p_sort = 'relevance'
      and p_filters ? 'geography'
      and (select count(*) from pg_catalog.jsonb_object_keys(p_filters)) = 1 then
+    perform private.assert_portal_catalog_facet_contract_v1();
+
     with portal_latest_facts as materialized (
       select distinct on (facet.id)
         facet.id,

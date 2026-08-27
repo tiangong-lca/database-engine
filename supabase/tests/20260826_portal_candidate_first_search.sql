@@ -2743,6 +2743,13 @@ select extensions.throws_ok(
   'empty Facets fails closed through its public error contract on facet-manifest drift'
 );
 
+select extensions.throws_ok(
+  $$select api.portal_search_flows_v1('', '{"geography":"cn"}'::jsonb, 'relevance', null, 1)$$,
+  'P0001',
+  'portal catalog unavailable',
+  'geography-only Flow Search fails closed through its public error contract on facet-manifest drift'
+);
+
 reset role;
 
 grant api_internal_executor to postgres;
