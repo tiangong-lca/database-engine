@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: 63e790a
+lastReviewedCommit: 9e1304e
 lastReviewedNote: "已复核 Issue #543：275-file recovery/benchmark、可执行 summary classification example gate、固定 sitemap shards、匿名 Preview gates 与 13-module Portal 生成均为当前状态。"
 related:
   - ../AGENTS.md

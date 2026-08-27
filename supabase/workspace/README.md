@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-27
-lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for the 274-migration Issue #539 exact-version sitemap child, history reader, and SHA-pinned old-Preview fixture; generated workspace/type ownership is unchanged."
+lastReviewedAt: 2026-08-28
+lastReviewedCommit: 9e1304e
+lastReviewedNote: "Reviewed for the 275-migration Issue #543 function-only Portal catalog-summary example repair; generated workspace/type ownership remains unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
