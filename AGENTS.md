@@ -37,7 +37,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 7650446f8ad757e7c81c2dcff41ee48b65362a57
+lastReviewedCommit: 9cf96265b8aec53b5c686c4b1c3c338fd93ece50
 lastReviewedNote: "Reviewed for Issue #532 selected-row Portal card context and generated DTO types; repository ownership, no-writer-expansion, and delivery boundaries are unchanged."
 related:
   - .docpact/config.yaml
@@ -115,6 +115,7 @@ Keep these entry-level facts in `AGENTS.md`. Use `docs/agents/repo-validation.md
 - schema boundary: `public` contains only `processes`, `flows`, `contacts`, `sources`, `unitgroups`, `flowproperties`, `lciamethods`, `lifecyclemodels`, and `ilcd`; client RPCs live in the exposed `api` schema, internal state and service helpers live in `private`, operational tooling lives in `util`, and retired rollback evidence lives in `archive`
 - PostgREST exposes `public` and `api`; entity access keeps `public` as the default profile, while RPC callers must select the `api` profile explicitly
 - anonymous Portal numerics come only from immutable publication-bound typed projections; Search, Detail, and Versions derive `lciaVisible` and Detail publication context from the same current finalized non-revoked predicate as the numeric reader; Search and Hybrid add their shared public card context only after ordering and limit by exact `kind/id/version` source lookup through one manifest-guarded allowlist helper, with no second projection or writer hook; V3 Worker staging and package readiness are service-only and lease-fenced, predictable package/result/projection drift is rejected before insert, every unexpected post-insert validation failure rolls back the insert and temporary job-schema mutation, an immediate exact retry may recover only a fully matching committed package, and a reclaimed Worker may use the current job lease for locator-free readback of the immutable package/old prepared projection without reusing the old projection lease; package publish prepare/command and projection prepare/finalize re-run the same authoritative binding guard before advancement, while raw projection/artifact tables never gain browser access
+- empty-query, geography-only Flow Search reuses the synchronized narrow Facet child for latest/filter/cursor/order/limit before hydrating at most 51 parent cards; it adds no index, relation, Trigger, or writer work and every other Search shape retains the general card-facts path
 - `supabase/seed.sql` must remain an executable SQL batch even when it seeds no rows; retain a data-neutral no-op rather than comments only
 - hosted mutation E2E assets under `supabase/tests/preview/**` are exact-Preview, disposable test paths; their complete actor, credential, recovery, and cleanup proof requirements live in `docs/agents/repo-validation.md`
 - migration authoring starts from Git `dev`, not GitHub default-branch UI

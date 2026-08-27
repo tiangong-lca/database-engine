@@ -1,6 +1,6 @@
 ---
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 7650446f8ad757e7c81c2dcff41ee48b65362a57
+lastReviewedCommit: 9cf96265b8aec53b5c686c4b1c3c338fd93ece50
 lastReviewedNote: "Reviewed for the Issue #532 independent card-context manifest and explicit absence of a new rollout or writer-recovery boundary; Issue #531 recovery remains unchanged."
 title: Portal Projection Migration Recovery
 docType: runbook
@@ -38,6 +38,7 @@ checkPaths:
   - supabase/migrations/20260827020005_portal_facet_projection_reconcile.sql
   - supabase/migrations/20260827020006_portal_facet_projection_cutover.sql
   - supabase/migrations/20260827021441_portal_card_context_decorator.sql
+  - supabase/migrations/20260827134100_optimize_portal_flow_geography_search.sql
 related:
   - ../../AGENTS.md
   - repo-validation.md
@@ -103,14 +104,24 @@ owners, language, volatility, parallel/security settings, and function config
 of the exact eleven-function card/document closure. Contract drift fails closed
 before projection rows are read.
 
-Issue #532 does not add another projection rollout or recovery boundary. Its
-single migration preserves every Issue #531 table, index, trigger, stored card,
-and Facet fact. After Search or Hybrid has ordered and limited candidates, one
-shared exact-key decorator reads at most 50 Process/Flow source rows and derives
-only the exhaustive public card context. The decorator has its own live
-transitive manifest because it stores no historical rows; drift or an exact
-source miss fails closed. There is no backfill, reconcile, concurrent index,
-COMMIT/history cleanup, or writer recovery action for this layer.
+Issue #532 does not add another projection rollout or recovery boundary. The
+card-context migration preserves every Issue #531 table, index, trigger, stored
+card, and Facet fact. After Search or Hybrid has ordered and limited candidates,
+one shared exact-key decorator reads at most 50 Process/Flow source rows and
+derives only the exhaustive public card context. Its later query-only Flow
+geography Search repair reuses the already synchronized facet child for
+latest/filter/order/limit before hydrating 51 parent cards; it adds no relation,
+index, Trigger, or writer work. The decorator has its own live transitive
+manifest because it stores no historical rows; drift or an exact source miss
+fails closed. There is no backfill, reconcile, concurrent index, COMMIT/history
+cleanup, or writer recovery action for either layer.
+
+The query-only geography Search migration accepts only the exact reviewed
+pre-image or its exact canonical post-image digest. A database COMMIT followed
+by a missing migration-history write may therefore use the unchanged normal
+retry; reapplying the same `CREATE OR REPLACE FUNCTION` is byte-idempotent.
+Any third definition, owner/config/ACL drift, or manifest failure remains a
+hard stop and requires a separately reviewed forward repair.
 
 ## Read-only diagnosis
 
@@ -445,7 +456,7 @@ Issue 531 Supabase project. It resets that local project and must never target a
 shared checkout, Preview, persistent Dev, or production.
 
 Formal recovery evidence requires clean HEAD, the reviewed Supabase CLI
-`2.109.1`, and byte equality plus one aggregate SHA-256 across all 267 migration
+`2.109.1`, and byte equality plus one aggregate SHA-256 across all 268 migration
 files in the repository and isolated project. Comparing only Issue 531 files is
 not sufficient because an earlier baseline change can alter recovery behavior.
 

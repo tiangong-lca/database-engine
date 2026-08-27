@@ -350,6 +350,33 @@ select extensions.ok(
 
 select extensions.ok(
   (
+    select routine.prosrc ~ 'portal_latest_facts as materialized'
+      and routine.prosrc ~ 'portal_catalog_facet_rows_v1'
+      and routine.prosrc ~ 'facet_geography'
+      and routine.prosrc ~ $$p_kind = 'flow'$$
+      and routine.prosrc ~ $$p_query = ''$$
+      and routine.prosrc ~ $$p_sort = 'relevance'$$
+      and routine.prosrc ~ $$p_filters \? 'geography'$$
+      and routine.prosrc ~ 'portal_ordered_keys as materialized'
+      and routine.prosrc ~ 'limit p_limit \+ 1'
+      and (
+        pg_catalog.length(routine.prosrc)
+        - pg_catalog.length(pg_catalog.replace(
+          routine.prosrc,
+          'catalog_portal_card_facts_v1',
+          ''
+        ))
+      ) / pg_catalog.length('catalog_portal_card_facts_v1') = 1
+    from pg_catalog.pg_proc as routine
+    where routine.oid = pg_catalog.to_regprocedure(
+      'private.catalog_portal_search_v1_impl(text,text,jsonb,text,text,uuid,text,integer,text)'
+    )
+  ),
+  'geography-only Flow browse filters and limits on synchronized narrow facts before the sole wide card-facts path'
+);
+
+select extensions.ok(
+  (
     select routine.proowner = 'portal_public_executor'::regrole
       and routine.prosecdef
       and routine.proconfig @> array[

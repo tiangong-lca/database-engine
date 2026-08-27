@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 7650446f8ad757e7c81c2dcff41ee48b65362a57
+lastReviewedCommit: 9cf96265b8aec53b5c686c4b1c3c338fd93ece50
 lastReviewedNote: "Reviewed for Issue #532 Portal type generation, card-context manifest/parity checks, isolated proof targeting, and retained named benchmark profiles."
 related:
   - ../AGENTS.md
@@ -96,7 +96,7 @@ See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries. Formal evidence additionally requires
 clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
-the complete 267-file migration tree.
+the complete 268-file migration tree.
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
@@ -113,7 +113,7 @@ The runner always resets the isolated project to full HEAD on exit.
 Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
 fence, plan, and ANN-recall benchmark only against an explicitly attested
 Issue-531 local Supabase project. The runner byte-compares the complete
-267-file migration tree with the repository, writes into a new operator-selected private
+268-file migration tree with the repository, writes into a new operator-selected private
 directory, and resets the isolated database before and after the run so rolled
 back HNSW pages cannot accumulate. Its environment contract mirrors the
 recovery runner and additionally requires
@@ -162,6 +162,8 @@ wrapper `EXPLAIN (ANALYZE, BUFFERS)`. The runner rejects missing evidence,
 records temp-buffer use, rejects more than 750,000 total or 250,000 read shared
 blocks, and applies the existing
 2-second Search / 6-second Hybrid budgets.
+The evidence file also carries a dedicated full plan for empty-query,
+`geography=cn` Flow Search-50, the representative filtered worst case.
 
 ### `check_portal_projection_manifest.py`
 
@@ -170,7 +172,9 @@ closure, the exact two-function narrow-facet closure, and the independent
 selected-row context/decorator closure. It rejects later mutation of any
 closure/control set, validates the four facet shards plus reconcile/cutover,
 requires the context migration to add no table/index/trigger, and retains the
-Flow eligibility index catalog guard without changing either #531 digest.
+Flow eligibility index catalog guard without changing either #531 digest. It
+also requires the Flow geography Search follow-up to remain a single
+query-only kernel replacement with no table/index/trigger/writer rewrite.
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py

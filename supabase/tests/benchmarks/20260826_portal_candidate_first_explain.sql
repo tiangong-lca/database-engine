@@ -1999,6 +1999,24 @@ select pg_temp.capture_portal_benchmark_plan(
   $query$
 );
 
+\qecho profile=flow-filtered-search50-evidence-complete-wrapper
+explain (analyze, buffers, settings, wal, summary, format json)
+select api.portal_search_flows_v1(
+  '', '{"geography":"cn"}'::jsonb, 'relevance', null, 50
+);
+select pg_temp.capture_portal_benchmark_plan(
+  'flow_filtered_search50_context_wrapper',
+  $query$
+    select api.portal_search_flows_v1(
+      '',
+      '{"geography":"cn"}'::jsonb,
+      'relevance',
+      null,
+      50
+    )
+  $query$
+);
+
 \qecho profile=process-hybrid20-evidence-complete-wrapper
 explain (analyze, buffers, settings, wal, summary, format json)
 select api.portal_hybrid_search_v1(
@@ -2208,7 +2226,7 @@ where (:'process_rows'::integer >= 10000
     and :'flow_rows'::integer >= 100000)
   and (
     (select count(*) from pg_temp.portal_benchmark_plans) <> case
-      when :'benchmark_semantic_plan_profile'::boolean then 17 else 13
+      when :'benchmark_semantic_plan_profile'::boolean then 18 else 14
     end
    or (
      select count(*)
@@ -2384,6 +2402,7 @@ with wrapper_plans as (
   where label in (
     'process_search50_context_wrapper',
     'flow_search50_context_wrapper',
+    'flow_filtered_search50_context_wrapper',
     'process_hybrid20_context_wrapper',
     'flow_hybrid20_context_wrapper'
   )
@@ -2393,7 +2412,7 @@ select
   'P0001',
   'evidence-complete Search50/Hybrid20 wrapper exceeded time or shared-buffer bounds',
   coalesce((select max(execution_ms) from wrapper_plans), 0)::double precision
-where (select count(*) from wrapper_plans) <> 4
+where (select count(*) from wrapper_plans) <> 5
    or exists (
      select 1
      from wrapper_plans

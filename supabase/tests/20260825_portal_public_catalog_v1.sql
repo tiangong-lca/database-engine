@@ -4107,6 +4107,120 @@ select extensions.ok(
   'the 101st canonical facet value is represented by hasMore without exceeding 100 values'
 );
 
+insert into public.flows (
+  id, version, json, json_ordered, user_id, team_id, review_id,
+  state_code, rule_verification, modified_at, extracted_md, search_text
+)
+select fixture.id,
+  '01.00.000',
+  fixture.payload,
+  fixture.payload::json,
+  '52700000-0000-4000-8000-000000000001',
+  '52700000-0000-4000-8000-000000000002',
+  '52700000-0000-4000-8000-000000000003',
+  100,
+  true,
+  '2026-08-26 02:00:00+00'::timestamptz +
+    fixture.ordinal * interval '1 second',
+  fixture.name,
+  array[fixture.name]
+from (
+  select series.ordinal,
+    ('52730000-0000-4000-8000-' ||
+      pg_catalog.lpad(series.ordinal::text, 12, '0'))::uuid as id,
+    'Geography Fast Flow ' || series.ordinal::text as name,
+    pg_catalog.jsonb_set(
+      pg_temp.portal_flow_payload(
+        'Geography Fast Flow ' || series.ordinal::text,
+        '01.00.000',
+        '52700000-0000-4000-8000-000000000301',
+        '01.00.000',
+        'Free of charge for all users and uses',
+        'none'
+      ),
+      '{flowDataSet,flowInformation,geography}',
+      '{"locationOfSupply":{"@location":"CN"}}'::jsonb,
+      true
+    ) as payload
+  from pg_catalog.generate_series(1, 2) as series(ordinal)
+) as fixture;
+
+set local role anon;
+insert into portal_test_results (label, payload)
+values (
+  'flow_geography_fast_page_1',
+  api.portal_search_flows_v1(
+    '', '{"geography":"cn"}'::jsonb, 'relevance', null, 1
+  )
+);
+insert into portal_test_results (label, payload)
+select
+  'flow_geography_fast_page_2',
+  api.portal_search_flows_v1(
+    '',
+    '{"geography":"cn"}'::jsonb,
+    'relevance',
+    first_page.payload ->> 'nextCursor',
+    1
+  )
+from portal_test_results as first_page
+where first_page.label = 'flow_geography_fast_page_1';
+reset role;
+
+select extensions.ok(
+  (
+    with latest as (
+      select distinct on (facet.id)
+        facet.id,
+        facet.version,
+        facet.facet_geography
+      from private.portal_catalog_facet_rows_v1 as facet
+      where facet.dataset_kind = 'flow'
+      order by facet.id,
+        facet.version desc,
+        facet.modified_at desc,
+        facet.state_code desc
+    ), expected as (
+      select pg_catalog.array_agg(
+        bounded.id::text order by bounded.id, bounded.version desc
+      ) as ids
+      from (
+        select latest.id,
+          latest.version
+        from latest
+        where latest.facet_geography = 'cn'
+        order by latest.id,
+          latest.version desc
+        limit 2
+      ) as bounded
+    ), actual as (
+      select pg_catalog.array_agg(
+        result.payload #>> '{items,0,key,id}' order by result.label
+      ) as ids,
+      pg_catalog.bool_and(
+        result.payload #>> '{items,0,geography,code}' = 'CN'
+        and result.payload #>> '{items,0,match,kind}' = 'lexical'
+        and result.payload #> '{items,0,match,reasonCodes}' = '[]'::jsonb
+      ) as shape_ok
+      from portal_test_results as result
+      where result.label in (
+        'flow_geography_fast_page_1',
+        'flow_geography_fast_page_2'
+      )
+    )
+    select actual.ids = expected.ids
+      and actual.shape_ok
+      and (
+        select payload ->> 'nextCursor' is not null
+        from portal_test_results
+        where label = 'flow_geography_fast_page_1'
+      )
+    from expected
+    cross join actual
+  ),
+  'geography-only Flow Search filters latest narrow facts before exact ordered card hydration and cursor continuation'
+);
+
 select extensions.ok(
   not exists (
     select 1

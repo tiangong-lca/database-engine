@@ -21,6 +21,9 @@ FACET_ANCHOR_NAME = "20260827020000_portal_facet_projection_expand.sql"
 FACET_RECONCILE_NAME = "20260827020005_portal_facet_projection_reconcile.sql"
 FACET_CUTOVER_NAME = "20260827020006_portal_facet_projection_cutover.sql"
 CARD_CONTEXT_ANCHOR_NAME = "20260827021441_portal_card_context_decorator.sql"
+FLOW_GEOGRAPHY_SEARCH_NAME = (
+    "20260827134100_optimize_portal_flow_geography_search.sql"
+)
 MANIFEST_SHA256 = (
     "b5e0aff9abbffcc8d2dacaf559a5d1a8c993c20b647d0c70f0e4fa18eb06d2dc"
 )
@@ -269,6 +272,61 @@ def main() -> int:
             if pattern.search(executable_sql):
                 violations.append(f"{migration.name}: {identity}")
 
+    flow_geography_search = MIGRATIONS_DIR / FLOW_GEOGRAPHY_SEARCH_NAME
+    if not flow_geography_search.is_file():
+        violations.append(
+            f"missing Portal Flow geography Search migration: "
+            f"{FLOW_GEOGRAPHY_SEARCH_NAME}"
+        )
+    else:
+        geography_sql = sql_without_comments(
+            flow_geography_search.read_text(encoding="utf-8")
+        )
+        geography_sql_lower = geography_sql.lower()
+        required_geography_tokens = (
+            "3fdf121819227c2885a23233ab406291c8310902cf413e3eca96f1f0809bb7f4",
+            "cf1e7a540a9f0fe4370de7588160b7720eb97b94f641d6b3d019ab9780586936",
+            "portal_latest_facts as materialized",
+            "private.portal_catalog_facet_rows_v1",
+            "facet.facet_geography",
+            "portal_ordered_keys as materialized",
+            "limit p_limit + 1",
+            "join private.portal_catalog_search_rows_v1",
+            "private.assert_portal_catalog_projection_contract_v1()",
+            "private.assert_portal_catalog_facet_contract_v1()",
+        )
+        missing = [
+            token
+            for token in required_geography_tokens
+            if token not in geography_sql_lower
+        ]
+        if missing:
+            violations.append(
+                f"{FLOW_GEOGRAPHY_SEARCH_NAME}: missing narrow Search tokens "
+                + ", ".join(missing)
+            )
+        if len(
+            re.findall(
+                r"create\s+or\s+replace\s+function\s+"
+                r'"?private"?\s*[.]\s*"?catalog_portal_search_v1_impl"?\s*[(]',
+                geography_sql,
+                flags=re.IGNORECASE,
+            )
+        ) != 1:
+            violations.append(
+                f"{FLOW_GEOGRAPHY_SEARCH_NAME}: expected one Search kernel replacement"
+            )
+        if re.search(
+            r"\b(?:create\s+(?:unlogged\s+)?table|create\s+(?:unique\s+)?index|"
+            r"create\s+trigger|alter\s+table)\b",
+            geography_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{FLOW_GEOGRAPHY_SEARCH_NAME}: query-only repair must not add "
+                "a table, index, trigger, or writer-table rewrite"
+            )
+
     required_guard_counts = {
         "20260826080345_portal_projection_reconcile.sql": 1,
         "20260826080400_portal_projection_candidate_cutover.sql": 2,
@@ -469,7 +527,8 @@ def main() -> int:
         f"sha256={FACET_MANIFEST_SHA256}; selected-row context closure "
         f"{len(CARD_CONTEXT_FUNCTION_IDENTITIES)} derivation functions and "
         f"{len(CARD_CONTEXT_CONTROL_FUNCTION_IDENTITIES)} controls, "
-        f"sha256={CARD_CONTEXT_MANIFEST_SHA256}"
+        f"sha256={CARD_CONTEXT_MANIFEST_SHA256}; Flow geography Search "
+        "repair remains query-only"
     )
     return 0
 

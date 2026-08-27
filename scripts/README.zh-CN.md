@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 7650446f8ad757e7c81c2dcff41ee48b65362a57
+lastReviewedCommit: 9cf96265b8aec53b5c686c4b1c3c338fd93ece50
 lastReviewedNote: "已为 Issue #532 复核 Portal 类型生成、card-context manifest/parity 检查、隔离 proof 目标与保留的命名 benchmark profile。"
 related:
   - ../AGENTS.md
@@ -84,7 +84,7 @@ scripts/test_search_text_array_upgrade.sh
 expand COMMIT/history 缺口、四分片幂等重试、同名 concurrent index 受控清理、Flow
 eligibility guard 回滚，以及已记录迁移重复执行不会重建七个索引。所需环境变量与恢复边界见
 `docs/agents/portal-projection-migration-recovery.md`。正式证据还要求干净 HEAD、
-Supabase CLI `2.109.1`，以及完整 267-file migration tree 的逐字相等和 aggregate
+Supabase CLI `2.109.1`，以及完整 268-file migration tree 的逐字相等和 aggregate
 SHA-256。
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
@@ -99,7 +99,7 @@ Facet migration。每条 backfill statement 必须在 120 秒门下保留至少 
 
 仅在显式确认的 Issue 531 隔离本地 Supabase 项目中运行代表性 Process/Flow
 Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把完整
-267-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
+268-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
 reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合同与 recovery runner
 一致，另要求 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`。
 
@@ -139,6 +139,8 @@ Search-50/Hybrid-20 label 必须分别返回准确 50/20 个完整 item、20 个
 并输出完整 wrapper `EXPLAIN (ANALYZE, BUFFERS)`。runner 会记录 temp-buffer 使用，
 拒绝字段缺失、超过 750,000 total / 250,000 read shared blocks，以及超过既有 Search 2 秒 / Hybrid
 6 秒门槛的结果。
+证据文件还会单独保存空 query、`geography=cn` Flow Search-50 的完整计划，
+因为它是代表性的过滤最坏路径。
 
 ### `check_portal_projection_manifest.py`
 
@@ -146,7 +148,8 @@ Search-50/Hybrid-20 label 必须分别返回准确 50/20 个完整 item、20 个
 闭包，以及独立的 limit 后 context/decorator 闭包。它禁止后续 mutation 任一
 闭包/控制函数，校验四个 Facet 分片、reconcile/cutover，要求 context migration
 不新增 table/index/trigger，并保留 Flow eligibility index 的精确 catalog guard，
-同时不改变两个 #531 digest。
+同时不改变两个 #531 digest。它还要求 Flow geography Search follow-up 只能是
+单一 query-only kernel replacement，不得新增 table/index/trigger 或改写 writer。
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py

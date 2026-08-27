@@ -51,9 +51,9 @@ fi
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 267 \
-   || "${#test_migrations[@]}" -ne 267 ]]; then
-  echo "complete migration tree must contain exactly 267 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 268 \
+   || "${#test_migrations[@]}" -ne 268 ]]; then
+  echo "complete migration tree must contain exactly 268 files" >&2
   exit 2
 fi
 migration_manifest_payload=""
@@ -265,7 +265,7 @@ echo "Supabase CLI: $supabase_cli_version" | tee "$results_log"
 echo "Benchmark target: $project_id" | tee -a "$results_log"
 echo "Benchmark profile: $profile_name" | tee -a "$results_log"
 echo "Repository HEAD: $repository_head" | tee -a "$results_log"
-echo "Migration tree SHA-256 (267 files): $migration_tree_sha256" \
+echo "Migration tree SHA-256 (268 files): $migration_tree_sha256" \
   | tee -a "$results_log"
 echo "Benchmark SQL SHA-256: $benchmark_sql_sha256" | tee -a "$results_log"
 echo "Benchmark runner SHA-256: $benchmark_runner_sha256" \
@@ -317,6 +317,7 @@ fi
 for expected_wrapper_profile in \
   process-search50-evidence-complete-wrapper \
   flow-search50-evidence-complete-wrapper \
+  flow-filtered-search50-evidence-complete-wrapper \
   process-hybrid20-evidence-complete-wrapper \
   flow-hybrid20-evidence-complete-wrapper
 do

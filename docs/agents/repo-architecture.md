@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 7650446f8ad757e7c81c2dcff41ee48b65362a57
+lastReviewedCommit: 9cf96265b8aec53b5c686c4b1c3c338fd93ece50
 lastReviewedNote: "Reviewed for Issue #532 exact-key 50/20 card decoration and generated DTO ownership; stored projection, index, trigger, and writer boundaries are unchanged."
 related:
   - ../../AGENTS.md
@@ -341,6 +341,14 @@ Hybrid-20 labels record 20-sample p95 plus full wrapper
 recorded temp-buffer evidence. Existing zero-spill gates remain scoped to the
 narrow empty/exact phases that own them. These fixtures remain rollback-only test data and add no
 runtime relation, index, trigger, or writer path.
+
+The measured empty-query, geography-only Flow Search has one deliberately
+narrow query fast path. It reads the already synchronized facet child through
+the existing latest-key B-tree, applies exact geography/cursor/order/limit on
+those narrow rows, and joins at most 51 exact parent cards. It does not add a
+geography index—the representative filter matches the full Flow universe, so
+such an index would add writer/storage cost without selectivity—and all other
+Search filters continue through the general exhaustive card-facts path.
 
 This contract assumes privileged DDL is delivered only through the governed
 migration and CI path. The live digest proves current definitions, not the
