@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 8ca5fba
-lastReviewedNote: "已复核 Portal 双 manifest、既有数据 Facet upgrade/recovery runner 与命名性能 profile。"
+lastReviewedCommit: b7ffb20
+lastReviewedNote: "已为 Issue #532 复核 Portal 类型生成、runtime Facet/card-context manifest 检查、filtered Search exact-50 proof 与隔离命名 benchmark profile。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -84,7 +84,7 @@ scripts/test_search_text_array_upgrade.sh
 expand COMMIT/history 缺口、四分片幂等重试、同名 concurrent index 受控清理、Flow
 eligibility guard 回滚，以及已记录迁移重复执行不会重建七个索引。所需环境变量与恢复边界见
 `docs/agents/portal-projection-migration-recovery.md`。正式证据还要求干净 HEAD、
-Supabase CLI `2.109.1`，以及完整 266-file migration tree 的逐字相等和 aggregate
+Supabase CLI `2.109.1`，以及完整 268-file migration tree 的逐字相等和 aggregate
 SHA-256。
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
@@ -99,7 +99,7 @@ Facet migration。每条 backfill statement 必须在 120 秒门下保留至少 
 
 仅在显式确认的 Issue 531 隔离本地 Supabase 项目中运行代表性 Process/Flow
 Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把完整
-266-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
+268-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
 reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合同与 recovery runner
 一致，另要求 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`。
 
@@ -132,15 +132,39 @@ writer delta/ratio 门。
 HNSW index；sparse source probe 可以选择 eligibility/empty-set plan，但仍必须提供
 buffers、execution time 且没有 temp/disk spill。
 
+所有命名 profile 都会构造 evidence-complete card context：每个 Process 都解析准确
+公开 reference Flow 与真实 FlowProperty/UnitGroup functional-unit 支撑链，Process/Flow
+还包含公开 source/database，Process 另包含 review/technology 字段。四个专用
+Search-50/Hybrid-20 label 必须分别返回准确 50/20 个完整 item、20 个 timing sample，
+并输出完整 wrapper `EXPLAIN (ANALYZE, BUFFERS)`。runner 会记录 temp-buffer 使用，
+拒绝字段缺失、超过 750,000 total / 250,000 read shared blocks，以及超过既有 Search 2 秒 / Hybrid
+6 秒门槛的结果。
+证据文件还会单独保存空 query、`geography=cn` Flow Search-50 的完整计划，
+因为它是代表性的过滤最坏路径；对应 timing label 也必须准确返回 50 个完整 item，
+避免空结果或过窄结果让性能门假绿。
+
 ### `check_portal_projection_manifest.py`
 
-同时验证两个已提交的 Portal digest：十一函数 card 闭包与两函数窄 Facet 闭包。
-它禁止后续 mutation 任一闭包/控制函数，校验四个 Facet 分片、reconcile 与严格
-cutover dispatch，并保留 Flow eligibility index 的精确 catalog guard，同时不改变
-card-v1 digest。
+同时验证三个已提交的 Portal digest：十一函数 stored-card 闭包、两函数窄 Facet
+闭包，以及独立的 limit 后 context/decorator 闭包。它禁止后续 mutation 任一
+闭包/控制函数，校验四个 Facet 分片、reconcile/cutover，要求 context migration
+不新增 table/index/trigger，并保留 Flow eligibility index 的精确 catalog guard，
+同时不改变两个 #531 digest。它还要求 Flow geography Search follow-up 只能是
+单一 query-only kernel replacement，不得新增 table/index/trigger 或改写 writer；
+runtime 在读取该 child projection 前还必须独立验证 Facet manifest。
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py
+```
+
+### `check_portal_card_schema_parity.py`
+
+除非 lexical Search 与 Hybrid candidate item 在各自版本化 `match` 之外具有
+逐字一致且 exhaustive 的 card properties，并共同引用精确五字段
+`PublicCardContext` 定义，否则立即失败。
+
+```bash
+python3 scripts/check_portal_card_schema_parity.py
 ```
 
 ### `resolve_migration_head.py`
@@ -176,6 +200,10 @@ anon key 能进入下一 step；此前必须清除原始 JSON 与 PAT。匿名 H
 包含 PAT、`Authorization`、`Cookie` 或 service credential。整个 workflow 唯一允许的
 Management API 修改，是持久化 Dev 与 Preview 各一次 PostgREST PATCH；Functions
 命令、广义 `config push`、手工固定 migration head 及其他修改仍全部拒绝。
+
+合同还要求失败诊断只能输出 HTTP status 与通过响应形态校验的
+PostgREST/SQLSTATE code；禁止打印原始 response body，形态异常或包含额外字段的
+错误 envelope 必须统一记为 `unclassified`。
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py
@@ -288,6 +316,21 @@ python scripts/build_database_types.py --environment local
 ```
 
 只有在刻意以已链接的 Supabase 项目为来源时才使用 `--environment linked`。CI 会从本地完整 migration 状态重新生成，并在 `supabase/workspace/database.types.ts` 漂移时失败。
+
+### `build_portal_contract_types.py`
+
+为每个 exhaustive Portal JSON Schema 生成一个纳入版本控制的 TypeScript module。
+本仓没有 Node package manifest，因此脚本遵循既有 CI 依赖政策，通过 `npx`
+调用精确固定的 `json-schema-to-typescript@15.0.4`。
+
+```bash
+python3 scripts/build_portal_contract_types.py
+python3 scripts/build_portal_contract_types.py --check
+```
+
+普通生成会让 `contracts/portal/generated/*.d.ts` 与按名称排序的
+`contracts/portal/*.schema.json` source set 同步。`--check` 只在临时目录渲染，
+若 module 缺失、变化或多余则失败，且不修改 checkout；CI 使用该只读检查。
 
 ### `check_generated_workspace_legacy_tables.py`
 

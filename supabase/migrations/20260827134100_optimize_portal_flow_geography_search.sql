@@ -1,3 +1,71 @@
+-- Issue #532: avoid full-card facts materialization for the measured
+-- empty-query, geography-only Flow Search path. The existing narrow facet
+-- child already carries the exact synchronized geography fact, so latest,
+-- filter, cursor, order, and limit can run there before 51 parent cards are
+-- hydrated. No table, index, Trigger, policy, or writer path changes.
+
+begin;
+
+set local lock_timeout = '5s';
+set local statement_timeout = '120s';
+
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+select private.assert_portal_catalog_projection_contract_v1();
+select private.assert_portal_catalog_facet_contract_v1();
+reset role;
+revoke api_internal_executor from postgres;
+
+do $portal_flow_geography_search_prerequisite$
+declare
+  v_definition_sha256 text;
+begin
+  select pg_catalog.encode(
+    extensions.digest(
+      pg_catalog.convert_to(
+        pg_catalog.pg_get_functiondef(
+          'private.catalog_portal_search_v1_impl(text,text,jsonb,text,text,uuid,text,integer,text)'::regprocedure
+        ),
+        'UTF8'
+      ),
+      'sha256'
+    ),
+    'hex'
+  )
+  into v_definition_sha256;
+
+  if v_definition_sha256 not in (
+       '3fdf121819227c2885a23233ab406291c8310902cf413e3eca96f1f0809bb7f4',
+       'cf1e7a540a9f0fe4370de7588160b7720eb97b94f641d6b3d019ab9780586936'
+     )
+     or (
+       select pg_catalog.pg_get_userbyid(routine.proowner) <>
+           'api_internal_executor'
+         or not routine.prosecdef
+         or routine.provolatile <> 's'
+         or routine.proparallel <> 'r'
+         or pg_catalog.pg_get_function_result(routine.oid) <> 'jsonb'
+         or coalesce(routine.proconfig, '{}'::text[]) <> array[
+           'search_path=""',
+           'statement_timeout=8s',
+           'plan_cache_mode=force_custom_plan'
+         ]::text[]
+         or coalesce(routine.proacl::text, '') <>
+           '{api_internal_executor=X/api_internal_executor,portal_public_executor=X/api_internal_executor}'
+       from pg_catalog.pg_proc as routine
+       where routine.oid =
+         'private.catalog_portal_search_v1_impl(text,text,jsonb,text,text,uuid,text,integer,text)'::regprocedure
+     ) then
+    raise exception 'Portal Search kernel prerequisite drifted'
+      using errcode = '55000';
+  end if;
+end
+$portal_flow_geography_search_prerequisite$;
+
+grant api_internal_executor to postgres;
+grant create on schema private to api_internal_executor;
+set role api_internal_executor;
+
 CREATE OR REPLACE FUNCTION "private"."catalog_portal_search_v1_impl"("p_kind" "text", "p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
@@ -505,3 +573,47 @@ ALTER FUNCTION "private"."catalog_portal_search_v1_impl"("p_kind" "text", "p_que
 REVOKE ALL ON FUNCTION "private"."catalog_portal_search_v1_impl"("p_kind" "text", "p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") FROM PUBLIC;
 
 GRANT ALL ON FUNCTION "private"."catalog_portal_search_v1_impl"("p_kind" "text", "p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") TO "portal_public_executor";
+
+reset role;
+revoke create on schema private from api_internal_executor;
+revoke api_internal_executor from postgres;
+
+do $verify_portal_flow_geography_search$
+begin
+  if (
+    select pg_catalog.pg_get_userbyid(routine.proowner) <>
+        'api_internal_executor'
+      or not routine.prosecdef
+      or routine.provolatile <> 's'
+      or routine.proparallel <> 'r'
+      or pg_catalog.pg_get_function_result(routine.oid) <> 'jsonb'
+      or coalesce(routine.proconfig, '{}'::text[]) <> array[
+        'search_path=""',
+        'statement_timeout=8s',
+        'plan_cache_mode=force_custom_plan'
+      ]::text[]
+      or coalesce(routine.proacl::text, '') <>
+        '{api_internal_executor=X/api_internal_executor,portal_public_executor=X/api_internal_executor}'
+      or routine.prosrc !~ 'portal_latest_facts as materialized'
+      or routine.prosrc !~ 'portal_catalog_facet_rows_v1'
+      or routine.prosrc !~ 'facet_geography'
+      or routine.prosrc !~ 'catalog_portal_card_facts_v1'
+      or routine.prosrc !~ 'catalog_portal_candidate_rows_v1'
+    from pg_catalog.pg_proc as routine
+    where routine.oid =
+      'private.catalog_portal_search_v1_impl(text,text,jsonb,text,text,uuid,text,integer,text)'::regprocedure
+  ) then
+    raise exception 'Portal geography Search cutover drifted'
+      using errcode = '55000';
+  end if;
+end
+$verify_portal_flow_geography_search$;
+
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+select private.assert_portal_catalog_projection_contract_v1();
+select private.assert_portal_catalog_facet_contract_v1();
+reset role;
+revoke api_internal_executor from postgres;
+
+commit;

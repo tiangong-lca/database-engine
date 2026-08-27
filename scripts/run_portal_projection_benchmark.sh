@@ -43,17 +43,17 @@ project_id="$({
   sed -n 's/^project_id = "\([^"]*\)"$/\1/p' \
     "$test_workdir/supabase/config.toml" | head -n 1
 })"
-if [[ ! "$project_id" =~ ^database-engine-531-[a-z0-9-]+$ ]]; then
-  echo "refusing non-Issue-531 Supabase project_id: $project_id" >&2
+if [[ ! "$project_id" =~ ^database-engine-(531|532)-[a-z0-9-]+$ ]]; then
+  echo "refusing non-Issue-531/532 Supabase project_id: $project_id" >&2
   exit 2
 fi
 
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 266 \
-   || "${#test_migrations[@]}" -ne 266 ]]; then
-  echo "complete migration tree must contain exactly 266 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 268 \
+   || "${#test_migrations[@]}" -ne 268 ]]; then
+  echo "complete migration tree must contain exactly 268 files" >&2
   exit 2
 fi
 migration_manifest_payload=""
@@ -265,7 +265,7 @@ echo "Supabase CLI: $supabase_cli_version" | tee "$results_log"
 echo "Benchmark target: $project_id" | tee -a "$results_log"
 echo "Benchmark profile: $profile_name" | tee -a "$results_log"
 echo "Repository HEAD: $repository_head" | tee -a "$results_log"
-echo "Migration tree SHA-256 (266 files): $migration_tree_sha256" \
+echo "Migration tree SHA-256 (268 files): $migration_tree_sha256" \
   | tee -a "$results_log"
 echo "Benchmark SQL SHA-256: $benchmark_sql_sha256" | tee -a "$results_log"
 echo "Benchmark runner SHA-256: $benchmark_runner_sha256" \
@@ -298,6 +298,11 @@ docker exec -i "$container_name" \
   <"$repo_root/supabase/tests/benchmarks/20260826_portal_candidate_first_explain.sql" \
   2>&1 | tee -a "$results_log"
 
+# Preserve the complete plan artifact even when a gate fails so the failed
+# exact-head run remains diagnosable without repeating the representative load.
+docker cp "$container_name:$container_explain" "$explain_log" >/dev/null
+chmod 600 "$explain_log"
+
 expected_sql_status=DIAGNOSTIC_PASS
 if [[ "$release_profile" == "true" ]]; then
   expected_sql_status=RELEASE_PASS
@@ -309,8 +314,30 @@ if ! grep -q "^SQL_STATUS=${expected_sql_status}$" "$results_log"; then
   exit 1
 fi
 
-docker cp "$container_name:$container_explain" "$explain_log" >/dev/null
-chmod 600 "$explain_log"
+for expected_wrapper_profile in \
+  process-search50-evidence-complete-wrapper \
+  flow-search50-evidence-complete-wrapper \
+  flow-filtered-search50-evidence-complete-wrapper \
+  process-hybrid20-evidence-complete-wrapper \
+  flow-hybrid20-evidence-complete-wrapper
+do
+  if ! grep -q "profile=$expected_wrapper_profile" "$explain_log"; then
+    echo "missing evidence-complete wrapper plan: $expected_wrapper_profile" >&2
+    exit 1
+  fi
+done
+
+for expected_wrapper_timing in \
+  process_context_search_50 \
+  flow_context_search_50 \
+  process_context_hybrid_20 \
+  flow_context_hybrid_20
+do
+  if ! grep -q "$expected_wrapper_timing" "$results_log"; then
+    echo "missing evidence-complete wrapper p95: $expected_wrapper_timing" >&2
+    exit 1
+  fi
+done
 
 # The ~17k-row Process lexical leaf has two valid natural-cost plans. SQL
 # records and bounds whichever the planner selects; Flow must name PGroonga.

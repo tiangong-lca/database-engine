@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 70c2294ba894df3982939dec6b5e549e108f9630
-lastReviewedNote: "Reviewed after the exact PR Preview gate minimized branch/key authority and isolated public-key selection from anonymous transport; persistent Dev and production mutation boundaries remain unchanged."
+lastReviewedCommit: 2e128536bf4665afd911a1b844a0c0727eccb428
+lastReviewedNote: "Reviewed for Issue #532 generated-type and Preview contract gates; PR, persistent Dev, production, and cross-repository mutation boundaries remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -210,6 +210,10 @@ discard and rebuild that disposable branch state.
   the selected public key is masked/exported, then the PAT and raw JSON are
   cleared. The following REST step has no PAT or service credential and uses
   `apikey` only, never `Authorization` or `Cookie`.
+- If the anonymous explicit-`api` probe fails, the job may print only its HTTP
+  status and a shape-validated PostgREST or SQLSTATE code. Raw response bodies,
+  messages, details, hints, request payloads, and public keys remain unlogged;
+  malformed or unexpected error shapes are reported as `unclassified`.
 
 `--include-all` means every committed migration absent from remote history is
 eligible for application. It is required when a governed `main -> dev`

@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 8ca5fba
-lastReviewedNote: "Reviewed for narrow facet facts, strict empty-request dispatch, and populated-upgrade proof; the architecture boundary is unchanged."
+lastReviewedCommit: b7ffb20
+lastReviewedNote: "Reviewed for Issue #532 exact-key 50/20 card decoration, per-request Facet-manifest validation, and generated DTO ownership; stored projection, index, trigger, and writer boundaries are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -76,7 +76,7 @@ therefore denied until their exact signature is deliberately classified.
 
 ## Portal Public Read Boundary
 
-`contracts/portal/**` owns the exhaustive versioned JSON Schemas for the anonymous Portal DTOs. The matching `api.portal_*_v1` functions are additive façades: they fix visibility to public states 100/200, use stable keyset cursors, return canonical decimal strings, and recursively exclude actor/team/review fields, embeddings, credentials, private artifact locators, and database error detail. They do not replace or change legacy Search, raw-table RLS, Data Product, or Release consumers.
+`contracts/portal/**` owns the exhaustive versioned JSON Schemas for the anonymous Portal DTOs. `contracts/portal/generated/*.d.ts` is committed, deterministic output from those schemas; it is never a parallel handwritten contract. The matching `api.portal_*_v1` functions are additive façades: they fix visibility to public states 100/200, use stable keyset cursors, return canonical decimal strings, and recursively exclude actor/team/review fields, embeddings, credentials, private artifact locators, and database error detail. They do not replace or change legacy Search, raw-table RLS, Data Product, or Release consumers.
 
 Portal capability policy is fail closed. State 200 and unknown, missing, exclusive, or conflicting license evidence remain metadata-only. Exchange values require an exact public Process/Flow/FlowProperty/UnitGroup support chain plus an explicitly open capability. LCIA values come only from typed Process/Impact/Value rows staged by an exact V3 Worker job under its active lease. Database independently binds the ordered certificate Process/Method axes, dense Cartesian grid, canonical decimals, int32be UTF-8 record/relation/content hashes, source artifact hashes, and the package's exact `portalProjectionId`/`portalProjectionContentHash`. Batches are capped at 500 records and 1 MiB serialized UTF-8 JSON; terminal rows are immutable and raw tables remain private.
 
@@ -160,6 +160,7 @@ executable by application roles.
 | `supabase/workspace/global/**` | generated split-out global objects rebuilt on workspace refresh |
 | `supabase/workspace/schemas/**` | generated human-browsable split schema objects rebuilt on workspace refresh |
 | `supabase/workspace/database.types.ts` | generated TypeScript contract for the exposed `public` and `api` Data API schemas; CI rejects drift from the full local migration state |
+| `contracts/portal/generated/*.d.ts` | generated TypeScript DTO modules from every exhaustive Portal JSON Schema; CI regenerates with exact-pinned `json-schema-to-typescript` and rejects drift |
 
 ## Branch Model In Practice
 
@@ -183,6 +184,12 @@ Hosted proof or independent Auth/SQL readback. Hosted mutation fixtures must be
 bound to the intended disposable Preview and clean up only their own actors and
 effects. The exact proof required for each capability lives in
 `docs/agents/repo-validation.md`.
+
+The PR Preview transport probe keeps failure evidence deliberately narrow: it
+may report the HTTP status and a strict shape-validated PostgREST or SQLSTATE
+code, but never the raw response body, error prose, request payload, or public
+API key. This preserves enough evidence to distinguish schema-cache failures
+from database exceptions without widening the credential or data boundary.
 
 ## Hybrid Search Plan Boundary
 
@@ -313,6 +320,36 @@ projection. The v1 helpers and registry row are immutable: any semantic change
 requires a new helper closure, shadow projection, bounded backfill, concurrent
 indexes, short reconcile fence, and atomic read cutover. Updating a digest or
 rebuilding v1 rows in place is not a valid migration path.
+
+Search and Hybrid card context is a bounded composition layer rather than a
+stored-card mutation. After the existing candidate path fixes ordering and
+applies its 50-item Search or 20-item Hybrid limit, one shared helper resolves
+each exact `kind/id/version` source row and reuses only the public-dataset
+allowlist helpers for reference product/property, complete functional unit,
+technology, source, and dataset-authored review status. An independent live
+manifest protects that helper/decorator closure. It creates no second
+full-cardinality projection, index, policy, source trigger, or writer work;
+missing source identity or helper drift fails the wrapper closed. A future
+change to stored v1 card/document semantics still requires shadow-v2 rollout.
+
+The representative benchmark exercises this composition with complete
+evidence, not placeholder nulls: exact Process→Flow and shared
+Flow→FlowProperty→UnitGroup support, public source/database identity,
+technology, and review status are all present. Dedicated Search-50 and
+Hybrid-20 labels record 20-sample p95 plus full wrapper
+`EXPLAIN (ANALYZE, BUFFERS)` under the existing time, shared-buffer, and
+recorded temp-buffer evidence. Existing zero-spill gates remain scoped to the
+narrow empty/exact phases that own them. These fixtures remain rollback-only test data and add no
+runtime relation, index, trigger, or writer path.
+
+The measured empty-query, geography-only Flow Search has one deliberately
+narrow query fast path. It reads the already synchronized facet child through
+the existing latest-key B-tree, applies exact geography/cursor/order/limit on
+those narrow rows, and joins at most 51 exact parent cards. It first validates
+the independent live Facet manifest on every matching request. It does not add a
+geography index—the representative filter matches the full Flow universe, so
+such an index would add writer/storage cost without selectivity—and all other
+Search filters continue through the general exhaustive card-facts path.
 
 This contract assumes privileged DDL is delivered only through the governed
 migration and CI path. The live digest proves current definitions, not the

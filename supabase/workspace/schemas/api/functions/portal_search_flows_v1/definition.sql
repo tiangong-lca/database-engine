@@ -4,7 +4,11 @@ CREATE OR REPLACE FUNCTION "api"."portal_search_flows_v1"("p_query" "text", "p_f
     SET "statement_timeout" TO '8s'
     AS $$
 begin
-  return private.portal_search_v1('flow', p_query, p_filters, p_sort, p_cursor, p_limit);
+  return private.portal_decorate_card_context_v1(
+    private.portal_search_v1(
+      'flow', p_query, p_filters, p_sort, p_cursor, p_limit
+    )
+  );
 exception
   when sqlstate '22023' then
     raise exception using errcode = '22023', message = 'invalid portal request';

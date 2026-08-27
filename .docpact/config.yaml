@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-27"
-lastReviewedCommit: "8ca5fba"
-lastReviewedNote: "Reviewed for the seven-migration narrow Portal facet sub-rollout, recovery coverage, and exact-head validation evidence."
+lastReviewedCommit: "b7ffb20"
+lastReviewedNote: "Reviewed for Issue #532 runtime Facet-manifest fail-closed Search, exact-50 filtered benchmark evidence, generated Portal types, isolated 268-migration proof, and the unchanged Issue #531 writer graph."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -491,7 +491,13 @@ rules:
         kind: database-migration
       - path: supabase/migrations/20260827020006_portal_facet_projection_cutover.sql
         kind: database-migration
+      - path: supabase/migrations/20260827021441_portal_card_context_decorator.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827134100_optimize_portal_flow_geography_search.sql
+        kind: database-migration
       - path: supabase/tests/20260826_portal_candidate_first_search.sql
+        kind: database-contract-test
+      - path: supabase/tests/20260827_portal_card_context_v1.sql
         kind: database-contract-test
       - path: supabase/tests/benchmarks/20260826_portal_candidate_first_explain.sql
         kind: database-benchmark
@@ -510,4 +516,4 @@ rules:
         mode: review_or_update
       - path: docs/agents/portal-projection-migration-recovery.md
         mode: review_or_update
-    reason: The immutable card and facet manifests, online expand/backfill/reconcile/index/cutover sequences, recovery procedure, and representative performance gates must change together.
+    reason: The immutable card and facet manifests, online expand/backfill/reconcile/index/cutover sequences, selected-row card-context decorator, query-only Flow geography Search repair, recovery procedure, and representative performance gates must change together.
