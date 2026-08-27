@@ -1,0 +1,1 @@
+COMMENT ON INDEX "private"."portal_catalog_summary_eligibility_v1_idx" IS 'Narrow public-card eligibility membership for deterministic Portal CAS/classification examples; stores no card or example value.';

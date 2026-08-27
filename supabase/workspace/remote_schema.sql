@@ -18776,6 +18776,315 @@ $$;
 ALTER FUNCTION "api"."policy_user_has_team"("_user_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "api"."portal_catalog_summary_v1"() RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '2s'
+    SET "work_mem" TO '32MB'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    SET "max_parallel_workers_per_gather" TO '0'
+    SET "jit" TO 'off'
+    SET "row_security" TO 'on'
+    AS $_$
+declare
+  v_counts jsonb;
+  v_latest_modified_at text;
+  v_uuid_example jsonb;
+  v_cas_example jsonb;
+  v_classification_example jsonb;
+  v_result jsonb;
+begin
+  perform private.assert_portal_catalog_projection_contract_v1();
+  perform private.assert_portal_catalog_facet_contract_v1();
+
+  with latest as materialized (
+    select distinct on (facet.dataset_kind, facet.id)
+      facet.dataset_kind,
+      facet.id,
+      facet.version,
+      facet.modified_at,
+      facet.state_code
+    from private.portal_catalog_facet_rows_v1 as facet
+    where facet.facet_contract_version = 1
+    order by facet.dataset_kind,
+      facet.id,
+      facet.version desc,
+      facet.modified_at desc,
+      facet.state_code desc
+  ), counts as (
+    select pg_catalog.jsonb_build_object(
+        'process', pg_catalog.count(*) filter (
+          where latest.dataset_kind = 'process'
+        ),
+        'flow', pg_catalog.count(*) filter (
+          where latest.dataset_kind = 'flow'
+        ),
+        'total', pg_catalog.count(*)
+      ) as value,
+      private.portal_timestamp_v1(
+        pg_catalog.max(latest.modified_at)
+      ) as latest_modified_at
+    from latest
+  ), uuid_candidates as materialized (
+    (
+      select 0 as preference,
+        candidate.dataset_kind,
+        candidate.id,
+        candidate.version,
+        private.portal_catalog_summary_label_v1(candidate.card) as label
+      from private.portal_catalog_search_rows_v1 as candidate
+      join latest
+        on latest.dataset_kind = candidate.dataset_kind
+       and latest.id = candidate.id
+       and latest.version = candidate.version
+      where candidate.dataset_kind = 'process'
+        and pg_catalog.jsonb_array_length(
+          private.portal_catalog_summary_label_v1(candidate.card)
+        ) > 0
+      order by candidate.id,
+        candidate.version desc,
+        candidate.modified_at desc,
+        candidate.state_code desc
+      limit 1
+    )
+    union all
+    (
+      select 1 as preference,
+        candidate.dataset_kind,
+        candidate.id,
+        candidate.version,
+        private.portal_catalog_summary_label_v1(candidate.card) as label
+      from private.portal_catalog_search_rows_v1 as candidate
+      join latest
+        on latest.dataset_kind = candidate.dataset_kind
+       and latest.id = candidate.id
+       and latest.version = candidate.version
+      where candidate.dataset_kind = 'flow'
+        and pg_catalog.jsonb_array_length(
+          private.portal_catalog_summary_label_v1(candidate.card)
+        ) > 0
+      order by candidate.id,
+        candidate.version desc,
+        candidate.modified_at desc,
+        candidate.state_code desc
+      limit 1
+    )
+  ), uuid_example as (
+    select pg_catalog.jsonb_build_object(
+      'queryKind', 'uuid',
+      'datasetKind', candidate.dataset_kind,
+      'query', candidate.id::text,
+      'label', candidate.label
+    ) as value
+    from uuid_candidates as candidate
+    order by candidate.preference
+    limit 1
+  ), cas_candidates as materialized (
+    select candidate.dataset_kind,
+      candidate.id,
+      candidate.version,
+      candidate.modified_at,
+      candidate.state_code,
+      candidate.card ->> 'casNumber' as cas_number,
+      private.portal_catalog_summary_label_v1(candidate.card) as label
+    from private.portal_catalog_search_rows_v1 as candidate
+    join latest
+      on latest.dataset_kind = candidate.dataset_kind
+     and latest.id = candidate.id
+     and latest.version = candidate.version
+    where candidate.dataset_kind = 'flow'
+      and pg_catalog.jsonb_typeof(candidate.card -> 'casNumber') = 'string'
+      and candidate.card ->> 'casNumber' ~
+        '^[0-9]{2,7}-[0-9]{2}-[0-9]$'
+      and private.portal_catalog_summary_valid_cas_v1(
+        candidate.card ->> 'casNumber'
+      )
+      and pg_catalog.jsonb_array_length(
+        private.portal_catalog_summary_label_v1(candidate.card)
+      ) > 0
+    order by candidate.id,
+      candidate.version desc,
+      candidate.modified_at desc,
+      candidate.state_code desc
+    limit 1
+  ), cas_example as (
+    select pg_catalog.jsonb_build_object(
+      'queryKind', 'cas',
+      'datasetKind', 'flow',
+      'query', candidate.cas_number,
+      'label', candidate.label
+    ) as value
+    from cas_candidates as candidate
+  ), classification_candidates as materialized (
+    (
+      select 0 as preference,
+        candidate.dataset_kind,
+        candidate.id,
+        candidate.version,
+        candidate.modified_at,
+        candidate.state_code,
+        classification.ordinality,
+        pg_catalog.btrim(classification.value ->> 'code') as code,
+        private.portal_catalog_summary_label_v1(candidate.card) as label
+      from private.portal_catalog_search_rows_v1 as candidate
+      join latest
+        on latest.dataset_kind = candidate.dataset_kind
+       and latest.id = candidate.id
+       and latest.version = candidate.version
+      cross join lateral pg_catalog.jsonb_array_elements(
+        candidate.card -> 'classifications'
+      ) with ordinality as classification(value, ordinality)
+      where candidate.dataset_kind = 'flow'
+        and pg_catalog.jsonb_typeof(
+          candidate.card -> 'classifications'
+        ) = 'array'
+        and pg_catalog.jsonb_array_length(
+          candidate.card -> 'classifications'
+        ) > 0
+        and pg_catalog.jsonb_typeof(classification.value) = 'object'
+        and pg_catalog.jsonb_typeof(classification.value -> 'code') = 'string'
+        and nullif(
+          pg_catalog.btrim(classification.value ->> 'code'), ''
+        ) is not null
+        and pg_catalog.length(
+          pg_catalog.btrim(classification.value ->> 'code')
+        ) <= 128
+        and pg_catalog.octet_length(
+          pg_catalog.btrim(classification.value ->> 'code')
+        ) <= 512
+        and pg_catalog.btrim(
+          classification.value ->> 'code'
+        ) !~ '[[:cntrl:]]'
+        and pg_catalog.jsonb_array_length(
+          private.portal_catalog_summary_label_v1(candidate.card)
+        ) > 0
+      order by candidate.id,
+        candidate.version desc,
+        candidate.modified_at desc,
+        candidate.state_code desc,
+        classification.ordinality,
+        pg_catalog.btrim(
+          classification.value ->> 'code'
+        ) collate pg_catalog."C"
+      limit 1
+    )
+    union all
+    (
+      select 1 as preference,
+        candidate.dataset_kind,
+        candidate.id,
+        candidate.version,
+        candidate.modified_at,
+        candidate.state_code,
+        classification.ordinality,
+        pg_catalog.btrim(classification.value ->> 'code') as code,
+        private.portal_catalog_summary_label_v1(candidate.card) as label
+      from private.portal_catalog_search_rows_v1 as candidate
+      join latest
+        on latest.dataset_kind = candidate.dataset_kind
+       and latest.id = candidate.id
+       and latest.version = candidate.version
+      cross join lateral pg_catalog.jsonb_array_elements(
+        candidate.card -> 'classifications'
+      ) with ordinality as classification(value, ordinality)
+      where candidate.dataset_kind = 'process'
+        and pg_catalog.jsonb_typeof(
+          candidate.card -> 'classifications'
+        ) = 'array'
+        and pg_catalog.jsonb_array_length(
+          candidate.card -> 'classifications'
+        ) > 0
+        and pg_catalog.jsonb_typeof(classification.value) = 'object'
+        and pg_catalog.jsonb_typeof(classification.value -> 'code') = 'string'
+        and nullif(
+          pg_catalog.btrim(classification.value ->> 'code'), ''
+        ) is not null
+        and pg_catalog.length(
+          pg_catalog.btrim(classification.value ->> 'code')
+        ) <= 128
+        and pg_catalog.octet_length(
+          pg_catalog.btrim(classification.value ->> 'code')
+        ) <= 512
+        and pg_catalog.btrim(
+          classification.value ->> 'code'
+        ) !~ '[[:cntrl:]]'
+        and pg_catalog.jsonb_array_length(
+          private.portal_catalog_summary_label_v1(candidate.card)
+        ) > 0
+      order by candidate.id,
+        candidate.version desc,
+        candidate.modified_at desc,
+        candidate.state_code desc,
+        classification.ordinality,
+        pg_catalog.btrim(
+          classification.value ->> 'code'
+        ) collate pg_catalog."C"
+      limit 1
+    )
+  ), classification_example as (
+    select pg_catalog.jsonb_build_object(
+      'queryKind', 'classification',
+      'datasetKind', candidate.dataset_kind,
+      'query', candidate.code,
+      'label', candidate.label
+    ) as value
+    from classification_candidates as candidate
+    order by candidate.preference
+    limit 1
+  )
+  select counts.value,
+    counts.latest_modified_at,
+    uuid_example.value,
+    cas_example.value,
+    classification_example.value
+  into v_counts,
+    v_latest_modified_at,
+    v_uuid_example,
+    v_cas_example,
+    v_classification_example
+  from counts
+  left join uuid_example on true
+  left join cas_example on true
+  left join classification_example on true;
+
+  select pg_catalog.jsonb_build_object(
+    'schemaVersion', 'portal.public-catalog-summary.v1',
+    'counts', v_counts,
+    'latestModifiedAt', v_latest_modified_at,
+    'examples', coalesce(pg_catalog.jsonb_agg(
+      example.value order by example.ordinality
+    ) filter (where example.value is not null), '[]'::jsonb)
+  )
+  into v_result
+  from (values
+    (1, v_uuid_example),
+    (2, v_cas_example),
+    (3, v_classification_example)
+  ) as example(ordinality, value);
+
+  if pg_catalog.octet_length(v_result::text) > 16384 then
+    raise exception using
+      errcode = '54000',
+      message = 'Portal catalog summary exceeded its response budget';
+  end if;
+
+  return v_result;
+exception
+  when query_canceled then
+    raise exception using errcode = 'P0001', message = 'portal catalog unavailable';
+  when others then
+    raise exception using errcode = 'P0001', message = 'portal catalog unavailable';
+end
+$_$;
+
+
+ALTER FUNCTION "api"."portal_catalog_summary_v1"() OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "api"."portal_catalog_summary_v1"() IS 'Bounded latest-visible public Process/Flow counts, timestamp, and deterministic executable R1 examples from synchronized Portal projections.';
+
+
+
 CREATE OR REPLACE FUNCTION "api"."portal_facets_v1"("p_kind" "text", "p_query" "text", "p_filters" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
@@ -19252,19 +19561,21 @@ begin
     p_filters,
     p_limit
   );
-  v_page := private.portal_lcia_decorate_item_page_v1(
-    private.portal_projection_hybrid_search_v1_impl(
-      v_input ->> 'kind',
-      array(
-        select term.value
-        from pg_catalog.jsonb_array_elements_text(v_input -> 'queryTerms')
-          with ordinality as term(value, ordinality)
-        order by term.ordinality
-      ),
-      (v_input ->> 'queryEmbedding')::extensions.vector(1024),
-      v_input -> 'filters',
-      (v_input ->> 'limit')::integer,
-      v_input ->> 'queryFingerprint'
+  v_page := private.portal_decorate_card_context_v1(
+    private.portal_lcia_decorate_item_page_v1(
+      private.portal_projection_hybrid_search_v1_impl(
+        v_input ->> 'kind',
+        array(
+          select term.value
+          from pg_catalog.jsonb_array_elements_text(v_input -> 'queryTerms')
+            with ordinality as term(value, ordinality)
+          order by term.ordinality
+        ),
+        (v_input ->> 'queryEmbedding')::extensions.vector(1024),
+        v_input -> 'filters',
+        (v_input ->> 'limit')::integer,
+        v_input ->> 'queryFingerprint'
+      )
     )
   );
   if v_page is null
@@ -19537,7 +19848,11 @@ CREATE OR REPLACE FUNCTION "api"."portal_search_flows_v1"("p_query" "text", "p_f
     SET "statement_timeout" TO '8s'
     AS $$
 begin
-  return private.portal_search_v1('flow', p_query, p_filters, p_sort, p_cursor, p_limit);
+  return private.portal_decorate_card_context_v1(
+    private.portal_search_v1(
+      'flow', p_query, p_filters, p_sort, p_cursor, p_limit
+    )
+  );
 exception
   when sqlstate '22023' then
     raise exception using errcode = '22023', message = 'invalid portal request';
@@ -19562,9 +19877,11 @@ CREATE OR REPLACE FUNCTION "api"."portal_search_processes_v1"("p_query" "text", 
     SET "statement_timeout" TO '8s'
     AS $$
 begin
-  return private.portal_lcia_decorate_item_page_v1(
-    private.portal_search_v1(
-      'process', p_query, p_filters, p_sort, p_cursor, p_limit
+  return private.portal_decorate_card_context_v1(
+    private.portal_lcia_decorate_item_page_v1(
+      private.portal_search_v1(
+        'process', p_query, p_filters, p_sort, p_cursor, p_limit
+      )
     )
   );
 exception
@@ -24636,6 +24953,33 @@ $$;
 ALTER FUNCTION "api"."unitgroups_embedding_ft_input"("proc" "public"."unitgroups") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "private"."assert_portal_card_context_contract_v1"() RETURNS "void"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "row_security" TO 'on'
+    AS $$
+declare
+  v_expected_digest constant text :=
+    'e0516d5f3a641d26221a5c44b92a2e7a87cab125e9145e8141074d9bc2af39fa';
+begin
+  perform private.assert_portal_catalog_projection_contract_v1();
+  if private.portal_card_context_manifest_sha256_v1()
+       is distinct from v_expected_digest then
+    raise exception using
+      errcode = '55000',
+      message = 'Portal card context derivation contract drifted';
+  end if;
+end
+$$;
+
+
+ALTER FUNCTION "private"."assert_portal_card_context_contract_v1"() OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."assert_portal_card_context_contract_v1"() IS 'Fails closed before card-context hydration when its live derivation closure drifts.';
+
+
+
 CREATE OR REPLACE FUNCTION "private"."assert_portal_catalog_facet_contract_v1"() RETURNS "void"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
@@ -25942,6 +26286,113 @@ begin
       else null end
     into v_items, v_next_cursor_payload
     from portal_decorated;
+
+    return pg_catalog.jsonb_build_object(
+      'items', v_items,
+      'nextCursorPayload', v_next_cursor_payload
+    );
+  end if;
+
+  -- Geography-only Flow browse can use the synchronized narrow facet child
+  -- for latest/filter/order/limit, then hydrate only limit+1 stored cards.
+  -- This preserves latest-version and cursor semantics without evaluating
+  -- the wide card-facts helper over the full Flow card set.
+  if p_kind = 'flow'
+     and p_query = ''
+     and p_sort = 'relevance'
+     and p_filters ? 'geography'
+     and (select count(*) from pg_catalog.jsonb_object_keys(p_filters)) = 1 then
+    perform private.assert_portal_catalog_facet_contract_v1();
+
+    with portal_latest_facts as materialized (
+      select distinct on (facet.id)
+        facet.id,
+        facet.version,
+        facet.state_code,
+        facet.modified_at,
+        facet.facet_geography
+      from private.portal_catalog_facet_rows_v1 as facet
+      where facet.dataset_kind = 'flow'
+      order by facet.id,
+        facet.version desc,
+        facet.modified_at desc,
+        facet.state_code desc
+    ), portal_filtered_keys as materialized (
+      select portal_latest_facts.*
+      from portal_latest_facts
+      where portal_latest_facts.facet_geography =
+          p_filters ->> 'geography'
+        and (
+          p_cursor_rank is null
+          or 0::numeric < p_cursor_rank::numeric
+          or (
+            0::numeric = p_cursor_rank::numeric
+            and (
+              portal_latest_facts.id > p_cursor_id
+              or (
+                portal_latest_facts.id = p_cursor_id
+                and portal_latest_facts.version < p_cursor_version
+              )
+            )
+          )
+        )
+    ), portal_ordered_keys as materialized (
+      select portal_filtered_keys.*,
+        pg_catalog.row_number() over (
+          order by portal_filtered_keys.id,
+            portal_filtered_keys.version desc
+        ) as page_rank
+      from portal_filtered_keys
+      order by portal_filtered_keys.id,
+        portal_filtered_keys.version desc
+      limit p_limit + 1
+    ), portal_hydrated as materialized (
+      select portal_ordered_keys.*,
+        projection.card
+      from portal_ordered_keys
+      join private.portal_catalog_search_rows_v1 as projection
+        on projection.dataset_kind = 'flow'
+       and projection.id = portal_ordered_keys.id
+       and projection.version = portal_ordered_keys.version
+    )
+    select
+      coalesce(pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object(
+          'key', pg_catalog.jsonb_build_object(
+            'kind', p_kind,
+            'id', portal_hydrated.id::text,
+            'version', portal_hydrated.version
+          ),
+          'accessLevel', portal_hydrated.card -> 'accessLevel',
+          'capabilities', portal_hydrated.card -> 'capabilities',
+          'names', portal_hydrated.card -> 'names',
+          'summary', portal_hydrated.card -> 'summary',
+          'geography', portal_hydrated.card -> 'geography',
+          'referenceYear', portal_hydrated.card -> 'referenceYear',
+          'modifiedAt', pg_catalog.to_char(
+            portal_hydrated.modified_at at time zone 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+          ),
+          'match', pg_catalog.jsonb_build_object(
+            'kind', 'lexical',
+            'score', 0::numeric,
+            'reasonCodes', '[]'::jsonb
+          )
+        ) order by portal_hydrated.page_rank
+      ) filter (where portal_hydrated.page_rank <= p_limit), '[]'::jsonb),
+      case when max(portal_hydrated.page_rank) > p_limit then
+        (pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'v', 1,
+          'fp', p_query_fingerprint,
+          'rankKey', '0',
+          'kind', p_kind,
+          'id', portal_hydrated.id::text,
+          'version', portal_hydrated.version
+        ) order by portal_hydrated.page_rank)
+          filter (where portal_hydrated.page_rank = p_limit)) -> 0
+      else null end
+    into v_items, v_next_cursor_payload
+    from portal_hydrated;
 
     return pg_catalog.jsonb_build_object(
       'items', v_items,
@@ -40111,6 +40562,178 @@ $$;
 ALTER FUNCTION "private"."portal_capabilities_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") OWNER TO "portal_public_executor";
 
 
+CREATE OR REPLACE FUNCTION "private"."portal_card_context_manifest_sha256_v1"() RETURNS "text"
+    LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "row_security" TO 'on'
+    AS $$
+  with expected(identity) as (
+    values
+      ('private.portal_card_context_v1(text,integer,jsonb)'::text),
+      ('private.portal_decorate_card_context_v1(jsonb)'),
+      ('private.portal_process_reference_product_v1(jsonb)'),
+      ('private.portal_process_functional_unit_v1(integer,jsonb)'),
+      ('private.portal_exchange_support_v1(integer,jsonb,jsonb)'),
+      ('private.portal_reference_flowproperty_v1(jsonb)'),
+      ('private.portal_localized_text_v1(jsonb)'),
+      ('private.portal_scalar_text_v1(jsonb)'),
+      ('private.portal_json_items_v1(jsonb)'),
+      ('private.portal_source_v1(text,jsonb)'),
+      ('private.portal_capabilities_v1(text,integer,jsonb)'),
+      ('private.portal_canonical_decimal_v1(text)'),
+      ('private.portal_flow_kind_v1(text)'),
+      ('private.portal_support_capabilities_v1(text,integer)'),
+      ('private.portal_classifications_v1(jsonb)'),
+      ('private.portal_publication_root_v1(text,jsonb)'),
+      ('private.portal_access_restrictions_open_v1(jsonb)')
+  ), manifest_entries as (
+    select expected.identity,
+      pg_catalog.jsonb_build_object(
+        'identity', expected.identity,
+        'definition', pg_catalog.pg_get_functiondef(routine.oid),
+        'owner', pg_catalog.pg_get_userbyid(routine.proowner),
+        'language', language.lanname,
+        'volatility', routine.provolatile,
+        'parallel', routine.proparallel,
+        'securityDefiner', routine.prosecdef,
+        'config', coalesce(
+          pg_catalog.to_jsonb(routine.proconfig),
+          'null'::jsonb
+        )
+      )::text as entry
+    from expected
+    join pg_catalog.pg_proc as routine
+      on routine.oid = pg_catalog.to_regprocedure(expected.identity)
+    join pg_catalog.pg_language as language
+      on language.oid = routine.prolang
+  )
+  select pg_catalog.encode(
+    extensions.digest(
+      pg_catalog.convert_to(
+        pg_catalog.string_agg(
+          manifest_entries.entry,
+          E'\n'
+          order by manifest_entries.identity
+        ),
+        'UTF8'
+      ),
+      'sha256'
+    ),
+    'hex'
+  )
+  from manifest_entries
+$$;
+
+
+ALTER FUNCTION "private"."portal_card_context_manifest_sha256_v1"() OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."portal_card_context_manifest_sha256_v1"() IS 'Live SHA-256 for the exact context/decorator and transitive allowlist helper closure.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_card_context_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "row_security" TO 'on'
+    AS $$
+declare
+  v_information jsonb;
+  v_modelling jsonb;
+  v_reference_name jsonb := '[]'::jsonb;
+  v_functional_unit jsonb := 'null'::jsonb;
+  v_technology jsonb := '[]'::jsonb;
+  v_source jsonb;
+  v_review_status jsonb := 'null'::jsonb;
+  v_flow_property jsonb;
+begin
+  if p_state_code not in (100, 200)
+     or pg_catalog.jsonb_typeof(p_json) <> 'object' then
+    return null;
+  end if;
+
+  if p_kind = 'process'
+     and pg_catalog.jsonb_typeof(p_json -> 'processDataSet') = 'object' then
+    v_information := p_json #> '{processDataSet,processInformation}';
+    v_modelling := p_json #> '{processDataSet,modellingAndValidation}';
+    v_reference_name := private.portal_process_reference_product_v1(p_json);
+
+    -- Functional-unit amount/unit are public metadata, not permission to read
+    -- Exchanges. Reuse the exact open support-chain validator for both public
+    -- Process states, then emit null unless the evidence is complete.
+    v_functional_unit := private.portal_process_functional_unit_v1(100, p_json);
+    if pg_catalog.jsonb_typeof(v_functional_unit) <> 'object'
+       or pg_catalog.jsonb_typeof(
+         v_functional_unit -> 'amount'
+       ) <> 'string'
+       or pg_catalog.jsonb_typeof(
+         v_functional_unit -> 'unit'
+       ) <> 'string' then
+      v_functional_unit := 'null'::jsonb;
+    end if;
+
+    v_technology := private.portal_localized_text_v1(
+      v_information #> '{technology,technologyDescriptionAndIncludedProcesses}'
+    ) || private.portal_localized_text_v1(
+      v_information #> '{technology,technologicalApplicability}'
+    );
+    select coalesce(
+      pg_catalog.to_jsonb(nullif(
+        private.portal_scalar_text_v1(review_item -> '@type'),
+        ''
+      )),
+      'null'::jsonb
+    )
+    into v_review_status
+    from private.portal_json_items_v1(
+      v_modelling #> '{validation,review}'
+    ) as review_item
+    limit 1;
+    v_review_status := coalesce(v_review_status, 'null'::jsonb);
+  elsif p_kind = 'flow'
+     and pg_catalog.jsonb_typeof(p_json -> 'flowDataSet') = 'object' then
+    v_flow_property := private.portal_reference_flowproperty_v1(p_json);
+    v_reference_name := coalesce(
+      v_flow_property -> 'name',
+      '[]'::jsonb
+    );
+  else
+    return null;
+  end if;
+
+  v_source := private.portal_source_v1(p_kind, p_json);
+  if pg_catalog.jsonb_typeof(v_reference_name) <> 'array'
+     or pg_catalog.jsonb_typeof(v_technology) <> 'array'
+     or pg_catalog.jsonb_typeof(v_source) <> 'object' then
+    return null;
+  end if;
+
+  return pg_catalog.jsonb_build_object(
+    'reference', pg_catalog.jsonb_build_object(
+      'kind', case p_kind
+        when 'process' then 'reference_product'
+        else 'reference_flow_property'
+      end,
+      'name', v_reference_name
+    ),
+    'functionalUnit', v_functional_unit,
+    'technology', v_technology,
+    'source', v_source,
+    'quality', pg_catalog.jsonb_build_object(
+      'reviewStatus', v_review_status
+    )
+  );
+end
+$$;
+
+
+ALTER FUNCTION "private"."portal_card_context_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."portal_card_context_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") IS 'Builds the exact five-field public-safe Search/Hybrid context from one selected source row and reviewed public-dataset allowlist helpers.';
+
+
+
 CREATE OR REPLACE FUNCTION "private"."portal_catalog_card_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE PARALLEL RESTRICTED
     SET "search_path" TO ''
@@ -40407,6 +41030,92 @@ $$;
 
 
 ALTER FUNCTION "private"."portal_catalog_rows_v1"("p_kind" "text") OWNER TO "portal_public_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_catalog_summary_label_v1"("p_card" "jsonb") RETURNS "jsonb"
+    LANGUAGE "sql" IMMUTABLE PARALLEL SAFE
+    SET "search_path" TO ''
+    AS $_$
+  select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+    'language', label_item.language,
+    'value', label_item.label_value
+  ) order by label_item.preference,
+      pg_catalog.lower(label_item.language) collate pg_catalog."C",
+      label_item.label_value collate pg_catalog."C",
+      label_item.ordinality), '[]'::jsonb)
+  from (
+    select
+      pg_catalog.btrim(item.value ->> 'language') as language,
+      pg_catalog.btrim(item.value ->> 'value') as label_value,
+      item.ordinality,
+      case pg_catalog.lower(pg_catalog.btrim(item.value ->> 'language'))
+        when 'zh-cn' then 0
+        when 'en' then 1
+        else 2
+      end as preference
+    from pg_catalog.jsonb_array_elements(
+      case pg_catalog.jsonb_typeof(p_card -> 'names')
+        when 'array' then p_card -> 'names'
+        else '[]'::jsonb
+      end
+    ) with ordinality as item(value, ordinality)
+    where pg_catalog.jsonb_typeof(item.value) = 'object'
+      and pg_catalog.jsonb_typeof(item.value -> 'language') = 'string'
+      and pg_catalog.jsonb_typeof(item.value -> 'value') = 'string'
+      and pg_catalog.btrim(item.value ->> 'language') ~
+        '^[A-Za-z]{2,3}(-[A-Za-z0-9]{2,8})*$'
+      and pg_catalog.length(
+        pg_catalog.btrim(item.value ->> 'language')
+      ) <= 35
+      and nullif(pg_catalog.btrim(item.value ->> 'value'), '') is not null
+      and pg_catalog.length(
+        pg_catalog.btrim(item.value ->> 'value')
+      ) <= 160
+      and pg_catalog.octet_length(
+        pg_catalog.btrim(item.value ->> 'value')
+      ) <= 640
+    order by preference,
+      pg_catalog.lower(
+        pg_catalog.btrim(item.value ->> 'language')
+      ) collate pg_catalog."C",
+      pg_catalog.btrim(item.value ->> 'value') collate pg_catalog."C",
+      item.ordinality
+    limit 2
+  ) as label_item
+$_$;
+
+
+ALTER FUNCTION "private"."portal_catalog_summary_label_v1"("p_card" "jsonb") OWNER TO "portal_public_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_catalog_summary_valid_cas_v1"("p_value" "text") RETURNS boolean
+    LANGUAGE "sql" IMMUTABLE PARALLEL SAFE
+    SET "search_path" TO ''
+    AS $_$
+  select case
+    when p_value ~ '^[0-9]{2,7}-[0-9]{2}-[0-9]$' then
+      pg_catalog.right(p_value, 1)::integer = (
+        select pg_catalog.mod(
+          pg_catalog.sum(
+            digit.value::integer * digit.ordinality::integer
+          ),
+          10
+        )
+        from pg_catalog.regexp_split_to_table(
+          pg_catalog.reverse(pg_catalog.replace(
+            pg_catalog.left(p_value, pg_catalog.length(p_value) - 2),
+            '-',
+            ''
+          )),
+          ''
+        ) with ordinality as digit(value, ordinality)
+      )
+    else false
+  end
+$_$;
+
+
+ALTER FUNCTION "private"."portal_catalog_summary_valid_cas_v1"("p_value" "text") OWNER TO "portal_public_executor";
 
 
 CREATE OR REPLACE FUNCTION "private"."portal_classifications_v1"("p_information" "jsonb") RETURNS "jsonb"
@@ -40891,6 +41600,135 @@ $_$;
 
 
 ALTER FUNCTION "private"."portal_datetime_v1"("p_value" "text") OWNER TO "portal_public_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_decorate_card_context_v1"("p_page" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    SET "row_security" TO 'on'
+    AS $_$
+declare
+  v_schema_version text := p_page ->> 'schemaVersion';
+  v_kind text := p_page ->> 'kind';
+  v_expected integer;
+  v_actual integer;
+  v_items jsonb;
+begin
+  perform private.assert_portal_card_context_contract_v1();
+
+  if pg_catalog.jsonb_typeof(p_page) <> 'object'
+     or pg_catalog.jsonb_typeof(p_page -> 'items') <> 'array'
+     or v_schema_version not in (
+       'portal.public-search-page.v1',
+       'portal.public-hybrid-candidate-page.v1'
+     )
+     or v_kind not in ('process', 'flow') then
+    raise exception 'Portal card context page is invalid'
+      using errcode = '55000';
+  end if;
+  v_expected := pg_catalog.jsonb_array_length(p_page -> 'items');
+  if v_expected > (
+    case
+      when v_schema_version = 'portal.public-search-page.v1' then 50
+      else 20
+    end
+  ) then
+    raise exception 'Portal card context page exceeds its fixed bound'
+      using errcode = '54000';
+  end if;
+
+  if v_kind = 'process' then
+    with input as materialized (
+      select item.value, item.ordinality,
+        case
+          when item.value #>> '{key,id}'
+            ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            then (item.value #>> '{key,id}')::uuid
+          else null
+        end as id,
+        item.value #>> '{key,version}' as version
+      from pg_catalog.jsonb_array_elements(p_page -> 'items')
+        with ordinality as item(value, ordinality)
+      where pg_catalog.jsonb_typeof(item.value) = 'object'
+        and item.value #>> '{key,kind}' = 'process'
+        and item.value #>> '{key,version}' ~ '^\d{2}\.\d{2}\.\d{3}$'
+    ), hydrated as materialized (
+      select input.value, input.ordinality,
+        private.portal_card_context_v1(
+          'process', source.state_code, source.json
+        ) as card_context
+      from input
+      join public.processes as source
+        on source.id = input.id
+       and source.version::text = input.version
+       and source.state_code in (100, 200)
+    )
+    select count(*), coalesce(
+      pg_catalog.jsonb_agg(
+        hydrated.value || pg_catalog.jsonb_build_object(
+          'context', hydrated.card_context
+        ) order by hydrated.ordinality
+      ),
+      '[]'::jsonb
+    )
+    into v_actual, v_items
+    from hydrated
+    where pg_catalog.jsonb_typeof(hydrated.card_context) = 'object';
+  else
+    with input as materialized (
+      select item.value, item.ordinality,
+        case
+          when item.value #>> '{key,id}'
+            ~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+            then (item.value #>> '{key,id}')::uuid
+          else null
+        end as id,
+        item.value #>> '{key,version}' as version
+      from pg_catalog.jsonb_array_elements(p_page -> 'items')
+        with ordinality as item(value, ordinality)
+      where pg_catalog.jsonb_typeof(item.value) = 'object'
+        and item.value #>> '{key,kind}' = 'flow'
+        and item.value #>> '{key,version}' ~ '^\d{2}\.\d{2}\.\d{3}$'
+    ), hydrated as materialized (
+      select input.value, input.ordinality,
+        private.portal_card_context_v1(
+          'flow', source.state_code, source.json
+        ) as card_context
+      from input
+      join public.flows as source
+        on source.id = input.id
+       and source.version::text = input.version
+       and source.state_code in (100, 200)
+    )
+    select count(*), coalesce(
+      pg_catalog.jsonb_agg(
+        hydrated.value || pg_catalog.jsonb_build_object(
+          'context', hydrated.card_context
+        ) order by hydrated.ordinality
+      ),
+      '[]'::jsonb
+    )
+    into v_actual, v_items
+    from hydrated
+    where pg_catalog.jsonb_typeof(hydrated.card_context) = 'object';
+  end if;
+
+  if v_actual is distinct from v_expected then
+    raise exception 'Portal card context exact-key hydration failed'
+      using errcode = '55000';
+  end if;
+  return pg_catalog.jsonb_set(p_page, '{items}', v_items, false);
+end
+$_$;
+
+
+ALTER FUNCTION "private"."portal_decorate_card_context_v1"("p_page" "jsonb") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."portal_decorate_card_context_v1"("p_page" "jsonb") IS 'Hydrates at most 50 Search or 20 Hybrid items by exact public source identity after candidate ordering and limit.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."portal_exchange_support_v1"("p_process_state" integer, "p_process_json" "jsonb", "p_exchange" "jsonb") RETURNS "jsonb"
@@ -66242,6 +67080,14 @@ CREATE INDEX "portal_catalog_search_rows_latest_v1_idx" ON "private"."portal_cat
 
 
 
+CREATE INDEX "portal_catalog_summary_eligibility_v1_idx" ON "private"."portal_catalog_search_rows_v1" USING "btree" ("dataset_kind", "id", "version" DESC, "modified_at" DESC, "state_code" DESC) WHERE ((("dataset_kind" = 'flow'::"text") AND ("jsonb_typeof"(("card" -> 'casNumber'::"text")) = 'string'::"text") AND (("card" ->> 'casNumber'::"text") ~ '^[0-9]{2,7}-[0-9]{2}-[0-9]$'::"text")) OR (("jsonb_typeof"(("card" -> 'classifications'::"text")) = 'array'::"text") AND ("jsonb_array_length"(("card" -> 'classifications'::"text")) > 0)));
+
+
+
+COMMENT ON INDEX "private"."portal_catalog_summary_eligibility_v1_idx" IS 'Narrow public-card eligibility membership for deterministic Portal CAS/classification examples; stores no card or example value.';
+
+
+
 CREATE INDEX "portal_lcia_projection_publications_visibility_idx" ON "private"."portal_lcia_projection_publications" USING "btree" ("status", "lcia_result_publication_id", "projection_id") WHERE ("status" = 'finalized'::"text");
 
 
@@ -69511,6 +70357,12 @@ GRANT ALL ON FUNCTION "api"."policy_user_has_team"("_user_id" "uuid") TO "api_in
 
 
 
+REVOKE ALL ON FUNCTION "api"."portal_catalog_summary_v1"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."portal_catalog_summary_v1"() TO "anon";
+GRANT ALL ON FUNCTION "api"."portal_catalog_summary_v1"() TO "authenticated";
+
+
+
 REVOKE ALL ON FUNCTION "api"."portal_facets_v1"("p_kind" "text", "p_query" "text", "p_filters" "jsonb") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."portal_facets_v1"("p_kind" "text", "p_query" "text", "p_filters" "jsonb") TO "anon";
 GRANT ALL ON FUNCTION "api"."portal_facets_v1"("p_kind" "text", "p_query" "text", "p_filters" "jsonb") TO "authenticated";
@@ -70131,6 +70983,10 @@ GRANT SELECT("modified_at") ON TABLE "public"."unitgroups" TO "portal_public_exe
 
 REVOKE ALL ON FUNCTION "api"."unitgroups_embedding_ft_input"("proc" "public"."unitgroups") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."unitgroups_embedding_ft_input"("proc" "public"."unitgroups") TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."assert_portal_card_context_contract_v1"() FROM PUBLIC;
 
 
 
@@ -70787,6 +71643,14 @@ REVOKE ALL ON FUNCTION "private"."portal_capabilities_v1"("p_kind" "text", "p_st
 
 
 
+REVOKE ALL ON FUNCTION "private"."portal_card_context_manifest_sha256_v1"() FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_card_context_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "private"."portal_catalog_card_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") FROM PUBLIC;
 
 
@@ -70804,6 +71668,14 @@ REVOKE ALL ON FUNCTION "private"."portal_catalog_projection_manifest_sha256_v1"(
 
 
 REVOKE ALL ON FUNCTION "private"."portal_catalog_rows_v1"("p_kind" "text") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_catalog_summary_label_v1"("p_card" "jsonb") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_catalog_summary_valid_cas_v1"("p_value" "text") FROM PUBLIC;
 
 
 
@@ -70841,6 +71713,10 @@ REVOKE ALL ON FUNCTION "private"."portal_dataset_rows_v1"("p_kind" "text", "p_id
 
 
 REVOKE ALL ON FUNCTION "private"."portal_datetime_v1"("p_value" "text") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_decorate_card_context_v1"("p_page" "jsonb") FROM PUBLIC;
 
 
 

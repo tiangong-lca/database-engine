@@ -26,9 +26,9 @@ fi
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 266 \
-   || "${#test_migrations[@]}" -ne 266 ]]; then
-  echo "complete migration tree must contain exactly 266 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 271 \
+   || "${#test_migrations[@]}" -ne 271 ]]; then
+  echo "complete migration tree must contain exactly 271 files" >&2
   exit 2
 fi
 migration_manifest_payload=""
@@ -68,8 +68,8 @@ project_id="$({
   sed -n 's/^project_id = "\([^"]*\)"$/\1/p' \
     "$test_workdir/supabase/config.toml" | head -n 1
 })"
-if [[ ! "$project_id" =~ ^database-engine-531-[a-z0-9-]+$ ]]; then
-  echo "refusing non-Issue-531 Supabase project_id: $project_id" >&2
+if [[ ! "$project_id" =~ ^database-engine-(531|532)-[a-z0-9-]+$ ]]; then
+  echo "refusing non-Issue-531/532 Supabase project_id: $project_id" >&2
   exit 2
 fi
 
@@ -211,7 +211,7 @@ fi
 echo "Supabase CLI: $supabase_cli_version"
 echo "Recovery target: $project_id"
 echo "Repository HEAD: $repository_head"
-echo "Migration tree SHA-256 (266 files): $migration_tree_sha256"
+echo "Migration tree SHA-256 (271 files): $migration_tree_sha256"
 
 # Breakpoint 1: expand plus every bounded backfill is recorded, while old API
 # wrappers remain authoritative. Exercise all five write/snapshot races before

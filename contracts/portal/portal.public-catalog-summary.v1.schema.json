@@ -1,0 +1,203 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "portal.public-catalog-summary.v1.schema.json",
+  "title": "TianGong Portal public catalog summary v1",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "counts",
+    "latestModifiedAt",
+    "examples"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "portal.public-catalog-summary.v1"
+    },
+    "counts": {
+      "$ref": "#/$defs/CatalogCounts"
+    },
+    "latestModifiedAt": {
+      "anyOf": [
+        {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/DateTime"
+        },
+        {
+          "type": "null"
+        }
+      ]
+    },
+    "examples": {
+      "type": "array",
+      "maxItems": 3,
+      "uniqueItems": true,
+      "allOf": [
+        {
+          "contains": {
+            "$ref": "#/$defs/UuidExample"
+          },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "$ref": "#/$defs/CasExample"
+          },
+          "minContains": 0,
+          "maxContains": 1
+        },
+        {
+          "contains": {
+            "$ref": "#/$defs/ClassificationExample"
+          },
+          "minContains": 0,
+          "maxContains": 1
+        }
+      ],
+      "items": {
+        "oneOf": [
+          {
+            "$ref": "#/$defs/UuidExample"
+          },
+          {
+            "$ref": "#/$defs/CasExample"
+          },
+          {
+            "$ref": "#/$defs/ClassificationExample"
+          }
+        ]
+      }
+    }
+  },
+  "$defs": {
+    "CatalogCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "process",
+        "flow",
+        "total"
+      ],
+      "properties": {
+        "process": {
+          "$ref": "#/$defs/SafeCount"
+        },
+        "flow": {
+          "$ref": "#/$defs/SafeCount"
+        },
+        "total": {
+          "$ref": "#/$defs/SafeCount"
+        }
+      }
+    },
+    "SafeCount": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 9007199254740991
+    },
+    "ExampleLabel": {
+      "description": "One or two bounded labels copied only from the public card allowlist.",
+      "type": "array",
+      "minItems": 1,
+      "maxItems": 2,
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "language",
+          "value"
+        ],
+        "properties": {
+          "language": {
+            "type": "string",
+            "minLength": 2,
+            "maxLength": 35,
+            "pattern": "^[A-Za-z]{2,3}(?:-[A-Za-z0-9]{2,8})*$"
+          },
+          "value": {
+            "type": "string",
+            "minLength": 1,
+            "maxLength": 160
+          }
+        }
+      }
+    },
+    "UuidExample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "queryKind",
+        "datasetKind",
+        "query",
+        "label"
+      ],
+      "properties": {
+        "queryKind": {
+          "const": "uuid"
+        },
+        "datasetKind": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/DatasetKind"
+        },
+        "query": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/UUID"
+        },
+        "label": {
+          "$ref": "#/$defs/ExampleLabel"
+        }
+      }
+    },
+    "CasExample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "queryKind",
+        "datasetKind",
+        "query",
+        "label"
+      ],
+      "properties": {
+        "queryKind": {
+          "const": "cas"
+        },
+        "datasetKind": {
+          "const": "flow"
+        },
+        "query": {
+          "type": "string",
+          "maxLength": 12,
+          "pattern": "^[0-9]{2,7}-[0-9]{2}-[0-9]$"
+        },
+        "label": {
+          "$ref": "#/$defs/ExampleLabel"
+        }
+      }
+    },
+    "ClassificationExample": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "queryKind",
+        "datasetKind",
+        "query",
+        "label"
+      ],
+      "properties": {
+        "queryKind": {
+          "const": "classification"
+        },
+        "datasetKind": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/DatasetKind"
+        },
+        "query": {
+          "type": "string",
+          "minLength": 1,
+          "maxLength": 128,
+          "pattern": "^[^\\u0000-\\u001F\\u007F-\\u009F]+$"
+        },
+        "label": {
+          "$ref": "#/$defs/ExampleLabel"
+        }
+      }
+    }
+  }
+}

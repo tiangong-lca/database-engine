@@ -1577,6 +1577,7 @@ export type Database = {
         Returns: boolean
       }
       policy_user_has_team: { Args: { _user_id: string }; Returns: boolean }
+      portal_catalog_summary_v1: { Args: never; Returns: Json }
       portal_facets_v1: {
         Args: { p_filters?: Json; p_kind: string; p_query: string }
         Returns: Json

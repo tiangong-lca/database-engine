@@ -866,13 +866,13 @@ select extensions.ok(
     select 1
     from portal_hybrid_results as result
     cross join lateral pg_catalog.jsonb_array_elements(result.payload -> 'items') as candidate(item)
-    where (select count(*) from pg_catalog.jsonb_object_keys(candidate.item)) <> 9
+    where (select count(*) from pg_catalog.jsonb_object_keys(candidate.item)) <> 10
        or exists (
          select 1
          from pg_catalog.jsonb_object_keys(candidate.item) as candidate_key(key)
          where candidate_key.key not in (
            'key', 'accessLevel', 'capabilities', 'names', 'summary', 'geography',
-           'referenceYear', 'modifiedAt', 'match'
+           'referenceYear', 'context', 'modifiedAt', 'match'
          )
        )
   ),

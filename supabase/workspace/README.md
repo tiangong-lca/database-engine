@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 8ca5fba
-lastReviewedNote: "Reviewed after populated-upgrade proof; the deterministic 266-migration snapshot and public/api type ownership are unchanged."
+lastReviewedCommit: ac64c51
+lastReviewedNote: "Reviewed for the combined 271-migration Issue #532 card-context/Flow-geography and Issue #533 catalog-summary snapshot; generated workspace and public/api type ownership are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

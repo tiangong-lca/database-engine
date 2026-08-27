@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 8ca5fba
-lastReviewedNote: "Reviewed for dual Portal manifests, populated facet upgrade and recovery runners, and named performance profiles."
+lastReviewedCommit: ac64c51
+lastReviewedNote: "Reviewed after combining Issue #532/#533: 271-file recovery/benchmark runners, runtime manifests, exact-50 Search, summary performance, and 11-module Portal generation are current."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -96,7 +96,7 @@ See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries. Formal evidence additionally requires
 clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
-the complete 266-file migration tree.
+the complete 271-file migration tree.
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
@@ -113,7 +113,7 @@ The runner always resets the isolated project to full HEAD on exit.
 Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
 fence, plan, and ANN-recall benchmark only against an explicitly attested
 Issue-531 local Supabase project. The runner byte-compares the complete
-266-file migration tree with the repository, writes into a new operator-selected private
+271-file migration tree with the repository, writes into a new operator-selected private
 directory, and resets the isolated database before and after the run so rolled
 back HNSW pages cannot accumulate. Its environment contract mirrors the
 recovery runner and additionally requires
@@ -153,16 +153,45 @@ forcing that index. Only release must name both source HNSW indexes; sparse
 source probes may choose an eligibility/empty-set plan but still require
 buffers, execution time, and no temp/disk spill.
 
+All named profiles build evidence-complete card context: each Process resolves
+an exact public reference Flow plus the real FlowProperty/UnitGroup functional
+unit chain, while Process/Flow rows carry the public source/database and
+Process review/technology fields. Four dedicated Search-50/Hybrid-20 labels
+must each produce exactly 50/20 complete items, 20 timing samples, and a full
+wrapper `EXPLAIN (ANALYZE, BUFFERS)`. The runner rejects missing evidence,
+records temp-buffer use, rejects more than 750,000 total or 250,000 read shared
+blocks, and applies the existing
+2-second Search / 6-second Hybrid budgets.
+The evidence file also carries a dedicated full plan for empty-query,
+`geography=cn` Flow Search-50, the representative filtered worst case; its
+timing label must also return exactly 50 complete cards so an empty or narrowed
+result cannot make the performance gate pass.
+
 ### `check_portal_projection_manifest.py`
 
-Checks both committed Portal digests: the exact eleven-function card closure
-and the exact two-function narrow-facet closure. It rejects later mutation of
-either closure/control set, validates the four facet shards plus reconcile/
-cutover dispatch, and retains the Flow eligibility index catalog guard without
-changing the card-v1 digest.
+Checks all three committed Portal digests: the exact eleven-function stored-card
+closure, the exact two-function narrow-facet closure, and the independent
+selected-row context/decorator closure. It rejects later mutation of any
+closure/control set, validates the four facet shards plus reconcile/cutover,
+requires the context migration to add no table/index/trigger, and retains the
+Flow eligibility index catalog guard without changing either #531 digest. It
+also requires the Flow geography Search follow-up to remain a single
+query-only kernel replacement with no table/index/trigger/writer rewrite. The
+runtime path independently validates the Facet manifest before reading that
+child projection.
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py
+```
+
+### `check_portal_card_schema_parity.py`
+
+Fails unless lexical Search and Hybrid candidate items have byte-identical,
+exhaustive card properties outside their versioned `match` objects and both
+reference the exact five-field `PublicCardContext` definition.
+
+```bash
+python3 scripts/check_portal_card_schema_parity.py
 ```
 
 ### `resolve_migration_head.py`
@@ -203,6 +232,10 @@ cleared first. The anonymous Hybrid step itself may contain no PAT,
 Management API mutations are the one persistent-Dev and one Preview PostgREST
 PATCH; Functions commands, broad `config push`, pinned migration heads, and any
 other mutation remain rejected.
+
+The contract also requires failure diagnostics to emit only the HTTP status
+and a shape-validated PostgREST/SQLSTATE code. It rejects raw response-body
+printing; malformed or unexpected error envelopes must become `unclassified`.
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py
@@ -319,6 +352,23 @@ python scripts/build_database_types.py --environment local
 ```
 
 Use `--environment linked` only when the linked Supabase target is intentionally the source. CI regenerates the local contract and fails when `supabase/workspace/database.types.ts` drifts.
+
+### `build_portal_contract_types.py`
+
+Generates one committed TypeScript module per exhaustive Portal JSON Schema.
+The repository has no Node package manifest, so the script follows the existing
+CI dependency policy and invokes exact-pinned
+`json-schema-to-typescript@15.0.4` through `npx`.
+
+```bash
+python3 scripts/build_portal_contract_types.py
+python3 scripts/build_portal_contract_types.py --check
+```
+
+Normal generation synchronizes `contracts/portal/generated/*.d.ts` with the
+sorted `contracts/portal/*.schema.json` source set. `--check` renders into a
+temporary directory and fails on missing, changed, or unexpected generated
+modules without modifying the checkout. CI uses the read-only check.
 
 ### `check_generated_workspace_legacy_tables.py`
 

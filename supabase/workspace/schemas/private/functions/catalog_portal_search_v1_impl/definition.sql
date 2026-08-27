@@ -175,6 +175,113 @@ begin
     );
   end if;
 
+  -- Geography-only Flow browse can use the synchronized narrow facet child
+  -- for latest/filter/order/limit, then hydrate only limit+1 stored cards.
+  -- This preserves latest-version and cursor semantics without evaluating
+  -- the wide card-facts helper over the full Flow card set.
+  if p_kind = 'flow'
+     and p_query = ''
+     and p_sort = 'relevance'
+     and p_filters ? 'geography'
+     and (select count(*) from pg_catalog.jsonb_object_keys(p_filters)) = 1 then
+    perform private.assert_portal_catalog_facet_contract_v1();
+
+    with portal_latest_facts as materialized (
+      select distinct on (facet.id)
+        facet.id,
+        facet.version,
+        facet.state_code,
+        facet.modified_at,
+        facet.facet_geography
+      from private.portal_catalog_facet_rows_v1 as facet
+      where facet.dataset_kind = 'flow'
+      order by facet.id,
+        facet.version desc,
+        facet.modified_at desc,
+        facet.state_code desc
+    ), portal_filtered_keys as materialized (
+      select portal_latest_facts.*
+      from portal_latest_facts
+      where portal_latest_facts.facet_geography =
+          p_filters ->> 'geography'
+        and (
+          p_cursor_rank is null
+          or 0::numeric < p_cursor_rank::numeric
+          or (
+            0::numeric = p_cursor_rank::numeric
+            and (
+              portal_latest_facts.id > p_cursor_id
+              or (
+                portal_latest_facts.id = p_cursor_id
+                and portal_latest_facts.version < p_cursor_version
+              )
+            )
+          )
+        )
+    ), portal_ordered_keys as materialized (
+      select portal_filtered_keys.*,
+        pg_catalog.row_number() over (
+          order by portal_filtered_keys.id,
+            portal_filtered_keys.version desc
+        ) as page_rank
+      from portal_filtered_keys
+      order by portal_filtered_keys.id,
+        portal_filtered_keys.version desc
+      limit p_limit + 1
+    ), portal_hydrated as materialized (
+      select portal_ordered_keys.*,
+        projection.card
+      from portal_ordered_keys
+      join private.portal_catalog_search_rows_v1 as projection
+        on projection.dataset_kind = 'flow'
+       and projection.id = portal_ordered_keys.id
+       and projection.version = portal_ordered_keys.version
+    )
+    select
+      coalesce(pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object(
+          'key', pg_catalog.jsonb_build_object(
+            'kind', p_kind,
+            'id', portal_hydrated.id::text,
+            'version', portal_hydrated.version
+          ),
+          'accessLevel', portal_hydrated.card -> 'accessLevel',
+          'capabilities', portal_hydrated.card -> 'capabilities',
+          'names', portal_hydrated.card -> 'names',
+          'summary', portal_hydrated.card -> 'summary',
+          'geography', portal_hydrated.card -> 'geography',
+          'referenceYear', portal_hydrated.card -> 'referenceYear',
+          'modifiedAt', pg_catalog.to_char(
+            portal_hydrated.modified_at at time zone 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+          ),
+          'match', pg_catalog.jsonb_build_object(
+            'kind', 'lexical',
+            'score', 0::numeric,
+            'reasonCodes', '[]'::jsonb
+          )
+        ) order by portal_hydrated.page_rank
+      ) filter (where portal_hydrated.page_rank <= p_limit), '[]'::jsonb),
+      case when max(portal_hydrated.page_rank) > p_limit then
+        (pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
+          'v', 1,
+          'fp', p_query_fingerprint,
+          'rankKey', '0',
+          'kind', p_kind,
+          'id', portal_hydrated.id::text,
+          'version', portal_hydrated.version
+        ) order by portal_hydrated.page_rank)
+          filter (where portal_hydrated.page_rank = p_limit)) -> 0
+      else null end
+    into v_items, v_next_cursor_payload
+    from portal_hydrated;
+
+    return pg_catalog.jsonb_build_object(
+      'items', v_items,
+      'nextCursorPayload', v_next_cursor_payload
+    );
+  end if;
+
   with portal_prefilter as materialized (
     select p_kind as dataset_kind,
       candidate.*

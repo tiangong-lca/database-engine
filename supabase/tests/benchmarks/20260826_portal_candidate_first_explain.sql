@@ -180,6 +180,15 @@ select
   and pg_catalog.to_regprocedure(
     'private.catalog_portal_facets_empty_v1_impl(text,text)'
   ) is not null
+  and pg_catalog.to_regprocedure(
+    'private.portal_card_context_v1(text,integer,jsonb)'
+  ) is not null
+  and pg_catalog.to_regprocedure(
+    'private.portal_decorate_card_context_v1(jsonb)'
+  ) is not null
+  and pg_catalog.to_regprocedure(
+    'private.assert_portal_card_context_contract_v1()'
+  ) is not null
   and (
     select routine.prosrc ~ $$v_query = '' and v_filters = '{}'::jsonb$$
       and routine.prosrc ~ 'catalog_portal_facets_empty_v1_impl'
@@ -274,11 +283,88 @@ as $function$
   select pg_catalog.jsonb_build_object(
     'common:dataSetVersion', p_version,
     'common:licenseType', 'Free of charge for all users and uses',
+    'common:referenceToUnchangedRepublication',
+      pg_catalog.jsonb_build_object(
+        '@type', 'source data set',
+        '@refObjectId', '53200000-0000-4000-8000-000000000903',
+        '@version', '01.00.000',
+        'common:shortDescription', pg_temp.portal_bench_localized(
+          'Synthetic benchmark database'
+        )
+      ),
     'common:referenceToOwnershipOfDataSet', pg_catalog.jsonb_build_object(
       '@refObjectId', '53100000-0000-4000-8000-000000009999',
       '@version', '01.00.000',
       'common:shortDescription', pg_temp.portal_bench_localized(
         'Synthetic benchmark provider'
+      )
+    )
+  )
+$function$;
+
+create or replace function pg_temp.portal_bench_unitgroup_payload()
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'unitGroupDataSet', pg_catalog.jsonb_build_object(
+      'unitGroupInformation', pg_catalog.jsonb_build_object(
+        'dataSetInformation', pg_catalog.jsonb_build_object(
+          'common:name', pg_temp.portal_bench_localized(
+            'Synthetic benchmark kilogram unit group'
+          )
+        ),
+        'quantitativeReference', pg_catalog.jsonb_build_object(
+          'referenceToReferenceUnit', '1'
+        )
+      ),
+      'units', pg_catalog.jsonb_build_object(
+        'unit', pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            '@dataSetInternalID', '1',
+            'name', 'kg',
+            'meanValue', '1.0000'
+          )
+        )
+      ),
+      'administrativeInformation', pg_catalog.jsonb_build_object(
+        'publicationAndOwnership',
+        pg_temp.portal_bench_publication('01.00.000')
+      )
+    )
+  )
+$function$;
+
+create or replace function pg_temp.portal_bench_flowproperty_payload()
+returns jsonb
+language sql
+immutable
+set search_path = ''
+as $function$
+  select pg_catalog.jsonb_build_object(
+    'flowPropertyDataSet', pg_catalog.jsonb_build_object(
+      'flowPropertiesInformation', pg_catalog.jsonb_build_object(
+        'dataSetInformation', pg_catalog.jsonb_build_object(
+          'common:name', pg_temp.portal_bench_localized(
+            'Synthetic benchmark mass flow property'
+          )
+        ),
+        'quantitativeReference', pg_catalog.jsonb_build_object(
+          'referenceToReferenceUnitGroup', pg_catalog.jsonb_build_object(
+            '@type', 'unit group data set',
+            '@refObjectId', pg_temp.portal_bench_uuid('unitgroup', 1)::text,
+            '@version', '01.00.000',
+            'common:shortDescription', pg_temp.portal_bench_localized(
+              'Synthetic benchmark kilogram unit group'
+            )
+          )
+        )
+      ),
+      'administrativeInformation', pg_catalog.jsonb_build_object(
+        'publicationAndOwnership',
+        pg_temp.portal_bench_publication('01.00.000')
       )
     )
   )
@@ -313,6 +399,12 @@ as $function$
             )
           )
         ),
+        'quantitativeReference', pg_catalog.jsonb_build_object(
+          'referenceToReferenceFlow', '1',
+          'functionalUnitOrOther', pg_temp.portal_bench_localized(
+            'one kilogram of synthetic benchmark product'
+          )
+        ),
         'time', pg_catalog.jsonb_build_object('common:referenceYear', '2024'),
         'geography', pg_catalog.jsonb_build_object(
           'locationOfOperationSupplyOrProduction',
@@ -323,9 +415,49 @@ as $function$
           pg_temp.portal_bench_localized('synthetic benchmark technology')
         )
       ),
+      'exchanges', pg_catalog.jsonb_build_object(
+        'exchange', pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            '@dataSetInternalID', '1',
+            'exchangeDirection', 'Output',
+            'meanAmount', '1.0000',
+            'referenceToFlowDataSet', pg_catalog.jsonb_build_object(
+              '@type', 'flow data set',
+              '@refObjectId', pg_temp.portal_bench_uuid(
+                'flow', p_ordinal - case
+                  when p_ordinal % 5 = 0 then 1
+                  else 0
+                end
+              )::text,
+              '@version', '01.00.000',
+              'common:shortDescription', pg_temp.portal_bench_localized(
+                'Synthetic benchmark reference product'
+              )
+            )
+          )
+        )
+      ),
       'modellingAndValidation', pg_catalog.jsonb_build_object(
         'LCIMethodAndAllocation', pg_catalog.jsonb_build_object(
           'typeOfDataSet', 'Unit process, single operation'
+        ),
+        'dataSourcesTreatmentAndRepresentativeness',
+          pg_catalog.jsonb_build_object(
+            'referenceToDataSource', pg_catalog.jsonb_build_object(
+              '@type', 'source data set',
+              '@refObjectId', '53200000-0000-4000-8000-000000000904',
+              '@version', '01.00.000',
+              'common:shortDescription', pg_temp.portal_bench_localized(
+                'Synthetic benchmark source'
+              )
+            )
+          ),
+        'validation', pg_catalog.jsonb_build_object(
+          'review', pg_catalog.jsonb_build_array(
+            pg_catalog.jsonb_build_object(
+              '@type', 'Independent external review'
+            )
+          )
         )
       ),
       'administrativeInformation', pg_catalog.jsonb_build_object(
@@ -365,14 +497,137 @@ as $function$
           ),
           'CASNumber', '50-00-0'
         ),
+        'quantitativeReference', pg_catalog.jsonb_build_object(
+          'referenceToReferenceFlowProperty', '1'
+        ),
         'geography', pg_catalog.jsonb_build_object(
           'locationOfSupply', pg_catalog.jsonb_build_object('@location', 'CN')
         )
+      ),
+      'flowProperties', pg_catalog.jsonb_build_object(
+        'flowProperty', pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            '@dataSetInternalID', '1',
+            'meanValue', '1.0000',
+            'referenceToFlowPropertyDataSet',
+              pg_catalog.jsonb_build_object(
+                '@type', 'flow property data set',
+                '@refObjectId', pg_temp.portal_bench_uuid(
+                  'flowproperty', 1
+                )::text,
+                '@version', '01.00.000',
+                'common:shortDescription', pg_temp.portal_bench_localized(
+                  'Synthetic benchmark mass flow property'
+                )
+              )
+          )
+        )
+      ),
+      'modellingAndValidation', pg_catalog.jsonb_build_object(
+        'LCIMethod', pg_catalog.jsonb_build_object(
+          'typeOfDataSet', 'Product flow'
+        ),
+        'dataSourcesTreatmentAndRepresentativeness',
+          pg_catalog.jsonb_build_object(
+            'referenceToDataSource', pg_catalog.jsonb_build_object(
+              '@type', 'source data set',
+              '@refObjectId', '53200000-0000-4000-8000-000000000904',
+              '@version', '01.00.000',
+              'common:shortDescription', pg_temp.portal_bench_localized(
+                'Synthetic benchmark source'
+              )
+            )
+          )
       ),
       'administrativeInformation', pg_catalog.jsonb_build_object(
         'publicationAndOwnership', pg_temp.portal_bench_publication('01.00.000')
       )
     )
+  )
+$function$;
+
+create or replace function pg_temp.portal_bench_context_complete(
+  p_kind text,
+  p_item jsonb
+)
+returns boolean
+language sql
+immutable
+set search_path = ''
+as $function$
+  select coalesce(
+    case p_kind
+      when 'process' then
+        case
+          when pg_catalog.jsonb_typeof(p_item -> 'context') <> 'object'
+            then false
+          else
+            (select count(*) = 5
+             from pg_catalog.jsonb_object_keys(p_item -> 'context'))
+            and p_item #>> '{context,reference,kind}' = 'reference_product'
+            and case pg_catalog.jsonb_typeof(
+              p_item #> '{context,reference,name}'
+            ) when 'array' then pg_catalog.jsonb_array_length(
+              p_item #> '{context,reference,name}'
+            ) > 0 else false end
+            and pg_catalog.jsonb_typeof(
+              p_item #> '{context,functionalUnit}'
+            ) = 'object'
+            and pg_catalog.jsonb_typeof(
+              p_item #> '{context,functionalUnit,amount}'
+            ) = 'string'
+            and pg_catalog.jsonb_typeof(
+              p_item #> '{context,functionalUnit,unit}'
+            ) = 'string'
+            and case pg_catalog.jsonb_typeof(
+              p_item #> '{context,technology}'
+            ) when 'array' then pg_catalog.jsonb_array_length(
+              p_item #> '{context,technology}'
+            ) > 0 else false end
+            and p_item #>> '{context,source,databaseId}' =
+              '53200000-0000-4000-8000-000000000903'
+            and p_item #>> '{context,source,databaseVersion}' = '01.00.000'
+            and p_item #>> '{context,source,sourceRecordId}' =
+              '53200000-0000-4000-8000-000000000904'
+            and case pg_catalog.jsonb_typeof(
+              p_item #> '{context,source,providerName}'
+            ) when 'array' then pg_catalog.jsonb_array_length(
+              p_item #> '{context,source,providerName}'
+            ) > 0 else false end
+            and p_item #>> '{context,quality,reviewStatus}' =
+              'Independent external review'
+        end
+      when 'flow' then
+        case
+          when pg_catalog.jsonb_typeof(p_item -> 'context') <> 'object'
+            then false
+          else
+            (select count(*) = 5
+             from pg_catalog.jsonb_object_keys(p_item -> 'context'))
+            and p_item #>> '{context,reference,kind}' =
+              'reference_flow_property'
+            and case pg_catalog.jsonb_typeof(
+              p_item #> '{context,reference,name}'
+            ) when 'array' then pg_catalog.jsonb_array_length(
+              p_item #> '{context,reference,name}'
+            ) > 0 else false end
+            and p_item #> '{context,functionalUnit}' = 'null'::jsonb
+            and p_item #> '{context,technology}' = '[]'::jsonb
+            and p_item #>> '{context,source,databaseId}' =
+              '53200000-0000-4000-8000-000000000903'
+            and p_item #>> '{context,source,databaseVersion}' = '01.00.000'
+            and p_item #>> '{context,source,sourceRecordId}' =
+              '53200000-0000-4000-8000-000000000904'
+            and case pg_catalog.jsonb_typeof(
+              p_item #> '{context,source,providerName}'
+            ) when 'array' then pg_catalog.jsonb_array_length(
+              p_item #> '{context,source,providerName}'
+            ) > 0 else false end
+            and p_item #> '{context,quality,reviewStatus}' = 'null'::jsonb
+        end
+      else false
+    end,
+    false
   )
 $function$;
 
@@ -655,6 +910,51 @@ join summary as projection on projection.mode = pairs.projection_mode
 join summary as baseline on baseline.mode = pairs.baseline_mode
 order by pairs.projection_mode;
 
+-- One exact public FlowProperty/UnitGroup support chain is shared by every
+-- synthetic Flow. Process reference Exchanges point to their corresponding
+-- exact Flow identity, so a 50-row Process page performs the complete public
+-- reference/functional-unit path without adding any benchmark-only index or
+-- writer hook.
+alter table public.unitgroups disable trigger user;
+alter table public.flowproperties disable trigger user;
+
+insert into public.unitgroups (
+  id, version, json, json_ordered, user_id, state_code,
+  rule_verification, modified_at
+)
+select
+  pg_temp.portal_bench_uuid('unitgroup', 1),
+  '01.00.000',
+  payload.value,
+  payload.value::json,
+  '53100000-0000-4000-8000-000000000001'::uuid,
+  100,
+  true,
+  '2026-08-26 00:00:00+00'::timestamptz
+from (
+  select pg_temp.portal_bench_unitgroup_payload() as value
+) as payload;
+
+insert into public.flowproperties (
+  id, version, json, json_ordered, user_id, state_code,
+  rule_verification, modified_at
+)
+select
+  pg_temp.portal_bench_uuid('flowproperty', 1),
+  '01.00.000',
+  payload.value,
+  payload.value::json,
+  '53100000-0000-4000-8000-000000000001'::uuid,
+  100,
+  true,
+  '2026-08-26 00:00:01+00'::timestamptz
+from (
+  select pg_temp.portal_bench_flowproperty_payload() as value
+) as payload;
+
+alter table public.unitgroups enable trigger user;
+alter table public.flowproperties enable trigger user;
+
 insert into public.processes (
   id,
   version,
@@ -826,6 +1126,8 @@ alter table public.flows enable trigger user;
 
 analyze public.processes;
 analyze public.flows;
+analyze public.flowproperties;
+analyze public.unitgroups;
 analyze private.portal_catalog_search_rows_v1;
 analyze private.portal_catalog_facet_rows_v1;
 
@@ -1243,7 +1545,7 @@ grant execute on function pg_temp.portal_raw_ann_count(
 \o :explain_output
 
 grant execute on function pg_temp.portal_bench_vector(integer)
-  to portal_public_executor, api_internal_executor;
+  to portal_public_executor, api_internal_executor, anon;
 
 grant portal_public_executor to postgres;
 set local role portal_public_executor;
@@ -1661,6 +1963,104 @@ select pg_temp.capture_portal_benchmark_plan(
   $query$
 );
 
+\qecho profile=process-search50-evidence-complete-wrapper
+explain (analyze, buffers, settings, wal, summary, format json)
+select api.portal_search_processes_v1(
+  'portalbenchcommon electricity', '{}'::jsonb, 'relevance', null, 50
+);
+select pg_temp.capture_portal_benchmark_plan(
+  'process_search50_context_wrapper',
+  $query$
+    select api.portal_search_processes_v1(
+      'portalbenchcommon electricity',
+      '{}'::jsonb,
+      'relevance',
+      null,
+      50
+    )
+  $query$
+);
+
+\qecho profile=flow-search50-evidence-complete-wrapper
+explain (analyze, buffers, settings, wal, summary, format json)
+select api.portal_search_flows_v1(
+  'portalbenchcommon electricity', '{}'::jsonb, 'relevance', null, 50
+);
+select pg_temp.capture_portal_benchmark_plan(
+  'flow_search50_context_wrapper',
+  $query$
+    select api.portal_search_flows_v1(
+      'portalbenchcommon electricity',
+      '{}'::jsonb,
+      'relevance',
+      null,
+      50
+    )
+  $query$
+);
+
+\qecho profile=flow-filtered-search50-evidence-complete-wrapper
+explain (analyze, buffers, settings, wal, summary, format json)
+select api.portal_search_flows_v1(
+  '', '{"geography":"cn"}'::jsonb, 'relevance', null, 50
+);
+select pg_temp.capture_portal_benchmark_plan(
+  'flow_filtered_search50_context_wrapper',
+  $query$
+    select api.portal_search_flows_v1(
+      '',
+      '{"geography":"cn"}'::jsonb,
+      'relevance',
+      null,
+      50
+    )
+  $query$
+);
+
+\qecho profile=process-hybrid20-evidence-complete-wrapper
+explain (analyze, buffers, settings, wal, summary, format json)
+select api.portal_hybrid_search_v1(
+  'process',
+  array['portalbenchcommon electricity'],
+  pg_temp.portal_bench_vector(1)::text,
+  '{}'::jsonb,
+  20
+);
+select pg_temp.capture_portal_benchmark_plan(
+  'process_hybrid20_context_wrapper',
+  $query$
+    select api.portal_hybrid_search_v1(
+      'process',
+      array['portalbenchcommon electricity'],
+      pg_temp.portal_bench_vector(1)::text,
+      '{}'::jsonb,
+      20
+    )
+  $query$
+);
+
+\qecho profile=flow-hybrid20-evidence-complete-wrapper
+explain (analyze, buffers, settings, wal, summary, format json)
+select api.portal_hybrid_search_v1(
+  'flow',
+  array['portalbenchcommon electricity'],
+  pg_temp.portal_bench_vector(1)::text,
+  '{}'::jsonb,
+  20
+);
+select pg_temp.capture_portal_benchmark_plan(
+  'flow_hybrid20_context_wrapper',
+  $query$
+    select api.portal_hybrid_search_v1(
+      'flow',
+      array['portalbenchcommon electricity'],
+      pg_temp.portal_bench_vector(1)::text,
+      '{}'::jsonb,
+      20
+    )
+  $query$
+);
+
 reset role;
 revoke anon from postgres;
 
@@ -1719,6 +2119,20 @@ where (
       <> :'draft_vector_rows'::integer
     or (select count(*) from private.portal_catalog_facet_rows_v1)
       <> (select count(*) from private.portal_catalog_search_rows_v1)
+    or (
+      select count(*)
+      from public.flowproperties
+      where id = pg_temp.portal_bench_uuid('flowproperty', 1)
+        and version = '01.00.000'
+        and state_code = 100
+    ) <> 1
+    or (
+      select count(*)
+      from public.unitgroups
+      where id = pg_temp.portal_bench_uuid('unitgroup', 1)
+        and version = '01.00.000'
+        and state_code = 100
+    ) <> 1
   );
 
 insert into pg_temp.portal_benchmark_failures (
@@ -1812,7 +2226,7 @@ where (:'process_rows'::integer >= 10000
     and :'flow_rows'::integer >= 100000)
   and (
     (select count(*) from pg_temp.portal_benchmark_plans) <> case
-      when :'benchmark_semantic_plan_profile'::boolean then 13 else 9
+      when :'benchmark_semantic_plan_profile'::boolean then 18 else 14
     end
    or (
      select count(*)
@@ -1960,6 +2374,57 @@ where (:'process_rows'::integer >= 10000
      )
    )
   );
+
+insert into pg_temp.portal_benchmark_failures (
+  label, sqlstate, message, elapsed_ms
+)
+with wrapper_plans as (
+  select label,
+    plan_text,
+    coalesce(
+      (pg_catalog.regexp_match(plan_text, 'shared hit=([0-9]+)'))[1]::bigint,
+      0
+    ) as hit_blocks,
+    coalesce(
+      (pg_catalog.regexp_match(
+        plan_text,
+        'shared[^\n]*read=([0-9]+)'
+      ))[1]::bigint,
+      0
+    ) as read_blocks,
+    coalesce((
+      pg_catalog.regexp_match(
+        plan_text,
+        'Execution Time: ([0-9]+[.][0-9]+|[0-9]+) ms'
+      )
+    )[1]::numeric, 999999) as execution_ms
+  from pg_temp.portal_benchmark_plans
+  where label in (
+    'process_search50_context_wrapper',
+    'flow_search50_context_wrapper',
+    'flow_filtered_search50_context_wrapper',
+    'process_hybrid20_context_wrapper',
+    'flow_hybrid20_context_wrapper'
+  )
+)
+select
+  'context_wrapper_plan_guard',
+  'P0001',
+  'evidence-complete Search50/Hybrid20 wrapper exceeded time or shared-buffer bounds',
+  coalesce((select max(execution_ms) from wrapper_plans), 0)::double precision
+where (select count(*) from wrapper_plans) <> 5
+   or exists (
+     select 1
+     from wrapper_plans
+     where plan_text !~ 'Buffers: shared'
+        or plan_text !~ 'Execution Time: [0-9]'
+        or hit_blocks + read_blocks > 750000
+        or read_blocks > 250000
+        or execution_ms > case
+          when label like '%search50%' then 2000
+          else 6000
+        end
+   );
 
 select label,
   plan_text ~ 'portal_catalog_search_process_document_v1_pgroonga'
@@ -2195,7 +2660,20 @@ begin
     if v_result is null
        or v_result ->> 'schemaVersion' <> 'portal.public-search-page.v1'
        or pg_catalog.jsonb_typeof(v_result -> 'items') <> 'array'
-       or pg_catalog.jsonb_array_length(v_result -> 'items') > 50 then
+       or pg_catalog.jsonb_array_length(v_result -> 'items') > 50
+       or exists (
+         select 1
+         from pg_catalog.jsonb_array_elements(v_result -> 'items') as item(value)
+         where not pg_temp.portal_bench_context_complete(p_kind, item.value)
+       )
+       or (
+         p_label in (
+           'process_context_search_50',
+           'flow_context_search_50',
+           'flow_filtered_broad'
+         )
+         and pg_catalog.jsonb_array_length(v_result -> 'items') <> 50
+       ) then
       raise exception 'invalid search result';
     end if;
     insert into pg_temp.portal_benchmark_timings values (
@@ -2268,7 +2746,12 @@ begin
     if v_result is null
        or v_result ->> 'schemaVersion' <> 'portal.public-search-page.v1'
        or pg_catalog.jsonb_typeof(v_result -> 'items') <> 'array'
-       or pg_catalog.jsonb_array_length(v_result -> 'items') > 50 then
+       or pg_catalog.jsonb_array_length(v_result -> 'items') > 50
+       or exists (
+         select 1
+         from pg_catalog.jsonb_array_elements(v_result -> 'items') as item(value)
+         where not pg_temp.portal_bench_context_complete(p_kind, item.value)
+       ) then
       raise exception 'invalid search second page';
     end if;
     insert into pg_temp.portal_benchmark_timings values (
@@ -2362,6 +2845,15 @@ begin
           <> 'portal.public-hybrid-candidate-page.v1'
        or pg_catalog.jsonb_typeof(v_result -> 'items') <> 'array'
        or pg_catalog.jsonb_array_length(v_result -> 'items') > 20
+       or exists (
+         select 1
+         from pg_catalog.jsonb_array_elements(v_result -> 'items') as item(value)
+         where not pg_temp.portal_bench_context_complete(p_kind, item.value)
+       )
+       or (
+         p_label in ('process_context_hybrid_20', 'flow_context_hybrid_20')
+         and pg_catalog.jsonb_array_length(v_result -> 'items') <> 20
+       )
        or pg_catalog.octet_length(
          pg_catalog.convert_to(v_result::text, 'UTF8')
        ) > 524288 then
@@ -2416,6 +2908,11 @@ begin
           <> 'portal.public-hybrid-candidate-page.v1'
        or pg_catalog.jsonb_typeof(v_result -> 'items') <> 'array'
        or pg_catalog.jsonb_array_length(v_result -> 'items') > 20
+       or exists (
+         select 1
+         from pg_catalog.jsonb_array_elements(v_result -> 'items') as item(value)
+         where not pg_temp.portal_bench_context_complete(p_kind, item.value)
+       )
        or pg_catalog.octet_length(
          pg_catalog.convert_to(v_result::text, 'UTF8')
        ) > 524288 then
@@ -2462,6 +2959,11 @@ begin
       'process_common', 'process', 'portalbenchcommon electricity'
     );
     perform pg_temp.record_portal_search_timing(
+      'process_context_search_50',
+      'process',
+      'portalbenchcommon electricity'
+    );
+    perform pg_temp.record_portal_search_timing(
       'process_no_hit', 'process', 'portalbench-no-hit-531'
     );
     perform pg_temp.record_portal_search_timing(
@@ -2477,6 +2979,11 @@ begin
     );
     perform pg_temp.record_portal_search_timing(
       'flow_common', 'flow', 'portalbenchcommon electricity'
+    );
+    perform pg_temp.record_portal_search_timing(
+      'flow_context_search_50',
+      'flow',
+      'portalbenchcommon electricity'
     );
     perform pg_temp.record_portal_search_timing(
       'flow_no_hit', 'flow', 'portalbench-no-hit-531'
@@ -2540,7 +3047,19 @@ begin
       v_query_vector
     );
     perform pg_temp.record_portal_hybrid_timing(
+      'process_context_hybrid_20',
+      'process',
+      'portalbenchcommon electricity',
+      v_query_vector
+    );
+    perform pg_temp.record_portal_hybrid_timing(
       'flow_hybrid_fused',
+      'flow',
+      'portalbenchcommon electricity',
+      v_query_vector
+    );
+    perform pg_temp.record_portal_hybrid_timing(
+      'flow_context_hybrid_20',
       'flow',
       'portalbenchcommon electricity',
       v_query_vector
@@ -2692,7 +3211,8 @@ grant execute on function pg_temp.run_portal_candidate_timing(integer)
   to anon;
 grant execute on function pg_temp.portal_bench_uuid(text, integer),
   pg_temp.portal_bench_vector(integer),
-  pg_temp.portal_bench_far_vector()
+  pg_temp.portal_bench_far_vector(),
+  pg_temp.portal_bench_context_complete(text, jsonb)
   to anon;
 set local role anon;
 select pg_temp.run_portal_candidate_timing(1);
@@ -3198,14 +3718,17 @@ order by label;
 with expected(label) as (
   values
     ('process_exact'), ('process_common'), ('process_no_hit'),
+    ('process_context_search_50'),
     ('process_identifier'), ('process_empty'),
     ('flow_exact'), ('flow_common'), ('flow_no_hit'),
+    ('flow_context_search_50'),
     ('flow_identifier'), ('flow_empty'),
     ('process_filtered_broad'), ('process_filtered_selective'),
     ('flow_filtered_broad'), ('flow_filtered_selective'),
     ('process_name_asc_empty'), ('flow_name_asc_empty'),
     ('flow_name_asc_page2'), ('flow_filtered_relevance_page2'),
     ('process_hybrid_fused'), ('flow_hybrid_fused'),
+    ('process_context_hybrid_20'), ('flow_context_hybrid_20'),
     ('process_hybrid_semantic_only'), ('flow_hybrid_semantic_only'),
     ('process_hybrid_lexical_only'), ('flow_hybrid_lexical_only'),
     ('process_hybrid_zero_boundary'), ('flow_hybrid_zero_boundary'),
@@ -3311,6 +3834,8 @@ rollback;
 -- statistics after the rollback removes every synthetic row.
 analyze public.processes;
 analyze public.flows;
+analyze public.flowproperties;
+analyze public.unitgroups;
 analyze private.portal_catalog_search_rows_v1;
 analyze private.portal_catalog_facet_rows_v1;
 
@@ -3323,6 +3848,6 @@ analyze private.portal_catalog_facet_rows_v1;
     \echo 'SQL_STATUS=DIAGNOSTIC_PASS'
   \endif
 \else
-  \echo 'ERROR: Portal projection benchmark failed its recall/plan/fence/writer or Search/Facet 2s and Hybrid 6s budgets'
+  \echo 'ERROR: Portal projection benchmark failed its context/recall/plan/fence/writer or Search/Facet 2s and Hybrid 6s budgets'
   \echo 'SQL_STATUS=FAIL'
 \endif

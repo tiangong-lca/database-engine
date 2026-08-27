@@ -196,6 +196,9 @@ def main() -> int:
         'Content-Profile: api',
         'portal_hybrid_search_v1',
         'portal.public-hybrid-candidate-page.v1.schema.json',
+        "sanitized_error_code=",
+        'test("^(PGRST[0-9]{3}|[0-9A-Z]{5})$")',
+        "with sanitized code $sanitized_error_code",
         'assert_opaque_error 404 PGRST202',
         'assert_opaque_error 406 PGRST106',
         'p_actor_id p_team_id p_state_codes p_data_source',
@@ -269,6 +272,16 @@ def main() -> int:
             failures.append(
                 "anonymous Preview Hybrid probe must not contain "
                 f"{forbidden_probe_credential}"
+            )
+    for forbidden_probe_output in (
+        'cat "$response_file"',
+        'echo "$(<"$response_file")"',
+        'echo "$(cat "$response_file")"',
+    ):
+        if forbidden_probe_output in preview_probe:
+            failures.append(
+                "anonymous Preview Hybrid diagnostics must not print the raw "
+                f"response body via {forbidden_probe_output}"
             )
     if preview_key_step.count(
         '"https://api.supabase.com/v1/projects/$PREVIEW_PROJECT_REF/api-keys"'

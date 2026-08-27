@@ -45,6 +45,7 @@
         "summary",
         "geography",
         "referenceYear",
+        "context",
         "modifiedAt",
         "match"
       ],
@@ -69,6 +70,9 @@
         },
         "referenceYear": {
           "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableYear"
+        },
+        "context": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicCardContext"
         },
         "modifiedAt": {
           "$ref": "./portal.common-types.v1.schema.json#/$defs/DateTime"

@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 70c2294ba894df3982939dec6b5e549e108f9630
-lastReviewedNote: "已在准确 PR Preview 门最小化 branch/key 权限并把公共 key 选择与匿名传输隔离后复核；持久化 Dev 与生产的修改边界不变。"
+lastReviewedCommit: 2e128536bf4665afd911a1b844a0c0727eccb428
+lastReviewedNote: "已为 Issue #532 的生成类型与 Preview 合同门复核；PR、持久化 Dev、生产和跨仓修改边界均保持不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -174,6 +174,7 @@ migration 的提交，因此必须使用该参数；已经存在于远端 histor
 - 解析出的 ref 必须同时不同于 main parent 与持久化 Dev；job 不执行 `supabase link`、`db push`、Functions 命令、广义 `config push`、seed 或 migration。
 - Management API 修改准确为对该 disposable ref 的一次 PATCH，且只含 checked-in PostgREST schema、search path 与 row limit；传输探测前必须再通过独立 GET 回读三项。
 - 独立 key step 只做一次不带 `reveal` 的 Management API GET，并使用原始 `disabled` 字段；只接受非空、形态正确且启用的 publishable key，缺少时才回退到形态正确且启用的 legacy `anon`。选择出的公共 key 先 mask/export，随后清除 PAT 与原始 JSON；后续 REST step 不含 PAT/service credential，只带 `apikey`，绝不带 `Authorization` 或 `Cookie`。
+- 匿名显式 `api` probe 失败时，job 只能输出 HTTP status 与通过严格响应形态校验的 PostgREST/SQLSTATE code；不得输出原始 response body、`message`、`details`、`hint`、请求 payload 或公共 key。形态异常时统一记录为 `unclassified`。
 
 ### Issue #474 一次性持久化 Dev 账本修复
 
