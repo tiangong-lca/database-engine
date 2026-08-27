@@ -4112,7 +4112,7 @@ insert into public.flows (
   state_code, rule_verification, modified_at, extracted_md, search_text
 )
 select fixture.id,
-  '01.00.000',
+  fixture.version,
   fixture.payload,
   fixture.payload::json,
   '52700000-0000-4000-8000-000000000001',
@@ -4125,24 +4125,40 @@ select fixture.id,
   fixture.name,
   array[fixture.name]
 from (
-  select series.ordinal,
-    ('52730000-0000-4000-8000-' ||
-      pg_catalog.lpad(series.ordinal::text, 12, '0'))::uuid as id,
-    'Geography Fast Flow ' || series.ordinal::text as name,
+  select source.ordinal,
+    source.id,
+    source.version,
+    source.name,
     pg_catalog.jsonb_set(
       pg_temp.portal_flow_payload(
-        'Geography Fast Flow ' || series.ordinal::text,
-        '01.00.000',
+        source.name,
+        source.version,
         '52700000-0000-4000-8000-000000000301',
         '01.00.000',
         'Free of charge for all users and uses',
         'none'
       ),
       '{flowDataSet,flowInformation,geography}',
-      '{"locationOfSupply":{"@location":"CN"}}'::jsonb,
+      pg_catalog.jsonb_build_object(
+        'locationOfSupply',
+        pg_catalog.jsonb_build_object('@location', source.location)
+      ),
       true
     ) as payload
-  from pg_catalog.generate_series(1, 2) as series(ordinal)
+  from (values
+    (1, '52730000-0000-4000-8000-000000000000'::uuid,
+      '01.00.000', 'Geography Former Match', 'CN'),
+    (2, '52730000-0000-4000-8000-000000000000'::uuid,
+      '01.00.001', 'Geography Latest Excluded', 'DE'),
+    (3, '52730000-0000-4000-8000-000000000001'::uuid,
+      '01.00.000', 'Geography Fast Flow 1', 'CN'),
+    (4, '52730000-0000-4000-8000-000000000002'::uuid,
+      '01.00.000', 'Geography Fast Flow 2', 'CN'),
+    (5, '52730000-0000-4000-8000-000000000003'::uuid,
+      '01.00.000', 'Geography Former Nonmatch', 'DE'),
+    (6, '52730000-0000-4000-8000-000000000003'::uuid,
+      '01.00.001', 'Geography Latest Match', 'CN')
+  ) as source(ordinal, id, version, name, location)
 ) as fixture;
 
 set local role anon;
@@ -4165,6 +4181,18 @@ select
   )
 from portal_test_results as first_page
 where first_page.label = 'flow_geography_fast_page_1';
+insert into portal_test_results (label, payload)
+select
+  'flow_geography_fast_page_3',
+  api.portal_search_flows_v1(
+    '',
+    '{"geography":"cn"}'::jsonb,
+    'relevance',
+    second_page.payload ->> 'nextCursor',
+    1
+  )
+from portal_test_results as second_page
+where second_page.label = 'flow_geography_fast_page_2';
 reset role;
 
 select extensions.ok(
@@ -4182,8 +4210,9 @@ select extensions.ok(
         facet.state_code desc
     ), expected as (
       select pg_catalog.array_agg(
-        bounded.id::text order by bounded.id, bounded.version desc
-      ) as ids
+        bounded.id::text || '@' || bounded.version
+        order by bounded.id, bounded.version desc
+      ) as keys
       from (
         select latest.id,
           latest.version
@@ -4191,12 +4220,14 @@ select extensions.ok(
         where latest.facet_geography = 'cn'
         order by latest.id,
           latest.version desc
-        limit 2
+        limit 3
       ) as bounded
     ), actual as (
       select pg_catalog.array_agg(
-        result.payload #>> '{items,0,key,id}' order by result.label
-      ) as ids,
+        (result.payload #>> '{items,0,key,id}') || '@' ||
+          (result.payload #>> '{items,0,key,version}')
+        order by result.label
+      ) as keys,
       pg_catalog.bool_and(
         result.payload #>> '{items,0,geography,code}' = 'CN'
         and result.payload #>> '{items,0,match,kind}' = 'lexical'
@@ -4205,15 +4236,19 @@ select extensions.ok(
       from portal_test_results as result
       where result.label in (
         'flow_geography_fast_page_1',
-        'flow_geography_fast_page_2'
+        'flow_geography_fast_page_2',
+        'flow_geography_fast_page_3'
       )
     )
-    select actual.ids = expected.ids
+    select actual.keys = expected.keys
       and actual.shape_ok
       and (
-        select payload ->> 'nextCursor' is not null
+        select pg_catalog.bool_and(payload ->> 'nextCursor' is not null)
         from portal_test_results
-        where label = 'flow_geography_fast_page_1'
+        where label in (
+          'flow_geography_fast_page_1',
+          'flow_geography_fast_page_2'
+        )
       )
     from expected
     cross join actual
