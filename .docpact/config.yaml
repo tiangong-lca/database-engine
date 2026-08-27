@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-27"
-lastReviewedCommit: "d7d9ae41cefbf0a6b719b079add3a74f3ddcf294"
+lastReviewedCommit: "e4693674f56a4bea65a0507e0832a360effbc66c"
 lastReviewedNote: "Reviewed for the seven-migration narrow Portal facet sub-rollout, recovery coverage, and exact-head validation evidence."
 
 # Keep deterministic governance facts here.
