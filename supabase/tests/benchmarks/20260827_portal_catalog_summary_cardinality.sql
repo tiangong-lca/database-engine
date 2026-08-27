@@ -359,7 +359,8 @@ begin
   )
   where dataset_kind = 'flow'
     and pg_catalog.jsonb_typeof(card -> 'casNumber') = 'string'
-    and card ->> 'casNumber' ~ '^[0-9]{2,7}-[0-9]{2}-[0-9]$';
+    and card ->> 'casNumber' ~ '^[0-9]{2,7}-[0-9]{2}-[0-9]$'
+    and pg_catalog.length(card ->> 'casNumber') between 7 and 12;
 
   insert into pg_temp.portal_summary_index_build (
     profile,
