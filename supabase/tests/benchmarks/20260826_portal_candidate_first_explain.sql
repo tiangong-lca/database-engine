@@ -180,6 +180,15 @@ select
   and pg_catalog.to_regprocedure(
     'private.catalog_portal_facets_empty_v1_impl(text,text)'
   ) is not null
+  and pg_catalog.to_regprocedure(
+    'private.portal_card_context_v1(text,integer,jsonb)'
+  ) is not null
+  and pg_catalog.to_regprocedure(
+    'private.portal_decorate_card_context_v1(jsonb)'
+  ) is not null
+  and pg_catalog.to_regprocedure(
+    'private.assert_portal_card_context_contract_v1()'
+  ) is not null
   and (
     select routine.prosrc ~ $$v_query = '' and v_filters = '{}'::jsonb$$
       and routine.prosrc ~ 'catalog_portal_facets_empty_v1_impl'
@@ -2195,7 +2204,18 @@ begin
     if v_result is null
        or v_result ->> 'schemaVersion' <> 'portal.public-search-page.v1'
        or pg_catalog.jsonb_typeof(v_result -> 'items') <> 'array'
-       or pg_catalog.jsonb_array_length(v_result -> 'items') > 50 then
+       or pg_catalog.jsonb_array_length(v_result -> 'items') > 50
+       or exists (
+         select 1
+         from pg_catalog.jsonb_array_elements(v_result -> 'items') as item(value)
+         where pg_catalog.jsonb_typeof(item.value -> 'context') <> 'object'
+            or (select count(*) from pg_catalog.jsonb_object_keys(
+                  item.value -> 'context'
+                )) <> 5
+            or not (item.value -> 'context' ?& array[
+              'reference', 'functionalUnit', 'technology', 'source', 'quality'
+            ])
+       ) then
       raise exception 'invalid search result';
     end if;
     insert into pg_temp.portal_benchmark_timings values (
@@ -2362,6 +2382,17 @@ begin
           <> 'portal.public-hybrid-candidate-page.v1'
        or pg_catalog.jsonb_typeof(v_result -> 'items') <> 'array'
        or pg_catalog.jsonb_array_length(v_result -> 'items') > 20
+       or exists (
+         select 1
+         from pg_catalog.jsonb_array_elements(v_result -> 'items') as item(value)
+         where pg_catalog.jsonb_typeof(item.value -> 'context') <> 'object'
+            or (select count(*) from pg_catalog.jsonb_object_keys(
+                  item.value -> 'context'
+                )) <> 5
+            or not (item.value -> 'context' ?& array[
+              'reference', 'functionalUnit', 'technology', 'source', 'quality'
+            ])
+       )
        or pg_catalog.octet_length(
          pg_catalog.convert_to(v_result::text, 'UTF8')
        ) > 524288 then
@@ -2416,6 +2447,17 @@ begin
           <> 'portal.public-hybrid-candidate-page.v1'
        or pg_catalog.jsonb_typeof(v_result -> 'items') <> 'array'
        or pg_catalog.jsonb_array_length(v_result -> 'items') > 20
+       or exists (
+         select 1
+         from pg_catalog.jsonb_array_elements(v_result -> 'items') as item(value)
+         where pg_catalog.jsonb_typeof(item.value -> 'context') <> 'object'
+            or (select count(*) from pg_catalog.jsonb_object_keys(
+                  item.value -> 'context'
+                )) <> 5
+            or not (item.value -> 'context' ?& array[
+              'reference', 'functionalUnit', 'technology', 'source', 'quality'
+            ])
+       )
        or pg_catalog.octet_length(
          pg_catalog.convert_to(v_result::text, 'UTF8')
        ) > 524288 then

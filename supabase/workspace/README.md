@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
 lastReviewedCommit: 27dadfa0f5529e16043ccebce7e615a228b136cc
-lastReviewedNote: "Reviewed after populated-upgrade proof; the deterministic 266-migration snapshot and public/api type ownership are unchanged."
+lastReviewedNote: "Reviewed for Issue #532; the deterministic 267-migration snapshot and public/api type ownership are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
