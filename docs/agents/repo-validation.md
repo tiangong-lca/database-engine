@@ -32,7 +32,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: 7e093de
+lastReviewedCommit: a9c4f79
 lastReviewedNote: "Reviewed for Issue #543: 276-migration reset, summary-selected classification and Flow CAS execution, unchanged Search budgets, bounded index/writer evidence, and anonymous Preview transport gates."
 related:
   - ../../AGENTS.md

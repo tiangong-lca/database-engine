@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: 7e093de
+lastReviewedCommit: a9c4f79
 lastReviewedNote: "Reviewed for Issue #543 non-broad classification examples plus an exact partial-index Flow CAS branch; projection semantics, ordinary PGroonga Search, and writer ownership remain unchanged."
 related:
   - ../../AGENTS.md

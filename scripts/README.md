@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: 7e093de
+lastReviewedCommit: a9c4f79
 lastReviewedNote: "Reviewed for Issue #543: 276-file recovery/benchmark runners, executable UUID/CAS/classification example gates, bounded Flow CAS index evidence, fixed sitemap shards, and 13-module Portal generation are current."
 related:
   - ../AGENTS.md

@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-28"
-lastReviewedCommit: "7e093de"
+lastReviewedCommit: "a9c4f79"
 lastReviewedNote: "Reviewed for Issue #543: 276 migrations, executable Portal UUID/CAS/classification examples, bounded Flow CAS index evidence, 13 generated modules, and retained sitemap recovery."
 
 # Keep deterministic governance facts here.

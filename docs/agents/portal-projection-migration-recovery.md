@@ -1,6 +1,6 @@
 ---
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: 7e093de
+lastReviewedCommit: a9c4f79
 lastReviewedNote: "Reviewed for Issue #543: the 276-file tree retains exact-version sitemap recovery and adds bounded classification plus exact Flow CAS example repairs without changing projection recovery ownership."
 title: Portal Projection Migration Recovery
 docType: runbook
