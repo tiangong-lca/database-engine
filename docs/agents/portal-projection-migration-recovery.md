@@ -1,7 +1,7 @@
 ---
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: ac64c51
-lastReviewedNote: "Reviewed after combining Issue #532 with the three Issue #533 summary migrations: the 271-file tree, concurrent-index recovery, runtime manifests, and Issue #531 recovery boundary are explicit."
+lastReviewedCommit: 712558e
+lastReviewedNote: "Reviewed for Issue #539: the 273-file tree, transactional latest-only rollout/recovery, runtime capacity guard, and bounded sync writer extension are explicit."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -14,6 +14,7 @@ whenToUse:
   - when a concurrent Portal projection index is INVALID or exists without migration history
   - when validating retry safety for the Portal projection rollout
   - when an Issue 533 Portal catalog-summary eligibility index stops before its guard or façade migration completes
+  - when an Issue 539 Portal sitemap latest projection stops before its public façade migration completes
 whenToUpdate:
   - when the Portal projection migration sequence or recovery test changes
 checkPaths:
@@ -40,10 +41,14 @@ checkPaths:
   - supabase/migrations/20260827020006_portal_facet_projection_cutover.sql
   - supabase/migrations/20260827021441_portal_card_context_decorator.sql
   - supabase/migrations/20260827134100_optimize_portal_flow_geography_search.sql
+  - supabase/migrations/20260827134101_portal_sitemap_latest_projection.sql
+  - supabase/migrations/20260827134102_portal_sitemap_shard_contract.sql
   - supabase/migrations/20260827050000_portal_catalog_summary_eligibility_index.sql
   - supabase/migrations/20260827050001_portal_catalog_summary_eligibility_guard.sql
   - supabase/migrations/20260827050002_portal_catalog_summary_v1.sql
   - supabase/tests/benchmarks/20260827_portal_catalog_summary_cardinality.sql
+  - supabase/tests/20260827_portal_sitemap_shards_v1.sql
+  - supabase/tests/benchmarks/20260827_portal_sitemap_shards_cardinality.sql
 related:
   - ../../AGENTS.md
   - repo-validation.md
@@ -53,8 +58,9 @@ related:
 
 # Portal Projection Migration Recovery
 
-This runbook covers only the additive Issue 531 Portal projection rollout and
-the narrow Issue 533 catalog-summary eligibility index layered on top of it. It
+This runbook covers only the additive Issue 531 Portal projection rollout, the
+narrow Issue 533 catalog-summary eligibility index, and the Issue 539 sitemap
+latest-only projection layered on top of the same synchronized facet projection. It
 does not authorize production mutation, migration-history edits, or deletion
 of an applied migration. Use the repository's normal tracked-delivery and
 Supabase branch controls before any hosted action.
@@ -106,13 +112,25 @@ The rollout has six observable boundaries:
    its two ACL-closed validation helpers. Counts and latest timestamp continue
    reading the narrow facet projection; no existing card/facet manifest,
    source trigger, table, or index changes.
+8. `20260827134101` transactionally creates an empty latest-only table and its
+   `(shard_no,dataset_kind,id)` covering B-tree, installs one ACL-closed facet
+   sync trigger, performs one set-based backfill, and proves exact equality
+   with the current latest-visible facet set. The physical smallint bucket
+   avoids non-leakproof expression filtering through forced RLS. Inserts and
+   updates use one direct latest upsert; only deletion of a current version
+   looks up its visible predecessor. `20260827134102` then verifies initial
+   capacity and exposes a constant 64-row opaque manifest plus one bounded
+   shard read with a 4,096-identity hard cap. The capacity guard is read-only:
+   it never rejects, delays, or changes source/facet/latest writes, and the
+   retained `portal_sitemap_entries_v1` function remains byte-identical.
 
 The card expand/reconcile/cutovers and all facet expand/backfill/reconcile/
 cutover files are explicit transactions. A statement or guard failure rolls
-back the entire file. Each concurrent index file contains exactly one
+back the entire file. Each pre-existing concurrent index file contains exactly one
 non-transactional `CREATE INDEX CONCURRENTLY` statement. Source vectors,
 embedding triggers, and duplicate projection HNSW indexes are intentionally
-absent.
+absent. The sitemap covering index is created normally while its new table is
+empty, so it has no INVALID live-index recovery state.
 
 Search, Hybrid, and Facets call the v1 manifest guard once per request. The
 guard compares the committed registry SHA-256 with the live definitions,
@@ -205,7 +223,8 @@ where (
       'portal_catalog_search_process_document_v1_pgroonga',
       'portal_catalog_search_flow_document_v1_pgroonga',
       'portal_catalog_facet_rows_v1_pkey',
-      'portal_catalog_facet_rows_latest_v1_idx'
+      'portal_catalog_facet_rows_latest_v1_idx',
+      'portal_sitemap_latest_shard_v1_idx'
     )
   ) or (
     namespace.nspname = 'public'
@@ -397,6 +416,26 @@ already recorded, do not drop or rename the index and do not edit migration
 history. Preserve the exact ledger/index/function evidence and repair through
 a separately reviewed forward migration.
 
+The Portal sitemap rollout has a two-file transactional boundary. The expand
+file creates the latest table, its empty-table index, helper, trigger, backfill,
+and parity proof in one transaction. Ordinary failure rolls all of them back.
+A database COMMIT followed by a missing `20260827134101` ledger row is not
+blind-idempotent: normal retry must fail on the existing table/function. On a
+hosted branch, do not delete a subset or edit history; retain the exact ledger,
+table/index, trigger, helper digest, and public-RPC absence evidence, then use a
+separately reviewed forward repair. Only the explicitly disposable isolated
+recovery project may reset to `20260827134100` and repeat the unchanged expand.
+
+The `20260827134102` public cutover is also transactional. A missing/disabled
+trigger, missing/invalid covering index, helper digest drift, or initial shard
+above 4,096 fails before exposing either RPC. Restoring an unrecorded metadata
+rename inside the isolated recovery fixture and repeating the unchanged
+migration is valid; an applied hosted expand with real definition/data drift
+requires forward repair. Capacity overflow after cutover is never migration or
+index corruption and never authorizes cleanup: source/facet/latest writes
+continue, only the affected shard remains fail closed, and expansion requires
+a separately versioned reshard contract.
+
 ## Uncertain expand commit
 
 The expand migration is transactional, so ordinary SQL failure leaves no Issue
@@ -493,7 +532,7 @@ Issue 531 Supabase project. It resets that local project and must never target a
 shared checkout, Preview, persistent Dev, or production.
 
 Formal recovery evidence requires clean HEAD, the reviewed Supabase CLI
-`2.109.1`, and byte equality plus one aggregate SHA-256 across all 271 migration
+`2.109.1`, and byte equality plus one aggregate SHA-256 across all 273 migration
 files in the repository and isolated project. Comparing only Issue 531 files is
 not sufficient because an earlier baseline change can alter recovery behavior.
 
@@ -513,7 +552,15 @@ same-name index cleanup without history edits, cutover guard rollback,
 post-cutover Flow eligibility build/guard recovery, facet expand COMMIT/history
 failure, facet shard idempotent retry, facet reconcile lock rollback, facet
 cutover parity rollback, parent-trigger/FK-cascade convergence, successful
-retry, and no-op repeat without rebuilding the seven recorded indexes.
+retry, and no-op repeat without rebuilding the eight recorded indexes.
+
+The same runner also resets to `20260827134100` and proves the sitemap expand
+COMMIT/history gap requires an explicit disposable-project reset. It then
+renames the recorded covering index to force public-cutover rollback, proves
+both RPCs remain absent, restores the unrecorded metadata name, applies the
+unchanged cutover, and validates the final 64-descriptor manifest. Its final
+no-op pass includes the latest covering-index OID so a recorded retry cannot
+rebuild it.
 
 The separate populated-upgrade runner resets the same kind of isolated project
 to `20260827010003`, inserts 17,299 Process plus 108,947 Flow parent cards, and

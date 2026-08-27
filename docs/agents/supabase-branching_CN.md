@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 2e128536bf4665afd911a1b844a0c0727eccb428
-lastReviewedNote: "已为 Issue #532 的生成类型与 Preview 合同门复核；PR、持久化 Dev、生产和跨仓修改边界均保持不变。"
+lastReviewedCommit: 712558e
+lastReviewedNote: "已为 Issue #539 的匿名 sitemap Preview 探测复核；PR、持久化 Dev、生产和跨仓修改边界均保持不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

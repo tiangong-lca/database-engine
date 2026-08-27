@@ -115,6 +115,17 @@ select extensions.is(
 );
 
 select extensions.is(
+  (
+    select pg_catalog.count(*)
+    from private.portal_sitemap_latest_rows_v1
+    where shard_no = 0
+      and contract_version = 1
+  ),
+  4096::bigint,
+  'the latest-only sitemap projection contains one row per visible identity'
+);
+
+select extensions.is(
   pg_catalog.jsonb_array_length(
     api.portal_sitemap_shard_v1(
       api.portal_sitemap_manifest_v1() #>>
@@ -250,6 +261,17 @@ select extensions.is(
   'the 4097th latest identity is accepted and an existing second version is retained'
 );
 
+select extensions.is(
+  (
+    select pg_catalog.count(*)
+    from private.portal_sitemap_latest_rows_v1
+    where shard_no = 0
+      and contract_version = 1
+  ),
+  4097::bigint,
+  'capacity overflow is recorded in the latest projection without blocking its writer'
+);
+
 select extensions.throws_ok(
   pg_catalog.format(
     'select api.portal_sitemap_shard_v1(%L)',
@@ -296,6 +318,40 @@ select extensions.is(
   ),
   4096,
   'removing the overflow identity immediately restores the exact bounded shard'
+);
+
+grant api_internal_executor to postgres;
+set local role api_internal_executor;
+
+delete from private.portal_catalog_search_rows_v1
+where dataset_kind = 'process'
+  and id = (
+    select id
+    from portal_sitemap_capacity_ids
+    where ordinal = 1
+  )
+  and version = '02.00.000';
+
+reset role;
+revoke api_internal_executor from postgres;
+
+select extensions.is(
+  (
+    select item.value #>> '{key,version}'
+    from pg_catalog.jsonb_array_elements(
+      api.portal_sitemap_shard_v1(
+        api.portal_sitemap_manifest_v1() #>>
+          '{shards,0,shardCursor}'
+      ) -> 'items'
+    ) as item(value)
+    where item.value #>> '{key,id}' = (
+      select id::text
+      from portal_sitemap_capacity_ids
+      where ordinal = 1
+    )
+  ),
+  '01.00.000',
+  'deleting the latest visible version synchronously restores its visible predecessor'
 );
 
 select extensions.ok(

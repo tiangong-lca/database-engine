@@ -21,8 +21,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: 2e128536bf4665afd911a1b844a0c0727eccb428
-lastReviewedNote: "Reviewed for Issue #532 generated-type and Preview contract gates; PR, persistent Dev, production, and cross-repository mutation boundaries remain unchanged."
+lastReviewedCommit: 712558e
+lastReviewedNote: "Reviewed for Issue #539 anonymous sitemap Preview probes; PR, persistent Dev, production, and cross-repository mutation boundaries remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

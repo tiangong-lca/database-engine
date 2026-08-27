@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-27"
-lastReviewedCommit: "ac64c51"
-lastReviewedNote: "Reviewed after rebasing Issue #533 catalog summary onto Issue #532: 271 migrations, 11 generated Portal modules, combined manifests/tests, and the unchanged Issue #531 writer boundary."
+lastReviewedCommit: "712558e"
+lastReviewedNote: "Reviewed for Issue #539: 273 migrations, 13 generated Portal modules, fixed 64-shard sitemap DTO/RPC gates, and one bounded latest-sync writer extension."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -495,11 +495,19 @@ rules:
         kind: database-migration
       - path: supabase/migrations/20260827134100_optimize_portal_flow_geography_search.sql
         kind: database-migration
+      - path: supabase/migrations/20260827134101_portal_sitemap_latest_projection.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827134102_portal_sitemap_shard_contract.sql
+        kind: database-migration
       - path: supabase/tests/20260826_portal_candidate_first_search.sql
         kind: database-contract-test
       - path: supabase/tests/20260827_portal_card_context_v1.sql
         kind: database-contract-test
+      - path: supabase/tests/20260827_portal_sitemap_shards_v1.sql
+        kind: database-contract-test
       - path: supabase/tests/benchmarks/20260826_portal_candidate_first_explain.sql
+        kind: database-benchmark
+      - path: supabase/tests/benchmarks/20260827_portal_sitemap_shards_cardinality.sql
         kind: database-benchmark
       - path: scripts/test_portal_projection_upgrade_recovery.sh
         kind: migration-recovery
@@ -516,4 +524,4 @@ rules:
         mode: review_or_update
       - path: docs/agents/portal-projection-migration-recovery.md
         mode: review_or_update
-    reason: The immutable card and facet manifests, online expand/backfill/reconcile/index/cutover sequences, selected-row card-context decorator, query-only Flow geography Search repair, recovery procedure, and representative performance gates must change together.
+    reason: The immutable card and facet manifests, online expand/backfill/reconcile/index/cutover sequences, selected-row card-context decorator, query-only Flow geography Search repair, fixed bounded sitemap shards, recovery procedure, and representative performance gates must change together.

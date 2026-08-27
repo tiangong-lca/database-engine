@@ -32,8 +32,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: ac64c51
-lastReviewedNote: "Reviewed for the combined Issue #532/#533 271-migration reset, 11-module generation, Portal pgTAP, exact-50 Search, Facet-manifest drift, and catalog-summary performance evidence."
+lastReviewedCommit: 712558e
+lastReviewedNote: "Reviewed for Issue #539: 273-migration reset, 13-module generation, fixed 64-shard parity/capacity, bounded latest-sync cost, and anonymous Preview transport gates."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -169,6 +169,31 @@ time. The benchmark's separate temporary writer probe must compare 50
 four-update samples before and after only the combined eligibility index; it
 must not drop, rebuild, truncate, or rewrite the real Portal projection while
 collecting incremental writer evidence.
+
+For the bounded Portal sitemap shards, run
+`supabase/tests/20260827_portal_sitemap_shards_v1.sql` and the existing
+`20260825_portal_public_catalog_v1.sql` after a blank reset. The manifest must
+return exactly 64 byte-stable, unique opaque cursors with a fixed 4,096-item
+limit. Calling every descriptor must produce a globally disjoint union equal
+to the retained latest-visible sitemap set; the legacy façade remains
+byte-identical. A 4,097th latest identity must still commit to the synchronized
+projection while only that shard read fails closed, and removing it must
+restore the page immediately.
+
+Run `supabase/tests/benchmarks/20260827_portal_sitemap_shards_cardinality.sql`
+only on a uniquely named isolated local project with exactly 17,299 Process
+rows, 108,947 Flow rows, and 20 samples. Require all 126,246 identities exactly
+once, every shard at or below 4,096, manifest p95 at or below 250 ms, largest
+shard p95 at or below 2 seconds, each call below the function's four-second
+timeout, response JSON below 2 MiB, and a conservative rendered-XML estimate
+below 6 MiB. The largest-shard plan must naturally name
+`portal_sitemap_latest_shard_v1_idx`, scan no full latest-projection heap, and
+spill no temp data. Record the covering-index build time/bytes plus 20-sample
+writer p95 before/after both the physical index and the real facet-to-latest
+sync trigger. Preview then uses only the enabled publishable or
+legacy anon `apikey`, polls no longer than 300 seconds, strictly validates both
+new JSON Schemas, and passes one manifest cursor back byte-for-byte; Portal #12
+owns final Next/CDN XML and five-minute visibility proof.
 
 ## SQL And Offline Node Contract Notes
 

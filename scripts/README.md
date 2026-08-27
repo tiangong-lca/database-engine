@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: ac64c51
-lastReviewedNote: "Reviewed after combining Issue #532/#533: 271-file recovery/benchmark runners, runtime manifests, exact-50 Search, summary performance, and 11-module Portal generation are current."
+lastReviewedCommit: 712558e
+lastReviewedNote: "Reviewed for Issue #539: 273-file recovery/benchmark runners, fixed sitemap shards, bounded latest sync, anonymous Preview gates, and 13-module Portal generation are current."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -91,12 +91,13 @@ to prove valid-update, delete, state-invalidation, key-change, and
 embedding-only races; forces card/facet reconcile lock-timeout and cutover-guard
 failures; verifies facet expand COMMIT/history failure, four-shard idempotent
 retry, controlled same-name concurrent-index cleanup, post-cutover Flow
-eligibility guard rollback, and no-op repeat without rebuilding seven indexes.
+eligibility guard rollback, transactional sitemap expand COMMIT-gap/reset and
+public-cutover rollback/retry, and no-op repeat without rebuilding eight indexes.
 See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries. Formal evidence additionally requires
 clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
-the complete 271-file migration tree.
+the complete 273-file migration tree.
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
@@ -113,7 +114,7 @@ The runner always resets the isolated project to full HEAD on exit.
 Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
 fence, plan, and ANN-recall benchmark only against an explicitly attested
 Issue-531 local Supabase project. The runner byte-compares the complete
-271-file migration tree with the repository, writes into a new operator-selected private
+273-file migration tree with the repository, writes into a new operator-selected private
 directory, and resets the isolated database before and after the run so rolled
 back HNSW pages cannot accumulate. Its environment contract mirrors the
 recovery runner and additionally requires
@@ -180,6 +181,10 @@ query-only kernel replacement with no table/index/trigger/writer rewrite. The
 runtime path independently validates the Facet manifest before reading that
 child projection.
 
+It also freezes the Issue #539 64-bucket latest-only table, empty-table covering
+index, direct-upsert/delete-fallback sync trigger, transactional public guard,
+4,096-item read cap, and byte-identical retained sitemap façade.
+
 ```bash
 python3 scripts/check_portal_projection_manifest.py
 ```
@@ -236,6 +241,11 @@ other mutation remain rejected.
 The contract also requires failure diagnostics to emit only the HTTP status
 and a shape-validated PostgREST/SQLSTATE code. It rejects raw response-body
 printing; malformed or unexpected error envelopes must become `unclassified`.
+
+The same anonymous credential boundary polls the sitemap manifest for no more
+than 300 seconds, validates exactly 64 opaque descriptors, passes one cursor
+byte-for-byte into the shard RPC, validates both exhaustive JSON Schemas, and
+requires a forged cursor to return only the bounded `22023` envelope.
 
 ```bash
 python scripts/test_supabase_dev_workflow_contract.py

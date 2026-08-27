@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: ac64c51
-lastReviewedNote: "已为合并后的 271-migration Issue #532 card-context/Flow-geography 与 Issue #533 catalog-summary 快照复核；generated workspace 与 public/api 类型所有权不变。"
+lastReviewedCommit: 712558e
+lastReviewedNote: "已为 273-migration Issue #539 sitemap shard 快照复核；generated workspace 与 public/api 类型所有权不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

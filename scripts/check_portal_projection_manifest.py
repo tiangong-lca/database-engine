@@ -24,6 +24,12 @@ CARD_CONTEXT_ANCHOR_NAME = "20260827021441_portal_card_context_decorator.sql"
 FLOW_GEOGRAPHY_SEARCH_NAME = (
     "20260827134100_optimize_portal_flow_geography_search.sql"
 )
+SITEMAP_LATEST_PROJECTION_NAME = (
+    "20260827134101_portal_sitemap_latest_projection.sql"
+)
+SITEMAP_SHARD_CONTRACT_NAME = (
+    "20260827134102_portal_sitemap_shard_contract.sql"
+)
 MANIFEST_SHA256 = (
     "b5e0aff9abbffcc8d2dacaf559a5d1a8c993c20b647d0c70f0e4fa18eb06d2dc"
 )
@@ -83,6 +89,12 @@ CARD_CONTEXT_CONTROL_FUNCTION_IDENTITIES = (
     "private.portal_card_context_manifest_sha256_v1()",
     "private.assert_portal_card_context_contract_v1()",
 )
+SITEMAP_SHARD_FUNCTION_IDENTITIES = (
+    "private.sync_portal_sitemap_latest_row_v1()",
+    "private.assert_portal_sitemap_projection_v1()",
+    "api.portal_sitemap_manifest_v1()",
+    "api.portal_sitemap_shard_v1(text)",
+)
 
 
 def sql_without_comments(sql: str) -> str:
@@ -93,6 +105,7 @@ def sql_without_comments(sql: str) -> str:
 
 
 def mutation_pattern(identity: str) -> re.Pattern[str]:
+    schema_name = identity.split(".", 1)[0]
     function_name = identity.split(".", 1)[1].split("(", 1)[0]
     return re.compile(
         rf"\b(?:"
@@ -100,7 +113,8 @@ def mutation_pattern(identity: str) -> re.Pattern[str]:
         rf"|drop\s+(?:function|routine)(?:\s+if\s+exists)?"
         rf"|alter\s+(?:function|routine)"
         rf")\s+"
-        rf'(?:(?:"?private"?)\s*\.\s*)?"?{re.escape(function_name)}"?\s*\(',
+        rf'(?:(?:"?{re.escape(schema_name)}"?)\s*\.\s*)?'
+        rf'"?{re.escape(function_name)}"?\s*\(',
         flags=re.IGNORECASE,
     )
 
@@ -509,6 +523,119 @@ def main() -> int:
                 + ", ".join(missing_guard_tokens)
             )
 
+    sitemap_latest = MIGRATIONS_DIR / SITEMAP_LATEST_PROJECTION_NAME
+    if not sitemap_latest.is_file():
+        violations.append(
+            "missing Portal sitemap latest projection: "
+            f"{SITEMAP_LATEST_PROJECTION_NAME}"
+        )
+    else:
+        sitemap_latest_sql = sql_without_comments(
+            sitemap_latest.read_text(encoding="utf-8")
+        ).lower()
+        required_latest_tokens = (
+            "create table private.portal_sitemap_latest_rows_v1",
+            "primary key (dataset_kind, id)",
+            "shard_no smallint not null",
+            "check (shard_no between 0 and 63)",
+            "create index portal_sitemap_latest_shard_v1_idx",
+            "include (",
+            "create function private.sync_portal_sitemap_latest_row_v1()",
+            "security definer",
+            "portal_sitemap_latest_sync_v1",
+            "on conflict (dataset_kind, id) do update",
+            "excluded.version > portal_sitemap_latest_rows_v1.version",
+            "pg_catalog.md5(",
+            ") / 4",
+            "select distinct on (facet.dataset_kind, facet.id)",
+            "portal sitemap latest projection reconciliation failed",
+        )
+        missing_latest_tokens = [
+            token
+            for token in required_latest_tokens
+            if token not in sitemap_latest_sql
+        ]
+        if missing_latest_tokens:
+            violations.append(
+                f"{SITEMAP_LATEST_PROJECTION_NAME}: missing latest projection tokens "
+                + ", ".join(missing_latest_tokens)
+            )
+        if "create index concurrently" in sitemap_latest_sql:
+            violations.append(
+                f"{SITEMAP_LATEST_PROJECTION_NAME}: the new index must be created "
+                "on the empty latest table before its set-based backfill"
+            )
+        if "portal_sitemap_entries_v1" in sitemap_latest_sql:
+            violations.append(
+                f"{SITEMAP_LATEST_PROJECTION_NAME}: expand must not change a public RPC"
+            )
+
+    sitemap_contract = MIGRATIONS_DIR / SITEMAP_SHARD_CONTRACT_NAME
+    if not sitemap_contract.is_file():
+        violations.append(
+            f"missing Portal sitemap shard contract: {SITEMAP_SHARD_CONTRACT_NAME}"
+        )
+    else:
+        sitemap_contract_sql = sql_without_comments(
+            sitemap_contract.read_text(encoding="utf-8")
+        )
+        sitemap_contract_lower = sitemap_contract_sql.lower()
+        required_contract_tokens = (
+            "api.portal_sitemap_manifest_v1()",
+            "api.portal_sitemap_shard_v1(text)",
+            "private.assert_portal_sitemap_projection_v1()",
+            "generate_series(0, 63)",
+            "'maxitems', 4096",
+            "limit 4097",
+            "jsonb_array_length(v_items) > 4096",
+            "portal.public-sitemap-manifest.v1",
+            "portal.public-sitemap-shard.v1",
+            "03dd37bd0871c220fcd94cb2dec203ed",
+            "91af513bb8fed85bd4f8a1999c30cfbc",
+            "portal_sitemap_latest_rows_v1",
+            "projection.shard_no = v_bucket",
+        )
+        missing_contract_tokens = [
+            token
+            for token in required_contract_tokens
+            if token not in sitemap_contract_lower
+        ]
+        if missing_contract_tokens:
+            violations.append(
+                f"{SITEMAP_SHARD_CONTRACT_NAME}: missing bounded shard tokens "
+                + ", ".join(missing_contract_tokens)
+            )
+        if re.search(
+            r"\b(?:create\s+(?:unlogged\s+)?table|create\s+trigger|alter\s+table)\b",
+            sitemap_contract_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{SITEMAP_SHARD_CONTRACT_NAME}: sitemap shards must not add "
+                "a writer table, trigger, or table rewrite"
+            )
+        if re.search(
+            r"create\s+(?:or\s+replace\s+)?function\s+"
+            r"api[.]portal_sitemap_entries_v1\s*[(]",
+            sitemap_contract_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{SITEMAP_SHARD_CONTRACT_NAME}: retained sitemap v1 must stay unchanged"
+            )
+
+    sitemap_patterns = {
+        identity: mutation_pattern(identity)
+        for identity in SITEMAP_SHARD_FUNCTION_IDENTITIES
+    }
+    for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        if migration.name <= SITEMAP_SHARD_CONTRACT_NAME:
+            continue
+        executable_sql = sql_without_comments(migration.read_text(encoding="utf-8"))
+        for identity, pattern in sitemap_patterns.items():
+            if pattern.search(executable_sql):
+                violations.append(f"{migration.name}: {identity}")
+
     if violations:
         print(
             "Portal projection-v1 manifest governance failed:\n- "
@@ -528,7 +655,9 @@ def main() -> int:
         f"{len(CARD_CONTEXT_FUNCTION_IDENTITIES)} derivation functions and "
         f"{len(CARD_CONTEXT_CONTROL_FUNCTION_IDENTITIES)} controls, "
         f"sha256={CARD_CONTEXT_MANIFEST_SHA256}; Flow geography Search "
-        "repair remains query-only"
+        "repair remains query-only; sitemap shards remain fixed at 64 with "
+        "one guarded latest-only projection/index, one bounded sync trigger, "
+        "and a 4096-item fail-closed read cap"
     )
     return 0
 

@@ -37,8 +37,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: ac64c51
-lastReviewedNote: "Reviewed after rebasing Issue #533 catalog summary onto the Issue #532 card-context/Flow-geography delivery; repository ownership and delivery boundaries remain unchanged."
+lastReviewedCommit: 712558e
+lastReviewedNote: "Reviewed for Issue #539 anonymous sitemap Preview verification; repository ownership, branch workflow, and delivery boundaries remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

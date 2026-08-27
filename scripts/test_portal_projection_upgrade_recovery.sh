@@ -26,9 +26,9 @@ fi
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 271 \
-   || "${#test_migrations[@]}" -ne 271 ]]; then
-  echo "complete migration tree must contain exactly 271 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 273 \
+   || "${#test_migrations[@]}" -ne 273 ]]; then
+  echo "complete migration tree must contain exactly 273 files" >&2
   exit 2
 fi
 migration_manifest_payload=""
@@ -211,7 +211,7 @@ fi
 echo "Supabase CLI: $supabase_cli_version"
 echo "Recovery target: $project_id"
 echo "Repository HEAD: $repository_head"
-echo "Migration tree SHA-256 (271 files): $migration_tree_sha256"
+echo "Migration tree SHA-256 (273 files): $migration_tree_sha256"
 
 # Breakpoint 1: expand plus every bounded backfill is recorded, while old API
 # wrappers remain authoritative. Exercise all five write/snapshot races before
@@ -1170,7 +1170,8 @@ index_oids_before="$(scalar_sql "
         'portal_catalog_search_process_document_v1_pgroonga',
         'portal_catalog_search_flow_document_v1_pgroonga',
         'portal_catalog_facet_rows_v1_pkey',
-        'portal_catalog_facet_rows_latest_v1_idx'
+        'portal_catalog_facet_rows_latest_v1_idx',
+        'portal_sitemap_latest_shard_v1_idx'
       )
     ) or (
       namespace.nspname = 'public'
@@ -1192,7 +1193,8 @@ index_count_before="$(scalar_sql "
         'portal_catalog_search_process_document_v1_pgroonga',
         'portal_catalog_search_flow_document_v1_pgroonga',
         'portal_catalog_facet_rows_v1_pkey',
-        'portal_catalog_facet_rows_latest_v1_idx'
+        'portal_catalog_facet_rows_latest_v1_idx',
+        'portal_sitemap_latest_shard_v1_idx'
       )
     ) or (
       namespace.nspname = 'public'
@@ -1203,8 +1205,8 @@ index_count_before="$(scalar_sql "
       )
     )
 ")"
-if [[ "$index_count_before" != "7" \
-   || ! "$index_oids_before" =~ ^[0-9]+(,[0-9]+){6}$ ]]; then
+if [[ "$index_count_before" != "8" \
+   || ! "$index_oids_before" =~ ^[0-9]+(,[0-9]+){7}$ ]]; then
   echo "post-cutover index identity evidence is incomplete" >&2
   exit 1
 fi
@@ -1220,7 +1222,8 @@ index_oids_after="$(scalar_sql "
         'portal_catalog_search_process_document_v1_pgroonga',
         'portal_catalog_search_flow_document_v1_pgroonga',
         'portal_catalog_facet_rows_v1_pkey',
-        'portal_catalog_facet_rows_latest_v1_idx'
+        'portal_catalog_facet_rows_latest_v1_idx',
+        'portal_sitemap_latest_shard_v1_idx'
       )
     ) or (
       namespace.nspname = 'public'
@@ -1235,6 +1238,85 @@ if [[ "$index_oids_before" != "$index_oids_after" ]]; then
   echo "no-op migration retry rebuilt an already-recorded index" >&2
   exit 1
 fi
+
+# Breakpoint 9: the latest-only sitemap projection is one transactional expand
+# over a new empty table/index, followed by one transactional public cutover.
+# A COMMIT/history gap is never repaired by deleting a subset on a hosted
+# branch; the isolated recovery project proves the explicit reset path. A
+# cutover prerequisite failure leaves both public RPCs absent.
+reset_to 20260827134100
+apply_sql_file \
+  "$repo_root/supabase/migrations/20260827134101_portal_sitemap_latest_projection.sql" \
+  >"$race_log_dir/sitemap-latest-expand-commit-gap.log" 2>&1
+assert_sql "
+  not exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20260827134101'
+  )
+  and pg_catalog.to_regclass(
+    'private.portal_sitemap_latest_rows_v1'
+  ) is not null
+  and pg_catalog.to_regprocedure(
+    'private.sync_portal_sitemap_latest_row_v1()'
+  ) is not null
+  and pg_catalog.to_regprocedure(
+    'api.portal_sitemap_manifest_v1()'
+  ) is null
+" "sitemap latest expand COMMIT/history-gap fixture is not exact"
+sitemap_expand_log_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+if apply_pending >"$race_log_dir/expected-sitemap-expand-gap-failure.log" 2>&1; then
+  echo "sitemap latest expand unexpectedly ignored an unrecorded committed copy" >&2
+  exit 1
+fi
+docker logs --since "$sitemap_expand_log_since" "$container_name" \
+  >>"$race_log_dir/expected-sitemap-expand-gap-failure.log" 2>&1
+assert_log_contains \
+  "$race_log_dir/expected-sitemap-expand-gap-failure.log" \
+  'already exists|duplicate_(table|function|object)|42P07|42723|55000' \
+  'sitemap latest expand COMMIT/history-gap failure'
+
+reset_to 20260827134101
+run_psql <<'SQL'
+alter index private.portal_sitemap_latest_shard_v1_idx
+rename to portal_sitemap_latest_shard_v1_idx_held;
+SQL
+sitemap_cutover_log_since="$(date -u '+%Y-%m-%dT%H:%M:%SZ')"
+if apply_pending >"$race_log_dir/expected-sitemap-cutover-failure.log" 2>&1; then
+  echo "sitemap cutover unexpectedly accepted a missing canonical index" >&2
+  exit 1
+fi
+docker logs --since "$sitemap_cutover_log_since" "$container_name" \
+  >>"$race_log_dir/expected-sitemap-cutover-failure.log" 2>&1
+assert_log_contains \
+  "$race_log_dir/expected-sitemap-cutover-failure.log" \
+  'Portal sitemap shard prerequisites are unsafe|55000' \
+  'sitemap public cutover prerequisite failure'
+assert_sql "
+  not exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20260827134102'
+  )
+  and pg_catalog.to_regprocedure(
+    'api.portal_sitemap_manifest_v1()'
+  ) is null
+  and pg_catalog.to_regprocedure(
+    'api.portal_sitemap_shard_v1(text)'
+  ) is null
+" "failed sitemap cutover unexpectedly exposed the public contract"
+run_psql <<'SQL'
+alter index private.portal_sitemap_latest_shard_v1_idx_held
+rename to portal_sitemap_latest_shard_v1_idx;
+SQL
+apply_pending
+assert_sql "
+  exists (
+    select 1 from supabase_migrations.schema_migrations
+    where version = '20260827134102'
+  )
+  and pg_catalog.jsonb_array_length(
+    api.portal_sitemap_manifest_v1() -> 'shards'
+  ) = 64
+" "sitemap cutover recovery did not reach the exact 64-shard contract"
 
 # Reverse-direction lock proof: a successful source-write fence blocks a real
 # content UPDATE until COMMIT. The fixed two-second sleep is coordination only;

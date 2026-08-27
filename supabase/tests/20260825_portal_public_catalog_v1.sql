@@ -367,23 +367,35 @@ select extensions.ok(
     join pg_catalog.pg_am as access_method
       on access_method.oid = index_relation.relam
     where index_catalog.indexrelid =
-      'private.portal_sitemap_shard_v1_idx'::regclass
+      'private.portal_sitemap_latest_shard_v1_idx'::regclass
       and index_catalog.indrelid =
-        'private.portal_catalog_facet_rows_v1'::regclass
+        'private.portal_sitemap_latest_rows_v1'::regclass
       and index_relation.relowner = 'postgres'::regrole
       and access_method.amname = 'btree'
       and index_catalog.indisvalid
       and index_catalog.indisready
       and index_catalog.indislive
-      and index_catalog.indnkeyatts = 7
-      and index_catalog.indnatts = 7
+      and index_catalog.indnkeyatts = 3
+      and index_catalog.indnatts = 6
       and index_catalog.indpred is null
-      and pg_catalog.pg_get_expr(
-        index_catalog.indexprs,
-        index_catalog.indrelid
-      ) = $$(get_byte(decode(md5(((dataset_kind || ':'::text) || (id)::text)), 'hex'::text), 0) / 4)$$
+      and index_catalog.indexprs is null
   ),
-  'the sitemap shard index is the exact healthy narrow 64-bucket facet index'
+  'the sitemap shard index is the exact healthy latest-only covering index'
+);
+
+select extensions.ok(
+  exists (
+    select 1
+    from pg_catalog.pg_trigger as trigger
+    where trigger.tgrelid =
+      'private.portal_catalog_facet_rows_v1'::regclass
+      and trigger.tgname = 'portal_sitemap_latest_sync_v1'
+      and not trigger.tgisinternal
+      and trigger.tgenabled = 'O'
+      and trigger.tgfoid =
+        'private.sync_portal_sitemap_latest_row_v1()'::regprocedure
+  ),
+  'the governed facet writer has exactly one enabled sitemap latest sync trigger'
 );
 
 select extensions.is(
@@ -402,7 +414,7 @@ select extensions.is(
     select pg_catalog.count(*)
     from pg_catalog.pg_proc as routine
     where routine.oid =
-      'private.assert_portal_sitemap_shard_index_v1()'::regprocedure
+      'private.assert_portal_sitemap_projection_v1()'::regprocedure
       and routine.proowner = 'portal_public_executor'::regrole
       and not routine.prosecdef
       and routine.provolatile = 's'
@@ -411,7 +423,55 @@ select extensions.is(
         '{portal_public_executor=X/portal_public_executor}'
   ),
   1::bigint,
-  'the sitemap index assertion is ACL-closed and owned by the constrained executor'
+  'the sitemap projection assertion is ACL-closed and owned by the constrained executor'
+);
+
+select extensions.is(
+  (
+    select pg_catalog.count(*)
+    from pg_catalog.pg_proc as routine
+    where routine.oid =
+      'private.sync_portal_sitemap_latest_row_v1()'::regprocedure
+      and routine.proowner = 'api_internal_executor'::regrole
+      and routine.prosecdef
+      and routine.provolatile = 'v'
+      and routine.proparallel = 'u'
+      and pg_catalog.md5(routine.prosrc) =
+        '91af513bb8fed85bd4f8a1999c30cfbc'
+      and coalesce(routine.proacl::text, '') =
+        '{api_internal_executor=X/api_internal_executor}'
+  ),
+  1::bigint,
+  'the latest sitemap sync helper is exact, owner-only, and security-definer fenced'
+);
+
+select extensions.is(
+  (
+    with expected(column_name) as (
+      values
+        ('dataset_kind'::text),
+        ('id'),
+        ('version'),
+        ('modified_at'),
+        ('shard_no'),
+        ('contract_version')
+    ), actual as (
+      select privilege.column_name
+      from information_schema.column_privileges as privilege
+      where privilege.grantee = 'portal_public_executor'
+        and privilege.table_schema = 'private'
+        and privilege.table_name = 'portal_sitemap_latest_rows_v1'
+        and privilege.privilege_type = 'SELECT'
+    )
+    select pg_catalog.count(*)
+    from (
+      (select * from actual except select * from expected)
+      union all
+      (select * from expected except select * from actual)
+    ) as symmetric_difference
+  ),
+  0::bigint,
+  'the Portal executor can read only the six locator-free latest sitemap columns'
 );
 
 select extensions.is(

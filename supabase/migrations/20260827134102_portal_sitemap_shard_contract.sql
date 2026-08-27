@@ -1,6 +1,6 @@
 -- Issue #539: expose a constant-cost sitemap manifest plus 64 deterministic,
--- globally disjoint, bounded shard pages over the synchronized narrow Portal
--- facet projection. Existing Portal sitemap/search consumers remain unchanged.
+-- globally disjoint, bounded shard pages over the synchronized latest-only
+-- sitemap projection. Existing Portal sitemap/search consumers remain unchanged.
 
 begin;
 
@@ -16,7 +16,7 @@ begin
        'api.portal_sitemap_shard_v1(text)'
      ) is not null
      or pg_catalog.to_regprocedure(
-       'private.assert_portal_sitemap_shard_index_v1()'
+       'private.assert_portal_sitemap_projection_v1()'
      ) is not null
      or pg_catalog.to_regprocedure(
        'private.assert_portal_catalog_projection_contract_v1()'
@@ -24,8 +24,14 @@ begin
      or pg_catalog.to_regprocedure(
        'private.assert_portal_catalog_facet_contract_v1()'
      ) is null
+     or pg_catalog.to_regprocedure(
+       'private.sync_portal_sitemap_latest_row_v1()'
+     ) is null
      or pg_catalog.to_regclass(
-       'private.portal_sitemap_shard_v1_idx'
+       'private.portal_sitemap_latest_rows_v1'
+     ) is null
+     or pg_catalog.to_regclass(
+       'private.portal_sitemap_latest_shard_v1_idx'
      ) is null
      or not exists (
        select 1
@@ -48,6 +54,27 @@ begin
 end
 $portal_sitemap_shard_prerequisite_guard$;
 
+grant api_internal_executor to postgres;
+set role api_internal_executor;
+select private.assert_portal_catalog_projection_contract_v1();
+select private.assert_portal_catalog_facet_contract_v1();
+do $portal_sitemap_initial_capacity_guard$
+begin
+  if exists (
+    select latest.shard_no
+    from private.portal_sitemap_latest_rows_v1 as latest
+    where latest.contract_version = 1
+    group by latest.shard_no
+    having pg_catalog.count(*) > 4096
+  ) then
+    raise exception 'Portal sitemap initial shard capacity is unsafe'
+      using errcode = '54000';
+  end if;
+end
+$portal_sitemap_initial_capacity_guard$;
+reset role;
+revoke api_internal_executor from postgres;
+
 grant portal_public_executor to postgres;
 grant create on schema private, api to portal_public_executor;
 set role portal_public_executor;
@@ -55,7 +82,7 @@ set role portal_public_executor;
 select private.assert_portal_catalog_projection_contract_v1();
 select private.assert_portal_catalog_facet_contract_v1();
 
-create function private.assert_portal_sitemap_shard_index_v1()
+create function private.assert_portal_sitemap_projection_v1()
 returns void
 language plpgsql
 stable
@@ -64,9 +91,7 @@ set search_path = ''
 as $function$
 declare
   v_index regclass :=
-    pg_catalog.to_regclass('private.portal_sitemap_shard_v1_idx');
-  v_expected_expression constant text :=
-    $$(get_byte(decode(md5(((dataset_kind || ':'::text) || (id)::text)), 'hex'::text), 0) / 4)$$;
+    pg_catalog.to_regclass('private.portal_sitemap_latest_shard_v1_idx');
 begin
   if v_index is null
      or not exists (
@@ -74,17 +99,41 @@ begin
        from pg_catalog.pg_index as index_catalog
        where index_catalog.indexrelid = v_index
          and index_catalog.indrelid =
-           'private.portal_catalog_facet_rows_v1'::regclass
+           'private.portal_sitemap_latest_rows_v1'::regclass
          and index_catalog.indisvalid
          and index_catalog.indisready
          and index_catalog.indislive
-         and index_catalog.indnkeyatts = 7
-         and index_catalog.indnatts = 7
+         and index_catalog.indnkeyatts = 3
+         and index_catalog.indnatts = 6
          and index_catalog.indpred is null
-         and pg_catalog.pg_get_expr(
-           index_catalog.indexprs,
-           index_catalog.indrelid
-         ) = v_expected_expression
+         and index_catalog.indexprs is null
+     )
+     or not exists (
+       select 1
+       from pg_catalog.pg_trigger as trigger
+       where trigger.tgrelid =
+         'private.portal_catalog_facet_rows_v1'::regclass
+         and trigger.tgname = 'portal_sitemap_latest_sync_v1'
+         and not trigger.tgisinternal
+         and trigger.tgenabled = 'O'
+         and trigger.tgfoid =
+           'private.sync_portal_sitemap_latest_row_v1()'::regprocedure
+     )
+     or not exists (
+       select 1
+       from pg_catalog.pg_proc as routine
+       where routine.oid =
+         'private.sync_portal_sitemap_latest_row_v1()'::regprocedure
+         and routine.proowner = 'api_internal_executor'::regrole
+         and routine.prosecdef
+         and routine.provolatile = 'v'
+         and routine.proparallel = 'u'
+         and coalesce(routine.proconfig, '{}'::text[]) @> array[
+           'search_path=""',
+           'row_security=on'
+         ]::text[]
+         and pg_catalog.md5(routine.prosrc) =
+           '91af513bb8fed85bd4f8a1999c30cfbc'
      ) then
     raise exception using
       errcode = 'P0001',
@@ -93,7 +142,7 @@ begin
 end
 $function$;
 
-revoke all on function private.assert_portal_sitemap_shard_index_v1()
+revoke all on function private.assert_portal_sitemap_projection_v1()
   from public, anon, authenticated, service_role, api_internal_executor;
 
 create function api.portal_sitemap_manifest_v1()
@@ -113,7 +162,7 @@ declare
 begin
   perform private.assert_portal_catalog_projection_contract_v1();
   perform private.assert_portal_catalog_facet_contract_v1();
-  perform private.assert_portal_sitemap_shard_index_v1();
+  perform private.assert_portal_sitemap_projection_v1();
 
   select pg_catalog.jsonb_agg(
     pg_catalog.jsonb_build_object(
@@ -188,34 +237,18 @@ begin
 
   perform private.assert_portal_catalog_projection_contract_v1();
   perform private.assert_portal_catalog_facet_contract_v1();
-  perform private.assert_portal_sitemap_shard_index_v1();
+  perform private.assert_portal_sitemap_projection_v1();
 
   with latest as materialized (
-    select distinct on (facet.dataset_kind, facet.id)
-      facet.dataset_kind,
-      facet.id,
-      facet.version,
-      facet.modified_at
-    from private.portal_catalog_facet_rows_v1 as facet
-    where facet.state_code in (100, 200)
-      and facet.facet_contract_version = 1
-      and (
-        pg_catalog.get_byte(
-          pg_catalog.decode(
-            pg_catalog.md5(
-              facet.dataset_kind || ':'::text || facet.id::text
-            ),
-            'hex'::text
-          ),
-          0
-        ) / 4
-      ) = v_bucket
-    order by facet.dataset_kind,
-      facet.id,
-      facet.version desc,
-      facet.modified_at desc,
-      facet.state_code desc,
-      facet.facet_contract_version
+    select projection.dataset_kind,
+      projection.id,
+      projection.version,
+      projection.modified_at
+    from private.portal_sitemap_latest_rows_v1 as projection
+    where projection.shard_no = v_bucket
+      and projection.contract_version = 1
+    order by projection.dataset_kind,
+      projection.id
     limit 4097
   )
   select coalesce(pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
@@ -313,7 +346,9 @@ declare
   v_shard regprocedure :=
     'api.portal_sitemap_shard_v1(text)'::regprocedure;
   v_assert regprocedure :=
-    'private.assert_portal_sitemap_shard_index_v1()'::regprocedure;
+    'private.assert_portal_sitemap_projection_v1()'::regprocedure;
+  v_sync regprocedure :=
+    'private.sync_portal_sitemap_latest_row_v1()'::regprocedure;
 begin
   if (
     select not (
@@ -367,6 +402,20 @@ begin
     where routine.oid = v_assert
   ) is not false
   or (
+    select not (
+      routine.proowner = 'api_internal_executor'::regrole
+      and routine.prosecdef
+      and routine.provolatile = 'v'
+      and routine.proparallel = 'u'
+      and pg_catalog.md5(routine.prosrc) =
+        '91af513bb8fed85bd4f8a1999c30cfbc'
+      and coalesce(routine.proacl::text, '') =
+        '{api_internal_executor=X/api_internal_executor}'
+    )
+    from pg_catalog.pg_proc as routine
+    where routine.oid = v_sync
+  ) is not false
+  or (
     select pg_catalog.md5(routine.prosrc)
     from pg_catalog.pg_proc as routine
     where routine.oid =
@@ -400,32 +449,37 @@ begin
   or pg_catalog.has_function_privilege(
     'api_internal_executor', v_assert, 'EXECUTE'
   )
+  or pg_catalog.has_function_privilege('anon', v_sync, 'EXECUTE')
+  or pg_catalog.has_function_privilege('authenticated', v_sync, 'EXECUTE')
+  or pg_catalog.has_function_privilege('service_role', v_sync, 'EXECUTE')
+  or pg_catalog.has_function_privilege(
+    'portal_public_executor', v_sync, 'EXECUTE'
+  )
   or exists (
     select 1
-    from pg_catalog.aclexplode(
+    from pg_catalog.pg_proc as routine
+    cross join lateral pg_catalog.aclexplode(
       coalesce(
-        (select routine.proacl
-         from pg_catalog.pg_proc as routine
-         where routine.oid in (v_manifest::oid, v_shard::oid)
-         limit 1),
-        '{}'::aclitem[]
+        routine.proacl,
+        pg_catalog.acldefault('f', routine.proowner)
       )
     ) as acl
-    where acl.grantee = 0
+    where routine.oid in (v_manifest::oid, v_shard::oid)
+      and acl.grantee = 0
       and acl.privilege_type = 'EXECUTE'
   )
   or (
     select routine.prosrc !~ 'generate_series\(0, 63\)'
       or routine.prosrc ~
-        'portal_catalog_(facet|search)_rows_v1|public\.(processes|flows)'
+        'portal_sitemap_latest_rows_v1|portal_catalog_(facet|search)_rows_v1|public\.(processes|flows)'
     from pg_catalog.pg_proc as routine
     where routine.oid = v_manifest
   )
   or (
-    select routine.prosrc !~ 'portal_catalog_facet_rows_v1'
-      or routine.prosrc !~ 'md5'
+    select routine.prosrc !~ 'portal_sitemap_latest_rows_v1'
+      or routine.prosrc !~ 'projection.shard_no = v_bucket'
       or routine.prosrc ~
-        'portal_catalog_search_rows_v1|public\.(processes|flows)|card|document|json_data|search_text|extracted_md|embedding_ft|team_id|user_id|review_id|privateLocator|objectLocator'
+        'portal_catalog_(facet|search)_rows_v1|public\.(processes|flows)|card|document|json_data|search_text|extracted_md|embedding_ft|team_id|user_id|review_id|privateLocator|objectLocator'
     from pg_catalog.pg_proc as routine
     where routine.oid = v_shard
   ) then

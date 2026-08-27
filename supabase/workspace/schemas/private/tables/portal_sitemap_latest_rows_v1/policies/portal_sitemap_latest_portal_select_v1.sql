@@ -1,0 +1,1 @@
+CREATE POLICY "portal_sitemap_latest_portal_select_v1" ON "private"."portal_sitemap_latest_rows_v1" FOR SELECT TO "portal_public_executor" USING ((("contract_version" = 1) AND (("shard_no" >= 0) AND ("shard_no" <= 63))));

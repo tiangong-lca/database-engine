@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: ac64c51
-lastReviewedNote: "Reviewed for the combined Issue #532/#533 card decoration, per-request Facet-manifest validation, bounded catalog summary, and generated DTO ownership; writer boundaries remain unchanged."
+lastReviewedCommit: 712558e
+lastReviewedNote: "Reviewed for Issue #539 fixed sitemap shards, exact opaque-cursor DTO ownership, and the bounded latest-only sync extension."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -120,6 +120,27 @@ stored or included in the index. The façade revalidates CAS check digits,
 classification bounds, labels, and exact latest identity before returning a
 value. It adds no source-table scan, new projection table, existing-index
 change, or trigger/writer branch.
+
+The bounded sitemap surface derives one latest-only, locator-free row per
+Process/Flow identity from the synchronized narrow facet projection. Its
+manifest always emits exactly 64
+ordered opaque shard cursors, so manifest work is constant and never scans or
+counts catalog rows. Each identity is assigned by the stable high six bits of
+`MD5(dataset_kind || ':' || id)`; MD5 is only a deterministic distribution
+primitive here, never an authorization or integrity decision. The new table
+and its `(shard_no,dataset_kind,id)` covering B-tree are created empty before
+one set-based backfill. One bounded facet trigger directly upserts a new/current
+version and performs a latest-index lookup only when a version is deleted, so
+the public RLS path filters a physical smallint column and naturally uses the
+covering index without privileged or leakproof-function assumptions.
+Each shard returns at most 4,096 latest visible exact identities and fails
+closed before returning a partial page if capacity is exceeded. Current
+production evidence has 122,176 identities with a largest shard of 1,991, more
+than 2x headroom; the representative local fixture's maximum is 2,066.
+Capacity never constrains a source, card, facet, or latest writer: an overfull
+shard alone becomes unavailable until a separately versioned reshard. No
+counter row, source-table index, existing card/facet semantics, or existing
+Portal façade changes; `portal_sitemap_entries_v1` remains byte-identical.
 
 Edge consumers must obtain Data Product publication, package, and worker
 metadata through bounded `api.svc_data_product_*` projections rather than
