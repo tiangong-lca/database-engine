@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: a9c4f79
-lastReviewedNote: "Reviewed for Issue #543: 276-file recovery/benchmark runners, executable UUID/CAS/classification example gates, bounded Flow CAS index evidence, fixed sitemap shards, and 13-module Portal generation are current."
+lastReviewedCommit: d21600b
+lastReviewedNote: "Reviewed for Issue #543: 277-file recovery/benchmark runners, executable UUID/CAS/classification gates, summary-isolated Flow CAS index evidence, fixed sitemap shards, and 13-module Portal generation are current."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -104,7 +104,7 @@ See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries. Formal evidence additionally requires
 clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
-the complete 276-file migration tree.
+the complete 277-file migration tree.
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
@@ -126,7 +126,7 @@ The runner always resets the isolated project to full HEAD on exit.
 Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
 fence, plan, and ANN-recall benchmark only against an explicitly attested
 Issue-531/532/539/543 local Supabase project. The runner byte-compares the complete
-276-file migration tree with the repository, writes into a new operator-selected private
+277-file migration tree with the repository, writes into a new operator-selected private
 directory, and resets the isolated database before and after the run so rolled
 back HNSW pages cannot accumulate. Its environment contract mirrors the
 recovery runner and additionally requires
