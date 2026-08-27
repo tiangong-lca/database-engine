@@ -4,7 +4,7 @@ CREATE OR REPLACE FUNCTION "private"."catalog_portal_candidate_rows_v1"("p_kind"
     SET "statement_timeout" TO '8s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "row_security" TO 'on'
-    AS $$
+    AS $_$
 begin
   if p_kind = 'process' and p_query = '' then
     return query
@@ -155,6 +155,54 @@ begin
     return;
   end if;
 
+  if p_kind = 'flow'
+     and private.portal_catalog_summary_valid_cas_v1(p_query) then
+    return query
+    with candidate_ids as materialized (
+      select distinct projection.id
+      from private.portal_catalog_search_rows_v1 as projection
+      where projection.dataset_kind = 'flow'
+        and pg_catalog.jsonb_typeof(
+          projection.card -> 'casNumber'
+        ) = 'string'
+        and projection.card ->> 'casNumber' ~
+          '^[0-9]{2,7}-[0-9]{2}-[0-9]$'
+        and projection.card ->> 'casNumber' = p_query
+    ), latest_rows as materialized (
+      select latest.id,
+        latest.version,
+        latest.card,
+        latest.state_code,
+        latest.modified_at
+      from candidate_ids
+      cross join lateral (
+        select projection.id,
+          projection.version,
+          projection.card,
+          projection.state_code,
+          projection.modified_at
+        from private.portal_catalog_search_rows_v1 as projection
+        where projection.dataset_kind = 'flow'
+          and projection.id = candidate_ids.id
+        order by projection.version desc,
+          projection.modified_at desc,
+          projection.state_code desc
+        limit 1
+      ) as latest
+      where pg_catalog.jsonb_typeof(
+          latest.card -> 'casNumber'
+        ) = 'string'
+        and latest.card ->> 'casNumber' = p_query
+    )
+    select latest.id,
+      latest.version,
+      latest.card,
+      latest.state_code,
+      latest.modified_at
+    from latest_rows as latest;
+    return;
+  end if;
+
   if p_kind = 'flow' and p_exact_id is not null then
     return query
     with matched as materialized (
@@ -269,7 +317,7 @@ begin
      and projection.version = eligible_keys.version;
   end if;
 end
-$$;
+$_$;
 
 ALTER FUNCTION "private"."catalog_portal_candidate_rows_v1"("p_kind" "text", "p_query" "text", "p_exact_id" "uuid", "p_like_pattern" "text") OWNER TO "portal_public_executor";
 
