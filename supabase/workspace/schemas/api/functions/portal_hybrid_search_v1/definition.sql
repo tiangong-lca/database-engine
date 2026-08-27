@@ -14,19 +14,21 @@ begin
     p_filters,
     p_limit
   );
-  v_page := private.portal_lcia_decorate_item_page_v1(
-    private.portal_projection_hybrid_search_v1_impl(
-      v_input ->> 'kind',
-      array(
-        select term.value
-        from pg_catalog.jsonb_array_elements_text(v_input -> 'queryTerms')
-          with ordinality as term(value, ordinality)
-        order by term.ordinality
-      ),
-      (v_input ->> 'queryEmbedding')::extensions.vector(1024),
-      v_input -> 'filters',
-      (v_input ->> 'limit')::integer,
-      v_input ->> 'queryFingerprint'
+  v_page := private.portal_decorate_card_context_v1(
+    private.portal_lcia_decorate_item_page_v1(
+      private.portal_projection_hybrid_search_v1_impl(
+        v_input ->> 'kind',
+        array(
+          select term.value
+          from pg_catalog.jsonb_array_elements_text(v_input -> 'queryTerms')
+            with ordinality as term(value, ordinality)
+          order by term.ordinality
+        ),
+        (v_input ->> 'queryEmbedding')::extensions.vector(1024),
+        v_input -> 'filters',
+        (v_input ->> 'limit')::integer,
+        v_input ->> 'queryFingerprint'
+      )
     )
   );
   if v_page is null

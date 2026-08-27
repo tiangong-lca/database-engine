@@ -134,13 +134,24 @@ buffers、execution time 且没有 temp/disk spill。
 
 ### `check_portal_projection_manifest.py`
 
-同时验证两个已提交的 Portal digest：十一函数 card 闭包与两函数窄 Facet 闭包。
-它禁止后续 mutation 任一闭包/控制函数，校验四个 Facet 分片、reconcile 与严格
-cutover dispatch，并保留 Flow eligibility index 的精确 catalog guard，同时不改变
-card-v1 digest。
+同时验证三个已提交的 Portal digest：十一函数 stored-card 闭包、两函数窄 Facet
+闭包，以及独立的 limit 后 context/decorator 闭包。它禁止后续 mutation 任一
+闭包/控制函数，校验四个 Facet 分片、reconcile/cutover，要求 context migration
+不新增 table/index/trigger，并保留 Flow eligibility index 的精确 catalog guard，
+同时不改变两个 #531 digest。
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py
+```
+
+### `check_portal_card_schema_parity.py`
+
+除非 lexical Search 与 Hybrid candidate item 在各自版本化 `match` 之外具有
+逐字一致且 exhaustive 的 card properties，并共同引用精确五字段
+`PublicCardContext` 定义，否则立即失败。
+
+```bash
+python3 scripts/check_portal_card_schema_parity.py
 ```
 
 ### `resolve_migration_head.py`

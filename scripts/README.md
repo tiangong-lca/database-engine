@@ -155,14 +155,25 @@ buffers, execution time, and no temp/disk spill.
 
 ### `check_portal_projection_manifest.py`
 
-Checks both committed Portal digests: the exact eleven-function card closure
-and the exact two-function narrow-facet closure. It rejects later mutation of
-either closure/control set, validates the four facet shards plus reconcile/
-cutover dispatch, and retains the Flow eligibility index catalog guard without
-changing the card-v1 digest.
+Checks all three committed Portal digests: the exact eleven-function stored-card
+closure, the exact two-function narrow-facet closure, and the independent
+selected-row context/decorator closure. It rejects later mutation of any
+closure/control set, validates the four facet shards plus reconcile/cutover,
+requires the context migration to add no table/index/trigger, and retains the
+Flow eligibility index catalog guard without changing either #531 digest.
 
 ```bash
 python3 scripts/check_portal_projection_manifest.py
+```
+
+### `check_portal_card_schema_parity.py`
+
+Fails unless lexical Search and Hybrid candidate items have byte-identical,
+exhaustive card properties outside their versioned `match` objects and both
+reference the exact five-field `PublicCardContext` definition.
+
+```bash
+python3 scripts/check_portal_card_schema_parity.py
 ```
 
 ### `resolve_migration_head.py`

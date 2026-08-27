@@ -20,6 +20,7 @@ FLOW_ELIGIBILITY_GUARD_NAME = (
 FACET_ANCHOR_NAME = "20260827020000_portal_facet_projection_expand.sql"
 FACET_RECONCILE_NAME = "20260827020005_portal_facet_projection_reconcile.sql"
 FACET_CUTOVER_NAME = "20260827020006_portal_facet_projection_cutover.sql"
+CARD_CONTEXT_ANCHOR_NAME = "20260827021441_portal_card_context_decorator.sql"
 MANIFEST_SHA256 = (
     "b5e0aff9abbffcc8d2dacaf559a5d1a8c993c20b647d0c70f0e4fa18eb06d2dc"
 )
@@ -52,6 +53,32 @@ FACET_FUNCTION_IDENTITIES = (
 FACET_CONTROL_FUNCTION_IDENTITIES = (
     "private.portal_catalog_facet_manifest_sha256_v1()",
     "private.assert_portal_catalog_facet_contract_v1()",
+)
+CARD_CONTEXT_MANIFEST_SHA256 = (
+    "e0516d5f3a641d26221a5c44b92a2e7a87cab125e9145e8141074d9bc2af39fa"
+)
+CARD_CONTEXT_FUNCTION_IDENTITIES = (
+    "private.portal_card_context_v1(text,integer,jsonb)",
+    "private.portal_decorate_card_context_v1(jsonb)",
+    "private.portal_process_reference_product_v1(jsonb)",
+    "private.portal_process_functional_unit_v1(integer,jsonb)",
+    "private.portal_exchange_support_v1(integer,jsonb,jsonb)",
+    "private.portal_reference_flowproperty_v1(jsonb)",
+    "private.portal_localized_text_v1(jsonb)",
+    "private.portal_scalar_text_v1(jsonb)",
+    "private.portal_json_items_v1(jsonb)",
+    "private.portal_source_v1(text,jsonb)",
+    "private.portal_capabilities_v1(text,integer,jsonb)",
+    "private.portal_canonical_decimal_v1(text)",
+    "private.portal_flow_kind_v1(text)",
+    "private.portal_support_capabilities_v1(text,integer)",
+    "private.portal_classifications_v1(jsonb)",
+    "private.portal_publication_root_v1(text,jsonb)",
+    "private.portal_access_restrictions_open_v1(jsonb)",
+)
+CARD_CONTEXT_CONTROL_FUNCTION_IDENTITIES = (
+    "private.portal_card_context_manifest_sha256_v1()",
+    "private.assert_portal_card_context_contract_v1()",
 )
 
 
@@ -156,6 +183,89 @@ def main() -> int:
             continue
         executable_sql = sql_without_comments(migration.read_text(encoding="utf-8"))
         for identity, pattern in facet_patterns.items():
+            if pattern.search(executable_sql):
+                violations.append(f"{migration.name}: {identity}")
+
+    context_anchor = MIGRATIONS_DIR / CARD_CONTEXT_ANCHOR_NAME
+    if not context_anchor.is_file():
+        violations.append(
+            f"missing Portal card-context migration: {CARD_CONTEXT_ANCHOR_NAME}"
+        )
+    else:
+        context_sql = sql_without_comments(
+            context_anchor.read_text(encoding="utf-8")
+        )
+        context_sql_lower = context_sql.lower()
+        if CARD_CONTEXT_MANIFEST_SHA256 not in context_sql:
+            violations.append("Portal card-context manifest digest literal is absent")
+        for identity in (
+            CARD_CONTEXT_FUNCTION_IDENTITIES
+            + CARD_CONTEXT_CONTROL_FUNCTION_IDENTITIES
+        ):
+            if identity not in context_sql:
+                violations.append(
+                    f"Portal card-context manifest anchor omits: {identity}"
+                )
+        required_context_tokens = (
+            "begin;",
+            "set local lock_timeout = '5s'",
+            "set local statement_timeout = '120s'",
+            "portal_process_functional_unit_v1(100, p_json)",
+            "portal_decorate_card_context_v1",
+            "jsonb_array_elements(p_page -> 'items')",
+            "join public.processes as source",
+            "join public.flows as source",
+            "v_expected > (",
+            "then 50",
+            "else 20",
+            "portal_card_context_writer_before",
+            "private.assert_portal_card_context_contract_v1()",
+            "commit;",
+        )
+        missing = [
+            token for token in required_context_tokens if token not in context_sql_lower
+        ]
+        if missing:
+            violations.append(
+                f"{CARD_CONTEXT_ANCHOR_NAME}: missing selected-row tokens "
+                + ", ".join(missing)
+            )
+        for wrapper in (
+            "api.portal_search_processes_v1",
+            "api.portal_search_flows_v1",
+            "api.portal_hybrid_search_v1",
+        ):
+            wrapper_pattern = re.compile(
+                rf"create\s+or\s+replace\s+function\s+{re.escape(wrapper)}\s*\(",
+                flags=re.IGNORECASE,
+            )
+            if len(wrapper_pattern.findall(context_sql)) != 1:
+                violations.append(
+                    f"{CARD_CONTEXT_ANCHOR_NAME}: expected one {wrapper} replacement"
+                )
+        if re.search(
+            r"\b(?:create\s+(?:unlogged\s+)?table|create\s+(?:unique\s+)?index|"
+            r"create\s+trigger|alter\s+table)\b",
+            context_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{CARD_CONTEXT_ANCHOR_NAME}: selected-row decorator must not add "
+                "a table, index, trigger, or source-table rewrite"
+            )
+
+    context_protected = (
+        CARD_CONTEXT_FUNCTION_IDENTITIES
+        + CARD_CONTEXT_CONTROL_FUNCTION_IDENTITIES
+    )
+    context_patterns = {
+        identity: mutation_pattern(identity) for identity in context_protected
+    }
+    for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        if migration.name <= CARD_CONTEXT_ANCHOR_NAME:
+            continue
+        executable_sql = sql_without_comments(migration.read_text(encoding="utf-8"))
+        for identity, pattern in context_patterns.items():
             if pattern.search(executable_sql):
                 violations.append(f"{migration.name}: {identity}")
 
@@ -356,7 +466,10 @@ def main() -> int:
         f"sha256={MANIFEST_SHA256}; facet closure "
         f"{len(FACET_FUNCTION_IDENTITIES)} derivation functions and "
         f"{len(FACET_CONTROL_FUNCTION_IDENTITIES)} controls, "
-        f"sha256={FACET_MANIFEST_SHA256}"
+        f"sha256={FACET_MANIFEST_SHA256}; selected-row context closure "
+        f"{len(CARD_CONTEXT_FUNCTION_IDENTITIES)} derivation functions and "
+        f"{len(CARD_CONTEXT_CONTROL_FUNCTION_IDENTITIES)} controls, "
+        f"sha256={CARD_CONTEXT_MANIFEST_SHA256}"
     )
     return 0
 

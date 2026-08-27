@@ -37,6 +37,7 @@ export interface SearchItem {
   summary: LocalizedText;
   geography: Geography;
   referenceYear: number | null;
+  context: PublicCardContext;
   modifiedAt: string;
   match: SearchMatch;
 }
@@ -71,6 +72,48 @@ export interface Geography {
   code: string | null;
   label: LocalizedText;
   precision: "country" | "province" | "city" | "other" | "unknown";
+}
+/**
+ * Shared, exhaustive, locator-free context emitted byte-identically by lexical Search and Hybrid candidate cards before their versioned match objects are added.
+ */
+export interface PublicCardContext {
+  reference: PublicCardReference;
+  functionalUnit: CompleteFunctionalUnit | null;
+  technology: LocalizedText;
+  source: PublicSource;
+  quality: PublicCardQuality;
+}
+/**
+ * Evidence-backed display reference for a Search or Hybrid card. Missing public evidence is represented by an empty name array, never by an authored locator or private fallback.
+ */
+export interface PublicCardReference {
+  kind: "reference_product" | "reference_flow_property";
+  name: LocalizedText;
+}
+/**
+ * Functional-unit context required before a public numeric value may be emitted.
+ */
+export interface CompleteFunctionalUnit {
+  /**
+   * Canonical non-exponent decimal string derived from TIDAS Real. Producers must remove a leading plus sign, leading integer zeroes, trailing fractional zeroes, and negative zero before emitting it. The value contains 1 to 38 total digits and consumers must not coerce it to a binary floating-point number.
+   */
+  amount: string;
+  unit: string;
+  description: LocalizedText;
+}
+export interface PublicSource {
+  databaseId: string | null;
+  databaseVersion: string | null;
+  sourceRecordId: string | null;
+  providerName: LocalizedText;
+  licenseId: string | null;
+  licenseUrl: string | null;
+}
+/**
+ * Public quality status copied only from the exhaustive public data-set metadata allowlist. It is unrelated to private workflow Review rows.
+ */
+export interface PublicCardQuality {
+  reviewStatus: string | null;
 }
 /**
  * This interface was referenced by `TianGongPortalPublicSearchPageV1`'s JSON-Schema

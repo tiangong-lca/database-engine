@@ -181,6 +181,38 @@ export interface FunctionalUnit {
   description: LocalizedText;
 }
 /**
+ * Evidence-backed display reference for a Search or Hybrid card. Missing public evidence is represented by an empty name array, never by an authored locator or private fallback.
+ *
+ * This interface was referenced by `TianGongPortalCommonPublicDTOTypesV1`'s JSON-Schema
+ * via the `definition` "PublicCardReference".
+ */
+export interface PublicCardReference {
+  kind: "reference_product" | "reference_flow_property";
+  name: LocalizedText;
+}
+/**
+ * Public quality status copied only from the exhaustive public data-set metadata allowlist. It is unrelated to private workflow Review rows.
+ *
+ * This interface was referenced by `TianGongPortalCommonPublicDTOTypesV1`'s JSON-Schema
+ * via the `definition` "PublicCardQuality".
+ */
+export interface PublicCardQuality {
+  reviewStatus: NullableNonEmptyString;
+}
+/**
+ * Shared, exhaustive, locator-free context emitted byte-identically by lexical Search and Hybrid candidate cards before their versioned match objects are added.
+ *
+ * This interface was referenced by `TianGongPortalCommonPublicDTOTypesV1`'s JSON-Schema
+ * via the `definition` "PublicCardContext".
+ */
+export interface PublicCardContext {
+  reference: PublicCardReference;
+  functionalUnit: CompleteFunctionalUnit | null;
+  technology: LocalizedText;
+  source: PublicSource;
+  quality: PublicCardQuality;
+}
+/**
  * Functional-unit context required before a public numeric value may be emitted.
  *
  * This interface was referenced by `TianGongPortalCommonPublicDTOTypesV1`'s JSON-Schema
@@ -190,6 +222,18 @@ export interface CompleteFunctionalUnit {
   amount: Real;
   unit: NonEmptyString;
   description: LocalizedText;
+}
+/**
+ * This interface was referenced by `TianGongPortalCommonPublicDTOTypesV1`'s JSON-Schema
+ * via the `definition` "PublicSource".
+ */
+export interface PublicSource {
+  databaseId: NullableNonEmptyString;
+  databaseVersion: NullableNonEmptyString;
+  sourceRecordId: NullableNonEmptyString;
+  providerName: LocalizedText;
+  licenseId: NullableNonEmptyString;
+  licenseUrl: PublicHttpsUri | null;
 }
 /**
  * This interface was referenced by `TianGongPortalCommonPublicDTOTypesV1`'s JSON-Schema
@@ -215,18 +259,6 @@ export interface FieldOrigin {
   ruleVersion: NullableNonEmptyString;
   confidence: "high" | "medium" | "low" | null;
   reason: LocalizedText;
-}
-/**
- * This interface was referenced by `TianGongPortalCommonPublicDTOTypesV1`'s JSON-Schema
- * via the `definition` "PublicSource".
- */
-export interface PublicSource {
-  databaseId: NullableNonEmptyString;
-  databaseVersion: NullableNonEmptyString;
-  sourceRecordId: NullableNonEmptyString;
-  providerName: LocalizedText;
-  licenseId: NullableNonEmptyString;
-  licenseUrl: PublicHttpsUri | null;
 }
 /**
  * This interface was referenced by `TianGongPortalCommonPublicDTOTypesV1`'s JSON-Schema

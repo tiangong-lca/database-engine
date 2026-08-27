@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."portal_card_context_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") IS 'Builds the exact five-field public-safe Search/Hybrid context from one selected source row and reviewed public-dataset allowlist helpers.';

@@ -102,6 +102,18 @@ need Git provenance still check out full history (`fetch-depth: 0`).
 | `supabase/workspace/**` | prove whether the touched file is generated or stable | if stable manual overlay files changed, explain how they feed migration generation | Generated files alone are not sufficient evidence of a durable schema change. |
 | repo docs only | `scripts/docpact lint --root . --files "<csv>" --mode enforce` | `scripts/docpact validate-config --root . --strict` when `.docpact/config.yaml` changes | Refresh review metadata even when prose stays unchanged. |
 
+The Issue #532 Search/Hybrid card context is not a stored v1 card/document
+semantic replacement. It must run only after the existing ordering and 50/20
+limit, use exact source keys, share one independently manifest-guarded
+decorator, and preserve the #531 projection/index/Facet/writer graph
+byte-for-byte. Run `supabase/tests/20260827_portal_card_context_v1.sql`, require
+Search and Hybrid schemas/types to share the exact exhaustive context, and add
+Process/Flow Search-50 plus Hybrid-20 context p95/buffer samples to each named
+Portal performance profile. Search remains <= 2 seconds; Hybrid remains <= 6
+seconds p95 and < 8 seconds per call. Preview must validate the strict response
+schemas with a publishable key. Any later change to the stored v1 card/document
+still requires the shadow-v2 rollout described above.
+
 For the narrow Portal facet projection, run both
 `scripts/test_portal_projection_upgrade_recovery.sh` and
 `scripts/test_portal_facet_projection_populated_upgrade.sh`. The latter must

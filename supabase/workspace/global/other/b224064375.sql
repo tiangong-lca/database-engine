@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."portal_decorate_card_context_v1"("p_page" "jsonb") IS 'Hydrates at most 50 Search or 20 Hybrid items by exact public source identity after candidate ordering and limit.';

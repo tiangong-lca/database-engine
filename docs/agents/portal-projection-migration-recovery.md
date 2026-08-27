@@ -37,6 +37,7 @@ checkPaths:
   - supabase/migrations/20260827020004_portal_facet_projection_backfill_c0_ff.sql
   - supabase/migrations/20260827020005_portal_facet_projection_reconcile.sql
   - supabase/migrations/20260827020006_portal_facet_projection_cutover.sql
+  - supabase/migrations/20260827021441_portal_card_context_decorator.sql
 related:
   - ../../AGENTS.md
   - repo-validation.md
@@ -101,6 +102,15 @@ guard compares the committed registry SHA-256 with the live definitions,
 owners, language, volatility, parallel/security settings, and function config
 of the exact eleven-function card/document closure. Contract drift fails closed
 before projection rows are read.
+
+Issue #532 does not add another projection rollout or recovery boundary. Its
+single migration preserves every Issue #531 table, index, trigger, stored card,
+and Facet fact. After Search or Hybrid has ordered and limited candidates, one
+shared exact-key decorator reads at most 50 Process/Flow source rows and derives
+only the exhaustive public card context. The decorator has its own live
+transitive manifest because it stores no historical rows; drift or an exact
+source miss fails closed. There is no backfill, reconcile, concurrent index,
+COMMIT/history cleanup, or writer recovery action for this layer.
 
 ## Read-only diagnosis
 

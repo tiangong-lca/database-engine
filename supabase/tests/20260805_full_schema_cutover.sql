@@ -80,7 +80,7 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  277::bigint,
+  281::bigint,
   'private contains the active helpers, Database B/reuse helpers, and reviewed Portal catalog/LCIA/Hybrid internals'
 );
 

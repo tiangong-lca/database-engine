@@ -315,6 +315,17 @@ requires a new helper closure, shadow projection, bounded backfill, concurrent
 indexes, short reconcile fence, and atomic read cutover. Updating a digest or
 rebuilding v1 rows in place is not a valid migration path.
 
+Search and Hybrid card context is a bounded composition layer rather than a
+stored-card mutation. After the existing candidate path fixes ordering and
+applies its 50-item Search or 20-item Hybrid limit, one shared helper resolves
+each exact `kind/id/version` source row and reuses only the public-dataset
+allowlist helpers for reference product/property, complete functional unit,
+technology, source, and dataset-authored review status. An independent live
+manifest protects that helper/decorator closure. It creates no second
+full-cardinality projection, index, policy, source trigger, or writer work;
+missing source identity or helper drift fails the wrapper closed. A future
+change to stored v1 card/document semantics still requires shadow-v2 rollout.
+
 This contract assumes privileged DDL is delivered only through the governed
 migration and CI path. The live digest proves current definitions, not the
 historical derivation of a row after out-of-band change/write/restore. Direct or

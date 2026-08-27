@@ -491,7 +491,11 @@ rules:
         kind: database-migration
       - path: supabase/migrations/20260827020006_portal_facet_projection_cutover.sql
         kind: database-migration
+      - path: supabase/migrations/20260827021441_portal_card_context_decorator.sql
+        kind: database-migration
       - path: supabase/tests/20260826_portal_candidate_first_search.sql
+        kind: database-contract-test
+      - path: supabase/tests/20260827_portal_card_context_v1.sql
         kind: database-contract-test
       - path: supabase/tests/benchmarks/20260826_portal_candidate_first_explain.sql
         kind: database-benchmark
@@ -510,4 +514,4 @@ rules:
         mode: review_or_update
       - path: docs/agents/portal-projection-migration-recovery.md
         mode: review_or_update
-    reason: The immutable card and facet manifests, online expand/backfill/reconcile/index/cutover sequences, recovery procedure, and representative performance gates must change together.
+    reason: The immutable card and facet manifests, online expand/backfill/reconcile/index/cutover sequences, selected-row card-context decorator, recovery procedure, and representative performance gates must change together.

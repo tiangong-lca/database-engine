@@ -21,7 +21,7 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: bf1e49bc1011a548f2c1ac86f38242e0b820cea3
+lastReviewedCommit: 27dadfa0f5529e16043ccebce7e615a228b136cc
 lastReviewedNote: "已在准确 PR Preview 门最小化 branch/key 权限并把公共 key 选择与匿名传输隔离后复核；持久化 Dev 与生产的修改边界不变。"
 related:
   - ../../AGENTS.md

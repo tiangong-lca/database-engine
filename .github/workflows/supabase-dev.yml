@@ -36,6 +36,7 @@ jobs:
           python scripts/test_resolve_migration_head.py
           python scripts/test_supabase_dev_workflow_contract.py
           python scripts/check_portal_projection_manifest.py
+          python3 scripts/check_portal_card_schema_parity.py
 
       - name: Rebuild migration history
         run: supabase start && supabase db reset --no-seed
@@ -59,6 +60,7 @@ jobs:
           supabase test db supabase/tests/20260826_portal_lcia_catalog_visibility_v1.sql
           supabase test db supabase/tests/20260826_portal_public_hybrid_search_v1.sql
           supabase test db supabase/tests/20260826_portal_candidate_first_search.sql
+          supabase test db supabase/tests/20260827_portal_card_context_v1.sql
           supabase test db supabase/tests/20260623_data_product_publication_mvp.sql
           supabase test db supabase/tests/20260716_lci_lcia_release_control_plane.sql
           scripts/test_full_schema_cutover_upgrade.sh

@@ -214,6 +214,76 @@
         }
       }
     },
+    "PublicCardReference": {
+      "description": "Evidence-backed display reference for a Search or Hybrid card. Missing public evidence is represented by an empty name array, never by an authored locator or private fallback.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "name"
+      ],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "enum": [
+            "reference_product",
+            "reference_flow_property"
+          ]
+        },
+        "name": {
+          "$ref": "#/$defs/LocalizedText"
+        }
+      }
+    },
+    "PublicCardQuality": {
+      "description": "Public quality status copied only from the exhaustive public data-set metadata allowlist. It is unrelated to private workflow Review rows.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reviewStatus"
+      ],
+      "properties": {
+        "reviewStatus": {
+          "$ref": "#/$defs/NullableNonEmptyString"
+        }
+      }
+    },
+    "PublicCardContext": {
+      "description": "Shared, exhaustive, locator-free context emitted byte-identically by lexical Search and Hybrid candidate cards before their versioned match objects are added.",
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "reference",
+        "functionalUnit",
+        "technology",
+        "source",
+        "quality"
+      ],
+      "properties": {
+        "reference": {
+          "$ref": "#/$defs/PublicCardReference"
+        },
+        "functionalUnit": {
+          "anyOf": [
+            {
+              "$ref": "#/$defs/CompleteFunctionalUnit"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
+        "technology": {
+          "$ref": "#/$defs/LocalizedText"
+        },
+        "source": {
+          "$ref": "#/$defs/PublicSource"
+        },
+        "quality": {
+          "$ref": "#/$defs/PublicCardQuality"
+        }
+      }
+    },
     "CompleteFunctionalUnit": {
       "description": "Functional-unit context required before a public numeric value may be emitted.",
       "type": "object",
