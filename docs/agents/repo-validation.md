@@ -32,8 +32,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: b7ffb20
-lastReviewedNote: "Reviewed for Issue #532 exact-key 50/20 decoration, exact-50 filtered Search proof, Facet-manifest drift failure, deterministic Portal types, and isolated release evidence."
+lastReviewedCommit: ac64c51
+lastReviewedNote: "Reviewed for the combined Issue #532/#533 271-migration reset, 11-module generation, Portal pgTAP, exact-50 Search, Facet-manifest drift, and catalog-summary performance evidence."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -155,6 +155,20 @@ p95 <= 6 seconds, every call < 8 seconds, and no `portal hybrid unavailable`;
 record index validity/size, database size before/after when available, and both
 advisor classes. Process remains index-free unless separate hosted evidence
 justifies shared write amplification.
+
+For the Portal catalog summary, run
+`supabase/tests/benchmarks/20260827_portal_catalog_summary_cardinality.sql`
+only against a uniquely named isolated local project with
+`benchmark_target=local`, exactly 17,299 Process rows, 108,947 Flow rows, and
+20 samples per profile. `normal`, `tail-evidence`, and
+`no-cas-classification-evidence` must each keep p95 at or below 250 ms and the
+response below 16 KiB. The CAS and classification plans must naturally name
+`portal_catalog_summary_eligibility_v1_idx`, with no sequential card scan or
+temp spill under the façade's 32-MB workspace. Record the index bytes and build
+time. The benchmark's separate temporary writer probe must compare 50
+four-update samples before and after only the combined eligibility index; it
+must not drop, rebuild, truncate, or rewrite the real Portal projection while
+collecting incremental writer evidence.
 
 ## SQL And Offline Node Contract Notes
 

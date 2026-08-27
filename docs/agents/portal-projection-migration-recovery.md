@@ -1,7 +1,7 @@
 ---
 lastReviewedAt: 2026-08-27
-lastReviewedCommit: b7ffb20
-lastReviewedNote: "Reviewed for the Issue #532 per-request Facet-manifest guard, independent card-context manifest, and explicit absence of a new rollout or writer-recovery boundary; Issue #531 recovery remains unchanged."
+lastReviewedCommit: ac64c51
+lastReviewedNote: "Reviewed after combining Issue #532 with the three Issue #533 summary migrations: the 271-file tree, concurrent-index recovery, runtime manifests, and Issue #531 recovery boundary are explicit."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -13,6 +13,7 @@ whenToUse:
   - when an Issue 531 Portal projection migration stops before cutover completes
   - when a concurrent Portal projection index is INVALID or exists without migration history
   - when validating retry safety for the Portal projection rollout
+  - when an Issue 533 Portal catalog-summary eligibility index stops before its guard or façade migration completes
 whenToUpdate:
   - when the Portal projection migration sequence or recovery test changes
 checkPaths:
@@ -39,6 +40,10 @@ checkPaths:
   - supabase/migrations/20260827020006_portal_facet_projection_cutover.sql
   - supabase/migrations/20260827021441_portal_card_context_decorator.sql
   - supabase/migrations/20260827134100_optimize_portal_flow_geography_search.sql
+  - supabase/migrations/20260827050000_portal_catalog_summary_eligibility_index.sql
+  - supabase/migrations/20260827050001_portal_catalog_summary_eligibility_guard.sql
+  - supabase/migrations/20260827050002_portal_catalog_summary_v1.sql
+  - supabase/tests/benchmarks/20260827_portal_catalog_summary_cardinality.sql
 related:
   - ../../AGENTS.md
   - repo-validation.md
@@ -48,10 +53,11 @@ related:
 
 # Portal Projection Migration Recovery
 
-This runbook covers only the additive Issue 531 Portal projection rollout. It
-does not authorize production mutation, migration-history edits, or deletion of
-an applied migration. Use the repository's normal tracked-delivery and Supabase
-branch controls before any hosted action.
+This runbook covers only the additive Issue 531 Portal projection rollout and
+the narrow Issue 533 catalog-summary eligibility index layered on top of it. It
+does not authorize production mutation, migration-history edits, or deletion
+of an applied migration. Use the repository's normal tracked-delivery and
+Supabase branch controls before any hosted action.
 
 ## Safe rollout states
 
@@ -90,6 +96,16 @@ The rollout has six observable boundaries:
    `20260827020006` then dispatches only normalized
    empty-query/empty-filter requests to the 32-MB bounded narrow helper. Every
    query or filter retains the unchanged card implementation.
+7. `20260827050000` builds one standalone concurrent combined eligibility
+   B-tree over the existing card projection. It keys only dataset kind,
+   identity, version, timestamp, and state, and its predicate admits
+   regex-shaped Flow CAS or nonempty classifications without storing card or
+   example values. `20260827050001` transactionally verifies the exact
+   relation, owner, access method, keys, opclasses, predicate, and validity.
+   `20260827050002` then adds the bounded anonymous catalog-summary façade and
+   its two ACL-closed validation helpers. Counts and latest timestamp continue
+   reading the narrow facet projection; no existing card/facet manifest,
+   source trigger, table, or index changes.
 
 The card expand/reconcile/cutovers and all facet expand/backfill/reconcile/
 cutover files are explicit transactions. A statement or guard failure rolls
@@ -363,6 +379,24 @@ Then rerun the normal migration command. Never drop the index when either
 post-cutover migration is recorded; diagnose or repair that state as separately
 tracked work.
 
+The Portal catalog-summary eligibility index has its own three-file boundary.
+Cleanup is allowed only when `20260827050000`, `20260827050001`, and
+`20260827050002` are all absent from migration history, both immutable Portal
+projection assertions succeed, the facet cutover through `20260827020006` is
+recorded, and the same-name relation is an INVALID, definition-drifted, or
+canonical-valid commit-gap copy on
+`private.portal_catalog_search_rows_v1`. Run only this standalone statement:
+
+```sql
+drop index concurrently if exists
+  private.portal_catalog_summary_eligibility_v1_idx;
+```
+
+Then repeat the normal migration command. If the guard or façade migration is
+already recorded, do not drop or rename the index and do not edit migration
+history. Preserve the exact ledger/index/function evidence and repair through
+a separately reviewed forward migration.
+
 ## Uncertain expand commit
 
 The expand migration is transactional, so ordinary SQL failure leaves no Issue
@@ -459,7 +493,7 @@ Issue 531 Supabase project. It resets that local project and must never target a
 shared checkout, Preview, persistent Dev, or production.
 
 Formal recovery evidence requires clean HEAD, the reviewed Supabase CLI
-`2.109.1`, and byte equality plus one aggregate SHA-256 across all 268 migration
+`2.109.1`, and byte equality plus one aggregate SHA-256 across all 271 migration
 files in the repository and isolated project. Comparing only Issue 531 files is
 not sufficient because an earlier baseline change can alter recovery behavior.
 
