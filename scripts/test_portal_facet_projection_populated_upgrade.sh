@@ -42,9 +42,9 @@ fi
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 275 \
-   || "${#test_migrations[@]}" -ne 275 ]]; then
-  echo "complete migration tree must contain exactly 275 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 276 \
+   || "${#test_migrations[@]}" -ne 276 ]]; then
+  echo "complete migration tree must contain exactly 276 files" >&2
   exit 2
 fi
 for migration_index in "${!repo_migrations[@]}"; do

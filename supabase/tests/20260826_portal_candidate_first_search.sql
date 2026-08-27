@@ -392,9 +392,11 @@ select extensions.ok(
             'return query',
             ''
           ))) / pg_catalog.length('return query')
-      ) = 6
+      ) = 7
       and routine.prosrc ~ 'catalog_portal_process_pattern_versions_v1'
       and routine.prosrc ~ 'catalog_portal_flow_pattern_versions_v1'
+      and routine.prosrc ~ 'portal_catalog_summary_valid_cas_v1'
+      and routine.prosrc ~ 'latest_rows as materialized'
       and routine.prosrc !~* '[[:space:]]execute[[:space:]]'
       and (
         pg_catalog.length(routine.prosrc)
@@ -438,7 +440,40 @@ select extensions.ok(
     'private.catalog_portal_candidate_rows_v1(text,text,uuid,text)',
     'EXECUTE'
   ),
-  'candidate lookup has six static branches and no external or dynamic-SQL edge'
+  'candidate lookup has seven static branches, including exact Flow CAS, and no external or dynamic-SQL edge'
+);
+
+select extensions.ok(
+  (
+    select access_method.amname = 'btree'
+      and index_record.indisvalid
+      and index_record.indisready
+      and index_record.indislive
+      and not index_record.indisunique
+      and index_record.indnkeyatts = 5
+      and index_record.indnatts = 5
+      and index_record.indexprs is not null
+      and pg_catalog.pg_get_expr(
+        index_record.indpred,
+        index_record.indrelid,
+        true
+      ) ~ $$dataset_kind = 'flow'$$
+      and pg_catalog.pg_get_expr(
+        index_record.indpred,
+        index_record.indrelid,
+        true
+      ) ~ 'casNumber'
+      and pg_catalog.pg_get_indexdef(index_record.indexrelid) ~
+        'casNumber.*id.*version DESC.*modified_at DESC.*state_code DESC'
+    from pg_catalog.pg_index as index_record
+    join pg_catalog.pg_class as index_relation
+      on index_relation.oid = index_record.indexrelid
+    join pg_catalog.pg_am as access_method
+      on access_method.oid = index_relation.relam
+    where index_record.indexrelid =
+      'private.portal_catalog_search_flow_cas_v1_idx'::regclass
+  ),
+  'valid Flow CAS candidates use one live five-key partial expression btree'
 );
 
 select extensions.ok(
@@ -1056,8 +1091,8 @@ values
   (
     '53100000-0000-4000-8000-000000000202',
     '01.00.000',
-    '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"candidate public flow"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::jsonb,
-    '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"candidate public flow"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::json,
+    '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"candidate public flow"}},"CASNumber":"50-00-0"}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::jsonb,
+    '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"candidate public flow"}},"CASNumber":"50-00-0"}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::json,
     '53100000-0000-4000-8000-000000000001',
     100,
     true,
@@ -1080,8 +1115,8 @@ values
   (
     '53100000-0000-4000-8000-000000000204',
     '01.00.000',
-    '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"staleversionneedle flow"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::jsonb,
-    '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"staleversionneedle flow"}}}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::json,
+    '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"staleversionneedle flow"}},"CASNumber":"64-17-5"}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::jsonb,
+    '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":{"@xml:lang":"en","#text":"staleversionneedle flow"}},"CASNumber":"64-17-5"}},"administrativeInformation":{"publicationAndOwnership":{"common:dataSetVersion":"01.00.000","common:licenseType":"Free of charge for all users and uses"}}}}'::json,
     '53100000-0000-4000-8000-000000000001',
     100,
     true,
@@ -1438,6 +1473,28 @@ select extensions.is(
   ),
   2::bigint,
   'candidate helper and Portal RLS exclude state-0/state-20 Flow rows'
+);
+
+select extensions.is(
+  (
+    select count(*)
+    from private.catalog_portal_candidate_rows_v1(
+      'flow', '50-00-0', null, '%50-00-0%'
+    )
+  ),
+  1::bigint,
+  'valid Flow CAS resolves through the exact-card candidate branch'
+);
+
+select extensions.is(
+  (
+    select count(*)
+    from private.catalog_portal_candidate_rows_v1(
+      'flow', '64-17-5', null, '%64-17-5%'
+    )
+  ),
+  0::bigint,
+  'a CAS present only on an older Flow version is rejected after exact latest recheck'
 );
 
 select extensions.is(

@@ -221,6 +221,7 @@ create temporary table portal_summary_writer_timings (
 ) on commit drop;
 
 create temporary table portal_summary_index_build (
+  profile text primary key,
   elapsed_ms numeric not null,
   index_bytes bigint not null
 ) on commit drop;
@@ -325,9 +326,11 @@ begin
     );
 
   insert into pg_temp.portal_summary_index_build (
+    profile,
     elapsed_ms,
     index_bytes
   ) values (
+    'combined-eligibility-index',
     extract(epoch from pg_catalog.clock_timestamp() - v_started_at) * 1000,
     pg_catalog.pg_relation_size(
       'pg_temp.portal_catalog_summary_eligibility_writer_probe_idx'
@@ -340,6 +343,42 @@ analyze pg_temp.portal_summary_writer_probe;
 
 select pg_temp.measure_portal_summary_writes(
   'combined-eligibility-index', 50
+);
+
+do $build_portal_catalog_flow_cas_index$
+declare
+  v_started_at timestamptz := pg_catalog.clock_timestamp();
+begin
+  create index portal_catalog_search_flow_cas_writer_probe_idx
+  on pg_temp.portal_summary_writer_probe (
+    ((card ->> 'casNumber')),
+    id,
+    version desc,
+    modified_at desc,
+    state_code desc
+  )
+  where dataset_kind = 'flow'
+    and pg_catalog.jsonb_typeof(card -> 'casNumber') = 'string'
+    and card ->> 'casNumber' ~ '^[0-9]{2,7}-[0-9]{2}-[0-9]$';
+
+  insert into pg_temp.portal_summary_index_build (
+    profile,
+    elapsed_ms,
+    index_bytes
+  ) values (
+    'flow-cas-index',
+    extract(epoch from pg_catalog.clock_timestamp() - v_started_at) * 1000,
+    pg_catalog.pg_relation_size(
+      'pg_temp.portal_catalog_search_flow_cas_writer_probe_idx'
+    )
+  );
+end
+$build_portal_catalog_flow_cas_index$;
+
+analyze pg_temp.portal_summary_writer_probe;
+
+select pg_temp.measure_portal_summary_writes(
+  'combined-plus-flow-cas-index', 50
 );
 
 select writer.profile,
@@ -358,16 +397,19 @@ from portal_summary_writer_timings as writer
 group by writer.profile
 order by writer.profile;
 
-select pg_catalog.round(index_build.elapsed_ms, 3) as build_ms,
+select index_build.profile,
+  pg_catalog.round(index_build.elapsed_ms, 3) as build_ms,
   index_build.index_bytes
-from portal_summary_index_build as index_build;
+from portal_summary_index_build as index_build
+order by index_build.profile;
 
 do $portal_summary_writer_performance_guard$
 declare
   v_baseline_p95 numeric;
   v_indexed_p95 numeric;
-  v_build_ms numeric;
-  v_index_bytes bigint;
+  v_cas_indexed_p95 numeric;
+  v_max_build_ms numeric;
+  v_total_index_bytes bigint;
 begin
   select pg_catalog.percentile_cont(0.95) within group (
       order by writer.elapsed_ms
@@ -383,19 +425,28 @@ begin
   from portal_summary_writer_timings as writer
   where writer.profile = 'combined-eligibility-index';
 
-  select index_build.elapsed_ms,
-    index_build.index_bytes
-  into v_build_ms,
-    v_index_bytes
+  select pg_catalog.percentile_cont(0.95) within group (
+      order by writer.elapsed_ms
+    )
+  into v_cas_indexed_p95
+  from portal_summary_writer_timings as writer
+  where writer.profile = 'combined-plus-flow-cas-index';
+
+  select pg_catalog.max(index_build.elapsed_ms),
+    pg_catalog.sum(index_build.index_bytes)
+  into v_max_build_ms,
+    v_total_index_bytes
   from portal_summary_index_build as index_build;
 
   if v_baseline_p95 is null
      or v_indexed_p95 is null
-     or v_build_ms is null
-     or v_index_bytes is null
+     or v_cas_indexed_p95 is null
+     or v_max_build_ms is null
+     or v_total_index_bytes is null
      or v_indexed_p95 > greatest(5::numeric, v_baseline_p95 * 3)
-     or v_build_ms > 5000
-     or v_index_bytes > 32 * 1024 * 1024 then
+     or v_cas_indexed_p95 > greatest(5::numeric, v_baseline_p95 * 3)
+     or v_max_build_ms > 5000
+     or v_total_index_bytes > 64 * 1024 * 1024 then
     raise exception 'Portal summary index writer/build budget failed'
       using errcode = '54000';
   end if;
@@ -414,10 +465,11 @@ create temporary table portal_summary_timings (
 create temporary table portal_summary_example_timings (
   profile text not null,
   sample integer not null,
+  query_kind text not null,
   dataset_kind text not null,
   elapsed_ms numeric not null,
   item_count integer not null,
-  primary key (profile, sample)
+  primary key (profile, query_kind, sample)
 ) on commit drop;
 
 create function pg_temp.measure_portal_summary(
@@ -498,12 +550,14 @@ begin
     insert into pg_temp.portal_summary_example_timings (
       profile,
       sample,
+      query_kind,
       dataset_kind,
       elapsed_ms,
       item_count
     ) values (
       p_profile,
       v_sample,
+      'classification',
       v_example ->> 'datasetKind',
       extract(
         epoch from pg_catalog.clock_timestamp() - v_started_at
@@ -514,7 +568,67 @@ begin
 end
 $function$;
 
+create function pg_temp.measure_portal_summary_cas_example(
+  p_profile text,
+  p_samples integer
+)
+returns void
+language plpgsql
+volatile
+set search_path = ''
+as $function$
+declare
+  v_sample integer;
+  v_started_at timestamptz;
+  v_example jsonb;
+  v_page jsonb;
+begin
+  select example.value
+  into v_example
+  from pg_catalog.jsonb_array_elements(
+    api.portal_catalog_summary_v1() -> 'examples'
+  ) as example(value)
+  where example.value ->> 'queryKind' = 'cas';
+  if v_example is null
+     or v_example ->> 'datasetKind' <> 'flow'
+     or not private.portal_catalog_summary_valid_cas_v1(
+       v_example ->> 'query'
+     ) then
+    raise exception 'Portal summary CAS benchmark example is missing or invalid'
+      using errcode = '54000';
+  end if;
+
+  for v_sample in 1..p_samples loop
+    v_started_at := pg_catalog.clock_timestamp();
+    v_page := private.portal_search_v1(
+      'flow', v_example ->> 'query', '{}'::jsonb, 'relevance', null, 50
+    );
+    insert into pg_temp.portal_summary_example_timings (
+      profile,
+      sample,
+      query_kind,
+      dataset_kind,
+      elapsed_ms,
+      item_count
+    ) values (
+      p_profile,
+      v_sample,
+      'cas',
+      'flow',
+      extract(
+        epoch from pg_catalog.clock_timestamp() - v_started_at
+      ) * 1000,
+      pg_catalog.jsonb_array_length(v_page -> 'items')
+    );
+  end loop;
+end
+$function$;
+
 grant execute on function pg_temp.measure_portal_summary_classification_example(
+  text,
+  integer
+) to portal_public_executor;
+grant execute on function pg_temp.measure_portal_summary_cas_example(
   text,
   integer
 ) to portal_public_executor;
@@ -572,6 +686,9 @@ set local role portal_public_executor;
 select pg_temp.measure_portal_summary_classification_example(
   'tail-evidence', :'benchmark_samples'::integer
 );
+select pg_temp.measure_portal_summary_cas_example(
+  'tail-evidence', :'benchmark_samples'::integer
+);
 reset role;
 
 set local role api_internal_executor;
@@ -619,6 +736,9 @@ select pg_temp.measure_portal_summary(
 );
 set local role portal_public_executor;
 select pg_temp.measure_portal_summary_classification_example(
+  'normal', :'benchmark_samples'::integer
+);
+select pg_temp.measure_portal_summary_cas_example(
   'normal', :'benchmark_samples'::integer
 );
 reset role;
@@ -676,6 +796,7 @@ $portal_summary_performance_guard$;
 
 select
   profile,
+  query_kind,
   pg_catalog.min(dataset_kind) as dataset_kind,
   pg_catalog.round(
     (
@@ -687,8 +808,8 @@ select
   pg_catalog.min(item_count) as minimum_items,
   pg_catalog.max(item_count) as maximum_items
 from portal_summary_example_timings
-group by profile
-order by profile;
+group by profile, query_kind
+order by profile, query_kind;
 
 do $portal_summary_example_performance_guard$
 declare
@@ -696,6 +817,7 @@ declare
 begin
   for v_profile in
     select profile,
+      query_kind,
       pg_catalog.min(dataset_kind) as minimum_kind,
       pg_catalog.max(dataset_kind) as maximum_kind,
       pg_catalog.percentile_cont(0.95) within group (
@@ -704,10 +826,23 @@ begin
       pg_catalog.max(elapsed_ms) as maximum_ms,
       pg_catalog.min(item_count) as minimum_items
     from portal_summary_example_timings
-    group by profile
+    group by profile, query_kind
   loop
-    if v_profile.minimum_kind <> 'process'
-       or v_profile.maximum_kind <> 'process'
+    if (
+         v_profile.query_kind = 'classification'
+         and (
+           v_profile.minimum_kind <> 'process'
+           or v_profile.maximum_kind <> 'process'
+         )
+       )
+       or (
+         v_profile.query_kind = 'cas'
+         and (
+           v_profile.minimum_kind <> 'flow'
+           or v_profile.maximum_kind <> 'flow'
+         )
+       )
+       or v_profile.query_kind not in ('classification', 'cas')
        or v_profile.p95_ms > 2000
        or v_profile.maximum_ms > 8000
        or v_profile.minimum_items < 1 then
@@ -826,6 +961,22 @@ select private.portal_search_v1(
       api.portal_catalog_summary_v1() -> 'examples'
     ) as example(value)
     where example.value ->> 'queryKind' = 'classification'
+  ),
+  '{}'::jsonb,
+  'relevance',
+  null,
+  50
+);
+
+explain (analyze, buffers, settings, format text)
+select private.portal_search_v1(
+  'flow',
+  (
+    select example.value ->> 'query'
+    from pg_catalog.jsonb_array_elements(
+      api.portal_catalog_summary_v1() -> 'examples'
+    ) as example(value)
+    where example.value ->> 'queryKind' = 'cas'
   ),
   '{}'::jsonb,
   'relevance',
