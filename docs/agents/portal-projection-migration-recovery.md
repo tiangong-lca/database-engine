@@ -1,6 +1,6 @@
 ---
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: 63e790a
+lastReviewedCommit: 9e1304e
 lastReviewedNote: "Reviewed for Issue #543: the 275-file tree retains the exact-version sitemap recovery and adds a function-only catalog-summary example repair with no projection or writer recovery surface."
 title: Portal Projection Migration Recovery
 docType: runbook

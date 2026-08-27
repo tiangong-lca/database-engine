@@ -37,7 +37,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: 63e790a
+lastReviewedCommit: 9e1304e
 lastReviewedNote: "Reviewed for Issue #543 summary-selected classification execution, unchanged Search/timeout budgets, and function-only repair; ownership and delivery boundaries remain unchanged."
 related:
   - .docpact/config.yaml
