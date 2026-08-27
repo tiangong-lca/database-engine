@@ -349,8 +349,8 @@ select extensions.is(
       and routine.proname like 'portal\_%\_v1' escape '\'
       and routine.proowner = 'portal_public_executor'::regrole
   ),
-  42::bigint,
-  'the private executor-owned Portal helper surface contains the expected 42 v1 routines'
+  44::bigint,
+  'the private executor-owned Portal helper surface contains the expected 44 v1 routines'
 );
 
 select extensions.is(
