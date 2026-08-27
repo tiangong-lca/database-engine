@@ -215,6 +215,88 @@ select extensions.ok(
 reset role;
 set local role portal_public_executor;
 
+select extensions.throws_ok(
+  $$
+    select private.portal_decorate_card_context_v1(
+      pg_catalog.jsonb_build_object(
+        'schemaVersion', 'portal.public-search-page.v1',
+        'kind', 'process',
+        'items', pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'key', pg_catalog.jsonb_build_object(
+              'kind', 'process',
+              'id', '53200000-0000-4000-8000-000000000001',
+              'version', '01.00.000'
+            )
+          )
+        )
+      )
+    )
+  $$,
+  '55000',
+  'Portal card context exact-key hydration failed',
+  'a missing exact source identity fails closed'
+);
+
+select extensions.throws_ok(
+  $$
+    select private.portal_decorate_card_context_v1(
+      pg_catalog.jsonb_build_object(
+        'schemaVersion', 'portal.public-search-page.v1',
+        'kind', 'process',
+        'items', pg_catalog.jsonb_build_array(
+          pg_catalog.jsonb_build_object(
+            'key', pg_catalog.jsonb_build_object(
+              'kind', 'flow',
+              'id', '53200000-0000-4000-8000-000000000001',
+              'version', '01.00.000'
+            )
+          )
+        )
+      )
+    )
+  $$,
+  '55000',
+  'Portal card context exact-key hydration failed',
+  'an item kind that differs from the page kind fails closed'
+);
+
+select extensions.throws_ok(
+  $$
+    select private.portal_decorate_card_context_v1(
+      pg_catalog.jsonb_build_object(
+        'schemaVersion', 'portal.public-search-page.v1',
+        'kind', 'process',
+        'items', (
+          select pg_catalog.jsonb_agg('{}'::jsonb order by ordinal)
+          from pg_catalog.generate_series(1, 51) as ordinal
+        )
+      )
+    )
+  $$,
+  '54000',
+  'Portal card context page exceeds its fixed bound',
+  'Search decoration rejects more than 50 final items'
+);
+
+select extensions.throws_ok(
+  $$
+    select private.portal_decorate_card_context_v1(
+      pg_catalog.jsonb_build_object(
+        'schemaVersion', 'portal.public-hybrid-candidate-page.v1',
+        'kind', 'flow',
+        'items', (
+          select pg_catalog.jsonb_agg('{}'::jsonb order by ordinal)
+          from pg_catalog.generate_series(1, 21) as ordinal
+        )
+      )
+    )
+  $$,
+  '54000',
+  'Portal card context page exceeds its fixed bound',
+  'Hybrid decoration rejects more than 20 final items'
+);
+
 alter function private.portal_process_functional_unit_v1(integer, jsonb)
   parallel safe;
 
