@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: d21600b
-lastReviewedNote: "Reviewed for the 277-migration Issue #543 Portal example repair and summary-isolated exact Flow CAS index path; generated workspace/type ownership remains unchanged."
+lastReviewedCommit: df5db04
+lastReviewedNote: "Reviewed for the 278-migration Issue #543 bounded unique-CAS example and summary-isolated exact index path; generated workspace/type ownership remains unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

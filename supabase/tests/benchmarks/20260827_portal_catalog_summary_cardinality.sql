@@ -697,7 +697,7 @@ update private.portal_catalog_search_rows_v1
 set card = pg_catalog.jsonb_set(
   card,
   '{casNumber}',
-  '"50-00-0"'::jsonb,
+  '"64-17-5"'::jsonb,
   false
 )
 where dataset_kind = 'flow'
@@ -741,6 +741,43 @@ select pg_temp.measure_portal_summary_classification_example(
 );
 select pg_temp.measure_portal_summary_cas_example(
   'normal', :'benchmark_samples'::integer
+);
+reset role;
+
+set local role api_internal_executor;
+update private.portal_catalog_search_rows_v1
+set card = pg_catalog.jsonb_set(
+  card,
+  '{casNumber}',
+  '"50-00-0"'::jsonb,
+  false
+)
+where dataset_kind = 'flow'
+  and id in (
+    select id
+    from private.portal_catalog_search_rows_v1
+    where dataset_kind = 'flow'
+      and id <> (
+        select id
+        from private.portal_catalog_search_rows_v1
+        where dataset_kind = 'flow'
+        order by id
+        limit 1
+      )
+    order by id
+    limit 10000
+  );
+reset role;
+
+select pg_temp.measure_portal_summary(
+  'cas-pressure', :'benchmark_samples'::integer
+);
+set local role portal_public_executor;
+select pg_temp.measure_portal_summary_classification_example(
+  'cas-pressure', :'benchmark_samples'::integer
+);
+select pg_temp.measure_portal_summary_cas_example(
+  'cas-pressure', :'benchmark_samples'::integer
 );
 reset role;
 

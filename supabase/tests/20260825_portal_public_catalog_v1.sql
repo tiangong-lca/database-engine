@@ -95,6 +95,19 @@ select extensions.is(
   'exactly ten Portal catalogue routines exist without overloads'
 );
 
+select extensions.ok(
+  (
+    select routine.prosrc ~ 'cas_probe_rows as materialized'
+      and routine.prosrc ~ 'limit 64'
+      and routine.prosrc ~ 'cas_distinct_candidates as materialized'
+      and routine.prosrc ~ 'limit 2'
+      and routine.prosrc ~ 'cas_match_count = 1'
+    from pg_catalog.pg_proc as routine
+    where routine.oid = 'api.portal_catalog_summary_v1()'::regprocedure
+  ),
+  'catalog summary chooses a unique CAS through a fixed 64-row/2-match probe'
+);
+
 select extensions.is(
   (
     with actual as (
@@ -1074,7 +1087,8 @@ create or replace function pg_temp.portal_flow_payload(
   p_flowproperty_id uuid,
   p_flowproperty_version text,
   p_license_type text,
-  p_access_restrictions text
+  p_access_restrictions text,
+  p_cas_number text default '50-00-0'
 )
 returns jsonb
 language sql
@@ -1091,7 +1105,7 @@ as $$
           'common:generalComment', pg_temp.portal_localized(
             p_name || ' public general comment'
           ),
-          'CASNumber', '50-00-0'
+          'CASNumber', p_cas_number
         ),
         'quantitativeReference', pg_catalog.jsonb_build_object(
           'referenceToReferenceFlowProperty', '1'
@@ -1582,7 +1596,8 @@ values
       '52700000-0000-4000-8000-000000000399',
       '01.00.000',
       'Free of charge for all users and uses',
-      null
+      null,
+      '64-17-5'
     ),
     pg_temp.portal_flow_payload(
       'Portal Fixture Missing Chain Flow',
@@ -1590,7 +1605,8 @@ values
       '52700000-0000-4000-8000-000000000399',
       '01.00.000',
       'Free of charge for all users and uses',
-      null
+      null,
+      '64-17-5'
     )::json,
     '52700000-0000-4000-8000-000000000001',
     '52700000-0000-4000-8000-000000000002',
@@ -4135,7 +4151,7 @@ select extensions.ok(
       and result.payload #>> '{examples,0,query}' =
         '52700000-0000-4000-8000-000000000101'
       and result.payload #>> '{examples,1,datasetKind}' = 'flow'
-      and result.payload #>> '{examples,1,query}' = '50-00-0'
+      and result.payload #>> '{examples,1,query}' = '64-17-5'
       and result.payload #>> '{examples,2,datasetKind}' = 'process'
       and result.payload #>> '{examples,2,query}' = 'PORTAL-FIXTURE'
       and pg_catalog.length(

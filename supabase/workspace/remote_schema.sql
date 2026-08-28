@@ -18879,7 +18879,7 @@ begin
     from uuid_candidates as candidate
     order by candidate.preference
     limit 1
-  ), cas_candidates as materialized (
+  ), cas_probe_rows as materialized (
     select candidate.dataset_kind,
       candidate.id,
       candidate.version,
@@ -18906,7 +18906,33 @@ begin
       candidate.version desc,
       candidate.modified_at desc,
       candidate.state_code desc
-    limit 1
+    limit 64
+  ), cas_distinct_candidates as materialized (
+    select distinct on (candidate.cas_number)
+      candidate.*
+    from cas_probe_rows as candidate
+    order by candidate.cas_number,
+      candidate.id,
+      candidate.version desc,
+      candidate.modified_at desc,
+      candidate.state_code desc
+  ), cas_candidates as materialized (
+    select candidate.*,
+      cardinality.cas_match_count
+    from cas_distinct_candidates as candidate
+    cross join lateral (
+      select pg_catalog.count(*)::integer as cas_match_count
+      from (
+        select 1
+        from private.catalog_portal_candidate_rows_v1(
+          'flow',
+          pg_catalog.lower(candidate.cas_number),
+          null,
+          null
+        )
+        limit 2
+      ) as exact_matches
+    ) as cardinality
   ), cas_example as (
     select pg_catalog.jsonb_build_object(
       'queryKind', 'cas',
@@ -18915,6 +18941,12 @@ begin
       'label', candidate.label
     ) as value
     from cas_candidates as candidate
+    where candidate.cas_match_count = 1
+    order by candidate.id,
+      candidate.version desc,
+      candidate.modified_at desc,
+      candidate.state_code desc
+    limit 1
   ), classification_candidates as materialized (
     (
       select 0 as preference,
@@ -19075,7 +19107,7 @@ $_$;
 ALTER FUNCTION "api"."portal_catalog_summary_v1"() OWNER TO "portal_public_executor";
 
 
-COMMENT ON FUNCTION "api"."portal_catalog_summary_v1"() IS 'Bounded latest-visible public Process/Flow counts, timestamp, and deterministic executable R1 examples; classification examples require a non-broad code and prefer Process evidence.';
+COMMENT ON FUNCTION "api"."portal_catalog_summary_v1"() IS 'Bounded latest-visible public Process/Flow counts, timestamp, and deterministic executable R1 examples; classification prefers non-broad Process evidence and CAS examples have exactly one current match.';
 
 
 

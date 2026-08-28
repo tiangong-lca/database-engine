@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-28"
-lastReviewedCommit: "d21600b"
-lastReviewedNote: "Reviewed for Issue #543: 277 migrations, executable Portal UUID/CAS/classification examples, summary-isolated Flow CAS index evidence, 13 generated modules, and retained sitemap recovery."
+lastReviewedCommit: "df5db04"
+lastReviewedNote: "Reviewed for Issue #543: 278 migrations, bounded unique Portal CAS selection, summary-isolated index evidence, 13 generated modules, and retained sitemap recovery."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -506,6 +506,8 @@ rules:
       - path: supabase/migrations/20260827210000_optimize_portal_flow_cas_search.sql
         kind: database-migration
       - path: supabase/migrations/20260827223000_isolate_portal_flow_cas_index.sql
+        kind: database-migration
+      - path: supabase/migrations/20260828003000_select_selective_portal_cas_example.sql
         kind: database-migration
       - path: supabase/tests/20260826_portal_candidate_first_search.sql
         kind: database-contract-test

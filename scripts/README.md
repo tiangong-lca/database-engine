@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: d21600b
-lastReviewedNote: "Reviewed for Issue #543: 277-file recovery/benchmark runners, executable UUID/CAS/classification gates, summary-isolated Flow CAS index evidence, fixed sitemap shards, and 13-module Portal generation are current."
+lastReviewedCommit: df5db04
+lastReviewedNote: "Reviewed for Issue #543: 278-file recovery/benchmark runners, bounded unique-CAS pressure gates, summary-isolated index evidence, fixed sitemap shards, and 13-module Portal generation are current."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -104,7 +104,7 @@ See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries. Formal evidence additionally requires
 clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
-the complete 277-file migration tree.
+the complete 278-file migration tree.
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
@@ -126,7 +126,7 @@ The runner always resets the isolated project to full HEAD on exit.
 Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
 fence, plan, and ANN-recall benchmark only against an explicitly attested
 Issue-531/532/539/543 local Supabase project. The runner byte-compares the complete
-277-file migration tree with the repository, writes into a new operator-selected private
+278-file migration tree with the repository, writes into a new operator-selected private
 directory, and resets the isolated database before and after the run so rolled
 back HNSW pages cannot accumulate. Its environment contract mirrors the
 recovery runner and additionally requires
@@ -137,6 +137,9 @@ selected classification and Flow CAS examples for 20 samples. Its temporary
 writer clone records the combined eligibility index and exact Flow CAS index
 independently, including build time, bytes, and incremental four-update p95;
 the real projection and its indexes are never dropped or rebuilt by that probe.
+Its `cas-pressure` profile assigns one CAS to 10,000 current Flow cards while
+retaining one unique CAS, then requires the bounded selector to keep summary
+p95 below 250 ms and the emitted CAS to return exactly one item.
 
 `PORTAL_PROJECTION_BENCHMARK_PROFILE` selects a fail-closed named profile:
 
