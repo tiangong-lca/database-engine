@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-28"
-lastReviewedCommit: "df5db04"
-lastReviewedNote: "Reviewed for Issue #543: 278 migrations, bounded unique Portal CAS selection, summary-isolated index evidence, 13 generated modules, and retained sitemap recovery."
+lastReviewedCommit: "26f583b"
+lastReviewedNote: "Reviewed for Issue #543: 278 migrations, history-unique Portal CAS selection, duplicate-pressure evidence, 13 generated modules, and retained sitemap recovery."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

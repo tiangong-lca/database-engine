@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: df5db04
-lastReviewedNote: "Reviewed for Issue #543 non-broad classification plus bounded unique-CAS examples over a summary-isolated exact index; Search semantics and writer ownership remain unchanged."
+lastReviewedCommit: 26f583b
+lastReviewedNote: "Reviewed for Issue #543 non-broad classification plus history-unique CAS examples over a summary-isolated exact index; Search semantics and writer ownership remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

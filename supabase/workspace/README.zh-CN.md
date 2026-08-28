@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: df5db04
-lastReviewedNote: "已为 278-migration Issue #543 受限唯一 CAS example 与 summary-isolated exact index path 复核；generated workspace/type 所有权保持不变。"
+lastReviewedCommit: 26f583b
+lastReviewedNote: "已为 278-migration Issue #543 历史唯一 CAS example 与 summary-isolated exact index path 复核；generated workspace/type 所有权保持不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

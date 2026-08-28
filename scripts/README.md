@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: df5db04
-lastReviewedNote: "Reviewed for Issue #543: 278-file recovery/benchmark runners, bounded unique-CAS pressure gates, summary-isolated index evidence, fixed sitemap shards, and 13-module Portal generation are current."
+lastReviewedCommit: 26f583b
+lastReviewedNote: "Reviewed for Issue #543: 278-file recovery/benchmark runners, history-unique CAS pressure gates, summary-isolated index evidence, fixed sitemap shards, and 13-module Portal generation are current."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
