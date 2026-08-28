@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: df5db04
-lastReviewedNote: "Reviewed for the 278-migration Issue #543 bounded unique-CAS example and summary-isolated exact index path; generated workspace/type ownership remains unchanged."
+lastReviewedCommit: 26f583b
+lastReviewedNote: "Reviewed for the 278-migration Issue #543 history-unique CAS example and summary-isolated exact index path; generated workspace/type ownership remains unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

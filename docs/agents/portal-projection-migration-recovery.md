@@ -1,7 +1,7 @@
 ---
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: df5db04
-lastReviewedNote: "Reviewed for Issue #543: the 278-file tree retains exact-version sitemap recovery and adds bounded classification plus unique-CAS example repairs without changing projection recovery ownership."
+lastReviewedCommit: 26f583b
+lastReviewedNote: "Reviewed for Issue #543: the 278-file tree retains exact-version sitemap recovery and adds bounded classification plus history-unique CAS example repair without changing projection recovery ownership."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -499,12 +499,14 @@ index and function on any failure.
 `20260828003000_select_selective_portal_cas_example.sql` changes only summary
 example selection after a strict Dev probe showed that exhaustive context
 hydration for a 13-match CAS could still consume the public eight-second
-budget. The summary inspects at most 64 id-ordered current CAS rows using the
-eligibility path, de-duplicates those probe values, and uses the exact CAS
-index/latest-version helper with a two-row early stop to choose the first CAS
-having exactly one current match. Search itself remains complete and unchanged.
-If valid public CAS evidence exists but the bounded probe cannot find a unique
-example, the migration fails instead of silently removing the homepage CAS.
+budget. The summary performs one ordered GroupAggregate over the exact CAS
+index, retains at most 64 CAS values that occur exactly once across all stored
+projection history, and then joins the chosen row to the shared latest CTE.
+This conservative condition guarantees one current match after the latest
+recheck without repeated helper calls; Search itself remains complete and
+unchanged. If valid public CAS evidence exists but the bounded unique-value
+probe cannot produce a current example, the migration fails instead of silently
+removing the homepage CAS.
 The summary's two-second timeout, three-example order, and 16-KiB cap remain
 unchanged, and migration verification runs as the constrained Portal executor.
 

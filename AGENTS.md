@@ -37,8 +37,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: df5db04
-lastReviewedNote: "Reviewed for Issue #543 bounded unique-CAS example selection, summary/index isolation, unchanged Search/timeout budgets, and fail-closed forward repair; ownership boundaries remain unchanged."
+lastReviewedCommit: 26f583b
+lastReviewedNote: "Reviewed for Issue #543 history-unique CAS example selection, summary/index isolation, unchanged Search/timeout budgets, and fail-closed forward repair; ownership boundaries remain unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-28
-lastReviewedCommit: df5db04
-lastReviewedNote: "已复核 Issue #543：278-file recovery/benchmark、受限唯一 CAS 压力门、summary-isolated index 证据、固定 sitemap shards 与 13-module Portal 生成均为当前状态。"
+lastReviewedCommit: 26f583b
+lastReviewedNote: "已复核 Issue #543：278-file recovery/benchmark、历史唯一 CAS 压力门、summary-isolated index 证据、固定 sitemap shards 与 13-module Portal 生成均为当前状态。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

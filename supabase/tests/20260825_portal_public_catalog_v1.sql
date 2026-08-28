@@ -97,15 +97,13 @@ select extensions.is(
 
 select extensions.ok(
   (
-    select routine.prosrc ~ 'cas_probe_rows as materialized'
+    select routine.prosrc ~ 'cas_unique_values as materialized'
       and routine.prosrc ~ 'limit 64'
-      and routine.prosrc ~ 'cas_distinct_candidates as materialized'
-      and routine.prosrc ~ 'limit 2'
-      and routine.prosrc ~ 'cas_match_count = 1'
+      and routine.prosrc ~ 'having pg_catalog.count\(\*\) = 1'
     from pg_catalog.pg_proc as routine
     where routine.oid = 'api.portal_catalog_summary_v1()'::regprocedure
   ),
-  'catalog summary chooses a unique CAS through a fixed 64-row/2-match probe'
+  'catalog summary chooses a history-unique CAS through a fixed 64-value index probe'
 );
 
 select extensions.is(
