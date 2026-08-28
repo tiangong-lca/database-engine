@@ -1,8 +1,8 @@
 -- Issue #543 final example repair: exact CAS lookup is sub-millisecond, but a
 -- cold public Flow response for a high-cardinality CAS can still spend the
 -- eight-second budget hydrating every exhaustive source context. Preserve
--- complete Search semantics and advertise only a current CAS with exactly one
--- latest-visible match.
+-- complete Search semantics and advertise only a CAS that occurs exactly once
+-- across retained projection history and still matches its latest-visible row.
 
 begin;
 
@@ -181,60 +181,50 @@ begin
     from uuid_candidates as candidate
     order by candidate.preference
     limit 1
-  ), cas_probe_rows as materialized (
+  ), cas_unique_values as materialized (
+    select candidate.card ->> 'casNumber' as cas_number,
+      pg_catalog.min(candidate.id::text)::uuid as id
+    from private.portal_catalog_search_rows_v1 as candidate
+    where candidate.dataset_kind = 'flow'
+      and pg_catalog.jsonb_typeof(candidate.card -> 'casNumber') = 'string'
+      and candidate.card ->> 'casNumber' ~
+        '^[0-9]{2,7}-[0-9]{2}-[0-9]$'
+      and pg_catalog.length(
+        candidate.card ->> 'casNumber'
+      ) between 7 and 12
+      and private.portal_catalog_summary_valid_cas_v1(
+        candidate.card ->> 'casNumber'
+      )
+    group by candidate.card ->> 'casNumber'
+    having pg_catalog.count(*) = 1
+    order by candidate.card ->> 'casNumber'
+    limit 64
+  ), cas_candidates as materialized (
     select candidate.dataset_kind,
       candidate.id,
       candidate.version,
       candidate.modified_at,
       candidate.state_code,
-      candidate.card ->> 'casNumber' as cas_number,
+      unique_cas.cas_number,
       private.portal_catalog_summary_label_v1(candidate.card) as label
-    from private.portal_catalog_search_rows_v1 as candidate
+    from cas_unique_values as unique_cas
+    join private.portal_catalog_search_rows_v1 as candidate
+      on candidate.dataset_kind = 'flow'
+     and candidate.id = unique_cas.id
+     and candidate.card ->> 'casNumber' = unique_cas.cas_number
     join latest
       on latest.dataset_kind = candidate.dataset_kind
      and latest.id = candidate.id
      and latest.version = candidate.version
-    where candidate.dataset_kind = 'flow'
-      and pg_catalog.jsonb_typeof(candidate.card -> 'casNumber') = 'string'
-      and candidate.card ->> 'casNumber' ~
-        '^[0-9]{2,7}-[0-9]{2}-[0-9]$'
-      and private.portal_catalog_summary_valid_cas_v1(
-        candidate.card ->> 'casNumber'
-      )
-      and pg_catalog.jsonb_array_length(
-        private.portal_catalog_summary_label_v1(candidate.card)
-      ) > 0
-    order by candidate.id,
-      candidate.version desc,
-      candidate.modified_at desc,
-      candidate.state_code desc
-    limit 64
-  ), cas_distinct_candidates as materialized (
-    select distinct on (candidate.cas_number)
-      candidate.*
-    from cas_probe_rows as candidate
-    order by candidate.cas_number,
+    where pg_catalog.jsonb_array_length(
+      private.portal_catalog_summary_label_v1(candidate.card)
+    ) > 0
+    order by unique_cas.cas_number,
       candidate.id,
       candidate.version desc,
       candidate.modified_at desc,
       candidate.state_code desc
-  ), cas_candidates as materialized (
-    select candidate.*,
-      cardinality.cas_match_count
-    from cas_distinct_candidates as candidate
-    cross join lateral (
-      select pg_catalog.count(*)::integer as cas_match_count
-      from (
-        select 1
-        from private.catalog_portal_candidate_rows_v1(
-          'flow',
-          pg_catalog.lower(candidate.cas_number),
-          null,
-          null
-        )
-        limit 2
-      ) as exact_matches
-    ) as cardinality
+    limit 1
   ), cas_example as (
     select pg_catalog.jsonb_build_object(
       'queryKind', 'cas',
@@ -243,7 +233,6 @@ begin
       'label', candidate.label
     ) as value
     from cas_candidates as candidate
-    where candidate.cas_match_count = 1
     order by candidate.id,
       candidate.version desc,
       candidate.modified_at desc,
@@ -406,7 +395,7 @@ end
 $function$;
 
 comment on function api.portal_catalog_summary_v1() is
-  'Bounded latest-visible public Process/Flow counts, timestamp, and deterministic executable R1 examples; classification prefers non-broad Process evidence and CAS examples have exactly one current match.';
+  'Bounded latest-visible public Process/Flow counts, timestamp, and deterministic executable R1 examples; classification prefers non-broad Process evidence and CAS examples are unique across retained projection history.';
 
 reset role;
 revoke create on schema api from portal_public_executor;
@@ -439,9 +428,9 @@ begin
          ]::text[]
          and routine.prosrc ~ 'between 4 and 128'
          and routine.prosrc ~ 'dataset_kind = ''process'''
-         and routine.prosrc ~ 'cas_probe_rows as materialized'
+         and routine.prosrc ~ 'cas_unique_values as materialized'
          and routine.prosrc ~ 'limit 64'
-         and routine.prosrc ~ 'cas_match_count = 1'
+         and routine.prosrc ~ 'having pg_catalog.count\(\*\) = 1'
      )
      or not pg_catalog.has_function_privilege(
        'anon', v_routine, 'EXECUTE'
