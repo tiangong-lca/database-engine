@@ -1,0 +1,1 @@
+COMMENT ON POLICY "portal_catalog_search_rows_portal_select_v1" ON "private"."portal_catalog_search_rows_v1" IS 'Row-neutral forced-RLS SELECT over a purpose-built projection whose validated table CHECK admits only public states 100/200; the neutral policy permits exact JSON-expression predicates to remain index conditions.';

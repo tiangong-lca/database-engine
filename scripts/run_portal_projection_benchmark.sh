@@ -44,17 +44,17 @@ project_id="$({
   sed -n 's/^project_id = "\([^"]*\)"$/\1/p' \
     "$test_workdir/supabase/config.toml" | head -n 1
 })"
-if [[ ! "$project_id" =~ ^database-engine-(531|532|539|543)-[a-z0-9-]+$ ]]; then
-  echo "refusing non-Issue-531/532/539/543 Supabase project_id: $project_id" >&2
+if [[ ! "$project_id" =~ ^database-engine-(531|532|539|543|551)-[a-z0-9-]+$ ]]; then
+  echo "refusing non-Issue-531/532/539/543/551 Supabase project_id: $project_id" >&2
   exit 2
 fi
 
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 278 \
-   || "${#test_migrations[@]}" -ne 278 ]]; then
-  echo "complete migration tree must contain exactly 278 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 296 \
+   || "${#test_migrations[@]}" -ne 296 ]]; then
+  echo "complete migration tree must contain exactly 296 files" >&2
   exit 2
 fi
 migration_manifest_payload=""
@@ -266,7 +266,7 @@ echo "Supabase CLI: $supabase_cli_version" | tee "$results_log"
 echo "Benchmark target: $project_id" | tee -a "$results_log"
 echo "Benchmark profile: $profile_name" | tee -a "$results_log"
 echo "Repository HEAD: $repository_head" | tee -a "$results_log"
-echo "Migration tree SHA-256 (278 files): $migration_tree_sha256" \
+echo "Migration tree SHA-256 (296 files): $migration_tree_sha256" \
   | tee -a "$results_log"
 echo "Benchmark SQL SHA-256: $benchmark_sql_sha256" | tee -a "$results_log"
 echo "Benchmark runner SHA-256: $benchmark_runner_sha256" \

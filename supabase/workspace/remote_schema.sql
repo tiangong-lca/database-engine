@@ -25183,6 +25183,119 @@ COMMENT ON FUNCTION "private"."assert_portal_card_context_contract_v1"() IS 'Fai
 
 
 
+CREATE OR REPLACE FUNCTION "private"."assert_portal_catalog_character_contract_v1"() RETURNS "void"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "row_security" TO 'on'
+    AS $$
+begin
+  if (
+       select not relation.relrowsecurity
+         or not relation.relforcerowsecurity
+         or relation.relowner <> 'postgres'::regrole
+       from pg_catalog.pg_class as relation
+       where relation.oid =
+         'private.portal_catalog_character_rows_v1'::regclass
+     ) is not false
+     or (
+       select count(*)
+       from pg_catalog.pg_attribute as attribute
+       where attribute.attrelid =
+           'private.portal_catalog_character_rows_v1'::regclass
+         and attribute.attnum > 0
+         and not attribute.attisdropped
+         and attribute.attname in (
+           'dataset_kind',
+           'id',
+           'version',
+           'state_code',
+           'modified_at',
+           'document_characters',
+           'name_characters',
+           'name_exact_characters',
+           'classification_characters',
+           'classification_exact_characters',
+           'character_contract_version'
+         )
+     ) <> 11
+     or not exists (
+       select 1
+       from pg_catalog.pg_constraint as parent_fk
+       where parent_fk.conrelid =
+           'private.portal_catalog_character_rows_v1'::regclass
+         and parent_fk.confrelid =
+           'private.portal_catalog_search_rows_v1'::regclass
+         and parent_fk.conname = 'portal_catalog_character_parent_v1_fk'
+         and parent_fk.contype = 'f'
+         and parent_fk.convalidated
+         and parent_fk.confupdtype = 'r'
+         and parent_fk.confdeltype = 'c'
+     )
+     or (
+       select not index_record.indisvalid
+         or not index_record.indisready
+         or not index_record.indislive
+       from pg_catalog.pg_index as index_record
+       where index_record.indexrelid =
+         'private.portal_catalog_character_rows_latest_v1_idx'::regclass
+     ) is not false
+     or not exists (
+       select 1
+       from pg_catalog.pg_trigger as trigger
+       where trigger.tgrelid =
+           'private.portal_catalog_search_rows_v1'::regclass
+         and trigger.tgname = 'portal_catalog_character_sync_v1'
+         and not trigger.tgisinternal
+         and pg_catalog.pg_get_triggerdef(trigger.oid) ~
+           'AFTER INSERT OR UPDATE'
+     )
+     or (
+       select count(*)
+       from pg_catalog.pg_policies as policy
+       where policy.schemaname = 'private'
+         and policy.tablename = 'portal_catalog_character_rows_v1'
+         and policy.policyname =
+           'portal_catalog_character_rows_portal_select_v1'
+         and policy.roles = array['portal_public_executor']::name[]
+         and policy.cmd = 'SELECT'
+         and policy.qual = 'true'
+         and policy.with_check is null
+     ) <> 1
+     or (
+       select count(*)
+       from pg_catalog.pg_proc as routine
+       where routine.oid in (
+           'private.portal_catalog_character_set_v1(text)'::regprocedure,
+           'private.portal_catalog_character_field_set_v1(jsonb,text,boolean)'::regprocedure
+         )
+         and routine.proowner = 'portal_public_executor'::regrole
+         and routine.provolatile = 'i'
+         and routine.proparallel = 's'
+         and routine.prosecdef
+         and routine.proconfig @> array['search_path=""']::text[]
+     ) <> 2
+     or (
+       select routine.proowner <> 'api_internal_executor'::regrole
+         or not routine.prosecdef
+         or not (coalesce(routine.proconfig, '{}'::text[]) @> array[
+           'search_path=""',
+           'row_security=on'
+         ]::text[])
+       from pg_catalog.pg_proc as routine
+       where routine.oid =
+         'private.sync_portal_catalog_character_row_v1()'::regprocedure
+     ) is not false then
+    raise exception using
+      errcode = '55000',
+      message = 'Portal character projection contract drifted';
+  end if;
+end
+$$;
+
+
+ALTER FUNCTION "private"."assert_portal_catalog_character_contract_v1"() OWNER TO "portal_public_executor";
+
+
 CREATE OR REPLACE FUNCTION "private"."assert_portal_catalog_facet_contract_v1"() RETURNS "void"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
@@ -25376,6 +25489,53 @@ begin
        where relation.oid =
          'private.portal_catalog_projection_contract_v1'::regclass
      ) is not false
+     or (
+       select not relation.relrowsecurity
+         or not relation.relforcerowsecurity
+         or relation.relowner <> 'postgres'::regrole
+       from pg_catalog.pg_class as relation
+       where relation.oid =
+         'private.portal_catalog_search_rows_v1'::regclass
+     ) is not false
+     or not exists (
+       select 1
+       from pg_catalog.pg_constraint as state_check
+       where state_check.conrelid =
+           'private.portal_catalog_search_rows_v1'::regclass
+         and state_check.conname =
+           'portal_catalog_search_rows_v1_state_code_check'
+         and state_check.contype = 'c'
+         and state_check.convalidated
+         and pg_catalog.regexp_replace(
+           pg_catalog.pg_get_expr(
+             state_check.conbin,
+             state_check.conrelid
+           ),
+           '[[:space:]]',
+           '',
+           'g'
+         ) = '(state_code=ANY(ARRAY[100,200]))'
+     )
+     or (
+       select count(*)
+       from pg_catalog.pg_policies as policy
+       where policy.schemaname = 'private'
+         and policy.tablename = 'portal_catalog_search_rows_v1'
+         and policy.policyname =
+           'portal_catalog_search_rows_portal_select_v1'
+         and policy.permissive = 'PERMISSIVE'
+         and policy.roles = array['portal_public_executor']::name[]
+         and policy.cmd = 'SELECT'
+         and policy.qual = 'true'
+         and policy.with_check is null
+     ) <> 1
+     or (
+       select count(*)
+       from pg_catalog.pg_policies as policy
+       where policy.schemaname = 'private'
+         and policy.tablename = 'portal_catalog_search_rows_v1'
+         and policy.roles @> array['portal_public_executor']::name[]
+     ) <> 1
      or not exists (
        select 1
        from pg_catalog.pg_attribute as attribute
@@ -26522,7 +26682,22 @@ CREATE OR REPLACE FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "row_security" TO 'on'
     AS $_$
+declare
+  v_literal text;
 begin
+  if pg_catalog.char_length(p_like_pattern) = 3
+     and pg_catalog.left(p_like_pattern, 1) = '%'
+     and pg_catalog.right(p_like_pattern, 1) = '%' then
+    v_literal := pg_catalog.substr(p_like_pattern, 2, 1);
+    return query
+    select candidate.id,
+      candidate.version
+    from private.catalog_portal_flow_single_character_versions_v1(
+      v_literal
+    ) as candidate;
+    return;
+  end if;
+
   return query execute pg_catalog.format($sql$
     select projection.id,
       projection.version
@@ -26535,6 +26710,38 @@ $_$;
 
 
 ALTER FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_like_pattern" "text") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_like_pattern" "text") IS 'Returns Flow projection versions through the fixed literal-LIKE template; an unescaped one-code-point substring uses the parallel sequential helper to avoid TokenBigram false negatives.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."catalog_portal_flow_single_character_versions_v1"("p_literal" "text") RETURNS TABLE("id" "uuid", "version" "text")
+    LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "enable_indexscan" TO 'off'
+    SET "enable_indexonlyscan" TO 'off'
+    SET "enable_bitmapscan" TO 'off'
+    SET "max_parallel_workers_per_gather" TO '4'
+    SET "min_parallel_table_scan_size" TO '0'
+    SET "parallel_setup_cost" TO '0'
+    SET "parallel_tuple_cost" TO '0'
+    SET "row_security" TO 'on'
+    AS $$
+  select projection.id,
+    projection.version
+  from private.portal_catalog_search_rows_v1 as projection
+  where projection.dataset_kind = 'flow'
+    and pg_catalog.strpos(projection.document, p_literal) > 0
+$$;
+
+
+ALTER FUNCTION "private"."catalog_portal_flow_single_character_versions_v1"("p_literal" "text") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."catalog_portal_flow_single_character_versions_v1"("p_literal" "text") IS 'Parallel sequential Flow projection scan for one literal code point; index paths are disabled only inside this helper.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."catalog_portal_hybrid_pattern_matches_v1"("p_kind" "text", "p_query_terms" "text"[]) RETURNS TABLE("id" "uuid", "version" "text", "term_ordinal" integer)
@@ -26594,7 +26801,22 @@ CREATE OR REPLACE FUNCTION "private"."catalog_portal_process_pattern_versions_v1
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "row_security" TO 'on'
     AS $_$
+declare
+  v_literal text;
 begin
+  if pg_catalog.char_length(p_like_pattern) = 3
+     and pg_catalog.left(p_like_pattern, 1) = '%'
+     and pg_catalog.right(p_like_pattern, 1) = '%' then
+    v_literal := pg_catalog.substr(p_like_pattern, 2, 1);
+    return query
+    select candidate.id,
+      candidate.version
+    from private.catalog_portal_process_single_character_versions_v1(
+      v_literal
+    ) as candidate;
+    return;
+  end if;
+
   return query execute pg_catalog.format($sql$
     select projection.id,
       projection.version
@@ -26607,6 +26829,38 @@ $_$;
 
 
 ALTER FUNCTION "private"."catalog_portal_process_pattern_versions_v1"("p_like_pattern" "text") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."catalog_portal_process_pattern_versions_v1"("p_like_pattern" "text") IS 'Returns Process projection versions through the fixed literal-LIKE template; an unescaped one-code-point substring uses the parallel sequential helper to avoid TokenBigram false negatives.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."catalog_portal_process_single_character_versions_v1"("p_literal" "text") RETURNS TABLE("id" "uuid", "version" "text")
+    LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "enable_indexscan" TO 'off'
+    SET "enable_indexonlyscan" TO 'off'
+    SET "enable_bitmapscan" TO 'off'
+    SET "max_parallel_workers_per_gather" TO '4'
+    SET "min_parallel_table_scan_size" TO '0'
+    SET "parallel_setup_cost" TO '0'
+    SET "parallel_tuple_cost" TO '0'
+    SET "row_security" TO 'on'
+    AS $$
+  select projection.id,
+    projection.version
+  from private.portal_catalog_search_rows_v1 as projection
+  where projection.dataset_kind = 'process'
+    and pg_catalog.strpos(projection.document, p_literal) > 0
+$$;
+
+
+ALTER FUNCTION "private"."catalog_portal_process_single_character_versions_v1"("p_literal" "text") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."catalog_portal_process_single_character_versions_v1"("p_literal" "text") IS 'Parallel sequential Process projection scan for one literal code point; index paths are disabled only inside this helper.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."catalog_portal_projection_payload_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") RETURNS "jsonb"
@@ -27146,6 +27400,165 @@ ALTER FUNCTION "private"."catalog_portal_search_v1_impl"("p_kind" "text", "p_que
 
 
 COMMENT ON FUNCTION "private"."catalog_portal_search_v1_impl"("p_kind" "text", "p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") IS 'Candidate-first Portal catalog kernel: fixed public-document PGroonga candidates, exact latest-visible recheck, then public-card hydration.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."catalog_portal_single_character_search_v1_impl"("p_kind" "text", "p_query" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "work_mem" TO '32MB'
+    SET "plan_cache_mode" TO 'force_custom_plan'
+    SET "jit" TO 'off'
+    SET "row_security" TO 'on'
+    AS $$
+declare
+  v_items jsonb;
+  v_next_cursor_payload jsonb;
+begin
+  perform private.assert_portal_catalog_character_contract_v1();
+
+  if p_kind not in ('process', 'flow')
+     or pg_catalog.char_length(p_query) <> 1
+     or p_limit not between 1 and 50 then
+    raise exception 'invalid Portal character Search'
+      using errcode = '22023';
+  end if;
+
+  with latest as materialized (
+    select distinct on (character_row.id)
+      character_row.id,
+      character_row.version,
+      character_row.state_code,
+      character_row.modified_at,
+      character_row.document_characters,
+      character_row.name_characters,
+      character_row.name_exact_characters,
+      character_row.classification_characters,
+      character_row.classification_exact_characters
+    from private.portal_catalog_character_rows_v1 as character_row
+    where character_row.dataset_kind = p_kind
+    order by character_row.id,
+      character_row.version desc,
+      character_row.modified_at desc,
+      character_row.state_code desc
+  ), scored as materialized (
+    select latest.*,
+      case
+        when pg_catalog.strpos(
+          latest.name_exact_characters, p_query
+        ) > 0 then 0.95::numeric
+        when pg_catalog.strpos(
+          latest.classification_exact_characters, p_query
+        ) > 0 then 0.92::numeric
+        else 0.70::numeric
+      end as score,
+      case
+        when pg_catalog.strpos(latest.name_characters, p_query) > 0
+          then pg_catalog.jsonb_build_array('name')
+        when pg_catalog.strpos(
+          latest.classification_characters, p_query
+        ) > 0 then pg_catalog.jsonb_build_array('classification')
+        else pg_catalog.jsonb_build_array('full_text')
+      end as reason_codes
+    from latest
+    where pg_catalog.strpos(latest.document_characters, p_query) > 0
+  ), after_cursor as materialized (
+    select scored.*
+    from scored
+    where p_cursor_rank is null
+      or scored.score < p_cursor_rank::numeric
+      or (
+        scored.score = p_cursor_rank::numeric
+        and (
+          scored.id > p_cursor_id
+          or (
+            scored.id = p_cursor_id
+            and scored.version < p_cursor_version
+          )
+        )
+      )
+  ), ordered as materialized (
+    select after_cursor.*,
+      pg_catalog.row_number() over (
+        order by after_cursor.score desc,
+          after_cursor.id asc,
+          after_cursor.version desc
+      ) as page_rank
+    from after_cursor
+    order by after_cursor.score desc,
+      after_cursor.id asc,
+      after_cursor.version desc
+    limit p_limit + 1
+  ), hydrated as materialized (
+    select ordered.*,
+      projection.card
+    from ordered
+    join private.portal_catalog_search_rows_v1 as projection
+      on projection.dataset_kind = p_kind
+     and projection.id = ordered.id
+     and projection.version = ordered.version
+  )
+  select coalesce(
+      pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object(
+          'key', pg_catalog.jsonb_build_object(
+            'kind', p_kind,
+            'id', hydrated.id::text,
+            'version', hydrated.version
+          ),
+          'accessLevel', hydrated.card -> 'accessLevel',
+          'capabilities', hydrated.card -> 'capabilities',
+          'names', hydrated.card -> 'names',
+          'summary', hydrated.card -> 'summary',
+          'geography', hydrated.card -> 'geography',
+          'referenceYear', hydrated.card -> 'referenceYear',
+          'modifiedAt', pg_catalog.to_char(
+            hydrated.modified_at at time zone 'UTC',
+            'YYYY-MM-DD"T"HH24:MI:SS.US"Z"'
+          ),
+          'match', pg_catalog.jsonb_build_object(
+            'kind', 'lexical',
+            'score', hydrated.score,
+            'reasonCodes', hydrated.reason_codes
+          )
+        )
+        order by hydrated.page_rank
+      ) filter (where hydrated.page_rank <= p_limit),
+      '[]'::jsonb
+    ),
+    case
+      when pg_catalog.max(hydrated.page_rank) > p_limit then
+        (
+          pg_catalog.jsonb_agg(
+            pg_catalog.jsonb_build_object(
+              'v', 1,
+              'fp', p_query_fingerprint,
+              'rankKey', hydrated.score::text,
+              'kind', p_kind,
+              'id', hydrated.id::text,
+              'version', hydrated.version
+            )
+            order by hydrated.page_rank
+          ) filter (where hydrated.page_rank = p_limit)
+        ) -> 0
+      else null
+    end
+  into v_items, v_next_cursor_payload
+  from hydrated;
+
+  return pg_catalog.jsonb_build_object(
+    'items', v_items,
+    'nextCursorPayload', v_next_cursor_payload
+  );
+end
+$$;
+
+
+ALTER FUNCTION "private"."catalog_portal_single_character_search_v1_impl"("p_kind" "text", "p_query" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."catalog_portal_single_character_search_v1_impl"("p_kind" "text", "p_query" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") IS 'Bounded one-code-point unfiltered relevance Search over the synchronized narrow character projection.';
 
 
 
@@ -41387,6 +41800,68 @@ $_$;
 ALTER FUNCTION "private"."portal_catalog_card_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") OWNER TO "portal_public_executor";
 
 
+CREATE OR REPLACE FUNCTION "private"."portal_catalog_character_field_set_v1"("p_items" "jsonb", "p_key" "text", "p_exact_one" boolean) RETURNS "text"
+    LANGUAGE "sql" IMMUTABLE SECURITY DEFINER PARALLEL SAFE
+    SET "search_path" TO ''
+    AS $$
+  select private.portal_catalog_character_set_v1(
+    coalesce(
+      pg_catalog.string_agg(normalized.value, '' order by normalized.ordinality),
+      ''
+    )
+  )
+  from (
+    select item.ordinality,
+      pg_catalog.lower(pg_catalog.btrim(item.value ->> p_key)) as value
+    from pg_catalog.jsonb_array_elements(
+      case
+        when pg_catalog.jsonb_typeof(p_items) = 'array' then p_items
+        else '[]'::jsonb
+      end
+    ) with ordinality as item(value, ordinality)
+    where p_key in ('value', 'code')
+      and pg_catalog.jsonb_typeof(item.value) = 'object'
+      and pg_catalog.jsonb_typeof(item.value -> p_key) = 'string'
+      and nullif(pg_catalog.btrim(item.value ->> p_key), '') is not null
+      and (
+        not p_exact_one
+        or pg_catalog.char_length(
+          pg_catalog.lower(pg_catalog.btrim(item.value ->> p_key))
+        ) = 1
+      )
+  ) as normalized
+$$;
+
+
+ALTER FUNCTION "private"."portal_catalog_character_field_set_v1"("p_items" "jsonb", "p_key" "text", "p_exact_one" boolean) OWNER TO "portal_public_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."portal_catalog_character_set_v1"("p_value" "text") RETURNS "text"
+    LANGUAGE "sql" IMMUTABLE SECURITY DEFINER PARALLEL SAFE
+    SET "search_path" TO ''
+    AS $$
+  select coalesce(
+    pg_catalog.string_agg(
+      distinct_character.value,
+      ''
+      order by distinct_character.value collate pg_catalog."C"
+    ),
+    ''
+  )
+  from (
+    select distinct character.value
+    from pg_catalog.regexp_split_to_table(
+      coalesce(p_value, ''),
+      ''
+    ) as character(value)
+    where character.value <> ''
+  ) as distinct_character
+$$;
+
+
+ALTER FUNCTION "private"."portal_catalog_character_set_v1"("p_value" "text") OWNER TO "portal_public_executor";
+
+
 CREATE OR REPLACE FUNCTION "private"."portal_catalog_facet_facts_v1"("p_kind" "text", "p_card" "jsonb") RETURNS TABLE("facet_access_level" "text", "facet_geography" "text", "facet_reference_year" "text", "facet_process_subtype" "text", "facet_source" "text")
     LANGUAGE "sql" IMMUTABLE PARALLEL SAFE
     SET "search_path" TO ''
@@ -45963,17 +46438,32 @@ begin
     end if;
   end if;
 
-  v_kernel := private.catalog_portal_search_v1_impl(
-    p_kind,
-    v_query,
-    v_filters,
-    v_sort,
-    v_cursor_rank,
-    v_cursor_id,
-    v_cursor_version,
-    v_limit,
-    v_fingerprint
-  );
+  if pg_catalog.char_length(v_query) = 1
+     and v_filters = '{}'::jsonb
+     and v_sort = 'relevance' then
+    v_kernel := private.catalog_portal_single_character_search_v1_impl(
+      p_kind,
+      v_query,
+      v_cursor_rank,
+      v_cursor_id,
+      v_cursor_version,
+      v_limit,
+      v_fingerprint
+    );
+  else
+    v_kernel := private.catalog_portal_search_v1_impl(
+      p_kind,
+      v_query,
+      v_filters,
+      v_sort,
+      v_cursor_rank,
+      v_cursor_id,
+      v_cursor_version,
+      v_limit,
+      v_fingerprint
+    );
+  end if;
+
   v_next_cursor_payload := nullif(
     v_kernel -> 'nextCursorPayload',
     'null'::jsonb
@@ -45993,6 +46483,10 @@ $_$;
 
 
 ALTER FUNCTION "private"."portal_search_v1"("p_kind" "text", "p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor" "text", "p_limit" integer) OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."portal_search_v1"("p_kind" "text", "p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor" "text", "p_limit" integer) IS 'Validates and normalizes public Search, routing only one-code-point unfiltered relevance to the narrow character pre-limit kernel.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."portal_source_v1"("p_kind" "text", "p_json" "jsonb") RETURNS "jsonb"
@@ -55016,6 +55510,67 @@ END;$$;
 
 
 ALTER FUNCTION "private"."sync_json_to_jsonb"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "private"."sync_portal_catalog_character_row_v1"() RETURNS "trigger"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    SET "row_security" TO 'on'
+    AS $$
+begin
+  insert into private.portal_catalog_character_rows_v1 (
+    dataset_kind,
+    id,
+    version,
+    state_code,
+    modified_at,
+    document_characters,
+    name_characters,
+    name_exact_characters,
+    classification_characters,
+    classification_exact_characters,
+    character_contract_version
+  ) values (
+    new.dataset_kind,
+    new.id,
+    new.version,
+    new.state_code,
+    new.modified_at,
+    private.portal_catalog_character_set_v1(new.document),
+    private.portal_catalog_character_field_set_v1(
+      new.card -> 'names', 'value', false
+    ),
+    private.portal_catalog_character_field_set_v1(
+      new.card -> 'names', 'value', true
+    ),
+    private.portal_catalog_character_field_set_v1(
+      new.card -> 'classifications', 'code', false
+    ),
+    private.portal_catalog_character_field_set_v1(
+      new.card -> 'classifications', 'code', true
+    ),
+    1
+  )
+  on conflict (dataset_kind, id, version) do update
+  set state_code = excluded.state_code,
+      modified_at = excluded.modified_at,
+      document_characters = excluded.document_characters,
+      name_characters = excluded.name_characters,
+      name_exact_characters = excluded.name_exact_characters,
+      classification_characters = excluded.classification_characters,
+      classification_exact_characters =
+        excluded.classification_exact_characters,
+      character_contract_version = excluded.character_contract_version;
+  return new;
+end
+$$;
+
+
+ALTER FUNCTION "private"."sync_portal_catalog_character_row_v1"() OWNER TO "api_internal_executor";
+
+
+COMMENT ON FUNCTION "private"."sync_portal_catalog_character_row_v1"() IS 'Synchronizes one exact parent projection version into the narrow character projection.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."sync_portal_catalog_facet_row_v1"() RETURNS "trigger"
@@ -65162,6 +65717,34 @@ CREATE TABLE IF NOT EXISTS "private"."notifications" (
 ALTER TABLE "private"."notifications" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "private"."portal_catalog_character_rows_v1" (
+    "dataset_kind" "text" NOT NULL,
+    "id" "uuid" NOT NULL,
+    "version" "text" NOT NULL,
+    "state_code" integer NOT NULL,
+    "modified_at" timestamp with time zone NOT NULL,
+    "document_characters" "text" NOT NULL,
+    "name_characters" "text" NOT NULL,
+    "name_exact_characters" "text" NOT NULL,
+    "classification_characters" "text" NOT NULL,
+    "classification_exact_characters" "text" NOT NULL,
+    "character_contract_version" smallint DEFAULT 1 NOT NULL,
+    CONSTRAINT "portal_catalog_character_rows__character_contract_version_check" CHECK (("character_contract_version" = 1)),
+    CONSTRAINT "portal_catalog_character_rows_v1_dataset_kind_check" CHECK (("dataset_kind" = ANY (ARRAY['process'::"text", 'flow'::"text"]))),
+    CONSTRAINT "portal_catalog_character_rows_v1_state_code_check" CHECK (("state_code" = ANY (ARRAY[100, 200]))),
+    CONSTRAINT "portal_catalog_character_rows_v1_version_check" CHECK (("version" ~ '^\d{2}\.\d{2}\.\d{3}$'::"text"))
+);
+
+ALTER TABLE ONLY "private"."portal_catalog_character_rows_v1" FORCE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "private"."portal_catalog_character_rows_v1" OWNER TO "postgres";
+
+
+COMMENT ON TABLE "private"."portal_catalog_character_rows_v1" IS 'Narrow exact-version public character sets for bounded one-code-point Search pre-limit; parent FK and INSERT/UPDATE trigger keep it synchronized.';
+
+
+
 CREATE TABLE IF NOT EXISTS "private"."portal_catalog_facet_contract_v1" (
     "contract_version" smallint NOT NULL,
     "manifest_schema" "text" NOT NULL,
@@ -66904,6 +67487,11 @@ ALTER TABLE ONLY "private"."notifications"
 
 
 
+ALTER TABLE ONLY "private"."portal_catalog_character_rows_v1"
+    ADD CONSTRAINT "portal_catalog_character_rows_v1_pkey" PRIMARY KEY ("dataset_kind", "id", "version");
+
+
+
 ALTER TABLE ONLY "private"."portal_catalog_facet_contract_v1"
     ADD CONSTRAINT "portal_catalog_facet_contract_v1_pkey" PRIMARY KEY ("contract_version");
 
@@ -67744,6 +68332,10 @@ CREATE INDEX "notifications_sender_user_id_idx" ON "private"."notifications" USI
 
 
 
+CREATE INDEX "portal_catalog_character_rows_latest_v1_idx" ON "private"."portal_catalog_character_rows_v1" USING "btree" ("dataset_kind", "id", "version" DESC, "modified_at" DESC, "state_code" DESC);
+
+
+
 CREATE INDEX "portal_catalog_facet_rows_latest_v1_idx" ON "private"."portal_catalog_facet_rows_v1" USING "btree" ("dataset_kind", "id", "version" DESC, "modified_at" DESC, "state_code" DESC);
 
 
@@ -68560,6 +69152,10 @@ CREATE OR REPLACE TRIGGER "notifications_set_modified_at_trigger" BEFORE UPDATE 
 
 
 
+CREATE OR REPLACE TRIGGER "portal_catalog_character_sync_v1" AFTER INSERT OR UPDATE OF "dataset_kind", "id", "version", "state_code", "modified_at", "card", "document" ON "private"."portal_catalog_search_rows_v1" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_catalog_character_row_v1"();
+
+
+
 CREATE OR REPLACE TRIGGER "portal_catalog_facet_sync_v1" AFTER INSERT OR UPDATE OF "dataset_kind", "id", "version", "state_code", "modified_at", "card" ON "private"."portal_catalog_search_rows_v1" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_catalog_facet_row_v1"();
 
 
@@ -69244,6 +69840,11 @@ ALTER TABLE ONLY "private"."notifications"
 
 
 
+ALTER TABLE ONLY "private"."portal_catalog_character_rows_v1"
+    ADD CONSTRAINT "portal_catalog_character_parent_v1_fk" FOREIGN KEY ("dataset_kind", "id", "version") REFERENCES "private"."portal_catalog_search_rows_v1"("dataset_kind", "id", "version") ON UPDATE RESTRICT ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "private"."portal_catalog_facet_rows_v1"
     ADD CONSTRAINT "portal_catalog_facet_rows_contract_version_v1_fk" FOREIGN KEY ("facet_contract_version") REFERENCES "private"."portal_catalog_facet_contract_v1"("contract_version") ON UPDATE RESTRICT ON DELETE RESTRICT;
 
@@ -69647,6 +70248,17 @@ CREATE POLICY "notifications_update_sender" ON "private"."notifications" FOR UPD
 
 
 
+CREATE POLICY "portal_catalog_character_rows_internal_all_v1" ON "private"."portal_catalog_character_rows_v1" TO "api_internal_executor" USING (true) WITH CHECK (true);
+
+
+
+CREATE POLICY "portal_catalog_character_rows_portal_select_v1" ON "private"."portal_catalog_character_rows_v1" FOR SELECT TO "portal_public_executor" USING (true);
+
+
+
+ALTER TABLE "private"."portal_catalog_character_rows_v1" ENABLE ROW LEVEL SECURITY;
+
+
 CREATE POLICY "portal_catalog_facet_contract_internal_select_v1" ON "private"."portal_catalog_facet_contract_v1" FOR SELECT TO "api_internal_executor" USING (("contract_version" = 1));
 
 
@@ -69676,7 +70288,11 @@ CREATE POLICY "portal_catalog_search_rows_internal_all_v1" ON "private"."portal_
 
 
 
-CREATE POLICY "portal_catalog_search_rows_portal_select_v1" ON "private"."portal_catalog_search_rows_v1" FOR SELECT TO "portal_public_executor" USING (("state_code" = ANY (ARRAY[100, 200])));
+CREATE POLICY "portal_catalog_search_rows_portal_select_v1" ON "private"."portal_catalog_search_rows_v1" FOR SELECT TO "portal_public_executor" USING (true);
+
+
+
+COMMENT ON POLICY "portal_catalog_search_rows_portal_select_v1" ON "private"."portal_catalog_search_rows_v1" IS 'Row-neutral forced-RLS SELECT over a purpose-built projection whose validated table CHECK admits only public states 100/200; the neutral policy permits exact JSON-expression predicates to remain index conditions.';
 
 
 
@@ -71730,6 +72346,11 @@ REVOKE ALL ON FUNCTION "private"."assert_portal_card_context_contract_v1"() FROM
 
 
 
+REVOKE ALL ON FUNCTION "private"."assert_portal_catalog_character_contract_v1"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."assert_portal_catalog_character_contract_v1"() TO "api_internal_executor";
+
+
+
 REVOKE ALL ON FUNCTION "private"."assert_portal_catalog_facet_contract_v1"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."assert_portal_catalog_facet_contract_v1"() TO "portal_public_executor";
 
@@ -71770,12 +72391,20 @@ REVOKE ALL ON FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_li
 
 
 
+REVOKE ALL ON FUNCTION "private"."catalog_portal_flow_single_character_versions_v1"("p_literal" "text") FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "private"."catalog_portal_hybrid_pattern_matches_v1"("p_kind" "text", "p_query_terms" "text"[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."catalog_portal_hybrid_pattern_matches_v1"("p_kind" "text", "p_query_terms" "text"[]) TO "api_internal_executor";
 
 
 
 REVOKE ALL ON FUNCTION "private"."catalog_portal_process_pattern_versions_v1"("p_like_pattern" "text") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."catalog_portal_process_single_character_versions_v1"("p_literal" "text") FROM PUBLIC;
 
 
 
@@ -71786,6 +72415,10 @@ GRANT ALL ON FUNCTION "private"."catalog_portal_projection_payload_v1"("p_kind" 
 
 REVOKE ALL ON FUNCTION "private"."catalog_portal_search_v1_impl"("p_kind" "text", "p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."catalog_portal_search_v1_impl"("p_kind" "text", "p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") TO "portal_public_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."catalog_portal_single_character_search_v1_impl"("p_kind" "text", "p_query" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") FROM PUBLIC;
 
 
 
@@ -72396,6 +73029,16 @@ REVOKE ALL ON FUNCTION "private"."portal_card_context_v1"("p_kind" "text", "p_st
 
 
 REVOKE ALL ON FUNCTION "private"."portal_catalog_card_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_catalog_character_field_set_v1"("p_items" "jsonb", "p_key" "text", "p_exact_one" boolean) FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."portal_catalog_character_field_set_v1"("p_items" "jsonb", "p_key" "text", "p_exact_one" boolean) TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."portal_catalog_character_set_v1"("p_value" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."portal_catalog_character_set_v1"("p_value" "text") TO "api_internal_executor";
 
 
 
@@ -73095,6 +73738,10 @@ GRANT ALL ON FUNCTION "private"."sync_json_to_jsonb"() TO "api_internal_executor
 
 
 
+REVOKE ALL ON FUNCTION "private"."sync_portal_catalog_character_row_v1"() FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "private"."sync_portal_catalog_facet_row_v1"() FROM PUBLIC;
 
 
@@ -73628,6 +74275,50 @@ GRANT SELECT ON TABLE "private"."lcia_scope_closure_scan_executions" TO "api_int
 
 GRANT ALL ON TABLE "private"."notifications" TO "service_role";
 GRANT SELECT ON TABLE "private"."notifications" TO "api_internal_executor";
+
+
+
+GRANT SELECT,INSERT,DELETE,UPDATE ON TABLE "private"."portal_catalog_character_rows_v1" TO "api_internal_executor";
+
+
+
+GRANT SELECT("dataset_kind") ON TABLE "private"."portal_catalog_character_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("id") ON TABLE "private"."portal_catalog_character_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("version") ON TABLE "private"."portal_catalog_character_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("state_code") ON TABLE "private"."portal_catalog_character_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("modified_at") ON TABLE "private"."portal_catalog_character_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("document_characters") ON TABLE "private"."portal_catalog_character_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("name_characters") ON TABLE "private"."portal_catalog_character_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("name_exact_characters") ON TABLE "private"."portal_catalog_character_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("classification_characters") ON TABLE "private"."portal_catalog_character_rows_v1" TO "portal_public_executor";
+
+
+
+GRANT SELECT("classification_exact_characters") ON TABLE "private"."portal_catalog_character_rows_v1" TO "portal_public_executor";
 
 
 

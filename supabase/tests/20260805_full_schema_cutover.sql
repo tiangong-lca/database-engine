@@ -80,8 +80,8 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  285::bigint,
-  'private contains the active helpers, Database B/reuse helpers, and reviewed Portal catalog/LCIA/Hybrid/sitemap internals'
+  292::bigint,
+  'private contains the active helpers, Database B/reuse helpers, and reviewed Portal catalog/LCIA/Hybrid/sitemap/character internals'
 );
 
 select ok(
@@ -112,7 +112,7 @@ select is(
     from pg_trigger trigger_record
     where not trigger_record.tgisinternal
   ),
-  115::bigint,
+  116::bigint,
   'all active application triggers remain present'
 );
 
@@ -121,7 +121,7 @@ select is(
     select count(*)
     from pg_policy
   ),
-  78::bigint,
+  80::bigint,
   'all RLS policies remain present'
 );
 
@@ -136,7 +136,7 @@ select is(
       'util'::regnamespace
     )
   ),
-  541::bigint,
+  547::bigint,
   'all application constraints remain present'
 );
 
@@ -165,7 +165,7 @@ select is(
       and class.relkind in ('r', 'p')
       and class.relrowsecurity
   ),
-  66::bigint,
+  67::bigint,
   'RLS enablement is preserved across moved tables'
 );
 

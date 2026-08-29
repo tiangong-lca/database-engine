@@ -1,7 +1,7 @@
 ---
-lastReviewedAt: 2026-08-28
-lastReviewedCommit: 26f583b
-lastReviewedNote: "Reviewed for Issue #543: the 278-file tree retains exact-version sitemap recovery and adds bounded classification plus history-unique CAS example repair without changing projection recovery ownership."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: 2425798
+lastReviewedNote: "Reviewed for Issues #551/#552: the 296-file tree retains exact-version recovery, forced-RLS CAS indexability, and the sharded narrow character projection rollout with bounded writer ownership."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -510,6 +510,40 @@ removing the homepage CAS.
 The summary's two-second timeout, three-example order, and 16-KiB cap remain
 unchanged, and migration verification runs as the constrained Portal executor.
 
+`20260829130000_make_portal_flow_cas_rls_indexable.sql` changes only the
+Portal SELECT policy on the purpose-built card projection and the live
+projection assertion. The table remains `postgres`-owned with forced RLS and a
+validated CHECK that admits only states 100/200; the row-neutral policy is safe
+only while the assertion pins all of those facts and its unique role binding.
+This lets the existing non-leakproof JSON CAS equality remain an exact index
+condition instead of a parent-wide filter. The migration adds or removes no
+relation, index, Trigger, row, writer branch, timeout, or public contract. Any
+policy, CHECK, owner, RLS-flag, assertion-hash, candidate-function, or summary-
+function prerequisite drift aborts atomically. Recovery is the unchanged
+migration retry; do not hand-edit the policy or weaken the table constraint.
+
+`20260829131000_repair_portal_single_character_literal_search.sql` preserves
+the fixed `%L` multi-code-point templates and establishes a correctness-only
+`strpos` fallback after TokenBigram LIKE demonstrated a one-code-point false
+negative. It changes no public wrapper, index, relation, or writer and is a safe
+intermediate state if later rollout files have not committed.
+
+`20260829131001_portal_character_projection_expand.sql` creates the narrow
+exact-version character child, derivation helpers, latest-key B-tree, exact
+parent FK, and sole parent INSERT/UPDATE upsert Trigger. It contains no initial
+rows. `131002` through `131005` backfill four UUID quarters under independent
+120-second statements while the Trigger covers concurrent parent writes.
+`20260829131006_portal_character_projection_cutover.sql` takes one short parent
+writer fence, inserts any missing rows, removes impossible extras, proves exact
+key/state/time parity plus deterministic sampled facts, installs the runtime
+schema assertion and bounded pre-limit kernel, then routes only validated
+one-code-point empty-filter relevance through it. Any interruption before
+cutover leaves the retained correctness fallback authoritative. After cutover,
+the child is rebuildable from the immutable parent: never hand-edit rows,
+disable the Trigger, rebuild PGroonga, or add a unigram index. A missing shard
+is repaired by replaying only its unrecorded migration; an uncertain recorded
+cutover requires catalog/ledger inspection before any retry.
+
 ## Uncertain expand commit
 
 The expand migration is transactional, so ordinary SQL failure leaves no Issue
@@ -606,7 +640,7 @@ Issue 531 Supabase project. It resets that local project and must never target a
 shared checkout, Preview, persistent Dev, or production.
 
 Formal recovery evidence requires clean HEAD, the reviewed Supabase CLI
-`2.109.1`, and byte equality plus one aggregate SHA-256 across all 278 migration
+`2.109.1`, and byte equality plus one aggregate SHA-256 across all 296 migration
 files in the repository and isolated project. Comparing only Issue 531 files is
 not sufficient because an earlier baseline change can alter recovery behavior.
 

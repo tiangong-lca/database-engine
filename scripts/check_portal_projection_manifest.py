@@ -25,6 +25,18 @@ CARD_CONTEXT_ANCHOR_NAME = "20260827021441_portal_card_context_decorator.sql"
 FLOW_GEOGRAPHY_SEARCH_NAME = (
     "20260827134100_optimize_portal_flow_geography_search.sql"
 )
+FLOW_CAS_RLS_POLICY_NAME = (
+    "20260829130000_make_portal_flow_cas_rls_indexable.sql"
+)
+SINGLE_CHARACTER_SEARCH_NAME = (
+    "20260829131000_repair_portal_single_character_literal_search.sql"
+)
+CHARACTER_PROJECTION_EXPAND_NAME = (
+    "20260829131001_portal_character_projection_expand.sql"
+)
+CHARACTER_PROJECTION_CUTOVER_NAME = (
+    "20260829131006_portal_character_projection_cutover.sql"
+)
 SITEMAP_LATEST_PROJECTION_NAME = (
     "20260827134101_portal_sitemap_latest_projection.sql"
 )
@@ -186,6 +198,12 @@ def main() -> int:
         executable_sql = sql_without_comments(migration.read_text(encoding="utf-8"))
         for identity, pattern in patterns.items():
             if pattern.search(executable_sql):
+                if (
+                    migration.name == FLOW_CAS_RLS_POLICY_NAME
+                    and identity
+                    == "private.assert_portal_catalog_projection_contract_v1()"
+                ):
+                    continue
                 violations.append(f"{migration.name}: {identity}")
 
     facet_anchor = MIGRATIONS_DIR / FACET_ANCHOR_NAME
@@ -353,6 +371,291 @@ def main() -> int:
             violations.append(
                 f"{FLOW_GEOGRAPHY_SEARCH_NAME}: query-only repair must not add "
                 "a table, index, trigger, or writer-table rewrite"
+            )
+
+    flow_cas_rls_policy = MIGRATIONS_DIR / FLOW_CAS_RLS_POLICY_NAME
+    if not flow_cas_rls_policy.is_file():
+        violations.append(
+            f"missing Portal Flow CAS RLS migration: {FLOW_CAS_RLS_POLICY_NAME}"
+        )
+    else:
+        rls_sql = sql_without_comments(
+            flow_cas_rls_policy.read_text(encoding="utf-8")
+        )
+        rls_sql_lower = rls_sql.lower()
+        required_rls_tokens = (
+            "35cf6024873514fa198dad8684cd41815f7cd4147f715a9becbb764a6bb37149",
+            "b001ad1fe7c4ae14fd577a740205af0b2e0f91a62b9912bcb133628e05e8b8cc",
+            "c23867609136dd833aa713cf3868ad27f9b858efbca8f4f130e1840c9a359094",
+            "alter policy portal_catalog_search_rows_portal_select_v1",
+            "on private.portal_catalog_search_rows_v1",
+            "using (true)",
+            "portal_catalog_search_rows_v1_state_code_check",
+            "(state_code=any(array[100,200]))",
+            "policy.qual = 'true'",
+            "relation.relrowsecurity",
+            "relation.relforcerowsecurity",
+            "private.assert_portal_catalog_projection_contract_v1()",
+            "portal flow cas rls-indexability prerequisites drifted",
+        )
+        missing = [
+            token for token in required_rls_tokens if token not in rls_sql_lower
+        ]
+        if missing:
+            violations.append(
+                f"{FLOW_CAS_RLS_POLICY_NAME}: missing RLS-indexability tokens "
+                + ", ".join(missing)
+            )
+        assertion_pattern = mutation_pattern(
+            "private.assert_portal_catalog_projection_contract_v1()"
+        )
+        if len(assertion_pattern.findall(rls_sql)) != 1:
+            violations.append(
+                f"{FLOW_CAS_RLS_POLICY_NAME}: expected one projection assertion replacement"
+            )
+        if re.search(
+            r"\b(?:create\s+(?:unlogged\s+)?table|create\s+(?:unique\s+)?index|"
+            r"create\s+trigger|alter\s+table|drop\s+(?:table|index|trigger))\b",
+            rls_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{FLOW_CAS_RLS_POLICY_NAME}: policy-only repair must not add, "
+                "rewrite, or remove a relation, index, trigger, or writer path"
+            )
+        if len(
+            re.findall(
+                r"\balter\s+policy\s+portal_catalog_search_rows_portal_select_v1\b",
+                rls_sql,
+                flags=re.IGNORECASE,
+            )
+        ) != 1:
+            violations.append(
+                f"{FLOW_CAS_RLS_POLICY_NAME}: expected one exact Portal SELECT policy change"
+            )
+
+    single_character_search = MIGRATIONS_DIR / SINGLE_CHARACTER_SEARCH_NAME
+    if not single_character_search.is_file():
+        violations.append(
+            "missing Portal single-character Search migration: "
+            f"{SINGLE_CHARACTER_SEARCH_NAME}"
+        )
+    else:
+        character_sql = sql_without_comments(
+            single_character_search.read_text(encoding="utf-8")
+        )
+        character_sql_lower = character_sql.lower()
+        required_character_tokens = (
+            "114236b32b7a8a813f222ea301be9dd92529aba1eaf565301b3ed533d94e2115",
+            "e36c34a1fec82f769fef1c67ce4505f760025d0b2c0d4b72ed8b55e87abfd6a4",
+            "private.catalog_portal_process_pattern_versions_v1",
+            "private.catalog_portal_flow_pattern_versions_v1",
+            "private.catalog_portal_process_single_character_versions_v1",
+            "private.catalog_portal_flow_single_character_versions_v1",
+            "char_length(p_like_pattern) = 3",
+            "pg_catalog.strpos",
+            "return query execute pg_catalog.format",
+            "portal_catalog_search_rows_portal_select_v1",
+            "policy.qual = 'true'",
+            "portal single-character search prerequisites drifted",
+        )
+        missing = [
+            token
+            for token in required_character_tokens
+            if token not in character_sql_lower
+        ]
+        if missing:
+            violations.append(
+                f"{SINGLE_CHARACTER_SEARCH_NAME}: missing correctness tokens "
+                + ", ".join(missing)
+            )
+        for helper in (
+            "private.catalog_portal_process_pattern_versions_v1",
+            "private.catalog_portal_flow_pattern_versions_v1",
+        ):
+            helper_pattern = re.compile(
+                rf"create\s+or\s+replace\s+function\s+{re.escape(helper)}\s*\(",
+                flags=re.IGNORECASE,
+            )
+            if len(helper_pattern.findall(character_sql)) != 1:
+                violations.append(
+                    f"{SINGLE_CHARACTER_SEARCH_NAME}: expected one {helper} replacement"
+                )
+        for helper in (
+            "private.catalog_portal_process_single_character_versions_v1",
+            "private.catalog_portal_flow_single_character_versions_v1",
+        ):
+            helper_pattern = re.compile(
+                rf"create\s+function\s+{re.escape(helper)}\s*\(",
+                flags=re.IGNORECASE,
+            )
+            if len(helper_pattern.findall(character_sql)) != 1:
+                violations.append(
+                    f"{SINGLE_CHARACTER_SEARCH_NAME}: expected one new {helper}"
+                )
+        if re.search(
+            r"\b(?:create\s+(?:unlogged\s+)?table|create\s+(?:unique\s+)?index|"
+            r"create\s+trigger|alter\s+(?:table|policy)|"
+            r"drop\s+(?:table|index|trigger))\b",
+            character_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{SINGLE_CHARACTER_SEARCH_NAME}: helper-only repair must not "
+                "change a relation, index, trigger, policy, or writer path"
+            )
+        if re.search(
+            r"create\s+or\s+replace\s+function\s+api[.]portal_",
+            character_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{SINGLE_CHARACTER_SEARCH_NAME}: public Portal wrappers must remain byte-stable"
+            )
+
+    character_expand = MIGRATIONS_DIR / CHARACTER_PROJECTION_EXPAND_NAME
+    if not character_expand.is_file():
+        violations.append(
+            f"missing Portal character projection expand: {CHARACTER_PROJECTION_EXPAND_NAME}"
+        )
+    else:
+        expand_sql = sql_without_comments(
+            character_expand.read_text(encoding="utf-8")
+        ).lower()
+        required_expand_tokens = (
+            "create table private.portal_catalog_character_rows_v1",
+            "portal_catalog_character_parent_v1_fk",
+            "on update restrict",
+            "on delete cascade",
+            "portal_catalog_character_rows_latest_v1_idx",
+            "portal_catalog_character_set_v1",
+            "portal_catalog_character_field_set_v1",
+            "sync_portal_catalog_character_row_v1",
+            "create trigger portal_catalog_character_sync_v1",
+            "after insert or update",
+            "enable row level security",
+            "force row level security",
+            "portal_catalog_character_rows_portal_select_v1",
+            "portal_catalog_character_rows_internal_all_v1",
+            "select count(*)",
+            "<> 0",
+        )
+        missing = [
+            token for token in required_expand_tokens if token not in expand_sql
+        ]
+        if missing:
+            violations.append(
+                f"{CHARACTER_PROJECTION_EXPAND_NAME}: missing expand tokens "
+                + ", ".join(missing)
+            )
+
+    character_backfills = sorted(
+        MIGRATIONS_DIR.glob(
+            "2026082913100[2-5]_portal_character_projection_backfill_*.sql"
+        )
+    )
+    if len(character_backfills) != 4:
+        violations.append(
+            "expected exactly four Portal character projection backfills, "
+            f"found {len(character_backfills)}"
+        )
+    expected_character_ranges = (
+        ("00000000-0000-0000-0000-000000000000", "40000000-0000-0000-0000-000000000000"),
+        ("40000000-0000-0000-0000-000000000000", "80000000-0000-0000-0000-000000000000"),
+        ("80000000-0000-0000-0000-000000000000", "c0000000-0000-0000-0000-000000000000"),
+        ("c0000000-0000-0000-0000-000000000000", None),
+    )
+    for migration, (lower, upper) in zip(
+        character_backfills, expected_character_ranges
+    ):
+        executable_sql = sql_without_comments(
+            migration.read_text(encoding="utf-8")
+        ).lower()
+        required_tokens = (
+            "set local lock_timeout = '5s'",
+            "set local statement_timeout = '120s'",
+            "insert into private.portal_catalog_character_rows_v1",
+            "from private.portal_catalog_search_rows_v1",
+            "portal_catalog_character_set_v1",
+            "portal_catalog_character_field_set_v1",
+            "on conflict (dataset_kind, id, version) do nothing",
+            "portal character backfill is incomplete",
+            lower,
+        )
+        missing = [token for token in required_tokens if token not in executable_sql]
+        if upper is not None and upper not in executable_sql:
+            missing.append(upper)
+        if missing:
+            violations.append(
+                f"{migration.name}: missing character backfill tokens "
+                + ", ".join(missing)
+            )
+
+    character_cutover = MIGRATIONS_DIR / CHARACTER_PROJECTION_CUTOVER_NAME
+    if not character_cutover.is_file():
+        violations.append(
+            f"missing Portal character projection cutover: "
+            f"{CHARACTER_PROJECTION_CUTOVER_NAME}"
+        )
+    else:
+        cutover_sql = sql_without_comments(
+            character_cutover.read_text(encoding="utf-8")
+        )
+        cutover_sql_lower = cutover_sql.lower()
+        required_cutover_tokens = (
+            "lock table private.portal_catalog_search_rows_v1",
+            "in share row exclusive mode",
+            "insert into private.portal_catalog_character_rows_v1",
+            "delete from private.portal_catalog_character_rows_v1",
+            "portal character projection reconciliation failed",
+            "assert_portal_catalog_character_contract_v1",
+            "catalog_portal_single_character_search_v1_impl",
+            "char_length(v_query) = 1",
+            "v_filters = '{}'::jsonb",
+            "v_sort = 'relevance'",
+            "join private.portal_catalog_search_rows_v1",
+            "limit p_limit + 1",
+            "catalog_portal_search_v1_impl",
+            "portal character search cutover drifted",
+        )
+        missing = [
+            token for token in required_cutover_tokens
+            if token not in cutover_sql_lower
+        ]
+        if missing:
+            violations.append(
+                f"{CHARACTER_PROJECTION_CUTOVER_NAME}: missing cutover tokens "
+                + ", ".join(missing)
+            )
+        if len(
+            re.findall(
+                r"create\s+or\s+replace\s+function\s+"
+                r"private[.]portal_search_v1\s*[(]",
+                cutover_sql,
+                flags=re.IGNORECASE,
+            )
+        ) != 1:
+            violations.append(
+                f"{CHARACTER_PROJECTION_CUTOVER_NAME}: expected one Search coordinator replacement"
+            )
+        if re.search(
+            r"\b(?:create\s+(?:unlogged\s+)?table|"
+            r"create\s+(?:unique\s+)?index|create\s+trigger|"
+            r"alter\s+(?:table|policy)|drop\s+(?:table|index|trigger))\b",
+            cutover_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{CHARACTER_PROJECTION_CUTOVER_NAME}: cutover must not change "
+                "a relation, index, trigger, policy, or writer definition"
+            )
+        if re.search(
+            r"create\s+or\s+replace\s+function\s+api[.]portal_",
+            cutover_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{CHARACTER_PROJECTION_CUTOVER_NAME}: public wrappers must remain byte-stable"
             )
 
     required_guard_counts = {
@@ -751,7 +1054,11 @@ def main() -> int:
         f"{len(CARD_CONTEXT_FUNCTION_IDENTITIES)} derivation functions and "
         f"{len(CARD_CONTEXT_CONTROL_FUNCTION_IDENTITIES)} controls, "
         f"sha256={CARD_CONTEXT_MANIFEST_SHA256}; Flow geography Search "
-        "repair remains query-only; sitemap shards remain fixed at 64 with "
+        "repair remains query-only; forced-RLS Flow CAS equality remains an "
+        "exact index condition over the validated public-state projection; "
+        "one-code-point literal Search uses one narrow exact-version child, "
+        "latest-key index, and parent INSERT/UPDATE trigger; "
+        "sitemap shards remain fixed at 64 with "
         "an exact-version FK child/index, one AFTER INSERT/UPDATE direct-upsert "
         "trigger, FK-cascade DELETE, the 134103 forward repair, and a "
         "4096-item fail-closed output cap"
