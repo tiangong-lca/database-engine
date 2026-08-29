@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: ab87cb5da02b978b119cd983683649a10a05ab8a
-lastReviewedNote: "Documented Issue #549 Worker queue growth controls and Worker-owned package-retention safety boundaries."
+lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
+lastReviewedNote: "Reviewed for Issue #552: the workflow dependency pin changes no repository architecture or runtime boundary."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -32,8 +32,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: ab87cb5da02b978b119cd983683649a10a05ab8a
-lastReviewedNote: "Added Issue #549 proof for coalesced heartbeats, exact negative admission, maintenance reuse, and Worker-owned package retention."
+lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
+lastReviewedNote: "Reviewed for Issue #552: existing workflow validation remains sufficient for the Supabase CLI restart fix."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: ab87cb5da02b978b119cd983683649a10a05ab8a
-lastReviewedNote: "Reviewed for Issue #543: 278-file recovery/benchmark runners, history-unique CAS pressure gates, summary-isolated index evidence, fixed sitemap shards, and 13-module Portal generation are current."
+lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
+lastReviewedNote: "Reviewed for Issue #552: the workflow contract now enforces one Supabase CLI version across all three jobs; the script surface is unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
