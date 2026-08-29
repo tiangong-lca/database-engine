@@ -171,14 +171,14 @@ select is(
 );
 
 select ok(
-  exists (
+  not exists (
     select 1
     from private.worker_job_events
     where job_id = (select job_id from issue_448_ids where label = 'explicit_retry')
       and event_type = 'heartbeat'
-      and details #>> '{diagnostics,failedField}' = 'stale'
+      and details ? 'diagnostics'
   ),
-  'append-only events retain the prior attempt heartbeat diagnostics'
+  'heartbeat events omit attempt diagnostics while terminal state still replaces the job-row diagnostics'
 );
 
 select private.worker_retry_job(
