@@ -20,8 +20,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-28
-lastReviewedCommit: 26f583b
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: ab87cb5da02b978b119cd983683649a10a05ab8a
 lastReviewedNote: "已复核 Issue #543：278-file recovery/benchmark、历史唯一 CAS 压力门、summary-isolated index 证据、固定 sitemap shards 与 13-module Portal 生成均为当前状态。"
 related:
   - ../AGENTS.md

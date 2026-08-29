@@ -5,6 +5,11 @@ CREATE OR REPLACE FUNCTION "private"."worker_heartbeat_job"("p_job_id" "uuid", "
 declare
   v_job private.worker_jobs%rowtype;
   v_lease_seconds integer := greatest(1, least(coalesce(p_lease_seconds, 300), 86400));
+  v_phase text;
+  v_progress numeric;
+  v_diagnostics jsonb;
+  v_business_changed boolean;
+  v_emit_event boolean;
 begin
   if not coalesce(util.is_service_request(), false) then
     return jsonb_build_object(
@@ -75,42 +80,56 @@ begin
     );
   end if;
 
+  v_phase := coalesce(nullif(trim(p_phase), ''), v_job.phase);
+  v_progress := coalesce(p_progress, v_job.progress);
+  v_diagnostics := v_job.diagnostics || coalesce(p_diagnostics, '{}'::jsonb);
+  v_business_changed := v_phase is distinct from v_job.phase
+    or v_progress is distinct from v_job.progress
+    or v_diagnostics is distinct from v_job.diagnostics;
+  v_emit_event := v_phase is distinct from v_job.phase
+    or (v_job.progress is null and p_progress is not null)
+    or (
+      v_job.progress is not null
+      and p_progress is not null
+      and floor(p_progress * 20) > floor(v_job.progress * 20)
+    );
+
   update private.worker_jobs
-    set phase = coalesce(nullif(trim(p_phase), ''), phase),
-        progress = coalesce(p_progress, progress),
-        diagnostics = diagnostics || coalesce(p_diagnostics, '{}'::jsonb),
+    set phase = v_phase,
+        progress = v_progress,
+        diagnostics = v_diagnostics,
         heartbeat_at = now(),
         lease_expires_at = now() + make_interval(secs => v_lease_seconds),
-        updated_at = now()
+        updated_at = case when v_business_changed then now() else updated_at end
   where id = v_job.id
   returning *
     into v_job;
 
-  insert into private.worker_job_events (
-    job_id,
-    event_type,
-    status,
-    phase,
-    progress,
-    worker_id,
-    lease_token,
-    details
-  ) values (
-    v_job.id,
-    'heartbeat',
-    v_job.status,
-    v_job.phase,
-    v_job.progress,
-    v_job.leased_by,
-    v_job.lease_token,
-    jsonb_build_object(
-      'leaseExpiresAt', v_job.lease_expires_at,
-      'diagnostics', coalesce(p_diagnostics, '{}'::jsonb)
-    )
-  );
+  if v_emit_event then
+    insert into private.worker_job_events (
+      job_id,
+      event_type,
+      status,
+      phase,
+      progress,
+      worker_id,
+      lease_token,
+      details
+    ) values (
+      v_job.id,
+      'heartbeat',
+      v_job.status,
+      v_job.phase,
+      v_job.progress,
+      v_job.leased_by,
+      v_job.lease_token,
+      jsonb_build_object('leaseExpiresAt', v_job.lease_expires_at)
+    );
+  end if;
 
   return jsonb_build_object(
     'ok', true,
+    'eventEmitted', v_emit_event,
     'data', private.worker_job_payload(v_job, true)
   );
 end;

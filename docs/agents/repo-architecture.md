@@ -30,7 +30,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: 01619747ce3f23e9d192fb81b1b41f022aebfa00
+lastReviewedCommit: ab87cb5da02b978b119cd983683649a10a05ab8a
 lastReviewedNote: "Documented Issue #549 Worker queue growth controls and Worker-owned package-retention safety boundaries."
 related:
   - ../../AGENTS.md
