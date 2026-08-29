@@ -32,7 +32,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: 0eac283e00b318bd2690a180fe4d8ebe300dbbd3
+lastReviewedCommit: 01619747ce3f23e9d192fb81b1b41f022aebfa00
 lastReviewedNote: "Added Issue #549 proof for coalesced heartbeats, exact negative admission, maintenance reuse, and Worker-owned package retention."
 related:
   - ../../AGENTS.md
