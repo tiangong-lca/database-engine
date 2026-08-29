@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
 lastReviewedCommit: 2425798
-lastReviewedNote: "Reviewed for Issues #551/#552: 290-file recovery/benchmark runners, forced-RLS CAS and one-code-point literal p95 gates, plus the workflow's single Supabase CLI version remain current."
+lastReviewedNote: "Reviewed for Issues #551/#552: 296-file recovery/benchmark runners, forced-RLS CAS and narrow character projection p95 gates, plus the workflow's single Supabase CLI version remain current."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -104,7 +104,7 @@ See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries. Formal evidence additionally requires
 clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
-the complete 290-file migration tree.
+the complete 296-file migration tree.
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
@@ -126,7 +126,7 @@ The runner always resets the isolated project to full HEAD on exit.
 Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
 fence, plan, and ANN-recall benchmark only against an explicitly attested
 Issue-531/532/539/543/551 local Supabase project. The runner byte-compares the complete
-290-file migration tree with the repository, writes into a new operator-selected private
+296-file migration tree with the repository, writes into a new operator-selected private
 directory, and resets the isolated database before and after the run so rolled
 back HNSW pages cannot accumulate. Its environment contract mirrors the
 recovery runner and additionally requires
@@ -146,10 +146,11 @@ unless the CAS equality is in `portal_catalog_search_flow_cas_v1_idx`'s
 
 The full candidate benchmark also records 20-sample
 `process_single_character` and `flow_single_character` labels. They exercise
-the ACL-closed, index-disabled parallel `strpos` fallback for one unescaped
-code point and must keep Search
+the synchronized narrow character pre-limit for one unescaped code point and
+must keep Search
 p95 below two seconds; all multi-code-point and escaped literal labels retain
-the existing PGroonga-backed template.
+the existing PGroonga-backed template. Writer evidence includes the sole child
+upsert Trigger, and populated/recovery runners prove child/parent parity.
 
 `PORTAL_PROJECTION_BENCHMARK_PROFILE` selects a fail-closed named profile:
 

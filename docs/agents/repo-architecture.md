@@ -138,13 +138,21 @@ matches and relies on PostgreSQL heap recheck to remove false positives. With
 the current TokenBigram projection indexes, one unescaped code point inside
 `%...%` can produce no index candidate, so recheck cannot recover the true SQL
 match. The two private Process/Flow pattern helpers therefore retain their
-fixed `%L` multi-code-point LIKE templates but route only the exact
-three-code-point pattern shape (`%`, one literal code point, `%`) through two
-ACL-closed helpers that disable index/bitmap paths only inside their call and
-run `strpos(document,literal)` with up to four parallel workers. Escaped `%`,
-`_`, and backslash stay on their existing literal-LIKE path. The branch changes no public wrapper, ranking,
-latest-version recheck, RLS, relation, index, Trigger, or writer; representative
-Process and Flow one-code-point p95 remain under the existing Search budget.
+fixed `%L` multi-code-point LIKE templates and a correctness-only `strpos`
+fallback for nonstandard one-code-point filtered/sorted shapes. The common
+validated one-code-point, empty-filter, relevance path instead reads
+`private.portal_catalog_character_rows_v1`: a narrow exact-version child that
+stores only unique document/name/classification character sets and exact
+one-code-point name/classification sets. One parent `AFTER INSERT OR UPDATE`
+upsert Trigger plus an exact-key `ON DELETE CASCADE` FK keeps the child current;
+four UUID-quarter backfills and a short reconcile fence avoid rewriting the
+wide card/document heap. Its latest-key B-tree pre-limits score/id/version on
+narrow rows, then joins at most `limit+1` exact parent cards. Escaped `%`, `_`,
+and backslash stay on the existing literal-LIKE path. The child is RLS forced,
+ACL closed, carries no raw source, and adds no public wrapper, text/vector
+index, timeout, or DTO change. Representative Process and Flow one-code-point
+p95 remain under the existing Search budget, and writer/storage amplification
+is measured with the other synchronized projections.
 
 The bounded sitemap surface stores one locator-free row for every public facet
 version in `private.portal_sitemap_rows_v1`. Its primary key is

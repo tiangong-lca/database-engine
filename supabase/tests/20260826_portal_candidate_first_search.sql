@@ -232,6 +232,76 @@ select extensions.ok(
 );
 
 select extensions.ok(
+  (
+    select relation.relowner = 'postgres'::regrole
+      and relation.relrowsecurity
+      and relation.relforcerowsecurity
+    from pg_catalog.pg_class as relation
+    where relation.oid =
+      'private.portal_catalog_character_rows_v1'::regclass
+  )
+  and (
+    select count(*)
+    from pg_catalog.pg_attribute as attribute
+    where attribute.attrelid =
+        'private.portal_catalog_character_rows_v1'::regclass
+      and attribute.attnum > 0
+      and not attribute.attisdropped
+  ) = 11
+  and exists (
+    select 1
+    from pg_catalog.pg_constraint as parent_fk
+    where parent_fk.conrelid =
+        'private.portal_catalog_character_rows_v1'::regclass
+      and parent_fk.confrelid =
+        'private.portal_catalog_search_rows_v1'::regclass
+      and parent_fk.conname = 'portal_catalog_character_parent_v1_fk'
+      and parent_fk.contype = 'f'
+      and parent_fk.convalidated
+      and parent_fk.confupdtype = 'r'
+      and parent_fk.confdeltype = 'c'
+  )
+  and pg_catalog.to_regclass(
+    'private.portal_catalog_character_rows_latest_v1_idx'
+  ) is not null
+  and (
+    select count(*)
+    from pg_catalog.pg_trigger as trigger
+    where trigger.tgrelid =
+        'private.portal_catalog_search_rows_v1'::regclass
+      and trigger.tgname = 'portal_catalog_character_sync_v1'
+      and not trigger.tgisinternal
+  ) = 1
+  and not pg_catalog.has_table_privilege(
+    'portal_public_executor',
+    'private.portal_catalog_character_rows_v1',
+    'SELECT'
+  )
+  and pg_catalog.has_column_privilege(
+    'portal_public_executor',
+    'private.portal_catalog_character_rows_v1',
+    'document_characters',
+    'SELECT'
+  )
+  and not pg_catalog.has_function_privilege(
+    'anon',
+    'private.catalog_portal_single_character_search_v1_impl(text,text,text,uuid,text,integer,text)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.catalog_portal_single_character_search_v1_impl(text,text,text,uuid,text,integer,text)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'service_role',
+    'private.catalog_portal_single_character_search_v1_impl(text,text,text,uuid,text,integer,text)',
+    'EXECUTE'
+  ),
+  'narrow character storage has exact FK/index/Trigger/RLS ownership and no external table or kernel ACL'
+);
+
+select extensions.ok(
   pg_catalog.has_table_privilege(
     'api_internal_executor',
     'private.portal_catalog_projection_contract_v1',
@@ -1601,6 +1671,155 @@ select extensions.ok(
       and candidate.version = '01.00.000'
   ),
   'single-character Flow literals bypass TokenBigram without changing the exact public candidate'
+);
+
+select extensions.is(
+  (
+    with fast as (
+      select api.portal_search_processes_v1(
+        'a', '{}'::jsonb, 'relevance', null, 20
+      ) as payload
+    ), general as (
+      select private.catalog_portal_search_v1_impl(
+        'process',
+        'a',
+        '{}'::jsonb,
+        'relevance',
+        null,
+        null,
+        null,
+        20,
+        private.portal_query_fingerprint_v1(
+          'process', 'a', '{}'::jsonb, 'relevance'
+        )
+      ) as payload
+    )
+    select (
+      select pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object(
+          'key', item.value -> 'key',
+          'match', item.value -> 'match'
+        ) order by item.ordinality
+      )
+      from pg_catalog.jsonb_array_elements(fast.payload -> 'items')
+        with ordinality as item(value, ordinality)
+    ) = (
+      select pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object(
+          'key', item.value -> 'key',
+          'match', item.value -> 'match'
+        ) order by item.ordinality
+      )
+      from pg_catalog.jsonb_array_elements(general.payload -> 'items')
+        with ordinality as item(value, ordinality)
+    )
+    from fast cross join general
+  ),
+  true,
+  'one-code-point Process pre-limit preserves general-kernel key, score, reason, and order'
+);
+
+select extensions.is(
+  (
+    with fast as (
+      select api.portal_search_flows_v1(
+        'a', '{}'::jsonb, 'relevance', null, 20
+      ) as payload
+    ), general as (
+      select private.catalog_portal_search_v1_impl(
+        'flow',
+        'a',
+        '{}'::jsonb,
+        'relevance',
+        null,
+        null,
+        null,
+        20,
+        private.portal_query_fingerprint_v1(
+          'flow', 'a', '{}'::jsonb, 'relevance'
+        )
+      ) as payload
+    )
+    select (
+      select pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object(
+          'key', item.value -> 'key',
+          'match', item.value -> 'match'
+        ) order by item.ordinality
+      )
+      from pg_catalog.jsonb_array_elements(fast.payload -> 'items')
+        with ordinality as item(value, ordinality)
+    ) = (
+      select pg_catalog.jsonb_agg(
+        pg_catalog.jsonb_build_object(
+          'key', item.value -> 'key',
+          'match', item.value -> 'match'
+        ) order by item.ordinality
+      )
+      from pg_catalog.jsonb_array_elements(general.payload -> 'items')
+        with ordinality as item(value, ordinality)
+    )
+    from fast cross join general
+  ),
+  true,
+  'one-code-point Flow pre-limit preserves general-kernel key, score, reason, and order'
+);
+
+select extensions.ok(
+  not exists (
+    (
+      select projection.dataset_kind,
+        projection.id,
+        projection.version,
+        projection.state_code,
+        projection.modified_at
+      from private.portal_catalog_search_rows_v1 as projection
+      except
+      select character_row.dataset_kind,
+        character_row.id,
+        character_row.version,
+        character_row.state_code,
+        character_row.modified_at
+      from private.portal_catalog_character_rows_v1 as character_row
+    )
+    union all
+    (
+      select character_row.dataset_kind,
+        character_row.id,
+        character_row.version,
+        character_row.state_code,
+        character_row.modified_at
+      from private.portal_catalog_character_rows_v1 as character_row
+      except
+      select projection.dataset_kind,
+        projection.id,
+        projection.version,
+        projection.state_code,
+        projection.modified_at
+      from private.portal_catalog_search_rows_v1 as projection
+    )
+  )
+  and (
+    select character_row.document_characters =
+        private.portal_catalog_character_set_v1(projection.document)
+      and character_row.name_characters =
+        private.portal_catalog_character_field_set_v1(
+          projection.card -> 'names', 'value', false
+        )
+      and character_row.name_exact_characters =
+        private.portal_catalog_character_field_set_v1(
+          projection.card -> 'names', 'value', true
+        )
+    from private.portal_catalog_search_rows_v1 as projection
+    join private.portal_catalog_character_rows_v1 as character_row
+      on character_row.dataset_kind = projection.dataset_kind
+     and character_row.id = projection.id
+     and character_row.version = projection.version
+    where projection.dataset_kind = 'process'
+      and projection.id = '53100000-0000-4000-8000-000000000105'
+      and projection.version = '01.00.000'
+  ),
+  'character child remains exact after source-trigger inserts and authenticated draft updates'
 );
 
 select extensions.is(

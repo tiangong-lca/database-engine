@@ -42,9 +42,9 @@ fi
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 290 \
-   || "${#test_migrations[@]}" -ne 290 ]]; then
-  echo "complete migration tree must contain exactly 290 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 296 \
+   || "${#test_migrations[@]}" -ne 296 ]]; then
+  echo "complete migration tree must contain exactly 296 files" >&2
   exit 2
 fi
 for migration_index in "${!repo_migrations[@]}"; do
@@ -307,15 +307,96 @@ for sitemap_index in "${!sitemap_versions[@]}"; do
   fi
 done
 
+character_prerequisite_versions=(
+  20260827021441
+  20260827050000
+  20260827050001
+  20260827050002
+  20260827134100
+  20260827193451
+  20260827210000
+  20260827223000
+  20260828003000
+  20260829115958
+  20260829115959
+  20260829120000
+  20260829120058
+  20260829120059
+  20260829120060
+  20260829120061
+  20260829120062
+  20260829120063
+  20260829120100
+  20260829130000
+  20260829131000
+)
+for migration_version in "${character_prerequisite_versions[@]}"; do
+  migration_file=("$repo_root"/supabase/migrations/${migration_version}_*.sql)
+  if [[ "${#migration_file[@]}" -ne 1 ]]; then
+    echo "expected one character prerequisite migration for $migration_version" >&2
+    exit 1
+  fi
+  apply_sql_file "${migration_file[0]}" >/dev/null
+done
+
+character_expand_log="$upgrade_log_dir/20260829131001.log"
+character_expand_started="$(perl -MTime::HiRes=time -e 'printf "%.6f", time')"
+apply_timed_sql_file \
+  "$repo_root/supabase/migrations/20260829131001_portal_character_projection_expand.sql" \
+  "$character_expand_log" \
+  30
+character_expand_ms="$(perl -MTime::HiRes=time -e \
+  'printf "%.3f", (time - $ARGV[0]) * 1000' "$character_expand_started")"
+echo "Character expand: ${character_expand_ms}ms"
+
+for migration_version in 20260829131002 20260829131003 20260829131004 20260829131005; do
+  migration_file=("$repo_root"/supabase/migrations/${migration_version}_*.sql)
+  migration_log="$upgrade_log_dir/${migration_version}.log"
+  started="$(perl -MTime::HiRes=time -e 'printf "%.6f", time')"
+  if ! apply_timed_sql_file "${migration_file[0]}" "$migration_log" 120; then
+    echo "character backfill $migration_version failed or exceeded 120s" >&2
+    exit 1
+  fi
+  elapsed_ms="$(perl -MTime::HiRes=time -e \
+    'printf "%.3f", (time - $ARGV[0]) * 1000' "$started")"
+  max_statement_ms="$(awk '
+    /^Time: [0-9]+([.][0-9]+)? ms/ {
+      if ($2 > maximum) maximum = $2
+    }
+    END { printf "%.3f", maximum }
+  ' "$migration_log")"
+  echo "Character backfill ${migration_version}: total=${elapsed_ms}ms max-statement=${max_statement_ms}ms"
+  if ! awk -v statement="$max_statement_ms" -v total="$elapsed_ms" \
+    'BEGIN { exit !(statement > 0 && statement <= 60000 && total <= 120000) }'; then
+    echo "character backfill lacks 2x statement headroom or exceeds 120s" >&2
+    exit 1
+  fi
+done
+
+character_cutover_started="$(perl -MTime::HiRes=time -e 'printf "%.6f", time')"
+apply_sql_file \
+  "$repo_root/supabase/migrations/20260829131006_portal_character_projection_cutover.sql" \
+  >/dev/null
+character_cutover_ms="$(perl -MTime::HiRes=time -e \
+  'printf "%.3f", (time - $ARGV[0]) * 1000' "$character_cutover_started")"
+echo "Character reconcile/cutover: ${character_cutover_ms}ms"
+if ! awk -v value="$character_cutover_ms" \
+  'BEGIN { exit !(value > 0 && value <= 5000) }'; then
+  echo "character reconcile/cutover exceeded its 5s fence budget" >&2
+  exit 1
+fi
+
 run_psql <<'SQL'
 grant api_internal_executor to postgres;
 set role api_internal_executor;
 select private.assert_portal_catalog_projection_contract_v1();
 select private.assert_portal_catalog_facet_contract_v1();
+select private.assert_portal_catalog_character_contract_v1();
 do $verify_populated_facet_upgrade$
 begin
   if (select count(*) from private.portal_catalog_facet_rows_v1) <> 126246
      or (select count(*) from private.portal_sitemap_rows_v1) <> 126246
+     or (select count(*) from private.portal_catalog_character_rows_v1) <> 126246
      or (
        select count(*)
        from private.portal_catalog_search_rows_v1

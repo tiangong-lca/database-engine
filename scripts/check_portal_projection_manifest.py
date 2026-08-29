@@ -31,6 +31,12 @@ FLOW_CAS_RLS_POLICY_NAME = (
 SINGLE_CHARACTER_SEARCH_NAME = (
     "20260829131000_repair_portal_single_character_literal_search.sql"
 )
+CHARACTER_PROJECTION_EXPAND_NAME = (
+    "20260829131001_portal_character_projection_expand.sql"
+)
+CHARACTER_PROJECTION_CUTOVER_NAME = (
+    "20260829131006_portal_character_projection_cutover.sql"
+)
 SITEMAP_LATEST_PROJECTION_NAME = (
     "20260827134101_portal_sitemap_latest_projection.sql"
 )
@@ -507,6 +513,151 @@ def main() -> int:
                 f"{SINGLE_CHARACTER_SEARCH_NAME}: public Portal wrappers must remain byte-stable"
             )
 
+    character_expand = MIGRATIONS_DIR / CHARACTER_PROJECTION_EXPAND_NAME
+    if not character_expand.is_file():
+        violations.append(
+            f"missing Portal character projection expand: {CHARACTER_PROJECTION_EXPAND_NAME}"
+        )
+    else:
+        expand_sql = sql_without_comments(
+            character_expand.read_text(encoding="utf-8")
+        ).lower()
+        required_expand_tokens = (
+            "create table private.portal_catalog_character_rows_v1",
+            "portal_catalog_character_parent_v1_fk",
+            "on update restrict",
+            "on delete cascade",
+            "portal_catalog_character_rows_latest_v1_idx",
+            "portal_catalog_character_set_v1",
+            "portal_catalog_character_field_set_v1",
+            "sync_portal_catalog_character_row_v1",
+            "create trigger portal_catalog_character_sync_v1",
+            "after insert or update",
+            "enable row level security",
+            "force row level security",
+            "portal_catalog_character_rows_portal_select_v1",
+            "portal_catalog_character_rows_internal_all_v1",
+            "select count(*)",
+            "<> 0",
+        )
+        missing = [
+            token for token in required_expand_tokens if token not in expand_sql
+        ]
+        if missing:
+            violations.append(
+                f"{CHARACTER_PROJECTION_EXPAND_NAME}: missing expand tokens "
+                + ", ".join(missing)
+            )
+
+    character_backfills = sorted(
+        MIGRATIONS_DIR.glob(
+            "2026082913100[2-5]_portal_character_projection_backfill_*.sql"
+        )
+    )
+    if len(character_backfills) != 4:
+        violations.append(
+            "expected exactly four Portal character projection backfills, "
+            f"found {len(character_backfills)}"
+        )
+    expected_character_ranges = (
+        ("00000000-0000-0000-0000-000000000000", "40000000-0000-0000-0000-000000000000"),
+        ("40000000-0000-0000-0000-000000000000", "80000000-0000-0000-0000-000000000000"),
+        ("80000000-0000-0000-0000-000000000000", "c0000000-0000-0000-0000-000000000000"),
+        ("c0000000-0000-0000-0000-000000000000", None),
+    )
+    for migration, (lower, upper) in zip(
+        character_backfills, expected_character_ranges
+    ):
+        executable_sql = sql_without_comments(
+            migration.read_text(encoding="utf-8")
+        ).lower()
+        required_tokens = (
+            "set local lock_timeout = '5s'",
+            "set local statement_timeout = '120s'",
+            "insert into private.portal_catalog_character_rows_v1",
+            "from private.portal_catalog_search_rows_v1",
+            "portal_catalog_character_set_v1",
+            "portal_catalog_character_field_set_v1",
+            "on conflict (dataset_kind, id, version) do nothing",
+            "portal character backfill is incomplete",
+            lower,
+        )
+        missing = [token for token in required_tokens if token not in executable_sql]
+        if upper is not None and upper not in executable_sql:
+            missing.append(upper)
+        if missing:
+            violations.append(
+                f"{migration.name}: missing character backfill tokens "
+                + ", ".join(missing)
+            )
+
+    character_cutover = MIGRATIONS_DIR / CHARACTER_PROJECTION_CUTOVER_NAME
+    if not character_cutover.is_file():
+        violations.append(
+            f"missing Portal character projection cutover: "
+            f"{CHARACTER_PROJECTION_CUTOVER_NAME}"
+        )
+    else:
+        cutover_sql = sql_without_comments(
+            character_cutover.read_text(encoding="utf-8")
+        )
+        cutover_sql_lower = cutover_sql.lower()
+        required_cutover_tokens = (
+            "lock table private.portal_catalog_search_rows_v1",
+            "in share row exclusive mode",
+            "insert into private.portal_catalog_character_rows_v1",
+            "delete from private.portal_catalog_character_rows_v1",
+            "portal character projection reconciliation failed",
+            "assert_portal_catalog_character_contract_v1",
+            "catalog_portal_single_character_search_v1_impl",
+            "char_length(v_query) = 1",
+            "v_filters = '{}'::jsonb",
+            "v_sort = 'relevance'",
+            "join private.portal_catalog_search_rows_v1",
+            "limit p_limit + 1",
+            "catalog_portal_search_v1_impl",
+            "portal character search cutover drifted",
+        )
+        missing = [
+            token for token in required_cutover_tokens
+            if token not in cutover_sql_lower
+        ]
+        if missing:
+            violations.append(
+                f"{CHARACTER_PROJECTION_CUTOVER_NAME}: missing cutover tokens "
+                + ", ".join(missing)
+            )
+        if len(
+            re.findall(
+                r"create\s+or\s+replace\s+function\s+"
+                r"private[.]portal_search_v1\s*[(]",
+                cutover_sql,
+                flags=re.IGNORECASE,
+            )
+        ) != 1:
+            violations.append(
+                f"{CHARACTER_PROJECTION_CUTOVER_NAME}: expected one Search coordinator replacement"
+            )
+        if re.search(
+            r"\b(?:create\s+(?:unlogged\s+)?table|"
+            r"create\s+(?:unique\s+)?index|create\s+trigger|"
+            r"alter\s+(?:table|policy)|drop\s+(?:table|index|trigger))\b",
+            cutover_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{CHARACTER_PROJECTION_CUTOVER_NAME}: cutover must not change "
+                "a relation, index, trigger, policy, or writer definition"
+            )
+        if re.search(
+            r"create\s+or\s+replace\s+function\s+api[.]portal_",
+            cutover_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{CHARACTER_PROJECTION_CUTOVER_NAME}: public wrappers must remain byte-stable"
+            )
+
     required_guard_counts = {
         "20260826080345_portal_projection_reconcile.sql": 1,
         "20260826080400_portal_projection_candidate_cutover.sql": 2,
@@ -905,8 +1056,8 @@ def main() -> int:
         f"sha256={CARD_CONTEXT_MANIFEST_SHA256}; Flow geography Search "
         "repair remains query-only; forced-RLS Flow CAS equality remains an "
         "exact index condition over the validated public-state projection; "
-        "one-code-point literal Search bypasses TokenBigram false negatives "
-        "without a new index or writer path; "
+        "one-code-point literal Search uses one narrow exact-version child, "
+        "latest-key index, and parent INSERT/UPDATE trigger; "
         "sitemap shards remain fixed at 64 with "
         "an exact-version FK child/index, one AFTER INSERT/UPDATE direct-upsert "
         "trigger, FK-cascade DELETE, the 134103 forward repair, and a "

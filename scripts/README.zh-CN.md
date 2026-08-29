@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
 lastReviewedCommit: 2425798
-lastReviewedNote: "已为 Issues #551/#552 复核：290-file recovery/benchmark、forced-RLS CAS 与单 code point literal p95 门、workflow 单一 Supabase CLI 版本均为当前状态。"
+lastReviewedNote: "已为 Issues #551/#552 复核：296-file recovery/benchmark、forced-RLS CAS 与窄 character projection p95 门、workflow 单一 Supabase CLI 版本均为当前状态。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -91,7 +91,7 @@ facet version 集精确相等。脚本还证明已记录迁移重复执行不会
 证明 populated 且已记录的 `134101`/`134102` 状态只应用 `134103` 即可收敛。
 所需环境变量与恢复边界见
 `docs/agents/portal-projection-migration-recovery.md`。正式证据还要求干净 HEAD、
-Supabase CLI `2.109.1`，以及完整 290-file migration tree 的逐字相等和 aggregate
+Supabase CLI `2.109.1`，以及完整 296-file migration tree 的逐字相等和 aggregate
 SHA-256。
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
@@ -109,7 +109,7 @@ history-order index、唯一 same-key trigger、shard capacity 与两个 public 
 
 仅在显式确认的 Issue 531/532/539/543/551 隔离本地 Supabase 项目中运行代表性 Process/Flow
 Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把完整
-290-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
+296-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
 reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合同与 recovery runner
 一致，另要求 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`。
 
@@ -124,9 +124,10 @@ forced-RLS exact-CAS 自然计划；除非 CAS 等值位于
 
 完整 candidate benchmark 还会记录 20-sample
 `process_single_character` / `flow_single_character` label；它们验证一个未转义
-code point 的 ACL-closed、index-disabled parallel `strpos` fallback，并要求 Search
+code point 的同步窄 character pre-limit，并要求 Search
 p95 <2 秒。所有多 code point 与
-已转义 literal 仍保留既有 PGroonga 模板。
+已转义 literal 仍保留既有 PGroonga 模板。writer 证据包含唯一 child upsert
+Trigger，populated/recovery runner 证明 child/parent parity。
 
 `PORTAL_PROJECTION_BENCHMARK_PROFILE` 用于选择 fail-closed 命名 profile：
 

@@ -1,7 +1,7 @@
 ---
 lastReviewedAt: 2026-08-29
 lastReviewedCommit: 2425798
-lastReviewedNote: "Reviewed for Issues #551/#552: the 290-file tree retains exact-version recovery, forced-RLS CAS indexability, and the helper-only one-code-point Search repair without changing writer recovery ownership."
+lastReviewedNote: "Reviewed for Issues #551/#552: the 296-file tree retains exact-version recovery, forced-RLS CAS indexability, and the sharded narrow character projection rollout with bounded writer ownership."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -522,20 +522,27 @@ policy, CHECK, owner, RLS-flag, assertion-hash, candidate-function, or summary-
 function prerequisite drift aborts atomically. Recovery is the unchanged
 migration retry; do not hand-edit the policy or weaken the table constraint.
 
-`20260829131000_repair_portal_single_character_literal_search.sql` adds two
-ACL-closed parallel sequential helpers and replaces only the two private
-Process/Flow pattern helpers after the current PGroonga
-TokenBigram LIKE path demonstrated a one-code-point false negative. It retains
-the fixed `%L` multi-code-point template and adds one exact `strpos` branch for
-the `%` + one unescaped code point + `%` shape. Index, index-only, and bitmap
-paths are disabled only inside those narrow helpers so their scans can use up
-to four parallel workers. Escaped wildcard/backslash
-patterns, candidate/latest semantics, wrappers, timeouts, ACL/RLS, indexes,
-relations, Triggers, and writers are unchanged. The migration requires exact
-predecessor helper hashes plus the `130000` policy/domain state and rolls back
-both replacements on any mismatch. Recovery is the normal forward retry; do
-not rebuild PGroonga, weaken the test, or add a unigram index without separately
-measured storage and writer evidence.
+`20260829131000_repair_portal_single_character_literal_search.sql` preserves
+the fixed `%L` multi-code-point templates and establishes a correctness-only
+`strpos` fallback after TokenBigram LIKE demonstrated a one-code-point false
+negative. It changes no public wrapper, index, relation, or writer and is a safe
+intermediate state if later rollout files have not committed.
+
+`20260829131001_portal_character_projection_expand.sql` creates the narrow
+exact-version character child, derivation helpers, latest-key B-tree, exact
+parent FK, and sole parent INSERT/UPDATE upsert Trigger. It contains no initial
+rows. `131002` through `131005` backfill four UUID quarters under independent
+120-second statements while the Trigger covers concurrent parent writes.
+`20260829131006_portal_character_projection_cutover.sql` takes one short parent
+writer fence, inserts any missing rows, removes impossible extras, proves exact
+key/state/time parity plus deterministic sampled facts, installs the runtime
+schema assertion and bounded pre-limit kernel, then routes only validated
+one-code-point empty-filter relevance through it. Any interruption before
+cutover leaves the retained correctness fallback authoritative. After cutover,
+the child is rebuildable from the immutable parent: never hand-edit rows,
+disable the Trigger, rebuild PGroonga, or add a unigram index. A missing shard
+is repaired by replaying only its unrecorded migration; an uncertain recorded
+cutover requires catalog/ledger inspection before any retry.
 
 ## Uncertain expand commit
 
@@ -633,7 +640,7 @@ Issue 531 Supabase project. It resets that local project and must never target a
 shared checkout, Preview, persistent Dev, or production.
 
 Formal recovery evidence requires clean HEAD, the reviewed Supabase CLI
-`2.109.1`, and byte equality plus one aggregate SHA-256 across all 290 migration
+`2.109.1`, and byte equality plus one aggregate SHA-256 across all 296 migration
 files in the repository and isolated project. Comparing only Issue 531 files is
 not sufficient because an earlier baseline change can alter recovery behavior.
 

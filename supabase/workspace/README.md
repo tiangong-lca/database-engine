@@ -22,7 +22,7 @@ checkPaths:
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
 lastReviewedCommit: 2425798
-lastReviewedNote: "Reviewed for Issues #551/#552: the 290-migration exact-local CAS policy plus one-code-point helper state regenerates without drift; generated workspace/type ownership remains unchanged."
+lastReviewedNote: "Reviewed for Issues #551/#552: the 296-migration exact-local CAS policy plus narrow character projection state regenerates without drift; generated workspace/type ownership remains unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
