@@ -1,7 +1,7 @@
 ---
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: 1ffccd6
-lastReviewedNote: "Reviewed for Issues #551/#552: the 289-file tree retains exact-version recovery, binds forced-RLS CAS indexability to the validated public-state domain, and keeps the workflow CLI pin outside writer recovery ownership."
+lastReviewedCommit: 2425798
+lastReviewedNote: "Reviewed for Issues #551/#552: the 290-file tree retains exact-version recovery, forced-RLS CAS indexability, and the helper-only one-code-point Search repair without changing writer recovery ownership."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -522,6 +522,18 @@ policy, CHECK, owner, RLS-flag, assertion-hash, candidate-function, or summary-
 function prerequisite drift aborts atomically. Recovery is the unchanged
 migration retry; do not hand-edit the policy or weaken the table constraint.
 
+`20260829131000_repair_portal_single_character_literal_search.sql` replaces
+only the two private Process/Flow pattern helpers after the current PGroonga
+TokenBigram LIKE path demonstrated a one-code-point false negative. It retains
+the fixed `%L` multi-code-point template and adds one exact `strpos` branch for
+the `%` + one unescaped code point + `%` shape. Escaped wildcard/backslash
+patterns, candidate/latest semantics, wrappers, timeouts, ACL/RLS, indexes,
+relations, Triggers, and writers are unchanged. The migration requires exact
+predecessor helper hashes plus the `130000` policy/domain state and rolls back
+both replacements on any mismatch. Recovery is the normal forward retry; do
+not rebuild PGroonga, weaken the test, or add a unigram index without separately
+measured storage and writer evidence.
+
 ## Uncertain expand commit
 
 The expand migration is transactional, so ordinary SQL failure leaves no Issue
@@ -618,7 +630,7 @@ Issue 531 Supabase project. It resets that local project and must never target a
 shared checkout, Preview, persistent Dev, or production.
 
 Formal recovery evidence requires clean HEAD, the reviewed Supabase CLI
-`2.109.1`, and byte equality plus one aggregate SHA-256 across all 289 migration
+`2.109.1`, and byte equality plus one aggregate SHA-256 across all 290 migration
 files in the repository and isolated project. Comparing only Issue 531 files is
 not sufficient because an earlier baseline change can alter recovery behavior.
 

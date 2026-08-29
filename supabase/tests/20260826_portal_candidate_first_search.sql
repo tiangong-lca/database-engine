@@ -359,13 +359,15 @@ select extensions.is(
         'row_security=on'
       ]::text[]
       and pg_catalog.strpos(routine.prosrc, 'return query execute pg_catalog.format') > 0
+      and routine.prosrc ~ 'char_length\(p_like_pattern\) = 3'
+      and routine.prosrc ~ 'pg_catalog.strpos'
       and pg_catalog.strpos(routine.prosrc, '%L') > 0
       and pg_catalog.strpos(routine.prosrc, '%I') = 0
       and coalesce(routine.proacl::text, '')
         = '{portal_public_executor=X/portal_public_executor}'
   ),
   2::bigint,
-  'two owner-only fixed SQL templates render only a literal LIKE pattern and never an identifier'
+  'two owner-only helpers retain fixed literal-LIKE templates plus one-code-point correctness branches'
 );
 
 select extensions.ok(
@@ -1362,7 +1364,10 @@ select extensions.is(
         ('single_character', 'a', '53100000-0000-4000-8000-000000000105'::uuid),
         ('cjk', '电力生产', '53100000-0000-4000-8000-000000000105'::uuid)
     )
-    select count(*)
+    select coalesce(
+      pg_catalog.jsonb_agg(queries.label order by queries.label),
+      '[]'::jsonb
+    )
     from queries
     cross join lateral (
       select api.portal_search_processes_v1(
@@ -1381,7 +1386,7 @@ select extensions.is(
       where item.value #>> '{key,id}' = queries.expected_id::text
     )
   ),
-  7::bigint,
+  '["backslash","cjk","cross_field","percent","punctuation","single_character","underscore"]'::jsonb,
   'literal LIKE candidates preserve cross-field, wildcard, slash, punctuation, single-character, and CJK matches'
 );
 
@@ -1541,6 +1546,16 @@ select extensions.is(
   ),
   1::bigint,
   'valid Flow CAS resolves through the exact-card candidate branch'
+);
+
+select extensions.ok(
+  exists (
+    select 1
+    from private.catalog_portal_flow_pattern_versions_v1('%a%') as candidate
+    where candidate.id = '53100000-0000-4000-8000-000000000202'
+      and candidate.version = '01.00.000'
+  ),
+  'single-character Flow literals bypass TokenBigram without changing the exact public candidate'
 );
 
 select extensions.is(

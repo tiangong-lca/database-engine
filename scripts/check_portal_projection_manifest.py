@@ -28,6 +28,9 @@ FLOW_GEOGRAPHY_SEARCH_NAME = (
 FLOW_CAS_RLS_POLICY_NAME = (
     "20260829130000_make_portal_flow_cas_rls_indexable.sql"
 )
+SINGLE_CHARACTER_SEARCH_NAME = (
+    "20260829131000_repair_portal_single_character_literal_search.sql"
+)
 SITEMAP_LATEST_PROJECTION_NAME = (
     "20260827134101_portal_sitemap_latest_projection.sql"
 )
@@ -423,6 +426,71 @@ def main() -> int:
         ) != 1:
             violations.append(
                 f"{FLOW_CAS_RLS_POLICY_NAME}: expected one exact Portal SELECT policy change"
+            )
+
+    single_character_search = MIGRATIONS_DIR / SINGLE_CHARACTER_SEARCH_NAME
+    if not single_character_search.is_file():
+        violations.append(
+            "missing Portal single-character Search migration: "
+            f"{SINGLE_CHARACTER_SEARCH_NAME}"
+        )
+    else:
+        character_sql = sql_without_comments(
+            single_character_search.read_text(encoding="utf-8")
+        )
+        character_sql_lower = character_sql.lower()
+        required_character_tokens = (
+            "114236b32b7a8a813f222ea301be9dd92529aba1eaf565301b3ed533d94e2115",
+            "e36c34a1fec82f769fef1c67ce4505f760025d0b2c0d4b72ed8b55e87abfd6a4",
+            "private.catalog_portal_process_pattern_versions_v1",
+            "private.catalog_portal_flow_pattern_versions_v1",
+            "char_length(p_like_pattern) = 3",
+            "pg_catalog.strpos",
+            "return query execute pg_catalog.format",
+            "portal_catalog_search_rows_portal_select_v1",
+            "policy.qual = 'true'",
+            "portal single-character search prerequisites drifted",
+        )
+        missing = [
+            token
+            for token in required_character_tokens
+            if token not in character_sql_lower
+        ]
+        if missing:
+            violations.append(
+                f"{SINGLE_CHARACTER_SEARCH_NAME}: missing correctness tokens "
+                + ", ".join(missing)
+            )
+        for helper in (
+            "private.catalog_portal_process_pattern_versions_v1",
+            "private.catalog_portal_flow_pattern_versions_v1",
+        ):
+            helper_pattern = re.compile(
+                rf"create\s+or\s+replace\s+function\s+{re.escape(helper)}\s*\(",
+                flags=re.IGNORECASE,
+            )
+            if len(helper_pattern.findall(character_sql)) != 1:
+                violations.append(
+                    f"{SINGLE_CHARACTER_SEARCH_NAME}: expected one {helper} replacement"
+                )
+        if re.search(
+            r"\b(?:create\s+(?:unlogged\s+)?table|create\s+(?:unique\s+)?index|"
+            r"create\s+trigger|alter\s+(?:table|policy)|"
+            r"drop\s+(?:table|index|trigger))\b",
+            character_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{SINGLE_CHARACTER_SEARCH_NAME}: helper-only repair must not "
+                "change a relation, index, trigger, policy, or writer path"
+            )
+        if re.search(
+            r"create\s+or\s+replace\s+function\s+api[.]portal_",
+            character_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{SINGLE_CHARACTER_SEARCH_NAME}: public Portal wrappers must remain byte-stable"
             )
 
     required_guard_counts = {
@@ -823,6 +891,8 @@ def main() -> int:
         f"sha256={CARD_CONTEXT_MANIFEST_SHA256}; Flow geography Search "
         "repair remains query-only; forced-RLS Flow CAS equality remains an "
         "exact index condition over the validated public-state projection; "
+        "one-code-point literal Search bypasses TokenBigram false negatives "
+        "without a new index or writer path; "
         "sitemap shards remain fixed at 64 with "
         "an exact-version FK child/index, one AFTER INSERT/UPDATE direct-upsert "
         "trigger, FK-cascade DELETE, the 134103 forward repair, and a "

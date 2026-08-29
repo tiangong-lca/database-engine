@@ -2967,6 +2967,9 @@ begin
       'process_no_hit', 'process', 'portalbench-no-hit-531'
     );
     perform pg_temp.record_portal_search_timing(
+      'process_single_character', 'process', 'p'
+    );
+    perform pg_temp.record_portal_search_timing(
       'process_identifier',
       'process',
       pg_temp.portal_bench_uuid('process', 1)::text
@@ -2987,6 +2990,9 @@ begin
     );
     perform pg_temp.record_portal_search_timing(
       'flow_no_hit', 'flow', 'portalbench-no-hit-531'
+    );
+    perform pg_temp.record_portal_search_timing(
+      'flow_single_character', 'flow', 'p'
     );
     perform pg_temp.record_portal_search_timing(
       'flow_identifier',
@@ -3718,9 +3724,11 @@ order by label;
 with expected(label) as (
   values
     ('process_exact'), ('process_common'), ('process_no_hit'),
+    ('process_single_character'),
     ('process_context_search_50'),
     ('process_identifier'), ('process_empty'),
     ('flow_exact'), ('flow_common'), ('flow_no_hit'),
+    ('flow_single_character'),
     ('flow_context_search_50'),
     ('flow_identifier'), ('flow_empty'),
     ('process_filtered_broad'), ('process_filtered_selective'),

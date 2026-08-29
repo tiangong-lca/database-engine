@@ -26569,7 +26569,22 @@ CREATE OR REPLACE FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "row_security" TO 'on'
     AS $_$
+declare
+  v_literal text;
 begin
+  if pg_catalog.char_length(p_like_pattern) = 3
+     and pg_catalog.left(p_like_pattern, 1) = '%'
+     and pg_catalog.right(p_like_pattern, 1) = '%' then
+    v_literal := pg_catalog.substr(p_like_pattern, 2, 1);
+    return query
+    select projection.id,
+      projection.version
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'flow'
+      and pg_catalog.strpos(projection.document, v_literal) > 0;
+    return;
+  end if;
+
   return query execute pg_catalog.format($sql$
     select projection.id,
       projection.version
@@ -26582,6 +26597,10 @@ $_$;
 
 
 ALTER FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_like_pattern" "text") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_like_pattern" "text") IS 'Returns Flow projection versions through the fixed literal-LIKE template; an unescaped one-code-point substring uses strpos to avoid TokenBigram false negatives.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."catalog_portal_hybrid_pattern_matches_v1"("p_kind" "text", "p_query_terms" "text"[]) RETURNS TABLE("id" "uuid", "version" "text", "term_ordinal" integer)
@@ -26641,7 +26660,22 @@ CREATE OR REPLACE FUNCTION "private"."catalog_portal_process_pattern_versions_v1
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "row_security" TO 'on'
     AS $_$
+declare
+  v_literal text;
 begin
+  if pg_catalog.char_length(p_like_pattern) = 3
+     and pg_catalog.left(p_like_pattern, 1) = '%'
+     and pg_catalog.right(p_like_pattern, 1) = '%' then
+    v_literal := pg_catalog.substr(p_like_pattern, 2, 1);
+    return query
+    select projection.id,
+      projection.version
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'process'
+      and pg_catalog.strpos(projection.document, v_literal) > 0;
+    return;
+  end if;
+
   return query execute pg_catalog.format($sql$
     select projection.id,
       projection.version
@@ -26654,6 +26688,10 @@ $_$;
 
 
 ALTER FUNCTION "private"."catalog_portal_process_pattern_versions_v1"("p_like_pattern" "text") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."catalog_portal_process_pattern_versions_v1"("p_like_pattern" "text") IS 'Returns Process projection versions through the fixed literal-LIKE template; an unescaped one-code-point substring uses strpos to avoid TokenBigram false negatives.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."catalog_portal_projection_payload_v1"("p_kind" "text", "p_state_code" integer, "p_json" "jsonb") RETURNS "jsonb"

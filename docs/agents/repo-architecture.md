@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: ac98d7e
-lastReviewedNote: "Reviewed for Issues #551/#552: the row-neutral Portal policy is bound to the validated public-state projection domain with no Search/index/writer change, and the workflow CLI pin changes no architecture boundary."
+lastReviewedCommit: 2425798
+lastReviewedNote: "Reviewed for Issues #551/#552: forced-RLS CAS remains bound to the public-state domain, one-code-point literal Search bypasses TokenBigram false negatives without a new index, and the workflow CLI pin changes no architecture boundary."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -132,6 +132,18 @@ place the exact CAS equality in `portal_catalog_search_flow_cas_v1_idx`'s
 `Index Cond`, leave no CAS filter, and preserve all ordinary lexical, UUID,
 invalid-CAS, visibility, ACL, and writer behavior. It adds no relation, index,
 Trigger, source write, timeout, or public DTO change.
+
+PGroonga translates ordinary indexed `LIKE` literal fragments into token
+matches and relies on PostgreSQL heap recheck to remove false positives. With
+the current TokenBigram projection indexes, one unescaped code point inside
+`%...%` can produce no index candidate, so recheck cannot recover the true SQL
+match. The two private Process/Flow pattern helpers therefore retain their
+fixed `%L` multi-code-point LIKE templates but route only the exact
+three-code-point pattern shape (`%`, one literal code point, `%`) through
+`strpos(document,literal)`. Escaped `%`, `_`, and backslash stay on their
+existing literal-LIKE path. The branch changes no public wrapper, ranking,
+latest-version recheck, RLS, relation, index, Trigger, or writer; representative
+Process and Flow one-code-point p95 remain under the existing Search budget.
 
 The bounded sitemap surface stores one locator-free row for every public facet
 version in `private.portal_sitemap_rows_v1`. Its primary key is
