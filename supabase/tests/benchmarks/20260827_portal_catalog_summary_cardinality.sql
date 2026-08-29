@@ -905,6 +905,72 @@ order by facet.dataset_kind,
   facet.modified_at desc,
   facet.state_code desc;
 
+create function pg_temp.assert_portal_flow_cas_rls_plan_v1(p_query text)
+returns void
+language plpgsql
+set search_path = ''
+as $function$
+declare
+  v_plan json;
+  v_index_nodes bigint;
+  v_indexable boolean;
+begin
+  if p_query !~ '^[0-9]{2,7}-[0-9]{2}-[0-9]$' then
+    raise exception 'Portal summary CAS plan probe is missing a valid query'
+      using errcode = '54000';
+  end if;
+
+  execute $explain$
+    explain (format json)
+    select distinct projection.id
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'flow'
+      and pg_catalog.jsonb_typeof(
+        projection.card -> 'casNumber'
+      ) = 'string'
+      and projection.card ->> 'casNumber' ~
+        '^[0-9]{2,7}-[0-9]{2}-[0-9]$'
+      and pg_catalog.length(
+        projection.card ->> 'casNumber'
+      ) between 7 and 12
+      and projection.card ->> 'casNumber' = $1
+  $explain$
+  using p_query
+  into v_plan;
+
+  with recursive plan_nodes(node) as (
+    select v_plan::jsonb #> '{0,Plan}'
+    union all
+    select child.value
+    from plan_nodes
+    cross join lateral pg_catalog.jsonb_array_elements(
+      coalesce(plan_nodes.node -> 'Plans', '[]'::jsonb)
+    ) as child(value)
+  ), cas_index as (
+    select plan_nodes.node
+    from plan_nodes
+    where plan_nodes.node ->> 'Index Name' =
+      'portal_catalog_search_flow_cas_v1_idx'
+  )
+  select pg_catalog.count(*),
+    pg_catalog.bool_and(
+      coalesce(cas_index.node ->> 'Index Cond', '') ~ 'casNumber'
+      and coalesce(cas_index.node ->> 'Filter', '') !~ 'casNumber'
+    )
+  into v_index_nodes, v_indexable
+  from cas_index;
+
+  if v_index_nodes <> 1 or v_indexable is not true then
+    raise exception
+      'Portal exact CAS equality is not an index condition under forced RLS'
+      using errcode = '54000';
+  end if;
+end
+$function$;
+
+grant execute on function pg_temp.assert_portal_flow_cas_rls_plan_v1(text)
+to portal_public_executor;
+
 grant portal_public_executor to postgres;
 set local role portal_public_executor;
 
@@ -1004,6 +1070,16 @@ select private.portal_search_v1(
   'relevance',
   null,
   50
+);
+
+select pg_temp.assert_portal_flow_cas_rls_plan_v1(
+  (
+    select example.value ->> 'query'
+    from pg_catalog.jsonb_array_elements(
+      api.portal_catalog_summary_v1() -> 'examples'
+    ) as example(value)
+    where example.value ->> 'queryKind' = 'cas'
+  )
 );
 
 explain (analyze, buffers, settings, format text)
