@@ -20,8 +20,8 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-28
-lastReviewedCommit: 26f583b
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: ab87cb5da02b978b119cd983683649a10a05ab8a
 lastReviewedNote: "Reviewed for the 278-migration Issue #543 history-unique CAS example and summary-isolated exact index path; generated workspace/type ownership remains unchanged."
 related:
   - ../../AGENTS.md

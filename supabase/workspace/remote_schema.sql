@@ -24170,6 +24170,26 @@ begin
           'job_id', v_cache.job_id, 'worker_job_id', v_cache.worker_job_id
         );
       end if;
+      if v_worker.status = 'failed' and v_worker.retryable is false then
+        return jsonb_build_object(
+          'ok', false,
+          'code', 'WORKER_REQUEST_NON_RETRYABLE_FAILURE',
+          'status', 409,
+          'mode', 'failed_cache_hit',
+          'message', 'The cached worker request failed and is not retryable',
+          'reused', true,
+          'reuseReason', 'terminal_non_retryable_failure',
+          'cache_id', v_cache.id,
+          'job_id', v_cache.job_id,
+          'worker_job_id', v_worker.id,
+          'error_code', coalesce(v_cache.error_code, v_worker.error_code),
+          'error_message', coalesce(v_cache.error_message, v_worker.error_message),
+          'retryable', false,
+          'details', jsonb_build_object(
+            'workerJob', private.worker_job_payload(v_worker, false)
+          )
+        );
+      end if;
     end if;
   end if;
 
@@ -24234,7 +24254,7 @@ begin
     'cache_id', v_cache.id,
     'job_id', v_cache.job_id, 'worker_job_id', v_cache.worker_job_id
   );
-end
+end;
 $$;
 
 
@@ -55502,6 +55522,10 @@ declare
   v_payload_schema_version text;
   v_priority integer;
   v_max_attempts integer;
+  v_idempotency_key text := nullif(trim(p_idempotency_key), '');
+  v_request_hash text := nullif(trim(p_request_hash), '');
+  v_concurrency_key text := nullif(trim(p_concurrency_key), '');
+  v_queue_key text := nullif(trim(p_queue_key), '');
 begin
   if not coalesce(util.is_service_request(), false) then
     return jsonb_build_object(
@@ -55572,20 +55596,56 @@ begin
     );
   end if;
 
-  v_payload_schema_version := coalesce(nullif(trim(p_payload_schema_version), ''), v_kind.payload_schema_version);
+  v_payload_schema_version := coalesce(
+    nullif(trim(p_payload_schema_version), ''),
+    v_kind.payload_schema_version
+  );
   v_priority := coalesce(p_priority, v_kind.default_priority);
   v_max_attempts := greatest(1, coalesce(p_max_attempts, v_kind.default_max_attempts, 3));
 
-  if p_idempotency_key is not null then
+  -- Scheduled maintenance uses a logical, caller-supplied idempotency key. Lock
+  -- the full key for this transaction and reuse terminal as well as active jobs;
+  -- an operator can still force a deliberate retry with a new explicit key.
+  if v_kind.worker_queue = 'maintenance' and v_idempotency_key is not null then
+    perform pg_advisory_xact_lock(hashtextextended(
+      concat_ws(
+        ':',
+        'worker-maintenance-idempotency-v1',
+        v_kind.worker_runtime,
+        v_kind.job_kind,
+        coalesce(p_requested_by::text, ''),
+        v_idempotency_key
+      ),
+      0
+    ));
+
     select *
       into v_existing
     from private.worker_jobs
     where worker_runtime = v_kind.worker_runtime
       and job_kind = v_kind.job_kind
       and requested_by is not distinct from p_requested_by
-      and idempotency_key = p_idempotency_key
+      and idempotency_key = v_idempotency_key
+    order by created_at desc, id desc
+    limit 1;
+
+    if v_existing.id is not null then
+      return jsonb_build_object(
+        'ok', true,
+        'data', private.worker_job_payload(v_existing, true),
+        'reused', true
+      );
+    end if;
+  elsif v_idempotency_key is not null then
+    select *
+      into v_existing
+    from private.worker_jobs
+    where worker_runtime = v_kind.worker_runtime
+      and job_kind = v_kind.job_kind
+      and requested_by is not distinct from p_requested_by
+      and idempotency_key = v_idempotency_key
       and status in ('queued', 'running', 'waiting', 'stale', 'blocked')
-    order by created_at desc
+    order by created_at desc, id desc
     limit 1;
 
     if v_existing.id is not null then
@@ -55597,15 +55657,49 @@ begin
     end if;
   end if;
 
-  if p_concurrency_key is not null then
+  -- The request identity deliberately excludes idempotency/concurrency keys:
+  -- they are transport controls, while this identity represents the exact
+  -- deterministic work request. Only the latest exact request can suppress a
+  -- new enqueue, and only when it is explicitly non-retryable.
+  if v_request_hash is not null then
+    select *
+      into v_existing
+    from private.worker_jobs
+    where worker_runtime = v_kind.worker_runtime
+      and job_kind = v_kind.job_kind
+      and requester_type = v_requester_type
+      and requested_by is not distinct from p_requested_by
+      and team_id is not distinct from p_team_id
+      and queue_key is not distinct from v_queue_key
+      and payload_schema_version = v_payload_schema_version
+      and request_hash = v_request_hash
+    order by created_at desc, id desc
+    limit 1;
+
+    if v_existing.status = 'failed' and v_existing.retryable is false then
+      return jsonb_build_object(
+        'ok', false,
+        'code', 'WORKER_REQUEST_NON_RETRYABLE_FAILURE',
+        'status', 409,
+        'message', 'The latest exact worker request failed and is not retryable',
+        'reused', true,
+        'reuseReason', 'terminal_non_retryable_failure',
+        'details', jsonb_build_object(
+          'workerJob', private.worker_job_payload(v_existing, false)
+        )
+      );
+    end if;
+  end if;
+
+  if v_concurrency_key is not null then
     select *
       into v_existing
     from private.worker_jobs
     where worker_runtime = v_kind.worker_runtime
       and worker_queue = v_kind.worker_queue
-      and concurrency_key = p_concurrency_key
+      and concurrency_key = v_concurrency_key
       and status in ('queued', 'running', 'waiting', 'stale')
-    order by created_at desc
+    order by created_at desc, id desc
     limit 1;
 
     if v_existing.id is not null then
@@ -55649,7 +55743,7 @@ begin
     v_kind.worker_runtime,
     v_kind.worker_queue,
     v_priority,
-    nullif(trim(p_queue_key), ''),
+    v_queue_key,
     p_root_job_id,
     p_parent_job_id,
     nullif(trim(p_subject_type), ''),
@@ -55658,9 +55752,9 @@ begin
     v_requester_type,
     p_requested_by,
     p_team_id,
-    nullif(trim(p_idempotency_key), ''),
-    nullif(trim(p_request_hash), ''),
-    nullif(trim(p_concurrency_key), ''),
+    v_idempotency_key,
+    v_request_hash,
+    v_concurrency_key,
     v_visibility,
     coalesce(p_run_after, now()),
     v_max_attempts,
@@ -55710,6 +55804,10 @@ $$;
 ALTER FUNCTION "private"."worker_enqueue_job"("p_job_kind" "text", "p_payload_json" "jsonb", "p_payload_schema_version" "text", "p_subject_type" "text", "p_subject_id" "uuid", "p_subject_version" "text", "p_requested_by" "uuid", "p_requester_type" "text", "p_team_id" "uuid", "p_idempotency_key" "text", "p_request_hash" "text", "p_concurrency_key" "text", "p_priority" integer, "p_queue_key" "text", "p_run_after" timestamp with time zone, "p_visibility" "text", "p_max_attempts" integer, "p_timeout_at" timestamp with time zone, "p_payload_ref" "jsonb", "p_parent_job_id" "uuid", "p_root_job_id" "uuid") OWNER TO "postgres";
 
 
+COMMENT ON FUNCTION "private"."worker_enqueue_job"("p_job_kind" "text", "p_payload_json" "jsonb", "p_payload_schema_version" "text", "p_subject_type" "text", "p_subject_id" "uuid", "p_subject_version" "text", "p_requested_by" "uuid", "p_requester_type" "text", "p_team_id" "uuid", "p_idempotency_key" "text", "p_request_hash" "text", "p_concurrency_key" "text", "p_priority" integer, "p_queue_key" "text", "p_run_after" timestamp with time zone, "p_visibility" "text", "p_max_attempts" integer, "p_timeout_at" timestamp with time zone, "p_payload_ref" "jsonb", "p_parent_job_id" "uuid", "p_root_job_id" "uuid") IS 'Canonical service-only Worker admission. Reuses active idempotent jobs, reuses any same-key maintenance run under a transaction advisory lock, and rejects the latest exact deterministic non-retryable failure without inserting a job or event.';
+
+
+
 CREATE OR REPLACE FUNCTION "private"."worker_heartbeat_job"("p_job_id" "uuid", "p_lease_token" "uuid", "p_phase" "text" DEFAULT NULL::"text", "p_progress" numeric DEFAULT NULL::numeric, "p_diagnostics" "jsonb" DEFAULT NULL::"jsonb", "p_lease_seconds" integer DEFAULT 300) RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'private', 'api', 'public', 'util', 'extensions', 'pg_temp'
@@ -55717,6 +55815,11 @@ CREATE OR REPLACE FUNCTION "private"."worker_heartbeat_job"("p_job_id" "uuid", "
 declare
   v_job private.worker_jobs%rowtype;
   v_lease_seconds integer := greatest(1, least(coalesce(p_lease_seconds, 300), 86400));
+  v_phase text;
+  v_progress numeric;
+  v_diagnostics jsonb;
+  v_business_changed boolean;
+  v_emit_event boolean;
 begin
   if not coalesce(util.is_service_request(), false) then
     return jsonb_build_object(
@@ -55787,42 +55890,56 @@ begin
     );
   end if;
 
+  v_phase := coalesce(nullif(trim(p_phase), ''), v_job.phase);
+  v_progress := coalesce(p_progress, v_job.progress);
+  v_diagnostics := v_job.diagnostics || coalesce(p_diagnostics, '{}'::jsonb);
+  v_business_changed := v_phase is distinct from v_job.phase
+    or v_progress is distinct from v_job.progress
+    or v_diagnostics is distinct from v_job.diagnostics;
+  v_emit_event := v_phase is distinct from v_job.phase
+    or (v_job.progress is null and p_progress is not null)
+    or (
+      v_job.progress is not null
+      and p_progress is not null
+      and floor(p_progress * 20) > floor(v_job.progress * 20)
+    );
+
   update private.worker_jobs
-    set phase = coalesce(nullif(trim(p_phase), ''), phase),
-        progress = coalesce(p_progress, progress),
-        diagnostics = diagnostics || coalesce(p_diagnostics, '{}'::jsonb),
+    set phase = v_phase,
+        progress = v_progress,
+        diagnostics = v_diagnostics,
         heartbeat_at = now(),
         lease_expires_at = now() + make_interval(secs => v_lease_seconds),
-        updated_at = now()
+        updated_at = case when v_business_changed then now() else updated_at end
   where id = v_job.id
   returning *
     into v_job;
 
-  insert into private.worker_job_events (
-    job_id,
-    event_type,
-    status,
-    phase,
-    progress,
-    worker_id,
-    lease_token,
-    details
-  ) values (
-    v_job.id,
-    'heartbeat',
-    v_job.status,
-    v_job.phase,
-    v_job.progress,
-    v_job.leased_by,
-    v_job.lease_token,
-    jsonb_build_object(
-      'leaseExpiresAt', v_job.lease_expires_at,
-      'diagnostics', coalesce(p_diagnostics, '{}'::jsonb)
-    )
-  );
+  if v_emit_event then
+    insert into private.worker_job_events (
+      job_id,
+      event_type,
+      status,
+      phase,
+      progress,
+      worker_id,
+      lease_token,
+      details
+    ) values (
+      v_job.id,
+      'heartbeat',
+      v_job.status,
+      v_job.phase,
+      v_job.progress,
+      v_job.leased_by,
+      v_job.lease_token,
+      jsonb_build_object('leaseExpiresAt', v_job.lease_expires_at)
+    );
+  end if;
 
   return jsonb_build_object(
     'ok', true,
+    'eventEmitted', v_emit_event,
     'data', private.worker_job_payload(v_job, true)
   );
 end;
@@ -55830,6 +55947,10 @@ $$;
 
 
 ALTER FUNCTION "private"."worker_heartbeat_job"("p_job_id" "uuid", "p_lease_token" "uuid", "p_phase" "text", "p_progress" numeric, "p_diagnostics" "jsonb", "p_lease_seconds" integer) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "private"."worker_heartbeat_job"("p_job_id" "uuid", "p_lease_token" "uuid", "p_phase" "text", "p_progress" numeric, "p_diagnostics" "jsonb", "p_lease_seconds" integer) IS 'Renews a running Worker lease on every valid call. Appends a heartbeat event only for phase changes, first progress, or a crossed higher five-percent progress bucket; heartbeat diagnostics stay on the current job row and eventEmitted reports the decision.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."worker_job_payload"("p_job" "private"."worker_jobs", "p_include_internal" boolean DEFAULT false) RETURNS "jsonb"
@@ -56872,8 +56993,6 @@ CREATE OR REPLACE FUNCTION "util"."apply_lca_package_retention"("p_job_retention
     LANGUAGE "plpgsql"
     SET "search_path" TO ''
     AS $$
-declare
-  v_count bigint;
 begin
   if p_as_of is null then
     raise exception using
@@ -56899,100 +57018,33 @@ begin
       message = 'package retention max rows must be greater than zero';
   end if;
 
-  if p_dry_run then
-    return query
-    with artifact_candidates as (
-      select artifacts.id
-      from private.lca_package_artifacts as artifacts
-      join private.worker_jobs as jobs
-        on jobs.id = artifacts.worker_job_id
-      where jobs.job_kind in ('tidas.export_package', 'tidas.import_package')
-        and jobs.status not in ('queued', 'running', 'waiting')
-        and artifacts.status not in ('deleted', 'pending')
-        and not artifacts.is_pinned
-        and artifacts.expires_at is not null
-        and artifacts.expires_at <= p_as_of
-        and not exists (
-          select 1
-          from private.lca_package_request_cache as request_cache
-          where (
-              request_cache.export_artifact_id = artifacts.id
-              or request_cache.report_artifact_id = artifacts.id
-            )
-            and request_cache.last_accessed_at >= p_as_of - p_request_cache_retention_window
-        )
-      order by artifacts.expires_at, artifacts.created_at, artifacts.id
-      limit p_max_rows
-    ),
-    request_cache_candidates as (
-      select request_cache.id
-      from private.lca_package_request_cache as request_cache
-      left join private.worker_jobs as jobs
-        on jobs.id = request_cache.worker_job_id
-      where request_cache.status not in ('pending', 'running')
-        and request_cache.last_accessed_at < p_as_of - p_request_cache_retention_window
-        and coalesce(jobs.status not in ('queued', 'running', 'waiting'), true)
-      order by request_cache.last_accessed_at, request_cache.created_at, request_cache.id
-      limit p_max_rows
-    ),
-    export_item_candidates as (
-      select export_items.id
-      from private.lca_package_export_items as export_items
-      join private.worker_jobs as jobs
-        on jobs.id = export_items.worker_job_id
-      where jobs.job_kind in ('tidas.export_package', 'tidas.import_package')
-        and jobs.status not in ('queued', 'running', 'waiting')
-        and coalesce(jobs.finished_at, jobs.updated_at, jobs.created_at) < p_as_of - p_job_retention_window
-        and not exists (
-          select 1
-          from private.lca_package_artifacts as artifacts
-          where artifacts.worker_job_id = export_items.worker_job_id
-            and artifacts.status <> 'deleted'
-        )
-        and not exists (
-          select 1
-          from private.lca_package_request_cache as request_cache
-          where request_cache.worker_job_id = export_items.worker_job_id
-            and request_cache.last_accessed_at >= p_as_of - p_request_cache_retention_window
-        )
-      order by export_items.created_at, export_items.id
-      limit p_max_rows
-    )
-    select
-      'lca_package_artifacts'::text,
-      'mark_expired_unpinned_artifacts_deleted'::text,
-      true,
-      count(*)::bigint
-    from artifact_candidates
-    union all
-    select
-      'lca_package_request_cache'::text,
-      'delete_stale_request_cache_rows'::text,
-      true,
-      count(*)::bigint
-    from request_cache_candidates
-    union all
-    select
-      'lca_package_export_items'::text,
-      'delete_export_items_after_artifact_gc'::text,
-      true,
-      count(*)::bigint
-    from export_item_candidates;
-
-    return;
+  if not p_dry_run then
+    raise exception using
+      errcode = '0A000',
+      message = 'database-only package retention apply is disabled',
+      detail = 'Use the Worker object-first package GC so object deletion succeeds before artifact tombstoning and dependent metadata cleanup.';
   end if;
 
+  return query
   with artifact_candidates as (
     select artifacts.id
     from private.lca_package_artifacts as artifacts
-    join private.worker_jobs as jobs
-      on jobs.id = artifacts.worker_job_id
-    where jobs.job_kind in ('tidas.export_package', 'tidas.import_package')
-      and jobs.status not in ('queued', 'running', 'waiting')
-      and artifacts.status not in ('deleted', 'pending')
+    where artifacts.status = 'ready'
       and not artifacts.is_pinned
       and artifacts.expires_at is not null
       and artifacts.expires_at <= p_as_of
+      and not exists (
+        select 1
+        from private.worker_jobs as active_job
+        where active_job.status in ('queued', 'running', 'waiting')
+          and (
+            (
+              artifacts.worker_job_id is not null
+              and active_job.id = artifacts.worker_job_id
+            )
+            or active_job.payload_json ->> 'job_id' = artifacts.job_id::text
+          )
+      )
       and not exists (
         select 1
         from private.lca_package_request_cache as request_cache
@@ -57000,83 +57052,116 @@ begin
             request_cache.export_artifact_id = artifacts.id
             or request_cache.report_artifact_id = artifacts.id
           )
-          and request_cache.last_accessed_at >= p_as_of - p_request_cache_retention_window
+          and (
+            request_cache.status in ('pending', 'running')
+            or request_cache.last_accessed_at >= p_as_of - p_request_cache_retention_window
+          )
       )
     order by artifacts.expires_at, artifacts.created_at, artifacts.id
     limit p_max_rows
-  )
-  update private.lca_package_artifacts as artifacts
-     set status = 'deleted',
-         metadata = artifacts.metadata || jsonb_build_object(
-           'retentionDeletedAt', p_as_of,
-           'retentionAction', 'package_metadata_retention_gc'
-         ),
-         updated_at = p_as_of
-  from artifact_candidates
-  where artifacts.id = artifact_candidates.id;
-
-  get diagnostics v_count = row_count;
-  return query select
-    'lca_package_artifacts'::text,
-    'mark_expired_unpinned_artifacts_deleted'::text,
-    false,
-    v_count;
-
-  with request_cache_candidates as (
+  ),
+  request_cache_candidates as (
     select request_cache.id
     from private.lca_package_request_cache as request_cache
-    left join private.worker_jobs as jobs
-      on jobs.id = request_cache.worker_job_id
     where request_cache.status not in ('pending', 'running')
       and request_cache.last_accessed_at < p_as_of - p_request_cache_retention_window
-      and coalesce(jobs.status not in ('queued', 'running', 'waiting'), true)
-    order by request_cache.last_accessed_at, request_cache.created_at, request_cache.id
-    limit p_max_rows
-  )
-  delete from private.lca_package_request_cache as request_cache
-  using request_cache_candidates
-  where request_cache.id = request_cache_candidates.id;
-
-  get diagnostics v_count = row_count;
-  return query select
-    'lca_package_request_cache'::text,
-    'delete_stale_request_cache_rows'::text,
-    false,
-    v_count;
-
-  with export_item_candidates as (
-    select export_items.id
-    from private.lca_package_export_items as export_items
-    join private.worker_jobs as jobs
-      on jobs.id = export_items.worker_job_id
-    where jobs.job_kind in ('tidas.export_package', 'tidas.import_package')
-      and jobs.status not in ('queued', 'running', 'waiting')
-      and coalesce(jobs.finished_at, jobs.updated_at, jobs.created_at) < p_as_of - p_job_retention_window
+      and not exists (
+        select 1
+        from private.worker_jobs as active_job
+        where active_job.status in ('queued', 'running', 'waiting')
+          and (
+            (
+              request_cache.worker_job_id is not null
+              and active_job.id = request_cache.worker_job_id
+            )
+            or active_job.payload_json ->> 'job_id' = request_cache.job_id::text
+          )
+      )
       and not exists (
         select 1
         from private.lca_package_artifacts as artifacts
-        where artifacts.worker_job_id = export_items.worker_job_id
-          and artifacts.status <> 'deleted'
+        where artifacts.status <> 'deleted'
+          and artifacts.id in (
+            request_cache.export_artifact_id,
+            request_cache.report_artifact_id
+          )
+      )
+    order by request_cache.last_accessed_at, request_cache.created_at, request_cache.id
+    limit p_max_rows
+  ),
+  export_item_candidates as (
+    select export_items.id
+    from private.lca_package_export_items as export_items
+    left join private.worker_jobs as canonical_job
+      on canonical_job.id = export_items.worker_job_id
+    where coalesce(
+        canonical_job.finished_at,
+        canonical_job.updated_at,
+        canonical_job.created_at,
+        export_items.created_at
+      ) < p_as_of - p_job_retention_window
+      and not exists (
+        select 1
+        from private.worker_jobs as active_job
+        where active_job.status in ('queued', 'running', 'waiting')
+          and (
+            (
+              export_items.worker_job_id is not null
+              and active_job.id = export_items.worker_job_id
+            )
+            or active_job.payload_json ->> 'job_id' = export_items.job_id::text
+          )
+      )
+      and not exists (
+        select 1
+        from private.lca_package_artifacts as artifacts
+        where artifacts.status <> 'deleted'
+          and (
+            (
+              export_items.worker_job_id is not null
+              and artifacts.worker_job_id = export_items.worker_job_id
+            )
+            or artifacts.job_id = export_items.job_id
+          )
       )
       and not exists (
         select 1
         from private.lca_package_request_cache as request_cache
-        where request_cache.worker_job_id = export_items.worker_job_id
-          and request_cache.last_accessed_at >= p_as_of - p_request_cache_retention_window
+        where (
+            request_cache.status in ('pending', 'running')
+            or request_cache.last_accessed_at >= p_as_of - p_request_cache_retention_window
+          )
+          and (
+            (
+              export_items.worker_job_id is not null
+              and request_cache.worker_job_id = export_items.worker_job_id
+            )
+            or request_cache.job_id = export_items.job_id
+          )
       )
     order by export_items.created_at, export_items.id
     limit p_max_rows
   )
-  delete from private.lca_package_export_items as export_items
-  using export_item_candidates
-  where export_items.id = export_item_candidates.id;
-
-  get diagnostics v_count = row_count;
-  return query select
+  select
+    'lca_package_artifacts'::text,
+    'worker_object_delete_required'::text,
+    true,
+    count(*)::bigint
+  from artifact_candidates
+  union all
+  select
+    'lca_package_request_cache'::text,
+    'worker_delete_stale_request_cache_rows'::text,
+    true,
+    count(*)::bigint
+  from request_cache_candidates
+  union all
+  select
     'lca_package_export_items'::text,
-    'delete_export_items_after_artifact_gc'::text,
-    false,
-    v_count;
+    'worker_delete_export_items_after_artifact_gc'::text,
+    true,
+    count(*)::bigint
+  from export_item_candidates;
 end;
 $$;
 
@@ -57084,7 +57169,7 @@ $$;
 ALTER FUNCTION "util"."apply_lca_package_retention"("p_job_retention_window" interval, "p_request_cache_retention_window" interval, "p_as_of" timestamp with time zone, "p_max_rows" integer, "p_dry_run" boolean) OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "util"."apply_lca_package_retention"("p_job_retention_window" interval, "p_request_cache_retention_window" interval, "p_as_of" timestamp with time zone, "p_max_rows" integer, "p_dry_run" boolean) IS 'Operator/service-role helper for package domain retention. Dry-run counts candidates by default; apply mode marks expired unpinned package artifacts deleted and removes stale package request-cache/export-item metadata rows. Storage object deletion remains a worker/operator responsibility before or around metadata GC.';
+COMMENT ON FUNCTION "util"."apply_lca_package_retention"("p_job_retention_window" interval, "p_request_cache_retention_window" interval, "p_as_of" timestamp with time zone, "p_max_rows" integer, "p_dry_run" boolean) IS 'Dry-run-only package retention preview. Mutating apply is fail-closed because only the Worker can prove object deletion before artifact tombstoning and dependent metadata cleanup.';
 
 
 
@@ -67311,6 +67396,10 @@ CREATE INDEX "lca_network_snapshots_updated_idx" ON "private"."lca_network_snaps
 
 
 
+CREATE INDEX "lca_package_artifacts_gc_candidate_idx" ON "private"."lca_package_artifacts" USING "btree" ("expires_at", "created_at", "id") WHERE (("expires_at" IS NOT NULL) AND ("is_pinned" IS FALSE) AND ("status" = 'ready'::"text"));
+
+
+
 CREATE INDEX "lca_package_artifacts_job_created_idx" ON "private"."lca_package_artifacts" USING "btree" ("job_id", "created_at" DESC);
 
 
@@ -67324,6 +67413,10 @@ CREATE INDEX "lca_package_artifacts_status_created_idx" ON "private"."lca_packag
 
 
 CREATE INDEX "lca_package_artifacts_worker_job_idx" ON "private"."lca_package_artifacts" USING "btree" ("worker_job_id") WHERE ("worker_job_id" IS NOT NULL);
+
+
+
+CREATE INDEX "lca_package_export_items_gc_candidate_idx" ON "private"."lca_package_export_items" USING "btree" ("created_at", "id") INCLUDE ("worker_job_id", "job_id");
 
 
 
@@ -67348,6 +67441,10 @@ CREATE UNIQUE INDEX "lca_package_import_prepare_idempotency_uk" ON "private"."lc
 
 
 CREATE INDEX "lca_package_request_cache_export_artifact_idx" ON "private"."lca_package_request_cache" USING "btree" ("export_artifact_id") WHERE ("export_artifact_id" IS NOT NULL);
+
+
+
+CREATE INDEX "lca_package_request_cache_gc_candidate_idx" ON "private"."lca_package_request_cache" USING "btree" ("last_accessed_at", "created_at", "id") WHERE ("status" <> ALL (ARRAY['pending'::"text", 'running'::"text"]));
 
 
 
@@ -67755,11 +67852,19 @@ CREATE UNIQUE INDEX "worker_jobs_idempotency_active_uidx" ON "private"."worker_j
 
 
 
+CREATE INDEX "worker_jobs_idempotency_latest_idx" ON "private"."worker_jobs" USING "btree" ("worker_runtime", "job_kind", COALESCE("requested_by", '00000000-0000-0000-0000-000000000000'::"uuid"), "idempotency_key", "created_at" DESC, "id" DESC) WHERE ("idempotency_key" IS NOT NULL);
+
+
+
 CREATE INDEX "worker_jobs_job_kind_idx" ON "private"."worker_jobs" USING "btree" ("job_kind");
 
 
 
 CREATE INDEX "worker_jobs_parent_idx" ON "private"."worker_jobs" USING "btree" ("parent_job_id") WHERE ("parent_job_id" IS NOT NULL);
+
+
+
+CREATE INDEX "worker_jobs_request_identity_latest_idx" ON "private"."worker_jobs" USING "btree" ("worker_runtime", "job_kind", "requester_type", COALESCE("requested_by", '00000000-0000-0000-0000-000000000000'::"uuid"), COALESCE("team_id", '00000000-0000-0000-0000-000000000000'::"uuid"), COALESCE("queue_key", ''::"text"), "payload_schema_version", "request_hash", "created_at" DESC, "id" DESC) WHERE ("request_hash" IS NOT NULL);
 
 
 
@@ -68910,12 +69015,12 @@ ALTER TABLE ONLY "private"."lca_network_snapshots"
 
 
 ALTER TABLE ONLY "private"."lca_package_artifacts"
-    ADD CONSTRAINT "lca_package_artifacts_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "private"."worker_jobs"("id") ON DELETE SET NULL;
+    ADD CONSTRAINT "lca_package_artifacts_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "private"."worker_jobs"("id") ON DELETE RESTRICT;
 
 
 
 ALTER TABLE ONLY "private"."lca_package_export_items"
-    ADD CONSTRAINT "lca_package_export_items_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "private"."worker_jobs"("id") ON DELETE SET NULL;
+    ADD CONSTRAINT "lca_package_export_items_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "private"."worker_jobs"("id") ON DELETE RESTRICT;
 
 
 
@@ -68930,7 +69035,7 @@ ALTER TABLE ONLY "private"."lca_package_request_cache"
 
 
 ALTER TABLE ONLY "private"."lca_package_request_cache"
-    ADD CONSTRAINT "lca_package_request_cache_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "private"."worker_jobs"("id") ON DELETE SET NULL;
+    ADD CONSTRAINT "lca_package_request_cache_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "private"."worker_jobs"("id") ON DELETE RESTRICT;
 
 
 

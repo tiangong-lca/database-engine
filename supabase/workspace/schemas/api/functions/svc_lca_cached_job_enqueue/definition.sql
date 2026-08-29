@@ -45,6 +45,26 @@ begin
           'job_id', v_cache.job_id, 'worker_job_id', v_cache.worker_job_id
         );
       end if;
+      if v_worker.status = 'failed' and v_worker.retryable is false then
+        return jsonb_build_object(
+          'ok', false,
+          'code', 'WORKER_REQUEST_NON_RETRYABLE_FAILURE',
+          'status', 409,
+          'mode', 'failed_cache_hit',
+          'message', 'The cached worker request failed and is not retryable',
+          'reused', true,
+          'reuseReason', 'terminal_non_retryable_failure',
+          'cache_id', v_cache.id,
+          'job_id', v_cache.job_id,
+          'worker_job_id', v_worker.id,
+          'error_code', coalesce(v_cache.error_code, v_worker.error_code),
+          'error_message', coalesce(v_cache.error_message, v_worker.error_message),
+          'retryable', false,
+          'details', jsonb_build_object(
+            'workerJob', private.worker_job_payload(v_worker, false)
+          )
+        );
+      end if;
     end if;
   end if;
 
@@ -109,7 +129,7 @@ begin
     'cache_id', v_cache.id,
     'job_id', v_cache.job_id, 'worker_job_id', v_cache.worker_job_id
   );
-end
+end;
 $$;
 
 ALTER FUNCTION "api"."svc_lca_cached_job_enqueue"("p_scope" "text", "p_snapshot_id" "uuid", "p_request_key" "text", "p_request_payload" "jsonb", "p_job_kind" "text", "p_job_id" "uuid", "p_payload" "jsonb", "p_payload_schema_version" "text", "p_requested_by" "uuid", "p_idempotency_key" "text", "p_queue_key" "text") OWNER TO "postgres";

@@ -17,7 +17,7 @@ as $$
   );
 $$;
 
-select plan(40);
+select plan(38);
 
 select ok(
   to_regprocedure('util.apply_lca_package_retention(interval,interval,timestamp with time zone,integer,boolean)') is not null,
@@ -762,8 +762,8 @@ select is(
     from pg_temp.package_retention_apply_preview
     where retention_area = 'lca_package_request_cache'
   ),
-  1,
-  'retention dry-run reports one eligible stale package request-cache row'
+  0,
+  'retention dry-run protects stale request-cache metadata while its artifact is still live'
 );
 
 select is(
@@ -806,54 +806,27 @@ select is(
   'retention dry-run does not delete package export item rows'
 );
 
-create temporary table pg_temp.package_retention_apply_result as
-select *
-from util.apply_lca_package_retention(
-  interval '30 days',
-  interval '7 days',
-  '2026-06-03 14:00:00+00'::timestamp with time zone,
-  1000,
-  false
+select throws_ok(
+  $$select * from util.apply_lca_package_retention(
+    interval '30 days',
+    interval '7 days',
+    '2026-06-03 14:00:00+00'::timestamp with time zone,
+    1000,
+    false
+  )$$,
+  '0A000',
+  'database-only package retention apply is disabled',
+  'retention mutation is fail-closed because object deletion belongs to the Worker'
 );
 
 select is(
   (
-    select affected_count::integer
-    from pg_temp.package_retention_apply_result
-    where retention_area = 'lca_package_artifacts'
-  ),
-  1,
-  'retention apply marks one eligible package artifact metadata row'
-);
-
-select is(
-  (
-    select affected_count::integer
-    from pg_temp.package_retention_apply_result
-    where retention_area = 'lca_package_request_cache'
-  ),
-  1,
-  'retention apply deletes one stale package request-cache row'
-);
-
-select is(
-  (
-    select affected_count::integer
-    from pg_temp.package_retention_apply_result
-    where retention_area = 'lca_package_export_items'
-  ),
-  1,
-  'retention apply deletes one package export item row'
-);
-
-select ok(
-  (
-    select status = 'deleted'
-      and metadata->>'retentionAction' = 'package_metadata_retention_gc'
+    select status
     from private.lca_package_artifacts
     where id = '98200000-0000-4000-8000-000000000304'
   ),
-  'retention apply marks eligible artifacts deleted and records GC metadata'
+  'ready',
+  'failed database-only retention apply does not mark artifact metadata deleted'
 );
 
 select is(
@@ -862,8 +835,8 @@ select is(
     from private.lca_package_request_cache
     where id = '98200000-0000-4000-8000-000000000404'
   ),
-  0,
-  'retention apply deletes eligible stale request-cache metadata'
+  1,
+  'failed database-only retention apply does not delete request-cache metadata'
 );
 
 select is(
@@ -872,8 +845,8 @@ select is(
     from private.lca_package_export_items
     where id = '98200000-0000-4000-8000-000000000402'
   ),
-  0,
-  'retention apply deletes eligible export item metadata'
+  1,
+  'failed database-only retention apply does not delete export item metadata'
 );
 
 select is(
@@ -885,6 +858,8 @@ select is(
   'ready',
   'retention apply preserves pinned package artifacts'
 );
+
+reset role;
 
 select ok(
   pg_temp.has_empty_search_path('util.apply_lca_package_retention(interval,interval,timestamp with time zone,integer,boolean)'),
