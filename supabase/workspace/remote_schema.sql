@@ -72347,6 +72347,7 @@ REVOKE ALL ON FUNCTION "private"."assert_portal_card_context_contract_v1"() FROM
 
 
 REVOKE ALL ON FUNCTION "private"."assert_portal_catalog_character_contract_v1"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."assert_portal_catalog_character_contract_v1"() TO "api_internal_executor";
 
 
 

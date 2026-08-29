@@ -110,3 +110,5 @@ $$;
 ALTER FUNCTION "private"."assert_portal_catalog_character_contract_v1"() OWNER TO "portal_public_executor";
 
 REVOKE ALL ON FUNCTION "private"."assert_portal_catalog_character_contract_v1"() FROM PUBLIC;
+
+GRANT ALL ON FUNCTION "private"."assert_portal_catalog_character_contract_v1"() TO "api_internal_executor";

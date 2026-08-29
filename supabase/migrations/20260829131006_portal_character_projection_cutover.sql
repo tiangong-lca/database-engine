@@ -463,7 +463,10 @@ $function$;
 
 revoke all on function
   private.assert_portal_catalog_character_contract_v1()
-from public, anon, authenticated, service_role, api_internal_executor;
+from public, anon, authenticated, service_role;
+grant execute on function
+  private.assert_portal_catalog_character_contract_v1()
+to api_internal_executor;
 revoke all on function
   private.catalog_portal_single_character_search_v1_impl(
     text,text,text,uuid,text,integer,text
