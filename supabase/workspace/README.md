@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
-lastReviewedNote: "Reviewed for Issue #552: exact-local regeneration has no drift, and generated workspace/type ownership remains unchanged."
+lastReviewedCommit: ac98d7e
+lastReviewedNote: "Reviewed for Issues #551/#552: the 289-migration exact-local forced-RLS CAS policy/assertion state regenerates without drift; generated workspace/type ownership remains unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

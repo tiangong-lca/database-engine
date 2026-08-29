@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
-lastReviewedNote: "已为 Issue #552 复核：exact-local 重新生成无漂移，generated workspace/type 所有权保持不变。"
+lastReviewedCommit: ac98d7e
+lastReviewedNote: "已为 Issues #551/#552 复核：289-migration exact-local forced-RLS CAS policy/assertion 状态重新生成无漂移；generated workspace/type 所有权保持不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

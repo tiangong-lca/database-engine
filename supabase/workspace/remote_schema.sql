@@ -25376,6 +25376,53 @@ begin
        where relation.oid =
          'private.portal_catalog_projection_contract_v1'::regclass
      ) is not false
+     or (
+       select not relation.relrowsecurity
+         or not relation.relforcerowsecurity
+         or relation.relowner <> 'postgres'::regrole
+       from pg_catalog.pg_class as relation
+       where relation.oid =
+         'private.portal_catalog_search_rows_v1'::regclass
+     ) is not false
+     or not exists (
+       select 1
+       from pg_catalog.pg_constraint as state_check
+       where state_check.conrelid =
+           'private.portal_catalog_search_rows_v1'::regclass
+         and state_check.conname =
+           'portal_catalog_search_rows_v1_state_code_check'
+         and state_check.contype = 'c'
+         and state_check.convalidated
+         and pg_catalog.regexp_replace(
+           pg_catalog.pg_get_expr(
+             state_check.conbin,
+             state_check.conrelid
+           ),
+           '[[:space:]]',
+           '',
+           'g'
+         ) = '(state_code=ANY(ARRAY[100,200]))'
+     )
+     or (
+       select count(*)
+       from pg_catalog.pg_policies as policy
+       where policy.schemaname = 'private'
+         and policy.tablename = 'portal_catalog_search_rows_v1'
+         and policy.policyname =
+           'portal_catalog_search_rows_portal_select_v1'
+         and policy.permissive = 'PERMISSIVE'
+         and policy.roles = array['portal_public_executor']::name[]
+         and policy.cmd = 'SELECT'
+         and policy.qual = 'true'
+         and policy.with_check is null
+     ) <> 1
+     or (
+       select count(*)
+       from pg_catalog.pg_policies as policy
+       where policy.schemaname = 'private'
+         and policy.tablename = 'portal_catalog_search_rows_v1'
+         and policy.roles @> array['portal_public_executor']::name[]
+     ) <> 1
      or not exists (
        select 1
        from pg_catalog.pg_attribute as attribute
@@ -69676,7 +69723,11 @@ CREATE POLICY "portal_catalog_search_rows_internal_all_v1" ON "private"."portal_
 
 
 
-CREATE POLICY "portal_catalog_search_rows_portal_select_v1" ON "private"."portal_catalog_search_rows_v1" FOR SELECT TO "portal_public_executor" USING (("state_code" = ANY (ARRAY[100, 200])));
+CREATE POLICY "portal_catalog_search_rows_portal_select_v1" ON "private"."portal_catalog_search_rows_v1" FOR SELECT TO "portal_public_executor" USING (true);
+
+
+
+COMMENT ON POLICY "portal_catalog_search_rows_portal_select_v1" ON "private"."portal_catalog_search_rows_v1" IS 'Row-neutral forced-RLS SELECT over a purpose-built projection whose validated table CHECK admits only public states 100/200; the neutral policy permits exact JSON-expression predicates to remain index conditions.';
 
 
 

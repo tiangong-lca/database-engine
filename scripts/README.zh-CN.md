@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
-lastReviewedNote: "已为 Issue #552 复核：workflow 合同现在要求三个 job 使用同一 Supabase CLI 版本；脚本命令面不变。"
+lastReviewedCommit: ac98d7e
+lastReviewedNote: "已为 Issues #551/#552 复核：289-file recovery/benchmark、forced-RLS CAS plan 门与 workflow 单一 Supabase CLI 版本均为当前状态；脚本命令面不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -78,7 +78,7 @@ scripts/test_search_text_array_upgrade.sh
 
 ### `test_portal_projection_upgrade_recovery.sh`
 
-在显式确认且隔离的本地 Supabase 项目中验证 Issue 531/532/539/543 Portal projection
+在显式确认且隔离的本地 Supabase 项目中验证 Issue 531/532/539/543/551 Portal projection
 上线。脚本使用真实并发连接覆盖有效更新、删除、状态失效、主键变更以及仅 embedding
 更新竞态；主动制造 card/facet reconcile 锁超时与 cutover guard 失败；证明 facet
 expand COMMIT/history 缺口、四分片幂等重试、同名 concurrent index 受控清理、Flow
@@ -91,12 +91,12 @@ facet version 集精确相等。脚本还证明已记录迁移重复执行不会
 证明 populated 且已记录的 `134101`/`134102` 状态只应用 `134103` 即可收敛。
 所需环境变量与恢复边界见
 `docs/agents/portal-projection-migration-recovery.md`。正式证据还要求干净 HEAD、
-Supabase CLI `2.109.1`，以及完整 278-file migration tree 的逐字相等和 aggregate
+Supabase CLI `2.109.1`，以及完整 289-file migration tree 的逐字相等和 aggregate
 SHA-256。
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
-在同一类显式隔离的 Issue-531/532/539/543 项目中，对 126,246 条既有 parent card 逐字执行七个
+在同一类显式隔离的 Issue-531/532/539/543/551 项目中，对 126,246 条既有 parent card 逐字执行七个
 Facet migration。每条 backfill statement 必须在 120 秒门下保留至少 2 倍余量，
 每个完整 UUID-quarter 文件必须低于 120 秒；成功 reconcile fence 必须在 5 秒内
 完成，并要求 key coverage、确定性抽样 facts 与 DTO 聚合计数精确一致。runner
@@ -107,9 +107,9 @@ history-order index、唯一 same-key trigger、shard capacity 与两个 public 
 
 ### `run_portal_projection_benchmark.sh`
 
-仅在显式确认的 Issue 531/532/539/543 隔离本地 Supabase 项目中运行代表性 Process/Flow
+仅在显式确认的 Issue 531/532/539/543/551 隔离本地 Supabase 项目中运行代表性 Process/Flow
 Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把完整
-278-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
+289-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
 reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合同与 recovery runner
 一致，另要求 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`。
 
@@ -118,7 +118,9 @@ CAS example 各执行 20 个样本。它在临时 writer clone 上分别记录 c
 eligibility index 与 exact Flow CAS index 的 build time、bytes 和增量四次更新 p95；
 该探针不会 drop 或 rebuild 真实 projection/index。`cas-pressure` profile 会让
 10,000 个 current Flow card 共用一个 CAS，同时保留一个唯一 CAS，并要求受限选择器
-保持 summary p95 <250 ms、已发布 CAS 只返回一条结果。
+保持 summary p95 <250 ms、已发布 CAS 只返回一条结果。同一代表性 fixture 还会捕获
+forced-RLS exact-CAS 自然计划；除非 CAS 等值位于
+`portal_catalog_search_flow_cas_v1_idx` 的 `Index Cond` 且没有 CAS JSON filter，否则失败。
 
 `PORTAL_PROJECTION_BENCHMARK_PROFILE` 用于选择 fail-closed 命名 profile：
 

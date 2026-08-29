@@ -25,6 +25,9 @@ CARD_CONTEXT_ANCHOR_NAME = "20260827021441_portal_card_context_decorator.sql"
 FLOW_GEOGRAPHY_SEARCH_NAME = (
     "20260827134100_optimize_portal_flow_geography_search.sql"
 )
+FLOW_CAS_RLS_POLICY_NAME = (
+    "20260829130000_make_portal_flow_cas_rls_indexable.sql"
+)
 SITEMAP_LATEST_PROJECTION_NAME = (
     "20260827134101_portal_sitemap_latest_projection.sql"
 )
@@ -186,6 +189,12 @@ def main() -> int:
         executable_sql = sql_without_comments(migration.read_text(encoding="utf-8"))
         for identity, pattern in patterns.items():
             if pattern.search(executable_sql):
+                if (
+                    migration.name == FLOW_CAS_RLS_POLICY_NAME
+                    and identity
+                    == "private.assert_portal_catalog_projection_contract_v1()"
+                ):
+                    continue
                 violations.append(f"{migration.name}: {identity}")
 
     facet_anchor = MIGRATIONS_DIR / FACET_ANCHOR_NAME
@@ -353,6 +362,67 @@ def main() -> int:
             violations.append(
                 f"{FLOW_GEOGRAPHY_SEARCH_NAME}: query-only repair must not add "
                 "a table, index, trigger, or writer-table rewrite"
+            )
+
+    flow_cas_rls_policy = MIGRATIONS_DIR / FLOW_CAS_RLS_POLICY_NAME
+    if not flow_cas_rls_policy.is_file():
+        violations.append(
+            f"missing Portal Flow CAS RLS migration: {FLOW_CAS_RLS_POLICY_NAME}"
+        )
+    else:
+        rls_sql = sql_without_comments(
+            flow_cas_rls_policy.read_text(encoding="utf-8")
+        )
+        rls_sql_lower = rls_sql.lower()
+        required_rls_tokens = (
+            "35cf6024873514fa198dad8684cd41815f7cd4147f715a9becbb764a6bb37149",
+            "b001ad1fe7c4ae14fd577a740205af0b2e0f91a62b9912bcb133628e05e8b8cc",
+            "c23867609136dd833aa713cf3868ad27f9b858efbca8f4f130e1840c9a359094",
+            "alter policy portal_catalog_search_rows_portal_select_v1",
+            "on private.portal_catalog_search_rows_v1",
+            "using (true)",
+            "portal_catalog_search_rows_v1_state_code_check",
+            "(state_code=any(array[100,200]))",
+            "policy.qual = 'true'",
+            "relation.relrowsecurity",
+            "relation.relforcerowsecurity",
+            "private.assert_portal_catalog_projection_contract_v1()",
+            "portal flow cas rls-indexability prerequisites drifted",
+        )
+        missing = [
+            token for token in required_rls_tokens if token not in rls_sql_lower
+        ]
+        if missing:
+            violations.append(
+                f"{FLOW_CAS_RLS_POLICY_NAME}: missing RLS-indexability tokens "
+                + ", ".join(missing)
+            )
+        assertion_pattern = mutation_pattern(
+            "private.assert_portal_catalog_projection_contract_v1()"
+        )
+        if len(assertion_pattern.findall(rls_sql)) != 1:
+            violations.append(
+                f"{FLOW_CAS_RLS_POLICY_NAME}: expected one projection assertion replacement"
+            )
+        if re.search(
+            r"\b(?:create\s+(?:unlogged\s+)?table|create\s+(?:unique\s+)?index|"
+            r"create\s+trigger|alter\s+table|drop\s+(?:table|index|trigger))\b",
+            rls_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{FLOW_CAS_RLS_POLICY_NAME}: policy-only repair must not add, "
+                "rewrite, or remove a relation, index, trigger, or writer path"
+            )
+        if len(
+            re.findall(
+                r"\balter\s+policy\s+portal_catalog_search_rows_portal_select_v1\b",
+                rls_sql,
+                flags=re.IGNORECASE,
+            )
+        ) != 1:
+            violations.append(
+                f"{FLOW_CAS_RLS_POLICY_NAME}: expected one exact Portal SELECT policy change"
             )
 
     required_guard_counts = {
@@ -751,7 +821,9 @@ def main() -> int:
         f"{len(CARD_CONTEXT_FUNCTION_IDENTITIES)} derivation functions and "
         f"{len(CARD_CONTEXT_CONTROL_FUNCTION_IDENTITIES)} controls, "
         f"sha256={CARD_CONTEXT_MANIFEST_SHA256}; Flow geography Search "
-        "repair remains query-only; sitemap shards remain fixed at 64 with "
+        "repair remains query-only; forced-RLS Flow CAS equality remains an "
+        "exact index condition over the validated public-state projection; "
+        "sitemap shards remain fixed at 64 with "
         "an exact-version FK child/index, one AFTER INSERT/UPDATE direct-upsert "
         "trigger, FK-cascade DELETE, the 134103 forward repair, and a "
         "4096-item fail-closed output cap"

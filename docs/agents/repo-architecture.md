@@ -30,8 +30,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
-lastReviewedNote: "Reviewed for Issue #552: the workflow dependency pin changes no repository architecture or runtime boundary."
+lastReviewedCommit: ac98d7e
+lastReviewedNote: "Reviewed for Issues #551/#552: the row-neutral Portal policy is bound to the validated public-state projection domain with no Search/index/writer change, and the workflow CLI pin changes no architecture boundary."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -120,6 +120,18 @@ stored or included in the index. The façade revalidates CAS check digits,
 classification bounds, labels, and exact latest identity before returning a
 value. It adds no source-table scan, new projection table, existing-index
 change, or trigger/writer branch.
+
+The projection relation is owned by `postgres`, has forced RLS, and has a
+validated table CHECK that permits only state 100/200 rows. Its Portal SELECT
+policy is deliberately row-neutral because every stored row is already a
+public-safe projection; the live projection assertion pins the relation owner,
+forced-RLS flags, exact CHECK, unique Portal policy, and `qual=true` together.
+This removes the RLS security barrier that otherwise keeps non-leakproof JSON
+CAS extraction as a full-index filter. The representative natural plan must
+place the exact CAS equality in `portal_catalog_search_flow_cas_v1_idx`'s
+`Index Cond`, leave no CAS filter, and preserve all ordinary lexical, UUID,
+invalid-CAS, visibility, ACL, and writer behavior. It adds no relation, index,
+Trigger, source write, timeout, or public DTO change.
 
 The bounded sitemap surface stores one locator-free row for every public facet
 version in `private.portal_sitemap_rows_v1`. Its primary key is
@@ -410,9 +422,11 @@ at least four characters, and prefers Process evidence before Flow evidence so
 the homepage does not advertise a one-character near-universe query. The
 representative benchmark resolves that emitted example dynamically and executes
 it through the matching public Search wrapper for 20 samples under the existing
-2-second p95 and 8-second hard timeout. Missing eligible evidence omits the
-example; it never authorizes a placeholder, private fallback, timeout increase,
-new writer path, or unmeasured index.
+2-second p95 and 8-second hard timeout. The same benchmark captures the
+forced-RLS exact-CAS natural plan and rejects a CAS equality left behind as an
+index filter. Missing eligible evidence omits the example; it never authorizes
+a placeholder, private fallback, timeout increase, new writer path, or
+unmeasured index.
 
 This contract assumes privileged DDL is delivered only through the governed
 migration and CI path. The live digest proves current definitions, not the
