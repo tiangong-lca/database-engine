@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-27
-lastReviewedCommit: 712558e
-lastReviewedNote: "已为 274-migration Issue #539 exact-version sitemap child、history reader 与 SHA-pinned 旧 Preview fixture 复核；generated workspace/type 所有权不变。"
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
+lastReviewedNote: "已为 Issue #552 复核：exact-local 重新生成无漂移，generated workspace/type 所有权保持不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -1,0 +1,1 @@
+CREATE INDEX "lca_package_artifacts_gc_candidate_idx" ON "private"."lca_package_artifacts" USING "btree" ("expires_at", "created_at", "id") WHERE (("expires_at" IS NOT NULL) AND ("is_pinned" IS FALSE) AND ("status" = 'ready'::"text"));

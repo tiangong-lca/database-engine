@@ -95,6 +95,17 @@ select extensions.is(
   'exactly ten Portal catalogue routines exist without overloads'
 );
 
+select extensions.ok(
+  (
+    select routine.prosrc ~ 'cas_unique_values as materialized'
+      and routine.prosrc ~ 'limit 64'
+      and routine.prosrc ~ 'having pg_catalog.count\(\*\) = 1'
+    from pg_catalog.pg_proc as routine
+    where routine.oid = 'api.portal_catalog_summary_v1()'::regprocedure
+  ),
+  'catalog summary chooses a history-unique CAS through a fixed 64-value index probe'
+);
+
 select extensions.is(
   (
     with actual as (
@@ -1074,7 +1085,8 @@ create or replace function pg_temp.portal_flow_payload(
   p_flowproperty_id uuid,
   p_flowproperty_version text,
   p_license_type text,
-  p_access_restrictions text
+  p_access_restrictions text,
+  p_cas_number text default '50-00-0'
 )
 returns jsonb
 language sql
@@ -1091,7 +1103,7 @@ as $$
           'common:generalComment', pg_temp.portal_localized(
             p_name || ' public general comment'
           ),
-          'CASNumber', '50-00-0'
+          'CASNumber', p_cas_number
         ),
         'quantitativeReference', pg_catalog.jsonb_build_object(
           'referenceToReferenceFlowProperty', '1'
@@ -1582,7 +1594,8 @@ values
       '52700000-0000-4000-8000-000000000399',
       '01.00.000',
       'Free of charge for all users and uses',
-      null
+      null,
+      '64-17-5'
     ),
     pg_temp.portal_flow_payload(
       'Portal Fixture Missing Chain Flow',
@@ -1590,7 +1603,8 @@ values
       '52700000-0000-4000-8000-000000000399',
       '01.00.000',
       'Free of charge for all users and uses',
-      null
+      null,
+      '64-17-5'
     )::json,
     '52700000-0000-4000-8000-000000000001',
     '52700000-0000-4000-8000-000000000002',
@@ -4135,8 +4149,12 @@ select extensions.ok(
       and result.payload #>> '{examples,0,query}' =
         '52700000-0000-4000-8000-000000000101'
       and result.payload #>> '{examples,1,datasetKind}' = 'flow'
-      and result.payload #>> '{examples,1,query}' = '50-00-0'
+      and result.payload #>> '{examples,1,query}' = '64-17-5'
+      and result.payload #>> '{examples,2,datasetKind}' = 'process'
       and result.payload #>> '{examples,2,query}' = 'PORTAL-FIXTURE'
+      and pg_catalog.length(
+        result.payload #>> '{examples,2,query}'
+      ) >= 4
     from portal_test_results as result
     where result.label = 'catalog_summary_initial'
   ),
@@ -4212,6 +4230,47 @@ select extensions.ok(
   ),
   'catalog summary is bounded and excludes hidden draft/review identities'
 );
+
+create temporary table portal_summary_search_cards_original on commit drop as
+select dataset_kind, id, version, card
+from private.portal_catalog_search_rows_v1;
+
+update private.portal_catalog_search_rows_v1
+set card = card - 'classifications'
+where dataset_kind = 'process';
+
+update private.portal_catalog_search_rows_v1
+set card = pg_catalog.jsonb_set(
+  card,
+  '{classifications}',
+  '[{"system":"fixture","code":"1","label":[]}]'::jsonb,
+  true
+)
+where dataset_kind = 'flow';
+
+set local role anon;
+insert into portal_test_results (label, payload)
+values ('catalog_summary_short_classification_only', api.portal_catalog_summary_v1());
+reset role;
+
+select extensions.ok(
+  not exists (
+    select 1
+    from portal_test_results as result
+    cross join lateral pg_catalog.jsonb_array_elements(result.payload -> 'examples')
+      as example(value)
+    where result.label = 'catalog_summary_short_classification_only'
+      and example.value ->> 'queryKind' = 'classification'
+  ),
+  'summary omits one-character classification evidence instead of advertising a broad timeout-prone query'
+);
+
+update private.portal_catalog_search_rows_v1 as target
+set card = original.card
+from portal_summary_search_cards_original as original
+where target.dataset_kind = original.dataset_kind
+  and target.id = original.id
+  and target.version = original.version;
 
 create temporary table portal_flow_201_original on commit drop as
 select json, json_ordered

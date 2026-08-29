@@ -1,7 +1,21 @@
-CREATE OR REPLACE FUNCTION "util"."apply_lca_package_retention"("p_job_retention_window" interval DEFAULT '30 days'::interval, "p_request_cache_retention_window" interval DEFAULT '30 days'::interval, "p_as_of" timestamp with time zone DEFAULT "now"(), "p_max_rows" integer DEFAULT 1000, "p_dry_run" boolean DEFAULT true) RETURNS TABLE("retention_area" "text", "retention_action" "text", "dry_run" boolean, "affected_count" bigint)
-    LANGUAGE "plpgsql"
-    SET "search_path" TO ''
-    AS $$
+-- P0 safety rails for bounded, Worker-owned object-first package retention.
+
+create or replace function util.apply_lca_package_retention(
+  p_job_retention_window interval default interval '30 days',
+  p_request_cache_retention_window interval default interval '30 days',
+  p_as_of timestamp with time zone default pg_catalog.now(),
+  p_max_rows integer default 1000,
+  p_dry_run boolean default true
+) returns table (
+  retention_area text,
+  retention_action text,
+  dry_run boolean,
+  affected_count bigint
+)
+language plpgsql
+volatile
+set search_path to ''
+as $$
 begin
   if p_as_of is null then
     raise exception using
@@ -174,8 +188,7 @@ begin
 end;
 $$;
 
-ALTER FUNCTION "util"."apply_lca_package_retention"("p_job_retention_window" interval, "p_request_cache_retention_window" interval, "p_as_of" timestamp with time zone, "p_max_rows" integer, "p_dry_run" boolean) OWNER TO "postgres";
-
-REVOKE ALL ON FUNCTION "util"."apply_lca_package_retention"("p_job_retention_window" interval, "p_request_cache_retention_window" interval, "p_as_of" timestamp with time zone, "p_max_rows" integer, "p_dry_run" boolean) FROM PUBLIC;
-
-GRANT ALL ON FUNCTION "util"."apply_lca_package_retention"("p_job_retention_window" interval, "p_request_cache_retention_window" interval, "p_as_of" timestamp with time zone, "p_max_rows" integer, "p_dry_run" boolean) TO "service_role";
+comment on function util.apply_lca_package_retention(
+  interval, interval, timestamp with time zone, integer, boolean
+)
+  is 'Dry-run-only package retention preview. Mutating apply is fail-closed because only the Worker can prove object deletion before artifact tombstoning and dependent metadata cleanup.';

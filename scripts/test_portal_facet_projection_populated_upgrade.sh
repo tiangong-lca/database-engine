@@ -25,8 +25,8 @@ project_id="$(
   sed -n 's/^project_id = "\([^"]*\)"$/\1/p' \
     "$test_workdir/supabase/config.toml" | head -n 1
 )"
-if [[ ! "$project_id" =~ ^database-engine-(531|532|539)-[a-z0-9-]+$ ]]; then
-  echo "refusing non-Issue-531/532/539 Supabase project_id: $project_id" >&2
+if [[ ! "$project_id" =~ ^database-engine-(531|532|539|543)-[a-z0-9-]+$ ]]; then
+  echo "refusing non-Issue-531/532/539/543 Supabase project_id: $project_id" >&2
   exit 2
 fi
 container_name="supabase_db_${project_id}"
@@ -42,9 +42,9 @@ fi
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 274 \
-   || "${#test_migrations[@]}" -ne 274 ]]; then
-  echo "complete migration tree must contain exactly 274 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 278 \
+   || "${#test_migrations[@]}" -ne 278 ]]; then
+  echo "complete migration tree must contain exactly 278 files" >&2
   exit 2
 fi
 for migration_index in "${!repo_migrations[@]}"; do

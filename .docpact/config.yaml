@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-27"
-lastReviewedCommit: "712558e"
-lastReviewedNote: "Reviewed for Issue #539: 274 migrations, 13 generated Portal modules, exact-version FK-cascaded sitemap child, history-density reader gate, and SHA-pinned old-Preview forward fixture."
+lastReviewedAt: "2026-08-29"
+lastReviewedCommit: "e39fdf422fcf109a16bc8e52bba59538092c521c"
+lastReviewedNote: "Reviewed for Issue #552: the Supabase CLI pin update changes no documentation routing, coverage, or ownership rule."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -500,6 +500,14 @@ rules:
       - path: supabase/migrations/20260827134102_portal_sitemap_shard_contract.sql
         kind: database-migration
       - path: supabase/migrations/20260827134103_portal_sitemap_concurrency_repair.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827193451_repair_portal_classification_example.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827210000_optimize_portal_flow_cas_search.sql
+        kind: database-migration
+      - path: supabase/migrations/20260827223000_isolate_portal_flow_cas_index.sql
+        kind: database-migration
+      - path: supabase/migrations/20260828003000_select_selective_portal_cas_example.sql
         kind: database-migration
       - path: supabase/tests/20260826_portal_candidate_first_search.sql
         kind: database-contract-test

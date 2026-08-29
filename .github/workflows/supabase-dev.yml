@@ -29,7 +29,7 @@ jobs:
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v2
         with:
-          version: 2.98.0
+          version: 2.116.0
 
       - name: Verify deployment workflow contract
         run: |
@@ -99,7 +99,7 @@ jobs:
       - name: Setup Supabase CLI
         uses: supabase/setup-cli@v2
         with:
-          version: 2.98.0
+          version: 2.116.0
 
       - name: Link Supabase Dev branch
         run: supabase link --project-ref "$SUPABASE_PROJECT_ID"
@@ -267,7 +267,7 @@ jobs:
         if: steps.preview_authority.outputs.available == 'true'
         uses: supabase/setup-cli@v2
         with:
-          version: 2.98.0
+          version: 2.116.0
 
       - name: Wait for exact Supabase Preview check
         if: steps.preview_authority.outputs.available == 'true'

@@ -1,0 +1,1 @@
+CREATE INDEX "worker_jobs_idempotency_latest_idx" ON "private"."worker_jobs" USING "btree" ("worker_runtime", "job_kind", COALESCE("requested_by", '00000000-0000-0000-0000-000000000000'::"uuid"), "idempotency_key", "created_at" DESC, "id" DESC) WHERE ("idempotency_key" IS NOT NULL);

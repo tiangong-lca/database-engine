@@ -1,7 +1,7 @@
 ---
-lastReviewedAt: 2026-08-27
-lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for Issue #539: the 274-file tree, exact-version FK-cascaded sitemap child, history-ordered reader, and atomic 134103 forward replacement are explicit."
+lastReviewedAt: 2026-08-28
+lastReviewedCommit: 26f583b
+lastReviewedNote: "Reviewed for Issue #543: the 278-file tree retains exact-version sitemap recovery and adds bounded classification plus history-unique CAS example repair without changing projection recovery ownership."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -467,6 +467,49 @@ atomic commit. Preserve and escalate any prerequisite or convergence failure;
 do not expose a partially backfilled child, retain an obsolete helper, split the
 reader swap from old-object retirement, or edit history to force the repair.
 
+`20260827193451_repair_portal_classification_example.sql` changes only the
+existing summary function's optional example selection. It filters broad
+classification codes, prefers Process evidence, preserves the function owner,
+ACL, RLS and two-second summary budget, and adds no projection row, index,
+Trigger, or writer path. An uncertain commit follows the normal unchanged
+migration retry: `CREATE OR REPLACE FUNCTION` is idempotent after its strict
+prerequisite/definition checks, and no data cleanup or projection recovery is
+authorized.
+
+`20260827210000_optimize_portal_flow_cas_search.sql` adds one partial expression
+B-tree over valid public Flow CAS card values and one exact-CAS candidate branch.
+It preserves the existing PGroonga path for ordinary lexical, UUID, and invalid
+CAS-shaped text, rechecks the exact latest version before returning a candidate,
+and changes no projection row, Trigger, RLS policy, cursor, or timeout. A failed
+index build, function prerequisite, public-example smoke, or contract assertion
+rolls back atomically; do not retain a manual index or bypass the forward
+migration after an uncertain hosted outcome.
+
+`20260827223000_isolate_portal_flow_cas_index.sql` is the forward repair for a
+cold persistent-Dev summary timeout discovered after `210000`. It atomically
+recreates the same index with an explicit 7..12 CAS-length predicate and adds
+the identical predicate to the exact candidate branch. That discriminator is
+redundant for valid CAS values but deliberately prevents the unconstrained
+summary selector from choosing the CAS-leading index; summary selection
+returns to the retained id-ordered eligibility index. The migration must prove
+the exact `210000` function/index predecessor, run the real summary smoke inside
+its two-second budget, preserve exact-CAS/latest behavior, and roll back both
+index and function on any failure.
+
+`20260828003000_select_selective_portal_cas_example.sql` changes only summary
+example selection after a strict Dev probe showed that exhaustive context
+hydration for a 13-match CAS could still consume the public eight-second
+budget. The summary performs one ordered GroupAggregate over the exact CAS
+index, retains at most 64 CAS values that occur exactly once across all stored
+projection history, and then joins the chosen row to the shared latest CTE.
+This conservative condition guarantees one current match after the latest
+recheck without repeated helper calls; Search itself remains complete and
+unchanged. If valid public CAS evidence exists but the bounded unique-value
+probe cannot produce a current example, the migration fails instead of silently
+removing the homepage CAS.
+The summary's two-second timeout, three-example order, and 16-KiB cap remain
+unchanged, and migration verification runs as the constrained Portal executor.
+
 ## Uncertain expand commit
 
 The expand migration is transactional, so ordinary SQL failure leaves no Issue
@@ -563,7 +606,7 @@ Issue 531 Supabase project. It resets that local project and must never target a
 shared checkout, Preview, persistent Dev, or production.
 
 Formal recovery evidence requires clean HEAD, the reviewed Supabase CLI
-`2.109.1`, and byte equality plus one aggregate SHA-256 across all 274 migration
+`2.109.1`, and byte equality plus one aggregate SHA-256 across all 278 migration
 files in the repository and isolated project. Comparing only Issue 531 files is
 not sufficient because an earlier baseline change can alter recovery behavior.
 

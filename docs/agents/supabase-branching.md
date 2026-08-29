@@ -20,9 +20,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-27
-lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for Issue #539 bounded independent Hybrid/sitemap Preview probes; PR, persistent Dev, production, and cross-repository mutation boundaries remain unchanged."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
+lastReviewedNote: "Reviewed for Issue #552: the Supabase CLI restart fix changes no PR, persistent Dev, production, or cross-repository mutation boundary."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -1,0 +1,1 @@
+CREATE INDEX "lca_package_request_cache_gc_candidate_idx" ON "private"."lca_package_request_cache" USING "btree" ("last_accessed_at", "created_at", "id") WHERE ("status" <> ALL (ARRAY['pending'::"text", 'running'::"text"]));

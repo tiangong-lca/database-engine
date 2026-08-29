@@ -29,9 +29,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-27
-lastReviewedCommit: 712558e
-lastReviewedNote: "Reviewed for Issue #539 fixed sitemap shards, exact-version FK-cascaded child, history-ordered reader, atomic 134103 replacement, and its SHA-pinned old-Preview fixture."
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
+lastReviewedNote: "Reviewed for Issue #552: the workflow dependency pin changes no repository architecture or runtime boundary."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -403,6 +403,17 @@ geography index—the representative filter matches the full Flow universe, so
 such an index would add writer/storage cost without selectivity—and all other
 Search filters continue through the general exhaustive card-facts path.
 
+The catalog summary is a bounded consumer of the same synchronized projections,
+not a separate search index. UUID and CAS examples keep their exact evidence
+rules. A classification example is optional, requires a trimmed public code of
+at least four characters, and prefers Process evidence before Flow evidence so
+the homepage does not advertise a one-character near-universe query. The
+representative benchmark resolves that emitted example dynamically and executes
+it through the matching public Search wrapper for 20 samples under the existing
+2-second p95 and 8-second hard timeout. Missing eligible evidence omits the
+example; it never authorizes a placeholder, private fallback, timeout increase,
+new writer path, or unmeasured index.
+
 This contract assumes privileged DDL is delivered only through the governed
 migration and CI path. The live digest proves current definitions, not the
 historical derivation of a row after out-of-band change/write/restore. Direct or
@@ -425,9 +436,11 @@ The reusable AI runtime uses `worker_queue=ai`; `ai.tidas_suggestion` is only it
 
 Claim must remain non-blocking under concurrent recovery: expired max-attempt rows are selected in bounded `FOR UPDATE SKIP LOCKED` batches before they are marked failed, while claimable queued/stale or expired-retry rows use their own skip-locked candidate set. Terminal result recording is lease-fenced; an exact repeat with the same lease token, status, and normalized result content is an idempotent acknowledgement, while any conflicting replay remains rejected. This permits a Worker to retry an ambiguous database/transport failure without leaving completed compute stranded in `running`.
 
+Queue growth controls preserve lease freshness without turning every renewal into event history. A lease-only heartbeat updates `heartbeat_at` and `lease_expires_at` without changing business `updated_at`; events are appended only for a phase change, first progress value, or a crossed higher 5% progress bucket, diagnostics remain on the current job row, and the RPC reports `eventEmitted` for observation. Exact deterministic request identity excludes transport idempotency/concurrency keys. If its latest terminal job is explicitly `failed` with `retryable=false`, enqueue and LCA cache/snapshot facades return `WORKER_REQUEST_NON_RETRYABLE_FAILURE` with the reused Worker identity without inserting another job/event or resetting cache state; the result-cache facade exposes `mode=failed_cache_hit`, while `retryable=true` and unknown `NULL` remain admissible. Maintenance idempotency is stronger: a logical day-bucket key reuses terminal as well as active jobs under a transaction advisory lock.
+
 Review submission itself never enqueues or waits for Worker computation. A Review Admin may manually start a global `review.quality_diagnostic` job that evaluates completeness and numerical quality together. The report is read-only and informational: findings, inability to evaluate, and execution failure do not mutate review state or block assignment, approval, or rejection. Review Members cannot start or read this administrative report, and the job does not enter the ordinary task-center feed.
 
-Retained domain tables such as `lca_package_artifacts`, `lca_package_export_items`, `lca_package_request_cache`, `lca_results`, `lca_result_cache`, `lca_latest_all_unit_results`, and `lca_network_snapshots` are not replacement job tables. They store worker-produced artifacts, caches, projections, reports, or coordinator domain state. `dataset_review_submit_requests` and `dataset_review_submit_gate_runs` are legacy compatibility/audit history only; they no longer authorize or reject review submission. The package request cache deduplicates active work for mutable scopes (`current_user`, `open_data`, and `current_user_and_open_data`), but a new intent after completion must advance to a fresh Worker/package job; only `selected_roots`, whose exact root IDs and versions are request content, retains terminal artifact reuse. Post-cutover rows should be traceable back to `worker_jobs` through the appropriate worker job reference columns, except for explicitly documented exceptions such as snapshot identity rows that are traced through downstream worker-linked records.
+Retained domain tables such as `lca_package_artifacts`, `lca_package_export_items`, `lca_package_request_cache`, `lca_results`, `lca_result_cache`, `lca_latest_all_unit_results`, and `lca_network_snapshots` are not replacement job tables. They store worker-produced artifacts, caches, projections, reports, or coordinator domain state. `dataset_review_submit_requests` and `dataset_review_submit_gate_runs` are legacy compatibility/audit history only; they no longer authorize or reject review submission. The package request cache deduplicates active work for mutable scopes (`current_user`, `open_data`, and `current_user_and_open_data`), but a new intent after completion must advance to a fresh Worker/package job; only `selected_roots`, whose exact root IDs and versions are request content, retains terminal artifact reuse. Package retention is Worker-owned because SQL cannot prove object deletion: the database helper is preview-only and mutating calls fail closed. Package-domain foreign keys use `ON DELETE RESTRICT`, so bounded artifact/cache/export-detail cleanup cannot erase canonical `worker_jobs` history. Post-cutover rows should be traceable back to `worker_jobs` through the appropriate worker job reference columns, except for explicitly documented exceptions such as snapshot identity rows that are traced through downstream worker-linked records.
 
 Use `private.worker_domain_traceability_cutoffs` and
 `util.worker_domain_traceability_violations` for DB-side audit checks when

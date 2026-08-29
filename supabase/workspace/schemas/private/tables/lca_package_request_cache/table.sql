@@ -38,7 +38,7 @@ ALTER TABLE ONLY "private"."lca_package_request_cache"
     ADD CONSTRAINT "lca_package_request_cache_report_artifact_fk" FOREIGN KEY ("report_artifact_id") REFERENCES "private"."lca_package_artifacts"("id") ON DELETE SET NULL;
 
 ALTER TABLE ONLY "private"."lca_package_request_cache"
-    ADD CONSTRAINT "lca_package_request_cache_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "private"."worker_jobs"("id") ON DELETE SET NULL;
+    ADD CONSTRAINT "lca_package_request_cache_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "private"."worker_jobs"("id") ON DELETE RESTRICT;
 
 ALTER TABLE "private"."lca_package_request_cache" ENABLE ROW LEVEL SECURITY;
 
