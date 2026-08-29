@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
-lastReviewedNote: "已为 Issue #552 复核：workflow 合同现在要求三个 job 使用同一 Supabase CLI 版本；脚本命令面不变。"
+lastReviewedCommit: 6e1057511dde93f2289a753cc6561edf73c1486f
+lastReviewedNote: "已为 Issue #557 复核：新增离线 Auth 密码恢复邮件模板契约检查器。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -46,6 +46,17 @@ related:
 本地迁移输出和审计 JSONL 文件应写入 `_artifacts/`，该目录已被 Git 忽略。
 
 ## 脚本列表
+
+### `check_auth_email_templates.py`
+
+在不连接 Supabase 的情况下校验密码恢复邮件契约。它要求
+`supabase/config.toml` 使用准确绑定和非空主题，并要求按钮与可见、可复制的链接都指向
+同一个完整 `{{ .ConfirmationURL }}`；手工拼接 token hash 的 magic link 会被拒绝。
+
+```bash
+python3 scripts/check_auth_email_templates.py
+python3 scripts/test_check_auth_email_templates.py
+```
 
 ### `test_full_schema_cutover_upgrade.sh`
 

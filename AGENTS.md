@@ -25,6 +25,7 @@ checkPaths:
   - supabase/config.toml
   - supabase/migrations/**
   - supabase/tests/**
+  - supabase/templates/**
   - supabase/seed.sql
   - supabase/seeds/**
   - supabase/workspace/**
@@ -37,8 +38,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
-lastReviewedNote: "Reviewed for Issue #552: the Supabase CLI pin update changes no ownership, branch, deployment, or integration boundary."
+lastReviewedCommit: 6e1057511dde93f2289a753cc6561edf73c1486f
+lastReviewedNote: "Reviewed for Issue #557: Auth email templates are now an explicit database-engine source-of-truth path; branch and integration boundaries are unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -48,7 +49,7 @@ related:
 
 ## Repo Contract
 
-`database-engine` owns the checked-in Supabase database contract for the TianGong LCA workspace: schema truth, versioned public DTO schemas under `contracts/portal/**`, migration history, operator branch bindings, database-side tests, the automation that deploys committed migrations to the persistent Supabase `dev` branch, and the production Supabase GitHub integration contract that applies Git `main` migrations.
+`database-engine` owns the checked-in Supabase database contract for the TianGong LCA workspace: schema truth, versioned public DTO schemas under `contracts/portal/**`, migration history, Auth email template sources, operator branch bindings, database-side tests, the automation that deploys committed migrations to the persistent Supabase `dev` branch, and the production Supabase GitHub integration contract that applies Git `main` migrations.
 
 Start here when the task may change schema truth, branch bindings, generated schema-workspace tooling, repo validation rules, or documentation ownership inside this repo.
 

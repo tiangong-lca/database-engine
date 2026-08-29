@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
-lastReviewedNote: "已为 Issue #552 复核：exact-local 重新生成无漂移，generated workspace/type 所有权保持不变。"
+lastReviewedCommit: 6e1057511dde93f2289a753cc6561edf73c1486f
+lastReviewedNote: "已为 Issue #557 复核：Auth 邮件模板不属于 generated schema workspace，其所有权与刷新行为保持不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

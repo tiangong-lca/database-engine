@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
-lastReviewedNote: "Reviewed for Issue #552: the workflow contract now enforces one Supabase CLI version across all three jobs; the script surface is unchanged."
+lastReviewedCommit: 6e1057511dde93f2289a753cc6561edf73c1486f
+lastReviewedNote: "Reviewed for Issue #557: added the offline auth recovery email template contract checker."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -46,6 +46,18 @@ Those runners should keep their own `README.md` with dry-run, apply, and validat
 Local migration outputs and audit JSONL files should be written under `_artifacts/`, which is intentionally ignored by Git.
 
 ## Script List
+
+### `check_auth_email_templates.py`
+
+Validates the password-recovery email contract without contacting Supabase. It
+requires the exact `supabase/config.toml` binding, a non-empty subject, and both
+a button and visible copyable link targeting the same complete
+`{{ .ConfirmationURL }}`. It rejects hand-built token-hash magic links.
+
+```bash
+python3 scripts/check_auth_email_templates.py
+python3 scripts/test_check_auth_email_templates.py
+```
 
 ### `test_full_schema_cutover_upgrade.sh`
 

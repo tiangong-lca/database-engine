@@ -22,6 +22,7 @@ checkPaths:
   - supabase/config.toml
   - supabase/migrations/**
   - supabase/tests/**
+  - supabase/templates/**
   - supabase/workspace/**
   - scripts/**
   - .github/workflows/supabase-dev.yml
@@ -30,8 +31,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
-lastReviewedNote: "Reviewed for Issue #552: the workflow dependency pin changes no repository architecture or runtime boundary."
+lastReviewedCommit: 6e1057511dde93f2289a753cc6561edf73c1486f
+lastReviewedNote: "Reviewed for Issue #557: the stable path map now identifies Auth email template sources; generated workspace and runtime boundaries are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -198,6 +199,7 @@ executable by application roles.
 | Path group | Role |
 | --- | --- |
 | `supabase/config.toml` | shared local baseline plus branch-specific remote bindings |
+| `supabase/templates/**` | canonical Auth email template sources; hosted application still requires an explicit authorized operator action and readback |
 | `supabase/migrations/**` | authoritative migration history and durable schema changes |
 | `supabase/seed.sql` | shared seed data; when no rows are needed, retain an executable no-op statement instead of a comments-only file so hosted Preview seeding has a valid SQL batch |
 | `supabase/seeds/dev.sql` | persistent dev-only seed overlay |

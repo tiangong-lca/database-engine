@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
-lastReviewedNote: "Reviewed for Issue #552: exact-local regeneration has no drift, and generated workspace/type ownership remains unchanged."
+lastReviewedCommit: 6e1057511dde93f2289a753cc6561edf73c1486f
+lastReviewedNote: "Reviewed for Issue #557: Auth email templates are outside the generated schema workspace, whose ownership and refresh behavior are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
