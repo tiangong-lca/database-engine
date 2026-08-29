@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."portal_search_v1"("p_kind" "text", "p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor" "text", "p_limit" integer) IS 'Validates and normalizes public Search, routing only one-code-point unfiltered relevance to the narrow character pre-limit kernel.';

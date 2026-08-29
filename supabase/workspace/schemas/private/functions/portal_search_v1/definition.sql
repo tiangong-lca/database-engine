@@ -58,17 +58,32 @@ begin
     end if;
   end if;
 
-  v_kernel := private.catalog_portal_search_v1_impl(
-    p_kind,
-    v_query,
-    v_filters,
-    v_sort,
-    v_cursor_rank,
-    v_cursor_id,
-    v_cursor_version,
-    v_limit,
-    v_fingerprint
-  );
+  if pg_catalog.char_length(v_query) = 1
+     and v_filters = '{}'::jsonb
+     and v_sort = 'relevance' then
+    v_kernel := private.catalog_portal_single_character_search_v1_impl(
+      p_kind,
+      v_query,
+      v_cursor_rank,
+      v_cursor_id,
+      v_cursor_version,
+      v_limit,
+      v_fingerprint
+    );
+  else
+    v_kernel := private.catalog_portal_search_v1_impl(
+      p_kind,
+      v_query,
+      v_filters,
+      v_sort,
+      v_cursor_rank,
+      v_cursor_id,
+      v_cursor_version,
+      v_limit,
+      v_fingerprint
+    );
+  end if;
+
   v_next_cursor_payload := nullif(
     v_kernel -> 'nextCursorPayload',
     'null'::jsonb

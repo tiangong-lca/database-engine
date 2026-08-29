@@ -5,7 +5,22 @@ CREATE OR REPLACE FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "row_security" TO 'on'
     AS $_$
+declare
+  v_literal text;
 begin
+  if pg_catalog.char_length(p_like_pattern) = 3
+     and pg_catalog.left(p_like_pattern, 1) = '%'
+     and pg_catalog.right(p_like_pattern, 1) = '%' then
+    v_literal := pg_catalog.substr(p_like_pattern, 2, 1);
+    return query
+    select candidate.id,
+      candidate.version
+    from private.catalog_portal_flow_single_character_versions_v1(
+      v_literal
+    ) as candidate;
+    return;
+  end if;
+
   return query execute pg_catalog.format($sql$
     select projection.id,
       projection.version

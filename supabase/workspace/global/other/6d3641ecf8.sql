@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."catalog_portal_process_single_character_versions_v1"("p_literal" "text") IS 'Parallel sequential Process projection scan for one literal code point; index paths are disabled only inside this helper.';

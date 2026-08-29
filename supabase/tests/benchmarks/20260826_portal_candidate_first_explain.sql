@@ -1283,6 +1283,11 @@ begin
     raise exception 'representative Flow facet reconcile parity failed';
   end if;
 
+  if (select count(*) from private.portal_catalog_character_rows_v1) <>
+       (select count(*) from private.portal_catalog_search_rows_v1) then
+    raise exception 'representative character projection parity failed';
+  end if;
+
   insert into pg_temp.portal_benchmark_fence_metrics values (
     'facet_reconcile_fence_work',
     1000 * extract(epoch from pg_catalog.clock_timestamp() - v_started)
@@ -1312,6 +1317,9 @@ select pg_catalog.jsonb_build_object(
   ),
   'facet_projection_rows', (
     select count(*) from private.portal_catalog_facet_rows_v1
+  ),
+  'character_projection_rows', (
+    select count(*) from private.portal_catalog_character_rows_v1
   ),
   'process_latest_cards', (
     select count(distinct id)
@@ -1368,6 +1376,18 @@ select pg_catalog.jsonb_build_object(
   ),
   'facet_projection_latest_index_bytes', pg_catalog.pg_relation_size(
     'private.portal_catalog_facet_rows_latest_v1_idx'
+  ),
+  'character_projection_total_bytes', pg_catalog.pg_total_relation_size(
+    'private.portal_catalog_character_rows_v1'
+  ),
+  'character_projection_heap_bytes', pg_catalog.pg_relation_size(
+    'private.portal_catalog_character_rows_v1'
+  ),
+  'character_projection_pkey_bytes', pg_catalog.pg_relation_size(
+    'private.portal_catalog_character_rows_v1_pkey'
+  ),
+  'character_projection_latest_index_bytes', pg_catalog.pg_relation_size(
+    'private.portal_catalog_character_rows_latest_v1_idx'
   ),
   'database_bytes_before_fixture', pg_catalog.current_setting(
     'portal.benchmark_database_bytes_before'
@@ -2967,6 +2987,9 @@ begin
       'process_no_hit', 'process', 'portalbench-no-hit-531'
     );
     perform pg_temp.record_portal_search_timing(
+      'process_single_character', 'process', 'p'
+    );
+    perform pg_temp.record_portal_search_timing(
       'process_identifier',
       'process',
       pg_temp.portal_bench_uuid('process', 1)::text
@@ -2987,6 +3010,9 @@ begin
     );
     perform pg_temp.record_portal_search_timing(
       'flow_no_hit', 'flow', 'portalbench-no-hit-531'
+    );
+    perform pg_temp.record_portal_search_timing(
+      'flow_single_character', 'flow', 'p'
     );
     perform pg_temp.record_portal_search_timing(
       'flow_identifier',
@@ -3718,9 +3744,11 @@ order by label;
 with expected(label) as (
   values
     ('process_exact'), ('process_common'), ('process_no_hit'),
+    ('process_single_character'),
     ('process_context_search_50'),
     ('process_identifier'), ('process_empty'),
     ('flow_exact'), ('flow_common'), ('flow_no_hit'),
+    ('flow_single_character'),
     ('flow_context_search_50'),
     ('flow_identifier'), ('flow_empty'),
     ('process_filtered_broad'), ('process_filtered_selective'),
