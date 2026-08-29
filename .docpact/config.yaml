@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-29"
-lastReviewedCommit: "ab87cb5da02b978b119cd983683649a10a05ab8a"
-lastReviewedNote: "Reviewed for Issue #543: 278 migrations, history-unique Portal CAS selection, duplicate-pressure evidence, 13 generated modules, and retained sitemap recovery."
+lastReviewedCommit: "e39fdf422fcf109a16bc8e52bba59538092c521c"
+lastReviewedNote: "Reviewed for Issue #552: the Supabase CLI pin update changes no documentation routing, coverage, or ownership rule."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

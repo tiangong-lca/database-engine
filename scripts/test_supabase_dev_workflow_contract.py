@@ -57,6 +57,15 @@ def main() -> int:
     }
     failures = [label for label, token in forbidden.items() if token in lowered]
 
+    supabase_cli_versions = re.findall(
+        r"uses: supabase/setup-cli@v2\s+with:\s+version:\s*([^\s#]+)", text
+    )
+    if supabase_cli_versions != ["2.116.0"] * 3:
+        failures.append(
+            "all three local, persistent-Dev, and Preview Supabase CLI pins "
+            f"must be 2.116.0, found {supabase_cli_versions or 'none'}"
+        )
+
     expected_head = resolve_migration_head(MIGRATIONS)
     if re.search(r'EXPECTED_MIGRATION_HEAD:\s*["\']?\d{14}', text):
         failures.append("migration head must not be pinned manually")
@@ -155,7 +164,7 @@ def main() -> int:
         "Supabase Preview runtime verification requires SUPABASE_ACCESS_TOKEN, SUPABASE_MAIN_PROJECT_ID, and SUPABASE_DEV_PROJECT_ID",
         "exit 1",
         "uses: supabase/setup-cli@v2",
-        "version: 2.98.0",
+        "version: 2.116.0",
         "Wait for exact Supabase Preview check",
         "check_name=Supabase%20Preview&filter=latest",
         '.name == "Supabase Preview"',

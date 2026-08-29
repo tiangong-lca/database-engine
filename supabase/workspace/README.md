@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: ab87cb5da02b978b119cd983683649a10a05ab8a
-lastReviewedNote: "Reviewed for the 278-migration Issue #543 history-unique CAS example and summary-isolated exact index path; generated workspace/type ownership remains unchanged."
+lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
+lastReviewedNote: "Reviewed for Issue #552: exact-local regeneration has no drift, and generated workspace/type ownership remains unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

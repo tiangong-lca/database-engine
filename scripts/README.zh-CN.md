@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: ab87cb5da02b978b119cd983683649a10a05ab8a
-lastReviewedNote: "已复核 Issue #543：278-file recovery/benchmark、历史唯一 CAS 压力门、summary-isolated index 证据、固定 sitemap shards 与 13-module Portal 生成均为当前状态。"
+lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
+lastReviewedNote: "已为 Issue #552 复核：workflow 合同现在要求三个 job 使用同一 Supabase CLI 版本；脚本命令面不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

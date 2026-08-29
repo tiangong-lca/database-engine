@@ -20,9 +20,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-27
-lastReviewedCommit: 712558e
-lastReviewedNote: "已为 Issue #539 的有界且相互独立的 Hybrid/sitemap Preview 探测复核；PR、持久化 Dev、生产和跨仓修改边界均保持不变。"
+lastReviewedAt: 2026-08-29
+lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
+lastReviewedNote: "已为 Issue #552 复核：Supabase CLI 重启修复不改变 PR、持久化 Dev、生产或跨仓修改边界。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
