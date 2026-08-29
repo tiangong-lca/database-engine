@@ -13,11 +13,11 @@ begin
      and pg_catalog.right(p_like_pattern, 1) = '%' then
     v_literal := pg_catalog.substr(p_like_pattern, 2, 1);
     return query
-    select projection.id,
-      projection.version
-    from private.portal_catalog_search_rows_v1 as projection
-    where projection.dataset_kind = 'process'
-      and pg_catalog.strpos(projection.document, v_literal) > 0;
+    select candidate.id,
+      candidate.version
+    from private.catalog_portal_process_single_character_versions_v1(
+      v_literal
+    ) as candidate;
     return;
   end if;
 

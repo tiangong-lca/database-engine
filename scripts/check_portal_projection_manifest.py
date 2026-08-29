@@ -444,6 +444,8 @@ def main() -> int:
             "e36c34a1fec82f769fef1c67ce4505f760025d0b2c0d4b72ed8b55e87abfd6a4",
             "private.catalog_portal_process_pattern_versions_v1",
             "private.catalog_portal_flow_pattern_versions_v1",
+            "private.catalog_portal_process_single_character_versions_v1",
+            "private.catalog_portal_flow_single_character_versions_v1",
             "char_length(p_like_pattern) = 3",
             "pg_catalog.strpos",
             "return query execute pg_catalog.format",
@@ -472,6 +474,18 @@ def main() -> int:
             if len(helper_pattern.findall(character_sql)) != 1:
                 violations.append(
                     f"{SINGLE_CHARACTER_SEARCH_NAME}: expected one {helper} replacement"
+                )
+        for helper in (
+            "private.catalog_portal_process_single_character_versions_v1",
+            "private.catalog_portal_flow_single_character_versions_v1",
+        ):
+            helper_pattern = re.compile(
+                rf"create\s+function\s+{re.escape(helper)}\s*\(",
+                flags=re.IGNORECASE,
+            )
+            if len(helper_pattern.findall(character_sql)) != 1:
+                violations.append(
+                    f"{SINGLE_CHARACTER_SEARCH_NAME}: expected one new {helper}"
                 )
         if re.search(
             r"\b(?:create\s+(?:unlogged\s+)?table|create\s+(?:unique\s+)?index|"

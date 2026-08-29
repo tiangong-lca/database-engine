@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_like_pattern" "text") IS 'Returns Flow projection versions through the fixed literal-LIKE template; an unescaped one-code-point substring uses the parallel sequential helper to avoid TokenBigram false negatives.';

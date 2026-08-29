@@ -48,6 +48,12 @@ begin
        '114236b32b7a8a813f222ea301be9dd92529aba1eaf565301b3ed533d94e2115'
      or v_flow_sha256 <>
        'e36c34a1fec82f769fef1c67ce4505f760025d0b2c0d4b72ed8b55e87abfd6a4'
+     or pg_catalog.to_regprocedure(
+       'private.catalog_portal_process_single_character_versions_v1(text)'
+     ) is not null
+     or pg_catalog.to_regprocedure(
+       'private.catalog_portal_flow_single_character_versions_v1(text)'
+     ) is not null
      or (
        select not relation.relrowsecurity
          or not relation.relforcerowsecurity
@@ -88,6 +94,65 @@ grant portal_public_executor to postgres;
 grant create on schema private to portal_public_executor;
 set role portal_public_executor;
 
+create function private.catalog_portal_process_single_character_versions_v1(
+  p_literal text
+)
+returns table(id uuid, version text)
+language sql
+stable
+parallel restricted
+security definer
+set search_path = ''
+set statement_timeout = '8s'
+set enable_indexscan = 'off'
+set enable_indexonlyscan = 'off'
+set enable_bitmapscan = 'off'
+set max_parallel_workers_per_gather = '4'
+set min_parallel_table_scan_size = '0'
+set parallel_setup_cost = '0'
+set parallel_tuple_cost = '0'
+set row_security = 'on'
+as $function$
+  select projection.id,
+    projection.version
+  from private.portal_catalog_search_rows_v1 as projection
+  where projection.dataset_kind = 'process'
+    and pg_catalog.strpos(projection.document, p_literal) > 0
+$function$;
+
+create function private.catalog_portal_flow_single_character_versions_v1(
+  p_literal text
+)
+returns table(id uuid, version text)
+language sql
+stable
+parallel restricted
+security definer
+set search_path = ''
+set statement_timeout = '8s'
+set enable_indexscan = 'off'
+set enable_indexonlyscan = 'off'
+set enable_bitmapscan = 'off'
+set max_parallel_workers_per_gather = '4'
+set min_parallel_table_scan_size = '0'
+set parallel_setup_cost = '0'
+set parallel_tuple_cost = '0'
+set row_security = 'on'
+as $function$
+  select projection.id,
+    projection.version
+  from private.portal_catalog_search_rows_v1 as projection
+  where projection.dataset_kind = 'flow'
+    and pg_catalog.strpos(projection.document, p_literal) > 0
+$function$;
+
+revoke all on function
+  private.catalog_portal_process_single_character_versions_v1(text)
+from public, anon, authenticated, service_role, api_internal_executor;
+revoke all on function
+  private.catalog_portal_flow_single_character_versions_v1(text)
+from public, anon, authenticated, service_role, api_internal_executor;
+
 create or replace function private.catalog_portal_process_pattern_versions_v1(
   p_like_pattern text
 )
@@ -109,11 +174,11 @@ begin
      and pg_catalog.right(p_like_pattern, 1) = '%' then
     v_literal := pg_catalog.substr(p_like_pattern, 2, 1);
     return query
-    select projection.id,
-      projection.version
-    from private.portal_catalog_search_rows_v1 as projection
-    where projection.dataset_kind = 'process'
-      and pg_catalog.strpos(projection.document, v_literal) > 0;
+    select candidate.id,
+      candidate.version
+    from private.catalog_portal_process_single_character_versions_v1(
+      v_literal
+    ) as candidate;
     return;
   end if;
 
@@ -148,11 +213,11 @@ begin
      and pg_catalog.right(p_like_pattern, 1) = '%' then
     v_literal := pg_catalog.substr(p_like_pattern, 2, 1);
     return query
-    select projection.id,
-      projection.version
-    from private.portal_catalog_search_rows_v1 as projection
-    where projection.dataset_kind = 'flow'
-      and pg_catalog.strpos(projection.document, v_literal) > 0;
+    select candidate.id,
+      candidate.version
+    from private.catalog_portal_flow_single_character_versions_v1(
+      v_literal
+    ) as candidate;
     return;
   end if;
 
@@ -167,9 +232,15 @@ end
 $function$;
 
 comment on function private.catalog_portal_process_pattern_versions_v1(text) is
-  'Returns Process projection versions through the fixed literal-LIKE template; an unescaped one-code-point substring uses strpos to avoid TokenBigram false negatives.';
+  'Returns Process projection versions through the fixed literal-LIKE template; an unescaped one-code-point substring uses the parallel sequential helper to avoid TokenBigram false negatives.';
 comment on function private.catalog_portal_flow_pattern_versions_v1(text) is
-  'Returns Flow projection versions through the fixed literal-LIKE template; an unescaped one-code-point substring uses strpos to avoid TokenBigram false negatives.';
+  'Returns Flow projection versions through the fixed literal-LIKE template; an unescaped one-code-point substring uses the parallel sequential helper to avoid TokenBigram false negatives.';
+comment on function
+  private.catalog_portal_process_single_character_versions_v1(text) is
+  'Parallel sequential Process projection scan for one literal code point; index paths are disabled only inside this helper.';
+comment on function
+  private.catalog_portal_flow_single_character_versions_v1(text) is
+  'Parallel sequential Flow projection scan for one literal code point; index paths are disabled only inside this helper.';
 
 reset role;
 revoke create on schema private from portal_public_executor;
@@ -195,10 +266,62 @@ begin
            'row_security=on'
          ]::text[]
          and routine.prosrc ~ 'char_length\(p_like_pattern\) = 3'
-         and routine.prosrc ~ 'pg_catalog.strpos'
+         and routine.prosrc ~ 'single_character_versions_v1'
          and routine.prosrc ~ 'return query execute pg_catalog.format'
          and routine.prosrc !~ '%I'
      ) <> 2
+     or (
+       select count(*)
+       from pg_catalog.pg_proc as routine
+       join pg_catalog.pg_language as language
+         on language.oid = routine.prolang
+       where routine.oid in (
+           'private.catalog_portal_process_single_character_versions_v1(text)'::regprocedure,
+           'private.catalog_portal_flow_single_character_versions_v1(text)'::regprocedure
+         )
+         and routine.proowner = 'portal_public_executor'::regrole
+         and language.lanname = 'sql'
+         and routine.prosecdef
+         and routine.provolatile = 's'
+         and routine.proparallel = 'r'
+         and coalesce(routine.proconfig, '{}'::text[]) @> array[
+           'search_path=""',
+           'statement_timeout=8s',
+           'enable_indexscan=off',
+           'enable_indexonlyscan=off',
+           'enable_bitmapscan=off',
+           'max_parallel_workers_per_gather=4',
+           'min_parallel_table_scan_size=0',
+           'parallel_setup_cost=0',
+           'parallel_tuple_cost=0',
+           'row_security=on'
+         ]::text[]
+         and routine.prosrc ~ 'pg_catalog.strpos'
+     ) <> 2
+     or exists (
+       select 1
+       from (
+         values
+           ('anon'::text),
+           ('authenticated'),
+           ('service_role'),
+           ('api_internal_executor')
+       ) as caller(role_name)
+       cross join (
+         values
+           (
+             'private.catalog_portal_process_single_character_versions_v1(text)'::regprocedure
+           ),
+           (
+             'private.catalog_portal_flow_single_character_versions_v1(text)'::regprocedure
+           )
+       ) as helper(routine_oid)
+       where pg_catalog.has_function_privilege(
+         caller.role_name,
+         helper.routine_oid,
+         'EXECUTE'
+       )
+     )
      or pg_catalog.has_function_privilege(
        'anon',
        'private.catalog_portal_process_pattern_versions_v1(text)',

@@ -522,11 +522,14 @@ policy, CHECK, owner, RLS-flag, assertion-hash, candidate-function, or summary-
 function prerequisite drift aborts atomically. Recovery is the unchanged
 migration retry; do not hand-edit the policy or weaken the table constraint.
 
-`20260829131000_repair_portal_single_character_literal_search.sql` replaces
-only the two private Process/Flow pattern helpers after the current PGroonga
+`20260829131000_repair_portal_single_character_literal_search.sql` adds two
+ACL-closed parallel sequential helpers and replaces only the two private
+Process/Flow pattern helpers after the current PGroonga
 TokenBigram LIKE path demonstrated a one-code-point false negative. It retains
 the fixed `%L` multi-code-point template and adds one exact `strpos` branch for
-the `%` + one unescaped code point + `%` shape. Escaped wildcard/backslash
+the `%` + one unescaped code point + `%` shape. Index, index-only, and bitmap
+paths are disabled only inside those narrow helpers so their scans can use up
+to four parallel workers. Escaped wildcard/backslash
 patterns, candidate/latest semantics, wrappers, timeouts, ACL/RLS, indexes,
 relations, Triggers, and writers are unchanged. The migration requires exact
 predecessor helper hashes plus the `130000` policy/domain state and rolls back

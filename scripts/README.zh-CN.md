@@ -124,7 +124,8 @@ forced-RLS exact-CAS 自然计划；除非 CAS 等值位于
 
 完整 candidate benchmark 还会记录 20-sample
 `process_single_character` / `flow_single_character` label；它们验证一个未转义
-code point 的精确 `strpos` fallback，并要求 Search p95 <2 秒。所有多 code point 与
+code point 的 ACL-closed、index-disabled parallel `strpos` fallback，并要求 Search
+p95 <2 秒。所有多 code point 与
 已转义 literal 仍保留既有 PGroonga 模板。
 
 `PORTAL_PROJECTION_BENCHMARK_PROFILE` 用于选择 fail-closed 命名 profile：

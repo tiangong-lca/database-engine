@@ -146,7 +146,8 @@ unless the CAS equality is in `portal_catalog_search_flow_cas_v1_idx`'s
 
 The full candidate benchmark also records 20-sample
 `process_single_character` and `flow_single_character` labels. They exercise
-the exact `strpos` fallback for one unescaped code point and must keep Search
+the ACL-closed, index-disabled parallel `strpos` fallback for one unescaped
+code point and must keep Search
 p95 below two seconds; all multi-code-point and escaped literal labels retain
 the existing PGroonga-backed template.
 

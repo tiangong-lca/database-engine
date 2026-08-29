@@ -139,9 +139,10 @@ the current TokenBigram projection indexes, one unescaped code point inside
 `%...%` can produce no index candidate, so recheck cannot recover the true SQL
 match. The two private Process/Flow pattern helpers therefore retain their
 fixed `%L` multi-code-point LIKE templates but route only the exact
-three-code-point pattern shape (`%`, one literal code point, `%`) through
-`strpos(document,literal)`. Escaped `%`, `_`, and backslash stay on their
-existing literal-LIKE path. The branch changes no public wrapper, ranking,
+three-code-point pattern shape (`%`, one literal code point, `%`) through two
+ACL-closed helpers that disable index/bitmap paths only inside their call and
+run `strpos(document,literal)` with up to four parallel workers. Escaped `%`,
+`_`, and backslash stay on their existing literal-LIKE path. The branch changes no public wrapper, ranking,
 latest-version recheck, RLS, relation, index, Trigger, or writer; representative
 Process and Flow one-code-point p95 remain under the existing Search budget.
 

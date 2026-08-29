@@ -360,14 +360,59 @@ select extensions.is(
       ]::text[]
       and pg_catalog.strpos(routine.prosrc, 'return query execute pg_catalog.format') > 0
       and routine.prosrc ~ 'char_length\(p_like_pattern\) = 3'
-      and routine.prosrc ~ 'pg_catalog.strpos'
+      and routine.prosrc ~ 'single_character_versions_v1'
       and pg_catalog.strpos(routine.prosrc, '%L') > 0
       and pg_catalog.strpos(routine.prosrc, '%I') = 0
       and coalesce(routine.proacl::text, '')
         = '{portal_public_executor=X/portal_public_executor}'
   ),
   2::bigint,
-  'two owner-only helpers retain fixed literal-LIKE templates plus one-code-point correctness branches'
+  'two owner-only helpers retain fixed literal-LIKE templates plus isolated one-code-point branches'
+);
+
+select extensions.is(
+  (
+    select count(*)
+    from pg_catalog.pg_proc as routine
+    join pg_catalog.pg_language as language
+      on language.oid = routine.prolang
+    where routine.oid in (
+        'private.catalog_portal_process_single_character_versions_v1(text)'::regprocedure,
+        'private.catalog_portal_flow_single_character_versions_v1(text)'::regprocedure
+      )
+      and routine.proowner = 'portal_public_executor'::regrole
+      and language.lanname = 'sql'
+      and routine.prosecdef
+      and routine.provolatile = 's'
+      and routine.proparallel = 'r'
+      and routine.proconfig @> array[
+        'search_path=""',
+        'statement_timeout=8s',
+        'enable_indexscan=off',
+        'enable_indexonlyscan=off',
+        'enable_bitmapscan=off',
+        'max_parallel_workers_per_gather=4',
+        'min_parallel_table_scan_size=0',
+        'parallel_setup_cost=0',
+        'parallel_tuple_cost=0',
+        'row_security=on'
+      ]::text[]
+      and routine.prosrc ~ 'pg_catalog.strpos'
+      and not pg_catalog.has_function_privilege(
+        'anon', routine.oid, 'EXECUTE'
+      )
+      and not pg_catalog.has_function_privilege(
+        'authenticated', routine.oid, 'EXECUTE'
+      )
+      and not pg_catalog.has_function_privilege(
+        'service_role', routine.oid, 'EXECUTE'
+      )
+      and not pg_catalog.has_function_privilege(
+        'api_internal_executor', routine.oid, 'EXECUTE'
+      )
+  ),
+  2::bigint,
+  'one-code-point helpers force only their private scans onto bounded parallel sequential plans'
 );
 
 select extensions.ok(

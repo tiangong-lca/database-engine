@@ -26577,11 +26577,11 @@ begin
      and pg_catalog.right(p_like_pattern, 1) = '%' then
     v_literal := pg_catalog.substr(p_like_pattern, 2, 1);
     return query
-    select projection.id,
-      projection.version
-    from private.portal_catalog_search_rows_v1 as projection
-    where projection.dataset_kind = 'flow'
-      and pg_catalog.strpos(projection.document, v_literal) > 0;
+    select candidate.id,
+      candidate.version
+    from private.catalog_portal_flow_single_character_versions_v1(
+      v_literal
+    ) as candidate;
     return;
   end if;
 
@@ -26599,7 +26599,35 @@ $_$;
 ALTER FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_like_pattern" "text") OWNER TO "portal_public_executor";
 
 
-COMMENT ON FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_like_pattern" "text") IS 'Returns Flow projection versions through the fixed literal-LIKE template; an unescaped one-code-point substring uses strpos to avoid TokenBigram false negatives.';
+COMMENT ON FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_like_pattern" "text") IS 'Returns Flow projection versions through the fixed literal-LIKE template; an unescaped one-code-point substring uses the parallel sequential helper to avoid TokenBigram false negatives.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."catalog_portal_flow_single_character_versions_v1"("p_literal" "text") RETURNS TABLE("id" "uuid", "version" "text")
+    LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "enable_indexscan" TO 'off'
+    SET "enable_indexonlyscan" TO 'off'
+    SET "enable_bitmapscan" TO 'off'
+    SET "max_parallel_workers_per_gather" TO '4'
+    SET "min_parallel_table_scan_size" TO '0'
+    SET "parallel_setup_cost" TO '0'
+    SET "parallel_tuple_cost" TO '0'
+    SET "row_security" TO 'on'
+    AS $$
+  select projection.id,
+    projection.version
+  from private.portal_catalog_search_rows_v1 as projection
+  where projection.dataset_kind = 'flow'
+    and pg_catalog.strpos(projection.document, p_literal) > 0
+$$;
+
+
+ALTER FUNCTION "private"."catalog_portal_flow_single_character_versions_v1"("p_literal" "text") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."catalog_portal_flow_single_character_versions_v1"("p_literal" "text") IS 'Parallel sequential Flow projection scan for one literal code point; index paths are disabled only inside this helper.';
 
 
 
@@ -26668,11 +26696,11 @@ begin
      and pg_catalog.right(p_like_pattern, 1) = '%' then
     v_literal := pg_catalog.substr(p_like_pattern, 2, 1);
     return query
-    select projection.id,
-      projection.version
-    from private.portal_catalog_search_rows_v1 as projection
-    where projection.dataset_kind = 'process'
-      and pg_catalog.strpos(projection.document, v_literal) > 0;
+    select candidate.id,
+      candidate.version
+    from private.catalog_portal_process_single_character_versions_v1(
+      v_literal
+    ) as candidate;
     return;
   end if;
 
@@ -26690,7 +26718,35 @@ $_$;
 ALTER FUNCTION "private"."catalog_portal_process_pattern_versions_v1"("p_like_pattern" "text") OWNER TO "portal_public_executor";
 
 
-COMMENT ON FUNCTION "private"."catalog_portal_process_pattern_versions_v1"("p_like_pattern" "text") IS 'Returns Process projection versions through the fixed literal-LIKE template; an unescaped one-code-point substring uses strpos to avoid TokenBigram false negatives.';
+COMMENT ON FUNCTION "private"."catalog_portal_process_pattern_versions_v1"("p_like_pattern" "text") IS 'Returns Process projection versions through the fixed literal-LIKE template; an unescaped one-code-point substring uses the parallel sequential helper to avoid TokenBigram false negatives.';
+
+
+
+CREATE OR REPLACE FUNCTION "private"."catalog_portal_process_single_character_versions_v1"("p_literal" "text") RETURNS TABLE("id" "uuid", "version" "text")
+    LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
+    SET "search_path" TO ''
+    SET "statement_timeout" TO '8s'
+    SET "enable_indexscan" TO 'off'
+    SET "enable_indexonlyscan" TO 'off'
+    SET "enable_bitmapscan" TO 'off'
+    SET "max_parallel_workers_per_gather" TO '4'
+    SET "min_parallel_table_scan_size" TO '0'
+    SET "parallel_setup_cost" TO '0'
+    SET "parallel_tuple_cost" TO '0'
+    SET "row_security" TO 'on'
+    AS $$
+  select projection.id,
+    projection.version
+  from private.portal_catalog_search_rows_v1 as projection
+  where projection.dataset_kind = 'process'
+    and pg_catalog.strpos(projection.document, p_literal) > 0
+$$;
+
+
+ALTER FUNCTION "private"."catalog_portal_process_single_character_versions_v1"("p_literal" "text") OWNER TO "portal_public_executor";
+
+
+COMMENT ON FUNCTION "private"."catalog_portal_process_single_character_versions_v1"("p_literal" "text") IS 'Parallel sequential Process projection scan for one literal code point; index paths are disabled only inside this helper.';
 
 
 
@@ -71859,12 +71915,20 @@ REVOKE ALL ON FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_li
 
 
 
+REVOKE ALL ON FUNCTION "private"."catalog_portal_flow_single_character_versions_v1"("p_literal" "text") FROM PUBLIC;
+
+
+
 REVOKE ALL ON FUNCTION "private"."catalog_portal_hybrid_pattern_matches_v1"("p_kind" "text", "p_query_terms" "text"[]) FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."catalog_portal_hybrid_pattern_matches_v1"("p_kind" "text", "p_query_terms" "text"[]) TO "api_internal_executor";
 
 
 
 REVOKE ALL ON FUNCTION "private"."catalog_portal_process_pattern_versions_v1"("p_like_pattern" "text") FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."catalog_portal_process_single_character_versions_v1"("p_literal" "text") FROM PUBLIC;
 
 
 
