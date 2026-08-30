@@ -320,7 +320,7 @@ select throws_ok(
   'select api.oauth_client_pre_request()',
   '42501',
   'OAuth client is not authorized for this API route',
-  'pre-request hook fails closed for an unmapped relation write'
+  'pre-request hook fails closed for an ungranted relation write'
 );
 reset role;
 

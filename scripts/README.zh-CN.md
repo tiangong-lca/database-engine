@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-31
-lastReviewedCommit: 595d4d6
-lastReviewedNote: "为 Issue #566 复核：schema/type 生成继续使用既有脚本合同，不改变 helper 命令或稳定 overlay 规则。"
+lastReviewedCommit: 6e00affc589ba6af3af80c4fb43a2be13ea12e83
+lastReviewedNote: "为 Issue #566 复核：workflow contract 现要求 actor-command pgTAP 套件及 migration head 20260831120000；helper 命令与稳定 overlay 规则不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

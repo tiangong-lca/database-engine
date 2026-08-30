@@ -23,8 +23,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-31
-lastReviewedCommit: 595d4d6
-lastReviewedNote: "Reviewed for Issue #566: the OAuth database migration and added local-contract test do not change branch bindings, deployment ownership, or promotion procedure."
+lastReviewedCommit: 6e00affc589ba6af3af80c4fb43a2be13ea12e83
+lastReviewedNote: "Reviewed for Issue #566: the additive actor-command capability migration and its persistent-Dev workflow test do not change branch bindings, deployment ownership, or promotion procedure."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

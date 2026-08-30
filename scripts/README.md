@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-31
-lastReviewedCommit: 595d4d6
-lastReviewedNote: "Reviewed for Issue #566: generated schema/type refresh uses the existing script contract; no helper command or stable-overlay rule changes."
+lastReviewedCommit: 6e00affc589ba6af3af80c4fb43a2be13ea12e83
+lastReviewedNote: "Reviewed for Issue #566: the workflow contract now requires the actor-command pgTAP suite and migration head 20260831120000; helper commands and stable-overlay rules are unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

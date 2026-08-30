@@ -31,8 +31,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-31
-lastReviewedCommit: 595d4d6
-lastReviewedNote: "Reviewed for Issue #566: OAuth client authorization adds private revocation/capability state, restrictive core-table RLS, and a manifest-backed PostgREST pre-request gate without changing schema ownership."
+lastReviewedCommit: 6e00affc589ba6af3af80c4fb43a2be13ea12e83
+lastReviewedNote: "Reviewed for Issue #566: OAuth client authorization adds private revocation/capability state, restrictive relation-read RLS, narrow actor-command write capabilities, and a manifest-backed PostgREST gate without reopening raw DML."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -89,8 +89,12 @@ are never hardcoded in a generic migration.
 First-party Next sessions contain no `client_id` claim and preserve the
 existing `auth.uid()` policies. OAuth access tokens must name an enabled client
 with an explicit capability. Direct reads of the nine public entity tables add
-one `RESTRICTIVE` authenticated policy over the existing row policies. Every
-PostgREST RPC request is checked before execution by
+one `RESTRICTIVE` authenticated policy over the existing row policies. Raw
+table insert/update/delete remains ACL-closed after command cutover. The three
+actor-bound `cmd_dataset_create`, `cmd_dataset_save_draft`, and
+`cmd_dataset_delete` routes instead use `DB-CORE-WRITE-01`; other first-party
+CLI commands retain `CLI-RPC-01`. Every PostgREST relation or RPC request is
+checked before execution by
 `api.oauth_client_pre_request()`, which resolves `/rpc/<name>` through the
 exact-signature API capability manifest and rejects unknown, ambiguous,
 ungranted, or revoked routes with SQLSTATE `42501`. OAuth scopes remain OIDC

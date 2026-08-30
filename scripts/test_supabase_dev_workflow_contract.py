@@ -355,6 +355,7 @@ def main() -> int:
         "SUPABASE_MAIN_PROJECT_ID",
         "supabase db reset --no-seed",
         "supabase test db supabase/tests/20260830_oauth_client_capability_foundation.sql",
+        "supabase test db supabase/tests/20260831_oauth_actor_command_capabilities.sql",
         "supabase test db supabase/tests/20260827_portal_sitemap_shards_v1.sql",
         '"public", "api", "graphql_public"',
         '"public", "api", "extensions"',

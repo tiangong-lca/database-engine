@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-31"
-lastReviewedCommit: "595d4d6"
-lastReviewedNote: "Reviewed for Issue #566: routing and proof now cover OAuth client registry, capability RLS, PostgREST pre-request enforcement, and revocation transport checks."
+lastReviewedCommit: "6e00affc589ba6af3af80c4fb43a2be13ea12e83"
+lastReviewedNote: "Reviewed for Issue #566: routing and proof cover OAuth client registry, relation-read and actor-command capabilities, complete PostgREST manifest enforcement, and revocation transport checks."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-31
-lastReviewedCommit: 595d4d6
-lastReviewedNote: "Reviewed for Issue #566: OAuth schema objects are ordinary exact-local generated output and do not change workspace ownership, refresh, or stable-overlay rules."
+lastReviewedCommit: 6e00affc589ba6af3af80c4fb43a2be13ea12e83
+lastReviewedNote: "Reviewed for Issue #566: the actor-command migration changes capability data only; generated Data API types, workspace ownership, refresh, and stable-overlay rules are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
