@@ -180,12 +180,6 @@ comment on function private.portal_search_v1(
 ) is
   'Validates public Search; routes one-code-point searches to the character child and unfiltered Process keyword relevance to bounded key selection before card hydration.';
 
-revoke execute on function private.portal_process_rank_name_keys_v1(jsonb)
-from postgres;
-revoke execute on function private.portal_process_rank_classification_keys_v1(
-  jsonb
-) from postgres;
-
 reset role;
 revoke create on schema private from portal_public_executor;
 revoke portal_public_executor from postgres;
@@ -222,12 +216,12 @@ begin
        where routine.oid =
          'private.portal_search_v1(text,text,jsonb,text,text,integer)'::regprocedure
      ) is not false
-     or has_function_privilege(
+     or not has_function_privilege(
        'postgres',
        'private.portal_process_rank_name_keys_v1(jsonb)',
        'EXECUTE'
      )
-     or has_function_privilege(
+     or not has_function_privilege(
        'postgres',
        'private.portal_process_rank_classification_keys_v1(jsonb)',
        'EXECUTE'

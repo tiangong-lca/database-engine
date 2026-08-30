@@ -1,7 +1,7 @@
 ---
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 2425798
-lastReviewedNote: "Reviewed for Issues #551/#552: the 296-file tree retains exact-version recovery, forced-RLS CAS indexability, and the sharded narrow character projection rollout with bounded writer ownership."
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: be1f915
+lastReviewedNote: "Reviewed for Issue #563: the 299-file tree adds a dormant-helper/concurrent-index/atomic-cutover sequence for bounded Process keyword hydration with explicit writer and ANALYZE recovery edges."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -15,6 +15,7 @@ whenToUse:
   - when validating retry safety for the Portal projection rollout
   - when an Issue 533 Portal catalog-summary eligibility index stops before its guard or façade migration completes
   - when an Issue 539 Portal sitemap exact-version child rollout stops before its public façade migration completes
+  - when the Issue 563 Process keyword expression GIN is invalid or its cutover is unrecorded
 whenToUpdate:
   - when the Portal projection migration sequence or recovery test changes
 checkPaths:
@@ -51,6 +52,11 @@ checkPaths:
   - supabase/tests/20260827_portal_sitemap_shards_v1.sql
   - supabase/tests/upgrade/20260827_portal_sitemap_preview_winner_fixture.sql
   - supabase/tests/benchmarks/20260827_portal_sitemap_shards_cardinality.sql
+  - supabase/migrations/20260830134000_portal_process_keyword_rank_helpers.sql
+  - supabase/migrations/20260830134001_portal_process_keyword_rank_index.sql
+  - supabase/migrations/20260830134002_portal_process_keyword_rank_cutover.sql
+  - supabase/tests/20260826_portal_candidate_first_search.sql
+  - supabase/tests/benchmarks/20260826_portal_candidate_first_explain.sql
 related:
   - ../../AGENTS.md
   - repo-validation.md
@@ -544,6 +550,33 @@ disable the Trigger, rebuild PGroonga, or add a unigram index. A missing shard
 is repaired by replaying only its unrecorded migration; an uncertain recorded
 cutover requires catalog/ledger inspection before any retry.
 
+`20260830134000_portal_process_keyword_rank_helpers.sql` installs a dormant,
+manifest-guarded Process key selector and bounded hydration kernel. It changes
+no reader, row, relation, trigger, or public wrapper. The two immutable index
+expressions grant execution only to the internal projection writer and
+`postgres`, because ordinary Process projection maintenance and database
+`ANALYZE` must both evaluate them.
+
+`20260830134001_portal_process_keyword_rank_index.sql` contains one standalone
+`CREATE INDEX CONCURRENTLY` for
+`portal_catalog_search_process_exact_rank_v1_gin`. If it fails and the ledger
+row is absent, inspect `pg_index.indisvalid/indisready/indislive` and the exact
+`pg_get_indexdef`. Drop only that exact invalid/unrecorded index, then retry the
+unchanged migration; never drop a valid recorded index or rebuild the parent
+projection. The helper migration is a safe dormant state while the index is
+absent.
+
+`20260830134002_portal_process_keyword_rank_cutover.sql` first proves the
+helper digest, exact live index, maintenance ACLs, and predecessor coordinator
+hash, then atomically replaces only `private.portal_search_v1`. It dispatches
+only multi-code-point, non-UUID, empty-filter Process relevance requests and
+preserves the one-code-point and general branches verbatim. A guard or DDL
+failure rolls back the coordinator replacement. If the function bytes changed
+but the ledger row is absent, do not guess whether COMMIT occurred: record the
+live function SHA, helper assertion, index catalog/ACLs, and migration ledger,
+then escalate for reviewed reconciliation. Do not hand-edit the digest,
+function, grants, or migration history.
+
 ## Uncertain expand commit
 
 The expand migration is transactional, so ordinary SQL failure leaves no Issue
@@ -640,7 +673,7 @@ Issue 531 Supabase project. It resets that local project and must never target a
 shared checkout, Preview, persistent Dev, or production.
 
 Formal recovery evidence requires clean HEAD, the reviewed Supabase CLI
-`2.109.1`, and byte equality plus one aggregate SHA-256 across all 296 migration
+`2.109.1`, and byte equality plus one aggregate SHA-256 across all 299 migration
 files in the repository and isolated project. Comparing only Issue 531 files is
 not sufficient because an earlier baseline change can alter recovery behavior.
 

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-30
-lastReviewedCommit: b624bd7
-lastReviewedNote: "合并当前 main 后为 Issue #557 复核：Auth 密码恢复邮件检查器，以及现有 296-file recovery、benchmark、CAS 和 portal projection 工具均已准确记录。"
+lastReviewedCommit: be1f915
+lastReviewedNote: "为 Issue #563 复核：299-file recovery/benchmark 工具已覆盖 Process keyword expression-GIN 上线与内部维护 ACL。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -89,7 +89,7 @@ scripts/test_search_text_array_upgrade.sh
 
 ### `test_portal_projection_upgrade_recovery.sh`
 
-在显式确认且隔离的本地 Supabase 项目中验证 Issue 531/532/539/543/551 Portal projection
+在显式确认且隔离的本地 Supabase 项目中验证 Issue 531/532/539/543/551/563 Portal projection
 上线。脚本使用真实并发连接覆盖有效更新、删除、状态失效、主键变更以及仅 embedding
 更新竞态；主动制造 card/facet reconcile 锁超时与 cutover guard 失败；证明 facet
 expand COMMIT/history 缺口、四分片幂等重试、同名 concurrent index 受控清理、Flow
@@ -102,12 +102,12 @@ facet version 集精确相等。脚本还证明已记录迁移重复执行不会
 证明 populated 且已记录的 `134101`/`134102` 状态只应用 `134103` 即可收敛。
 所需环境变量与恢复边界见
 `docs/agents/portal-projection-migration-recovery.md`。正式证据还要求干净 HEAD、
-Supabase CLI `2.109.1`，以及完整 296-file migration tree 的逐字相等和 aggregate
+Supabase CLI `2.109.1`，以及完整 299-file migration tree 的逐字相等和 aggregate
 SHA-256。
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
-在同一类显式隔离的 Issue-531/532/539/543/551 项目中，对 126,246 条既有 parent card 逐字执行七个
+在同一类显式隔离的 Issue-531/532/539/543/551/563 项目中，对 126,246 条既有 parent card 逐字执行七个
 Facet migration。每条 backfill statement 必须在 120 秒门下保留至少 2 倍余量，
 每个完整 UUID-quarter 文件必须低于 120 秒；成功 reconcile fence 必须在 5 秒内
 完成，并要求 key coverage、确定性抽样 facts 与 DTO 聚合计数精确一致。runner
@@ -118,9 +118,9 @@ history-order index、唯一 same-key trigger、shard capacity 与两个 public 
 
 ### `run_portal_projection_benchmark.sh`
 
-仅在显式确认的 Issue 531/532/539/543/551 隔离本地 Supabase 项目中运行代表性 Process/Flow
+仅在显式确认的 Issue 531/532/539/543/551/563 隔离本地 Supabase 项目中运行代表性 Process/Flow
 Search、Hybrid、Facets、写路径、fence、plan 与 ANN recall 基准。runner 会把完整
-296-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
+299-file migration tree 与仓库逐字比较，把结果写入操作员提供的新私有目录，并在运行前后
 reset 隔离数据库，避免已回滚的 HNSW 页面持续累积。环境合同与 recovery runner
 一致，另要求 `PORTAL_PROJECTION_BENCHMARK_OUTPUT_DIR`。
 
@@ -159,9 +159,13 @@ temp/disk spill。每次运行必须使用新的 mode-0700 输出目录。正式
 路径开启。代表性 Flow 基数必须自然命中其 PGroonga scan node；Process 基数较小，
 因此记录自然成本计划而不强制某个索引，迁移期 catalog guard 负责证明其 PGroonga
 索引，命名 timing 独立覆盖 Process 性能、排序和 cursor。两类 lexical probe 都
-必须满足精确 needle fixture identity 且无 spill。基准还会捕获匿名 Process/Flow
-空 Facets 与过滤 Facets 计划，要求独立空路径在固定 32-MB 工作区内零 temp/disk
-spill，测量 parent-first facet reconcile fence，并把 facet child upsert 纳入现有
+必须满足精确 needle fixture identity 且无 spill。
+当 Process 行数不少于 10,000 时，每个 profile 还要求 exact-name/classification
+探针自然命中 `portal_catalog_search_process_exact_rank_v1_gin`，记录索引字节，并把
+新增表达式索引纳入既有 Process writer delta/ratio 门。
+基准还会捕获匿名 Process/Flow 空 Facets 与过滤 Facets 计划，要求独立空路径在固定
+32-MB 工作区内零 temp/disk spill，测量 parent-first facet reconcile fence，并把
+facet child upsert 纳入现有
 writer delta/ratio 门。
 每个 profile 还会记录精确的 Flow embedding universe probe。sparse profile 必须
 自然命中窄 partial eligibility B-tree，且不得扫描宽 Flow heap；release profile
@@ -189,13 +193,18 @@ history-order index 走 index-only path，不得出现 `Sort` / `Incremental Sor
 
 ### `check_portal_projection_manifest.py`
 
-同时验证三个已提交的 Portal digest：十一函数 stored-card 闭包、两函数窄 Facet
+同时验证已提交的 Portal digest：十一函数 stored-card 闭包、两函数窄 Facet
 闭包，以及独立的 limit 后 context/decorator 闭包。它禁止后续 mutation 任一
 闭包/控制函数，校验四个 Facet 分片、reconcile/cutover，要求 context migration
 不新增 table/index/trigger，并保留 Flow eligibility index 的精确 catalog guard，
 同时不改变两个 #531 digest。它还要求 Flow geography Search follow-up 只能是
 单一 query-only kernel replacement，不得新增 table/index/trigger 或改写 writer；
 runtime 在读取该 child projection 前还必须独立验证 Facet manifest。
+
+检查器还冻结 Issue #563 的三步序列：dormant immutable rank helper、唯一 standalone
+concurrent partial expression GIN，以及仅覆盖 multi-code-point、non-UUID、无过滤 Process
+relevance 的原子 coordinator cutover。内部 writer 与 `postgres` 维护 ACL 必须准确，
+不得改动公开 wrapper/Trigger/table，后续 migration 也不得静默修改该 helper closure。
 
 它还会冻结 Issue #539 的 64-bucket exact-version child：table/PK、带
 `ON UPDATE RESTRICT` / `ON DELETE CASCADE` 的 facet exact FK、history-order index，

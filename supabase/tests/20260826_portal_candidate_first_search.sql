@@ -1831,16 +1831,17 @@ select extensions.ok(
     where index_relation.oid =
       'private.portal_catalog_search_process_exact_rank_v1_gin'::regclass
   )
-  and not pg_catalog.has_function_privilege(
-    'postgres',
-    'private.portal_process_rank_name_keys_v1(jsonb)',
-    'EXECUTE'
-  )
-  and not pg_catalog.has_function_privilege(
-    'postgres',
-    'private.portal_process_rank_classification_keys_v1(jsonb)',
-    'EXECUTE'
-  )
+  and (
+    select pg_catalog.count(*)
+    from pg_catalog.pg_proc as routine
+    cross join lateral pg_catalog.aclexplode(routine.proacl) as privilege
+    where routine.oid in (
+      'private.portal_process_rank_name_keys_v1(jsonb)'::regprocedure,
+      'private.portal_process_rank_classification_keys_v1(jsonb)'::regprocedure
+    )
+      and privilege.grantee = 'postgres'::regrole
+      and privilege.privilege_type = 'EXECUTE'
+  ) = 2
   and pg_catalog.has_function_privilege(
     'api_internal_executor',
     'private.portal_process_rank_name_keys_v1(jsonb)',
@@ -1871,7 +1872,7 @@ select extensions.ok(
     'private.catalog_portal_process_keyword_relevance_v1_impl(text,text,uuid,text,integer,text)',
     'EXECUTE'
   ),
-  'the concurrent exact-rank GIN is live with only its required internal writer execution edge'
+  'the concurrent exact-rank GIN is live with only its required writer and database-maintenance execution edges'
 );
 
 select extensions.lives_ok(

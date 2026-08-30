@@ -506,10 +506,10 @@ from public, anon, authenticated, service_role, api_internal_executor;
 revoke all on function private.assert_portal_process_keyword_rank_contract_v1()
 from public, anon, authenticated, service_role, api_internal_executor;
 
--- The projection writer must evaluate the immutable index expressions on
--- every Process card write. The next standalone migration additionally
--- builds the expression index as postgres, whose temporary grants are removed
--- by the cutover migration.
+-- The projection writer evaluates the immutable expressions on every Process
+-- card write. The postgres maintenance role also needs the same two functions
+-- for concurrent index creation and ANALYZE; neither edge is an application
+-- or browser capability.
 grant execute on function private.portal_process_rank_name_keys_v1(jsonb)
 to api_internal_executor;
 grant execute on function private.portal_process_rank_classification_keys_v1(

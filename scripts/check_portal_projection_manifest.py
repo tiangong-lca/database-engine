@@ -37,6 +37,15 @@ CHARACTER_PROJECTION_EXPAND_NAME = (
 CHARACTER_PROJECTION_CUTOVER_NAME = (
     "20260829131006_portal_character_projection_cutover.sql"
 )
+PROCESS_KEYWORD_RANK_HELPERS_NAME = (
+    "20260830134000_portal_process_keyword_rank_helpers.sql"
+)
+PROCESS_KEYWORD_RANK_INDEX_NAME = (
+    "20260830134001_portal_process_keyword_rank_index.sql"
+)
+PROCESS_KEYWORD_RANK_CUTOVER_NAME = (
+    "20260830134002_portal_process_keyword_rank_cutover.sql"
+)
 SITEMAP_LATEST_PROJECTION_NAME = (
     "20260827134101_portal_sitemap_latest_projection.sql"
 )
@@ -112,6 +121,19 @@ CARD_CONTEXT_FUNCTION_IDENTITIES = (
 CARD_CONTEXT_CONTROL_FUNCTION_IDENTITIES = (
     "private.portal_card_context_manifest_sha256_v1()",
     "private.assert_portal_card_context_contract_v1()",
+)
+PROCESS_KEYWORD_RANK_MANIFEST_SHA256 = (
+    "3dd65dc6b0dbd5ca8108d0a996610030bad1b5478d61ee9674a57580433e6bbf"
+)
+PROCESS_KEYWORD_RANK_FUNCTION_IDENTITIES = (
+    "private.portal_process_rank_name_keys_v1(jsonb)",
+    "private.portal_process_rank_classification_keys_v1(jsonb)",
+    "private.catalog_portal_process_keyword_keys_v1(text,text,uuid,text,integer)",
+    "private.catalog_portal_process_keyword_relevance_v1_impl(text,text,uuid,text,integer,text)",
+)
+PROCESS_KEYWORD_RANK_CONTROL_FUNCTION_IDENTITIES = (
+    "private.portal_process_keyword_rank_manifest_sha256_v1()",
+    "private.assert_portal_process_keyword_rank_contract_v1()",
 )
 SITEMAP_SHARD_FUNCTION_IDENTITIES = (
     "private.sync_portal_sitemap_row_v1()",
@@ -658,6 +680,164 @@ def main() -> int:
                 f"{CHARACTER_PROJECTION_CUTOVER_NAME}: public wrappers must remain byte-stable"
             )
 
+    process_rank_helpers = MIGRATIONS_DIR / PROCESS_KEYWORD_RANK_HELPERS_NAME
+    if not process_rank_helpers.is_file():
+        violations.append(
+            "missing Portal Process keyword rank helpers: "
+            f"{PROCESS_KEYWORD_RANK_HELPERS_NAME}"
+        )
+    else:
+        process_rank_helpers_sql = sql_without_comments(
+            process_rank_helpers.read_text(encoding="utf-8")
+        )
+        process_rank_helpers_lower = process_rank_helpers_sql.lower()
+        process_rank_helpers_compact = re.sub(
+            r"\s+", " ", process_rank_helpers_lower
+        )
+        required_process_rank_tokens = (
+            PROCESS_KEYWORD_RANK_MANIFEST_SHA256,
+            "portal_catalog_search_process_exact_rank_v1_gin",
+            "catalog_portal_process_pattern_versions_v1",
+            "portal_process_rank_name_keys_v1",
+            "portal_process_rank_classification_keys_v1",
+            "catalog_portal_process_keyword_keys_v1",
+            "catalog_portal_process_keyword_relevance_v1_impl",
+            "assert_portal_process_keyword_rank_contract_v1",
+            "grant execute on function private.portal_process_rank_name_keys_v1(jsonb) to api_internal_executor",
+            "grant execute on function private.portal_process_rank_name_keys_v1(jsonb) to postgres",
+            "limit p_limit + 1",
+            "set statement_timeout = '8s'",
+            "set plan_cache_mode = 'force_custom_plan'",
+            "set row_security = 'on'",
+        )
+        missing = [
+            token
+            for token in required_process_rank_tokens
+            if token not in process_rank_helpers_compact
+        ]
+        for identity in (
+            PROCESS_KEYWORD_RANK_FUNCTION_IDENTITIES
+            + PROCESS_KEYWORD_RANK_CONTROL_FUNCTION_IDENTITIES
+        ):
+            if identity not in process_rank_helpers_sql:
+                missing.append(identity)
+        if missing:
+            violations.append(
+                f"{PROCESS_KEYWORD_RANK_HELPERS_NAME}: missing helper tokens "
+                + ", ".join(missing)
+            )
+        if re.search(
+            r"^[ \t]*(?:create\s+(?:unlogged\s+)?table|"
+            r"create\s+(?:unique\s+)?index|create\s+trigger|"
+            r"alter\s+(?:table|policy)|drop\s+(?:table|index|trigger))\b",
+            process_rank_helpers_sql,
+            flags=re.IGNORECASE | re.MULTILINE,
+        ):
+            violations.append(
+                f"{PROCESS_KEYWORD_RANK_HELPERS_NAME}: dormant helper phase must not change a relation, index, trigger, policy, or writer definition"
+            )
+
+    process_rank_index = MIGRATIONS_DIR / PROCESS_KEYWORD_RANK_INDEX_NAME
+    if not process_rank_index.is_file():
+        violations.append(
+            f"missing Portal Process keyword rank index: {PROCESS_KEYWORD_RANK_INDEX_NAME}"
+        )
+    else:
+        process_rank_index_sql = sql_without_comments(
+            process_rank_index.read_text(encoding="utf-8")
+        )
+        process_rank_index_pattern = re.compile(
+            r"\s*create\s+index\s+concurrently\s+"
+            r"portal_catalog_search_process_exact_rank_v1_gin\s+"
+            r"on\s+private[.]portal_catalog_search_rows_v1\s+using\s+gin\s*[(]"
+            r"\s*private[.]portal_process_rank_name_keys_v1[(]card[)]\s*,"
+            r"\s*private[.]portal_process_rank_classification_keys_v1[(]card[)]\s*"
+            r"[)]\s*where\s+dataset_kind\s*=\s*'process'\s*;\s*",
+            flags=re.IGNORECASE,
+        )
+        if not process_rank_index_pattern.fullmatch(process_rank_index_sql):
+            violations.append(
+                f"{PROCESS_KEYWORD_RANK_INDEX_NAME}: must be one exact concurrent partial expression GIN statement without IF NOT EXISTS"
+            )
+
+    process_rank_cutover = MIGRATIONS_DIR / PROCESS_KEYWORD_RANK_CUTOVER_NAME
+    if not process_rank_cutover.is_file():
+        violations.append(
+            f"missing Portal Process keyword rank cutover: {PROCESS_KEYWORD_RANK_CUTOVER_NAME}"
+        )
+    else:
+        process_rank_cutover_sql = sql_without_comments(
+            process_rank_cutover.read_text(encoding="utf-8")
+        )
+        process_rank_cutover_lower = process_rank_cutover_sql.lower()
+        required_process_rank_cutover_tokens = (
+            "assert_portal_process_keyword_rank_contract_v1",
+            "catalog_portal_process_keyword_relevance_v1_impl",
+            "char_length(v_query) > 1",
+            "v_query !~",
+            "p_kind = 'process'",
+            "v_filters = '{}'::jsonb",
+            "v_sort = 'relevance'",
+            "catalog_portal_single_character_search_v1_impl",
+            "catalog_portal_search_v1_impl",
+            "portal process keyword rank cutover drifted",
+            "has_function_privilege(",
+            "'api_internal_executor'",
+            "'postgres'",
+        )
+        missing = [
+            token
+            for token in required_process_rank_cutover_tokens
+            if token not in process_rank_cutover_lower
+        ]
+        if missing:
+            violations.append(
+                f"{PROCESS_KEYWORD_RANK_CUTOVER_NAME}: missing cutover tokens "
+                + ", ".join(missing)
+            )
+        if len(
+            re.findall(
+                r"create\s+or\s+replace\s+function\s+private[.]portal_search_v1\s*[(]",
+                process_rank_cutover_sql,
+                flags=re.IGNORECASE,
+            )
+        ) != 1:
+            violations.append(
+                f"{PROCESS_KEYWORD_RANK_CUTOVER_NAME}: expected one Search coordinator replacement"
+            )
+        if re.search(
+            r"\b(?:create\s+(?:unlogged\s+)?table|create\s+(?:unique\s+)?index|"
+            r"create\s+trigger|alter\s+(?:table|policy)|drop\s+(?:table|index|trigger))\b",
+            process_rank_cutover_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{PROCESS_KEYWORD_RANK_CUTOVER_NAME}: cutover must not change a relation, index, trigger, policy, or writer definition"
+            )
+        if re.search(
+            r"create\s+or\s+replace\s+function\s+api[.]portal_",
+            process_rank_cutover_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{PROCESS_KEYWORD_RANK_CUTOVER_NAME}: public wrappers must remain byte-stable"
+            )
+
+    process_rank_patterns = {
+        identity: mutation_pattern(identity)
+        for identity in (
+            PROCESS_KEYWORD_RANK_FUNCTION_IDENTITIES
+            + PROCESS_KEYWORD_RANK_CONTROL_FUNCTION_IDENTITIES
+        )
+    }
+    for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
+        if migration.name <= PROCESS_KEYWORD_RANK_CUTOVER_NAME:
+            continue
+        executable_sql = sql_without_comments(migration.read_text(encoding="utf-8"))
+        for identity, pattern in process_rank_patterns.items():
+            if pattern.search(executable_sql):
+                violations.append(f"{migration.name}: {identity}")
+
     required_guard_counts = {
         "20260826080345_portal_projection_reconcile.sql": 1,
         "20260826080400_portal_projection_candidate_cutover.sql": 2,
@@ -1058,6 +1238,8 @@ def main() -> int:
         "exact index condition over the validated public-state projection; "
         "one-code-point literal Search uses one narrow exact-version child, "
         "latest-key index, and parent INSERT/UPDATE trigger; "
+        "multi-code-point unfiltered Process relevance preselects exact/general "
+        "keys through one immutable expression GIN before bounded card hydration; "
         "sitemap shards remain fixed at 64 with "
         "an exact-version FK child/index, one AFTER INSERT/UPDATE direct-upsert "
         "trigger, FK-cascade DELETE, the 134103 forward repair, and a "

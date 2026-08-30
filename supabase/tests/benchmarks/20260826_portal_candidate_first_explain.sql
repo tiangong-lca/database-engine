@@ -2270,6 +2270,28 @@ insert into pg_temp.portal_benchmark_failures (
   label, sqlstate, message, elapsed_ms
 )
 select
+  'process_exact_rank_plan_guard',
+  'P0001',
+  'representative Process exact-rank probe did not use the expression GIN',
+  0
+where :'process_rows'::integer >= 10000
+  and not coalesce((
+    select plan_text ~ '(Index Scan using|Bitmap Index Scan on) portal_catalog_search_process_exact_rank_v1_gin'
+      and plan_text !~ 'Seq Scan on portal_catalog_search_rows_v1'
+      and plan_text ~ 'Buffers: shared'
+      and plan_text ~ 'Execution Time: [0-9]'
+      and plan_text !~ 'temp read=[1-9]'
+      and plan_text !~ 'temp (read=[0-9]+ )?written=[1-9]'
+      and plan_text !~ 'Disk:'
+      and plan_text !~ 'external merge'
+    from pg_temp.portal_benchmark_plans
+    where label = 'process_exact_rank_gin'
+  ), false);
+
+insert into pg_temp.portal_benchmark_failures (
+  label, sqlstate, message, elapsed_ms
+)
+select
   'plan_index_guard',
   'P0001',
   'representative plan missed required Process exact-rank, Flow lexical/semantic eligibility, or source-HNSW evidence',
@@ -2328,18 +2350,6 @@ where (:'process_rows'::integer >= 10000
        and plan_text !~ 'external merge'
      from pg_temp.portal_benchmark_plans
      where label = 'process_lexical_leaf'
-   ), false)
-   or not coalesce((
-     select plan_text ~ '(Index Scan using|Bitmap Index Scan on) portal_catalog_search_process_exact_rank_v1_gin'
-       and plan_text !~ 'Seq Scan on portal_catalog_search_rows_v1'
-       and plan_text ~ 'Buffers: shared'
-       and plan_text ~ 'Execution Time: [0-9]'
-       and plan_text !~ 'temp read=[1-9]'
-       and plan_text !~ 'temp (read=[0-9]+ )?written=[1-9]'
-       and plan_text !~ 'Disk:'
-       and plan_text !~ 'external merge'
-     from pg_temp.portal_benchmark_plans
-     where label = 'process_exact_rank_gin'
    ), false)
    or not coalesce((
      select plan_text ~ '(Index Scan using|Bitmap Index Scan on) portal_catalog_search_flow_document_v1_pgroonga'
