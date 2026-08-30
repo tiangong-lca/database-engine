@@ -1353,6 +1353,9 @@ select pg_catalog.jsonb_build_object(
   'flow_index_bytes', pg_catalog.pg_relation_size(
     'private.portal_catalog_search_flow_document_v1_pgroonga'
   ),
+  'process_exact_rank_index_bytes', pg_catalog.pg_relation_size(
+    'private.portal_catalog_search_process_exact_rank_v1_gin'
+  ),
   'reused_process_hnsw_bytes', pg_catalog.pg_relation_size(
     'public.processes_embedding_ft_hnsw_idx'
   ),
@@ -1599,6 +1602,35 @@ select pg_temp.capture_portal_benchmark_plan(
     from private.portal_catalog_search_rows_v1 as projection
     where projection.dataset_kind = 'process'
       and projection.document like '%portalbenchneedle%' escape E'\\'
+  $query$
+);
+
+\qecho profile=process-projection-exact-rank-gin
+explain (analyze, buffers, settings, wal, summary, format json)
+select projection.id,
+  projection.version
+from private.portal_catalog_search_rows_v1 as projection
+where projection.dataset_kind = 'process'
+  and (
+    private.portal_process_rank_name_keys_v1(projection.card)
+      @> array['portalbenchneedle process']
+    or private.portal_process_rank_classification_keys_v1(projection.card)
+      @> array['portalbenchneedle process']
+  );
+
+select pg_temp.capture_portal_benchmark_plan(
+  'process_exact_rank_gin',
+  $query$
+    select projection.id,
+      projection.version
+    from private.portal_catalog_search_rows_v1 as projection
+    where projection.dataset_kind = 'process'
+      and (
+        private.portal_process_rank_name_keys_v1(projection.card)
+          @> array['portalbenchneedle process']
+        or private.portal_process_rank_classification_keys_v1(projection.card)
+          @> array['portalbenchneedle process']
+      )
   $query$
 );
 
@@ -2240,13 +2272,13 @@ insert into pg_temp.portal_benchmark_failures (
 select
   'plan_index_guard',
   'P0001',
-  'representative plan missed required Flow lexical/semantic eligibility or source-HNSW evidence',
+  'representative plan missed required Process exact-rank, Flow lexical/semantic eligibility, or source-HNSW evidence',
   0
 where (:'process_rows'::integer >= 10000
     and :'flow_rows'::integer >= 100000)
   and (
     (select count(*) from pg_temp.portal_benchmark_plans) <> case
-      when :'benchmark_semantic_plan_profile'::boolean then 18 else 14
+      when :'benchmark_semantic_plan_profile'::boolean then 19 else 15
     end
    or (
      select count(*)
@@ -2296,6 +2328,18 @@ where (:'process_rows'::integer >= 10000
        and plan_text !~ 'external merge'
      from pg_temp.portal_benchmark_plans
      where label = 'process_lexical_leaf'
+   ), false)
+   or not coalesce((
+     select plan_text ~ '(Index Scan using|Bitmap Index Scan on) portal_catalog_search_process_exact_rank_v1_gin'
+       and plan_text !~ 'Seq Scan on portal_catalog_search_rows_v1'
+       and plan_text ~ 'Buffers: shared'
+       and plan_text ~ 'Execution Time: [0-9]'
+       and plan_text !~ 'temp read=[1-9]'
+       and plan_text !~ 'temp (read=[0-9]+ )?written=[1-9]'
+       and plan_text !~ 'Disk:'
+       and plan_text !~ 'external merge'
+     from pg_temp.portal_benchmark_plans
+     where label = 'process_exact_rank_gin'
    ), false)
    or not coalesce((
      select plan_text ~ '(Index Scan using|Bitmap Index Scan on) portal_catalog_search_flow_document_v1_pgroonga'
@@ -2449,6 +2493,8 @@ where (select count(*) from wrapper_plans) <> 5
 select label,
   plan_text ~ 'portal_catalog_search_process_document_v1_pgroonga'
     as process_pgroonga,
+  plan_text ~ 'portal_catalog_search_process_exact_rank_v1_gin'
+    as process_exact_rank_gin,
   plan_text ~ 'portal_catalog_search_flow_document_v1_pgroonga'
     as flow_pgroonga,
   plan_text ~ 'processes_embedding_ft_hnsw_idx' as process_hnsw,
