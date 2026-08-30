@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-30
-lastReviewedCommit: be1f915
-lastReviewedNote: "Reviewed for Issue #563: the 299-migration Process keyword rank rollout changes no generated-workspace ownership, refresh, or stable-overlay rule."
+lastReviewedAt: 2026-08-31
+lastReviewedCommit: 6e00affc589ba6af3af80c4fb43a2be13ea12e83
+lastReviewedNote: "Reviewed for Issue #566: the actor-command migration changes capability data only; generated Data API types, workspace ownership, refresh, and stable-overlay rules are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

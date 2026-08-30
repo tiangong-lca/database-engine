@@ -68,8 +68,8 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  275::bigint,
-  'api contains the active cutover functions, reviewed consumer facades, Database A Search RPCs, and Portal catalog/LCIA/Hybrid/sitemap facades'
+  277::bigint,
+  'api contains the active cutover functions, reviewed consumer facades, OAuth gate, Database A Search RPCs, and Portal catalog/LCIA/Hybrid/sitemap facades'
 );
 
 select is(
@@ -80,8 +80,8 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  298::bigint,
-  'private contains the active helpers, Database B/reuse helpers, and reviewed Portal catalog/LCIA/Hybrid/sitemap/character/Process-rank internals'
+  299::bigint,
+  'private contains the active helpers, OAuth capability predicate, Database B/reuse helpers, and reviewed Portal catalog/LCIA/Hybrid/sitemap/character/Process-rank internals'
 );
 
 select ok(
@@ -121,8 +121,8 @@ select is(
     select count(*)
     from pg_policy
   ),
-  80::bigint,
-  'all RLS policies remain present'
+  89::bigint,
+  'all RLS policies plus the nine restrictive OAuth relation guards remain present'
 );
 
 select is(
@@ -136,8 +136,8 @@ select is(
       'util'::regnamespace
     )
   ),
-  547::bigint,
-  'all application constraints remain present'
+  559::bigint,
+  'all application constraints plus the OAuth registry constraints remain present'
 );
 
 select is(
@@ -165,8 +165,8 @@ select is(
       and class.relkind in ('r', 'p')
       and class.relrowsecurity
   ),
-  67::bigint,
-  'RLS enablement is preserved across moved tables'
+  71::bigint,
+  'RLS enablement is preserved across moved tables and OAuth registry state'
 );
 
 select ok(

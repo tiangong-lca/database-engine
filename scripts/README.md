@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-30
-lastReviewedCommit: be1f915
-lastReviewedNote: "Reviewed for Issue #563: the 299-file recovery and benchmark tooling now covers the bounded Process keyword expression-GIN rollout and maintenance ACLs."
+lastReviewedAt: 2026-08-31
+lastReviewedCommit: 6e00affc589ba6af3af80c4fb43a2be13ea12e83
+lastReviewedNote: "Reviewed for Issue #566: the workflow contract now requires the actor-command pgTAP suite and migration head 20260831120000; helper commands and stable-overlay rules are unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

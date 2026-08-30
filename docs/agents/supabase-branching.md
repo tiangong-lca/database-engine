@@ -22,9 +22,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 6e1057511dde93f2289a753cc6561edf73c1486f
-lastReviewedNote: "Reviewed for Issue #557: password-recovery email templates now have a checked-in source and an explicit hosted-configuration operator gate."
+lastReviewedAt: 2026-08-31
+lastReviewedCommit: 6e00affc589ba6af3af80c4fb43a2be13ea12e83
+lastReviewedNote: "Reviewed for Issue #566: the additive actor-command capability migration and its persistent-Dev workflow test do not change branch bindings, deployment ownership, or promotion procedure."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

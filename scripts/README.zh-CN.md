@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-30
-lastReviewedCommit: be1f915
-lastReviewedNote: "为 Issue #563 复核：299-file recovery/benchmark 工具已覆盖 Process keyword expression-GIN 上线与内部维护 ACL。"
+lastReviewedAt: 2026-08-31
+lastReviewedCommit: 6e00affc589ba6af3af80c4fb43a2be13ea12e83
+lastReviewedNote: "为 Issue #566 复核：workflow contract 现要求 actor-command pgTAP 套件及 migration head 20260831120000；helper 命令与稳定 overlay 规则不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

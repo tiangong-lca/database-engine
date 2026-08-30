@@ -30,9 +30,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-30
-lastReviewedCommit: be1f915
-lastReviewedNote: "Reviewed for Issue #563: the Process keyword key-selector/index remains a bounded query layer over immutable Portal v1 cards and does not change schema ownership or generated-workspace boundaries."
+lastReviewedAt: 2026-08-31
+lastReviewedCommit: 6e00affc589ba6af3af80c4fb43a2be13ea12e83
+lastReviewedNote: "Reviewed for Issue #566: OAuth client authorization adds private revocation/capability state, restrictive relation-read RLS, narrow actor-command write capabilities, and a manifest-backed PostgREST gate without reopening raw DML."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -66,14 +66,39 @@ explicitly: `public` for entity tables and `api` for RPCs. This avoids relying
 on local CLI normalization, which may place a custom schema before `public`.
 `private`, `util`, and `archive` are not exposed. `authenticated` has only the
 `private.roles` and `private.reviews` reads needed to evaluate the preserved
-public core-table RLS policies; browser roles receive no other internal
-relation, routine, or write capability.
+public core-table RLS policies. `authenticated` additionally receives execute
+only on `private.oauth_client_has_capability(text)`, an ACL-closed helper in an
+unexposed schema used by restrictive policies; browser roles receive no other
+internal relation, routine, or write capability.
 
 Every external `EXECUTE` grant on an `api` routine is an exact-signature entry
 in `private.api_capability_grants`. That table records the owning capability ID
 and admitted caller roles; migrations first remove inherited grants and then
 rebuild the external ACL from this closed manifest. New or overloaded RPCs are
 therefore denied until their exact signature is deliberately classified.
+
+## OAuth Client Authorization Boundary
+
+Supabase Auth owns OAuth client registration metadata, client secrets, access
+tokens, and refresh tokens. Database state stores only the public `client_id`,
+client kind, enabled/revoked state, capability grants, and append-only change
+audit under `private`. Environment-specific client IDs are provisioned through
+the service-only configuration façade after Supabase Auth registration; they
+are never hardcoded in a generic migration.
+
+First-party Next sessions contain no `client_id` claim and preserve the
+existing `auth.uid()` policies. OAuth access tokens must name an enabled client
+with an explicit capability. Direct reads of the nine public entity tables add
+one `RESTRICTIVE` authenticated policy over the existing row policies. Raw
+table insert/update/delete remains ACL-closed after command cutover. The three
+actor-bound `cmd_dataset_create`, `cmd_dataset_save_draft`, and
+`cmd_dataset_delete` routes instead use `DB-CORE-WRITE-01`; other first-party
+CLI commands retain `CLI-RPC-01`. Every PostgREST relation or RPC request is
+checked before execution by
+`api.oauth_client_pre_request()`, which resolves `/rpc/<name>` through the
+exact-signature API capability manifest and rejects unknown, ambiguous,
+ungranted, or revoked routes with SQLSTATE `42501`. OAuth scopes remain OIDC
+identity scopes and never grant database capabilities.
 
 ## Portal Public Read Boundary
 

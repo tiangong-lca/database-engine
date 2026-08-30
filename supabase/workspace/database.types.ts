@@ -1271,6 +1271,7 @@ export type Database = {
         }
         Returns: Json
       }
+      oauth_client_pre_request: { Args: never; Returns: undefined }
       pgroonga_search_contacts: {
         Args: {
           data_source?: string
@@ -2826,6 +2827,15 @@ export type Database = {
       }
       svc_membership_is_review_admin: {
         Args: { p_user_id: string }
+        Returns: Json
+      }
+      svc_oauth_client_configure: {
+        Args: {
+          p_capability_ids?: string[]
+          p_client_id: string
+          p_client_kind: string
+          p_enabled: boolean
+        }
         Returns: Json
       }
       svc_schema_contract_status: { Args: never; Returns: Json }

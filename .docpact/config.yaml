@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-30"
-lastReviewedCommit: "be1f915"
-lastReviewedNote: "Reviewed for Issue #563: routing and proof now include the 299-migration Process keyword rank helper/index/cutover sequence without changing ownership boundaries."
+lastReviewedAt: "2026-08-31"
+lastReviewedCommit: "6e00affc589ba6af3af80c4fb43a2be13ea12e83"
+lastReviewedNote: "Reviewed for Issue #566: routing and proof cover OAuth client registry, relation-read and actor-command capabilities, complete PostgREST manifest enforcement, and revocation transport checks."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -132,6 +132,13 @@ routing:
         - supabase/seed.sql
         - supabase/seeds/**
         - supabase/tests/**
+    oauth-client-authorization:
+      paths:
+        - supabase/config.toml
+        - supabase/migrations/*oauth*.sql
+        - supabase/tests/*oauth*.sql
+        - docs/agents/repo-architecture.md
+        - docs/agents/repo-validation.md
     portal-public-contract:
       paths:
         - contracts/portal/**
@@ -389,6 +396,24 @@ rules:
       - path: docs/agents/repo-validation.md
         mode: review_or_update
     reason: SQL assertions and offline Node test contracts can alter the minimum proof story for future database and Hosted-runner work.
+  - id: database-engine-oauth-client-authorization
+    scope: repo
+    repo: database-engine
+    triggers:
+      - path: supabase/config.toml
+        kind: db-config
+      - path: supabase/migrations/*oauth*.sql
+        kind: db-schema
+      - path: supabase/tests/*oauth*.sql
+        kind: db-test
+    requiredDocs:
+      - path: .docpact/config.yaml
+        mode: review_or_update
+      - path: docs/agents/repo-validation.md
+        mode: review_or_update
+      - path: docs/agents/repo-architecture.md
+        mode: review_or_update
+    reason: OAuth client registration, revocation, RLS, RPC pre-request enforcement, and environment provisioning must retain one database authorization contract and proof path.
   - id: database-engine-schema-workspace-tooling
     scope: repo
     repo: database-engine

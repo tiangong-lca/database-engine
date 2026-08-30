@@ -22,9 +22,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 6e1057511dde93f2289a753cc6561edf73c1486f
-lastReviewedNote: "已为 Issue #557 复核：密码恢复邮件模板现在具有仓库内真相源和显式托管配置运维门。"
+lastReviewedAt: 2026-08-31
+lastReviewedCommit: 6e00affc589ba6af3af80c4fb43a2be13ea12e83
+lastReviewedNote: "已为 Issue #566 复核：追加的 actor-command 能力 migration 及其持久化 Dev workflow 测试不改变分支绑定、部署职责或晋升流程。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
