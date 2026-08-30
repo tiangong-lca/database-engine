@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."catalog_portal_single_character_search_v1_impl"("p_kind" "text", "p_query" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") IS 'Bounded one-code-point unfiltered relevance Search over the synchronized narrow character projection.';

@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-29"
-lastReviewedCommit: "6e1057511dde93f2289a753cc6561edf73c1486f"
-lastReviewedNote: "Reviewed for Issue #557: password-recovery templates now share the existing Supabase branch/config governance contract."
+lastReviewedAt: "2026-08-30"
+lastReviewedCommit: "b624bd73488b0e74aaa4fdecb75c5b000f2da67c"
+lastReviewedNote: "Reviewed for Issue #557 after merging current main: Auth recovery template ownership and checks compose with the 296-migration portal projection state; routing and validation boundaries remain accurate."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -513,6 +513,22 @@ rules:
         kind: database-migration
       - path: supabase/migrations/20260828003000_select_selective_portal_cas_example.sql
         kind: database-migration
+      - path: supabase/migrations/20260829130000_make_portal_flow_cas_rls_indexable.sql
+        kind: database-migration
+      - path: supabase/migrations/20260829131000_repair_portal_single_character_literal_search.sql
+        kind: database-migration
+      - path: supabase/migrations/20260829131001_portal_character_projection_expand.sql
+        kind: database-migration
+      - path: supabase/migrations/20260829131002_portal_character_projection_backfill_00_3f.sql
+        kind: database-migration
+      - path: supabase/migrations/20260829131003_portal_character_projection_backfill_40_7f.sql
+        kind: database-migration
+      - path: supabase/migrations/20260829131004_portal_character_projection_backfill_80_bf.sql
+        kind: database-migration
+      - path: supabase/migrations/20260829131005_portal_character_projection_backfill_c0_ff.sql
+        kind: database-migration
+      - path: supabase/migrations/20260829131006_portal_character_projection_cutover.sql
+        kind: database-migration
       - path: supabase/tests/20260826_portal_candidate_first_search.sql
         kind: database-contract-test
       - path: supabase/tests/20260827_portal_card_context_v1.sql
@@ -522,6 +538,8 @@ rules:
       - path: supabase/tests/benchmarks/20260826_portal_candidate_first_explain.sql
         kind: database-benchmark
       - path: supabase/tests/benchmarks/20260827_portal_sitemap_shards_cardinality.sql
+        kind: database-benchmark
+      - path: supabase/tests/benchmarks/20260827_portal_catalog_summary_cardinality.sql
         kind: database-benchmark
       - path: scripts/test_portal_projection_upgrade_recovery.sh
         kind: migration-recovery
@@ -538,4 +556,4 @@ rules:
         mode: review_or_update
       - path: docs/agents/portal-projection-migration-recovery.md
         mode: review_or_update
-    reason: The immutable card and facet manifests, online expand/backfill/reconcile/index/cutover sequences, selected-row card-context decorator, query-only Flow geography Search repair, fixed bounded sitemap shards, recovery procedure, and representative performance gates must change together.
+    reason: The immutable card and facet manifests, online expand/backfill/reconcile/index/cutover sequences, selected-row card-context decorator, query-only Flow geography Search repair, forced-RLS exact-CAS binding, sharded narrow character projection and pre-limit cutover, fixed sitemap shards, recovery procedure, and representative performance gates must change together.

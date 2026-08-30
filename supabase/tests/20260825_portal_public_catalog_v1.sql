@@ -395,8 +395,8 @@ select extensions.is(
       and routine.proname like 'portal\_%\_v1' escape '\'
       and routine.proowner = 'portal_public_executor'::regrole
   ),
-  44::bigint,
-  'the private executor-owned Portal helper surface contains the expected 44 v1 routines'
+  46::bigint,
+  'the private executor-owned Portal helper surface contains the expected 46 v1 routines'
 );
 
 select extensions.ok(
@@ -612,6 +612,15 @@ select extensions.is(
       )
       and not (
         routine.proname = 'portal_public_hybrid_card_v1'
+        and acl.grantee = 'api_internal_executor'::regrole
+        and acl.privilege_type = 'EXECUTE'
+        and not acl.is_grantable
+      )
+      and not (
+        routine.proname in (
+          'portal_catalog_character_set_v1',
+          'portal_catalog_character_field_set_v1'
+        )
         and acl.grantee = 'api_internal_executor'::regrole
         and acl.privilege_type = 'EXECUTE'
         and not acl.is_grantable

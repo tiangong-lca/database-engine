@@ -30,9 +30,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 6e1057511dde93f2289a753cc6561edf73c1486f
-lastReviewedNote: "Reviewed for Issue #557: the stable path map now identifies Auth email template sources; generated workspace and runtime boundaries are unchanged."
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: b624bd7
+lastReviewedNote: "Reviewed for Issue #557 after merging current main: the path map includes Auth email template sources alongside the current portal projection state; generated workspace and runtime boundaries remain accurate."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -121,6 +121,39 @@ stored or included in the index. The façade revalidates CAS check digits,
 classification bounds, labels, and exact latest identity before returning a
 value. It adds no source-table scan, new projection table, existing-index
 change, or trigger/writer branch.
+
+The projection relation is owned by `postgres`, has forced RLS, and has a
+validated table CHECK that permits only state 100/200 rows. Its Portal SELECT
+policy is deliberately row-neutral because every stored row is already a
+public-safe projection; the live projection assertion pins the relation owner,
+forced-RLS flags, exact CHECK, unique Portal policy, and `qual=true` together.
+This removes the RLS security barrier that otherwise keeps non-leakproof JSON
+CAS extraction as a full-index filter. The representative natural plan must
+place the exact CAS equality in `portal_catalog_search_flow_cas_v1_idx`'s
+`Index Cond`, leave no CAS filter, and preserve all ordinary lexical, UUID,
+invalid-CAS, visibility, ACL, and writer behavior. It adds no relation, index,
+Trigger, source write, timeout, or public DTO change.
+
+PGroonga translates ordinary indexed `LIKE` literal fragments into token
+matches and relies on PostgreSQL heap recheck to remove false positives. With
+the current TokenBigram projection indexes, one unescaped code point inside
+`%...%` can produce no index candidate, so recheck cannot recover the true SQL
+match. The two private Process/Flow pattern helpers therefore retain their
+fixed `%L` multi-code-point LIKE templates and a correctness-only `strpos`
+fallback for nonstandard one-code-point filtered/sorted shapes. The common
+validated one-code-point, empty-filter, relevance path instead reads
+`private.portal_catalog_character_rows_v1`: a narrow exact-version child that
+stores only unique document/name/classification character sets and exact
+one-code-point name/classification sets. One parent `AFTER INSERT OR UPDATE`
+upsert Trigger plus an exact-key `ON DELETE CASCADE` FK keeps the child current;
+four UUID-quarter backfills and a short reconcile fence avoid rewriting the
+wide card/document heap. Its latest-key B-tree pre-limits score/id/version on
+narrow rows, then joins at most `limit+1` exact parent cards. Escaped `%`, `_`,
+and backslash stay on the existing literal-LIKE path. The child is RLS forced,
+ACL closed, carries no raw source, and adds no public wrapper, text/vector
+index, timeout, or DTO change. Representative Process and Flow one-code-point
+p95 remain under the existing Search budget, and writer/storage amplification
+is measured with the other synchronized projections.
 
 The bounded sitemap surface stores one locator-free row for every public facet
 version in `private.portal_sitemap_rows_v1`. Its primary key is
@@ -412,9 +445,11 @@ at least four characters, and prefers Process evidence before Flow evidence so
 the homepage does not advertise a one-character near-universe query. The
 representative benchmark resolves that emitted example dynamically and executes
 it through the matching public Search wrapper for 20 samples under the existing
-2-second p95 and 8-second hard timeout. Missing eligible evidence omits the
-example; it never authorizes a placeholder, private fallback, timeout increase,
-new writer path, or unmeasured index.
+2-second p95 and 8-second hard timeout. The same benchmark captures the
+forced-RLS exact-CAS natural plan and rejects a CAS equality left behind as an
+index filter. Missing eligible evidence omits the example; it never authorizes
+a placeholder, private fallback, timeout increase, new writer path, or
+unmeasured index.
 
 This contract assumes privileged DDL is delivered only through the governed
 migration and CI path. The live digest proves current definitions, not the

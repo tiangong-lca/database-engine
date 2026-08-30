@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 6e1057511dde93f2289a753cc6561edf73c1486f
-lastReviewedNote: "已为 Issue #557 复核：Auth 邮件模板不属于 generated schema workspace，其所有权与刷新行为保持不变。"
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: b624bd7
+lastReviewedNote: "合并当前 main 后为 Issue #557 复核：Auth 邮件模板仍不属于 generated schema workspace；现有 296-migration projection 状态与 workspace 所有权保持准确。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

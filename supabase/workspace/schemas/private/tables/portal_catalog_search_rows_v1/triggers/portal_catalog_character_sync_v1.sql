@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "portal_catalog_character_sync_v1" AFTER INSERT OR UPDATE OF "dataset_kind", "id", "version", "state_code", "modified_at", "card", "document" ON "private"."portal_catalog_search_rows_v1" FOR EACH ROW EXECUTE FUNCTION "private"."sync_portal_catalog_character_row_v1"();

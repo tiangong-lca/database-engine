@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 6e1057511dde93f2289a753cc6561edf73c1486f
-lastReviewedNote: "Reviewed for Issue #557: Auth email templates are outside the generated schema workspace, whose ownership and refresh behavior are unchanged."
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: b624bd7
+lastReviewedNote: "Reviewed for Issue #557 after merging current main: Auth email templates remain outside the generated schema workspace; the current 296-migration projection state and workspace ownership remain accurate."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

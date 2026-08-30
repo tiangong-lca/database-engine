@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 6e1057511dde93f2289a753cc6561edf73c1486f
-lastReviewedNote: "Reviewed for Issue #557: added the offline auth recovery email template contract checker."
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: b624bd7
+lastReviewedNote: "Reviewed for Issue #557 after merging current main: the Auth recovery email checker and current 296-file recovery, benchmark, CAS, and portal projection tooling are all represented."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -97,7 +97,7 @@ scripts/test_search_text_array_upgrade.sh
 
 ### `test_portal_projection_upgrade_recovery.sh`
 
-Exercises the Issue 531/532/539/543 Portal projection rollout against an explicitly
+Exercises the Issue 531/532/539/543/551 Portal projection rollout against an explicitly
 attested, isolated local Supabase project. It uses live concurrent connections
 to prove valid-update, delete, state-invalidation, key-change, and
 embedding-only races; forces card/facet reconcile lock-timeout and cutover-guard
@@ -116,12 +116,12 @@ See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries. Formal evidence additionally requires
 clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
-the complete 278-file migration tree.
+the complete 296-file migration tree.
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
 Rehearses the seven facet migrations verbatim over 126,246 pre-existing parent
-cards in the same explicitly isolated Issue-531/532/539/543 project. It requires every
+cards in the same explicitly isolated Issue-531/532/539/543/551 project. It requires every
 backfill statement to retain at least 2x headroom under its 120-second timeout,
 each complete UUID-quarter file to stay below 120 seconds, the successful
 reconcile fence to finish within five seconds, plus exact key coverage,
@@ -137,8 +137,8 @@ The runner always resets the isolated project to full HEAD on exit.
 
 Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
 fence, plan, and ANN-recall benchmark only against an explicitly attested
-Issue-531/532/539/543 local Supabase project. The runner byte-compares the complete
-278-file migration tree with the repository, writes into a new operator-selected private
+Issue-531/532/539/543/551 local Supabase project. The runner byte-compares the complete
+296-file migration tree with the repository, writes into a new operator-selected private
 directory, and resets the isolated database before and after the run so rolled
 back HNSW pages cannot accumulate. Its environment contract mirrors the
 recovery runner and additionally requires
@@ -151,7 +151,18 @@ independently, including build time, bytes, and incremental four-update p95;
 the real projection and its indexes are never dropped or rebuilt by that probe.
 Its `cas-pressure` profile assigns one CAS to 10,000 current Flow cards while
 retaining one unique CAS, then requires the bounded selector to keep summary
-p95 below 250 ms and the emitted CAS to return exactly one item.
+p95 below 250 ms and the emitted CAS to return exactly one item. The same
+representative fixture captures the natural forced-RLS exact-CAS plan and fails
+unless the CAS equality is in `portal_catalog_search_flow_cas_v1_idx`'s
+`Index Cond` with no CAS JSON filter.
+
+The full candidate benchmark also records 20-sample
+`process_single_character` and `flow_single_character` labels. They exercise
+the synchronized narrow character pre-limit for one unescaped code point and
+must keep Search
+p95 below two seconds; all multi-code-point and escaped literal labels retain
+the existing PGroonga-backed template. Writer evidence includes the sole child
+upsert Trigger, and populated/recovery runners prove child/parent parity.
 
 `PORTAL_PROJECTION_BENCHMARK_PROFILE` selects a fail-closed named profile:
 
