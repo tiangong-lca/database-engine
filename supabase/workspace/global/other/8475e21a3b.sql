@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."catalog_portal_process_keyword_keys_v1"("p_query" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer) IS 'Selects exact-name/classification plus general Process keyword keys before reading wide cards, preserving the stable relevance cursor.';

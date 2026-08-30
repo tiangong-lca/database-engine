@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."portal_search_v1"("p_kind" "text", "p_query" "text", "p_filters" "jsonb", "p_sort" "text", "p_cursor" "text", "p_limit" integer) IS 'Validates public Search; routes one-code-point searches to the character child and unfiltered Process keyword relevance to bounded key selection before card hydration.';

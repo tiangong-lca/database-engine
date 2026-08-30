@@ -33,8 +33,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-30
-lastReviewedCommit: b624bd7
-lastReviewedNote: "Reviewed for Issue #557 after merging current main: Auth recovery templates retain the offline contract checker and hosted operator gate alongside the current migration and portal projection validation."
+lastReviewedCommit: be1f915
+lastReviewedNote: "Reviewed for Issue #563: Process keyword Search now requires byte-equivalent bounded-card hydration, natural expression-GIN evidence, write-maintenance ACL proof, and hosted p95 validation."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -115,6 +115,23 @@ Portal performance profile. Search remains <= 2 seconds; Hybrid remains <= 6
 seconds p95 and < 8 seconds per call. Preview must validate the strict response
 schemas with a publishable key. Any later change to the stored v1 card/document
 still requires the shadow-v2 rollout described above.
+
+The Issue #563 Process keyword acceleration is a query-only consumer of the
+immutable v1 card/document projection, not a stored-card replacement. It may
+route only multi-code-point, non-UUID, empty-filter `relevance` Process Search.
+The PGroonga pattern helper and exact latest-visible key set remain
+authoritative; one partial expression GIN supplies exact name/classification
+rank probes, then the kernel orders and limits keys before hydrating at most
+`limit+1` wide cards. Flow, UUID, empty-query, one-code-point, filtered, and
+alternate-sort requests must stay byte-identical on their predecessor paths.
+Run `supabase/tests/20260826_portal_candidate_first_search.sql` after a blank
+reset and the representative candidate benchmark. Require exact/general/no-hit
+and page-2 byte equality, a natural `portal_catalog_search_process_exact_rank_v1_gin`
+plan at 17,299 Process rows, recorded index bytes, successful Process writer
+and `ANALYZE` maintenance through only `api_internal_executor` and `postgres`,
+and the existing 2-second Search p95 / 8-second hard timeout. Hosted promotion
+must repeat the common-term Search p95 and buffer profile before the Portal
+performance task closes.
 
 The named benchmark fixture must exercise the complete expensive path rather
 than context shape alone: every Process card carries a real quantitative

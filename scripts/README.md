@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-30
-lastReviewedCommit: b624bd7
-lastReviewedNote: "Reviewed for Issue #557 after merging current main: the Auth recovery email checker and current 296-file recovery, benchmark, CAS, and portal projection tooling are all represented."
+lastReviewedCommit: be1f915
+lastReviewedNote: "Reviewed for Issue #563: the 299-file recovery and benchmark tooling now covers the bounded Process keyword expression-GIN rollout and maintenance ACLs."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -97,7 +97,7 @@ scripts/test_search_text_array_upgrade.sh
 
 ### `test_portal_projection_upgrade_recovery.sh`
 
-Exercises the Issue 531/532/539/543/551 Portal projection rollout against an explicitly
+Exercises the Issue 531/532/539/543/551/563 Portal projection rollout against an explicitly
 attested, isolated local Supabase project. It uses live concurrent connections
 to prove valid-update, delete, state-invalidation, key-change, and
 embedding-only races; forces card/facet reconcile lock-timeout and cutover-guard
@@ -116,12 +116,12 @@ See
 `docs/agents/portal-projection-migration-recovery.md` for the required
 environment and recovery boundaries. Formal evidence additionally requires
 clean HEAD, Supabase CLI `2.109.1`, and byte equality plus aggregate SHA-256 for
-the complete 296-file migration tree.
+the complete 299-file migration tree.
 
 ### `test_portal_facet_projection_populated_upgrade.sh`
 
 Rehearses the seven facet migrations verbatim over 126,246 pre-existing parent
-cards in the same explicitly isolated Issue-531/532/539/543/551 project. It requires every
+cards in the same explicitly isolated Issue-531/532/539/543/551/563 project. It requires every
 backfill statement to retain at least 2x headroom under its 120-second timeout,
 each complete UUID-quarter file to stay below 120 seconds, the successful
 reconcile fence to finish within five seconds, plus exact key coverage,
@@ -137,8 +137,8 @@ The runner always resets the isolated project to full HEAD on exit.
 
 Runs the Issue 531 representative Process/Flow Search, Hybrid, Facets, writer,
 fence, plan, and ANN-recall benchmark only against an explicitly attested
-Issue-531/532/539/543/551 local Supabase project. The runner byte-compares the complete
-296-file migration tree with the repository, writes into a new operator-selected private
+Issue-531/532/539/543/551/563 local Supabase project. The runner byte-compares the complete
+299-file migration tree with the repository, writes into a new operator-selected private
 directory, and resets the isolated database before and after the run so rolled
 back HNSW pages cannot accumulate. Its environment contract mirrors the
 recovery runner and additionally requires
@@ -187,6 +187,11 @@ the smaller Process cardinality records its natural-cost plan without forcing
 one index, while the migration catalog guard proves its PGroonga index and the
 named timings independently cover Process performance, ordering, and cursors.
 Both lexical probes require the exact needle fixture identity and no spill.
+Every profile with at least 10,000 Process rows also requires the exact-name/
+classification probe to naturally name
+`portal_catalog_search_process_exact_rank_v1_gin`, records its bytes, and
+keeps the existing Process writer delta/ratio gate so the query gain cannot
+hide unsafe projection-write amplification.
 The benchmark also captures anonymous Process/Flow empty and filtered Facets
 plans, requires the independent empty path to use its 32-MB workspace without
 temp/disk spill, measures the parent-first facet reconcile fence, and includes
@@ -222,7 +227,7 @@ timeout remain bounded even though scanned rows grow with retained versions.
 
 ### `check_portal_projection_manifest.py`
 
-Checks all three committed Portal digests: the exact eleven-function stored-card
+Checks the committed Portal digests: the exact eleven-function stored-card
 closure, the exact two-function narrow-facet closure, and the independent
 selected-row context/decorator closure. It rejects later mutation of any
 closure/control set, validates the four facet shards plus reconcile/cutover,
@@ -232,6 +237,13 @@ also requires the Flow geography Search follow-up to remain a single
 query-only kernel replacement with no table/index/trigger/writer rewrite. The
 runtime path independently validates the Facet manifest before reading that
 child projection.
+
+The checker also freezes the Issue #563 three-step sequence: dormant immutable
+rank helpers, one standalone concurrent partial expression GIN, and an atomic
+coordinator cutover limited to multi-code-point, non-UUID, unfiltered Process
+relevance. It requires the internal writer and `postgres` maintenance ACLs,
+rejects any public wrapper/trigger/table rewrite, and protects the helper
+closure from later mutation.
 
 It also freezes the Issue #539 64-bucket exact-version child: table/PK, exact
 facet FK with `ON UPDATE RESTRICT`/`ON DELETE CASCADE`, history-order index, and

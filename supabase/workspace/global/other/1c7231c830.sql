@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."portal_process_rank_classification_keys_v1"("p_card" "jsonb") IS 'Extracts bounded normalized exact Process classification codes from one frozen public card for the expression GIN rank probe.';
