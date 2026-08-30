@@ -231,6 +231,16 @@ begin
        'postgres',
        'private.portal_process_rank_classification_keys_v1(jsonb)',
        'EXECUTE'
+     )
+     or not has_function_privilege(
+       'api_internal_executor',
+       'private.portal_process_rank_name_keys_v1(jsonb)',
+       'EXECUTE'
+     )
+     or not has_function_privilege(
+       'api_internal_executor',
+       'private.portal_process_rank_classification_keys_v1(jsonb)',
+       'EXECUTE'
      ) then
     raise exception 'Portal Process keyword rank cutover drifted'
       using errcode = '55000';

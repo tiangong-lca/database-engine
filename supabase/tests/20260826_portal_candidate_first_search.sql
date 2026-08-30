@@ -1841,6 +1841,16 @@ select extensions.ok(
     'private.portal_process_rank_classification_keys_v1(jsonb)',
     'EXECUTE'
   )
+  and pg_catalog.has_function_privilege(
+    'api_internal_executor',
+    'private.portal_process_rank_name_keys_v1(jsonb)',
+    'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'api_internal_executor',
+    'private.portal_process_rank_classification_keys_v1(jsonb)',
+    'EXECUTE'
+  )
   and not pg_catalog.has_function_privilege(
     'anon',
     'private.catalog_portal_process_keyword_relevance_v1_impl(text,text,uuid,text,integer,text)',
@@ -1861,7 +1871,7 @@ select extensions.ok(
     'private.catalog_portal_process_keyword_relevance_v1_impl(text,text,uuid,text,integer,text)',
     'EXECUTE'
   ),
-  'the concurrent exact-rank GIN is live while its helper closure remains externally closed'
+  'the concurrent exact-rank GIN is live with only its required internal writer execution edge'
 );
 
 select extensions.lives_ok(

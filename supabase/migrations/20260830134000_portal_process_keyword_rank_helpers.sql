@@ -506,7 +506,15 @@ from public, anon, authenticated, service_role, api_internal_executor;
 revoke all on function private.assert_portal_process_keyword_rank_contract_v1()
 from public, anon, authenticated, service_role, api_internal_executor;
 
--- The next standalone migration builds the expression index as postgres.
+-- The projection writer must evaluate the immutable index expressions on
+-- every Process card write. The next standalone migration additionally
+-- builds the expression index as postgres, whose temporary grants are removed
+-- by the cutover migration.
+grant execute on function private.portal_process_rank_name_keys_v1(jsonb)
+to api_internal_executor;
+grant execute on function private.portal_process_rank_classification_keys_v1(
+  jsonb
+) to api_internal_executor;
 grant execute on function private.portal_process_rank_name_keys_v1(jsonb)
 to postgres;
 grant execute on function private.portal_process_rank_classification_keys_v1(
