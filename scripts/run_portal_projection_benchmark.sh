@@ -44,17 +44,17 @@ project_id="$({
   sed -n 's/^project_id = "\([^"]*\)"$/\1/p' \
     "$test_workdir/supabase/config.toml" | head -n 1
 })"
-if [[ ! "$project_id" =~ ^database-engine-(531|532|539|543|551)-[a-z0-9-]+$ ]]; then
-  echo "refusing non-Issue-531/532/539/543/551 Supabase project_id: $project_id" >&2
+if [[ ! "$project_id" =~ ^database-engine-(531|532|539|543|551|563)-[a-z0-9-]+$ ]]; then
+  echo "refusing non-Issue-531/532/539/543/551/563 Supabase project_id: $project_id" >&2
   exit 2
 fi
 
 shopt -s nullglob
 repo_migrations=("$repo_root"/supabase/migrations/*.sql)
 test_migrations=("$test_workdir"/supabase/migrations/*.sql)
-if [[ "${#repo_migrations[@]}" -ne 296 \
-   || "${#test_migrations[@]}" -ne 296 ]]; then
-  echo "complete migration tree must contain exactly 296 files" >&2
+if [[ "${#repo_migrations[@]}" -ne 299 \
+   || "${#test_migrations[@]}" -ne 299 ]]; then
+  echo "complete migration tree must contain exactly 299 files" >&2
   exit 2
 fi
 migration_manifest_payload=""
@@ -266,7 +266,7 @@ echo "Supabase CLI: $supabase_cli_version" | tee "$results_log"
 echo "Benchmark target: $project_id" | tee -a "$results_log"
 echo "Benchmark profile: $profile_name" | tee -a "$results_log"
 echo "Repository HEAD: $repository_head" | tee -a "$results_log"
-echo "Migration tree SHA-256 (296 files): $migration_tree_sha256" \
+echo "Migration tree SHA-256 (299 files): $migration_tree_sha256" \
   | tee -a "$results_log"
 echo "Benchmark SQL SHA-256: $benchmark_sql_sha256" | tee -a "$results_log"
 echo "Benchmark runner SHA-256: $benchmark_runner_sha256" \
@@ -342,7 +342,10 @@ done
 
 # The ~17k-row Process lexical leaf has two valid natural-cost plans. SQL
 # records and bounds whichever the planner selects; Flow must name PGroonga.
-for expected_index in portal_catalog_search_flow_document_v1_pgroonga; do
+for expected_index in \
+  portal_catalog_search_process_exact_rank_v1_gin \
+  portal_catalog_search_flow_document_v1_pgroonga
+do
   if ! grep -q "$expected_index" "$explain_log"; then
     echo "missing representative plan index: $expected_index" >&2
     exit 1

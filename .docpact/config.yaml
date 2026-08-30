@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-30"
-lastReviewedCommit: "b624bd73488b0e74aaa4fdecb75c5b000f2da67c"
-lastReviewedNote: "Reviewed for Issue #557 after merging current main: Auth recovery template ownership and checks compose with the 296-migration portal projection state; routing and validation boundaries remain accurate."
+lastReviewedCommit: "be1f915"
+lastReviewedNote: "Reviewed for Issue #563: routing and proof now include the 299-migration Process keyword rank helper/index/cutover sequence without changing ownership boundaries."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -529,6 +529,12 @@ rules:
         kind: database-migration
       - path: supabase/migrations/20260829131006_portal_character_projection_cutover.sql
         kind: database-migration
+      - path: supabase/migrations/20260830134000_portal_process_keyword_rank_helpers.sql
+        kind: database-migration
+      - path: supabase/migrations/20260830134001_portal_process_keyword_rank_index.sql
+        kind: database-migration
+      - path: supabase/migrations/20260830134002_portal_process_keyword_rank_cutover.sql
+        kind: database-migration
       - path: supabase/tests/20260826_portal_candidate_first_search.sql
         kind: database-contract-test
       - path: supabase/tests/20260827_portal_card_context_v1.sql
@@ -556,4 +562,4 @@ rules:
         mode: review_or_update
       - path: docs/agents/portal-projection-migration-recovery.md
         mode: review_or_update
-    reason: The immutable card and facet manifests, online expand/backfill/reconcile/index/cutover sequences, selected-row card-context decorator, query-only Flow geography Search repair, forced-RLS exact-CAS binding, sharded narrow character projection and pre-limit cutover, fixed sitemap shards, recovery procedure, and representative performance gates must change together.
+    reason: The immutable card and facet manifests, online expand/backfill/reconcile/index/cutover sequences, selected-row card-context decorator, query-only Flow geography Search repair, forced-RLS exact-CAS binding, sharded narrow character projection, bounded Process keyword expression-GIN pre-limit cutover, fixed sitemap shards, recovery procedure, and representative performance gates must change together.

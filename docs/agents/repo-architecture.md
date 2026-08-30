@@ -31,8 +31,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-30
-lastReviewedCommit: b624bd7
-lastReviewedNote: "Reviewed for Issue #557 after merging current main: the path map includes Auth email template sources alongside the current portal projection state; generated workspace and runtime boundaries remain accurate."
+lastReviewedCommit: be1f915
+lastReviewedNote: "Reviewed for Issue #563: the Process keyword key-selector/index remains a bounded query layer over immutable Portal v1 cards and does not change schema ownership or generated-workspace boundaries."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -437,6 +437,17 @@ the independent live Facet manifest on every matching request. It does not add a
 geography index—the representative filter matches the full Flow universe, so
 such an index would add writer/storage cost without selectivity—and all other
 Search filters continue through the general exhaustive card-facts path.
+
+Multi-code-point, non-UUID, empty-filter Process relevance Search has one
+separate bounded hydration path. It preserves the existing PGroonga
+pattern-version match and exact latest-visible recheck, probes normalized exact
+name/classification keys through a partial expression GIN, merges those scores
+with the general matched keys, applies the existing cursor/order/`limit+1`, and
+only then reads wide cards and derives match facts. The immutable expression
+functions are executable only by their owner, the internal projection writer,
+and the `postgres` index/ANALYZE maintenance role. The path adds no projection
+row, trigger, public wrapper, filter, timeout, or Flow behavior; empty, UUID,
+one-code-point, filtered, and alternate-sort requests keep their prior kernels.
 
 The catalog summary is a bounded consumer of the same synchronized projections,
 not a separate search index. UUID and CAS examples keep their exact evidence

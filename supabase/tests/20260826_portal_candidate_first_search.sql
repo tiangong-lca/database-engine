@@ -1766,6 +1766,281 @@ select extensions.is(
 );
 
 select extensions.ok(
+  (
+    select pg_catalog.bool_and(
+      routine.proowner = 'portal_public_executor'::regrole
+      and case routine.oid
+        when 'private.portal_process_rank_name_keys_v1(jsonb)'::regprocedure
+          then not routine.prosecdef
+            and routine.provolatile = 'i'
+            and routine.proparallel = 's'
+            and routine.proconfig = array['search_path=""']::text[]
+        when 'private.portal_process_rank_classification_keys_v1(jsonb)'::regprocedure
+          then not routine.prosecdef
+            and routine.provolatile = 'i'
+            and routine.proparallel = 's'
+            and routine.proconfig = array['search_path=""']::text[]
+        else routine.prosecdef
+          and routine.provolatile = 's'
+          and routine.proparallel = 'r'
+          and routine.proconfig @> array[
+            'search_path=""',
+            'row_security=on'
+          ]::text[]
+      end
+    )
+    from pg_catalog.pg_proc as routine
+    where routine.oid in (
+      'private.portal_process_rank_name_keys_v1(jsonb)'::regprocedure,
+      'private.portal_process_rank_classification_keys_v1(jsonb)'::regprocedure,
+      'private.catalog_portal_process_keyword_keys_v1(text,text,uuid,text,integer)'::regprocedure,
+      'private.catalog_portal_process_keyword_relevance_v1_impl(text,text,uuid,text,integer,text)'::regprocedure,
+      'private.portal_process_keyword_rank_manifest_sha256_v1()'::regprocedure,
+      'private.assert_portal_process_keyword_rank_contract_v1()'::regprocedure
+    )
+  )
+  and (
+    select pg_catalog.count(*) = 6
+    from pg_catalog.pg_proc as routine
+    where routine.oid in (
+      'private.portal_process_rank_name_keys_v1(jsonb)'::regprocedure,
+      'private.portal_process_rank_classification_keys_v1(jsonb)'::regprocedure,
+      'private.catalog_portal_process_keyword_keys_v1(text,text,uuid,text,integer)'::regprocedure,
+      'private.catalog_portal_process_keyword_relevance_v1_impl(text,text,uuid,text,integer,text)'::regprocedure,
+      'private.portal_process_keyword_rank_manifest_sha256_v1()'::regprocedure,
+      'private.assert_portal_process_keyword_rank_contract_v1()'::regprocedure
+    )
+  ),
+  'Process keyword rank helpers retain exact owner, volatility, parallel, definer, search-path, and RLS metadata'
+);
+
+select extensions.ok(
+  (
+    select index_catalog.indisvalid
+      and index_catalog.indisready
+      and index_catalog.indislive
+      and not index_catalog.indisunique
+      and access_method.amname = 'gin'
+      and pg_catalog.pg_get_indexdef(index_relation.oid) =
+        'CREATE INDEX portal_catalog_search_process_exact_rank_v1_gin ON private.portal_catalog_search_rows_v1 USING gin (private.portal_process_rank_name_keys_v1(card), private.portal_process_rank_classification_keys_v1(card)) WHERE (dataset_kind = ''process''::text)'
+    from pg_catalog.pg_class as index_relation
+    join pg_catalog.pg_index as index_catalog
+      on index_catalog.indexrelid = index_relation.oid
+    join pg_catalog.pg_am as access_method
+      on access_method.oid = index_relation.relam
+    where index_relation.oid =
+      'private.portal_catalog_search_process_exact_rank_v1_gin'::regclass
+  )
+  and (
+    select pg_catalog.count(*)
+    from pg_catalog.pg_proc as routine
+    cross join lateral pg_catalog.aclexplode(routine.proacl) as privilege
+    where routine.oid in (
+      'private.portal_process_rank_name_keys_v1(jsonb)'::regprocedure,
+      'private.portal_process_rank_classification_keys_v1(jsonb)'::regprocedure
+    )
+      and privilege.grantee = 'postgres'::regrole
+      and privilege.privilege_type = 'EXECUTE'
+  ) = 2
+  and pg_catalog.has_function_privilege(
+    'api_internal_executor',
+    'private.portal_process_rank_name_keys_v1(jsonb)',
+    'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
+    'api_internal_executor',
+    'private.portal_process_rank_classification_keys_v1(jsonb)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'anon',
+    'private.catalog_portal_process_keyword_relevance_v1_impl(text,text,uuid,text,integer,text)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'authenticated',
+    'private.catalog_portal_process_keyword_relevance_v1_impl(text,text,uuid,text,integer,text)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'service_role',
+    'private.catalog_portal_process_keyword_relevance_v1_impl(text,text,uuid,text,integer,text)',
+    'EXECUTE'
+  )
+  and not pg_catalog.has_function_privilege(
+    'api_internal_executor',
+    'private.catalog_portal_process_keyword_relevance_v1_impl(text,text,uuid,text,integer,text)',
+    'EXECUTE'
+  ),
+  'the concurrent exact-rank GIN is live with only its required writer and database-maintenance execution edges'
+);
+
+select extensions.lives_ok(
+  $$select private.assert_portal_process_keyword_rank_contract_v1()$$,
+  'the Process keyword rank manifest and exact index contract are live'
+);
+
+select extensions.ok(
+  (
+    with cases(query_text, page_limit) as (
+      values
+        ('candidate public process'::text, 1),
+        ('candidate public', 20),
+        ('filterfillneedle', 1),
+        ('filterfillneedle', 2),
+        ('filterfillneedle', 20),
+        ('portal-candidate-no-hit', 20)
+    ), compared as (
+      select private.catalog_portal_search_v1_impl(
+          'process',
+          cases.query_text,
+          '{}'::jsonb,
+          'relevance',
+          null,
+          null,
+          null,
+          cases.page_limit,
+          private.portal_query_fingerprint_v1(
+            'process', cases.query_text, '{}'::jsonb, 'relevance'
+          )
+        ) as predecessor,
+        private.catalog_portal_process_keyword_relevance_v1_impl(
+          cases.query_text,
+          null,
+          null,
+          null,
+          cases.page_limit,
+          private.portal_query_fingerprint_v1(
+            'process', cases.query_text, '{}'::jsonb, 'relevance'
+          )
+        ) as bounded
+      from cases
+    )
+    select pg_catalog.bool_and(
+      compared.predecessor is not distinct from compared.bounded
+    )
+    from compared
+  ),
+  'bounded Process keyword hydration is byte-identical for exact, contains, common, limited, and no-hit pages'
+);
+
+select extensions.ok(
+  (
+    with fingerprint as (
+      select private.portal_query_fingerprint_v1(
+        'process', 'filterfillneedle', '{}'::jsonb, 'relevance'
+      ) as value
+    ), first_page as (
+      select private.catalog_portal_search_v1_impl(
+        'process',
+        'filterfillneedle',
+        '{}'::jsonb,
+        'relevance',
+        null,
+        null,
+        null,
+        2,
+        fingerprint.value
+      ) as value,
+      fingerprint.value as fingerprint
+      from fingerprint
+    ), cursor_value as (
+      select first_page.value -> 'nextCursorPayload' as value,
+        first_page.fingerprint
+      from first_page
+    ), compared as (
+      select private.catalog_portal_search_v1_impl(
+          'process',
+          'filterfillneedle',
+          '{}'::jsonb,
+          'relevance',
+          cursor_value.value ->> 'rankKey',
+          (cursor_value.value ->> 'id')::uuid,
+          cursor_value.value ->> 'version',
+          2,
+          cursor_value.fingerprint
+        ) as predecessor,
+        private.catalog_portal_process_keyword_relevance_v1_impl(
+          'filterfillneedle',
+          cursor_value.value ->> 'rankKey',
+          (cursor_value.value ->> 'id')::uuid,
+          cursor_value.value ->> 'version',
+          2,
+          cursor_value.fingerprint
+        ) as bounded
+      from cursor_value
+    )
+    select compared.predecessor is not distinct from compared.bounded
+    from compared
+  ),
+  'bounded Process keyword hydration preserves the exact second-page cursor result'
+);
+
+select extensions.ok(
+  (
+    with fingerprint as (
+      select private.portal_query_fingerprint_v1(
+        'process', 'filterfillneedle', '{}'::jsonb, 'relevance'
+      ) as value
+    ), predecessor as (
+      select private.catalog_portal_search_v1_impl(
+        'process',
+        'filterfillneedle',
+        '{}'::jsonb,
+        'relevance',
+        null,
+        null,
+        null,
+        2,
+        fingerprint.value
+      ) as kernel,
+      fingerprint.value as fingerprint
+      from fingerprint
+    ), expected as (
+      select pg_catalog.jsonb_build_object(
+        'schemaVersion', 'portal.public-search-page.v1',
+        'kind', 'process',
+        'queryFingerprint', predecessor.fingerprint,
+        'items', predecessor.kernel -> 'items',
+        'nextCursor', case
+          when nullif(
+            predecessor.kernel -> 'nextCursorPayload',
+            'null'::jsonb
+          ) is null then null
+          else private.portal_cursor_encode_v1(
+            predecessor.kernel -> 'nextCursorPayload'
+          )
+        end
+      ) as value
+      from predecessor
+    )
+    select private.portal_search_v1(
+      'process',
+      'filterfillneedle',
+      '{}'::jsonb,
+      'relevance',
+      null,
+      2
+    ) is not distinct from expected.value
+    from expected
+  )
+  and (
+    select routine.proowner = 'portal_public_executor'::regrole
+      and not routine.prosecdef
+      and routine.proconfig = array['search_path=""']::text[]
+      and routine.prosrc ~ 'char_length\(v_query\) > 1'
+      and routine.prosrc ~ 'v_query !~'
+      and routine.prosrc ~ 'catalog_portal_process_keyword_relevance_v1_impl'
+      and routine.prosrc ~ 'catalog_portal_single_character_search_v1_impl'
+      and routine.prosrc ~ 'catalog_portal_search_v1_impl'
+    from pg_catalog.pg_proc as routine
+    where routine.oid =
+      'private.portal_search_v1(text,text,jsonb,text,text,integer)'::regprocedure
+  ),
+  'the public coordinator preserves predecessor bytes and gates only the intended Process keyword shape'
+);
+
+select extensions.ok(
   not exists (
     (
       select projection.dataset_kind,

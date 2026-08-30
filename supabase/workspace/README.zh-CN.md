@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-30
-lastReviewedCommit: b624bd7
-lastReviewedNote: "合并当前 main 后为 Issue #557 复核：Auth 邮件模板仍不属于 generated schema workspace；现有 296-migration projection 状态与 workspace 所有权保持准确。"
+lastReviewedCommit: be1f915
+lastReviewedNote: "为 Issue #563 复核：299-migration Process keyword rank 上线不改变 generated workspace 所有权、刷新或稳定 overlay 规则。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

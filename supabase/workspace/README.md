@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-30
-lastReviewedCommit: b624bd7
-lastReviewedNote: "Reviewed for Issue #557 after merging current main: Auth email templates remain outside the generated schema workspace; the current 296-migration projection state and workspace ownership remain accurate."
+lastReviewedCommit: be1f915
+lastReviewedNote: "Reviewed for Issue #563: the 299-migration Process keyword rank rollout changes no generated-workspace ownership, refresh, or stable-overlay rule."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
