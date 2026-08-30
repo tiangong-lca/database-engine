@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."catalog_portal_process_keyword_relevance_v1_impl"("p_query" "text", "p_cursor_rank" "text", "p_cursor_id" "uuid", "p_cursor_version" "text", "p_limit" integer, "p_query_fingerprint" "text") IS 'Hydrates only the bounded Process keyword relevance page after exact-rank and general-key selection.';

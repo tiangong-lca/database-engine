@@ -70,6 +70,20 @@ begin
       v_limit,
       v_fingerprint
     );
+  elsif p_kind = 'process'
+     and pg_catalog.char_length(v_query) > 1
+     and v_query !~ '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+     and v_filters = '{}'::jsonb
+     and v_sort = 'relevance' then
+    perform private.assert_portal_process_keyword_rank_contract_v1();
+    v_kernel := private.catalog_portal_process_keyword_relevance_v1_impl(
+      v_query,
+      v_cursor_rank,
+      v_cursor_id,
+      v_cursor_version,
+      v_limit,
+      v_fingerprint
+    );
   else
     v_kernel := private.catalog_portal_search_v1_impl(
       p_kind,

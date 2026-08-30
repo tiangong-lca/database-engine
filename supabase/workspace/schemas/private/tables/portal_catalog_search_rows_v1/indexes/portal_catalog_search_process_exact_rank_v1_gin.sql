@@ -1,0 +1,1 @@
+CREATE INDEX "portal_catalog_search_process_exact_rank_v1_gin" ON "private"."portal_catalog_search_rows_v1" USING "gin" ("private"."portal_process_rank_name_keys_v1"("card"), "private"."portal_process_rank_classification_keys_v1"("card")) WHERE ("dataset_kind" = 'process'::"text");
