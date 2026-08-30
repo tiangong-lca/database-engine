@@ -25,6 +25,7 @@ checkPaths:
   - supabase/config.toml
   - supabase/migrations/**
   - supabase/tests/**
+  - supabase/templates/**
   - supabase/seed.sql
   - supabase/seeds/**
   - supabase/workspace/**
@@ -36,9 +37,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 2425798
-lastReviewedNote: "Reviewed for Issues #551/#552: forced-RLS CAS remains bound to the public-state domain, one-code-point relevance pre-limits on an exact-FK synchronized narrow character child, and the CLI pin changes no ownership or delivery boundary."
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: b624bd7
+lastReviewedNote: "Reviewed for Issue #557 after merging current main: Auth email templates remain an explicit database-engine source path; the current portal projection work changes no ownership or delivery boundary."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
@@ -48,7 +49,7 @@ related:
 
 ## Repo Contract
 
-`database-engine` owns the checked-in Supabase database contract for the TianGong LCA workspace: schema truth, versioned public DTO schemas under `contracts/portal/**`, migration history, operator branch bindings, database-side tests, the automation that deploys committed migrations to the persistent Supabase `dev` branch, and the production Supabase GitHub integration contract that applies Git `main` migrations.
+`database-engine` owns the checked-in Supabase database contract for the TianGong LCA workspace: schema truth, versioned public DTO schemas under `contracts/portal/**`, migration history, Auth email template sources, operator branch bindings, database-side tests, the automation that deploys committed migrations to the persistent Supabase `dev` branch, and the production Supabase GitHub integration contract that applies Git `main` migrations.
 
 Start here when the task may change schema truth, branch bindings, generated schema-workspace tooling, repo validation rules, or documentation ownership inside this repo.
 

@@ -17,12 +17,14 @@ checkPaths:
   - AGENTS.md
   - .docpact/config.yaml
   - supabase/config.toml
+  - supabase/templates/**
+  - scripts/check_auth_email_templates.py
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
-lastReviewedNote: "Reviewed for Issue #552: the Supabase CLI restart fix changes no PR, persistent Dev, production, or cross-repository mutation boundary."
+lastReviewedCommit: 6e1057511dde93f2289a753cc6561edf73c1486f
+lastReviewedNote: "Reviewed for Issue #557: password-recovery email templates now have a checked-in source and an explicit hosted-configuration operator gate."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -42,6 +44,7 @@ This repository owns:
 - `supabase/seed.sql`
 - `supabase/seeds/*`
 - `supabase/tests/*.sql`
+- `supabase/templates/*.html`
 - `.env.supabase.dev.local.example`
 - `.env.supabase.main.local.example`
 - `.github/workflows/supabase-dev.yml`
@@ -97,6 +100,7 @@ When review changes an already-applied PR migration, add a later migration that 
 - `supabase/seed.sql`: shared seed data
 - `supabase/seeds/dev.sql`: optional persistent-dev-only seed data
 - `supabase/tests/*.sql`: database assertions and safety checks
+- `supabase/templates/recovery.html`: canonical password-recovery email body
 - `.env.supabase.dev.local.example`: template for the persistent `dev` branch binding
 - `.env.supabase.main.local.example`: template for the `main` branch binding
 - `docs/agents/supabase-branching.md`: English branching workflow
@@ -284,6 +288,31 @@ deploy for Supabase. That is intentional: Git `main` is handled by the Supabase
 GitHub integration. An operator can still run `supabase link` and
 `supabase db push --include-all` locally as an explicit fallback or recovery
 path, but that manual action must be recorded in validation or incident notes.
+
+## Auth email template contract
+
+`supabase/templates/recovery.html` is the canonical password-recovery email body,
+and `[auth.email.template.recovery]` in `supabase/config.toml` owns its subject and
+local CLI binding. Run this static contract before delivery:
+
+```bash
+python3 scripts/check_auth_email_templates.py
+python3 scripts/test_check_auth_email_templates.py
+```
+
+The template must use Supabase's complete `{{ .ConfirmationURL }}` for both the
+reset button and a visible copyable fallback. Do not rebuild the verification
+URL from `.TokenHash`, and do not label a recovery link as `type=magiclink`.
+
+Committing this file, applying migrations, or merging `main` does not by itself
+prove that an existing hosted project's Auth email template changed. After the
+code PR is reviewed, an explicitly authorized operator must open the exact
+target project in **Authentication -> Email Templates -> Reset Password**, copy
+the checked-in subject and HTML without editing the URL expression, save it,
+and then send a real recovery email. Validate both the button and copied-link
+paths through the Next application, and record the target environment, time,
+and pass/fail readback in the delivery Issue or PR. Never paste access tokens,
+the rendered recovery URL, or raw email contents into logs or GitHub records.
 
 ## Vault secret contract
 

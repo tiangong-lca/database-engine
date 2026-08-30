@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 2425798
-lastReviewedNote: "Reviewed for Issues #551/#552: the 296-migration exact-local CAS policy plus narrow character projection state regenerates without drift; generated workspace/type ownership remains unchanged."
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: b624bd7
+lastReviewedNote: "Reviewed for Issue #557 after merging current main: Auth email templates remain outside the generated schema workspace; the current 296-migration projection state and workspace ownership remain accurate."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

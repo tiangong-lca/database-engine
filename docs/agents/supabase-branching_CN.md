@@ -17,12 +17,14 @@ checkPaths:
   - AGENTS.md
   - .docpact/config.yaml
   - supabase/config.toml
+  - supabase/templates/**
+  - scripts/check_auth_email_templates.py
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-29
-lastReviewedCommit: e39fdf422fcf109a16bc8e52bba59538092c521c
-lastReviewedNote: "已为 Issue #552 复核：Supabase CLI 重启修复不改变 PR、持久化 Dev、生产或跨仓修改边界。"
+lastReviewedCommit: 6e1057511dde93f2289a753cc6561edf73c1486f
+lastReviewedNote: "已为 Issue #557 复核：密码恢复邮件模板现在具有仓库内真相源和显式托管配置运维门。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -42,6 +44,7 @@ related:
 - `supabase/seed.sql`
 - `supabase/seeds/*`
 - `supabase/tests/*.sql`
+- `supabase/templates/*.html`
 - `.env.supabase.dev.local.example`
 - `.env.supabase.main.local.example`
 - `.github/workflows/supabase-dev.yml`
@@ -99,6 +102,7 @@ canonical-base-to-head upgrade；追加的 Preview repair 本身不能证明首�
 - `supabase/seed.sql`：共享 seed 数据
 - `supabase/seeds/dev.sql`：可选的持久化 dev 专属 seed 数据
 - `supabase/tests/*.sql`：数据库断言与安全检查
+- `supabase/templates/recovery.html`：密码恢复邮件正文真相源
 - `.env.supabase.dev.local.example`：持久化 `dev` 分支绑定模板
 - `.env.supabase.main.local.example`：`main` 分支绑定模板
 - `docs/agents/supabase-branching.md`：英文 branching 文档
@@ -232,6 +236,28 @@ Promote 路径：
 Git `main` 由 Supabase GitHub integration 处理。运维人员仍可在本地执行
 `supabase link` 和 `supabase db push --include-all`，但这只能作为明确的兜底或恢复路径，
 并且必须在验证记录或事故记录中说明。
+
+## Auth 邮件模板契约
+
+`supabase/templates/recovery.html` 是密码恢复邮件正文的真相源，
+`supabase/config.toml` 中的 `[auth.email.template.recovery]` 负责主题和本地 CLI
+绑定。交付前运行：
+
+```bash
+python3 scripts/check_auth_email_templates.py
+python3 scripts/test_check_auth_email_templates.py
+```
+
+按钮和可见、可复制的备用链接都必须直接使用 Supabase 提供的完整
+`{{ .ConfirmationURL }}`。禁止用 `.TokenHash` 手工拼接验证 URL，也禁止把恢复链接
+写成 `type=magiclink`。
+
+提交该文件、应用 migration 或合并 `main`，都不能单独证明已有托管项目中的 Auth
+邮件模板已经变化。代码 PR 通过评审后，获得明确授权的运维人员必须进入准确目标项目的
+**Authentication -> Email Templates -> Reset Password**，原样复制仓库内的主题与 HTML，
+不得修改 URL 表达式，然后发送一封真实恢复邮件。必须通过 Next 应用分别验证按钮和复制
+链接，并在交付 Issue 或 PR 中记录目标环境、时间与通过/失败回读。不得把 access token、
+渲染后的恢复 URL 或原始邮件内容写入日志或 GitHub 记录。
 
 ## Vault secret 契约
 

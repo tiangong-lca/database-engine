@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 2425798
-lastReviewedNote: "已为 Issues #551/#552 复核：296-migration exact-local CAS policy 与窄 character projection 状态重新生成无漂移；generated workspace/type 所有权保持不变。"
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: b624bd7
+lastReviewedNote: "合并当前 main 后为 Issue #557 复核：Auth 邮件模板仍不属于 generated schema workspace；现有 296-migration projection 状态与 workspace 所有权保持准确。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
