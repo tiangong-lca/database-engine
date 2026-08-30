@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-30
-lastReviewedCommit: be1f915
-lastReviewedNote: "Reviewed for Issue #563: the 299-file recovery and benchmark tooling now covers the bounded Process keyword expression-GIN rollout and maintenance ACLs."
+lastReviewedAt: 2026-08-31
+lastReviewedCommit: 595d4d6
+lastReviewedNote: "Reviewed for Issue #566: generated schema/type refresh uses the existing script contract; no helper command or stable-overlay rule changes."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

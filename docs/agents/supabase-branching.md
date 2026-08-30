@@ -22,9 +22,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 6e1057511dde93f2289a753cc6561edf73c1486f
-lastReviewedNote: "Reviewed for Issue #557: password-recovery email templates now have a checked-in source and an explicit hosted-configuration operator gate."
+lastReviewedAt: 2026-08-31
+lastReviewedCommit: 595d4d6
+lastReviewedNote: "Reviewed for Issue #566: the OAuth database migration and added local-contract test do not change branch bindings, deployment ownership, or promotion procedure."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

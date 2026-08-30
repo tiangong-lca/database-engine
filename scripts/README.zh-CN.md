@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-30
-lastReviewedCommit: be1f915
-lastReviewedNote: "为 Issue #563 复核：299-file recovery/benchmark 工具已覆盖 Process keyword expression-GIN 上线与内部维护 ACL。"
+lastReviewedAt: 2026-08-31
+lastReviewedCommit: 595d4d6
+lastReviewedNote: "为 Issue #566 复核：schema/type 生成继续使用既有脚本合同，不改变 helper 命令或稳定 overlay 规则。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

@@ -22,9 +22,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 6e1057511dde93f2289a753cc6561edf73c1486f
-lastReviewedNote: "已为 Issue #557 复核：密码恢复邮件模板现在具有仓库内真相源和显式托管配置运维门。"
+lastReviewedAt: 2026-08-31
+lastReviewedCommit: 595d4d6
+lastReviewedNote: "已为 Issue #566 复核：OAuth 数据库 migration 与新增本地合同测试不改变分支绑定、部署职责或晋升流程。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

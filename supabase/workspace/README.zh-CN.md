@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-30
-lastReviewedCommit: be1f915
-lastReviewedNote: "为 Issue #563 复核：299-migration Process keyword rank 上线不改变 generated workspace 所有权、刷新或稳定 overlay 规则。"
+lastReviewedAt: 2026-08-31
+lastReviewedCommit: 595d4d6
+lastReviewedNote: "为 Issue #566 复核：OAuth schema 对象属于普通 exact-local 生成结果，不改变 workspace 所有权、刷新或稳定 overlay 规则。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

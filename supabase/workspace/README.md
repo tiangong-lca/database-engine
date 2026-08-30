@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-30
-lastReviewedCommit: be1f915
-lastReviewedNote: "Reviewed for Issue #563: the 299-migration Process keyword rank rollout changes no generated-workspace ownership, refresh, or stable-overlay rule."
+lastReviewedAt: 2026-08-31
+lastReviewedCommit: 595d4d6
+lastReviewedNote: "Reviewed for Issue #566: OAuth schema objects are ordinary exact-local generated output and do not change workspace ownership, refresh, or stable-overlay rules."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
