@@ -22,6 +22,7 @@ checkPaths:
   - supabase/config.toml
   - supabase/migrations/**
   - supabase/tests/**
+  - supabase/templates/**
   - supabase/workspace/**
   - scripts/**
   - .github/workflows/supabase-dev.yml
@@ -29,9 +30,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 2425798
-lastReviewedNote: "Reviewed for Issues #551/#552: forced-RLS CAS remains bound to the public-state domain, one-code-point literal Search bypasses TokenBigram false negatives without a new index, and the workflow CLI pin changes no architecture boundary."
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: b624bd7
+lastReviewedNote: "Reviewed for Issue #557 after merging current main: the path map includes Auth email template sources alongside the current portal projection state; generated workspace and runtime boundaries remain accurate."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -231,6 +232,7 @@ executable by application roles.
 | Path group | Role |
 | --- | --- |
 | `supabase/config.toml` | shared local baseline plus branch-specific remote bindings |
+| `supabase/templates/**` | canonical Auth email template sources; hosted application still requires an explicit authorized operator action and readback |
 | `supabase/migrations/**` | authoritative migration history and durable schema changes |
 | `supabase/seed.sql` | shared seed data; when no rows are needed, retain an executable no-op statement instead of a comments-only file so hosted Preview seeding has a valid SQL batch |
 | `supabase/seeds/dev.sql` | persistent dev-only seed overlay |

@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-29
-lastReviewedCommit: 2425798
-lastReviewedNote: "Reviewed for Issues #551/#552: 296-file recovery/benchmark runners, forced-RLS CAS and narrow character projection p95 gates, plus the workflow's single Supabase CLI version remain current."
+lastReviewedAt: 2026-08-30
+lastReviewedCommit: b624bd7
+lastReviewedNote: "Reviewed for Issue #557 after merging current main: the Auth recovery email checker and current 296-file recovery, benchmark, CAS, and portal projection tooling are all represented."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -46,6 +46,18 @@ Those runners should keep their own `README.md` with dry-run, apply, and validat
 Local migration outputs and audit JSONL files should be written under `_artifacts/`, which is intentionally ignored by Git.
 
 ## Script List
+
+### `check_auth_email_templates.py`
+
+Validates the password-recovery email contract without contacting Supabase. It
+requires the exact `supabase/config.toml` binding, a non-empty subject, and both
+a button and visible copyable link targeting the same complete
+`{{ .ConfirmationURL }}`. It rejects hand-built token-hash magic links.
+
+```bash
+python3 scripts/check_auth_email_templates.py
+python3 scripts/test_check_auth_email_templates.py
+```
 
 ### `test_full_schema_cutover_upgrade.sh`
 

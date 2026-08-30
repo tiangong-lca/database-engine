@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-08-29"
-lastReviewedCommit: "2425798"
-lastReviewedNote: "Reviewed for Issues #551/#552: 296 migrations, forced-RLS CAS indexability, narrow character projection correctness/performance gates, retained recovery, and unchanged ownership/routing for the CLI pin."
+lastReviewedAt: "2026-08-30"
+lastReviewedCommit: "b624bd73488b0e74aaa4fdecb75c5b000f2da67c"
+lastReviewedNote: "Reviewed for Issue #557 after merging current main: Auth recovery template ownership and checks compose with the 296-migration portal projection state; routing and validation boundaries remain accurate."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -40,6 +40,7 @@ ownership:
           - supabase/seed.sql
           - supabase/seeds/**
           - supabase/tests/**
+          - supabase/templates/**
           - .env.supabase.dev.local.example
           - .env.supabase.main.local.example
           - .github/workflows/supabase-dev.yml
@@ -89,6 +90,7 @@ coverage:
     - supabase/seed.sql
     - supabase/seeds/**
     - supabase/tests/**
+    - supabase/templates/**
     - scripts/**
     - supabase/workspace/**
     - .env.supabase.dev.local.example
@@ -305,6 +307,8 @@ rules:
     triggers:
       - path: supabase/config.toml
         kind: db-config
+      - path: supabase/templates/**
+        kind: auth-email-template
       - path: .github/workflows/supabase-dev.yml
         kind: automation
       - path: .env.supabase.dev.local.example
