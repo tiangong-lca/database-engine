@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-31
-lastReviewedCommit: 6e00affc589ba6af3af80c4fb43a2be13ea12e83
-lastReviewedNote: "Reviewed for Issue #566: the actor-command migration changes capability data only; generated Data API types, workspace ownership, refresh, and stable-overlay rules are unchanged."
+lastReviewedCommit: e6b4afe857d70cb0242dcbc803f288f77da39608
+lastReviewedNote: "Reviewed for Issue #568: the forward repair changes only capability-manifest data; generated Data API types, workspace ownership, refresh, and stable-overlay rules are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

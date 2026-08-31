@@ -23,8 +23,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-31
-lastReviewedCommit: 6e00affc589ba6af3af80c4fb43a2be13ea12e83
-lastReviewedNote: "Reviewed for Issue #566: the additive actor-command capability migration and its persistent-Dev workflow test do not change branch bindings, deployment ownership, or promotion procedure."
+lastReviewedCommit: e6b4afe857d70cb0242dcbc803f288f77da39608
+lastReviewedNote: "Reviewed for Issue #568: the append-only OAuth bundle-capability repair uses the existing Preview and persistent-Dev migration path without changing branch bindings, deployment ownership, or promotion procedure."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

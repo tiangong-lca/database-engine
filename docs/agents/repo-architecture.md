@@ -31,8 +31,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-31
-lastReviewedCommit: 6e00affc589ba6af3af80c4fb43a2be13ea12e83
-lastReviewedNote: "Reviewed for Issue #566: OAuth client authorization adds private revocation/capability state, restrictive relation-read RLS, narrow actor-command write capabilities, and a manifest-backed PostgREST gate without reopening raw DML."
+lastReviewedCommit: e6b4afe857d70cb0242dcbc803f288f77da39608
+lastReviewedNote: "Reviewed for Issue #568: the forward capability repair binds both exact LifecycleModel bundle signatures to EDGE-BUNDLE-01 and prevents MCP from inheriting the broad CLI capability."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -93,7 +93,11 @@ one `RESTRICTIVE` authenticated policy over the existing row policies. Raw
 table insert/update/delete remains ACL-closed after command cutover. The three
 actor-bound `cmd_dataset_create`, `cmd_dataset_save_draft`, and
 `cmd_dataset_delete` routes instead use `DB-CORE-WRITE-01`; other first-party
-CLI commands retain `CLI-RPC-01`. Every PostgREST relation or RPC request is
+CLI commands retain `CLI-RPC-01`. The exact
+`cmd_lifecycle_model_bundle_save(jsonb)` and
+`cmd_lifecycle_model_bundle_delete(uuid,text)` signatures use
+`EDGE-BUNDLE-01`; a forward repair and exact-signature regression prevent
+either from falling back to `CLI-RPC-01`. Every PostgREST relation or RPC request is
 checked before execution by
 `api.oauth_client_pre_request()`, which resolves `/rpc/<name>` through the
 exact-signature API capability manifest and rejects unknown, ambiguous,
