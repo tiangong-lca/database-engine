@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-08-31"
-lastReviewedCommit: "6e00affc589ba6af3af80c4fb43a2be13ea12e83"
-lastReviewedNote: "Reviewed for Issue #566: routing and proof cover OAuth client registry, relation-read and actor-command capabilities, complete PostgREST manifest enforcement, and revocation transport checks."
+lastReviewedCommit: "e6b4afe857d70cb0242dcbc803f288f77da39608"
+lastReviewedNote: "Reviewed for Issue #568: routing and proof cover the exact forward repair that restores EDGE-BUNDLE-01 to both LifecycleModel bundle signatures before MCP client admission."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

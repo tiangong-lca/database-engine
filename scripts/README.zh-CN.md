@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-08-31
-lastReviewedCommit: 6e00affc589ba6af3af80c4fb43a2be13ea12e83
-lastReviewedNote: "为 Issue #566 复核：workflow contract 现要求 actor-command pgTAP 套件及 migration head 20260831120000；helper 命令与稳定 overlay 规则不变。"
+lastReviewedCommit: e6b4afe857d70cb0242dcbc803f288f77da39608
+lastReviewedNote: "为 Issue #568 复核：OAuth bundle 回归把精确 migration head 推进到 20260831130000；helper 命令与稳定 overlay 规则不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

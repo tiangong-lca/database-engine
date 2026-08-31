@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, api, private, auth;
 
-select plan(12);
+select plan(17);
 
 select is(
   (
@@ -47,6 +47,39 @@ select is(
   ),
   'cmd_dataset_create:DB-CORE-WRITE-01,cmd_dataset_delete:DB-CORE-WRITE-01,cmd_dataset_save_draft:DB-CORE-WRITE-01'::text,
   'three actor-bound CRUD commands use the narrow write capability'
+);
+
+select is(
+  (
+    select string_agg(
+      concat_ws(':', routine.oid::regprocedure::text, manifest.capability_id),
+      ','
+      order by routine.oid::regprocedure::text
+    )
+    from private.api_capability_grants as manifest
+    join pg_proc as routine
+      on routine.oid = to_regprocedure(manifest.routine_identity)
+    where routine.oid = any (array[
+      'api.cmd_lifecycle_model_bundle_delete(uuid,text)'::regprocedure,
+      'api.cmd_lifecycle_model_bundle_save(jsonb)'::regprocedure
+    ])
+  ),
+  'cmd_lifecycle_model_bundle_delete(uuid,text):EDGE-BUNDLE-01,cmd_lifecycle_model_bundle_save(jsonb):EDGE-BUNDLE-01'::text,
+  'exact LifecycleModel bundle commands use the dedicated bundle capability'
+);
+
+select is(
+  (
+    select count(*)
+    from private.api_capability_grants as manifest
+    where to_regprocedure(manifest.routine_identity) = any (array[
+      'api.cmd_lifecycle_model_bundle_delete(uuid,text)'::regprocedure,
+      'api.cmd_lifecycle_model_bundle_save(jsonb)'::regprocedure
+    ])
+      and manifest.capability_id = 'CLI-RPC-01'
+  ),
+  0::bigint,
+  'LifecycleModel bundle commands never inherit the broad CLI capability'
 );
 
 select is(
@@ -100,7 +133,7 @@ values (
     'test-oauth-command-writer',
     'mcp',
     true,
-    array['DB-CORE-READ-01', 'DB-CORE-WRITE-01']
+    array['DB-CORE-READ-01', 'DB-CORE-WRITE-01', 'EDGE-BUNDLE-01']
   )
 ), (
   'reader',
@@ -123,6 +156,10 @@ select ok(
   private.oauth_client_has_capability('DB-CORE-WRITE-01'),
   'MCP writer receives the narrow command capability'
 );
+select ok(
+  private.oauth_client_has_capability('EDGE-BUNDLE-01'),
+  'MCP writer receives the dedicated LifecycleModel bundle capability'
+);
 select set_config('request.path', '/rpc/cmd_dataset_create', true);
 select set_config('request.method', 'POST', true);
 select lives_ok(
@@ -138,6 +175,11 @@ select set_config('request.path', '/rpc/cmd_dataset_delete', true);
 select lives_ok(
   'select api.oauth_client_pre_request()',
   'writer passes delete-command pre-request admission'
+);
+select set_config('request.path', '/rpc/cmd_lifecycle_model_bundle_save', true);
+select lives_ok(
+  'select api.oauth_client_pre_request()',
+  'writer passes LifecycleModel bundle pre-request admission'
 );
 
 select set_config('request.path', '/contacts', true);
@@ -160,6 +202,13 @@ select throws_ok(
   '42501',
   'OAuth client is not authorized for this API route',
   'read-only client cannot call the create command'
+);
+select set_config('request.path', '/rpc/cmd_lifecycle_model_bundle_save', true);
+select throws_ok(
+  'select api.oauth_client_pre_request()',
+  '42501',
+  'OAuth client is not authorized for this API route',
+  'read-only client cannot call the LifecycleModel bundle command'
 );
 
 select ok(

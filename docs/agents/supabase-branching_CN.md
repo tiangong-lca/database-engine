@@ -23,8 +23,8 @@ checkPaths:
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
 lastReviewedAt: 2026-08-31
-lastReviewedCommit: 6e00affc589ba6af3af80c4fb43a2be13ea12e83
-lastReviewedNote: "已为 Issue #566 复核：追加的 actor-command 能力 migration 及其持久化 Dev workflow 测试不改变分支绑定、部署职责或晋升流程。"
+lastReviewedCommit: e6b4afe857d70cb0242dcbc803f288f77da39608
+lastReviewedNote: "已为 Issue #568 复核：追加式 OAuth bundle 能力修复沿用现有 Preview 与持久化 Dev migration 路径，不改变分支绑定、部署职责或晋升流程。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
