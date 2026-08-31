@@ -1,0 +1,1 @@
+CREATE POLICY "oauth_client_select_capability_guard" ON "public"."ilcd" AS RESTRICTIVE FOR SELECT TO "authenticated" USING (( SELECT "private"."oauth_client_has_capability"('DB-CORE-READ-01'::"text") AS "oauth_client_has_capability"));

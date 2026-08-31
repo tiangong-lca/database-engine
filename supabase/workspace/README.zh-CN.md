@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-30
-lastReviewedCommit: be1f915
-lastReviewedNote: "为 Issue #563 复核：299-migration Process keyword rank 上线不改变 generated workspace 所有权、刷新或稳定 overlay 规则。"
+lastReviewedAt: 2026-08-31
+lastReviewedCommit: e6b4afe857d70cb0242dcbc803f288f77da39608
+lastReviewedNote: "为 Issue #568 复核：追加修复只改变能力 manifest 数据；生成的 Data API types、workspace 所有权、刷新与稳定 overlay 规则均不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

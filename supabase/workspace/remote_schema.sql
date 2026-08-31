@@ -17543,6 +17543,93 @@ $$;
 ALTER FUNCTION "api"."list_lcia_scope_closure_issues"("p_closure_check_id" "uuid", "p_after_issue_id" "uuid", "p_limit" integer) OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "api"."oauth_client_pre_request"() RETURNS "void"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  v_claims jsonb := coalesce(
+    nullif(pg_catalog.current_setting('request.jwt.claims', true), '')::jsonb,
+    '{}'::jsonb
+  );
+  v_client_id text := nullif(pg_catalog.btrim(coalesce(v_claims ->> 'client_id', '')), '');
+  v_headers jsonb := coalesce(
+    nullif(pg_catalog.current_setting('request.headers', true), '')::jsonb,
+    '{}'::jsonb
+  );
+  v_method text := upper(coalesce(
+    nullif(pg_catalog.current_setting('request.method', true), ''),
+    'GET'
+  ));
+  v_path text := coalesce(
+    nullif(pg_catalog.current_setting('request.path', true), ''),
+    '/'
+  );
+  v_profile text;
+  v_route_name text;
+  v_command text;
+  v_capability_id text;
+  v_capability_count integer;
+begin
+  if v_client_id is null then
+    return;
+  end if;
+
+  if v_path like '/rpc/%' then
+    v_route_name := split_part(v_path, '/', 3);
+
+    select
+      min(manifest.capability_id),
+      count(distinct manifest.capability_id)::integer
+    into v_capability_id, v_capability_count
+    from private.api_capability_grants as manifest
+    join pg_catalog.pg_proc as routine
+      on routine.oid = pg_catalog.to_regprocedure(manifest.routine_identity)
+    join pg_catalog.pg_namespace as namespace
+      on namespace.oid = routine.pronamespace
+    where namespace.nspname = 'api'
+      and routine.proname = v_route_name
+      and manifest.allow_authenticated;
+  else
+    v_profile := coalesce(
+      case
+        when v_method in ('GET', 'HEAD') then v_headers ->> 'accept-profile'
+        else v_headers ->> 'content-profile'
+      end,
+      v_headers ->> 'accept-profile',
+      'public'
+    );
+    v_route_name := ltrim(v_path, '/');
+    v_command := case v_method
+      when 'GET' then 'select'
+      when 'HEAD' then 'select'
+      when 'POST' then 'insert'
+      when 'PUT' then 'update'
+      when 'PATCH' then 'update'
+      when 'DELETE' then 'delete'
+      else null
+    end;
+
+    select relation_grant.capability_id, 1
+    into v_capability_id, v_capability_count
+    from private.oauth_relation_capability_grants as relation_grant
+    where relation_grant.relation_schema = v_profile
+      and relation_grant.relation_name = v_route_name
+      and relation_grant.command = v_command;
+  end if;
+
+  if coalesce(v_capability_count, 0) <> 1
+     or not private.oauth_client_has_capability(v_capability_id) then
+    raise insufficient_privilege using
+      message = 'OAuth client is not authorized for this API route';
+  end if;
+end;
+$$;
+
+
+ALTER FUNCTION "api"."oauth_client_pre_request"() OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "api"."pgroonga_search_contacts"("query_text" "text", "filter_condition" "text" DEFAULT ''::"text", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text") RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "total_count" bigint)
     LANGUAGE "plpgsql"
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
@@ -24556,6 +24643,144 @@ $$;
 
 
 ALTER FUNCTION "api"."svc_membership_is_review_admin"("p_user_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "api"."svc_oauth_client_configure"("p_client_id" "text", "p_client_kind" "text", "p_enabled" boolean, "p_capability_ids" "text"[] DEFAULT ARRAY[]::"text"[]) RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+declare
+  v_client_id text := pg_catalog.btrim(coalesce(p_client_id, ''));
+  v_client_kind text := pg_catalog.btrim(coalesce(p_client_kind, ''));
+  v_capability_ids text[];
+  v_unknown_capabilities text[];
+  v_before jsonb;
+  v_after jsonb;
+  v_action text;
+begin
+  if length(v_client_id) not between 1 and 256 then
+    raise invalid_parameter_value using message = 'OAuth client_id is invalid';
+  end if;
+  if v_client_kind !~ '^[a-z][a-z0-9_-]{1,63}$' then
+    raise invalid_parameter_value using message = 'OAuth client kind is invalid';
+  end if;
+  if p_enabled is null then
+    raise invalid_parameter_value using message = 'OAuth client enabled state is required';
+  end if;
+
+  select coalesce(array_agg(capability_id order by capability_id), array[]::text[])
+  into v_capability_ids
+  from (
+    select distinct pg_catalog.btrim(capability_id) as capability_id
+    from unnest(coalesce(p_capability_ids, array[]::text[])) as requested(capability_id)
+    where nullif(pg_catalog.btrim(capability_id), '') is not null
+  ) as normalized;
+
+  select array_agg(requested.capability_id order by requested.capability_id)
+  into v_unknown_capabilities
+  from unnest(v_capability_ids) as requested(capability_id)
+  where not exists (
+    select 1
+    from private.api_capability_grants as rpc_grant
+    where rpc_grant.capability_id = requested.capability_id
+    union all
+    select 1
+    from private.oauth_relation_capability_grants as relation_grant
+    where relation_grant.capability_id = requested.capability_id
+  );
+
+  if v_unknown_capabilities is not null then
+    raise invalid_parameter_value using
+      message = 'OAuth client capability list contains unknown values',
+      detail = array_to_string(v_unknown_capabilities, ',');
+  end if;
+
+  select jsonb_build_object(
+    'clientId', client.client_id,
+    'clientKind', client.client_kind,
+    'enabled', client.enabled,
+    'capabilities', coalesce((
+      select jsonb_agg(grant_row.capability_id order by grant_row.capability_id)
+      from private.oauth_client_capability_grants as grant_row
+      where grant_row.client_id = client.client_id
+        and grant_row.allowed
+    ), '[]'::jsonb)
+  )
+  into v_before
+  from private.oauth_client_registry as client
+  where client.client_id = v_client_id;
+
+  insert into private.oauth_client_registry (
+    client_id,
+    client_kind,
+    enabled,
+    disabled_at
+  ) values (
+    v_client_id,
+    v_client_kind,
+    p_enabled,
+    case when p_enabled then null else statement_timestamp() end
+  )
+  on conflict (client_id) do update set
+    client_kind = excluded.client_kind,
+    enabled = excluded.enabled,
+    updated_at = statement_timestamp(),
+    disabled_at = excluded.disabled_at;
+
+  delete from private.oauth_client_capability_grants
+  where client_id = v_client_id;
+
+  insert into private.oauth_client_capability_grants (
+    client_id,
+    capability_id
+  )
+  select v_client_id, capability_id
+  from unnest(v_capability_ids) as admitted(capability_id);
+
+  select jsonb_build_object(
+    'clientId', client.client_id,
+    'clientKind', client.client_kind,
+    'enabled', client.enabled,
+    'capabilities', coalesce((
+      select jsonb_agg(grant_row.capability_id order by grant_row.capability_id)
+      from private.oauth_client_capability_grants as grant_row
+      where grant_row.client_id = client.client_id
+        and grant_row.allowed
+    ), '[]'::jsonb)
+  )
+  into v_after
+  from private.oauth_client_registry as client
+  where client.client_id = v_client_id;
+
+  v_action := case
+    when v_before is null then 'create'
+    when not p_enabled then 'disable'
+    when coalesce((v_before ->> 'enabled')::boolean, false) then 'replace'
+    else 'enable'
+  end;
+
+  insert into private.oauth_client_registry_audit (
+    client_id,
+    action,
+    actor_role,
+    actor_sub,
+    before_state,
+    after_state
+  ) values (
+    v_client_id,
+    v_action,
+    auth.jwt() ->> 'role',
+    auth.uid(),
+    v_before,
+    v_after
+  );
+
+  return jsonb_build_object('ok', true, 'data', v_after);
+end;
+$_$;
+
+
+ALTER FUNCTION "api"."svc_oauth_client_configure"("p_client_id" "text", "p_client_kind" "text", "p_enabled" boolean, "p_capability_ids" "text"[]) OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "api"."svc_schema_contract_status"() RETURNS "jsonb"
@@ -41544,6 +41769,34 @@ $$;
 
 
 ALTER FUNCTION "private"."lifecyclemodels_sync_jsonb_version"() OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "private"."oauth_client_has_capability"("p_capability_id" "text") RETURNS boolean
+    LANGUAGE "sql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+  select case
+    -- First-party Supabase sessions have no OAuth client_id and retain the
+    -- existing auth.uid()-based RLS behavior.
+    when nullif(pg_catalog.btrim(coalesce(auth.jwt() ->> 'client_id', '')), '') is null
+      then true
+    when p_capability_id is null or pg_catalog.btrim(p_capability_id) = ''
+      then false
+    else exists (
+      select 1
+      from private.oauth_client_registry as client
+      join private.oauth_client_capability_grants as grant_row
+        on grant_row.client_id = client.client_id
+      where client.client_id = auth.jwt() ->> 'client_id'
+        and client.enabled
+        and grant_row.capability_id = p_capability_id
+        and grant_row.allowed
+    )
+  end;
+$$;
+
+
+ALTER FUNCTION "private"."oauth_client_has_capability"("p_capability_id" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "private"."pgroonga_escape_query_terms"("query_terms" "text"[]) RETURNS "text"[]
@@ -66131,6 +66384,82 @@ CREATE TABLE IF NOT EXISTS "private"."notifications" (
 ALTER TABLE "private"."notifications" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "private"."oauth_client_capability_grants" (
+    "client_id" "text" NOT NULL,
+    "capability_id" "text" NOT NULL,
+    "allowed" boolean DEFAULT true NOT NULL,
+    "granted_at" timestamp with time zone DEFAULT "statement_timestamp"() NOT NULL,
+    CONSTRAINT "oauth_client_capability_grants_capability_check" CHECK ((("capability_id" = "btrim"("capability_id")) AND (("length"("capability_id") >= 1) AND ("length"("capability_id") <= 128))))
+);
+
+ALTER TABLE ONLY "private"."oauth_client_capability_grants" FORCE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "private"."oauth_client_capability_grants" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "private"."oauth_client_registry" (
+    "client_id" "text" NOT NULL,
+    "client_kind" "text" NOT NULL,
+    "enabled" boolean DEFAULT true NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "statement_timestamp"() NOT NULL,
+    "updated_at" timestamp with time zone DEFAULT "statement_timestamp"() NOT NULL,
+    "disabled_at" timestamp with time zone,
+    CONSTRAINT "oauth_client_registry_client_id_check" CHECK ((("client_id" = "btrim"("client_id")) AND (("length"("client_id") >= 1) AND ("length"("client_id") <= 256)))),
+    CONSTRAINT "oauth_client_registry_client_kind_check" CHECK (("client_kind" ~ '^[a-z][a-z0-9_-]{1,63}$'::"text")),
+    CONSTRAINT "oauth_client_registry_disabled_at_check" CHECK ((("enabled" AND ("disabled_at" IS NULL)) OR ((NOT "enabled") AND ("disabled_at" IS NOT NULL))))
+);
+
+ALTER TABLE ONLY "private"."oauth_client_registry" FORCE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "private"."oauth_client_registry" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "private"."oauth_client_registry_audit" (
+    "id" bigint NOT NULL,
+    "client_id" "text" NOT NULL,
+    "action" "text" NOT NULL,
+    "actor_role" "text",
+    "actor_sub" "uuid",
+    "before_state" "jsonb",
+    "after_state" "jsonb" NOT NULL,
+    "changed_at" timestamp with time zone DEFAULT "statement_timestamp"() NOT NULL,
+    CONSTRAINT "oauth_client_registry_audit_action_check" CHECK (("action" = ANY (ARRAY['create'::"text", 'replace'::"text", 'disable'::"text", 'enable'::"text"])))
+);
+
+ALTER TABLE ONLY "private"."oauth_client_registry_audit" FORCE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "private"."oauth_client_registry_audit" OWNER TO "postgres";
+
+
+ALTER TABLE "private"."oauth_client_registry_audit" ALTER COLUMN "id" ADD GENERATED ALWAYS AS IDENTITY (
+    SEQUENCE NAME "private"."oauth_client_registry_audit_id_seq"
+    START WITH 1
+    INCREMENT BY 1
+    NO MINVALUE
+    NO MAXVALUE
+    CACHE 1
+);
+
+
+
+CREATE TABLE IF NOT EXISTS "private"."oauth_relation_capability_grants" (
+    "relation_schema" "name" NOT NULL,
+    "relation_name" "name" NOT NULL,
+    "command" "text" NOT NULL,
+    "capability_id" "text" NOT NULL,
+    CONSTRAINT "oauth_relation_capability_grants_capability_check" CHECK ((("capability_id" = "btrim"("capability_id")) AND (("length"("capability_id") >= 1) AND ("length"("capability_id") <= 128)))),
+    CONSTRAINT "oauth_relation_capability_grants_command_check" CHECK (("command" = ANY (ARRAY['select'::"text", 'insert'::"text", 'update'::"text", 'delete'::"text"])))
+);
+
+ALTER TABLE ONLY "private"."oauth_relation_capability_grants" FORCE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "private"."oauth_relation_capability_grants" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "private"."portal_catalog_character_rows_v1" (
     "dataset_kind" "text" NOT NULL,
     "id" "uuid" NOT NULL,
@@ -67898,6 +68227,26 @@ ALTER TABLE ONLY "private"."lcia_scope_closure_scan_executions"
 
 ALTER TABLE ONLY "private"."notifications"
     ADD CONSTRAINT "notifications_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "private"."oauth_client_capability_grants"
+    ADD CONSTRAINT "oauth_client_capability_grants_pkey" PRIMARY KEY ("client_id", "capability_id");
+
+
+
+ALTER TABLE ONLY "private"."oauth_client_registry_audit"
+    ADD CONSTRAINT "oauth_client_registry_audit_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "private"."oauth_client_registry"
+    ADD CONSTRAINT "oauth_client_registry_pkey" PRIMARY KEY ("client_id");
+
+
+
+ALTER TABLE ONLY "private"."oauth_relation_capability_grants"
+    ADD CONSTRAINT "oauth_relation_capability_grants_pkey" PRIMARY KEY ("relation_schema", "relation_name", "command");
 
 
 
@@ -70258,6 +70607,11 @@ ALTER TABLE ONLY "private"."notifications"
 
 
 
+ALTER TABLE ONLY "private"."oauth_client_capability_grants"
+    ADD CONSTRAINT "oauth_client_capability_grants_client_id_fkey" FOREIGN KEY ("client_id") REFERENCES "private"."oauth_client_registry"("client_id") ON DELETE CASCADE;
+
+
+
 ALTER TABLE ONLY "private"."portal_catalog_character_rows_v1"
     ADD CONSTRAINT "portal_catalog_character_parent_v1_fk" FOREIGN KEY ("dataset_kind", "id", "version") REFERENCES "private"."portal_catalog_search_rows_v1"("dataset_kind", "id", "version") ON UPDATE RESTRICT ON DELETE CASCADE;
 
@@ -70666,6 +71020,18 @@ CREATE POLICY "notifications_update_sender" ON "private"."notifications" FOR UPD
 
 
 
+ALTER TABLE "private"."oauth_client_capability_grants" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "private"."oauth_client_registry" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "private"."oauth_client_registry_audit" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "private"."oauth_relation_capability_grants" ENABLE ROW LEVEL SECURITY;
+
+
 CREATE POLICY "portal_catalog_character_rows_internal_all_v1" ON "private"."portal_catalog_character_rows_v1" TO "api_internal_executor" USING (true) WITH CHECK (true);
 
 
@@ -70998,6 +71364,42 @@ ALTER TABLE "public"."lciamethods" ENABLE ROW LEVEL SECURITY;
 
 
 ALTER TABLE "public"."lifecyclemodels" ENABLE ROW LEVEL SECURITY;
+
+
+CREATE POLICY "oauth_client_select_capability_guard" ON "public"."contacts" AS RESTRICTIVE FOR SELECT TO "authenticated" USING (( SELECT "private"."oauth_client_has_capability"('DB-CORE-READ-01'::"text") AS "oauth_client_has_capability"));
+
+
+
+CREATE POLICY "oauth_client_select_capability_guard" ON "public"."flowproperties" AS RESTRICTIVE FOR SELECT TO "authenticated" USING (( SELECT "private"."oauth_client_has_capability"('DB-CORE-READ-01'::"text") AS "oauth_client_has_capability"));
+
+
+
+CREATE POLICY "oauth_client_select_capability_guard" ON "public"."flows" AS RESTRICTIVE FOR SELECT TO "authenticated" USING (( SELECT "private"."oauth_client_has_capability"('DB-CORE-READ-01'::"text") AS "oauth_client_has_capability"));
+
+
+
+CREATE POLICY "oauth_client_select_capability_guard" ON "public"."ilcd" AS RESTRICTIVE FOR SELECT TO "authenticated" USING (( SELECT "private"."oauth_client_has_capability"('DB-CORE-READ-01'::"text") AS "oauth_client_has_capability"));
+
+
+
+CREATE POLICY "oauth_client_select_capability_guard" ON "public"."lciamethods" AS RESTRICTIVE FOR SELECT TO "authenticated" USING (( SELECT "private"."oauth_client_has_capability"('DB-CORE-READ-01'::"text") AS "oauth_client_has_capability"));
+
+
+
+CREATE POLICY "oauth_client_select_capability_guard" ON "public"."lifecyclemodels" AS RESTRICTIVE FOR SELECT TO "authenticated" USING (( SELECT "private"."oauth_client_has_capability"('DB-CORE-READ-01'::"text") AS "oauth_client_has_capability"));
+
+
+
+CREATE POLICY "oauth_client_select_capability_guard" ON "public"."processes" AS RESTRICTIVE FOR SELECT TO "authenticated" USING (( SELECT "private"."oauth_client_has_capability"('DB-CORE-READ-01'::"text") AS "oauth_client_has_capability"));
+
+
+
+CREATE POLICY "oauth_client_select_capability_guard" ON "public"."sources" AS RESTRICTIVE FOR SELECT TO "authenticated" USING (( SELECT "private"."oauth_client_has_capability"('DB-CORE-READ-01'::"text") AS "oauth_client_has_capability"));
+
+
+
+CREATE POLICY "oauth_client_select_capability_guard" ON "public"."unitgroups" AS RESTRICTIVE FOR SELECT TO "authenticated" USING (( SELECT "private"."oauth_client_has_capability"('DB-CORE-READ-01'::"text") AS "oauth_client_has_capability"));
+
 
 
 CREATE POLICY "portal_public_executor_select_flowproperties_v1" ON "public"."flowproperties" FOR SELECT TO "portal_public_executor" USING (("state_code" = ANY (ARRAY[100, 200])));
@@ -72002,6 +72404,13 @@ GRANT ALL ON FUNCTION "api"."list_lcia_scope_closure_issues"("p_closure_check_id
 
 
 
+REVOKE ALL ON FUNCTION "api"."oauth_client_pre_request"() FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."oauth_client_pre_request"() TO "anon";
+GRANT ALL ON FUNCTION "api"."oauth_client_pre_request"() TO "authenticated";
+GRANT ALL ON FUNCTION "api"."oauth_client_pre_request"() TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "api"."pgroonga_search_contacts"("query_text" "text", "filter_condition" "text", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."pgroonga_search_contacts"("query_text" "text", "filter_condition" "text", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text") TO "api_internal_executor";
 
@@ -72680,6 +73089,11 @@ GRANT ALL ON FUNCTION "api"."svc_lca_snapshot_candidates"("p_scope" "text", "p_s
 
 REVOKE ALL ON FUNCTION "api"."svc_membership_is_review_admin"("p_user_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."svc_membership_is_review_admin"("p_user_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "api"."svc_oauth_client_configure"("p_client_id" "text", "p_client_kind" "text", "p_enabled" boolean, "p_capability_ids" "text"[]) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."svc_oauth_client_configure"("p_client_id" "text", "p_client_kind" "text", "p_enabled" boolean, "p_capability_ids" "text"[]) TO "service_role";
 
 
 
@@ -73424,6 +73838,11 @@ GRANT ALL ON FUNCTION "private"."lciamethods_sync_jsonb_version"() TO "api_inter
 REVOKE ALL ON FUNCTION "private"."lifecyclemodels_sync_jsonb_version"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."lifecyclemodels_sync_jsonb_version"() TO "service_role";
 GRANT ALL ON FUNCTION "private"."lifecyclemodels_sync_jsonb_version"() TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."oauth_client_has_capability"("p_capability_id" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."oauth_client_has_capability"("p_capability_id" "text") TO "authenticated";
 
 
 

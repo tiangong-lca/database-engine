@@ -55,6 +55,8 @@ jobs:
           supabase test db supabase/tests/20260806_api_contract_closure.sql
           supabase test db supabase/tests/20260806_identity_center_facades.sql
           supabase test db supabase/tests/20260806_lca_package_capability_facades.sql
+          supabase test db supabase/tests/20260830_oauth_client_capability_foundation.sql
+          supabase test db supabase/tests/20260831_oauth_actor_command_capabilities.sql
           supabase test db supabase/tests/20260825_portal_public_catalog_v1.sql
           supabase test db supabase/tests/20260825_portal_public_lcia_projection_v1.sql
           supabase test db supabase/tests/20260826_portal_lcia_catalog_visibility_v1.sql

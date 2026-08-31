@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-30
-lastReviewedCommit: be1f915
-lastReviewedNote: "Reviewed for Issue #563: the 299-file recovery and benchmark tooling now covers the bounded Process keyword expression-GIN rollout and maintenance ACLs."
+lastReviewedAt: 2026-08-31
+lastReviewedCommit: e6b4afe857d70cb0242dcbc803f288f77da39608
+lastReviewedNote: "Reviewed for Issue #568: the OAuth bundle regression advances the exact migration head to 20260831130000; helper commands and stable-overlay rules are unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

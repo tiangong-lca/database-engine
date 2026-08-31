@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-30
-lastReviewedCommit: be1f915
-lastReviewedNote: "为 Issue #563 复核：299-file recovery/benchmark 工具已覆盖 Process keyword expression-GIN 上线与内部维护 ACL。"
+lastReviewedAt: 2026-08-31
+lastReviewedCommit: e6b4afe857d70cb0242dcbc803f288f77da39608
+lastReviewedNote: "为 Issue #568 复核：OAuth bundle 回归把精确 migration head 推进到 20260831130000；helper 命令与稳定 overlay 规则不变。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
