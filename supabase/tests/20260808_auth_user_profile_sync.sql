@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(15);
+select plan(27);
 
 select ok(
   to_regprocedure('private.sync_auth_users_to_private_users()') is not null,
@@ -62,6 +62,18 @@ select ok(
     'EXECUTE'
   ),
   'the trigger helper is not directly executable by application roles'
+);
+
+select ok(
+  exists (
+    select 1
+    from pg_constraint
+    where conrelid = 'private.users'::regclass
+      and conname = 'users_organization_metadata_contract'
+      and contype = 'c'
+      and convalidated
+  ),
+  'private.users has a validated organization metadata contract'
 );
 
 insert into auth.users (
@@ -165,7 +177,11 @@ select is(
 
 update auth.users
 set raw_user_meta_data =
-  raw_user_meta_data || '{"display_name":"Updated Candidate"}'::jsonb
+  raw_user_meta_data || jsonb_build_object(
+    'display_name', 'Updated Candidate',
+    'organization', 'Tsinghua University',
+    'profile_note', 'preserved'
+  )
 where id = '43500000-0000-4000-8000-000000000002';
 
 select is(
@@ -176,6 +192,139 @@ select is(
   ),
   'Updated Candidate',
   'Auth metadata updates are mirrored into private.users'
+);
+
+select is(
+  (
+    select raw_user_meta_data ->> 'organization'
+    from private.users
+    where id = '43500000-0000-4000-8000-000000000002'
+  ),
+  'Tsinghua University',
+  'organization metadata updates are mirrored into private.users'
+);
+
+select is(
+  (
+    select raw_user_meta_data ->> 'profile_note'
+    from private.users
+    where id = '43500000-0000-4000-8000-000000000002'
+  ),
+  'preserved',
+  'organization metadata updates preserve unrelated user metadata'
+);
+
+update auth.users
+set raw_user_meta_data =
+  raw_user_meta_data || '{"organization":"TianGong Initiative"}'::jsonb
+where id = '43500000-0000-4000-8000-000000000001';
+
+select is(
+  (
+    select raw_user_meta_data ->> 'organization'
+    from private.users
+    where id = '43500000-0000-4000-8000-000000000001'
+  ),
+  'TianGong Initiative',
+  'organization metadata is mirrored for an existing private profile'
+);
+
+select is(
+  (
+    select contact ->> 'kind'
+    from private.users
+    where id = '43500000-0000-4000-8000-000000000001'
+  ),
+  'preserved',
+  'organization metadata updates preserve application-owned contact data'
+);
+
+update auth.users
+set raw_user_meta_data =
+  raw_user_meta_data || '{"organization":""}'::jsonb
+where id = '43500000-0000-4000-8000-000000000002';
+
+select is(
+  (
+    select raw_user_meta_data ->> 'organization'
+    from private.users
+    where id = '43500000-0000-4000-8000-000000000002'
+  ),
+  '',
+  'an empty organization string remains a valid clear value'
+);
+
+select throws_ok(
+  $$
+    update auth.users
+    set raw_user_meta_data = raw_user_meta_data || '{"organization":42}'::jsonb
+    where id = '43500000-0000-4000-8000-000000000002'
+  $$,
+  '23514',
+  null,
+  'numeric organization metadata is rejected'
+);
+
+select throws_ok(
+  $$
+    update auth.users
+    set raw_user_meta_data =
+      raw_user_meta_data || '{"organization":{"name":"Example"}}'::jsonb
+    where id = '43500000-0000-4000-8000-000000000002'
+  $$,
+  '23514',
+  null,
+  'object organization metadata is rejected'
+);
+
+select throws_ok(
+  $$
+    update auth.users
+    set raw_user_meta_data =
+      raw_user_meta_data || '{"organization":["Example"]}'::jsonb
+    where id = '43500000-0000-4000-8000-000000000002'
+  $$,
+  '23514',
+  null,
+  'array organization metadata is rejected'
+);
+
+select throws_ok(
+  $$
+    update auth.users
+    set raw_user_meta_data =
+      raw_user_meta_data || '{"organization":null}'::jsonb
+    where id = '43500000-0000-4000-8000-000000000002'
+  $$,
+  '23514',
+  null,
+  'JSON null organization metadata is rejected'
+);
+
+select throws_ok(
+  $$
+    update auth.users
+    set raw_user_meta_data =
+      raw_user_meta_data || '{"organization":" Example University "}'::jsonb
+    where id = '43500000-0000-4000-8000-000000000002'
+  $$,
+  '23514',
+  null,
+  'organization metadata with surrounding whitespace is rejected'
+);
+
+select throws_ok(
+  $$
+    update auth.users
+    set raw_user_meta_data = raw_user_meta_data || jsonb_build_object(
+      'organization',
+      repeat('x', 201)
+    )
+    where id = '43500000-0000-4000-8000-000000000002'
+  $$,
+  '23514',
+  null,
+  'organization metadata longer than 200 characters is rejected'
 );
 
 delete from auth.users
