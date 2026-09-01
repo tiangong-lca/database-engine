@@ -20,8 +20,8 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-31
-lastReviewedCommit: 2dad5b37587bfa0780f5e16cf7830d69dcb3b53a
+lastReviewedAt: 2026-09-01
+lastReviewedCommit: 9f357599b154bee30124a2666334a2eeece4cab9
 lastReviewedNote: "Reviewed for Issue #568: the forward repair changes only capability-manifest data; generated Data API types, workspace ownership, refresh, and stable-overlay rules are unchanged."
 related:
   - ../../AGENTS.md
