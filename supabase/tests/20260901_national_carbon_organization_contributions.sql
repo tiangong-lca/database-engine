@@ -124,6 +124,8 @@ values (
   'admin'
 );
 
+set local session_replication_role = replica;
+
 insert into public.processes (
   id, version, user_id, state_code, created_at, modified_at
 )
@@ -146,6 +148,8 @@ values
   ('57420000-0000-4000-8000-000000000002', '01.00.000', '57400000-0000-4000-8000-000000000004', 100, now() - interval '5 days', now() - interval '5 days'),
   ('57420000-0000-4000-8000-000000000003', '01.00.000', '57400000-0000-4000-8000-000000000002', 20, now() - interval '3 days', now() - interval '3 days'),
   ('57420000-0000-4000-8000-000000000004', '01.00.000', '57400000-0000-4000-8000-000000000005', 100, now() - interval '35 days', now() - interval '35 days');
+
+set local session_replication_role = origin;
 
 select set_config('request.jwt.claim.sub', '', true);
 select set_config('request.jwt.claims', '{}', true);
