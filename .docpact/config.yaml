@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-09-01"
-lastReviewedCommit: "1e7a124736b38485386adde1d4ea484c028f2822"
+lastReviewedCommit: "b4d8e0cbbb16b3fd4b0565b95132243b659883a1"
 lastReviewedNote: "Reviewed for Issue #568: routing and proof cover the exact forward repair that restores EDGE-BUNDLE-01 to both LifecycleModel bundle signatures before MCP client admission."
 
 # Keep deterministic governance facts here.

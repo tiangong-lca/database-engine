@@ -31,7 +31,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-01
-lastReviewedCommit: 1e7a124736b38485386adde1d4ea484c028f2822
+lastReviewedCommit: b4d8e0cbbb16b3fd4b0565b95132243b659883a1
 lastReviewedNote: "Updated for Issue #572: organization is an optional bounded string in mirrored user metadata and is never an authorization input."
 related:
   - ../../AGENTS.md

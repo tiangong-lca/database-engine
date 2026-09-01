@@ -20549,18 +20549,9 @@ begin
     from latest_current_model as latest_row
     where latest_row.state_code = 20
   ),
-  relevant_user_ids as (
-    select published.user_id
-    from published_facts as published
-    where published.user_id is not null
-    union
-    select pending.user_id
-    from pending_review_facts as pending
-    where pending.user_id is not null
-  ),
   user_organization_names as materialized (
     select
-      relevant.user_id,
+      profile.id as user_id,
       nullif(
         pg_catalog.regexp_replace(
           pg_catalog.btrim(profile.raw_user_meta_data ->> 'organization'),
@@ -20570,9 +20561,8 @@ begin
         ),
         ''
       ) as organization_name
-    from relevant_user_ids as relevant
-    left join private.users as profile on profile.id = relevant.user_id
-      and pg_catalog.jsonb_typeof(profile.raw_user_meta_data -> 'organization') = 'string'
+    from private.users as profile
+    where pg_catalog.jsonb_typeof(profile.raw_user_meta_data -> 'organization') = 'string'
   ),
   user_organizations as materialized (
     select
@@ -20580,6 +20570,15 @@ begin
       pg_catalog.lower(named.organization_name) as organization_key,
       named.organization_name
     from user_organization_names as named
+  ),
+  organization_catalog as materialized (
+    select distinct organization.organization_key
+    from user_organizations as organization
+    where organization.organization_key is not null
+  ),
+  organization_summary as materialized (
+    select pg_catalog.count(*)::bigint as organization_count
+    from organization_catalog
   ),
   contribution_facts as (
     select
@@ -20628,28 +20627,31 @@ begin
   scope_summary_values as materialized (
     select
       scope.dataset_scope,
+      organization_summary.organization_count,
       coalesce(
-        pg_catalog.count(distinct fact.organization_key)
-          filter (
-            where fact.organization_key is not null
-              and fact.published_count = 1
-          ),
+        pg_catalog.sum(fact.published_count)
+          filter (where fact.organization_key is not null),
         0::bigint
-      )::bigint as organization_count,
-      coalesce(pg_catalog.sum(fact.published_count), 0::bigint)::bigint
+      )::bigint
         as published_dataset_count,
-      coalesce(pg_catalog.sum(fact.reviewing_count), 0::bigint)::bigint
+      coalesce(
+        pg_catalog.sum(fact.reviewing_count)
+          filter (where fact.organization_key is not null),
+        0::bigint
+      )::bigint
         as pending_review_dataset_count,
       coalesce(
         pg_catalog.sum(fact.published_count)
           filter (
-            where fact.modified_at >= pg_catalog.statement_timestamp() - interval '30 days'
+            where fact.organization_key is not null
+              and fact.modified_at >= pg_catalog.statement_timestamp() - interval '30 days'
           ),
         0::bigint
       )::bigint as published_last_30_days_count
     from scope_catalog as scope
+    cross join organization_summary
     left join scoped_facts as fact on fact.dataset_scope = scope.dataset_scope
-    group by scope.dataset_scope
+    group by scope.dataset_scope, organization_summary.organization_count
   ),
   scope_organization_aggregate as materialized (
     select
