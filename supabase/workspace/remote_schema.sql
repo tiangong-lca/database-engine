@@ -20860,6 +20860,7 @@ begin
 end;
 $$;
 
+
 ALTER FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer) OWNER TO "postgres";
 
 
@@ -75960,6 +75961,8 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUN
 
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "postgres";
+
+
 
 
 
