@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, api, private, auth;
 
-select plan(19);
+select plan(20);
 
 select is(
   (
@@ -104,6 +104,12 @@ values
     '57400000-0000-4000-8000-000000000006',
     'authenticated', 'authenticated', 'ordinary-user@example.com', 'test', now(),
     '{}', '{}', now(), now(), false, false
+  ),
+  (
+    '00000000-0000-0000-0000-000000000000',
+    '57400000-0000-4000-8000-000000000007',
+    'authenticated', 'authenticated', 'organization-only@example.com', 'test', now(),
+    '{}', '{"organization":"Gamma Cooperative"}', now(), now(), false, false
   );
 
 insert into private.users (id, raw_user_meta_data)
@@ -113,7 +119,8 @@ values
   ('57400000-0000-4000-8000-000000000003', '{"organization":"acme   labs"}'),
   ('57400000-0000-4000-8000-000000000004', '{"organization":"Beta Institute"}'),
   ('57400000-0000-4000-8000-000000000005', '{}'),
-  ('57400000-0000-4000-8000-000000000006', '{}')
+  ('57400000-0000-4000-8000-000000000006', '{}'),
+  ('57400000-0000-4000-8000-000000000007', '{"organization":"Gamma Cooperative"}')
 on conflict (id) do update set
   raw_user_meta_data = excluded.raw_user_meta_data;
 
@@ -133,7 +140,7 @@ values
   ('57410000-0000-4000-8000-000000000001', '01.00.000', '57400000-0000-4000-8000-000000000002', 100, now() - interval '80 days', now() - interval '60 days'),
   ('57410000-0000-4000-8000-000000000001', '02.00.000', '57400000-0000-4000-8000-000000000002', 100, now() - interval '10 days', now() - interval '10 days'),
   ('57410000-0000-4000-8000-000000000002', '01.00.000', '57400000-0000-4000-8000-000000000003', 100, now() - interval '8 days', now() - interval '8 days'),
-  ('57410000-0000-4000-8000-000000000003', '01.00.000', '57400000-0000-4000-8000-000000000005', 100, now() - interval '40 days', now() - interval '40 days'),
+  ('57410000-0000-4000-8000-000000000003', '01.00.000', '57400000-0000-4000-8000-000000000005', 100, now() - interval '5 days', now() - interval '5 days'),
   ('57410000-0000-4000-8000-000000000004', '01.00.000', '57400000-0000-4000-8000-000000000004', 20, now() - interval '4 days', now() - interval '4 days'),
   ('57410000-0000-4000-8000-000000000005', '01.00.000', '57400000-0000-4000-8000-000000000004', 20, now() - interval '6 days', now() - interval '6 days'),
   ('57410000-0000-4000-8000-000000000005', '02.00.000', '57400000-0000-4000-8000-000000000004', 0, now() - interval '2 days', now() - interval '2 days'),
@@ -147,7 +154,8 @@ values
   ('57410000-0000-4000-8000-000000000001', '01.00.000', '57400000-0000-4000-8000-000000000002', 100, now() - interval '7 days', now() - interval '7 days'),
   ('57420000-0000-4000-8000-000000000002', '01.00.000', '57400000-0000-4000-8000-000000000004', 100, now() - interval '5 days', now() - interval '5 days'),
   ('57420000-0000-4000-8000-000000000003', '01.00.000', '57400000-0000-4000-8000-000000000002', 20, now() - interval '3 days', now() - interval '3 days'),
-  ('57420000-0000-4000-8000-000000000004', '01.00.000', '57400000-0000-4000-8000-000000000005', 100, now() - interval '35 days', now() - interval '35 days');
+  ('57420000-0000-4000-8000-000000000004', '01.00.000', '57400000-0000-4000-8000-000000000005', 100, now() - interval '35 days', now() - interval '35 days'),
+  ('57420000-0000-4000-8000-000000000005', '01.00.000', '57400000-0000-4000-8000-000000000005', 20, now() - interval '2 days', now() - interval '2 days');
 
 set local session_replication_role = origin;
 
@@ -206,8 +214,8 @@ from organization_contribution_result;
 
 select is(
   snapshot #>> '{scopes,process,summary,publishedDatasetCount}',
-  '4'::text,
-  'Process counts each dataset ID once at its latest published version'
+  '3'::text,
+  'Process published total counts latest-published IDs assigned to a current organization'
 )
 from organization_contribution_result;
 
@@ -220,29 +228,36 @@ from organization_contribution_result;
 
 select is(
   snapshot #>> '{scopes,model,summary,publishedDatasetCount}',
-  '3'::text,
-  'Model returns its independent latest-published count'
+  '2'::text,
+  'Model published total excludes a latest-published ID without a current organization'
 )
 from organization_contribution_result;
 
 select is(
   snapshot #>> '{scopes,model,summary,pendingReviewDatasetCount}',
   '1'::text,
-  'Model returns its independent pending-review count'
+  'Model pending-review total excludes a current state-20 ID without an organization'
 )
 from organization_contribution_result;
 
 select is(
   snapshot #>> '{scopes,all,summary,publishedDatasetCount}',
-  '7'::text,
-  'All keeps equal UUIDs in Process and Model as separate typed datasets'
+  '5'::text,
+  'All keeps typed datasets separate while excluding rows without a current organization'
 )
 from organization_contribution_result;
 
 select is(
   snapshot #>> '{scopes,all,summary,organizationCount}',
-  '2'::text,
-  'participating-unit count excludes unassigned and pending-only units'
+  '3'::text,
+  'participating-unit count includes every current organization even without contribution facts'
+)
+from organization_contribution_result;
+
+select is(
+  snapshot #>> '{scopes,all,summary,publishedLast30DaysCount}',
+  '5'::text,
+  'last-30-day published total includes only rows assigned to a current organization'
 )
 from organization_contribution_result;
 
@@ -277,8 +292,8 @@ from organization_contribution_result;
 select cmp_ok(
   (snapshot #>> '{scopes,all,rankings,0,contributionShare}')::numeric,
   '=',
-  round(4::numeric / 7::numeric, 6),
-  'contribution share uses all published typed datasets including unassigned rows'
+  round(4::numeric / 5::numeric, 6),
+  'contribution share uses the organization-attributed published total'
 )
 from organization_contribution_result;
 

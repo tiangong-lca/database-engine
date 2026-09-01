@@ -1,7 +1,15 @@
-CREATE OR REPLACE FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer DEFAULT 10) RETURNS "jsonb"
-    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
+-- Issue #576: count all current user-profile organizations in the participant
+-- KPI and restrict contribution KPIs to datasets attributed to those units.
+
+create or replace function api.qry_national_carbon_organization_contributions(
+  p_limit integer default 10
+)
+returns jsonb
+language plpgsql
+stable
+security definer
+set search_path = ''
+as $function$
 declare
   v_actor uuid := auth.uid();
   v_result jsonb;
@@ -318,10 +326,4 @@ begin
 
   return v_result;
 end;
-$$;
-
-ALTER FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer) OWNER TO "postgres";
-
-REVOKE ALL ON FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer) FROM PUBLIC;
-
-GRANT ALL ON FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer) TO "authenticated";
+$function$;
