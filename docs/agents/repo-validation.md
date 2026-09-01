@@ -33,8 +33,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-01
-lastReviewedCommit: 92a7bb85152d0d7ac5de07b6ad4c5ada7749aef6
-lastReviewedNote: "Reviewed for Issue #568: OAuth proof now pins both exact LifecycleModel bundle signatures to EDGE-BUNDLE-01 and rejects CLI-RPC-01 fallback before MCP client admission."
+lastReviewedCommit: b3b14ab8fa42cdefcb846f97ced6573c0f092d6d
+lastReviewedNote: "Reviewed for Issue #582: OAuth proof adds direct public-client PKCE, exact capability, disabled-client, and grant/session revocation evidence without hardcoding environment UUIDs."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -259,6 +259,21 @@ XML and five-minute visibility proof. Canonical-cursor tests must also reject
 JSONB-equivalent alternate numeric
 scales (`1.0`, `64.0`) by comparing input with the freshly encoded expected
 object, not JSONB equality alone.
+
+### Direct MCP OAuth operational proof
+
+For each Dev or Production direct MCP client class, record:
+
+1. Supabase Dynamic Client Registration remains disabled and the client is a separate public manual registration with an exact loopback callback.
+2. Authorization Code uses S256 PKCE, the exact MCP resource, and only standard identity/offline scopes; OAuth scopes never grant database capabilities.
+3. The service-only configuration façade stores the environment `client_id` as `mcp_client` with exactly `DB-CORE-READ-01`, `DB-CORE-WRITE-01`, and `EDGE-BUNDLE-01`; no migration contains that UUID and no MCP client receives `CLI-RPC-01`.
+4. A fresh host session completes one actor-bound relation read and representative command/Edge paths while an unknown or disabled client fails with SQLSTATE `42501`.
+5. Disabling the same client's registry row denies an already-issued session, and restoring the exact capability set returns the row to enabled state without broadening grants.
+6. User grant revocation leaves the consent revoked and zero active Auth sessions/refresh tokens for that client. A JWT already accepted by local signature verification may remain usable until `exp`; do not claim immediate access-token revocation without a separate live session check or denylist.
+
+Keep client UUIDs in the environment-specific Issue/deployment evidence and
+service configuration only. Checked-in docs and migrations describe client
+classes and capability sets, never environment IDs.
 
 ## SQL And Offline Node Contract Notes
 

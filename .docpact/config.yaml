@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-09-01"
-lastReviewedCommit: "92a7bb85152d0d7ac5de07b6ad4c5ada7749aef6"
-lastReviewedNote: "Reviewed for Issue #568: routing and proof cover the exact forward repair that restores EDGE-BUNDLE-01 to both LifecycleModel bundle signatures before MCP client admission."
+lastReviewedCommit: "b3b14ab8fa42cdefcb846f97ced6573c0f092d6d"
+lastReviewedNote: "Reviewed for Issue #582: OAuth authorization routing covers separate public direct-MCP clients, exact environment provisioning, disabled-client denial, and grant/session revocation proof."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

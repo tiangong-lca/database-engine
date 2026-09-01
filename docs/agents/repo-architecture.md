@@ -31,8 +31,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-01
-lastReviewedCommit: 92a7bb85152d0d7ac5de07b6ad4c5ada7749aef6
-lastReviewedNote: "Updated for Issue #572: organization is an optional bounded string in mirrored user metadata and is never an authorization input."
+lastReviewedCommit: b3b14ab8fa42cdefcb846f97ced6573c0f092d6d
+lastReviewedNote: "Updated for Issue #582: direct MCP hosts use separate public Supabase OAuth clients and the existing exact capability registry without adding schema or migration state."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -85,6 +85,17 @@ client kind, enabled/revoked state, capability grants, and append-only change
 audit under `private`. Environment-specific client IDs are provisioned through
 the service-only configuration façade after Supabase Auth registration; they
 are never hardcoded in a generic migration.
+
+Direct MCP hosts use one public manual OAuth client per host and environment,
+with exact loopback callbacks and Dynamic Client Registration disabled. Each
+MCP client receives only `DB-CORE-READ-01`, `DB-CORE-WRITE-01`, and
+`EDGE-BUNDLE-01`; it never receives `CLI-RPC-01`. Disabling a client through
+the configuration façade atomically removes its effective access and causes
+the same otherwise valid OAuth session to fail the PostgREST pre-request gate
+with SQLSTATE `42501`. Supabase grant revocation deletes the client's Auth
+sessions and refresh tokens. A separately verified, already-issued JWT can
+remain valid until `exp`; immediate access-token revocation is not a database
+capability-registry guarantee.
 
 First-party Next sessions contain no `client_id` claim and preserve the
 existing `auth.uid()` policies. OAuth access tokens must name an enabled client
