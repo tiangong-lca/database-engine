@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-09-01"
-lastReviewedCommit: "92a7bb85152d0d7ac5de07b6ad4c5ada7749aef6"
-lastReviewedNote: "Reviewed for Issue #568: routing and proof cover the exact forward repair that restores EDGE-BUNDLE-01 to both LifecycleModel bundle signatures before MCP client admission."
+lastReviewedAt: "2026-09-02"
+lastReviewedCommit: "2fa558cc39be4431e6886ada71aef521e862976c"
+lastReviewedNote: "Reviewed for Issue #582: OAuth routing covers exact direct clients and Preview automation distinguishes deployable Supabase inputs from repository-only workspace/test/docs changes."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

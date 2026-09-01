@@ -158,8 +158,22 @@ def main() -> int:
         "SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}",
         "SUPABASE_MAIN_PROJECT_ID: ${{ vars.SUPABASE_MAIN_PROJECT_ID }}",
         "PREVIEW_GIT_BRANCH: ${{ github.event.pull_request.head.ref }}",
+        "PREVIEW_BASE_SHA: ${{ github.event.pull_request.base.sha }}",
         "PREVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
         "PREVIEW_PR_NUMBER: ${{ github.event.pull_request.number }}",
+        "Classify exact Supabase Preview scope",
+        "id: preview_scope",
+        'git cat-file -e "$PREVIEW_BASE_SHA^{commit}"',
+        'git cat-file -e "$PREVIEW_HEAD_SHA^{commit}"',
+        'git diff --quiet "$PREVIEW_BASE_SHA" "$PREVIEW_HEAD_SHA" --',
+        "supabase/config.toml",
+        "supabase/migrations/",
+        "supabase/seed.sql",
+        "supabase/seeds/",
+        "supabase/functions/",
+        'echo "required=false" >> "$GITHUB_OUTPUT"',
+        'echo "required=true" >> "$GITHUB_OUTPUT"',
+        "steps.preview_scope.outputs.required == 'true'",
         "steps.preview_authority.outputs.available == 'true'",
         "Supabase Preview runtime verification requires SUPABASE_ACCESS_TOKEN, SUPABASE_MAIN_PROJECT_ID, and SUPABASE_DEV_PROJECT_ID",
         "exit 1",
@@ -239,6 +253,37 @@ def main() -> int:
         failures.append(
             "Hybrid and sitemap readiness curl calls must be bounded by their remaining deadline"
         )
+    preview_scope_step = preview_workflow.split(
+        "- name: Classify exact Supabase Preview scope", 1
+    )[-1].split("- name: Check Preview verification authority", 1)[0]
+    if preview_scope_step.count(
+        'git diff --quiet "$PREVIEW_BASE_SHA" "$PREVIEW_HEAD_SHA" --'
+    ) != 1:
+        failures.append("Preview scope must use one exact base-to-head diff")
+    for deployable_path in (
+        "supabase/config.toml",
+        "supabase/migrations/",
+        "supabase/seed.sql",
+        "supabase/seeds/",
+        "supabase/functions/",
+    ):
+        if preview_scope_step.count(deployable_path) != 1:
+            failures.append(
+                f"Preview scope must contain deployable path exactly once: {deployable_path}"
+            )
+    for nondeployable_path in (
+        "supabase/workspace/",
+        "supabase/tests/",
+        "supabase/templates/",
+    ):
+        if nondeployable_path in preview_scope_step:
+            failures.append(
+                f"Preview scope must not treat repository-only path as deployable: {nondeployable_path}"
+            )
+    if preview_workflow.count('echo "required=false" >> "$GITHUB_OUTPUT"') != 1:
+        failures.append("Preview scope must emit exactly one no-change outcome")
+    if preview_workflow.count('echo "required=true" >> "$GITHUB_OUTPUT"') != 1:
+        failures.append("Preview scope must emit exactly one runtime-required outcome")
     for app_identity_token in (
         ".app.id == 330661",
         '.app.slug == "supabase"',
@@ -267,6 +312,9 @@ def main() -> int:
     )
 
     preview_order = (
+        preview_workflow.find("- name: Checkout exact PR head"),
+        preview_workflow.find("- name: Classify exact Supabase Preview scope"),
+        preview_workflow.find("- name: Check Preview verification authority"),
         preview_workflow.find("- name: Wait for exact Supabase Preview check"),
         preview_workflow.find("- name: Resolve exact Preview project"),
         preview_workflow.find("- name: Apply exact Preview PostgREST runtime contract"),
