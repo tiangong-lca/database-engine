@@ -38,7 +38,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-01
-lastReviewedCommit: 1c8334c5fdef42ec47ce1e5956ff8afd045eb515
+lastReviewedCommit: b4d8e0cbbb16b3fd4b0565b95132243b659883a1
 lastReviewedNote: "Reviewed for Issue #568: the exact LifecycleModel bundle RPCs retain EDGE-BUNDLE-01 after actor-command drift repair, so MCP admission never requires the broad CLI-RPC-01 capability."
 related:
   - .docpact/config.yaml
