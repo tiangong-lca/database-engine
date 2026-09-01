@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-01
-lastReviewedCommit: 92a7bb85152d0d7ac5de07b6ad4c5ada7749aef6
-lastReviewedNote: "Reviewed for Issue #568: the forward repair changes only capability-manifest data; generated Data API types, workspace ownership, refresh, and stable-overlay rules are unchanged."
+lastReviewedAt: 2026-09-02
+lastReviewedCommit: de28dd30f365cd3f94a4278f982fba29c0e70af9
+lastReviewedNote: "Reviewed for Issue #582: Preview path classification changes only CI admission; generated workspace ownership, refresh, types, and stable-overlay rules remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

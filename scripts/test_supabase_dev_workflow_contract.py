@@ -158,8 +158,17 @@ def main() -> int:
         "SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}",
         "SUPABASE_MAIN_PROJECT_ID: ${{ vars.SUPABASE_MAIN_PROJECT_ID }}",
         "PREVIEW_GIT_BRANCH: ${{ github.event.pull_request.head.ref }}",
+        "PREVIEW_BASE_SHA: ${{ github.event.pull_request.base.sha }}",
         "PREVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}",
         "PREVIEW_PR_NUMBER: ${{ github.event.pull_request.number }}",
+        "Classify exact Supabase Preview scope",
+        "id: preview_scope",
+        'git cat-file -e "$PREVIEW_BASE_SHA^{commit}"',
+        'git cat-file -e "$PREVIEW_HEAD_SHA^{commit}"',
+        'git diff --quiet "$PREVIEW_BASE_SHA" "$PREVIEW_HEAD_SHA" -- supabase/',
+        'echo "required=false" >> "$GITHUB_OUTPUT"',
+        'echo "required=true" >> "$GITHUB_OUTPUT"',
+        "steps.preview_scope.outputs.required == 'true'",
         "steps.preview_authority.outputs.available == 'true'",
         "Supabase Preview runtime verification requires SUPABASE_ACCESS_TOKEN, SUPABASE_MAIN_PROJECT_ID, and SUPABASE_DEV_PROJECT_ID",
         "exit 1",
@@ -239,6 +248,16 @@ def main() -> int:
         failures.append(
             "Hybrid and sitemap readiness curl calls must be bounded by their remaining deadline"
         )
+    if preview_workflow.count(
+        'git diff --quiet "$PREVIEW_BASE_SHA" "$PREVIEW_HEAD_SHA" -- supabase/'
+    ) != 1:
+        failures.append(
+            "Preview scope must use one exact base-to-head supabase/ diff"
+        )
+    if preview_workflow.count('echo "required=false" >> "$GITHUB_OUTPUT"') != 1:
+        failures.append("Preview scope must emit exactly one no-change outcome")
+    if preview_workflow.count('echo "required=true" >> "$GITHUB_OUTPUT"') != 1:
+        failures.append("Preview scope must emit exactly one runtime-required outcome")
     for app_identity_token in (
         ".app.id == 330661",
         '.app.slug == "supabase"',
@@ -267,6 +286,9 @@ def main() -> int:
     )
 
     preview_order = (
+        preview_workflow.find("- name: Checkout exact PR head"),
+        preview_workflow.find("- name: Classify exact Supabase Preview scope"),
+        preview_workflow.find("- name: Check Preview verification authority"),
         preview_workflow.find("- name: Wait for exact Supabase Preview check"),
         preview_workflow.find("- name: Resolve exact Preview project"),
         preview_workflow.find("- name: Apply exact Preview PostgREST runtime contract"),

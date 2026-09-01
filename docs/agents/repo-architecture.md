@@ -30,9 +30,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-01
-lastReviewedCommit: b3b14ab8fa42cdefcb846f97ced6573c0f092d6d
-lastReviewedNote: "Updated for Issue #582: direct MCP hosts use separate public Supabase OAuth clients and the existing exact capability registry without adding schema or migration state."
+lastReviewedAt: 2026-09-02
+lastReviewedCommit: de28dd30f365cd3f94a4278f982fba29c0e70af9
+lastReviewedNote: "Updated for Issue #582: direct OAuth client admission is unchanged, and Preview automation now classifies an exact supabase/ diff before requiring official hosted runtime proof."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -302,7 +302,7 @@ must never be used as an authorization, role, team, or RLS input.
 - Git `dev` is the daily integration trunk
 - Git `main` is the promoted release line
 - PR branches map to Supabase preview branches
-- the pull-request-only Preview job skips forks before authority, fails closed when a same-repository PR lacks the access token, main-parent ref, or persistent-Dev ref, requires exactly one successful check named `Supabase Preview` on the PR head from official Supabase App id `330661` and slug/owner `supabase`, captures the expected ref from its exact dashboard URL, and independently resolves one matching non-default/non-persistent BranchResponse from pinned CLI `branches list --output json`; equality plus main/Dev inequality gates the three-field PostgREST PATCH/readback. A dedicated Management API key step uses raw `disabled` state and exact public-key shape, clears its PAT/raw JSON after masked public-key export, and leaves the following anonymous Portal Hybrid step credential-free except for `apikey`; the job has no migration, Function, persistent-Dev, or production mutation path
+- the pull-request-only Preview job skips forks before authority and first classifies an exact event-base-to-event-head `supabase/` diff. A zero-diff PR succeeds without Preview authority or hosted mutation and accepts the official App's expected `skipped` result. A Supabase-changing PR still fails closed when any authority input is absent, requires exactly one successful check named `Supabase Preview` on the exact PR head from official Supabase App id `330661` and slug/owner `supabase`, captures the expected ref from its exact dashboard URL, and independently resolves one matching non-default/non-persistent BranchResponse from pinned CLI `branches list --output json`; equality plus main/Dev inequality gates the three-field PostgREST PATCH/readback. A dedicated Management API key step uses raw `disabled` state and exact public-key shape, clears its PAT/raw JSON after masked public-key export, and leaves the following anonymous Portal Hybrid step credential-free except for `apikey`; the job has no migration, Function, persistent-Dev, or production mutation path
 - `.github/workflows/supabase-dev.yml` is the sole migration deployer for Git `dev`; it gates the remote job on the local contract, issues exactly one `db push --include-all`, applies one exact Management API PATCH limited to the three PostgREST runtime fields checked into `supabase/config.toml`, and verifies the exact hosted result without Functions deployment, broad config push, or any other Management API mutation
 - after the database deployment succeeds, persistent-Dev Functions are deployed and validated through `tiangong-lca-edge-functions`; this repo contains no Function runtime source or Function deploy command
 - the production Supabase project is migrated automatically by the Supabase GitHub integration when Git `main` advances

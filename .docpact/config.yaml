@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-09-01"
-lastReviewedCommit: "b3b14ab8fa42cdefcb846f97ced6573c0f092d6d"
-lastReviewedNote: "Reviewed for Issue #582: OAuth authorization routing covers separate public direct-MCP clients, exact environment provisioning, disabled-client denial, and grant/session revocation proof."
+lastReviewedAt: "2026-09-02"
+lastReviewedCommit: "de28dd30f365cd3f94a4278f982fba29c0e70af9"
+lastReviewedNote: "Reviewed for Issue #582: OAuth routing covers exact direct clients and the Preview workflow now distinguishes docs-only official skips from supabase/ changes that still require full hosted proof."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

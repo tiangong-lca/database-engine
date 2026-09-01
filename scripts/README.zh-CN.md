@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-01
-lastReviewedCommit: 92a7bb85152d0d7ac5de07b6ad4c5ada7749aef6
-lastReviewedNote: "为 Issue #568 复核：OAuth bundle 回归把精确 migration head 推进到 20260831130000；helper 命令与稳定 overlay 规则不变。"
+lastReviewedAt: 2026-09-02
+lastReviewedCommit: de28dd30f365cd3f94a4278f982fba29c0e70af9
+lastReviewedNote: "为 Issue #582 复核：Supabase workflow 合同现在证明精确的 docs-only Preview 跳过，并对所有 supabase/ 变更保留 fail-closed 托管证据。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -250,11 +250,13 @@ python scripts/test_resolve_migration_head.py
 除非 `.github/workflows/supabase-dev.yml` 保持两条相互隔离的托管路径，否则立即
 失败。push-only 持久化 Dev job 必须绑定配置的 Dev 项目，准确执行一次
 `supabase db push --include-all`，从 checkout 推导 migration head，并执行准确一次
-三字段 PostgREST PATCH。pull-request-only Preview job 对 fork 跳过，但同仓 PR 缺少
-access token、main-parent ref 或 persistent-Dev ref 任一项时 fail closed。它必须把
-准确 head 上来自官方 Supabase App 的唯一成功 check，与 `branches list` 中按 Git
-branch、PR number、parent 匹配的唯一 non-default/non-persistent BranchResponse 绑定；
-两个 ref 必须相等且都不同于 main/Dev，才能执行 Preview 的一次相同 PATCH 与回读。
+三字段 PostgREST PATCH。pull-request-only Preview job 对 fork 跳过，并先验证事件
+base/head commit 和唯一准确的 `supabase/` diff。零 diff PR 输出 `required=false`，不执行
+任何 hosted Preview 动作。只要 Supabase 有变更，缺少 access token、main-parent ref 或
+persistent-Dev ref 任一项仍 fail closed；随后必须把准确 head 上来自官方 Supabase App
+的唯一成功 check，与 `branches list` 中按 Git branch、PR number、parent 匹配的唯一
+non-default/non-persistent BranchResponse 绑定。两个 ref 必须相等且都不同于 main/Dev，
+才能执行 Preview 的一次相同 PATCH 与回读。
 
 合同还要求通过独立且不带 `reveal` 的 Management API key 读取，使用原始
 `disabled` 状态与准确公共 key 形态筛选。只有已 mask 的启用 publishable 或 legacy

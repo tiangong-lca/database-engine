@@ -243,11 +243,32 @@ jobs:
       SUPABASE_DEV_PROJECT_ID: ${{ vars.SUPABASE_DEV_PROJECT_ID }}
       SUPABASE_MAIN_PROJECT_ID: ${{ vars.SUPABASE_MAIN_PROJECT_ID }}
       PREVIEW_GIT_BRANCH: ${{ github.event.pull_request.head.ref }}
+      PREVIEW_BASE_SHA: ${{ github.event.pull_request.base.sha }}
       PREVIEW_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
       PREVIEW_PR_NUMBER: ${{ github.event.pull_request.number }}
 
     steps:
+      - name: Checkout exact PR head
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+          ref: ${{ github.event.pull_request.head.sha }}
+
+      - name: Classify exact Supabase Preview scope
+        id: preview_scope
+        shell: bash
+        run: |
+          git cat-file -e "$PREVIEW_BASE_SHA^{commit}"
+          git cat-file -e "$PREVIEW_HEAD_SHA^{commit}"
+          if git diff --quiet "$PREVIEW_BASE_SHA" "$PREVIEW_HEAD_SHA" -- supabase/; then
+            echo "required=false" >> "$GITHUB_OUTPUT"
+            echo "No supabase/ changes; Preview runtime verification is not required."
+            exit 0
+          fi
+          echo "required=true" >> "$GITHUB_OUTPUT"
+
       - name: Check Preview verification authority
+        if: steps.preview_scope.outputs.required == 'true'
         id: preview_authority
         shell: bash
         env:
@@ -258,13 +279,6 @@ jobs:
             exit 1
           fi
           echo "available=true" >> "$GITHUB_OUTPUT"
-
-      - name: Checkout exact PR head
-        if: steps.preview_authority.outputs.available == 'true'
-        uses: actions/checkout@v7
-        with:
-          fetch-depth: 0
-          ref: ${{ github.event.pull_request.head.sha }}
 
       - name: Setup pinned Supabase CLI
         if: steps.preview_authority.outputs.available == 'true'
