@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, api, private, auth;
 
-select plan(20);
+select plan(27);
 
 select is(
   (
@@ -207,10 +207,77 @@ reset role;
 
 select is(
   snapshot ->> 'schemaVersion',
-  'national_carbon_organization_contribution_v1'::text,
-  'the response uses the frozen v1 schema'
+  'national_carbon_organization_contribution_v2'::text,
+  'the response uses the frozen v2 schema'
 )
 from organization_contribution_result;
+
+select ok(
+  snapshot #>> '{dailyCreation,metric}' = 'dataset_version_created_count'
+    and snapshot #> '{dailyCreation,deduplicationKey}' =
+      '["datasetType", "datasetId", "version"]'::jsonb
+    and snapshot #>> '{dailyCreation,timezone}' = 'Asia/Shanghai',
+  'daily creation metadata freezes the version identity and reporting timezone'
+)
+from organization_contribution_result;
+
+select ok(
+  snapshot #>> '{dailyCreation,startDate}' = (
+    date_trunc('week', timezone('Asia/Shanghai', statement_timestamp()))::date - 364
+  )::text
+    and snapshot #>> '{dailyCreation,endDate}' =
+      timezone('Asia/Shanghai', statement_timestamp())::date::text
+    and jsonb_array_length(snapshot #> '{dailyCreation,days}') =
+      timezone('Asia/Shanghai', statement_timestamp())::date
+        - (
+          date_trunc('week', timezone('Asia/Shanghai', statement_timestamp()))::date - 364
+        ) + 1,
+  'daily creation covers 53 calendar-week columns through the current Shanghai date'
+)
+from organization_contribution_result;
+
+select is(
+  (
+    select sum((day ->> 'processCount')::bigint)
+    from organization_contribution_result
+    cross join lateral jsonb_array_elements(snapshot #> '{dailyCreation,days}') as day
+  ),
+  9::numeric,
+  'daily Process creation counts every retained Process id-version row regardless of state or organization'
+);
+
+select is(
+  (
+    select sum((day ->> 'modelCount')::bigint)
+    from organization_contribution_result
+    cross join lateral jsonb_array_elements(snapshot #> '{dailyCreation,days}') as day
+  ),
+  5::numeric,
+  'daily Model creation counts every retained LifecycleModel id-version row'
+);
+
+select is(
+  (
+    select sum((day ->> 'allCount')::bigint)
+    from organization_contribution_result
+    cross join lateral jsonb_array_elements(snapshot #> '{dailyCreation,days}') as day
+  ),
+  14::numeric,
+  'daily All creation keeps Process and Model identities separate before summing them'
+);
+
+select is(
+  (
+    select day - 'date'
+    from organization_contribution_result
+    cross join lateral jsonb_array_elements(snapshot #> '{dailyCreation,days}') as day
+    where day ->> 'date' = (
+      timezone('Asia/Shanghai', statement_timestamp())::date - 2
+    )::text
+  ),
+  '{"processCount": 1, "modelCount": 1, "allCount": 2}'::jsonb,
+  'the same local day reports separate Process and Model counts plus their total'
+);
 
 select is(
   snapshot #>> '{scopes,process,summary,publishedDatasetCount}',
@@ -303,6 +370,29 @@ select is(
   'pending-only and unassigned organizations do not enter the Process ranking'
 )
 from organization_contribution_result;
+
+delete from public.processes
+where id = '57410000-0000-4000-8000-000000000005'
+  and version = '02.00.000';
+
+set local role authenticated;
+select set_config('request.jwt.claim.sub', '57400000-0000-4000-8000-000000000001', true);
+select set_config(
+  'request.jwt.claims',
+  '{"role":"authenticated","sub":"57400000-0000-4000-8000-000000000001"}',
+  true
+);
+select is(
+  (
+    select sum((day ->> 'allCount')::bigint)
+    from jsonb_array_elements(
+      api.qry_national_carbon_organization_contributions(10) #> '{dailyCreation,days}'
+    ) as day
+  ),
+  13::numeric,
+  'physical deletion removes the version from historical daily creation counts'
+);
+reset role;
 
 select * from finish();
 
