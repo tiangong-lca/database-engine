@@ -90,13 +90,13 @@ begin
       'timezone', 'Asia/Shanghai',
       'startDate', bounds.start_date,
       'endDate', bounds.end_date,
-      'days', pg_catalog.coalesce(
+      'days', coalesce(
         pg_catalog.jsonb_agg(
           pg_catalog.jsonb_build_object(
             'date', series.created_date,
-            'processCount', pg_catalog.coalesce(counts.process_count, 0::bigint),
-            'modelCount', pg_catalog.coalesce(counts.model_count, 0::bigint),
-            'allCount', pg_catalog.coalesce(counts.all_count, 0::bigint)
+            'processCount', coalesce(counts.process_count, 0::bigint),
+            'modelCount', coalesce(counts.model_count, 0::bigint),
+            'allCount', coalesce(counts.all_count, 0::bigint)
           )
           order by series.created_date
         ),
