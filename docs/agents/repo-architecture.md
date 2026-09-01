@@ -30,9 +30,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-31
-lastReviewedCommit: e6b4afe857d70cb0242dcbc803f288f77da39608
-lastReviewedNote: "Reviewed for Issue #568: the forward capability repair binds both exact LifecycleModel bundle signatures to EDGE-BUNDLE-01 and prevents MCP from inheriting the broad CLI capability."
+lastReviewedAt: 2026-09-01
+lastReviewedCommit: 92a7bb85152d0d7ac5de07b6ad4c5ada7749aef6
+lastReviewedNote: "Updated for Issue #572: organization is an optional bounded string in mirrored user metadata and is never an authorization input."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -255,6 +255,12 @@ identity is deleted. Forward migrations must also reconcile historical Auth
 rows while preserving application-owned profile fields. The trigger helper is
 `SECURITY DEFINER`, uses an empty fixed `search_path`, and is not directly
 executable by application roles.
+
+The optional `raw_user_meta_data.organization` profile key stores the user's
+organization as a trimmed string of at most 200 characters. The database
+validates that representation on `private.users`; the existing Auth-to-private
+mirror remains its only synchronization path. This descriptive profile value
+must never be used as an authorization, role, team, or RLS input.
 
 ## Stable Path Map
 

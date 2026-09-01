@@ -1,7 +1,8 @@
 CREATE TABLE IF NOT EXISTS "private"."users" (
     "id" "uuid" NOT NULL,
     "raw_user_meta_data" "jsonb",
-    "contact" "jsonb"
+    "contact" "jsonb",
+    CONSTRAINT "users_organization_metadata_contract" CHECK ((("raw_user_meta_data" IS NULL) OR (NOT ("raw_user_meta_data" ? 'organization'::"text")) OR (("jsonb_typeof"(("raw_user_meta_data" -> 'organization'::"text")) = 'string'::"text") AND (("raw_user_meta_data" ->> 'organization'::"text") !~ '^[[:space:]]|[[:space:]]$'::"text") AND ("char_length"(("raw_user_meta_data" ->> 'organization'::"text")) <= 200))))
 );
 
 ALTER TABLE "private"."users" OWNER TO "postgres";

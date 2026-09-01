@@ -20448,6 +20448,422 @@ $$;
 ALTER FUNCTION "api"."qry_membership_get_mine"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer DEFAULT 10) RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  v_actor uuid := auth.uid();
+  v_result jsonb;
+begin
+  if v_actor is null then
+    raise exception using
+      errcode = '28000',
+      message = 'AUTH_REQUIRED';
+  end if;
+
+  if not api.cmd_membership_is_system_manager(v_actor) then
+    raise exception using
+      errcode = '42501',
+      message = 'SYSTEM_MANAGER_REQUIRED';
+  end if;
+
+  if p_limit is null or p_limit < 1 or p_limit > 50 then
+    raise exception using
+      errcode = '22023',
+      message = 'INVALID_LIMIT';
+  end if;
+
+  with
+  daily_date_bounds as materialized (
+    select
+      (
+        pg_catalog.date_trunc(
+          'week',
+          pg_catalog.timezone('Asia/Shanghai', pg_catalog.statement_timestamp())
+        )::date - 364
+      ) as start_date,
+      pg_catalog.timezone(
+        'Asia/Shanghai',
+        pg_catalog.statement_timestamp()
+      )::date as end_date
+  ),
+  daily_time_bounds as materialized (
+    select
+      bounds.start_date,
+      bounds.end_date,
+      pg_catalog.timezone(
+        'Asia/Shanghai',
+        bounds.start_date::timestamp without time zone
+      ) as start_at,
+      pg_catalog.timezone(
+        'Asia/Shanghai',
+        (bounds.end_date + 1)::timestamp without time zone
+      ) as end_at
+    from daily_date_bounds as bounds
+  ),
+  daily_version_facts as materialized (
+    select
+      'process'::text as dataset_kind,
+      pg_catalog.timezone('Asia/Shanghai', process_row.created_at)::date as created_date
+    from public.processes as process_row
+    cross join daily_time_bounds as bounds
+    where process_row.created_at >= bounds.start_at
+      and process_row.created_at < bounds.end_at
+    union all
+    select
+      'model'::text as dataset_kind,
+      pg_catalog.timezone('Asia/Shanghai', model_row.created_at)::date as created_date
+    from public.lifecyclemodels as model_row
+    cross join daily_time_bounds as bounds
+    where model_row.created_at >= bounds.start_at
+      and model_row.created_at < bounds.end_at
+  ),
+  daily_version_counts as materialized (
+    select
+      fact.created_date,
+      pg_catalog.count(*) filter (where fact.dataset_kind = 'process')::bigint
+        as process_count,
+      pg_catalog.count(*) filter (where fact.dataset_kind = 'model')::bigint
+        as model_count,
+      pg_catalog.count(*)::bigint as all_count
+    from daily_version_facts as fact
+    group by fact.created_date
+  ),
+  daily_creation_payload as materialized (
+    select pg_catalog.jsonb_build_object(
+      'metric', 'dataset_version_created_count',
+      'deduplicationKey', pg_catalog.jsonb_build_array('datasetType', 'datasetId', 'version'),
+      'timezone', 'Asia/Shanghai',
+      'startDate', bounds.start_date,
+      'endDate', bounds.end_date,
+      'days', coalesce(
+        pg_catalog.jsonb_agg(
+          pg_catalog.jsonb_build_object(
+            'date', series.created_date,
+            'processCount', coalesce(counts.process_count, 0::bigint),
+            'modelCount', coalesce(counts.model_count, 0::bigint),
+            'allCount', coalesce(counts.all_count, 0::bigint)
+          )
+          order by series.created_date
+        ),
+        '[]'::jsonb
+      )
+    ) as payload
+    from daily_time_bounds as bounds
+    cross join lateral pg_catalog.generate_series(
+      bounds.start_date::timestamp without time zone,
+      bounds.end_date::timestamp without time zone,
+      interval '1 day'
+    ) as generated(created_at)
+    cross join lateral (
+      select generated.created_at::date as created_date
+    ) as series
+    left join daily_version_counts as counts using (created_date)
+    group by bounds.start_date, bounds.end_date
+  ),
+  latest_published_process as materialized (
+    select distinct on (process_row.id)
+      'process'::text as dataset_kind,
+      process_row.id as dataset_id,
+      process_row.user_id,
+      process_row.modified_at
+    from public.processes as process_row
+    where process_row.state_code = 100
+    order by
+      process_row.id,
+      process_row.version desc,
+      process_row.modified_at desc
+  ),
+  latest_current_process as materialized (
+    select distinct on (process_row.id)
+      'process'::text as dataset_kind,
+      process_row.id as dataset_id,
+      process_row.user_id,
+      process_row.state_code,
+      process_row.modified_at
+    from public.processes as process_row
+    order by
+      process_row.id,
+      process_row.version desc,
+      process_row.modified_at desc
+  ),
+  latest_published_model as materialized (
+    select distinct on (model_row.id)
+      'model'::text as dataset_kind,
+      model_row.id as dataset_id,
+      model_row.user_id,
+      model_row.modified_at
+    from public.lifecyclemodels as model_row
+    where model_row.state_code = 100
+    order by
+      model_row.id,
+      model_row.version desc,
+      model_row.modified_at desc
+  ),
+  latest_current_model as materialized (
+    select distinct on (model_row.id)
+      'model'::text as dataset_kind,
+      model_row.id as dataset_id,
+      model_row.user_id,
+      model_row.state_code,
+      model_row.modified_at
+    from public.lifecyclemodels as model_row
+    order by
+      model_row.id,
+      model_row.version desc,
+      model_row.modified_at desc
+  ),
+  published_facts as materialized (
+    select * from latest_published_process
+    union all
+    select * from latest_published_model
+  ),
+  pending_review_facts as materialized (
+    select
+      latest_row.dataset_kind,
+      latest_row.dataset_id,
+      latest_row.user_id,
+      latest_row.modified_at
+    from latest_current_process as latest_row
+    where latest_row.state_code = 20
+    union all
+    select
+      latest_row.dataset_kind,
+      latest_row.dataset_id,
+      latest_row.user_id,
+      latest_row.modified_at
+    from latest_current_model as latest_row
+    where latest_row.state_code = 20
+  ),
+  user_organization_names as materialized (
+    select
+      profile.id as user_id,
+      nullif(
+        pg_catalog.regexp_replace(
+          pg_catalog.btrim(profile.raw_user_meta_data ->> 'organization'),
+          '[[:space:]]+',
+          ' ',
+          'g'
+        ),
+        ''
+      ) as organization_name
+    from private.users as profile
+    where pg_catalog.jsonb_typeof(profile.raw_user_meta_data -> 'organization') = 'string'
+  ),
+  user_organizations as materialized (
+    select
+      named.user_id,
+      pg_catalog.lower(named.organization_name) as organization_key,
+      named.organization_name
+    from user_organization_names as named
+  ),
+  organization_catalog as materialized (
+    select distinct organization.organization_key
+    from user_organizations as organization
+    where organization.organization_key is not null
+  ),
+  organization_summary as materialized (
+    select pg_catalog.count(*)::bigint as organization_count
+    from organization_catalog
+  ),
+  contribution_facts as (
+    select
+      published.dataset_kind,
+      published.dataset_id,
+      published.user_id,
+      organization.organization_key,
+      organization.organization_name,
+      1::integer as published_count,
+      0::integer as reviewing_count,
+      published.modified_at
+    from published_facts as published
+    left join user_organizations as organization using (user_id)
+    union all
+    select
+      pending.dataset_kind,
+      pending.dataset_id,
+      pending.user_id,
+      organization.organization_key,
+      organization.organization_name,
+      0::integer as published_count,
+      1::integer as reviewing_count,
+      pending.modified_at
+    from pending_review_facts as pending
+    left join user_organizations as organization using (user_id)
+  ),
+  scoped_facts as materialized (
+    select
+      scope.dataset_scope,
+      fact.dataset_kind,
+      fact.dataset_id,
+      fact.user_id,
+      fact.organization_key,
+      fact.organization_name,
+      fact.published_count,
+      fact.reviewing_count,
+      fact.modified_at
+    from contribution_facts as fact
+    cross join lateral (
+      values (fact.dataset_kind), ('all'::text)
+    ) as scope(dataset_scope)
+  ),
+  scope_catalog(dataset_scope) as (
+    values ('process'::text), ('model'::text), ('all'::text)
+  ),
+  scope_summary_values as materialized (
+    select
+      scope.dataset_scope,
+      organization_summary.organization_count,
+      coalesce(
+        pg_catalog.sum(fact.published_count)
+          filter (where fact.organization_key is not null),
+        0::bigint
+      )::bigint
+        as published_dataset_count,
+      coalesce(
+        pg_catalog.sum(fact.reviewing_count)
+          filter (where fact.organization_key is not null),
+        0::bigint
+      )::bigint
+        as pending_review_dataset_count,
+      coalesce(
+        pg_catalog.sum(fact.published_count)
+          filter (
+            where fact.organization_key is not null
+              and fact.modified_at >= pg_catalog.statement_timestamp() - interval '30 days'
+          ),
+        0::bigint
+      )::bigint as published_last_30_days_count
+    from scope_catalog as scope
+    cross join organization_summary
+    left join scoped_facts as fact on fact.dataset_scope = scope.dataset_scope
+    group by scope.dataset_scope, organization_summary.organization_count
+  ),
+  scope_organization_aggregate as materialized (
+    select
+      fact.dataset_scope,
+      fact.organization_key,
+      pg_catalog.min(fact.organization_name collate "C") as organization_name,
+      pg_catalog.sum(fact.published_count)::bigint as published_dataset_count,
+      pg_catalog.sum(fact.reviewing_count)::bigint as reviewing_dataset_count,
+      (
+        pg_catalog.count(distinct fact.user_id)
+          filter (where fact.published_count = 1)
+      )::bigint as contributor_count,
+      pg_catalog.max(fact.modified_at)
+        filter (where fact.published_count = 1) as latest_contributed_at
+    from scoped_facts as fact
+    where fact.organization_key is not null
+    group by fact.dataset_scope, fact.organization_key
+  ),
+  scope_ranked as (
+    select
+      aggregate.dataset_scope,
+      pg_catalog.row_number() over (
+        partition by aggregate.dataset_scope
+        order by
+          aggregate.published_dataset_count desc,
+          aggregate.organization_name collate "C" asc,
+          aggregate.organization_key collate "C" asc
+      )::integer as rank,
+      aggregate.organization_key,
+      aggregate.organization_name,
+      aggregate.published_dataset_count,
+      aggregate.reviewing_dataset_count,
+      aggregate.contributor_count,
+      case
+        when summary.published_dataset_count = 0 then 0::numeric
+        else pg_catalog.round(
+          aggregate.published_dataset_count::numeric
+            / summary.published_dataset_count::numeric,
+          6
+        )
+      end as contribution_share,
+      aggregate.latest_contributed_at
+    from scope_organization_aggregate as aggregate
+    join scope_summary_values as summary using (dataset_scope)
+    where aggregate.published_dataset_count > 0
+  ),
+  scope_ranked_limited as materialized (
+    select *
+    from scope_ranked
+    where rank <= p_limit
+  ),
+  scope_payloads as materialized (
+    select
+      summary.dataset_scope,
+      pg_catalog.jsonb_build_object(
+        'datasetScope', summary.dataset_scope,
+        'metric', 'latest_published_dataset_count',
+        'summary', pg_catalog.jsonb_build_object(
+          'organizationCount', summary.organization_count,
+          'publishedDatasetCount', summary.published_dataset_count,
+          'pendingReviewDatasetCount', summary.pending_review_dataset_count,
+          'publishedLast30DaysCount', summary.published_last_30_days_count
+        ),
+        'rankings', coalesce(
+          (
+            select pg_catalog.jsonb_agg(
+              pg_catalog.jsonb_build_object(
+                'rank', ranked.rank,
+                'organizationKey', ranked.organization_key,
+                'organizationName', ranked.organization_name,
+                'publishedDatasetCount', ranked.published_dataset_count,
+                'reviewingDatasetCount', ranked.reviewing_dataset_count,
+                'contributorCount', ranked.contributor_count,
+                'contributionShare', ranked.contribution_share,
+                'latestContributedAt', ranked.latest_contributed_at
+              )
+              order by ranked.rank
+            )
+            from scope_ranked_limited as ranked
+            where ranked.dataset_scope = summary.dataset_scope
+          ),
+          '[]'::jsonb
+        )
+      ) as payload
+    from scope_summary_values as summary
+  ),
+  snapshot_metadata as (
+    select coalesce(
+      pg_catalog.max(fact.modified_at),
+      pg_catalog.statement_timestamp()
+    ) as data_as_of
+    from contribution_facts as fact
+  )
+  select pg_catalog.jsonb_build_object(
+    'schemaVersion', 'national_carbon_organization_contribution_v2',
+    'attributionMode', 'current_user_profile',
+    'generatedAt', pg_catalog.statement_timestamp(),
+    'dataAsOf', metadata.data_as_of,
+    'defaultScope', 'all',
+    'dailyCreation', (
+      select payload from daily_creation_payload
+    ),
+    'scopes', pg_catalog.jsonb_build_object(
+      'process', (
+        select payload from scope_payloads where dataset_scope = 'process'
+      ),
+      'model', (
+        select payload from scope_payloads where dataset_scope = 'model'
+      ),
+      'all', (
+        select payload from scope_payloads where dataset_scope = 'all'
+      )
+    )
+  )
+  into v_result
+  from snapshot_metadata as metadata;
+
+  return v_result;
+end;
+$$;
+
+
+ALTER FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer) OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "api"."qry_notification_get_my_data_count"("p_days" integer DEFAULT 3, "p_last_view_at" timestamp with time zone DEFAULT NULL::timestamp with time zone) RETURNS integer
     LANGUAGE "sql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
@@ -66790,7 +67206,8 @@ ALTER TABLE "private"."teams" OWNER TO "postgres";
 CREATE TABLE IF NOT EXISTS "private"."users" (
     "id" "uuid" NOT NULL,
     "raw_user_meta_data" "jsonb",
-    "contact" "jsonb"
+    "contact" "jsonb",
+    CONSTRAINT "users_organization_metadata_contract" CHECK ((("raw_user_meta_data" IS NULL) OR (NOT ("raw_user_meta_data" ? 'organization'::"text")) OR (("jsonb_typeof"(("raw_user_meta_data" -> 'organization'::"text")) = 'string'::"text") AND (("raw_user_meta_data" ->> 'organization'::"text") !~ '^[[:space:]]|[[:space:]]$'::"text") AND ("char_length"(("raw_user_meta_data" ->> 'organization'::"text")) <= 200))))
 );
 
 
@@ -72644,6 +73061,11 @@ GRANT ALL ON FUNCTION "api"."qry_identity_get_visible_users"("p_user_ids" "uuid"
 
 REVOKE ALL ON FUNCTION "api"."qry_membership_get_mine"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."qry_membership_get_mine"() TO "authenticated";
+
+
+
+REVOKE ALL ON FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer) FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer) TO "authenticated";
 
 
 
