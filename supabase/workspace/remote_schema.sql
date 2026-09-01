@@ -20475,6 +20475,93 @@ begin
   end if;
 
   with
+  daily_date_bounds as materialized (
+    select
+      (
+        pg_catalog.date_trunc(
+          'week',
+          pg_catalog.timezone('Asia/Shanghai', pg_catalog.statement_timestamp())
+        )::date - 364
+      ) as start_date,
+      pg_catalog.timezone(
+        'Asia/Shanghai',
+        pg_catalog.statement_timestamp()
+      )::date as end_date
+  ),
+  daily_time_bounds as materialized (
+    select
+      bounds.start_date,
+      bounds.end_date,
+      pg_catalog.timezone(
+        'Asia/Shanghai',
+        bounds.start_date::timestamp without time zone
+      ) as start_at,
+      pg_catalog.timezone(
+        'Asia/Shanghai',
+        (bounds.end_date + 1)::timestamp without time zone
+      ) as end_at
+    from daily_date_bounds as bounds
+  ),
+  daily_version_facts as materialized (
+    select
+      'process'::text as dataset_kind,
+      pg_catalog.timezone('Asia/Shanghai', process_row.created_at)::date as created_date
+    from public.processes as process_row
+    cross join daily_time_bounds as bounds
+    where process_row.created_at >= bounds.start_at
+      and process_row.created_at < bounds.end_at
+    union all
+    select
+      'model'::text as dataset_kind,
+      pg_catalog.timezone('Asia/Shanghai', model_row.created_at)::date as created_date
+    from public.lifecyclemodels as model_row
+    cross join daily_time_bounds as bounds
+    where model_row.created_at >= bounds.start_at
+      and model_row.created_at < bounds.end_at
+  ),
+  daily_version_counts as materialized (
+    select
+      fact.created_date,
+      pg_catalog.count(*) filter (where fact.dataset_kind = 'process')::bigint
+        as process_count,
+      pg_catalog.count(*) filter (where fact.dataset_kind = 'model')::bigint
+        as model_count,
+      pg_catalog.count(*)::bigint as all_count
+    from daily_version_facts as fact
+    group by fact.created_date
+  ),
+  daily_creation_payload as materialized (
+    select pg_catalog.jsonb_build_object(
+      'metric', 'dataset_version_created_count',
+      'deduplicationKey', pg_catalog.jsonb_build_array('datasetType', 'datasetId', 'version'),
+      'timezone', 'Asia/Shanghai',
+      'startDate', bounds.start_date,
+      'endDate', bounds.end_date,
+      'days', coalesce(
+        pg_catalog.jsonb_agg(
+          pg_catalog.jsonb_build_object(
+            'date', series.created_date,
+            'processCount', coalesce(counts.process_count, 0::bigint),
+            'modelCount', coalesce(counts.model_count, 0::bigint),
+            'allCount', coalesce(counts.all_count, 0::bigint)
+          )
+          order by series.created_date
+        ),
+        '[]'::jsonb
+      )
+    ) as payload
+    from daily_time_bounds as bounds
+    cross join lateral pg_catalog.generate_series(
+      bounds.start_date::timestamp without time zone,
+      bounds.end_date::timestamp without time zone,
+      interval '1 day'
+    ) as generated(created_at)
+    cross join lateral (
+      select generated.created_at::date as created_date
+    ) as series
+    left join daily_version_counts as counts using (created_date)
+    group by bounds.start_date, bounds.end_date
+  ),
   latest_published_process as materialized (
     select distinct on (process_row.id)
       'process'::text as dataset_kind,
@@ -20746,11 +20833,14 @@ begin
     from contribution_facts as fact
   )
   select pg_catalog.jsonb_build_object(
-    'schemaVersion', 'national_carbon_organization_contribution_v1',
+    'schemaVersion', 'national_carbon_organization_contribution_v2',
     'attributionMode', 'current_user_profile',
     'generatedAt', pg_catalog.statement_timestamp(),
     'dataAsOf', metadata.data_as_of,
     'defaultScope', 'all',
+    'dailyCreation', (
+      select payload from daily_creation_payload
+    ),
     'scopes', pg_catalog.jsonb_build_object(
       'process', (
         select payload from scope_payloads where dataset_scope = 'process'
