@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-01
-lastReviewedCommit: 92a7bb85152d0d7ac5de07b6ad4c5ada7749aef6
-lastReviewedNote: "Reviewed for Issue #568: the OAuth bundle regression advances the exact migration head to 20260831130000; helper commands and stable-overlay rules are unchanged."
+lastReviewedAt: 2026-09-02
+lastReviewedCommit: 2fa558cc39be4431e6886ada71aef521e862976c
+lastReviewedNote: "Reviewed for Issue #582: the workflow contract distinguishes deployable Supabase inputs from repository-only workspace, test, and documentation paths."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -293,12 +293,16 @@ Fails closed unless `.github/workflows/supabase-dev.yml` keeps two isolated
 hosted paths. The push-only persistent-Dev job must link the configured Dev
 project, run exactly one `supabase db push --include-all`, derive its migration
 head, and apply exactly one three-field PostgREST PATCH. The pull-request-only
-Preview job must skip forks but fail a same-repository PR when its access token,
-main-parent ref, or persistent-Dev ref is absent. It binds one successful check
-from the exact official Supabase App/head to a unique non-default,
-non-persistent `branches list` row for the same Git branch, PR number, and
-parent; the check ref and BranchResponse ref must match and differ from both
-main and Dev before the Preview's one identical PATCH/readback.
+Preview job skips forks and first validates the event base/head commits plus
+the exact deployable-input allowlist: config, migrations, root/extra seeds,
+and Functions. Workspace, tests, Auth templates, and docs are excluded. A
+zero-diff PR emits `required=false` and performs no hosted Preview work. Any
+allowlisted change still fails when its access token, main-parent ref, or
+persistent-Dev ref is absent, then binds one
+successful check from the exact official Supabase App/head to a unique
+non-default, non-persistent `branches list` row for the same Git branch, PR
+number, and parent. The check ref and BranchResponse ref must match and differ
+from both main and Dev before the Preview's one identical PATCH/readback.
 
 The contract also requires one separate no-reveal Management API key read using
 the raw `disabled` state and exact public-key shape. Only a masked enabled

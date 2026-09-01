@@ -30,9 +30,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-01
-lastReviewedCommit: 92a7bb85152d0d7ac5de07b6ad4c5ada7749aef6
-lastReviewedNote: "Updated for Issue #572: organization is an optional bounded string in mirrored user metadata and is never an authorization input."
+lastReviewedAt: 2026-09-02
+lastReviewedCommit: 2fa558cc39be4431e6886ada71aef521e862976c
+lastReviewedNote: "Updated for Issue #582: direct OAuth admission is unchanged; Preview automation now classifies exact deployable inputs before requiring official hosted runtime proof."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -85,6 +85,17 @@ client kind, enabled/revoked state, capability grants, and append-only change
 audit under `private`. Environment-specific client IDs are provisioned through
 the service-only configuration façade after Supabase Auth registration; they
 are never hardcoded in a generic migration.
+
+Direct MCP hosts use one public manual OAuth client per host and environment,
+with exact loopback callbacks and Dynamic Client Registration disabled. Each
+MCP client receives only `DB-CORE-READ-01`, `DB-CORE-WRITE-01`, and
+`EDGE-BUNDLE-01`; it never receives `CLI-RPC-01`. Disabling a client through
+the configuration façade atomically removes its effective access and causes
+the same otherwise valid OAuth session to fail the PostgREST pre-request gate
+with SQLSTATE `42501`. Supabase grant revocation deletes the client's Auth
+sessions and refresh tokens. A separately verified, already-issued JWT can
+remain valid until `exp`; immediate access-token revocation is not a database
+capability-registry guarantee.
 
 First-party Next sessions contain no `client_id` claim and preserve the
 existing `auth.uid()` policies. OAuth access tokens must name an enabled client
@@ -291,7 +302,7 @@ must never be used as an authorization, role, team, or RLS input.
 - Git `dev` is the daily integration trunk
 - Git `main` is the promoted release line
 - PR branches map to Supabase preview branches
-- the pull-request-only Preview job skips forks before authority, fails closed when a same-repository PR lacks the access token, main-parent ref, or persistent-Dev ref, requires exactly one successful check named `Supabase Preview` on the PR head from official Supabase App id `330661` and slug/owner `supabase`, captures the expected ref from its exact dashboard URL, and independently resolves one matching non-default/non-persistent BranchResponse from pinned CLI `branches list --output json`; equality plus main/Dev inequality gates the three-field PostgREST PATCH/readback. A dedicated Management API key step uses raw `disabled` state and exact public-key shape, clears its PAT/raw JSON after masked public-key export, and leaves the following anonymous Portal Hybrid step credential-free except for `apikey`; the job has no migration, Function, persistent-Dev, or production mutation path
+- the pull-request-only Preview job skips forks before authority, verifies exact event base/head commits, and classifies only deployable Preview inputs: `config.toml`, migrations, root/extra seed files, and Functions. Repository-only workspace, test, template, and documentation files are excluded. An exact zero diff over the deployable set succeeds without Preview authority or hosted mutation and accepts the official App's expected `skipped` result. Any deployable change still fails closed when authority is absent and requires the exact official check, disposable BranchResponse identity, PostgREST PATCH/readback, enabled public key, and anonymous Hybrid/sitemap proof; the job has no migration, Function, persistent-Dev, or production mutation path
 - `.github/workflows/supabase-dev.yml` is the sole migration deployer for Git `dev`; it gates the remote job on the local contract, issues exactly one `db push --include-all`, applies one exact Management API PATCH limited to the three PostgREST runtime fields checked into `supabase/config.toml`, and verifies the exact hosted result without Functions deployment, broad config push, or any other Management API mutation
 - after the database deployment succeeds, persistent-Dev Functions are deployed and validated through `tiangong-lca-edge-functions`; this repo contains no Function runtime source or Function deploy command
 - the production Supabase project is migrated automatically by the Supabase GitHub integration when Git `main` advances
