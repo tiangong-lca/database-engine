@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-01
-lastReviewedCommit: 161f48ee7a5c1e735b02eff30e8b5ddef1eaa284
+lastReviewedCommit: cd6ef3258462855ec5c7da822b379680fdd1db1d
 lastReviewedNote: "为 Issue #568 复核：OAuth bundle 回归把精确 migration head 推进到 20260831130000；helper 命令与稳定 overlay 规则不变。"
 related:
   - ../AGENTS.md
