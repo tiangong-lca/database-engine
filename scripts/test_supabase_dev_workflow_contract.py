@@ -165,7 +165,12 @@ def main() -> int:
         "id: preview_scope",
         'git cat-file -e "$PREVIEW_BASE_SHA^{commit}"',
         'git cat-file -e "$PREVIEW_HEAD_SHA^{commit}"',
-        'git diff --quiet "$PREVIEW_BASE_SHA" "$PREVIEW_HEAD_SHA" -- supabase/',
+        'git diff --quiet "$PREVIEW_BASE_SHA" "$PREVIEW_HEAD_SHA" --',
+        "supabase/config.toml",
+        "supabase/migrations/",
+        "supabase/seed.sql",
+        "supabase/seeds/",
+        "supabase/functions/",
         'echo "required=false" >> "$GITHUB_OUTPUT"',
         'echo "required=true" >> "$GITHUB_OUTPUT"',
         "steps.preview_scope.outputs.required == 'true'",
@@ -248,12 +253,33 @@ def main() -> int:
         failures.append(
             "Hybrid and sitemap readiness curl calls must be bounded by their remaining deadline"
         )
-    if preview_workflow.count(
-        'git diff --quiet "$PREVIEW_BASE_SHA" "$PREVIEW_HEAD_SHA" -- supabase/'
+    preview_scope_step = preview_workflow.split(
+        "- name: Classify exact Supabase Preview scope", 1
+    )[-1].split("- name: Check Preview verification authority", 1)[0]
+    if preview_scope_step.count(
+        'git diff --quiet "$PREVIEW_BASE_SHA" "$PREVIEW_HEAD_SHA" --'
     ) != 1:
-        failures.append(
-            "Preview scope must use one exact base-to-head supabase/ diff"
-        )
+        failures.append("Preview scope must use one exact base-to-head diff")
+    for deployable_path in (
+        "supabase/config.toml",
+        "supabase/migrations/",
+        "supabase/seed.sql",
+        "supabase/seeds/",
+        "supabase/functions/",
+    ):
+        if preview_scope_step.count(deployable_path) != 1:
+            failures.append(
+                f"Preview scope must contain deployable path exactly once: {deployable_path}"
+            )
+    for nondeployable_path in (
+        "supabase/workspace/",
+        "supabase/tests/",
+        "supabase/templates/",
+    ):
+        if nondeployable_path in preview_scope_step:
+            failures.append(
+                f"Preview scope must not treat repository-only path as deployable: {nondeployable_path}"
+            )
     if preview_workflow.count('echo "required=false" >> "$GITHUB_OUTPUT"') != 1:
         failures.append("Preview scope must emit exactly one no-change outcome")
     if preview_workflow.count('echo "required=true" >> "$GITHUB_OUTPUT"') != 1:

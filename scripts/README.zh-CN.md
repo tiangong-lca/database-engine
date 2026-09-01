@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: de28dd30f365cd3f94a4278f982fba29c0e70af9
-lastReviewedNote: "为 Issue #582 复核：Supabase workflow 合同现在证明精确的 docs-only Preview 跳过，并对所有 supabase/ 变更保留 fail-closed 托管证据。"
+lastReviewedCommit: 2fa558cc39be4431e6886ada71aef521e862976c
+lastReviewedNote: "为 Issue #582 复核：workflow 合同区分可部署 Supabase 输入与仅属于仓库的 workspace、test 和文档路径。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -251,9 +251,10 @@ python scripts/test_resolve_migration_head.py
 失败。push-only 持久化 Dev job 必须绑定配置的 Dev 项目，准确执行一次
 `supabase db push --include-all`，从 checkout 推导 migration head，并执行准确一次
 三字段 PostgREST PATCH。pull-request-only Preview job 对 fork 跳过，并先验证事件
-base/head commit 和唯一准确的 `supabase/` diff。零 diff PR 输出 `required=false`，不执行
-任何 hosted Preview 动作。只要 Supabase 有变更，缺少 access token、main-parent ref 或
-persistent-Dev ref 任一项仍 fail closed；随后必须把准确 head 上来自官方 Supabase App
+base/head commit 和精确可部署 allowlist：config、migrations、根/附加 seed 与
+Functions；workspace、tests、Auth templates 和文档不在其中。零 diff PR 输出
+`required=false`，不执行 hosted Preview。任一 allowlist 变化仍要求 access token、
+main-parent ref 与 persistent-Dev ref；随后必须把准确 head 上来自官方 Supabase App
 的唯一成功 check，与 `branches list` 中按 Git branch、PR number、parent 匹配的唯一
 non-default/non-persistent BranchResponse 绑定。两个 ref 必须相等且都不同于 main/Dev，
 才能执行 Preview 的一次相同 PATCH 与回读。

@@ -260,9 +260,14 @@ jobs:
         run: |
           git cat-file -e "$PREVIEW_BASE_SHA^{commit}"
           git cat-file -e "$PREVIEW_HEAD_SHA^{commit}"
-          if git diff --quiet "$PREVIEW_BASE_SHA" "$PREVIEW_HEAD_SHA" -- supabase/; then
+          if git diff --quiet "$PREVIEW_BASE_SHA" "$PREVIEW_HEAD_SHA" -- \
+            supabase/config.toml \
+            supabase/migrations/ \
+            supabase/seed.sql \
+            supabase/seeds/ \
+            supabase/functions/; then
             echo "required=false" >> "$GITHUB_OUTPUT"
-            echo "No supabase/ changes; Preview runtime verification is not required."
+            echo "No deployable Supabase changes; Preview runtime verification is not required."
             exit 0
           fi
           echo "required=true" >> "$GITHUB_OUTPUT"

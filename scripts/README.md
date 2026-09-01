@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: de28dd30f365cd3f94a4278f982fba29c0e70af9
-lastReviewedNote: "Reviewed for Issue #582: the Supabase workflow contract now proves exact docs-only Preview skipping and preserves fail-closed hosted proof for every supabase/ change."
+lastReviewedCommit: 2fa558cc39be4431e6886ada71aef521e862976c
+lastReviewedNote: "Reviewed for Issue #582: the workflow contract distinguishes deployable Supabase inputs from repository-only workspace, test, and documentation paths."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -294,9 +294,11 @@ hosted paths. The push-only persistent-Dev job must link the configured Dev
 project, run exactly one `supabase db push --include-all`, derive its migration
 head, and apply exactly one three-field PostgREST PATCH. The pull-request-only
 Preview job skips forks and first validates the event base/head commits plus
-one exact `supabase/` diff. A zero-diff PR emits `required=false` and performs
-no hosted Preview work. Any Supabase-changing PR still fails when its access
-token, main-parent ref, or persistent-Dev ref is absent, then binds one
+the exact deployable-input allowlist: config, migrations, root/extra seeds,
+and Functions. Workspace, tests, Auth templates, and docs are excluded. A
+zero-diff PR emits `required=false` and performs no hosted Preview work. Any
+allowlisted change still fails when its access token, main-parent ref, or
+persistent-Dev ref is absent, then binds one
 successful check from the exact official Supabase App/head to a unique
 non-default, non-persistent `branches list` row for the same Git branch, PR
 number, and parent. The check ref and BranchResponse ref must match and differ

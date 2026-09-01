@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-09-02"
-lastReviewedCommit: "de28dd30f365cd3f94a4278f982fba29c0e70af9"
-lastReviewedNote: "Reviewed for Issue #582: OAuth routing covers exact direct clients and the Preview workflow now distinguishes docs-only official skips from supabase/ changes that still require full hosted proof."
+lastReviewedCommit: "2fa558cc39be4431e6886ada71aef521e862976c"
+lastReviewedNote: "Reviewed for Issue #582: OAuth routing covers exact direct clients and Preview automation distinguishes deployable Supabase inputs from repository-only workspace/test/docs changes."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

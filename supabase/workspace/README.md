@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: de28dd30f365cd3f94a4278f982fba29c0e70af9
-lastReviewedNote: "Reviewed for Issue #582: Preview path classification changes only CI admission; generated workspace ownership, refresh, types, and stable-overlay rules remain unchanged."
+lastReviewedCommit: 2fa558cc39be4431e6886ada71aef521e862976c
+lastReviewedNote: "Reviewed for Issue #582: the deployable Preview allowlist explicitly excludes generated workspace paths; ownership, refresh, types, and stable-overlay rules remain unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
