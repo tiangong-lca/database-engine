@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-01
-lastReviewedCommit: cd6ef3258462855ec5c7da822b379680fdd1db1d
+lastReviewedCommit: ec5825ad4742a584bae133a79d8b01084f6b4716
 lastReviewedNote: "为 Issue #568 复核：追加修复只改变能力 manifest 数据；生成的 Data API types、workspace 所有权、刷新与稳定 overlay 规则均不变。"
 related:
   - ../../AGENTS.md

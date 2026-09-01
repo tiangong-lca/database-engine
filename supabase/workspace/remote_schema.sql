@@ -20628,24 +20628,24 @@ begin
   scope_summary_values as materialized (
     select
       scope.dataset_scope,
-      pg_catalog.coalesce(
+      coalesce(
         pg_catalog.count(distinct fact.organization_key)
           filter (
             where fact.organization_key is not null
               and fact.published_count = 1
           ),
-        0
+        0::bigint
       )::bigint as organization_count,
-      pg_catalog.coalesce(pg_catalog.sum(fact.published_count), 0)::bigint
+      coalesce(pg_catalog.sum(fact.published_count), 0::bigint)::bigint
         as published_dataset_count,
-      pg_catalog.coalesce(pg_catalog.sum(fact.reviewing_count), 0)::bigint
+      coalesce(pg_catalog.sum(fact.reviewing_count), 0::bigint)::bigint
         as pending_review_dataset_count,
-      pg_catalog.coalesce(
+      coalesce(
         pg_catalog.sum(fact.published_count)
           filter (
             where fact.modified_at >= pg_catalog.statement_timestamp() - interval '30 days'
           ),
-        0
+        0::bigint
       )::bigint as published_last_30_days_count
     from scope_catalog as scope
     left join scoped_facts as fact on fact.dataset_scope = scope.dataset_scope
@@ -20713,7 +20713,7 @@ begin
           'pendingReviewDatasetCount', summary.pending_review_dataset_count,
           'publishedLast30DaysCount', summary.published_last_30_days_count
         ),
-        'rankings', pg_catalog.coalesce(
+        'rankings', coalesce(
           (
             select pg_catalog.jsonb_agg(
               pg_catalog.jsonb_build_object(
@@ -20737,7 +20737,7 @@ begin
     from scope_summary_values as summary
   ),
   snapshot_metadata as (
-    select pg_catalog.coalesce(
+    select coalesce(
       pg_catalog.max(fact.modified_at),
       pg_catalog.statement_timestamp()
     ) as data_as_of
@@ -75869,7 +75869,6 @@ ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON FUN
 
 
 ALTER DEFAULT PRIVILEGES FOR ROLE "postgres" IN SCHEMA "public" GRANT ALL ON TABLES TO "postgres";
-
 
 
 
