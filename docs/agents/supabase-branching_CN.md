@@ -22,8 +22,8 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-31
-lastReviewedCommit: e6b4afe857d70cb0242dcbc803f288f77da39608
+lastReviewedAt: 2026-09-01
+lastReviewedCommit: e6707af64bfbf263d25848e6a839ec4aa56fd0b9
 lastReviewedNote: "已为 Issue #568 复核：追加式 OAuth bundle 能力修复沿用现有 Preview 与持久化 Dev migration 路径，不改变分支绑定、部署职责或晋升流程。"
 related:
   - ../../AGENTS.md

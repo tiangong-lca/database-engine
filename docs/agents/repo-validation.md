@@ -32,8 +32,8 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-08-31
-lastReviewedCommit: 2dad5b37587bfa0780f5e16cf7830d69dcb3b53a
+lastReviewedAt: 2026-09-01
+lastReviewedCommit: 1e7a124736b38485386adde1d4ea484c028f2822
 lastReviewedNote: "Reviewed for Issue #568: OAuth proof now pins both exact LifecycleModel bundle signatures to EDGE-BUNDLE-01 and rejects CLI-RPC-01 fallback before MCP client admission."
 related:
   - ../../AGENTS.md

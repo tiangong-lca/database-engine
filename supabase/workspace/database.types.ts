@@ -1686,6 +1686,10 @@ export type Database = {
           user_id: string
         }[]
       }
+      qry_national_carbon_organization_contributions: {
+        Args: { p_limit?: number }
+        Returns: Json
+      }
       qry_notification_get_my_data_count: {
         Args: { p_days?: number; p_last_view_at?: string }
         Returns: number
