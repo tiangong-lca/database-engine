@@ -22,8 +22,8 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-08-31
-lastReviewedCommit: e6b4afe857d70cb0242dcbc803f288f77da39608
+lastReviewedAt: 2026-09-01
+lastReviewedCommit: e6707af64bfbf263d25848e6a839ec4aa56fd0b9
 lastReviewedNote: "Reviewed for Issue #568: the append-only OAuth bundle-capability repair uses the existing Preview and persistent-Dev migration path without changing branch bindings, deployment ownership, or promotion procedure."
 related:
   - ../../AGENTS.md
