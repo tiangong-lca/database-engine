@@ -1,7 +1,7 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-09-02"
-lastReviewedCommit: "927e9ea5b35eba7c5360e17aad5e813e7927f33a"
+lastReviewedCommit: "859c823"
 lastReviewedNote: "Reviewed for Issue #589: routing and proof cover the nullable Process model_version contract, exact ownership, legacy fallback, generated workspace, and API closure at migration head 20260902104500."
 
 # Keep deterministic governance facts here.
