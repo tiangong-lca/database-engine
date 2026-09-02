@@ -33,8 +33,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: de868b022d5e9175773c3c4fda103810be7fab7a
-lastReviewedNote: "Reviewed for Issue #598: existing clean-reset and targeted pgTAP proof requirements cover the API closure migration-head assertion repair."
+lastReviewedCommit: '592c669ef2083e709305fccc6a0ca9704621baf9'
+lastReviewedNote: 'Reviewed for Database #600: additive version-aware Portal/Next APIs retain immutable projections and legacy interfaces; bounded candidates, exact groups, ACLs and local proof are explicit.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -278,6 +278,31 @@ service configuration only. Checked-in docs and migrations describe client
 classes and capability sets, never environment IDs.
 
 ## SQL And Offline Node Contract Notes
+
+### Version-aware search proof
+
+For the additive Portal V2/Next matched-version APIs, use a uniquely named
+isolated local stack, a clean migration reset, all Portal suites plus the
+nearby Hybrid/ACL/OAuth suites, and `20260902_next_hybrid_versions_v1.sql` plus
+`20260902_portal_version_search_v2.sql`. Prove positive 100/200 scope and exclusion of other synthetic
+states, 0/6/199/200 cardinalities, pre-limit filters, independent historical
+matches, best-member group ranking, complete bounded member expansion and
+keyset continuation. Existing V1 definitions and immutable projection/context
+manifests must remain unchanged. Compile all Portal JSON Schemas in strict
+Draft 2020-12 mode and regenerate contracts and the five-schema workspace
+twice without drift.
+
+`node scripts/benchmark_hybrid_versions.mjs --local-container
+supabase_db_database-engine-600-<isolated-suffix>` compares V1/V2 top-10/20
+identities, historical-version coverage, 20-sample timings and the natural
+V2 semantic plan over synthetic fixtures. Reset only that isolated stack
+before and after. The report is labelled `isolated-synthetic`: it is query
+shape/identity evidence, not real-world relevance or promotion-scale proof.
+Record eligible HNSW or small-universe plans and buffers without forcing
+planner indexes. Real public-data relevance and deployed readback remain
+separate evidence; production EXPLAIN ANALYZE and fixture writes are forbidden.
+The historical 299-file projection-rollout runners attest their frozen V1
+rollout, not this additive query-only V2 contract.
 
 The repo stores SQL assertions and narrow offline Node contracts under `supabase/tests/**`.
 

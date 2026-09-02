@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 967a52b8fa41b42e86c82b9881af2d7ca2e62af3
-lastReviewedNote: "Reviewed for Issue #589: migration and generated-workspace commands remain unchanged while the schema head advances for the Process model-version contract."
+lastReviewedCommit: '592c669ef2083e709305fccc6a0ca9704621baf9'
+lastReviewedNote: 'Reviewed for Database #600: additive version-aware Portal/Next APIs retain immutable projections and legacy interfaces; bounded candidates, exact groups, ACLs and local proof are explicit.'
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -46,6 +46,18 @@ Those runners should keep their own `README.md` with dry-run, apply, and validat
 Local migration outputs and audit JSONL files should be written under `_artifacts/`, which is intentionally ignored by Git.
 
 ## Script List
+
+### `benchmark_hybrid_versions.mjs`
+
+Runs rollback-only, explicitly isolated Database #600 synthetic comparison
+fixtures, 20-sample V1/V2 timings, top-10/20 identity overlap, restored
+historical-version coverage and a natural V2 semantic plan. It accepts only a
+named local Docker container; there is no remote URL or credential option.
+Output contains summary counts/timings/index names, not queries or vectors.
+Reset that isolated stack before and after. This diagnostic is not hosted
+relevance or production-cardinality release evidence.
+
+`node scripts/benchmark_hybrid_versions.mjs --help`
 
 ### `check_auth_email_templates.py`
 
