@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 2fa558cc39be4431e6886ada71aef521e862976c
-lastReviewedNote: "Reviewed for Issue #582: the deployable Preview allowlist explicitly excludes generated workspace paths; ownership, refresh, types, and stable-overlay rules remain unchanged."
+lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
+lastReviewedNote: "Reviewed for Issue #580: the exact-local five-schema workspace was regenerated twice from the isolated migrated stack with identical hashes; generated/stable ownership rules are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
