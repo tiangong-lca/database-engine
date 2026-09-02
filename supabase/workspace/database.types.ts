@@ -932,6 +932,30 @@ export type Database = {
           version: string
         }[]
       }
+      hybrid_search_flow_versions_v1: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
+          lexical_weight?: number
+          match_count?: number
+          match_threshold?: number
+          page_current?: number
+          page_size?: number
+          query_embedding: string
+          query_terms?: string[]
+          query_text: string
+          rrf_k?: number
+          semantic_weight?: number
+        }
+        Returns: {
+          id: string
+          json: Json
+          modified_at: string
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
       hybrid_search_flowproperties: {
         Args: {
           data_source?: string
@@ -1074,6 +1098,32 @@ export type Database = {
         Returns: {
           id: string
           json: Json
+          modified_at: string
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
+      hybrid_search_process_versions_v1: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
+          lexical_weight?: number
+          match_count?: number
+          match_threshold?: number
+          page_current?: number
+          page_size?: number
+          query_embedding: string
+          query_terms?: string[]
+          query_text: string
+          rrf_k?: number
+          semantic_weight?: number
+        }
+        Returns: {
+          id: string
+          json: Json
+          model_id: string
+          model_version: string
           modified_at: string
           team_id: string
           total_count: number
@@ -1587,6 +1637,10 @@ export type Database = {
         Args: { p_filters?: Json; p_kind: string; p_query: string }
         Returns: Json
       }
+      portal_facets_v2: {
+        Args: { p_filters?: Json; p_kind: string; p_query: string }
+        Returns: Json
+      }
       portal_get_dataset_v1: {
         Args: { p_id: string; p_kind: string; p_version: string }
         Returns: Json
@@ -1603,6 +1657,17 @@ export type Database = {
       }
       portal_hybrid_search_v1: {
         Args: {
+          p_filters: Json
+          p_kind: string
+          p_limit: number
+          p_query_embedding: string
+          p_query_terms: string[]
+        }
+        Returns: Json
+      }
+      portal_hybrid_search_v2: {
+        Args: {
+          p_cursor?: string
           p_filters: Json
           p_kind: string
           p_limit: number
@@ -1640,7 +1705,27 @@ export type Database = {
         }
         Returns: Json
       }
+      portal_search_flows_v2: {
+        Args: {
+          p_cursor?: string
+          p_filters?: Json
+          p_limit?: number
+          p_query: string
+          p_sort?: string
+        }
+        Returns: Json
+      }
       portal_search_processes_v1: {
+        Args: {
+          p_cursor?: string
+          p_filters?: Json
+          p_limit?: number
+          p_query: string
+          p_sort?: string
+        }
+        Returns: Json
+      }
+      portal_search_processes_v2: {
         Args: {
           p_cursor?: string
           p_filters?: Json

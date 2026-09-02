@@ -68,8 +68,8 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  278::bigint,
-  'api contains the active cutover functions, reviewed consumer facades, OAuth gate, Database A Search RPCs, and Portal catalog/LCIA/Hybrid/sitemap facades'
+  284::bigint,
+  'api contains the active cutover and consumer facades, including six additive Portal/Next version-search APIs'
 );
 
 select is(
@@ -80,8 +80,8 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  299::bigint,
-  'private contains the active helpers, OAuth capability predicate, Database B/reuse helpers, and reviewed Portal catalog/LCIA/Hybrid/sitemap/character/Process-rank internals'
+  314::bigint,
+  'private contains the active helpers, including fifteen additive exact-version search internals'
 );
 
 select ok(
@@ -204,8 +204,8 @@ select is(
       and routine.prosecdef
       and owner_role.rolname = 'api_internal_executor'
   ),
-  34::bigint,
-  'private RLS helper facades and Database A Search RPCs use the constrained executor'
+  36::bigint,
+  'private RLS, canonical Search, and opt-in Next version-search facades use the constrained executor'
 );
 
 select ok(
