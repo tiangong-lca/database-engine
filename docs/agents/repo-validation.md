@@ -33,8 +33,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 859c823
-lastReviewedNote: "Reviewed for Issue #589: SQL proof covers exact model-version persistence and reads, null legacy fallback, invalid partial ownership rejection, exact review/bundle membership, and API closure at the checkout migration head."
+lastReviewedCommit: de868b022d5e9175773c3c4fda103810be7fab7a
+lastReviewedNote: "Reviewed for Issue #598: existing clean-reset and targeted pgTAP proof requirements cover the API closure migration-head assertion repair."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

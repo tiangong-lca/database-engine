@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 71f12382c74c66bc56720746ee0c205f31b648f5
+lastReviewedCommit: 967a52b8fa41b42e86c82b9881af2d7ca2e62af3
 lastReviewedNote: "为 Issue #589 复核：迁移与 workspace 生成命令保持不变，schema head 因 Process model-version 合同而推进。"
 related:
   - ../AGENTS.md

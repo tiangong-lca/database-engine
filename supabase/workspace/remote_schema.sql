@@ -20710,6 +20710,7 @@ begin
     select distinct on (process_row.id)
       'process'::text as dataset_kind,
       process_row.id as dataset_id,
+      pg_catalog.btrim(process_row.version::text) as dataset_version,
       process_row.user_id,
       process_row.state_code,
       process_row.modified_at
@@ -20736,6 +20737,7 @@ begin
     select distinct on (model_row.id)
       'model'::text as dataset_kind,
       model_row.id as dataset_id,
+      pg_catalog.btrim(model_row.version::text) as dataset_version,
       model_row.user_id,
       model_row.state_code,
       model_row.modified_at
@@ -20754,17 +20756,49 @@ begin
     select
       latest_row.dataset_kind,
       latest_row.dataset_id,
+      latest_row.dataset_version,
       latest_row.user_id,
+      case when active_review.state_code = 1 then 1 else 0 end::integer
+        as assigned_reviewer_count,
+      case when active_review.state_code = 1 then 0 else 1 end::integer
+        as unassigned_reviewer_count,
       latest_row.modified_at
     from latest_current_process as latest_row
+    left join lateral (
+      select review_row.state_code
+      from private.reviews as review_row
+      where review_row.review_kind = 'root'
+        and review_row.target_table = 'processes'
+        and review_row.data_id = latest_row.dataset_id
+        and review_row.data_version = latest_row.dataset_version::character(9)
+        and review_row.state_code in (0, 1)
+      order by review_row.state_code desc, review_row.modified_at desc, review_row.id
+      limit 1
+    ) as active_review on true
     where latest_row.state_code = 20
     union all
     select
       latest_row.dataset_kind,
       latest_row.dataset_id,
+      latest_row.dataset_version,
       latest_row.user_id,
+      case when active_review.state_code = 1 then 1 else 0 end::integer
+        as assigned_reviewer_count,
+      case when active_review.state_code = 1 then 0 else 1 end::integer
+        as unassigned_reviewer_count,
       latest_row.modified_at
     from latest_current_model as latest_row
+    left join lateral (
+      select review_row.state_code
+      from private.reviews as review_row
+      where review_row.review_kind = 'root'
+        and review_row.target_table = 'lifecyclemodels'
+        and review_row.data_id = latest_row.dataset_id
+        and review_row.data_version = latest_row.dataset_version::character(9)
+        and review_row.state_code in (0, 1)
+      order by review_row.state_code desc, review_row.modified_at desc, review_row.id
+      limit 1
+    ) as active_review on true
     where latest_row.state_code = 20
   ),
   user_organization_names as materialized (
@@ -20806,7 +20840,8 @@ begin
       organization.organization_key,
       organization.organization_name,
       1::integer as published_count,
-      0::integer as reviewing_count,
+      0::integer as assigned_reviewer_count,
+      0::integer as unassigned_reviewer_count,
       published.modified_at
     from published_facts as published
     left join user_organizations as organization using (user_id)
@@ -20818,7 +20853,8 @@ begin
       organization.organization_key,
       organization.organization_name,
       0::integer as published_count,
-      1::integer as reviewing_count,
+      pending.assigned_reviewer_count,
+      pending.unassigned_reviewer_count,
       pending.modified_at
     from pending_review_facts as pending
     left join user_organizations as organization using (user_id)
@@ -20832,7 +20868,8 @@ begin
       fact.organization_key,
       fact.organization_name,
       fact.published_count,
-      fact.reviewing_count,
+      fact.assigned_reviewer_count,
+      fact.unassigned_reviewer_count,
       fact.modified_at
     from contribution_facts as fact
     cross join lateral (
@@ -20853,7 +20890,9 @@ begin
       )::bigint
         as published_dataset_count,
       coalesce(
-        pg_catalog.sum(fact.reviewing_count)
+        pg_catalog.sum(
+          fact.assigned_reviewer_count + fact.unassigned_reviewer_count
+        )
           filter (where fact.organization_key is not null),
         0::bigint
       )::bigint
@@ -20877,13 +20916,10 @@ begin
       fact.organization_key,
       pg_catalog.min(fact.organization_name collate "C") as organization_name,
       pg_catalog.sum(fact.published_count)::bigint as published_dataset_count,
-      pg_catalog.sum(fact.reviewing_count)::bigint as reviewing_dataset_count,
-      (
-        pg_catalog.count(distinct fact.user_id)
-          filter (where fact.published_count = 1)
-      )::bigint as contributor_count,
-      pg_catalog.max(fact.modified_at)
-        filter (where fact.published_count = 1) as latest_contributed_at
+      pg_catalog.sum(fact.assigned_reviewer_count)::bigint
+        as assigned_reviewer_dataset_count,
+      pg_catalog.sum(fact.unassigned_reviewer_count)::bigint
+        as unassigned_reviewer_dataset_count
     from scoped_facts as fact
     where fact.organization_key is not null
     group by fact.dataset_scope, fact.organization_key
@@ -20901,19 +20937,9 @@ begin
       aggregate.organization_key,
       aggregate.organization_name,
       aggregate.published_dataset_count,
-      aggregate.reviewing_dataset_count,
-      aggregate.contributor_count,
-      case
-        when summary.published_dataset_count = 0 then 0::numeric
-        else pg_catalog.round(
-          aggregate.published_dataset_count::numeric
-            / summary.published_dataset_count::numeric,
-          6
-        )
-      end as contribution_share,
-      aggregate.latest_contributed_at
+      aggregate.assigned_reviewer_dataset_count,
+      aggregate.unassigned_reviewer_dataset_count
     from scope_organization_aggregate as aggregate
-    join scope_summary_values as summary using (dataset_scope)
     where aggregate.published_dataset_count > 0
   ),
   scope_ranked_limited as materialized (
@@ -20941,10 +20967,8 @@ begin
                 'organizationKey', ranked.organization_key,
                 'organizationName', ranked.organization_name,
                 'publishedDatasetCount', ranked.published_dataset_count,
-                'reviewingDatasetCount', ranked.reviewing_dataset_count,
-                'contributorCount', ranked.contributor_count,
-                'contributionShare', ranked.contribution_share,
-                'latestContributedAt', ranked.latest_contributed_at
+                'assignedReviewerDatasetCount', ranked.assigned_reviewer_dataset_count,
+                'unassignedReviewerDatasetCount', ranked.unassigned_reviewer_dataset_count
               )
               order by ranked.rank
             )
@@ -20964,7 +20988,7 @@ begin
     from contribution_facts as fact
   )
   select pg_catalog.jsonb_build_object(
-    'schemaVersion', 'national_carbon_organization_contribution_v2',
+    'schemaVersion', 'national_carbon_organization_contribution_v3',
     'attributionMode', 'current_user_profile',
     'generatedAt', pg_catalog.statement_timestamp(),
     'dataAsOf', metadata.data_as_of,
@@ -69764,6 +69788,10 @@ CREATE INDEX "portal_sitemap_rows_shard_v1_idx" ON "private"."portal_sitemap_row
 
 
 COMMENT ON INDEX "private"."portal_sitemap_rows_shard_v1_idx" IS 'Latest-version sitemap shard order over the exact-version locator-free projection.';
+
+
+
+CREATE INDEX "reviews_active_root_assignment_lookup_idx" ON "private"."reviews" USING "btree" ("target_table", "data_id", "data_version", "state_code" DESC, "modified_at" DESC, "id") WHERE (("review_kind" = 'root'::"text") AND ("state_code" = ANY (ARRAY[0, 1])));
 
 
 

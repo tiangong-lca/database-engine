@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-09-02"
-lastReviewedCommit: "859c823"
-lastReviewedNote: "Reviewed for Issue #589: routing and proof cover the nullable Process model_version contract, exact ownership, legacy fallback, generated workspace, and API closure at migration head 20260902104500."
+lastReviewedCommit: "de868b022d5e9175773c3c4fda103810be7fab7a"
+lastReviewedNote: "Reviewed for Issue #598: SQL-test routing and proof remain unchanged; API closure now tracks checkout migration head 20260902120230 after PR #595."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
