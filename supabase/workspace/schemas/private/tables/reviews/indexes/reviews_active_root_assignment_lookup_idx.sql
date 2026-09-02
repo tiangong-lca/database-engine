@@ -1,0 +1,1 @@
+CREATE INDEX "reviews_active_root_assignment_lookup_idx" ON "private"."reviews" USING "btree" ("target_table", "data_id", "data_version", "state_code" DESC, "modified_at" DESC, "id") WHERE (("review_kind" = 'root'::"text") AND ("state_code" = ANY (ARRAY[0, 1])));

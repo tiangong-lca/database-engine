@@ -38,7 +38,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 927e9ea5b35eba7c5360e17aad5e813e7927f33a
+lastReviewedCommit: 26f64543a26b49cc5663548089a771424e21f883
 lastReviewedNote: "Reviewed for Issue #589: nullable exact Process model ownership and its API closure head update preserve repository ownership, branch, RPC-authority, and generated-workspace boundaries."
 related:
   - .docpact/config.yaml
