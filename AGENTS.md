@@ -38,8 +38,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
-lastReviewedNote: "Reviewed for Issue #580: the Portal Hybrid read path uses one bounded 20-second correctness budget while Search, LCIA, projection semantics, DTOs, ACLs, and indexes remain unchanged."
+lastReviewedCommit: d3a7f5a1ead4415c8f1a34ea841a6dbd57a58d58
+lastReviewedNote: "Reviewed for Issue #589: Process model ownership adds nullable exact model_version persistence and null legacy fallback without changing repository ownership, branch, RPC-authority, or generated-workspace boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
