@@ -216,7 +216,7 @@ begin
       into v_submodel_ids
     from public.processes as model_process
     where model_process.model_id = v_review.data_id
-      and model_process.version = v_review.data_version
+      and coalesce(model_process.model_version, model_process.version) = v_review.data_version
       and model_process.id <> v_review.data_id;
 
     foreach v_submodel_id in array v_submodel_ids

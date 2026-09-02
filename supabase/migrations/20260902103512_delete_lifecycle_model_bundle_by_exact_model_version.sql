@@ -1,3 +1,5 @@
+begin;
+
 CREATE OR REPLACE FUNCTION "private"."delete_lifecycle_model_bundle"("p_model_id" "uuid", "p_version" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'private', 'api', 'public', 'util', 'extensions', 'pg_temp'
@@ -46,3 +48,5 @@ REVOKE ALL ON FUNCTION "private"."delete_lifecycle_model_bundle"("p_model_id" "u
 GRANT ALL ON FUNCTION "private"."delete_lifecycle_model_bundle"("p_model_id" "uuid", "p_version" "text") TO "service_role";
 
 GRANT ALL ON FUNCTION "private"."delete_lifecycle_model_bundle"("p_model_id" "uuid", "p_version" "text") TO "api_internal_executor";
+
+commit;

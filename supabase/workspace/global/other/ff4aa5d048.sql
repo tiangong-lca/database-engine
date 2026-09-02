@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."cmd_review_assert_lifecycle_closure"("p_roots" "jsonb", "p_action" "text", "p_actor" "uuid") IS 'Asserts lifecycle closure using exact Process owner versions with legacy same-version fallback.';
