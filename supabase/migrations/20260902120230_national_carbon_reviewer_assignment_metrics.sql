@@ -1,3 +1,15 @@
+create index if not exists reviews_active_root_assignment_lookup_idx
+  on private.reviews (
+    target_table,
+    data_id,
+    data_version,
+    state_code desc,
+    modified_at desc,
+    id
+  )
+  where review_kind = 'root'
+    and state_code in (0, 1);
+
 CREATE OR REPLACE FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer DEFAULT 10) RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''

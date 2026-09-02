@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, api, private, auth;
 
-select plan(27);
+select plan(29);
 
 select is(
   (
@@ -157,6 +157,80 @@ values
   ('57420000-0000-4000-8000-000000000004', '01.00.000', '57400000-0000-4000-8000-000000000005', 100, now() - interval '35 days', now() - interval '35 days'),
   ('57420000-0000-4000-8000-000000000005', '01.00.000', '57400000-0000-4000-8000-000000000005', 20, now() - interval '2 days', now() - interval '2 days');
 
+insert into private.reviews (
+  id,
+  data_id,
+  data_version,
+  state_code,
+  reviewer_id,
+  json,
+  review_kind,
+  target_table,
+  submitted_revision_checksum,
+  target_owner_id
+)
+values
+  (
+    '57430000-0000-4000-8000-000000000001',
+    '57410000-0000-4000-8000-000000000004',
+    '01.00.000',
+    1,
+    '["57400000-0000-4000-8000-000000000001"]',
+    '{}',
+    'root',
+    'processes',
+    repeat('a', 64),
+    '57400000-0000-4000-8000-000000000004'
+  ),
+  (
+    '57430000-0000-4000-8000-000000000002',
+    '57410000-0000-4000-8000-000000000006',
+    '02.00.000',
+    0,
+    '[]',
+    '{}',
+    'root',
+    'processes',
+    repeat('b', 64),
+    '57400000-0000-4000-8000-000000000004'
+  ),
+  (
+    '57430000-0000-4000-8000-000000000003',
+    '57420000-0000-4000-8000-000000000003',
+    '01.00.000',
+    1,
+    '["57400000-0000-4000-8000-000000000001"]',
+    '{}',
+    'root',
+    'lifecyclemodels',
+    repeat('c', 64),
+    '57400000-0000-4000-8000-000000000002'
+  ),
+  (
+    '57430000-0000-4000-8000-000000000004',
+    '57420000-0000-4000-8000-000000000005',
+    '01.00.000',
+    0,
+    '[]',
+    '{}',
+    'root',
+    'lifecyclemodels',
+    repeat('d', 64),
+    '57400000-0000-4000-8000-000000000005'
+  ),
+  (
+    '57430000-0000-4000-8000-000000000005',
+    '57410000-0000-4000-8000-000000000005',
+    '01.00.000',
+    1,
+    '["57400000-0000-4000-8000-000000000001"]',
+    '{}',
+    'root',
+    'processes',
+    repeat('e', 64),
+    '57400000-0000-4000-8000-000000000004'
+  );
+
 set local session_replication_role = origin;
 
 select set_config('request.jwt.claim.sub', '', true);
@@ -207,8 +281,8 @@ reset role;
 
 select is(
   snapshot ->> 'schemaVersion',
-  'national_carbon_organization_contribution_v2'::text,
-  'the response uses the frozen v2 schema'
+  'national_carbon_organization_contribution_v3'::text,
+  'the response uses the reviewer-assignment v3 schema'
 )
 from organization_contribution_result;
 
@@ -343,24 +417,41 @@ select is(
 from organization_contribution_result;
 
 select is(
-  snapshot #>> '{scopes,all,rankings,0,contributorCount}',
-  '2'::text,
-  'combined contributors are distinct across Process and Model'
+  snapshot #>> '{scopes,all,rankings,0,assignedReviewerDatasetCount}',
+  '1'::text,
+  'Acme has one assigned current review dataset'
 )
 from organization_contribution_result;
 
 select is(
-  snapshot #>> '{scopes,all,rankings,1,reviewingDatasetCount}',
-  '2'::text,
-  'reviewing rows use the contributor current organization independently of published rows'
+  snapshot #>> '{scopes,all,rankings,0,unassignedReviewerDatasetCount}',
+  '0'::text,
+  'Acme has no current review dataset awaiting assignment'
 )
 from organization_contribution_result;
 
-select cmp_ok(
-  (snapshot #>> '{scopes,all,rankings,0,contributionShare}')::numeric,
-  '=',
-  round(4::numeric / 5::numeric, 6),
-  'contribution share uses the organization-attributed published total'
+select is(
+  snapshot #>> '{scopes,all,rankings,1,assignedReviewerDatasetCount}',
+  '1'::text,
+  'Beta has one current review dataset with an assigned reviewer'
+)
+from organization_contribution_result;
+
+select is(
+  snapshot #>> '{scopes,all,rankings,1,unassignedReviewerDatasetCount}',
+  '1'::text,
+  'Beta has one current review dataset awaiting reviewer assignment'
+)
+from organization_contribution_result;
+
+select ok(
+  not (snapshot #> '{scopes,all,rankings,0}') ?| array[
+    'reviewingDatasetCount',
+    'contributorCount',
+    'contributionShare',
+    'latestContributedAt'
+  ],
+  'v3 ranking rows omit the retired review, contributor, share, and timestamp fields'
 )
 from organization_contribution_result;
 
