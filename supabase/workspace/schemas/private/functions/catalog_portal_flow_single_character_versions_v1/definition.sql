@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION "private"."catalog_portal_flow_single_character_versions_v1"("p_literal" "text") RETURNS TABLE("id" "uuid", "version" "text")
     LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "enable_indexscan" TO 'off'
     SET "enable_indexonlyscan" TO 'off'
     SET "enable_bitmapscan" TO 'off'

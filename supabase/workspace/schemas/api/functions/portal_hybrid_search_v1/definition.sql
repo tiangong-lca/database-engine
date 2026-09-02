@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION "api"."portal_hybrid_search_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     AS $$
 declare
   v_input jsonb;

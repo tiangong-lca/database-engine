@@ -22,9 +22,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-09-01
-lastReviewedCommit: e6707af64bfbf263d25848e6a839ec4aa56fd0b9
-lastReviewedNote: "Reviewed for Issue #568: the append-only OAuth bundle-capability repair uses the existing Preview and persistent-Dev migration path without changing branch bindings, deployment ownership, or promotion procedure."
+lastReviewedAt: 2026-09-02
+lastReviewedCommit: 2fa558cc39be4431e6886ada71aef521e862976c
+lastReviewedNote: "Reviewed for Issue #582: the PR workflow skips hosted Preview only when config, migrations, seed, and Function inputs are unchanged; deployable changes retain full proof."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -80,7 +80,7 @@ When review changes an already-applied PR migration, add a later migration that 
 - Treat committed files in `supabase/migrations/` as the schema source of truth for production, `dev`, and preview branches.
 - Keep branch-specific overrides in `[remotes.<branch>]` inside `supabase/config.toml`.
 - Do not create a separate `supabase/` directory per Git branch.
-- Keep the pull-request-only Preview runtime job isolated from deployment. Fork PRs skip before authority is available; a same-repository PR missing the access token, main-parent ref, or persistent-Dev ref fails closed. The job requires exactly one successful `Supabase Preview` check on that PR head from official Supabase App id `330661`, slug/owner `supabase`, captures the expected ref from its exact dashboard URL, independently resolves exactly one matching non-default/non-persistent BranchResponse through pinned CLI `branches list --output json`, requires equality and main/Dev inequality, applies and reads back one three-field PostgREST PATCH, and probes Portal Hybrid plus sitemap with only an enabled publishable or legacy anon key. Each readiness poll has one 300-second deadline, and sitemap verification remains independent after Hybrid failure once the key step succeeded. The job must not link, push migrations, deploy Functions/configuration, or target persistent Dev or production.
+- Keep the pull-request-only Preview runtime job isolated from deployment. Fork PRs skip before authority. A same-repository PR first checks out the exact event head and verifies both event commits. It compares only deployable Preview inputs: `supabase/config.toml`, `supabase/migrations/`, `supabase/seed.sql`, `supabase/seeds/`, and `supabase/functions/`. Generated workspace, tests, Auth templates, and repository documentation are not deployment inputs. If that set has no diff, the job succeeds without secrets, branch resolution, or hosted mutation and accepts the official App's `skipped` result. Any deployable change retains the exact official-check, BranchResponse, PostgREST, key, Hybrid, and sitemap proof and fails closed when authority is missing.
 - Keep `.github/workflows/supabase-dev.yml` as the sole persistent-`dev` migration deployer. It may run `supabase link`, exactly one `supabase db push --include-all`, and one Management API PATCH limited to `db_schema`, `db_extra_search_path`, and `max_rows` so the running PostgREST instance matches the checked-in contract; it must not deploy/delete Edge Functions, run `supabase config push`, or mutate any other project setting.
 - After the database workflow succeeds, deploy and validate the intended persistent-Dev Functions through `tiangong-lca-edge-functions`. Function source, function selection, deployment commands, and runtime validation remain owned by that repository.
 - Do not add a checked-in GitHub Actions production deploy for Git `main`; the production project is migrated by the Supabase GitHub integration bound to this repository.
@@ -154,10 +154,11 @@ Normal PR path:
 
 1. A feature branch includes new files under `supabase/migrations/`.
 2. The PR targets Git `dev`.
-3. Supabase GitHub integration creates or updates the PR preview branch from
-   the checked-in `supabase/` directory.
-4. The preview branch is PR-scoped proof only; it is not the persistent
-   Supabase `dev` branch.
+3. When the PR changes a deployable config, migration, seed, or Function
+   input, Supabase GitHub integration creates or updates the preview branch.
+4. That preview is PR-scoped proof only, never persistent `dev`. A PR with an
+   exact empty base-to-head deployable-input diff needs no preview branch; the
+   repository job ends successfully after allowlist classification.
 5. After the exact `Supabase Preview` check succeeds for the current PR head,
    the same-repository Preview runtime job resolves that exact Git branch,
    applies and reads back only `db_schema=public,api,graphql_public`,
@@ -191,11 +192,13 @@ discard and rebuild that disposable branch state.
 ### Pull-request Preview runtime verification
 
 - This job runs only for `pull_request` events from the same repository and
-  depends on the local contract. Fork PRs skip before receiving authority.
+  depends on the local contract. Fork PRs skip before receiving authority. A
+  same-repository PR proves its exact event base/head commits and deployable
+  input allowlist before any secret or Management API step.
 - Missing `SUPABASE_ACCESS_TOKEN`, `SUPABASE_MAIN_PROJECT_ID`, or
   `SUPABASE_DEV_PROJECT_ID` fails a same-repository PR closed instead of
   guessing a project ref or using persistent Dev as fallback.
-- The accepted check must be from official Supabase App id `330661`, slug/owner
+- Exact no-change across the deployable input allowlist is the only path that does not require a Preview check. For any allowlisted diff, the accepted check must be from official Supabase App id `330661`, slug/owner `supabase`; the job captures the expected ref from its exact dashboard `details_url`, resolves one matching disposable BranchResponse, and requires ref equality plus main/Dev inequality. Failed, cancelled, skipped, stale, neutral, timed-out, ambiguous, or non-official checks fail closed whenever Preview is required.
   `supabase`; the job captures the expected ref from its exact dashboard
   `details_url`. The pinned CLI then uses `branches list --output json` and
   requires exactly one row matching the Git branch, PR number, parent project,

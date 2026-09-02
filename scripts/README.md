@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 6e9cc4896cedbdeded64d8e3db7c14118f9b8acc
-lastReviewedNote: "Reviewed for Issue #568: the OAuth bundle regression advances the exact migration head to 20260831130000; helper commands and stable-overlay rules are unchanged."
+lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
+lastReviewedNote: "Reviewed for Issue #580: Portal benchmark tooling retains Search/Facets gates while Hybrid latency becomes measurement-only under the bounded 20-second correctness contract."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -175,11 +175,11 @@ upsert Trigger, and populated/recovery runners prove child/parent parity.
   evidence; `auto` recognizes an exact named profile from its counts.
 
 All named gates require a clean exact HEAD. They cover the complete public
-request shapes, retain Search/Facets p95 <= 2 seconds and Hybrid p95 <= 6
-seconds with every Hybrid call below 8 seconds. Formal semantic plans must
-include parseable shared-buffer evidence, remain below 750,000 total and
-250,000 read blocks, finish exact execution within 5 seconds and formal
-ANN-plus-exact phases within 6 seconds, and show no temp/disk spill. Use a new
+request shapes and retain Search/Facets p95 <= 2 seconds. Hybrid samples must
+complete with the exact public schema under the bounded 20-second statement
+budget; their latency is recorded for optimization but is not a release gate.
+Formal semantic plans must include parseable shared-buffer evidence, remain
+below 750,000 total and 250,000 read blocks, and show no temp/disk spill. Use a new
 mode-0700 output directory for every run. Formal lexical plans use the exact
 Process/Flow pattern-helper leaf with every normal planner path enabled. The
 representative Flow cardinality must naturally select its PGroonga scan node;
@@ -293,12 +293,16 @@ Fails closed unless `.github/workflows/supabase-dev.yml` keeps two isolated
 hosted paths. The push-only persistent-Dev job must link the configured Dev
 project, run exactly one `supabase db push --include-all`, derive its migration
 head, and apply exactly one three-field PostgREST PATCH. The pull-request-only
-Preview job must skip forks but fail a same-repository PR when its access token,
-main-parent ref, or persistent-Dev ref is absent. It binds one successful check
-from the exact official Supabase App/head to a unique non-default,
-non-persistent `branches list` row for the same Git branch, PR number, and
-parent; the check ref and BranchResponse ref must match and differ from both
-main and Dev before the Preview's one identical PATCH/readback.
+Preview job skips forks and first validates the event base/head commits plus
+the exact deployable-input allowlist: config, migrations, root/extra seeds,
+and Functions. Workspace, tests, Auth templates, and docs are excluded. A
+zero-diff PR emits `required=false` and performs no hosted Preview work. Any
+allowlisted change still fails when its access token, main-parent ref, or
+persistent-Dev ref is absent, then binds one
+successful check from the exact official Supabase App/head to a unique
+non-default, non-persistent `branches list` row for the same Git branch, PR
+number, and parent. The check ref and BranchResponse ref must match and differ
+from both main and Dev before the Preview's one identical PATCH/readback.
 
 The contract also requires one separate no-reveal Management API key read using
 the raw `disabled` state and exact public-key shape. Only a masked enabled

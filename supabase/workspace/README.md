@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 6e9cc4896cedbdeded64d8e3db7c14118f9b8acc
-lastReviewedNote: "Reviewed for Issue #568: the forward repair changes only capability-manifest data; generated Data API types, workspace ownership, refresh, and stable-overlay rules are unchanged."
+lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
+lastReviewedNote: "Reviewed for Issue #580: the exact-local five-schema workspace was regenerated twice from the isolated migrated stack with identical hashes; generated/stable ownership rules are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

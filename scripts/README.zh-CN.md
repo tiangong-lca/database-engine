@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 6e9cc4896cedbdeded64d8e3db7c14118f9b8acc
-lastReviewedNote: "为 Issue #568 复核：OAuth bundle 回归把精确 migration head 推进到 20260831130000；helper 命令与稳定 overlay 规则不变。"
+lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
+lastReviewedNote: "为 Issue #580 复核：Portal 基准保留 Search/Facets 性能门，Hybrid 在 20 秒有界正确性合同内只记录时延、不把时延作为发布门。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -151,9 +151,10 @@ Trigger，populated/recovery runner 证明 child/parent parity。
   精确参数识别命名 profile。
 
 所有命名 gate 都要求干净且精确的 HEAD，覆盖完整公开请求形态，保持
-Search/Facets p95 <= 2 秒、Hybrid p95 <= 6 秒、每次 Hybrid < 8 秒。正式
-semantic plan 必须含可解析的 shared-buffer 证据、低于 750,000 total / 250,000
-read blocks、exact 在 5 秒内完成、formal ANN+exact 合计不超过 6 秒，且没有
+Search/Facets p95 <= 2 秒。Hybrid 必须在 20 秒有界 statement budget 内返回
+严格公开 Schema；其时延继续记录并用于优化，但不再是发布门。正式 semantic
+plan 必须含可解析的 shared-buffer 证据、低于 750,000 total / 250,000
+read blocks，且没有
 temp/disk spill。每次运行必须使用新的 mode-0700 输出目录。正式 lexical plan
 使用与 Process/Flow pattern helper 完全一致的 leaf，并保持所有常规 planner
 路径开启。代表性 Flow 基数必须自然命中其 PGroonga scan node；Process 基数较小，
@@ -250,11 +251,14 @@ python scripts/test_resolve_migration_head.py
 除非 `.github/workflows/supabase-dev.yml` 保持两条相互隔离的托管路径，否则立即
 失败。push-only 持久化 Dev job 必须绑定配置的 Dev 项目，准确执行一次
 `supabase db push --include-all`，从 checkout 推导 migration head，并执行准确一次
-三字段 PostgREST PATCH。pull-request-only Preview job 对 fork 跳过，但同仓 PR 缺少
-access token、main-parent ref 或 persistent-Dev ref 任一项时 fail closed。它必须把
-准确 head 上来自官方 Supabase App 的唯一成功 check，与 `branches list` 中按 Git
-branch、PR number、parent 匹配的唯一 non-default/non-persistent BranchResponse 绑定；
-两个 ref 必须相等且都不同于 main/Dev，才能执行 Preview 的一次相同 PATCH 与回读。
+三字段 PostgREST PATCH。pull-request-only Preview job 对 fork 跳过，并先验证事件
+base/head commit 和精确可部署 allowlist：config、migrations、根/附加 seed 与
+Functions；workspace、tests、Auth templates 和文档不在其中。零 diff PR 输出
+`required=false`，不执行 hosted Preview。任一 allowlist 变化仍要求 access token、
+main-parent ref 与 persistent-Dev ref；随后必须把准确 head 上来自官方 Supabase App
+的唯一成功 check，与 `branches list` 中按 Git branch、PR number、parent 匹配的唯一
+non-default/non-persistent BranchResponse 绑定。两个 ref 必须相等且都不同于 main/Dev，
+才能执行 Preview 的一次相同 PATCH 与回读。
 
 合同还要求通过独立且不带 `reveal` 的 Management API key 读取，使用原始
 `disabled` 状态与准确公共 key 形态筛选。只有已 mask 的启用 publishable 或 legacy

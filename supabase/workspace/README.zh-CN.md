@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 6e9cc4896cedbdeded64d8e3db7c14118f9b8acc
-lastReviewedNote: "为 Issue #568 复核：追加修复只改变能力 manifest 数据；生成的 Data API types、workspace 所有权、刷新与稳定 overlay 规则均不变。"
+lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
+lastReviewedNote: "为 Issue #580 复核：已从隔离 migration 栈两次生成 exact-local 五 schema workspace 且 hash 一致；生成路径与稳定人工路径的所有权规则不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

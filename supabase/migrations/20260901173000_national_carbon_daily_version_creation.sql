@@ -1,3 +1,6 @@
+-- Issue #578: expose the last 53 calendar weeks of daily Process and
+-- LifecycleModel version creation counts in the organization dashboard snapshot.
+
 CREATE OR REPLACE FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer DEFAULT 10) RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER
     SET "search_path" TO ''
@@ -415,3 +418,4 @@ ALTER FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" 
 REVOKE ALL ON FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer) FROM PUBLIC;
 
 GRANT ALL ON FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer) TO "authenticated";
+

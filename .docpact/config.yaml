@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-09-02"
-lastReviewedCommit: "6e9cc4896cedbdeded64d8e3db7c14118f9b8acc"
-lastReviewedNote: "Reviewed for Issue #568: routing and proof cover the exact forward repair that restores EDGE-BUNDLE-01 to both LifecycleModel bundle signatures before MCP client admission."
+lastReviewedCommit: "44c5b07d34559c4f8b20aa6f403790a269a3f753"
+lastReviewedNote: "Reviewed for Issue #580: migration, Portal public-contract, Hybrid-performance, SQL-test, generated-workspace, and proof routes cover the bounded 20-second correctness-first read-path change."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

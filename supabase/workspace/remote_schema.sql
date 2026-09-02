@@ -19774,7 +19774,7 @@ COMMENT ON FUNCTION "api"."portal_get_published_lcia_values_v1"("p_mode" "text",
 CREATE OR REPLACE FUNCTION "api"."portal_hybrid_search_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     AS $$
 declare
   v_input jsonb;
@@ -20606,6 +20606,93 @@ begin
   end if;
 
   with
+  daily_date_bounds as materialized (
+    select
+      (
+        pg_catalog.date_trunc(
+          'week',
+          pg_catalog.timezone('Asia/Shanghai', pg_catalog.statement_timestamp())
+        )::date - 364
+      ) as start_date,
+      pg_catalog.timezone(
+        'Asia/Shanghai',
+        pg_catalog.statement_timestamp()
+      )::date as end_date
+  ),
+  daily_time_bounds as materialized (
+    select
+      bounds.start_date,
+      bounds.end_date,
+      pg_catalog.timezone(
+        'Asia/Shanghai',
+        bounds.start_date::timestamp without time zone
+      ) as start_at,
+      pg_catalog.timezone(
+        'Asia/Shanghai',
+        (bounds.end_date + 1)::timestamp without time zone
+      ) as end_at
+    from daily_date_bounds as bounds
+  ),
+  daily_version_facts as materialized (
+    select
+      'process'::text as dataset_kind,
+      pg_catalog.timezone('Asia/Shanghai', process_row.created_at)::date as created_date
+    from public.processes as process_row
+    cross join daily_time_bounds as bounds
+    where process_row.created_at >= bounds.start_at
+      and process_row.created_at < bounds.end_at
+    union all
+    select
+      'model'::text as dataset_kind,
+      pg_catalog.timezone('Asia/Shanghai', model_row.created_at)::date as created_date
+    from public.lifecyclemodels as model_row
+    cross join daily_time_bounds as bounds
+    where model_row.created_at >= bounds.start_at
+      and model_row.created_at < bounds.end_at
+  ),
+  daily_version_counts as materialized (
+    select
+      fact.created_date,
+      pg_catalog.count(*) filter (where fact.dataset_kind = 'process')::bigint
+        as process_count,
+      pg_catalog.count(*) filter (where fact.dataset_kind = 'model')::bigint
+        as model_count,
+      pg_catalog.count(*)::bigint as all_count
+    from daily_version_facts as fact
+    group by fact.created_date
+  ),
+  daily_creation_payload as materialized (
+    select pg_catalog.jsonb_build_object(
+      'metric', 'dataset_version_created_count',
+      'deduplicationKey', pg_catalog.jsonb_build_array('datasetType', 'datasetId', 'version'),
+      'timezone', 'Asia/Shanghai',
+      'startDate', bounds.start_date,
+      'endDate', bounds.end_date,
+      'days', coalesce(
+        pg_catalog.jsonb_agg(
+          pg_catalog.jsonb_build_object(
+            'date', series.created_date,
+            'processCount', coalesce(counts.process_count, 0::bigint),
+            'modelCount', coalesce(counts.model_count, 0::bigint),
+            'allCount', coalesce(counts.all_count, 0::bigint)
+          )
+          order by series.created_date
+        ),
+        '[]'::jsonb
+      )
+    ) as payload
+    from daily_time_bounds as bounds
+    cross join lateral pg_catalog.generate_series(
+      bounds.start_date::timestamp without time zone,
+      bounds.end_date::timestamp without time zone,
+      interval '1 day'
+    ) as generated(created_at)
+    cross join lateral (
+      select generated.created_at::date as created_date
+    ) as series
+    left join daily_version_counts as counts using (created_date)
+    group by bounds.start_date, bounds.end_date
+  ),
   latest_published_process as materialized (
     select distinct on (process_row.id)
       'process'::text as dataset_kind,
@@ -20877,11 +20964,14 @@ begin
     from contribution_facts as fact
   )
   select pg_catalog.jsonb_build_object(
-    'schemaVersion', 'national_carbon_organization_contribution_v1',
+    'schemaVersion', 'national_carbon_organization_contribution_v2',
     'attributionMode', 'current_user_profile',
     'generatedAt', pg_catalog.statement_timestamp(),
     'dataAsOf', metadata.data_as_of,
     'defaultScope', 'all',
+    'dailyCreation', (
+      select payload from daily_creation_payload
+    ),
     'scopes', pg_catalog.jsonb_build_object(
       'process', (
         select payload from scope_payloads where dataset_scope = 'process'
@@ -25881,7 +25971,7 @@ CREATE OR REPLACE FUNCTION "private"."assert_portal_card_context_contract_v1"() 
     AS $$
 declare
   v_expected_digest constant text :=
-    'e0516d5f3a641d26221a5c44b92a2e7a87cab125e9145e8141074d9bc2af39fa';
+    'db78336c8604848af1e068352f8a39d9ee740308c44c59c639b986ed2660c47e';
 begin
   perform private.assert_portal_catalog_projection_contract_v1();
   if private.portal_card_context_manifest_sha256_v1()
@@ -27444,7 +27534,7 @@ COMMENT ON FUNCTION "private"."catalog_portal_facets_v1_impl"("p_kind" "text", "
 CREATE OR REPLACE FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_like_pattern" "text") RETURNS TABLE("id" "uuid", "version" "text")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "row_security" TO 'on'
     AS $_$
@@ -27485,7 +27575,7 @@ COMMENT ON FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_like_
 CREATE OR REPLACE FUNCTION "private"."catalog_portal_flow_single_character_versions_v1"("p_literal" "text") RETURNS TABLE("id" "uuid", "version" "text")
     LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "enable_indexscan" TO 'off'
     SET "enable_indexonlyscan" TO 'off'
     SET "enable_bitmapscan" TO 'off'
@@ -27513,7 +27603,7 @@ COMMENT ON FUNCTION "private"."catalog_portal_flow_single_character_versions_v1"
 CREATE OR REPLACE FUNCTION "private"."catalog_portal_hybrid_pattern_matches_v1"("p_kind" "text", "p_query_terms" "text"[]) RETURNS TABLE("id" "uuid", "version" "text", "term_ordinal" integer)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "row_security" TO 'on'
     AS $$
@@ -27798,7 +27888,7 @@ COMMENT ON FUNCTION "private"."catalog_portal_process_keyword_relevance_v1_impl"
 CREATE OR REPLACE FUNCTION "private"."catalog_portal_process_pattern_versions_v1"("p_like_pattern" "text") RETURNS TABLE("id" "uuid", "version" "text")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "row_security" TO 'on'
     AS $_$
@@ -27839,7 +27929,7 @@ COMMENT ON FUNCTION "private"."catalog_portal_process_pattern_versions_v1"("p_li
 CREATE OR REPLACE FUNCTION "private"."catalog_portal_process_single_character_versions_v1"("p_literal" "text") RETURNS TABLE("id" "uuid", "version" "text")
     LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "enable_indexscan" TO 'off'
     SET "enable_indexonlyscan" TO 'off'
     SET "enable_bitmapscan" TO 'off'
@@ -43640,7 +43730,7 @@ ALTER FUNCTION "private"."portal_datetime_v1"("p_value" "text") OWNER TO "portal
 CREATE OR REPLACE FUNCTION "private"."portal_decorate_card_context_v1"("p_page" "jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "row_security" TO 'on'
     AS $_$
@@ -46426,7 +46516,7 @@ ALTER FUNCTION "private"."portal_process_reference_product_v1"("p_json" "jsonb")
 CREATE OR REPLACE FUNCTION "private"."portal_projection_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "hnsw.iterative_scan" TO 'strict_order'
     SET "row_security" TO 'on'
@@ -46673,7 +46763,7 @@ COMMENT ON FUNCTION "private"."portal_projection_hybrid_search_v1_impl"("p_kind"
 CREATE OR REPLACE FUNCTION "private"."portal_projection_semantic_candidates_v1"("p_kind" "text", "p_query_embedding" "extensions"."vector") RETURNS TABLE("id" "uuid", "version" "text", "semantic_distance" double precision)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "row_security" TO 'on'
     AS $$
 begin
@@ -46700,7 +46790,7 @@ ALTER FUNCTION "private"."portal_projection_semantic_candidates_v1"("p_kind" "te
 CREATE OR REPLACE FUNCTION "private"."portal_projection_semantic_flow_exact_v1"("p_query_embedding" "extensions"."vector") RETURNS TABLE("id" "uuid", "version" "text", "semantic_distance" double precision)
     LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "work_mem" TO '32MB'
     SET "enable_hashjoin" TO 'on'
@@ -46753,7 +46843,7 @@ ALTER FUNCTION "private"."portal_projection_semantic_flow_exact_v1"("p_query_emb
 CREATE OR REPLACE FUNCTION "private"."portal_projection_semantic_flow_v1"("p_query_embedding" "extensions"."vector") RETURNS TABLE("id" "uuid", "version" "text", "semantic_distance" double precision)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "hnsw.iterative_scan" TO 'relaxed_order'
     SET "hnsw.ef_search" TO '1000'
@@ -46935,7 +47025,7 @@ ALTER FUNCTION "private"."portal_projection_semantic_flow_v1"("p_query_embedding
 CREATE OR REPLACE FUNCTION "private"."portal_projection_semantic_process_exact_v1"("p_query_embedding" "extensions"."vector") RETURNS TABLE("id" "uuid", "version" "text", "semantic_distance" double precision)
     LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "work_mem" TO '32MB'
     SET "enable_hashjoin" TO 'on'
@@ -46988,7 +47078,7 @@ ALTER FUNCTION "private"."portal_projection_semantic_process_exact_v1"("p_query_
 CREATE OR REPLACE FUNCTION "private"."portal_projection_semantic_process_v1"("p_query_embedding" "extensions"."vector") RETURNS TABLE("id" "uuid", "version" "text", "semantic_distance" double precision)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "hnsw.iterative_scan" TO 'relaxed_order'
     SET "hnsw.ef_search" TO '1000'
