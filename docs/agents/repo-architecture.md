@@ -31,8 +31,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 967a52b8fa41b42e86c82b9881af2d7ca2e62af3
-lastReviewedNote: "Updated for Issue #589: Process ownership now records an optional exact LifecycleModel version while preserving the historical same-version fallback for null legacy rows."
+lastReviewedCommit: de868b022d5e9175773c3c4fda103810be7fab7a
+lastReviewedNote: "Reviewed for Issue #598: the repository-only API closure assertion repair does not change schema boundaries, generated workspace, or branch architecture."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
