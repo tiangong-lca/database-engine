@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 92a7bb85152d0d7ac5de07b6ad4c5ada7749aef6
+lastReviewedCommit: 6e9cc4896cedbdeded64d8e3db7c14118f9b8acc
 lastReviewedNote: "Reviewed for Issue #568: the OAuth bundle regression advances the exact migration head to 20260831130000; helper commands and stable-overlay rules are unchanged."
 related:
   - ../AGENTS.md

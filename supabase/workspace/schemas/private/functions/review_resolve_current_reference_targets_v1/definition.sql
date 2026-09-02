@@ -125,7 +125,7 @@ CREATE OR REPLACE FUNCTION "private"."review_resolve_current_reference_targets_v
           or coalesce((current_target.dataset_row->>'state_code')::integer, 0) < 100
         )
         and model_process.model_id = current_target.data_id
-        and model_process.version = current_target.data_version
+        and coalesce(model_process.model_version, model_process.version) = current_target.data_version
     ) as neighbour
     cross join lateral (
       select api.cmd_review_get_dataset_row(

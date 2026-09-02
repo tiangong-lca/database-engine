@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) IS 'Resolves current review references using exact Process owner versions with legacy same-version fallback.';

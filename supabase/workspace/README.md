@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 92a7bb85152d0d7ac5de07b6ad4c5ada7749aef6
+lastReviewedCommit: 6e9cc4896cedbdeded64d8e3db7c14118f9b8acc
 lastReviewedNote: "Reviewed for Issue #568: the forward repair changes only capability-manifest data; generated Data API types, workspace ownership, refresh, and stable-overlay rules are unchanged."
 related:
   - ../../AGENTS.md

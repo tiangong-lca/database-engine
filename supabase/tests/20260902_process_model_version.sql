@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, auth;
 
-select plan(30);
+select plan(32);
 
 select has_column(
   'public',
@@ -411,6 +411,48 @@ select throws_like(
   '%PROCESS_NOT_FOUND%',
   'bundle delete mutation cannot remove a Process owned by another Model version'
 );
+
+reset role;
+
+select is(
+  (
+    select count(*)::text
+    from api.cmd_review_collect_dataset_targets(
+      '[{
+        "table": "lifecyclemodels",
+        "id": "b9400000-0000-0000-0000-000000000001",
+        "version": "02.00.000",
+        "is_root": true
+      }]'::jsonb,
+      false
+    )
+    where table_name = 'processes'
+      and dataset_id = 'b9500000-0000-0000-0000-000000000001'
+      and dataset_version = '01.05.000'
+  ),
+  '1',
+  'review target collection follows an exact cross-version Process owner reference'
+);
+
+select ok(
+  (
+    select bool_and(
+      strpos(
+        pg_get_functiondef(signature),
+        'coalesce(model_process.model_version, model_process.version)'
+      ) > 0
+    )
+    from unnest(array[
+      'api.cmd_review_collect_dataset_targets(jsonb,boolean)'::regprocedure,
+      'private.review_resolve_current_reference_targets_v1(uuid[])'::regprocedure,
+      'private.cmd_review_assert_lifecycle_closure(jsonb,text,uuid)'::regprocedure,
+      'private.cmd_review_approve_issue304_legacy(text,uuid,jsonb)'::regprocedure
+    ]) as signatures(signature)
+  ),
+  'all current review ownership paths use exact Model version semantics'
+);
+
+set local role service_role;
 
 select is(
   private.delete_lifecycle_model_bundle(

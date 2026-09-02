@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "api"."cmd_review_collect_dataset_targets"("p_roots" "jsonb", "p_lock" boolean) IS 'Collects exact review targets; LifecycleModel result membership uses model_id plus coalesce(model_version, process version).';

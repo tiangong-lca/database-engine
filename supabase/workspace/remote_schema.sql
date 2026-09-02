@@ -11008,7 +11008,7 @@ begin
         false
       from public.processes as model_process
       where model_process.model_id = v_current.dataset_id
-        and model_process.version = v_current.dataset_version
+        and coalesce(model_process.model_version, model_process.version) = v_current.dataset_version
       on conflict do nothing;
     end if;
   end loop;
@@ -11029,6 +11029,10 @@ $_$;
 
 
 ALTER FUNCTION "api"."cmd_review_collect_dataset_targets"("p_roots" "jsonb", "p_lock" boolean) OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "api"."cmd_review_collect_dataset_targets"("p_roots" "jsonb", "p_lock" boolean) IS 'Collects exact review targets; LifecycleModel result membership uses model_id plus coalesce(model_version, process version).';
+
 
 
 CREATE OR REPLACE FUNCTION "api"."cmd_review_extract_refs"("p_json" "jsonb") RETURNS TABLE("ref_type" "text", "ref_object_id" "uuid", "ref_version" "text")
@@ -33366,7 +33370,7 @@ begin
       into v_submodel_ids
     from public.processes as model_process
     where model_process.model_id = v_review.data_id
-      and model_process.version = v_review.data_version
+      and coalesce(model_process.model_version, model_process.version) = v_review.data_version
       and model_process.id <> v_review.data_id;
 
     foreach v_submodel_id in array v_submodel_ids
@@ -33523,6 +33527,10 @@ $_$;
 
 
 ALTER FUNCTION "private"."cmd_review_approve_issue304_legacy"("p_table" "text", "p_review_id" "uuid", "p_audit" "jsonb") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "private"."cmd_review_approve_issue304_legacy"("p_table" "text", "p_review_id" "uuid", "p_audit" "jsonb") IS 'Legacy approval compatibility path; Process model membership uses exact owner-version semantics.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."cmd_review_assert_lifecycle_closure"("p_roots" "jsonb", "p_action" "text", "p_actor" "uuid") RETURNS "jsonb"
@@ -33789,7 +33797,7 @@ begin
         )
       from public.processes as model_process
       where model_process.model_id = v_current.dataset_id
-        and model_process.version = v_current.dataset_version
+        and coalesce(model_process.model_version, model_process.version) = v_current.dataset_version
       on conflict do nothing;
     end if;
 
@@ -33899,6 +33907,10 @@ $_$;
 
 
 ALTER FUNCTION "private"."cmd_review_assert_lifecycle_closure"("p_roots" "jsonb", "p_action" "text", "p_actor" "uuid") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "private"."cmd_review_assert_lifecycle_closure"("p_roots" "jsonb", "p_action" "text", "p_actor" "uuid") IS 'Asserts lifecycle closure using exact Process owner versions with legacy same-version fallback.';
+
 
 
 CREATE OR REPLACE FUNCTION "private"."cmd_review_assign_reviewers_v1_legacy"("p_review_id" "uuid", "p_reviewer_ids" "jsonb", "p_deadline" timestamp with time zone DEFAULT NULL::timestamp with time zone, "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
@@ -48651,7 +48663,7 @@ CREATE OR REPLACE FUNCTION "private"."review_resolve_current_reference_targets_v
           or coalesce((current_target.dataset_row->>'state_code')::integer, 0) < 100
         )
         and model_process.model_id = current_target.data_id
-        and model_process.version = current_target.data_version
+        and coalesce(model_process.model_version, model_process.version) = current_target.data_version
     ) as neighbour
     cross join lateral (
       select api.cmd_review_get_dataset_row(
@@ -48699,7 +48711,7 @@ $$;
 ALTER FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) OWNER TO "postgres";
 
 
-COMMENT ON FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) IS 'Set-oriented recursive current JSON/submitted-Comment closure for multiple Root Reviews; state-zero drafts are excluded and no relationship is persisted.';
+COMMENT ON FUNCTION "private"."review_resolve_current_reference_targets_v1"("p_root_review_ids" "uuid"[]) IS 'Resolves current review references using exact Process owner versions with legacy same-version fallback.';
 
 
 
