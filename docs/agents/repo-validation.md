@@ -33,7 +33,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 859c823
+lastReviewedCommit: 967a52b8fa41b42e86c82b9881af2d7ca2e62af3
 lastReviewedNote: "Reviewed for Issue #589: SQL proof covers exact model-version persistence and reads, null legacy fallback, invalid partial ownership rejection, exact review/bundle membership, and API closure at the checkout migration head."
 related:
   - ../../AGENTS.md
