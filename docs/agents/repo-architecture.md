@@ -31,8 +31,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: de868b022d5e9175773c3c4fda103810be7fab7a
-lastReviewedNote: "Reviewed for Issue #598: the repository-only API closure assertion repair does not change schema boundaries, generated workspace, or branch architecture."
+lastReviewedCommit: '592c669ef2083e709305fccc6a0ca9704621baf9'
+lastReviewedNote: 'Reviewed for Database #600: additive version-aware Portal/Next APIs retain immutable projections and legacy interfaces; bounded candidates, exact groups, ACLs and local proof are explicit.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -519,11 +519,50 @@ overlapped a source write or backfill, restoring old bytes does not make v1
 trusted again; reads stay disabled operationally and recovery uses a shadow v2
 rebuild/cutover.
 
-The facade never invokes or relaxes the legacy raw Hybrid or semantic helpers
+The retained V1 Hybrid facade never invokes or relaxes the legacy raw Hybrid or semantic helpers
 and exposes no actor, team, state, data-source, cursor, model, weight, threshold,
 raw document, embedding, or locator control. Representative-cardinality plans,
 advisors, and the complete one-to-twelve-term/filter/sort/cursor input matrix
 remain promotion gates.
+
+## Version-aware Portal and Next retrieval
+
+Portal Search/Facets V2 retain every matching public version instead of
+substituting the latest row. Scope is exclusively `state_code IN (100,200)`;
+all other present or future values are excluded. Facet counts count matching
+versions. Latest aliases and sitemaps retain their separate latest-only role.
+
+`api.portal_hybrid_search_v2` filters each branch before a 200-exact-version
+candidate bound and fuses only on `id/version` with the retained 0.5/0.5,
+`k=60` RRF normalized by 61. Source HNSW uses strict iterative order,
+`ef_search=200`, `max_scan_tuples=20000` and `scan_mem_multiplier=2`.
+The exact-key projection/filter existence probe retains an `OFFSET 0`
+planner boundary so it cannot flatten into a projection-first full join that
+displaces the bounded source index path. Underfill remains underfill; no
+pool-filling exact helper is invoked and no new vector index is added.
+
+Grouping happens before pagination. `items` contains at most 20 best-version
+dataset representatives; `versionGroups` preserves every recalled exact
+member with its own evidence. `candidateCount` counts the at-most-400 version
+union and `datasetCount` counts distinct dataset IDs, not exhaustive corpus
+recall. The opaque keyset cursor binds terms, embedding digest, filters,
+kind, limit and the V2 algorithm namespace. Existing exact-key context and
+LCIA decorators run through a private V1 envelope adapter before the public
+page becomes V2; stored projection/writer/manifest semantics are unchanged.
+
+Next opt-in `hybrid_search_process_versions_v1` and
+`hybrid_search_flow_versions_v1` retain versions from lexical/semantic
+candidate creation through fusion and hydration. Each branch is fixed at
+200, independent of output pagination. Existing `tg`/`co`, actor-owned
+`my` and membership-checked semantic `te` visibility remain unchanged;
+the legacy team lexical path without an explicit team selector stays empty.
+The new public grants remain anon/authenticated only. Edge negotiates this
+mode with JWT-backed Next clients; legacy RPCs remain byte-stable.
+
+Full-text reads all authored language fragments from its existing reviewed
+source (the public-safe projection for Portal, `search_text` for Next).
+English-query embedding, original-term reservation and bounded multilingual
+aliases are owned by Edge, not by a source/vector backfill here.
 
 ## Worker Jobs And Domain State
 

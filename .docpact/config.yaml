@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-09-02"
-lastReviewedCommit: "de868b022d5e9175773c3c4fda103810be7fab7a"
-lastReviewedNote: "Reviewed for Issue #598: SQL-test routing and proof remain unchanged; API closure now tracks checkout migration head 20260902120230 after PR #595."
+lastReviewedCommit: '592c669ef2083e709305fccc6a0ca9704621baf9'
+lastReviewedNote: 'Reviewed for Database #600: additive version-aware Portal/Next APIs retain immutable projections and legacy interfaces; bounded candidates, exact groups, ACLs and local proof are explicit.'
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

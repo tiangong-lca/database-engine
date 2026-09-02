@@ -38,8 +38,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: de868b022d5e9175773c3c4fda103810be7fab7a
-lastReviewedNote: "Reviewed for Issue #598: the API closure migration-head assertion repair preserves repository ownership, branch, RPC-authority, and generated-workspace boundaries."
+lastReviewedCommit: '592c669ef2083e709305fccc6a0ca9704621baf9'
+lastReviewedNote: 'Reviewed for Database #600: additive version-aware Portal/Next APIs retain immutable projections and legacy interfaces; bounded candidates, exact groups, ACLs and local proof are explicit.'
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
