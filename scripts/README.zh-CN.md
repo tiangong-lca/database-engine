@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 2fa558cc39be4431e6886ada71aef521e862976c
-lastReviewedNote: "为 Issue #582 复核：workflow 合同区分可部署 Supabase 输入与仅属于仓库的 workspace、test 和文档路径。"
+lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
+lastReviewedNote: "为 Issue #580 复核：Portal 基准保留 Search/Facets 性能门，Hybrid 在 20 秒有界正确性合同内只记录时延、不把时延作为发布门。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -151,9 +151,10 @@ Trigger，populated/recovery runner 证明 child/parent parity。
   精确参数识别命名 profile。
 
 所有命名 gate 都要求干净且精确的 HEAD，覆盖完整公开请求形态，保持
-Search/Facets p95 <= 2 秒、Hybrid p95 <= 6 秒、每次 Hybrid < 8 秒。正式
-semantic plan 必须含可解析的 shared-buffer 证据、低于 750,000 total / 250,000
-read blocks、exact 在 5 秒内完成、formal ANN+exact 合计不超过 6 秒，且没有
+Search/Facets p95 <= 2 秒。Hybrid 必须在 20 秒有界 statement budget 内返回
+严格公开 Schema；其时延继续记录并用于优化，但不再是发布门。正式 semantic
+plan 必须含可解析的 shared-buffer 证据、低于 750,000 total / 250,000
+read blocks，且没有
 temp/disk spill。每次运行必须使用新的 mode-0700 输出目录。正式 lexical plan
 使用与 Process/Flow pattern helper 完全一致的 leaf，并保持所有常规 planner
 路径开启。代表性 Flow 基数必须自然命中其 PGroonga scan node；Process 基数较小，

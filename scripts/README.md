@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 2fa558cc39be4431e6886ada71aef521e862976c
-lastReviewedNote: "Reviewed for Issue #582: the workflow contract distinguishes deployable Supabase inputs from repository-only workspace, test, and documentation paths."
+lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
+lastReviewedNote: "Reviewed for Issue #580: Portal benchmark tooling retains Search/Facets gates while Hybrid latency becomes measurement-only under the bounded 20-second correctness contract."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -175,11 +175,11 @@ upsert Trigger, and populated/recovery runners prove child/parent parity.
   evidence; `auto` recognizes an exact named profile from its counts.
 
 All named gates require a clean exact HEAD. They cover the complete public
-request shapes, retain Search/Facets p95 <= 2 seconds and Hybrid p95 <= 6
-seconds with every Hybrid call below 8 seconds. Formal semantic plans must
-include parseable shared-buffer evidence, remain below 750,000 total and
-250,000 read blocks, finish exact execution within 5 seconds and formal
-ANN-plus-exact phases within 6 seconds, and show no temp/disk spill. Use a new
+request shapes and retain Search/Facets p95 <= 2 seconds. Hybrid samples must
+complete with the exact public schema under the bounded 20-second statement
+budget; their latency is recorded for optimization but is not a release gate.
+Formal semantic plans must include parseable shared-buffer evidence, remain
+below 750,000 total and 250,000 read blocks, and show no temp/disk spill. Use a new
 mode-0700 output directory for every run. Formal lexical plans use the exact
 Process/Flow pattern-helper leaf with every normal planner path enabled. The
 representative Flow cardinality must naturally select its PGroonga scan node;

@@ -31,8 +31,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 2fa558cc39be4431e6886ada71aef521e862976c
-lastReviewedNote: "Updated for Issue #582: direct OAuth admission is unchanged; Preview automation now classifies exact deployable inputs before requiring official hosted runtime proof."
+lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
+lastReviewedNote: "Updated for Issue #580: Portal Hybrid read and selected-row decoration share a bounded 20-second correctness budget without changing stored projection semantics or Search/LCIA bounds."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -441,10 +441,11 @@ helpers directly at full vector cardinality, while raw ANN counts separately
 record the naturally selected runtime branch. A second formal ANN plan mirrors
 the production 5,000-candidate scan and 200-candidate rerank; its time and
 buffers are added to the direct exact plan. Production-cardinality release,
-zero-vector, and 199-vector profiles retain the 6-second p95, sub-8-second
-per-call, direct-exact 5-second, combined ANN-plus-exact 6-second, zero-spill,
-and reviewed shared-buffer ceilings; the Edge admission
-gate bounds concurrency before R2 is enabled.
+zero-vector, and 199-vector profiles retain correctness, recall, zero-spill,
+and reviewed shared-buffer ceilings. Their latency is recorded for subsequent
+optimization but does not block release; the full read/decorate path remains
+bounded by one 20-second statement budget, and the Edge admission gate bounds
+concurrency before R2 is enabled.
 
 Projection rows bind an immutable v1 derivation-contract version. Its registry
 stores a committed SHA-256 over the exact transitive card/document helper
@@ -469,9 +470,11 @@ The representative benchmark exercises this composition with complete
 evidence, not placeholder nulls: exact Process→Flow and shared
 Flow→FlowProperty→UnitGroup support, public source/database identity,
 technology, and review status are all present. Dedicated Search-50 and
-Hybrid-20 labels record 20-sample p95 plus full wrapper
-`EXPLAIN (ANALYZE, BUFFERS)` under the existing time, shared-buffer, and
-recorded temp-buffer evidence. Existing zero-spill gates remain scoped to the
+Hybrid-20 labels record 20-sample latency plus full wrapper
+`EXPLAIN (ANALYZE, BUFFERS)` under the shared-buffer and recorded temp-buffer
+evidence. Search retains its performance gate; Hybrid gates schema-valid
+completion under the bounded 20-second statement budget and treats latency as
+measurement. Existing zero-spill gates remain scoped to the
 narrow empty/exact phases that own them. These fixtures remain rollback-only test data and add no
 runtime relation, index, trigger, or writer path.
 
