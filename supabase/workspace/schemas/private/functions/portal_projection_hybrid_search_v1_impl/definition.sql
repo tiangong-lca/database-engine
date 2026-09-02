@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION "private"."portal_projection_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "hnsw.iterative_scan" TO 'strict_order'
     SET "row_security" TO 'on'

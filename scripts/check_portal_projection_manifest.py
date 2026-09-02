@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Fail when the immutable Portal projection-v1 function closure is replaced."""
+"""Fail when Portal projection-v1 closures drift outside reviewed forward paths."""
 
 from __future__ import annotations
 
@@ -22,6 +22,9 @@ FACET_ANCHOR_NAME = "20260827020000_portal_facet_projection_expand.sql"
 FACET_RECONCILE_NAME = "20260827020005_portal_facet_projection_reconcile.sql"
 FACET_CUTOVER_NAME = "20260827020006_portal_facet_projection_cutover.sql"
 CARD_CONTEXT_ANCHOR_NAME = "20260827021441_portal_card_context_decorator.sql"
+HYBRID_CORRECTNESS_TIMEOUT_NAME = (
+    "20260901183000_portal_hybrid_correctness_timeout.sql"
+)
 FLOW_GEOGRAPHY_SEARCH_NAME = (
     "20260827134100_optimize_portal_flow_geography_search.sql"
 )
@@ -122,6 +125,24 @@ CARD_CONTEXT_CONTROL_FUNCTION_IDENTITIES = (
     "private.portal_card_context_manifest_sha256_v1()",
     "private.assert_portal_card_context_contract_v1()",
 )
+HYBRID_TIMEOUT_FUNCTION_IDENTITIES = (
+    "api.portal_hybrid_search_v1(text,text[],text,jsonb,integer)",
+    "private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)",
+    "private.catalog_portal_hybrid_pattern_matches_v1(text,text[])",
+    "private.catalog_portal_process_pattern_versions_v1(text)",
+    "private.catalog_portal_flow_pattern_versions_v1(text)",
+    "private.catalog_portal_process_single_character_versions_v1(text)",
+    "private.catalog_portal_flow_single_character_versions_v1(text)",
+    "private.portal_projection_semantic_candidates_v1(text,extensions.vector)",
+    "private.portal_projection_semantic_process_v1(extensions.vector)",
+    "private.portal_projection_semantic_flow_v1(extensions.vector)",
+    "private.portal_projection_semantic_process_exact_v1(extensions.vector)",
+    "private.portal_projection_semantic_flow_exact_v1(extensions.vector)",
+    "private.portal_decorate_card_context_v1(jsonb)",
+)
+HYBRID_TIMEOUT_CONTEXT_MANIFEST_SHA256 = (
+    "db78336c8604848af1e068352f8a39d9ee740308c44c59c639b986ed2660c47e"
+)
 PROCESS_KEYWORD_RANK_MANIFEST_SHA256 = (
     "3dd65dc6b0dbd5ca8108d0a996610030bad1b5478d61ee9674a57580433e6bbf"
 )
@@ -192,6 +213,72 @@ def main() -> int:
         return 1
 
     violations: list[str] = []
+
+    hybrid_timeout_migration = MIGRATIONS_DIR / HYBRID_CORRECTNESS_TIMEOUT_NAME
+    if not hybrid_timeout_migration.is_file():
+        violations.append(
+            "missing Portal Hybrid correctness timeout migration: "
+            + HYBRID_CORRECTNESS_TIMEOUT_NAME
+        )
+    else:
+        timeout_sql = sql_without_comments(
+            hybrid_timeout_migration.read_text(encoding="utf-8")
+        )
+        timeout_sql_lower = timeout_sql.lower()
+        required_timeout_tokens = (
+            "begin;",
+            "set local lock_timeout = '5s'",
+            "set local statement_timeout = '30s'",
+            "grant portal_public_executor, api_internal_executor to postgres",
+            "grant create on schema private to portal_public_executor",
+            "revoke create on schema private from portal_public_executor",
+            "revoke portal_public_executor, api_internal_executor from postgres",
+            CARD_CONTEXT_MANIFEST_SHA256,
+            HYBRID_TIMEOUT_CONTEXT_MANIFEST_SHA256,
+            "create or replace function private.assert_portal_card_context_contract_v1()",
+            "commit;",
+        ) + HYBRID_TIMEOUT_FUNCTION_IDENTITIES
+        missing = [
+            token for token in required_timeout_tokens if token not in timeout_sql_lower
+        ]
+        if missing:
+            violations.append(
+                f"{HYBRID_CORRECTNESS_TIMEOUT_NAME}: missing bounded timeout tokens "
+                + ", ".join(missing)
+            )
+        if timeout_sql_lower.count("set statement_timeout = '20s'") != 13:
+            violations.append(
+                f"{HYBRID_CORRECTNESS_TIMEOUT_NAME}: expected thirteen exact "
+                "20-second function settings"
+            )
+        if len(
+            re.findall(
+                r"create\s+or\s+replace\s+function",
+                timeout_sql,
+                flags=re.IGNORECASE,
+            )
+        ) != 1:
+            violations.append(
+                f"{HYBRID_CORRECTNESS_TIMEOUT_NAME}: only the card-context "
+                "assertion may be replaced"
+            )
+        if re.search(
+            r"\b(?:create\s+(?:unlogged\s+)?table|create\s+(?:unique\s+)?index|"
+            r"create\s+trigger|alter\s+table|insert\s+into|update\s+|"
+            r"delete\s+from|truncate\s+)\b",
+            timeout_sql,
+            flags=re.IGNORECASE,
+        ):
+            violations.append(
+                f"{HYBRID_CORRECTNESS_TIMEOUT_NAME}: config-only migration "
+                "must not mutate schema data, projections, indexes, or writers"
+            )
+        for identity in HYBRID_TIMEOUT_FUNCTION_IDENTITIES:
+            if len(mutation_pattern(identity).findall(timeout_sql)) != 1:
+                violations.append(
+                    f"{HYBRID_CORRECTNESS_TIMEOUT_NAME}: expected one config "
+                    f"mutation for {identity}"
+                )
     protected_identities = FUNCTION_IDENTITIES + CONTROL_FUNCTION_IDENTITIES
     patterns = {identity: mutation_pattern(identity) for identity in protected_identities}
     pattern_probes = (
@@ -216,6 +303,8 @@ def main() -> int:
         return 1
     for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
         if migration.name <= ANCHOR_NAME:
+            continue
+        if migration.name == HYBRID_CORRECTNESS_TIMEOUT_NAME:
             continue
         executable_sql = sql_without_comments(migration.read_text(encoding="utf-8"))
         for identity, pattern in patterns.items():
@@ -334,6 +423,8 @@ def main() -> int:
     }
     for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
         if migration.name <= CARD_CONTEXT_ANCHOR_NAME:
+            continue
+        if migration.name == HYBRID_CORRECTNESS_TIMEOUT_NAME:
             continue
         executable_sql = sql_without_comments(migration.read_text(encoding="utf-8"))
         for identity, pattern in context_patterns.items():
@@ -1233,7 +1324,9 @@ def main() -> int:
         f"sha256={FACET_MANIFEST_SHA256}; selected-row context closure "
         f"{len(CARD_CONTEXT_FUNCTION_IDENTITIES)} derivation functions and "
         f"{len(CARD_CONTEXT_CONTROL_FUNCTION_IDENTITIES)} controls, "
-        f"sha256={CARD_CONTEXT_MANIFEST_SHA256}; Flow geography Search "
+        f"anchor sha256={CARD_CONTEXT_MANIFEST_SHA256}, bounded Hybrid timeout "
+        f"config sha256={HYBRID_TIMEOUT_CONTEXT_MANIFEST_SHA256}; "
+        "Flow geography Search "
         "repair remains query-only; forced-RLS Flow CAS equality remains an "
         "exact index condition over the validated public-state projection; "
         "one-code-point literal Search uses one narrow exact-version child, "

@@ -19650,7 +19650,7 @@ COMMENT ON FUNCTION "api"."portal_get_published_lcia_values_v1"("p_mode" "text",
 CREATE OR REPLACE FUNCTION "api"."portal_hybrid_search_v1"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "text", "p_filters" "jsonb", "p_limit" integer) RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     AS $$
 declare
   v_input jsonb;
@@ -25804,7 +25804,7 @@ CREATE OR REPLACE FUNCTION "private"."assert_portal_card_context_contract_v1"() 
     AS $$
 declare
   v_expected_digest constant text :=
-    'e0516d5f3a641d26221a5c44b92a2e7a87cab125e9145e8141074d9bc2af39fa';
+    'db78336c8604848af1e068352f8a39d9ee740308c44c59c639b986ed2660c47e';
 begin
   perform private.assert_portal_catalog_projection_contract_v1();
   if private.portal_card_context_manifest_sha256_v1()
@@ -27367,7 +27367,7 @@ COMMENT ON FUNCTION "private"."catalog_portal_facets_v1_impl"("p_kind" "text", "
 CREATE OR REPLACE FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_like_pattern" "text") RETURNS TABLE("id" "uuid", "version" "text")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "row_security" TO 'on'
     AS $_$
@@ -27408,7 +27408,7 @@ COMMENT ON FUNCTION "private"."catalog_portal_flow_pattern_versions_v1"("p_like_
 CREATE OR REPLACE FUNCTION "private"."catalog_portal_flow_single_character_versions_v1"("p_literal" "text") RETURNS TABLE("id" "uuid", "version" "text")
     LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "enable_indexscan" TO 'off'
     SET "enable_indexonlyscan" TO 'off'
     SET "enable_bitmapscan" TO 'off'
@@ -27436,7 +27436,7 @@ COMMENT ON FUNCTION "private"."catalog_portal_flow_single_character_versions_v1"
 CREATE OR REPLACE FUNCTION "private"."catalog_portal_hybrid_pattern_matches_v1"("p_kind" "text", "p_query_terms" "text"[]) RETURNS TABLE("id" "uuid", "version" "text", "term_ordinal" integer)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "row_security" TO 'on'
     AS $$
@@ -27721,7 +27721,7 @@ COMMENT ON FUNCTION "private"."catalog_portal_process_keyword_relevance_v1_impl"
 CREATE OR REPLACE FUNCTION "private"."catalog_portal_process_pattern_versions_v1"("p_like_pattern" "text") RETURNS TABLE("id" "uuid", "version" "text")
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "row_security" TO 'on'
     AS $_$
@@ -27762,7 +27762,7 @@ COMMENT ON FUNCTION "private"."catalog_portal_process_pattern_versions_v1"("p_li
 CREATE OR REPLACE FUNCTION "private"."catalog_portal_process_single_character_versions_v1"("p_literal" "text") RETURNS TABLE("id" "uuid", "version" "text")
     LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "enable_indexscan" TO 'off'
     SET "enable_indexonlyscan" TO 'off'
     SET "enable_bitmapscan" TO 'off'
@@ -43555,7 +43555,7 @@ ALTER FUNCTION "private"."portal_datetime_v1"("p_value" "text") OWNER TO "portal
 CREATE OR REPLACE FUNCTION "private"."portal_decorate_card_context_v1"("p_page" "jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "row_security" TO 'on'
     AS $_$
@@ -46341,7 +46341,7 @@ ALTER FUNCTION "private"."portal_process_reference_product_v1"("p_json" "jsonb")
 CREATE OR REPLACE FUNCTION "private"."portal_projection_hybrid_search_v1_impl"("p_kind" "text", "p_query_terms" "text"[], "p_query_embedding" "extensions"."vector", "p_filters" "jsonb", "p_limit" integer, "p_query_fingerprint" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "hnsw.iterative_scan" TO 'strict_order'
     SET "row_security" TO 'on'
@@ -46588,7 +46588,7 @@ COMMENT ON FUNCTION "private"."portal_projection_hybrid_search_v1_impl"("p_kind"
 CREATE OR REPLACE FUNCTION "private"."portal_projection_semantic_candidates_v1"("p_kind" "text", "p_query_embedding" "extensions"."vector") RETURNS TABLE("id" "uuid", "version" "text", "semantic_distance" double precision)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "row_security" TO 'on'
     AS $$
 begin
@@ -46615,7 +46615,7 @@ ALTER FUNCTION "private"."portal_projection_semantic_candidates_v1"("p_kind" "te
 CREATE OR REPLACE FUNCTION "private"."portal_projection_semantic_flow_exact_v1"("p_query_embedding" "extensions"."vector") RETURNS TABLE("id" "uuid", "version" "text", "semantic_distance" double precision)
     LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "work_mem" TO '32MB'
     SET "enable_hashjoin" TO 'on'
@@ -46668,7 +46668,7 @@ ALTER FUNCTION "private"."portal_projection_semantic_flow_exact_v1"("p_query_emb
 CREATE OR REPLACE FUNCTION "private"."portal_projection_semantic_flow_v1"("p_query_embedding" "extensions"."vector") RETURNS TABLE("id" "uuid", "version" "text", "semantic_distance" double precision)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "hnsw.iterative_scan" TO 'relaxed_order'
     SET "hnsw.ef_search" TO '1000'
@@ -46850,7 +46850,7 @@ ALTER FUNCTION "private"."portal_projection_semantic_flow_v1"("p_query_embedding
 CREATE OR REPLACE FUNCTION "private"."portal_projection_semantic_process_exact_v1"("p_query_embedding" "extensions"."vector") RETURNS TABLE("id" "uuid", "version" "text", "semantic_distance" double precision)
     LANGUAGE "sql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "work_mem" TO '32MB'
     SET "enable_hashjoin" TO 'on'
@@ -46903,7 +46903,7 @@ ALTER FUNCTION "private"."portal_projection_semantic_process_exact_v1"("p_query_
 CREATE OR REPLACE FUNCTION "private"."portal_projection_semantic_process_v1"("p_query_embedding" "extensions"."vector") RETURNS TABLE("id" "uuid", "version" "text", "semantic_distance" double precision)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "hnsw.iterative_scan" TO 'relaxed_order'
     SET "hnsw.ef_search" TO '1000'

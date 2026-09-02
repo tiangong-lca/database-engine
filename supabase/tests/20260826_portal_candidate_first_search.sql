@@ -424,7 +424,7 @@ select extensions.is(
       and routine.prosecdef
       and routine.proconfig @> array[
         'search_path=""',
-        'statement_timeout=8s',
+        'statement_timeout=20s',
         'plan_cache_mode=force_custom_plan',
         'row_security=on'
       ]::text[]
@@ -457,7 +457,7 @@ select extensions.is(
       and routine.proparallel = 'r'
       and routine.proconfig @> array[
         'search_path=""',
-        'statement_timeout=8s',
+        'statement_timeout=20s',
         'enable_indexscan=off',
         'enable_indexonlyscan=off',
         'enable_bitmapscan=off',
@@ -753,7 +753,7 @@ select extensions.ok(
         and routine.prosecdef
         and routine.proconfig @> array[
           'search_path=""',
-          'statement_timeout=8s',
+          'statement_timeout=20s',
           'plan_cache_mode=force_custom_plan',
           'hnsw.iterative_scan=relaxed_order',
           'hnsw.ef_search=1000',
@@ -786,7 +786,7 @@ select extensions.ok(
         and routine.proparallel = 'r'
         and coalesce(routine.proconfig, '{}'::text[]) @> array[
           'search_path=""',
-          'statement_timeout=8s',
+          'statement_timeout=20s',
           'plan_cache_mode=force_custom_plan',
           'work_mem=32MB',
           'enable_hashjoin=on',

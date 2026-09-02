@@ -1,7 +1,7 @@
 ---
-lastReviewedAt: 2026-08-30
-lastReviewedCommit: be1f915
-lastReviewedNote: "Reviewed for Issue #563: the 299-file tree adds a dormant-helper/concurrent-index/atomic-cutover sequence for bounded Process keyword hydration with explicit writer and ANALYZE recovery edges."
+lastReviewedAt: 2026-09-02
+lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
+lastReviewedNote: "Reviewed for Issue #580: the config-only Hybrid timeout forward migration changes no projection row, derivation body, index, writer, DTO, or ACL and has ordinary transactional retry semantics."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -180,6 +180,36 @@ by a missing migration-history write may therefore use the unchanged normal
 retry; reapplying the same `CREATE OR REPLACE FUNCTION` is byte-idempotent.
 Any third definition, owner/config/ACL drift, or manifest failure remains a
 hard stop and requires a separately reviewed forward repair.
+
+## Hybrid correctness-timeout forward migration
+
+`20260901183000_portal_hybrid_correctness_timeout.sql` is a config-only,
+transactional read-path change. It requires the exact 8-second predecessor on
+thirteen Portal Hybrid wrapper, lexical/semantic, exact-fallback, and selected-
+row decorator functions, then sets all thirteen to one bounded 20-second
+statement budget. It changes no function body except the card-context runtime
+assertion's expected config digest. The stored v1 projection manifest and all
+projection rows, derivation helpers, tables, indexes, policies, triggers,
+writers, rankings, DTOs, owners, and application-role ACLs remain unchanged.
+
+The selected-row context closure stores no derived rows, but its live manifest
+includes function configuration. The migration therefore advances only that
+config digest from
+`e0516d5f3a641d26221a5c44b92a2e7a87cab125e9145e8141074d9bc2af39fa`
+to
+`db78336c8604848af1e068352f8a39d9ee740308c44c59c639b986ed2660c47e`.
+The static checker permits exactly this reviewed forward file and rejects any
+additional body, schema, data, index, or writer mutation.
+
+Because the file is one explicit transaction, an owner-role, schema-CREATE,
+predecessor, digest, or postcondition failure rolls back every function config,
+temporary role membership, and assertion replacement. If its migration ledger
+row is absent after an ordinary SQL failure, fix the file in Git and repeat the
+normal migration path. If catalog evidence shows the new 20-second configs or
+new context digest committed while the ledger row is absent, do not edit
+history or hand-change functions; record exact `pg_proc.proconfig`, assertion
+source, context digest, and ledger evidence, then ship a reviewed reconciliation
+migration.
 
 ## Read-only diagnosis
 

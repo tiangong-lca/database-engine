@@ -67,14 +67,14 @@ select extensions.is(
 select extensions.ok(
   (
     select routine.proconfig @> array[
-      'statement_timeout=8s',
+      'statement_timeout=20s',
       'plan_cache_mode=force_custom_plan'
     ]::text[]
     from pg_catalog.pg_proc as routine
     where routine.oid =
       'private.portal_decorate_card_context_v1(jsonb)'::regprocedure
   ),
-  'the bounded exact-key decorator retains the public eight-second/custom-plan budget'
+  'the bounded exact-key decorator retains the Hybrid correctness-first 20-second/custom-plan budget'
 );
 
 select extensions.is(
@@ -175,7 +175,7 @@ set local role portal_public_executor;
 
 select extensions.is(
   private.portal_card_context_manifest_sha256_v1(),
-  'e0516d5f3a641d26221a5c44b92a2e7a87cab125e9145e8141074d9bc2af39fa',
+  'db78336c8604848af1e068352f8a39d9ee740308c44c59c639b986ed2660c47e',
   'the live context/decorator allowlist closure matches its committed digest'
 );
 
