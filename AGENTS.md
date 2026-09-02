@@ -38,7 +38,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
+lastReviewedCommit: 8d3e2b506f4a131fc2b494b68fa3706e28e42fcd
 lastReviewedNote: "Reviewed for Issue #580: the Portal Hybrid read path uses one bounded 20-second correctness budget while Search, LCIA, projection semantics, DTOs, ACLs, and indexes remain unchanged."
 related:
   - .docpact/config.yaml
