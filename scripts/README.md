@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
-lastReviewedNote: "Reviewed for Issue #580: Portal benchmark tooling retains Search/Facets gates while Hybrid latency becomes measurement-only under the bounded 20-second correctness contract."
+lastReviewedCommit: 71f12382c74c66bc56720746ee0c205f31b648f5
+lastReviewedNote: "Reviewed for Issue #589: migration and generated-workspace commands remain unchanged while the schema head advances for the Process model-version contract."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

@@ -31,8 +31,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
-lastReviewedNote: "Updated for Issue #580: Portal Hybrid read and selected-row decoration share a bounded 20-second correctness budget without changing stored projection semantics or Search/LCIA bounds."
+lastReviewedCommit: 71f12382c74c66bc56720746ee0c205f31b648f5
+lastReviewedNote: "Updated for Issue #589: Process ownership now records an optional exact LifecycleModel version while preserving the historical same-version fallback for null legacy rows."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

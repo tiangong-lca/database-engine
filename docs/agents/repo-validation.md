@@ -33,8 +33,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
-lastReviewedNote: "Reviewed for Issue #580: Portal Hybrid validation now gates schema-valid completion under the bounded 20-second database budget; latency remains recorded but is not a release gate."
+lastReviewedCommit: 71f12382c74c66bc56720746ee0c205f31b648f5
+lastReviewedNote: "Reviewed for Issue #589: SQL proof covers exact model-version persistence and reads, null legacy fallback, invalid partial ownership rejection, and exact review/bundle membership."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
