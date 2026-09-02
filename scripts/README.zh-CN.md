@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
+lastReviewedCommit: 5e32f783e342abf6690035d84fb3b1ee65d76ccc
 lastReviewedNote: "为 Issue #580 复核：Portal 基准保留 Search/Facets 性能门，Hybrid 在 20 秒有界正确性合同内只记录时延、不把时延作为发布门。"
 related:
   - ../AGENTS.md

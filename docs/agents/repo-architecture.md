@@ -31,7 +31,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
+lastReviewedCommit: 5e32f783e342abf6690035d84fb3b1ee65d76ccc
 lastReviewedNote: "Updated for Issue #580: Portal Hybrid read and selected-row decoration share a bounded 20-second correctness budget without changing stored projection semantics or Search/LCIA bounds."
 related:
   - ../../AGENTS.md
