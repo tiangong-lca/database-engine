@@ -86,6 +86,7 @@ export type Database = {
           p_id: string
           p_json_ordered: Json
           p_model_id?: string
+          p_model_version?: string
           p_rule_verification?: boolean
           p_table: string
         }
@@ -97,6 +98,7 @@ export type Database = {
           p_id: string
           p_json_ordered: Json
           p_model_id?: string
+          p_model_version?: string
           p_rule_verification?: boolean
           p_source_version: string
           p_table: string
@@ -194,6 +196,7 @@ export type Database = {
           p_id: string
           p_json_ordered: Json
           p_model_id?: string
+          p_model_version?: string
           p_rule_verification?: boolean
           p_table: string
           p_version: string
@@ -785,6 +788,7 @@ export type Database = {
           id: string
           json: Json
           model_id: string
+          model_version: string
           modified_at: string
           team_id: string
           total_count: number
@@ -2369,6 +2373,7 @@ export type Database = {
           id: string
           json: Json
           model_id: string
+          model_version: string
           modified_at: string
           rank: number
           team_id: string
@@ -2394,6 +2399,7 @@ export type Database = {
           id: string
           json: Json
           model_id: string
+          model_version: string
           modified_at: string
           rank: number
           team_id: string
@@ -2420,6 +2426,7 @@ export type Database = {
           id: string
           json: Json
           model_id: string
+          model_version: string
           modified_at: string
           rank: number
           team_id: string
@@ -3247,6 +3254,7 @@ export type Database = {
           json: Json | null
           json_ordered: Json | null
           model_id: string | null
+          model_version: string | null
           modified_at: string | null
           review_id: string | null
           reviews: Json | null
@@ -3266,6 +3274,7 @@ export type Database = {
           json?: Json | null
           json_ordered?: Json | null
           model_id?: string | null
+          model_version?: string | null
           modified_at?: string | null
           review_id?: string | null
           reviews?: Json | null
@@ -3285,6 +3294,7 @@ export type Database = {
           json?: Json | null
           json_ordered?: Json | null
           model_id?: string | null
+          model_version?: string | null
           modified_at?: string | null
           review_id?: string | null
           reviews?: Json | null

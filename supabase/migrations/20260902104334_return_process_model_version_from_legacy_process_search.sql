@@ -1,3 +1,11 @@
+begin;
+
+drop function api.search_processes_latest(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer, text, text[]);
+
+grant api_internal_executor to postgres;
+grant create on schema api to api_internal_executor;
+set role api_internal_executor;
+
 CREATE OR REPLACE FUNCTION "api"."search_processes_latest"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "order_by" "jsonb" DEFAULT '{}'::"jsonb", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "type_of_data_set_filter" "text" DEFAULT 'all'::"text", "query_terms" "text"[] DEFAULT NULL::"text"[]) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "model_id" "uuid", "model_version" character, "total_count" bigint)
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
@@ -30,3 +38,46 @@ REVOKE ALL ON FUNCTION "api"."search_processes_latest"("query_text" "text", "fil
 GRANT ALL ON FUNCTION "api"."search_processes_latest"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[]) TO "anon";
 
 GRANT ALL ON FUNCTION "api"."search_processes_latest"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[]) TO "authenticated";
+
+comment on function api.search_processes_latest(text, jsonb, jsonb, bigint, bigint, text, text, uuid, integer, text, text[]) is
+  'Legacy compatibility Process search RPC. Delegates to the canonical private implementation and returns model_version from the selected Process revision.';
+
+reset role;
+revoke create on schema api from api_internal_executor;
+revoke api_internal_executor from postgres;
+
+-- Keep the oldest PGroonga compatibility alias on its established eight-column
+-- result contract. The canonical search adds model_version, so this wrapper must
+-- project columns explicitly instead of relying on select *.
+CREATE OR REPLACE FUNCTION "api"."pgroonga_search_processes_latest"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "order_by" "jsonb" DEFAULT '{}'::"jsonb", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "type_of_data_set_filter" "text" DEFAULT 'all'::"text") RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "model_id" "uuid", "total_count" bigint)
+    LANGUAGE "plpgsql"
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
+    SET "statement_timeout" TO '60s'
+    AS $$
+begin
+  return query
+  select
+    result.rank,
+    result.id,
+    result.json,
+    result.version,
+    result.modified_at,
+    result.team_id,
+    result.model_id,
+    result.total_count
+  from api.search_processes_latest(
+    query_text,
+    filter_condition,
+    order_by,
+    page_size,
+    page_current,
+    data_source,
+    this_user_id,
+    team_id_filter,
+    state_code_filter,
+    type_of_data_set_filter
+  ) as result;
+end;
+$$;
+
+commit;

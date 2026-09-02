@@ -20,8 +20,8 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-01
-lastReviewedCommit: b4d8e0cbbb16b3fd4b0565b95132243b659883a1
+lastReviewedAt: 2026-09-02
+lastReviewedCommit: 92a7bb85152d0d7ac5de07b6ad4c5ada7749aef6
 lastReviewedNote: "为 Issue #568 复核：追加修复只改变能力 manifest 数据；生成的 Data API types、workspace 所有权、刷新与稳定 overlay 规则均不变。"
 related:
   - ../../AGENTS.md

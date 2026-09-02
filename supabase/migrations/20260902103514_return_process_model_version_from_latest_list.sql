@@ -1,3 +1,7 @@
+begin;
+
+drop function api.get_latest_process_versions(bigint, bigint, text, text, uuid, integer, text, text, text);
+
 CREATE OR REPLACE FUNCTION "api"."get_latest_process_versions"("page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "type_of_data_set_filter" "text" DEFAULT 'all'::"text", "sort_by" "text" DEFAULT 'modified_at'::"text", "sort_direction" "text" DEFAULT 'desc'::"text") RETURNS TABLE("id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "model_id" "uuid", "model_version" character, "total_count" bigint)
     LANGUAGE "plpgsql"
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
@@ -117,3 +121,5 @@ GRANT ALL ON FUNCTION "api"."get_latest_process_versions"("page_size" bigint, "p
 GRANT ALL ON FUNCTION "api"."get_latest_process_versions"("page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "sort_by" "text", "sort_direction" "text") TO "anon";
 
 GRANT ALL ON FUNCTION "api"."get_latest_process_versions"("page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "sort_by" "text", "sort_direction" "text") TO "authenticated";
+
+commit;

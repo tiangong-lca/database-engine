@@ -1,3 +1,5 @@
+begin;
+
 CREATE OR REPLACE FUNCTION "private"."save_lifecycle_model_bundle"("p_plan" "jsonb") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'private', 'api', 'public', 'util', 'extensions', 'pg_temp'
@@ -384,3 +386,5 @@ REVOKE ALL ON FUNCTION "private"."save_lifecycle_model_bundle"("p_plan" "jsonb")
 GRANT ALL ON FUNCTION "private"."save_lifecycle_model_bundle"("p_plan" "jsonb") TO "service_role";
 
 GRANT ALL ON FUNCTION "private"."save_lifecycle_model_bundle"("p_plan" "jsonb") TO "api_internal_executor";
+
+commit;

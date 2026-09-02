@@ -2929,12 +2929,13 @@ $_$;
 ALTER FUNCTION "api"."cmd_dataset_assign_team"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_team_id" "uuid", "p_audit" "jsonb") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "api"."cmd_dataset_create"("p_table" "text", "p_id" "uuid", "p_json_ordered" "jsonb", "p_model_id" "uuid" DEFAULT NULL::"uuid", "p_rule_verification" boolean DEFAULT NULL::boolean, "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "api"."cmd_dataset_create"("p_table" "text", "p_id" "uuid", "p_json_ordered" "jsonb", "p_model_id" "uuid" DEFAULT NULL::"uuid", "p_rule_verification" boolean DEFAULT NULL::boolean, "p_audit" "jsonb" DEFAULT '{}'::"jsonb", "p_model_version" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
     AS $_$
 declare
   v_actor uuid := auth.uid();
+  v_model_version text := nullif(btrim(coalesce(p_model_version, '')), '');
   v_created_row jsonb;
 begin
   if v_actor is null then
@@ -2989,6 +2990,34 @@ begin
     );
   end if;
 
+  if p_table <> 'processes' and v_model_version is not null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'MODEL_VERSION_NOT_ALLOWED',
+      'status', 400,
+      'message', 'modelVersion is only allowed for process dataset creation'
+    );
+  end if;
+
+  if v_model_version is not null and p_model_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'MODEL_ID_REQUIRED_FOR_MODEL_VERSION',
+      'status', 400,
+      'message', 'modelId is required when modelVersion is provided'
+    );
+  end if;
+
+  if v_model_version is not null
+     and v_model_version !~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$' then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'INVALID_MODEL_VERSION',
+      'status', 400,
+      'message', 'modelVersion must use NN.NN.NNN format'
+    );
+  end if;
+
   if p_table = 'flows' then
     perform set_config('lock_timeout', '2s', true);
     perform set_config('statement_timeout', '8s', true);
@@ -2997,8 +3026,8 @@ begin
   begin
     if p_table = 'processes' then
       execute format(
-        'insert into public.%I as t (id, json_ordered, model_id, rule_verification)
-         values ($1, $2::json, $3, $4)
+        'insert into public.%I as t (id, json_ordered, model_id, model_version, rule_verification)
+         values ($1, $2::json, $3, $4, $5)
          returning jsonb_build_object(
            ''id'', t.id,
            ''version'', t.version,
@@ -3006,12 +3035,13 @@ begin
            ''user_id'', t.user_id,
            ''team_id'', t.team_id,
            ''model_id'', t.model_id,
+           ''model_version'', t.model_version,
            ''rule_verification'', t.rule_verification
          )',
         p_table
       )
         into v_created_row
-        using p_id, p_json_ordered, p_model_id, p_rule_verification;
+        using p_id, p_json_ordered, p_model_id, v_model_version, p_rule_verification;
     else
       execute format(
         'insert into public.%I as t (id, json_ordered, rule_verification)
@@ -3023,6 +3053,7 @@ begin
            ''user_id'', t.user_id,
            ''team_id'', t.team_id,
            ''model_id'', null,
+           ''model_version'', null,
            ''rule_verification'', t.rule_verification
          )',
         p_table
@@ -3093,15 +3124,16 @@ end;
 $_$;
 
 
-ALTER FUNCTION "api"."cmd_dataset_create"("p_table" "text", "p_id" "uuid", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb") OWNER TO "postgres";
+ALTER FUNCTION "api"."cmd_dataset_create"("p_table" "text", "p_id" "uuid", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb", "p_model_version" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "api"."cmd_dataset_create_version"("p_table" "text", "p_id" "uuid", "p_source_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid" DEFAULT NULL::"uuid", "p_rule_verification" boolean DEFAULT NULL::boolean, "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "api"."cmd_dataset_create_version"("p_table" "text", "p_id" "uuid", "p_source_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid" DEFAULT NULL::"uuid", "p_rule_verification" boolean DEFAULT NULL::boolean, "p_audit" "jsonb" DEFAULT '{}'::"jsonb", "p_model_version" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
     AS $_$
 declare
   v_actor uuid := auth.uid();
+  v_model_version text := nullif(btrim(coalesce(p_model_version, '')), '');
   v_root_key text;
   v_uri_slug text;
   v_source_exists boolean := false;
@@ -3193,6 +3225,34 @@ begin
       'code', 'MODEL_ID_NOT_ALLOWED',
       'status', 400,
       'message', 'modelId is only allowed for process dataset version creation'
+    );
+  end if;
+
+  if p_table <> 'processes' and v_model_version is not null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'MODEL_VERSION_NOT_ALLOWED',
+      'status', 400,
+      'message', 'modelVersion is only allowed for process dataset version creation'
+    );
+  end if;
+
+  if v_model_version is not null and p_model_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'MODEL_ID_REQUIRED_FOR_MODEL_VERSION',
+      'status', 400,
+      'message', 'modelId is required when modelVersion is provided'
+    );
+  end if;
+
+  if v_model_version is not null
+     and v_model_version !~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$' then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'INVALID_MODEL_VERSION',
+      'status', 400,
+      'message', 'modelVersion must use NN.NN.NNN format'
     );
   end if;
 
@@ -3297,8 +3357,8 @@ begin
 
     if p_table = 'processes' then
       execute format(
-        'insert into public.%I as t (id, json_ordered, model_id, rule_verification)
-         values ($1, $2::json, $3, $4)
+        'insert into public.%I as t (id, json_ordered, model_id, model_version, rule_verification)
+         values ($1, $2::json, $3, $4, $5)
          returning jsonb_build_object(
            ''id'', t.id,
            ''version'', t.version,
@@ -3306,13 +3366,14 @@ begin
            ''user_id'', t.user_id,
            ''team_id'', t.team_id,
            ''model_id'', t.model_id,
+           ''model_version'', t.model_version,
            ''rule_verification'', t.rule_verification,
            ''json_ordered'', t.json_ordered::jsonb
          )',
         p_table
       )
         into v_created_row
-        using p_id, v_payload, p_model_id, p_rule_verification;
+        using p_id, v_payload, p_model_id, v_model_version, p_rule_verification;
     else
       execute format(
         'insert into public.%I as t (id, json_ordered, rule_verification)
@@ -3324,6 +3385,7 @@ begin
            ''user_id'', t.user_id,
            ''team_id'', t.team_id,
            ''model_id'', null,
+           ''model_version'', null,
            ''rule_verification'', t.rule_verification,
            ''json_ordered'', t.json_ordered::jsonb
          )',
@@ -3395,7 +3457,7 @@ end;
 $_$;
 
 
-ALTER FUNCTION "api"."cmd_dataset_create_version"("p_table" "text", "p_id" "uuid", "p_source_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb") OWNER TO "postgres";
+ALTER FUNCTION "api"."cmd_dataset_create_version"("p_table" "text", "p_id" "uuid", "p_source_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb", "p_model_version" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "api"."cmd_dataset_delete"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
@@ -7379,12 +7441,13 @@ $$;
 ALTER FUNCTION "api"."cmd_dataset_publish"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_audit" "jsonb") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "api"."cmd_dataset_save_draft"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid" DEFAULT NULL::"uuid", "p_rule_verification" boolean DEFAULT NULL::boolean, "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
+CREATE OR REPLACE FUNCTION "api"."cmd_dataset_save_draft"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid" DEFAULT NULL::"uuid", "p_rule_verification" boolean DEFAULT NULL::boolean, "p_audit" "jsonb" DEFAULT '{}'::"jsonb", "p_model_version" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
     AS $_$
 declare
   v_actor uuid := auth.uid();
+  v_model_version text := nullif(btrim(coalesce(p_model_version, '')), '');
   v_current_row jsonb;
   v_owner_id uuid;
   v_state_code integer;
@@ -7431,6 +7494,34 @@ begin
       'code', 'MODEL_ID_NOT_ALLOWED',
       'status', 400,
       'message', 'modelId is only allowed for process dataset drafts'
+    );
+  end if;
+
+  if p_table <> 'processes' and v_model_version is not null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'MODEL_VERSION_NOT_ALLOWED',
+      'status', 400,
+      'message', 'modelVersion is only allowed for process dataset drafts'
+    );
+  end if;
+
+  if v_model_version is not null and p_model_id is null then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'MODEL_ID_REQUIRED_FOR_MODEL_VERSION',
+      'status', 400,
+      'message', 'modelId is required when modelVersion is provided'
+    );
+  end if;
+
+  if v_model_version is not null
+     and v_model_version !~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$' then
+    return jsonb_build_object(
+      'ok', false,
+      'code', 'INVALID_MODEL_VERSION',
+      'status', 400,
+      'message', 'modelVersion must use NN.NN.NNN format'
     );
   end if;
 
@@ -7492,15 +7583,21 @@ begin
       'update public.%I as t
           set json_ordered = $1::json,
               model_id = coalesce($2, t.model_id),
-              rule_verification = $3,
+              model_version = case
+                when $2 is null then t.model_version
+                when $3 is not null then $3
+                when $2 is distinct from t.model_id then null
+                else t.model_version
+              end,
+              rule_verification = $4,
               modified_at = now()
-        where t.id = $4
-          and t.version = $5
+        where t.id = $5
+          and t.version = $6
       returning to_jsonb(t)',
       p_table
     )
       into v_updated_row
-      using p_json_ordered, p_model_id, p_rule_verification, p_id, p_version;
+      using p_json_ordered, p_model_id, v_model_version, p_rule_verification, p_id, p_version;
   else
     execute format(
       'update public.%I as t
@@ -7541,7 +7638,7 @@ end;
 $_$;
 
 
-ALTER FUNCTION "api"."cmd_dataset_save_draft"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb") OWNER TO "postgres";
+ALTER FUNCTION "api"."cmd_dataset_save_draft"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb", "p_model_version" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "api"."cmd_dataset_withdraw"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_reason" "text", "p_audit" "jsonb" DEFAULT '{}'::"jsonb") RETURNS "jsonb"
@@ -15576,7 +15673,7 @@ $_$;
 ALTER FUNCTION "api"."get_latest_lifecyclemodel_versions"("page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "sort_by" "text", "sort_direction" "text") OWNER TO "postgres";
 
 
-CREATE OR REPLACE FUNCTION "api"."get_latest_process_versions"("page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "type_of_data_set_filter" "text" DEFAULT 'all'::"text", "sort_by" "text" DEFAULT 'modified_at'::"text", "sort_direction" "text" DEFAULT 'desc'::"text") RETURNS TABLE("id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "model_id" "uuid", "total_count" bigint)
+CREATE OR REPLACE FUNCTION "api"."get_latest_process_versions"("page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "type_of_data_set_filter" "text" DEFAULT 'all'::"text", "sort_by" "text" DEFAULT 'modified_at'::"text", "sort_direction" "text" DEFAULT 'desc'::"text") RETURNS TABLE("id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "model_id" "uuid", "model_version" character, "total_count" bigint)
     LANGUAGE "plpgsql"
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
     SET "statement_timeout" TO '60s'
@@ -15641,7 +15738,8 @@ BEGIN
         visible_rows.created_at,
         visible_rows.modified_at,
         visible_rows.team_id,
-        visible_rows.model_id
+        visible_rows.model_id,
+        visible_rows.model_version
       FROM visible_rows
       JOIN matched_ids ON matched_ids.id = visible_rows.id
       ORDER BY visible_rows.id, visible_rows.version DESC, visible_rows.modified_at DESC
@@ -15657,6 +15755,7 @@ BEGIN
       counted_rows.modified_at,
       counted_rows.team_id,
       counted_rows.model_id,
+      counted_rows.model_version,
       counted_rows.total_count
     FROM counted_rows
     ORDER BY
@@ -18249,11 +18348,32 @@ ALTER FUNCTION "api"."pgroonga_search_lifecyclemodels_v1"("query_text" "text", "
 
 CREATE OR REPLACE FUNCTION "api"."pgroonga_search_processes_latest"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "order_by" "jsonb" DEFAULT '{}'::"jsonb", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "type_of_data_set_filter" "text" DEFAULT 'all'::"text") RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "model_id" "uuid", "total_count" bigint)
     LANGUAGE "plpgsql"
-    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
+    SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
     SET "statement_timeout" TO '60s'
     AS $$
 begin
-  return query select * from api.search_processes_latest(query_text, filter_condition, order_by, page_size, page_current, data_source, this_user_id, team_id_filter, state_code_filter, type_of_data_set_filter);
+  return query
+  select
+    result.rank,
+    result.id,
+    result.json,
+    result.version,
+    result.modified_at,
+    result.team_id,
+    result.model_id,
+    result.total_count
+  from api.search_processes_latest(
+    query_text,
+    filter_condition,
+    order_by,
+    page_size,
+    page_current,
+    data_source,
+    this_user_id,
+    team_id_filter,
+    state_code_filter,
+    type_of_data_set_filter
+  ) as result;
 end;
 $$;
 
@@ -20296,6 +20416,9 @@ CREATE TABLE IF NOT EXISTS "public"."processes" (
     "embedding_ft" "extensions"."vector"(1024),
     "extracted_md" "text",
     "search_text" "text"[],
+    "model_version" character(9),
+    CONSTRAINT "processes_model_version_format_check" CHECK ((("model_version" IS NULL) OR (("model_version")::"text" ~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$'::"text"))),
+    CONSTRAINT "processes_model_version_requires_model_id_check" CHECK ((("model_version" IS NULL) OR ("model_id" IS NOT NULL))),
     CONSTRAINT "processes_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
 );
 
@@ -20304,6 +20427,10 @@ ALTER TABLE "public"."processes" OWNER TO "postgres";
 
 
 COMMENT ON COLUMN "public"."processes"."search_text" IS 'Edge-owned multilingual lexical projection as nullable text[]. The empty scalar precursor was replaced without a heap rewrite; the later backfill writes the complete projection. Not a lexical search source until Database B.';
+
+
+
+COMMENT ON COLUMN "public"."processes"."model_version" IS 'Exact LifecycleModel version that owns or generated this Process. NULL preserves the legacy same-version fallback to processes.version.';
 
 
 
@@ -23214,12 +23341,21 @@ $$;
 ALTER FUNCTION "api"."search_lifecyclemodels_latest"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "query_terms" "text"[]) OWNER TO "api_internal_executor";
 
 
-CREATE OR REPLACE FUNCTION "api"."search_processes"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "type_of_data_set_filter" "text" DEFAULT 'all'::"text", "query_terms" "text"[] DEFAULT NULL::"text"[], "owner_draft_only" boolean DEFAULT false) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "model_id" "uuid", "total_count" bigint)
+CREATE OR REPLACE FUNCTION "api"."search_processes"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "page_size" integer DEFAULT 10, "page_current" integer DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "type_of_data_set_filter" "text" DEFAULT 'all'::"text", "query_terms" "text"[] DEFAULT NULL::"text"[], "owner_draft_only" boolean DEFAULT false) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "model_id" "uuid", "model_version" character, "total_count" bigint)
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
     SET "statement_timeout" TO '60s'
     AS $$
-  select *
+  select
+    result.rank,
+    result.id,
+    result.json,
+    result.version,
+    result.modified_at,
+    result.team_id,
+    result.model_id,
+    process.model_version,
+    result.total_count
   from private.search_processes_latest_v2_impl(
     query_text,
     filter_condition,
@@ -23232,44 +23368,68 @@ CREATE OR REPLACE FUNCTION "api"."search_processes"("query_text" "text", "filter
     type_of_data_set_filter,
     query_terms,
     owner_draft_only
-  );
+  ) as result
+  left join public.processes as process
+    on process.id = result.id
+   and process.version = result.version;
 $$;
 
 
 ALTER FUNCTION "api"."search_processes"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) OWNER TO "api_internal_executor";
 
 
-COMMENT ON FUNCTION "api"."search_processes"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) IS 'Canonical Release 1 Search RPC. Compatibility entrypoint api.search_processes_latest_v2(text,jsonb,jsonb,bigint,bigint,text,text,uuid,integer,text,text[],boolean) delegates to the same private implementation; lexical reads remain on extracted_md until Database B.';
+COMMENT ON FUNCTION "api"."search_processes"("query_text" "text", "filter_condition" "jsonb", "page_size" integer, "page_current" integer, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) IS 'Canonical Process lexical search RPC. Delegates to the reviewed private implementation and returns model_version from the selected Process revision.';
 
 
 
-CREATE OR REPLACE FUNCTION "api"."search_processes_latest"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "order_by" "jsonb" DEFAULT '{}'::"jsonb", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "type_of_data_set_filter" "text" DEFAULT 'all'::"text", "query_terms" "text"[] DEFAULT NULL::"text"[]) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "model_id" "uuid", "total_count" bigint)
+CREATE OR REPLACE FUNCTION "api"."search_processes_latest"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "order_by" "jsonb" DEFAULT '{}'::"jsonb", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "type_of_data_set_filter" "text" DEFAULT 'all'::"text", "query_terms" "text"[] DEFAULT NULL::"text"[]) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "model_id" "uuid", "model_version" character, "total_count" bigint)
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
     SET "statement_timeout" TO '60s'
     AS $$
-  select *
+  select
+    result.rank,
+    result.id,
+    result.json,
+    result.version,
+    result.modified_at,
+    result.team_id,
+    result.model_id,
+    process.model_version,
+    result.total_count
   from private.search_processes_latest_v2_impl(
     query_text, filter_condition, page_size, page_current, data_source,
     this_user_id, team_id_filter, state_code_filter, type_of_data_set_filter,
     query_terms, false
-  )
+  ) as result
+  left join public.processes as process
+    on process.id = result.id
+   and process.version = result.version
 $$;
 
 
 ALTER FUNCTION "api"."search_processes_latest"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[]) OWNER TO "api_internal_executor";
 
 
-COMMENT ON FUNCTION "api"."search_processes_latest"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[]) IS 'Compatibility Process Search RPC. Delegates to the canonical Process private implementation with owner_draft_only=false.';
+COMMENT ON FUNCTION "api"."search_processes_latest"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[]) IS 'Legacy compatibility Process search RPC. Delegates to the canonical private implementation and returns model_version from the selected Process revision.';
 
 
 
-CREATE OR REPLACE FUNCTION "api"."search_processes_latest_v2"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "order_by" "jsonb" DEFAULT '{}'::"jsonb", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "type_of_data_set_filter" "text" DEFAULT 'all'::"text", "query_terms" "text"[] DEFAULT NULL::"text"[], "owner_draft_only" boolean DEFAULT false) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "model_id" "uuid", "total_count" bigint)
+CREATE OR REPLACE FUNCTION "api"."search_processes_latest_v2"("query_text" "text", "filter_condition" "jsonb" DEFAULT '{}'::"jsonb", "order_by" "jsonb" DEFAULT '{}'::"jsonb", "page_size" bigint DEFAULT 10, "page_current" bigint DEFAULT 1, "data_source" "text" DEFAULT 'tg'::"text", "this_user_id" "text" DEFAULT ''::"text", "team_id_filter" "uuid" DEFAULT NULL::"uuid", "state_code_filter" integer DEFAULT NULL::integer, "type_of_data_set_filter" "text" DEFAULT 'all'::"text", "query_terms" "text"[] DEFAULT NULL::"text"[], "owner_draft_only" boolean DEFAULT false) RETURNS TABLE("rank" bigint, "id" "uuid", "json" "jsonb", "version" character, "modified_at" timestamp with time zone, "team_id" "uuid", "model_id" "uuid", "model_version" character, "total_count" bigint)
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'extensions', 'pg_temp'
     SET "statement_timeout" TO '60s'
     AS $$
-  select *
+  select
+    result.rank,
+    result.id,
+    result.json,
+    result.version,
+    result.modified_at,
+    result.team_id,
+    result.model_id,
+    process.model_version,
+    result.total_count
   from private.search_processes_latest_v2_impl(
     query_text,
     filter_condition,
@@ -23282,14 +23442,17 @@ CREATE OR REPLACE FUNCTION "api"."search_processes_latest_v2"("query_text" "text
     type_of_data_set_filter,
     query_terms,
     owner_draft_only
-  );
+  ) as result
+  left join public.processes as process
+    on process.id = result.id
+   and process.version = result.version;
 $$;
 
 
 ALTER FUNCTION "api"."search_processes_latest_v2"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) OWNER TO "api_internal_executor";
 
 
-COMMENT ON FUNCTION "api"."search_processes_latest_v2"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) IS 'Indexed extracted_md process search with latest-version visibility and an optional strict owner-draft scope for LCA analysis.';
+COMMENT ON FUNCTION "api"."search_processes_latest_v2"("query_text" "text", "filter_condition" "jsonb", "order_by" "jsonb", "page_size" bigint, "page_current" bigint, "data_source" "text", "this_user_id" "text", "team_id_filter" "uuid", "state_code_filter" integer, "type_of_data_set_filter" "text", "query_terms" "text"[], "owner_draft_only" boolean) IS 'Compatibility Process lexical search RPC with optional strict owner-draft scope. Returns model_version from the selected Process revision.';
 
 
 
@@ -39105,7 +39268,7 @@ begin
 
     -- The relational ownership columns define bundle membership. json_tg is
     -- frontend state and may be absent, stale, or malformed.
-    execute 'del' || 'ete from processes where model_id = $1 and version = $2'
+    execute 'del' || 'ete from processes where model_id = $1 and coalesce(model_version, version) = $2'
        using p_model_id, p_version;
 
     execute 'del' || 'ete from lifecyclemodels where id = $1 and version = $2'
@@ -48740,6 +48903,7 @@ declare
     v_highest_version text;
     v_parts integer[];
     v_allocated_version text;
+    v_model_version text;
     v_allocated_uri text;
     v_dataset jsonb;
     v_admin jsonb;
@@ -48913,6 +49077,25 @@ begin
         end if;
     end if;
 
+    v_model_version := case
+        when v_allocate_version then v_allocated_version
+        when v_mode = 'update' then v_expected_version
+        else nullif(
+            btrim(
+                coalesce(
+                    v_parent_json_ordered #>> '{lifeCycleModelDataSet,administrativeInformation,publicationAndOwnership,common:dataSetVersion}',
+                    ''
+                )
+            ),
+            ''
+        )
+    end;
+
+    if v_model_version is null
+       or v_model_version !~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$' then
+        raise exception 'INVALID_PLAN';
+    end if;
+
     for v_mutation in
         select value
           from jsonb_array_elements(v_process_mutations)
@@ -48926,8 +49109,8 @@ begin
                     raise exception 'INVALID_PLAN';
                 end if;
 
-                execute 'del' || 'ete from processes where id = $1 and version = $2 and model_id = $3'
-                   using v_child_id, v_child_version, v_model_id;
+                execute 'del' || 'ete from processes where id = $1 and version = $2 and model_id = $3 and coalesce(model_version, version) = $4'
+                   using v_child_id, v_child_version, v_model_id, v_model_version;
 
                 get diagnostics v_rows_affected = row_count;
                 if v_rows_affected = 0 then
@@ -48981,6 +49164,7 @@ begin
                         id,
                         json_ordered,
                         model_id,
+                        model_version,
                         user_id,
                         rule_verification
                     )
@@ -48988,6 +49172,7 @@ begin
                         v_child_id,
                         v_child_json_ordered::json,
                         v_model_id,
+                        v_model_version,
                         v_actor_user_id,
                         v_child_rule_verification
                     );
@@ -49011,10 +49196,12 @@ begin
                 update processes
                    set json_ordered = v_child_json_ordered::json,
                        model_id = v_model_id,
+                       model_version = v_model_version,
                        rule_verification = v_child_rule_verification
                  where id = v_child_id
                    and version = v_child_version
-                   and model_id = v_model_id;
+                   and model_id = v_model_id
+                   and coalesce(model_version, version) = v_model_version;
 
                 if not found then
                     raise exception 'PROCESS_NOT_FOUND';
@@ -69898,6 +70085,10 @@ CREATE INDEX "processes_model_id_version_idx" ON "public"."processes" USING "btr
 
 
 
+CREATE INDEX "processes_model_owner_version_idx" ON "public"."processes" USING "btree" ("model_id", COALESCE("model_version", "version")) WHERE ("model_id" IS NOT NULL);
+
+
+
 CREATE INDEX "processes_modified_at_idx" ON "public"."processes" USING "btree" ("modified_at");
 
 
@@ -70510,7 +70701,7 @@ CREATE OR REPLACE TRIGGER "process_derivative_rebuild_primary_delete_fence" BEFO
 
 
 
-CREATE OR REPLACE TRIGGER "process_derivative_rebuild_primary_update_fence" BEFORE UPDATE OF "id", "json", "created_at", "json_ordered", "user_id", "state_code", "version", "modified_at", "team_id", "review_id", "rule_verification", "reviews", "model_id" ON "public"."processes" FOR EACH ROW EXECUTE FUNCTION "util"."guard_dataset_derivative_rebuild_primary"();
+CREATE OR REPLACE TRIGGER "process_derivative_rebuild_primary_update_fence" BEFORE UPDATE OF "id", "json", "created_at", "json_ordered", "user_id", "state_code", "version", "modified_at", "team_id", "review_id", "rule_verification", "reviews", "model_id", "model_version" ON "public"."processes" FOR EACH ROW EXECUTE FUNCTION "util"."guard_dataset_derivative_rebuild_primary"();
 
 
 
@@ -70538,7 +70729,7 @@ CREATE OR REPLACE TRIGGER "processes_json_sync_trigger" BEFORE INSERT OR UPDATE 
 
 
 
-CREATE OR REPLACE TRIGGER "processes_set_modified_at_trigger" BEFORE UPDATE OF "json", "json_ordered", "user_id", "state_code", "version", "team_id", "review_id", "rule_verification", "reviews", "model_id" ON "public"."processes" FOR EACH ROW EXECUTE FUNCTION "private"."update_modified_at"();
+CREATE OR REPLACE TRIGGER "processes_set_modified_at_trigger" BEFORE UPDATE OF "json", "json_ordered", "user_id", "state_code", "version", "team_id", "review_id", "rule_verification", "reviews", "model_id", "model_version" ON "public"."processes" FOR EACH ROW EXECUTE FUNCTION "private"."update_modified_at"();
 
 
 
@@ -71870,15 +72061,15 @@ GRANT ALL ON FUNCTION "api"."cmd_dataset_assign_team"("p_table" "text", "p_id" "
 
 
 
-REVOKE ALL ON FUNCTION "api"."cmd_dataset_create"("p_table" "text", "p_id" "uuid", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "api"."cmd_dataset_create"("p_table" "text", "p_id" "uuid", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb") TO "api_internal_executor";
-GRANT ALL ON FUNCTION "api"."cmd_dataset_create"("p_table" "text", "p_id" "uuid", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb") TO "authenticated";
+REVOKE ALL ON FUNCTION "api"."cmd_dataset_create"("p_table" "text", "p_id" "uuid", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb", "p_model_version" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."cmd_dataset_create"("p_table" "text", "p_id" "uuid", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb", "p_model_version" "text") TO "api_internal_executor";
+GRANT ALL ON FUNCTION "api"."cmd_dataset_create"("p_table" "text", "p_id" "uuid", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb", "p_model_version" "text") TO "authenticated";
 
 
 
-REVOKE ALL ON FUNCTION "api"."cmd_dataset_create_version"("p_table" "text", "p_id" "uuid", "p_source_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "api"."cmd_dataset_create_version"("p_table" "text", "p_id" "uuid", "p_source_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb") TO "api_internal_executor";
-GRANT ALL ON FUNCTION "api"."cmd_dataset_create_version"("p_table" "text", "p_id" "uuid", "p_source_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb") TO "authenticated";
+REVOKE ALL ON FUNCTION "api"."cmd_dataset_create_version"("p_table" "text", "p_id" "uuid", "p_source_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb", "p_model_version" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."cmd_dataset_create_version"("p_table" "text", "p_id" "uuid", "p_source_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb", "p_model_version" "text") TO "api_internal_executor";
+GRANT ALL ON FUNCTION "api"."cmd_dataset_create_version"("p_table" "text", "p_id" "uuid", "p_source_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb", "p_model_version" "text") TO "authenticated";
 
 
 
@@ -71977,9 +72168,9 @@ GRANT ALL ON FUNCTION "api"."cmd_dataset_publish"("p_table" "text", "p_id" "uuid
 
 
 
-REVOKE ALL ON FUNCTION "api"."cmd_dataset_save_draft"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "api"."cmd_dataset_save_draft"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb") TO "api_internal_executor";
-GRANT ALL ON FUNCTION "api"."cmd_dataset_save_draft"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb") TO "authenticated";
+REVOKE ALL ON FUNCTION "api"."cmd_dataset_save_draft"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb", "p_model_version" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."cmd_dataset_save_draft"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb", "p_model_version" "text") TO "api_internal_executor";
+GRANT ALL ON FUNCTION "api"."cmd_dataset_save_draft"("p_table" "text", "p_id" "uuid", "p_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb", "p_model_version" "text") TO "authenticated";
 
 
 

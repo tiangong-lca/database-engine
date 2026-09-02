@@ -16,6 +16,9 @@ CREATE TABLE IF NOT EXISTS "public"."processes" (
     "embedding_ft" "extensions"."vector"(1024),
     "extracted_md" "text",
     "search_text" "text"[],
+    "model_version" character(9),
+    CONSTRAINT "processes_model_version_format_check" CHECK ((("model_version" IS NULL) OR (("model_version")::"text" ~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$'::"text"))),
+    CONSTRAINT "processes_model_version_requires_model_id_check" CHECK ((("model_version" IS NULL) OR ("model_id" IS NOT NULL))),
     CONSTRAINT "processes_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
 );
 
