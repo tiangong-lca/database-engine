@@ -262,7 +262,7 @@ begin
         )
       from public.processes as model_process
       where model_process.model_id = v_current.dataset_id
-        and model_process.version = v_current.dataset_version
+        and coalesce(model_process.model_version, model_process.version) = v_current.dataset_version
       on conflict do nothing;
     end if;
 

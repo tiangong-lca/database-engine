@@ -136,7 +136,7 @@ select is(
       'util'::regnamespace
     )
   ),
-  560::bigint,
+  562::bigint,
   'all application constraints plus the OAuth registry constraints remain present'
 );
 

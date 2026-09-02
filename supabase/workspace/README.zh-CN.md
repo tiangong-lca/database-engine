@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
-lastReviewedNote: "为 Issue #580 复核：已从隔离 migration 栈两次生成 exact-local 五 schema workspace 且 hash 一致；生成路径与稳定人工路径的所有权规则不变。"
+lastReviewedCommit: 71f12382c74c66bc56720746ee0c205f31b648f5
+lastReviewedNote: "为 Issue #589 复核：生成的 workspace 已包含可空 Process model_version 与精确版本 RPC 行为；生成路径与稳定人工路径的所有权规则不变。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

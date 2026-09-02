@@ -1,3 +1,10 @@
+begin;
+
+delete from private.api_capability_grants
+where routine_identity = 'api.cmd_dataset_create_version(text, uuid, text, jsonb, uuid, boolean, jsonb)';
+
+drop function api.cmd_dataset_create_version(text, uuid, text, jsonb, uuid, boolean, jsonb);
+
 CREATE OR REPLACE FUNCTION "api"."cmd_dataset_create_version"("p_table" "text", "p_id" "uuid", "p_source_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid" DEFAULT NULL::"uuid", "p_rule_verification" boolean DEFAULT NULL::boolean, "p_audit" "jsonb" DEFAULT '{}'::"jsonb", "p_model_version" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO 'api', 'private', 'public', 'util', 'extensions', 'pg_temp'
@@ -334,3 +341,25 @@ REVOKE ALL ON FUNCTION "api"."cmd_dataset_create_version"("p_table" "text", "p_i
 GRANT ALL ON FUNCTION "api"."cmd_dataset_create_version"("p_table" "text", "p_id" "uuid", "p_source_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb", "p_model_version" "text") TO "api_internal_executor";
 
 GRANT ALL ON FUNCTION "api"."cmd_dataset_create_version"("p_table" "text", "p_id" "uuid", "p_source_version" "text", "p_json_ordered" "jsonb", "p_model_id" "uuid", "p_rule_verification" boolean, "p_audit" "jsonb", "p_model_version" "text") TO "authenticated";
+
+insert into private.api_capability_grants (
+  routine_identity,
+  capability_id,
+  allow_anon,
+  allow_authenticated,
+  allow_service_role
+)
+values (
+  'api.cmd_dataset_create_version(text, uuid, text, jsonb, uuid, boolean, jsonb, text)',
+  'CLI-RPC-01',
+  false,
+  true,
+  false
+)
+on conflict (routine_identity) do update
+set capability_id = excluded.capability_id,
+    allow_anon = excluded.allow_anon,
+    allow_authenticated = excluded.allow_authenticated,
+    allow_service_role = excluded.allow_service_role;
+
+commit;
