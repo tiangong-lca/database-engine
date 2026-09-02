@@ -38,8 +38,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: d3a7f5a1ead4415c8f1a34ea841a6dbd57a58d58
-lastReviewedNote: "Reviewed for Issue #589: Process model ownership adds nullable exact model_version persistence and null legacy fallback without changing repository ownership, branch, RPC-authority, or generated-workspace boundaries."
+lastReviewedCommit: 927e9ea5b35eba7c5360e17aad5e813e7927f33a
+lastReviewedNote: "Reviewed for Issue #589: nullable exact Process model ownership and its API closure head update preserve repository ownership, branch, RPC-authority, and generated-workspace boundaries."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-09-02"
-lastReviewedCommit: "71f12382c74c66bc56720746ee0c205f31b648f5"
-lastReviewedNote: "Reviewed for Issue #589: routing and proof cover the additive nullable Process model_version contract, exact model-version ownership, legacy Process-version fallback, and generated workspace artifacts."
+lastReviewedCommit: "927e9ea5b35eba7c5360e17aad5e813e7927f33a"
+lastReviewedNote: "Reviewed for Issue #589: routing and proof cover the nullable Process model_version contract, exact ownership, legacy fallback, generated workspace, and API closure at migration head 20260902104500."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
