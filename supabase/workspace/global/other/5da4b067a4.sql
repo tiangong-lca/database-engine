@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."cmd_review_approve_issue304_legacy"("p_table" "text", "p_review_id" "uuid", "p_audit" "jsonb") IS 'Legacy approval compatibility path; Process model membership uses exact owner-version semantics.';

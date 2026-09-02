@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 5e32f783e342abf6690035d84fb3b1ee65d76ccc
-lastReviewedNote: "为 Issue #580 复核：Portal 基准保留 Search/Facets 性能门，Hybrid 在 20 秒有界正确性合同内只记录时延、不把时延作为发布门。"
+lastReviewedCommit: 71f12382c74c66bc56720746ee0c205f31b648f5
+lastReviewedNote: "为 Issue #589 复核：迁移与 workspace 生成命令保持不变，schema head 因 Process model-version 合同而推进。"
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

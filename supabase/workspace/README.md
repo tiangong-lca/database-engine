@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 5e32f783e342abf6690035d84fb3b1ee65d76ccc
-lastReviewedNote: "Reviewed for Issue #580: the exact-local five-schema workspace was regenerated twice from the isolated migrated stack with identical hashes; generated/stable ownership rules are unchanged."
+lastReviewedCommit: 71f12382c74c66bc56720746ee0c205f31b648f5
+lastReviewedNote: "Reviewed for Issue #589: generated workspace artifacts include nullable Process model_version and exact-version RPC behavior; generated/stable ownership rules are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

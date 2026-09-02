@@ -31,8 +31,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 5e32f783e342abf6690035d84fb3b1ee65d76ccc
-lastReviewedNote: "Updated for Issue #580: Portal Hybrid read and selected-row decoration share a bounded 20-second correctness budget without changing stored projection semantics or Search/LCIA bounds."
+lastReviewedCommit: 71f12382c74c66bc56720746ee0c205f31b648f5
+lastReviewedNote: "Updated for Issue #589: Process ownership now records an optional exact LifecycleModel version while preserving the historical same-version fallback for null legacy rows."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -46,7 +46,7 @@ This repo is organized around one checked-in Supabase project plus a generated s
 
 ## Schema Boundaries
 
-For LifecycleModel review and bundle operations, authoritative composition comes from ILCD `processInstance` references and exact-version `public.processes.model_id` ownership. `lifecyclemodels.json_tg` is persisted for frontend reconstruction only and must not define review closure, approval targets, publication admission, or deletion membership.
+For LifecycleModel review and bundle operations, authoritative composition comes from ILCD `processInstance` references and the Process ownership pair `public.processes.model_id` plus `coalesce(public.processes.model_version, public.processes.version)`. The nullable `model_version` is an additive correction to the original same-version bundle assumption: new writers persist the exact owning LifecycleModel version, while historical rows with `model_version is null` retain the legacy Process-version fallback. Readers must never substitute the latest LifecycleModel version. `lifecyclemodels.json_tg` is persisted for frontend reconstruction only and must not define review closure, approval targets, publication admission, or deletion membership.
 
 The application database uses five durable schemas with deliberately different
 responsibilities:

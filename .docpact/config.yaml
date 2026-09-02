@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-09-02"
-lastReviewedCommit: "5e32f783e342abf6690035d84fb3b1ee65d76ccc"
-lastReviewedNote: "Reviewed for Issue #580: migration, Portal public-contract, Hybrid-performance, SQL-test, generated-workspace, and proof routes cover the bounded 20-second correctness-first read-path change."
+lastReviewedCommit: "859c823"
+lastReviewedNote: "Reviewed for Issue #589: routing and proof cover the nullable Process model_version contract, exact ownership, legacy fallback, generated workspace, and API closure at migration head 20260902104500."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
