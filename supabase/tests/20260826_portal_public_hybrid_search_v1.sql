@@ -30,7 +30,7 @@ select extensions.ok(
     select routine.proowner = 'portal_public_executor'::regrole
       and routine.prosecdef
       and pg_catalog.pg_get_function_result(routine.oid) = 'jsonb'
-      and routine.proconfig @> array['search_path=""', 'statement_timeout=8s']::text[]
+      and routine.proconfig @> array['search_path=""', 'statement_timeout=20s']::text[]
       and routine.prosrc ~ 'portal_lcia_decorate_item_page_v1'
       and routine.proargnames = array[
         'p_kind', 'p_query_terms', 'p_query_embedding', 'p_filters', 'p_limit'
@@ -38,7 +38,7 @@ select extensions.ok(
     from pg_catalog.pg_proc as routine
     where routine.oid = 'api.portal_hybrid_search_v1(text,text[],text,jsonb,integer)'::regprocedure
   ),
-  'Portal Hybrid wrapper has its frozen owner, arguments, result, security, and 8-second config'
+  'Portal Hybrid wrapper has its frozen owner, arguments, result, security, and correctness-first 20-second config'
 );
 
 select extensions.ok(
@@ -46,7 +46,7 @@ select extensions.ok(
     select routine.proowner = 'api_internal_executor'::regrole
       and routine.prosecdef
       and routine.proconfig @> array[
-        'search_path=""', 'statement_timeout=8s',
+        'search_path=""', 'statement_timeout=20s',
         'plan_cache_mode=force_custom_plan', 'hnsw.iterative_scan=strict_order'
       ]::text[]
     from pg_catalog.pg_proc as routine

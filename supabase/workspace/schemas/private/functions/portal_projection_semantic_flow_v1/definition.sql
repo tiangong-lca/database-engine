@@ -1,7 +1,7 @@
 CREATE OR REPLACE FUNCTION "private"."portal_projection_semantic_flow_v1"("p_query_embedding" "extensions"."vector") RETURNS TABLE("id" "uuid", "version" "text", "semantic_distance" double precision)
     LANGUAGE "plpgsql" STABLE SECURITY DEFINER PARALLEL RESTRICTED
     SET "search_path" TO ''
-    SET "statement_timeout" TO '8s'
+    SET "statement_timeout" TO '20s'
     SET "plan_cache_mode" TO 'force_custom_plan'
     SET "hnsw.iterative_scan" TO 'relaxed_order'
     SET "hnsw.ef_search" TO '1000'
