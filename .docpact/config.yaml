@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-09-03"
-lastReviewedCommit: "0958524dd71774965c65da12b4fc7e9e0d936e79"
-lastReviewedNote: 'Reviewed for Database #606: the query-only v5 daily activity contract counts process version-days from creation and latest modification; timezone deduplication, existing timestamp indexes, administrator ACLs, canonical local generation and coordinated consumer rollout are preserved.'
+lastReviewedCommit: "6daed39ef26da7b3da6f2c7053ef835c8a5c75ad"
+lastReviewedNote: 'Reviewed for Database #603: existing schema, Portal, SQL-test, and generated-workspace routes fully cover the adaptive Flow migration and proof; ownership and routing are unchanged.'
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
