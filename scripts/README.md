@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-03
-lastReviewedCommit: fb63d6e5808c9915a665ef9953e321c77fed0b59
-lastReviewedNote: 'Reviewed for Database #604: process-only dashboard RPC v4 preserves administrator ACLs, returns all current-profile organizations and open-process geography, and retains canonical local schema generation and coordinated consumer release boundaries.'
+lastReviewedCommit: 0958524dd71774965c65da12b4fc7e9e0d936e79
+lastReviewedNote: 'Reviewed for Database #606: the query-only v5 daily activity contract counts process version-days from creation and latest modification; timezone deduplication, existing timestamp indexes, administrator ACLs, canonical local generation and coordinated consumer rollout are preserved.'
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

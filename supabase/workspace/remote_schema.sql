@@ -20939,19 +20939,34 @@ begin
       pg_catalog.timezone('Asia/Shanghai', pg_catalog.statement_timestamp())::date as end_date
   ),
   daily_counts as (
-    -- The processes primary key already enforces one row per dataset ID + version.
-    -- Date filtering uses created_at directly; status changes do not change creation history.
-    select pg_catalog.timezone('Asia/Shanghai', p.created_at)::date as day,
-      pg_catalog.count(*)::bigint as process_count
-    from public.processes p cross join date_bounds b
-    where p.created_at >= pg_catalog.timezone('Asia/Shanghai', b.start_date::timestamp)
-      and p.created_at < pg_catalog.timezone('Asia/Shanghai', (b.end_date + 1)::timestamp)
-    group by 1
+    -- Each branch uses its existing timestamp B-tree and aggregates before UNION ALL.
+    -- The (id, version) primary key makes each branch unique per version/day.
+    -- Excluding same-local-day modifications makes the branches disjoint without
+    -- sorting/hashing the entire version identity set. NULL creation dates are safe.
+    select day, pg_catalog.sum(process_count)::bigint as process_count
+    from (
+      select pg_catalog.timezone('Asia/Shanghai', p.created_at)::date as day,
+        pg_catalog.count(*)::bigint as process_count
+      from public.processes p cross join date_bounds b
+      where p.created_at >= pg_catalog.timezone('Asia/Shanghai', b.start_date::timestamp)
+        and p.created_at < pg_catalog.timezone('Asia/Shanghai', (b.end_date + 1)::timestamp)
+      group by 1
+      union all
+      select pg_catalog.timezone('Asia/Shanghai', p.modified_at)::date as day,
+        pg_catalog.count(*)::bigint as process_count
+      from public.processes p cross join date_bounds b
+      where p.modified_at >= pg_catalog.timezone('Asia/Shanghai', b.start_date::timestamp)
+        and p.modified_at < pg_catalog.timezone('Asia/Shanghai', (b.end_date + 1)::timestamp)
+        and pg_catalog.timezone('Asia/Shanghai', p.modified_at)::date
+          is distinct from pg_catalog.timezone('Asia/Shanghai', p.created_at)::date
+      group by 1
+    ) activity
+    group by day
   ),
   daily_payload as (
     select pg_catalog.jsonb_build_object(
-      'metric', 'dataset_version_created_count',
-      'deduplicationKey', pg_catalog.jsonb_build_array('datasetType', 'datasetId', 'version'),
+      'metric', 'dataset_version_activity_count',
+      'deduplicationKey', pg_catalog.jsonb_build_array('datasetType', 'datasetId', 'version', 'date'),
       'timezone', 'Asia/Shanghai', 'startDate', b.start_date, 'endDate', b.end_date,
       'days', pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
         'date', d.day::date, 'processCount', coalesce(c.process_count, 0)
@@ -21048,7 +21063,7 @@ begin
     from locations group by location_code
   )
   select pg_catalog.jsonb_build_object(
-    'schemaVersion', 'national_carbon_organization_contribution_v4',
+    'schemaVersion', 'national_carbon_organization_contribution_v5',
     'datasetScope', 'process', 'attributionMode', 'current_user_profile',
     'generatedAt', pg_catalog.statement_timestamp(),
     'dataAsOf', coalesce((select pg_catalog.max(modified_at) from facts), pg_catalog.statement_timestamp()),
@@ -21073,7 +21088,7 @@ begin
       'globalProcessCount', coalesce((select process_count from regions where location_code = 'GLO'), 0),
       'unassignedProcessCount', coalesce((select process_count from regions where location_code is null), 0)
     ),
-    'dailyCreation', (select payload from daily_payload)
+    'dailyActivity', (select payload from daily_payload)
   ) into v_result;
   return v_result;
 end;

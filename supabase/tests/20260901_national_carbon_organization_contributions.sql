@@ -296,7 +296,7 @@ insert into organization_contribution_result (snapshot)
 select api.qry_national_carbon_organization_contributions(10);
 reset role;
 
-select is(snapshot ->> 'schemaVersion', 'national_carbon_organization_contribution_v4', 'process-only v4 contract') from organization_contribution_result;
+select is(snapshot ->> 'schemaVersion', 'national_carbon_organization_contribution_v5', 'process-only activity v5 contract') from organization_contribution_result;
 select is(snapshot ->> 'datasetScope', 'process', 'scope is fixed to processes') from organization_contribution_result;
 select ok(not snapshot ?| array['scopes', 'defaultScope'], 'no model or combined scopes') from organization_contribution_result;
 select is(snapshot #>> '{summary,organizationCount}', '3', 'all registered normalized units count') from organization_contribution_result;
@@ -316,18 +316,18 @@ select is(snapshot #> '{regions,items}', '[{"locationCode":"CN","processCount":1
 select is(snapshot #>> '{regions,globalProcessCount}', '1', 'GLO is its own non-overlapping bucket') from organization_contribution_result;
 select is(snapshot #>> '{regions,unassignedProcessCount}', '1', 'missing geography is counted separately') from organization_contribution_result;
 select is((select sum((d->>'processCount')::bigint) from organization_contribution_result,
-  lateral jsonb_array_elements(snapshot #> '{dailyCreation,days}') d), 9::numeric,
-  'daily creation counts all process versions, regardless of state or unit; ignores models');
+  lateral jsonb_array_elements(snapshot #> '{dailyActivity,days}') d), 10::numeric,
+  'daily activity counts all process versions, regardless of state or unit; ignores models');
 select ok(not exists(select 1 from organization_contribution_result,
-  lateral jsonb_array_elements(snapshot #> '{dailyCreation,days}') d
+  lateral jsonb_array_elements(snapshot #> '{dailyActivity,days}') d
   where d ?| array['modelCount','allCount']), 'daily series contains no model or combined counts');
-select ok(snapshot #>> '{dailyCreation,metric}' = 'dataset_version_created_count'
-  and snapshot #> '{dailyCreation,deduplicationKey}' = '["datasetType","datasetId","version"]'::jsonb
-  and snapshot #>> '{dailyCreation,timezone}' = 'Asia/Shanghai', 'daily identity/timezone contract retained')
+select ok(snapshot #>> '{dailyActivity,metric}' = 'dataset_version_activity_count'
+  and snapshot #> '{dailyActivity,deduplicationKey}' = '["datasetType","datasetId","version","date"]'::jsonb
+  and snapshot #>> '{dailyActivity,timezone}' = 'Asia/Shanghai', 'daily identity/timezone contract retained')
 from organization_contribution_result;
-select ok(snapshot #>> '{dailyCreation,startDate}' =
+select ok(snapshot #>> '{dailyActivity,startDate}' =
   (date_trunc('week', timezone('Asia/Shanghai', statement_timestamp()))::date - 364)::text
-  and jsonb_array_length(snapshot #> '{dailyCreation,days}') between 365 and 371,
+  and jsonb_array_length(snapshot #> '{dailyActivity,days}') between 365 and 371,
   'continuous 53-week daily window') from organization_contribution_result;
 
 -- The limit applies only to chart output. More than ten units need no extra query.
@@ -362,7 +362,7 @@ select is(api.qry_national_carbon_organization_contributions(10) #>> '{regions,t
 delete from public.processes where id = '57410000-0000-4000-8000-000000000005' and version = '02.00.000';
 set local session_replication_role = origin;
 select is((select sum((d->>'processCount')::bigint) from jsonb_array_elements(
-  api.qry_national_carbon_organization_contributions(10) #> '{dailyCreation,days}') d),
-  8::numeric, 'deletion removes the version from daily history');
+  api.qry_national_carbon_organization_contributions(10) #> '{dailyActivity,days}') d),
+  9::numeric, 'deletion removes the version from daily history');
 select * from finish();
 rollback;
