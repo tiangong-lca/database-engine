@@ -1,7 +1,7 @@
 ---
-lastReviewedAt: 2026-09-02
-lastReviewedCommit: 44c5b07d34559c4f8b20aa6f403790a269a3f753
-lastReviewedNote: "Reviewed for Issue #580: the config-only Hybrid timeout forward migration changes no projection row, derivation body, index, writer, DTO, or ACL and has ordinary transactional retry semantics."
+lastReviewedAt: 2026-09-03
+lastReviewedCommit: 6daed39ef26da7b3da6f2c7053ef835c8a5c75ad
+lastReviewedNote: "Reviewed for Issue #603: the two standalone adaptive Flow facet indexes and guarded transactional semantic-function cutover have explicit unrecorded-index and uncertain-commit recovery boundaries."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -16,6 +16,7 @@ whenToUse:
   - when an Issue 533 Portal catalog-summary eligibility index stops before its guard or façade migration completes
   - when an Issue 539 Portal sitemap exact-version child rollout stops before its public façade migration completes
   - when the Issue 563 Process keyword expression GIN is invalid or its cutover is unrecorded
+  - when an Issue 603 adaptive Flow facet index is invalid or its semantic cutover is unrecorded
 whenToUpdate:
   - when the Portal projection migration sequence or recovery test changes
 checkPaths:
@@ -55,7 +56,11 @@ checkPaths:
   - supabase/migrations/20260830134000_portal_process_keyword_rank_helpers.sql
   - supabase/migrations/20260830134001_portal_process_keyword_rank_index.sql
   - supabase/migrations/20260830134002_portal_process_keyword_rank_cutover.sql
+  - supabase/migrations/20260903120000_portal_flow_filter_geography_index.sql
+  - supabase/migrations/20260903120001_portal_flow_filter_access_level_index.sql
+  - supabase/migrations/20260903120002_portal_flow_adaptive_semantic_v2.sql
   - supabase/tests/20260826_portal_candidate_first_search.sql
+  - supabase/tests/20260903_portal_flow_adaptive_semantic_v2.sql
   - supabase/tests/benchmarks/20260826_portal_candidate_first_explain.sql
 related:
   - ../../AGENTS.md
@@ -67,8 +72,9 @@ related:
 # Portal Projection Migration Recovery
 
 This runbook covers only the additive Issue 531 Portal projection rollout, the
-narrow Issue 533 catalog-summary eligibility index, and the Issue 539 sitemap
-exact-version child layered on top of the same synchronized facet projection.
+narrow Issue 533 catalog-summary eligibility index, the Issue 539 sitemap
+exact-version child, and the Issue 603 query-only adaptive Flow indexes/cutover
+layered on top of the same synchronized facet projection.
 It does not authorize production mutation, migration-history edits, or
 deletion of an applied migration. Use the repository's normal tracked-delivery
 and Supabase branch controls before any hosted action.
@@ -468,6 +474,49 @@ Then repeat the normal migration command. If the guard or façade migration is
 already recorded, do not drop or rename the index and do not edit migration
 history. Preserve the exact ledger/index/function evidence and repair through
 a separately reviewed forward migration.
+
+The Issue 603 adaptive Flow path has two standalone concurrent-index files and
+one transactional cutover. For either
+`portal_catalog_facet_flow_geography_v1_idx` or
+`portal_catalog_facet_flow_access_level_v1_idx`, cleanup is allowed only when:
+
+- that index's own `20260903120000` or `20260903120001` migration version is
+  absent from history;
+- `20260903120002` is absent, while the version-aware Portal migration through
+  `20260902150000` is recorded and its projection/facet assertions are healthy;
+- the same-name relation is INVALID, definition-drifted, or a canonical-valid
+  build whose COMMIT preceded its missing migration-history row; and
+- the exact index is still on `private.portal_catalog_facet_rows_v1`, not an
+  unrelated relation that happens to reuse the name.
+
+Run only the matching statement as a standalone database command, then repeat
+the normal migration command:
+
+```sql
+drop index concurrently if exists
+  private.portal_catalog_facet_flow_geography_v1_idx;
+
+drop index concurrently if exists
+  private.portal_catalog_facet_flow_access_level_v1_idx;
+```
+
+Execute only one statement for the unrecorded failed migration. A recorded
+sibling index is a valid intermediate state and must not be removed. Never drop
+an index when its own migration or the `20260903120002` cutover is recorded.
+
+The cutover proves the exact predecessor function SHA, both live index
+fingerprints, executor-role invariants, and immutable projection/facet
+contracts before replacing only
+`private.portal_projection_semantic_flow_v2(vector,jsonb)`. An ordinary failure
+rolls the function, comments, and temporary maintenance grants back together;
+the two already recorded indexes remain dormant and safe for an unchanged
+retry. A COMMIT followed by a missing `20260903120002` ledger row is not
+blind-idempotent because the predecessor SHA has changed. Preserve the ledger,
+live function SHA/config/ACL, both index definitions and validity flags, and the
+projection/facet assertion results, then use a separately reviewed forward
+reconciliation. Do not edit migration history, restore function bytes by hand,
+or rebuild the facet projection. This rollout changes no facet row, derivation,
+Trigger, writer, manifest, public signature, or vector index.
 
 The Portal sitemap rollout has a three-file transactional boundary. The expand
 file creates the exact-version child, composite primary/FK keys, ordered shard

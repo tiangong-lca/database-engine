@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-03
-lastReviewedCommit: 0958524dd71774965c65da12b4fc7e9e0d936e79
-lastReviewedNote: 'Reviewed for Database #606: the query-only v5 daily activity contract counts process version-days from creation and latest modification; timezone deduplication, existing timestamp indexes, administrator ACLs, canonical local generation and coordinated consumer rollout are preserved.'
+lastReviewedCommit: 6daed39ef26da7b3da6f2c7053ef835c8a5c75ad
+lastReviewedNote: '已为 Database #603 复核：现有本地 schema workspace 与类型生成器可以确定性生成自适应 Flow helper 和 facet 索引，无需修改脚本命令。'
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
