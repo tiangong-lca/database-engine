@@ -37,9 +37,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-02
-lastReviewedCommit: '592c669ef2083e709305fccc6a0ca9704621baf9'
-lastReviewedNote: 'Reviewed for Database #600: additive version-aware Portal/Next APIs retain immutable projections and legacy interfaces; bounded candidates, exact groups, ACLs and local proof are explicit.'
+lastReviewedAt: 2026-09-03
+lastReviewedCommit: fb63d6e5808c9915a665ef9953e321c77fed0b59
+lastReviewedNote: 'Reviewed for Database #604: process-only dashboard RPC v4 preserves administrator ACLs, returns all current-profile organizations and open-process geography, and retains canonical local schema generation and coordinated consumer release boundaries.'
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
