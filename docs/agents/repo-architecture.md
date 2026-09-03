@@ -31,8 +31,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-03
-lastReviewedCommit: fb63d6e5808c9915a665ef9953e321c77fed0b59
-lastReviewedNote: 'Reviewed for Database #604: process-only dashboard RPC v4 preserves administrator ACLs, returns all current-profile organizations and open-process geography, and retains canonical local schema generation and coordinated consumer release boundaries.'
+lastReviewedCommit: 0958524dd71774965c65da12b4fc7e9e0d936e79
+lastReviewedNote: 'Reviewed for Database #606: the query-only v5 daily activity contract counts process version-days from creation and latest modification; timezone deduplication, existing timestamp indexes, administrator ACLs, canonical local generation and coordinated consumer rollout are preserved.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -276,7 +276,7 @@ must never be used as an authorization, role, team, or RLS input.
 ## National Carbon Process Statistics
 
 `api.qry_national_carbon_organization_contributions(integer)` returns the
-administrator-only `national_carbon_organization_contribution_v4` snapshot.
+administrator-only `national_carbon_organization_contribution_v5` snapshot.
 Only `public.processes` contributes dataset counts; LifecycleModels are not read.
 
 - `rankings` contains up to `p_limit` units with published processes, ordered by
@@ -298,9 +298,18 @@ Only `public.processes` contributes dataset counts; LifecycleModels are not read
   Preserve unknown codes; separate `GLO` and blank/non-string/missing geography.
   These disjoint buckets reconcile to `totalProcessCount`, which can exceed the
   organization-attributed published KPI.
-- `dailyCreation` counts retained process `(id, version)` primary-key rows by
-  `created_at` in Asia/Shanghai, independent of status/unit. It retains the
-  53-week continuous zero-filled date series. Deletion removes a version's count.
+- `dailyActivity` uses `dataset_version_activity_count`: count retained process
+  versions on both their `created_at` and latest `modified_at` dates in
+  Asia/Shanghai, independent of status/unit. Deduplicate by dataset type, ID,
+  version and local date: same-day creation/modification counts once, different
+  days count once each. NULL timestamps contribute no date. Two independently
+  range-filtered, daily-aggregated scans reuse the timestamp B-trees; the
+  modification branch excludes its creation date before `UNION ALL` and summing.
+  The 53-week continuous zero-filled date series remains unchanged. Deletion
+  removes both dates; a later modification replaces the earlier modification
+  date. This is a current-row activity snapshot, not a full audit history.
+  The yearly total sums version-days, not unique versions or edit operations.
+  V5 deliberately replaces V4's `dailyCreation`; consumers must upgrade together.
 
 The RPC aggregates narrow keys/scalars in PostgreSQL, reads geography only after
 selecting winning open keys, and reuses existing latest-key, timestamp and active
