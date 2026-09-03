@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 967a52b8fa41b42e86c82b9881af2d7ca2e62af3
-lastReviewedNote: "为 Issue #589 复核：迁移与 workspace 生成命令保持不变，schema head 因 Process model-version 合同而推进。"
+lastReviewedCommit: '592c669ef2083e709305fccc6a0ca9704621baf9'
+lastReviewedNote: 'Reviewed for Database #600: additive version-aware Portal/Next APIs retain immutable projections and legacy interfaces; bounded candidates, exact groups, ACLs and local proof are explicit.'
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -46,6 +46,16 @@ related:
 本地迁移输出和审计 JSONL 文件应写入 `_artifacts/`，该目录已被 Git 忽略。
 
 ## 脚本列表
+
+### `benchmark_hybrid_versions.mjs`
+
+仅在明确命名的 Database #600 独立本地 Docker 数据库中，使用 rollback-only
+合成数据比较 V1/V2 的 20 次耗时、前 10/20 项精确身份重合、历史版本覆盖和
+V2 自然语义查询计划。没有远程 URL 或凭据参数；只输出计数、耗时和索引名，
+不输出查询原文或向量。运行前后只重置该独立测试库。结果不代表真实相关性或
+生产数据量发布证明。
+
+`node scripts/benchmark_hybrid_versions.mjs --help`
 
 ### `check_auth_email_templates.py`
 

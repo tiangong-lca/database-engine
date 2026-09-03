@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-02
-lastReviewedCommit: 967a52b8fa41b42e86c82b9881af2d7ca2e62af3
-lastReviewedNote: "Reviewed for Issue #589: generated workspace artifacts include nullable Process model_version and exact-version RPC behavior; generated/stable ownership rules are unchanged."
+lastReviewedCommit: '592c669ef2083e709305fccc6a0ca9704621baf9'
+lastReviewedNote: 'Reviewed for Database #600: additive version-aware Portal/Next APIs retain immutable projections and legacy interfaces; bounded candidates, exact groups, ACLs and local proof are explicit.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

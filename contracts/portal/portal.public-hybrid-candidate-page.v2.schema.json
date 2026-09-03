@@ -1,0 +1,404 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "portal.public-hybrid-candidate-page.v2.schema.json",
+  "title": "TianGong Portal public Hybrid candidate page v2",
+  "description": "Strict locator-free version-aware Hybrid page. Both branches retain up to 200 eligible exact versions. Datasets are ranked by their best matching version before pagination; every recalled version is retained in its bounded version group. This is not exhaustive corpus recall.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schemaVersion",
+    "kind",
+    "queryFingerprint",
+    "items",
+    "candidateCount",
+    "nextCursor",
+    "datasetCount",
+    "versionGroups"
+  ],
+  "properties": {
+    "schemaVersion": {
+      "const": "portal.public-hybrid-candidate-page.v2"
+    },
+    "kind": {
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/DatasetKind"
+    },
+    "queryFingerprint": {
+      "description": "Lowercase SHA-256 binding normalized kind/terms, embedding digest, filters, limit and the isolated portal-hybrid-rank-v2 namespace.",
+      "$ref": "./portal.common-types.v1.schema.json#/$defs/Sha256"
+    },
+    "items": {
+      "type": "array",
+      "maxItems": 20,
+      "uniqueItems": true,
+      "items": {
+        "$ref": "#/$defs/Candidate"
+      }
+    },
+    "candidateCount": {
+      "description": "Number of exact public versions in this bounded candidate union, at most 400; not a global result count.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 400
+    },
+    "nextCursor": {
+      "description": "Opaque keyset continuation for the same query, filters, embedding and page size. Null when this candidate union has no remaining page.",
+      "type": [
+        "string",
+        "null"
+      ],
+      "minLength": 1,
+      "maxLength": 4096,
+      "pattern": "^[A-Za-z0-9_-]+$"
+    },
+    "datasetCount": {
+      "description": "Distinct dataset IDs in the bounded candidate union. Page limits count these groups, not individual versions.",
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 400
+    },
+    "versionGroups": {
+      "description": "One group per representative item, in the same order. Matches are sorted by exact-version score, then version descending; the first key equals the representative key. No candidate version in a returned group is suppressed.",
+      "type": "array",
+      "maxItems": 20,
+      "items": {
+        "$ref": "#/$defs/VersionGroup"
+      }
+    }
+  },
+  "allOf": [
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "process"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "process"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    {
+      "if": {
+        "properties": {
+          "kind": {
+            "const": "flow"
+          }
+        },
+        "required": [
+          "kind"
+        ]
+      },
+      "then": {
+        "properties": {
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "key": {
+                  "type": "object",
+                  "properties": {
+                    "kind": {
+                      "const": "flow"
+                    }
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  ],
+  "$defs": {
+    "Candidate": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "accessLevel",
+        "capabilities",
+        "names",
+        "summary",
+        "geography",
+        "referenceYear",
+        "context",
+        "modifiedAt",
+        "match"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicDatasetKey"
+        },
+        "accessLevel": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/AccessLevel"
+        },
+        "capabilities": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicCapabilities"
+        },
+        "names": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "summary": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/LocalizedText"
+        },
+        "geography": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/Geography"
+        },
+        "referenceYear": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/NullableYear"
+        },
+        "context": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicCardContext"
+        },
+        "modifiedAt": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/DateTime"
+        },
+        "match": {
+          "$ref": "#/$defs/HybridMatch"
+        }
+      }
+    },
+    "HybridMatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "kind",
+        "algorithmVersion",
+        "score",
+        "reasonCodes",
+        "evidence"
+      ],
+      "properties": {
+        "kind": {
+          "const": "hybrid"
+        },
+        "algorithmVersion": {
+          "description": "Each recall branch is bounded to 200 eligible exact versions. Deterministic 0.5/0.5 RRF (k=60), normalized by 61, is fused only on id/version. Underfilled ANN remains underfilled; no fill-driven full-corpus exact scan. Ranked candidates may differ from v1 and do not imply globally exhaustive recall. Groups are ordered by their best exact-version score before pagination, never by the sum of version scores.",
+          "const": "portal-hybrid-rank-v2"
+        },
+        "score": {
+          "description": "Finite normalized ranking explanation, never a domain quantity.",
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1
+        },
+        "reasonCodes": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 2,
+          "uniqueItems": true,
+          "items": {
+            "type": "string",
+            "enum": [
+              "lexical_public_projection",
+              "semantic_public_projection"
+            ]
+          }
+        },
+        "evidence": {
+          "$ref": "#/$defs/HybridEvidence"
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "evidence": {
+                "type": "object",
+                "properties": {
+                  "lexicalRank": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reasonCodes": {
+                "type": "array",
+                "contains": {
+                  "const": "lexical_public_projection"
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "reasonCodes": {
+                "not": {
+                  "type": "array",
+                  "contains": {
+                    "const": "lexical_public_projection"
+                  }
+                }
+              }
+            }
+          }
+        },
+        {
+          "if": {
+            "properties": {
+              "evidence": {
+                "type": "object",
+                "properties": {
+                  "semanticRank": {
+                    "type": "integer"
+                  }
+                }
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "reasonCodes": {
+                "type": "array",
+                "contains": {
+                  "const": "semantic_public_projection"
+                }
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "reasonCodes": {
+                "not": {
+                  "type": "array",
+                  "contains": {
+                    "const": "semantic_public_projection"
+                  }
+                }
+              }
+            }
+          }
+        }
+      ]
+    },
+    "HybridEvidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "lexicalRank",
+        "semanticRank",
+        "semanticDistance"
+      ],
+      "properties": {
+        "lexicalRank": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 200
+        },
+        "semanticRank": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 1,
+          "maximum": 200
+        },
+        "semanticDistance": {
+          "oneOf": [
+            {
+              "$ref": "#/$defs/NonNegativeCanonicalDecimal"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "semanticRank": {
+                "type": "integer"
+              }
+            }
+          },
+          "then": {
+            "properties": {
+              "semanticDistance": {
+                "$ref": "#/$defs/NonNegativeCanonicalDecimal"
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "semanticDistance": {
+                "type": "null"
+              }
+            }
+          }
+        }
+      ]
+    },
+    "NonNegativeCanonicalDecimal": {
+      "type": "string",
+      "pattern": "^(?=(?:[^0-9]*[0-9]){1,38}[^0-9]*$)(?:0|(?:[1-9]\\d*(?:\\.\\d*[1-9])?|0\\.\\d*[1-9]))$"
+    },
+    "VersionGroup": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "matches"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicDatasetKey"
+        },
+        "matches": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 400,
+          "uniqueItems": true,
+          "items": {
+            "$ref": "#/$defs/VersionMatch"
+          }
+        }
+      }
+    },
+    "VersionMatch": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "key",
+        "match"
+      ],
+      "properties": {
+        "key": {
+          "$ref": "./portal.common-types.v1.schema.json#/$defs/PublicDatasetKey"
+        },
+        "match": {
+          "$ref": "#/$defs/HybridMatch"
+        }
+      }
+    }
+  }
+}

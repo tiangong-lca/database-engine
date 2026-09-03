@@ -284,8 +284,8 @@ select extensions.is(
     from private.api_capability_grants as manifest
     where manifest.capability_id = 'PORTAL-CATALOG-01'
   ),
-  10::bigint,
-  'PORTAL-CATALOG-01 contains exactly the ten frozen Portal catalogue routines'
+  13::bigint,
+  'PORTAL-CATALOG-01 contains ten frozen v1 routines and three additive version-aware v2 routines'
 );
 
 select extensions.is(
