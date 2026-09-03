@@ -31,8 +31,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-03
-lastReviewedCommit: 0958524dd71774965c65da12b4fc7e9e0d936e79
-lastReviewedNote: 'Reviewed for Database #606: the query-only v5 daily activity contract counts process version-days from creation and latest modification; timezone deduplication, existing timestamp indexes, administrator ACLs, canonical local generation and coordinated consumer rollout are preserved.'
+lastReviewedCommit: 6daed39ef26da7b3da6f2c7053ef835c8a5c75ad
+lastReviewedNote: 'Reviewed for Database #603: version-aware Portal Flow semantic retrieval uses an exact small-filter branch backed by narrow facet indexes while preserving the established HNSW branch and settings for broad searches.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -375,6 +375,9 @@ semantic match count; private semantic helpers apply one 10x scan bound with a
 200-row floor. Empty residual JSON filters must be foldable under custom plans
 so they do not suppress HNSW. Filtered pgvector 0.8 HNSW paths use strict-order
 iterative scans because filtering happens after approximate index traversal.
+The version-aware Portal Flow semantic helper is the narrow exception described
+below: small indexed geography/access-level populations are evaluated exactly
+instead of making HNSW traverse and then discard a large cold working set.
 
 The global process/flow HNSW indexes remain necessary for owner/team and broad
 visibility paths. A smaller process partial HNSW index covers the measured
@@ -577,12 +580,30 @@ versions. Latest aliases and sitemaps retain their separate latest-only role.
 
 `api.portal_hybrid_search_v2` filters each branch before a 200-exact-version
 candidate bound and fuses only on `id/version` with the retained 0.5/0.5,
-`k=60` RRF normalized by 61. Source HNSW uses strict iterative order,
-`ef_search=200`, `max_scan_tuples=20000` and `scan_mem_multiplier=2`.
-The exact-key projection/filter existence probe retains an `OFFSET 0`
-planner boundary so it cannot flatten into a projection-first full join that
-displaces the bounded source index path. Underfill remains underfill; no
-pool-filling exact helper is invoked and no new vector index is added.
+`k=60` RRF normalized by 61. Process semantic retrieval and broad or unindexed
+Flow retrieval retain strict-order source HNSW with `ef_search=200`,
+`max_scan_tuples=20000` and `scan_mem_multiplier=2`.
+
+Flow V2 requests containing a normalized geography and/or access-level filter
+first probe at most 2,001 exact-version keys from the synchronized facet
+projection. Two partial covering B-tree indexes hold only the geography or
+access-level value plus `(id, version)` for public Flow rows under facet contract
+v1; neither index stores an embedding. A population of at most 2,000 keys is
+materialized and evaluated with exact cosine distance, while zero matches return
+directly. The exact path rejoins the source and card projection, reapplies the
+complete canonical filter, preserves exact versions, and orders distance ties by
+ID/version. A 2,001st key, an empty filter, or a filter without either indexed
+dimension dispatches to the predecessor HNSW body unchanged. The cutoff is a
+conservative measured local crossover, not a global planner estimate or a new
+public contract.
+
+The HNSW branch's exact-key projection/filter existence probe retains an
+`OFFSET 0` planner boundary so it cannot flatten into a projection-first full
+join that displaces the bounded source index path. Underfill on that approximate
+branch remains underfill; no pool-filling helper or duplicate vector index is
+added. The adaptive dispatch changes neither facet derivation/writes nor public
+function signatures, ACLs, timeouts, thresholds, candidate caps, grouping, or
+cursor semantics.
 
 Grouping happens before pagination. `items` contains at most 20 best-version
 dataset representatives; `versionGroups` preserves every recalled exact

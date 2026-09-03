@@ -1,0 +1,1 @@
+COMMENT ON FUNCTION "private"."portal_projection_semantic_flow_v2"("p_query_embedding" "extensions"."vector", "p_filters" "jsonb") IS 'Returns at most 200 exact Flow versions: exact distance over at most 2000 indexed geography/access candidates, otherwise strict iterative HNSW.';

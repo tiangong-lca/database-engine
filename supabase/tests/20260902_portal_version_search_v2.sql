@@ -297,17 +297,28 @@ grant execute on function pg_temp.portal_versions_vector(real,real) to api_inter
 grant execute on function pg_temp.portal_versions_vector_text(real,real) to api_internal_executor;
 
 select extensions.ok(
-  not exists(
-    select 1 from pg_proc p
-    where p.oid in (
-      'private.portal_projection_semantic_process_v2(vector,jsonb)'::regprocedure,
-      'private.portal_projection_semantic_flow_v2(vector,jsonb)'::regprocedure
-    ) and (
-      p.prosrc ~ 'exact_v1|limit 5000|newer\.|latest'
-      or not (p.proconfig @> array['hnsw.iterative_scan=strict_order','hnsw.ef_search=200',
-        'hnsw.max_scan_tuples=20000','hnsw.scan_mem_multiplier=2','statement_timeout=20s','row_security=on'])
-    )
-  ),'bounded version-aware HNSW has no latest suppression, 5000 pool, or exact-underfill branch');
+  (select p.prosrc !~ 'exact_v1|limit 5000|newer\.|latest'
+      and p.prosrc !~ 'v_exact_cutover|portal_catalog_facet_rows_v1'
+      and p.proconfig @> array['hnsw.iterative_scan=strict_order','hnsw.ef_search=200',
+        'hnsw.max_scan_tuples=20000','hnsw.scan_mem_multiplier=2','statement_timeout=20s','row_security=on']
+    from pg_proc p
+    where p.oid='private.portal_projection_semantic_process_v2(vector,jsonb)'::regprocedure),
+  'Process keeps its bounded version-aware HNSW path without latest suppression or exact fallback');
+
+select extensions.ok(
+  (select p.prosrc !~ 'exact_v1|limit 5000|newer\.|latest'
+      and p.prosrc ~ 'v_exact_cutover constant integer := 2000'
+      and p.prosrc ~ 'v_indexed_probe'
+      and p.prosrc ~ 'portal_catalog_facet_rows_v1'
+      and p.prosrc ~ 'facet_geography'
+      and p.prosrc ~ 'facet_access_level'
+      and p.prosrc ~ 'limit v_exact_cutover \+ 1'
+      and p.prosrc ~ 'offset 0'
+      and p.proconfig @> array['hnsw.iterative_scan=strict_order','hnsw.ef_search=200',
+        'hnsw.max_scan_tuples=20000','hnsw.scan_mem_multiplier=2','statement_timeout=20s','row_security=on']
+    from pg_proc p
+    where p.oid='private.portal_projection_semantic_flow_v2(vector,jsonb)'::regprocedure),
+  'Flow routes at most 2000 indexed exact versions and retains the predecessor HNSW fallback');
 
 select extensions.ok(
   not exists(
@@ -334,6 +345,33 @@ select extensions.is(
     k,pg_temp.portal_versions_vector(1,0),jsonb_build_object('geography','zz' || n))),
   n::bigint,k || ' semantic ' || n || ' candidates does not trigger pool-filling'
 ) from unnest(array['process','flow']) as k cross join unnest(array[0,6,199,200]) as n;
+
+select extensions.is(
+  (select count(*) from private.portal_projection_semantic_flow_v2(
+    pg_temp.portal_versions_vector(1,0),
+    '{"geography":"zz199","accessLevel":"open","classification":"portal-hybrid"}'::jsonb)),
+  199::bigint,
+  'Flow exact route uses indexed geography/access candidates and reapplies the complete filter'
+);
+
+select extensions.is(
+  (select pg_catalog.array_agg(candidate.version order by candidate.version)
+   from private.portal_projection_semantic_flow_v2(
+     pg_temp.portal_versions_vector(0.7,0.7),
+     '{"geography":"cn","accessLevel":"open"}'::jsonb
+   ) as candidate
+   where candidate.id='60000000-0000-4000-8000-000000000002'::uuid),
+  array['01.00.000','01.00.001']::text[],
+  'Flow exact route returns both qualifying exact versions of one dataset identity'
+);
+
+select extensions.is(
+  (select count(*) from private.portal_projection_semantic_flow_v2(
+    pg_temp.portal_versions_vector(1,0),
+    '{"accessLevel":"open"}'::jsonb)),
+  200::bigint,
+  'access-level-only exact route retains the 200-candidate branch bound'
+);
 
 select extensions.is(
   (select count(*) from private.portal_projection_hybrid_candidates_v2(
