@@ -1,7 +1,13 @@
-CREATE OR REPLACE FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer DEFAULT 10) RETURNS "jsonb"
-    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
-    SET "search_path" TO ''
-    AS $$
+-- #604: process-only dashboard. p_limit limits the chart, never the organization table.
+-- Existing primary (id, version), published/latest-version, created_at, and active-root
+-- review indexes serve the narrow scans. Do not index or aggregate whole json_ordered values.
+create or replace function api.qry_national_carbon_organization_contributions(
+  p_limit integer default 10
+)
+returns jsonb
+language plpgsql stable security definer
+set search_path = ''
+as $function$
 declare
   v_actor uuid := auth.uid();
   v_result jsonb;
@@ -24,34 +30,19 @@ begin
       pg_catalog.timezone('Asia/Shanghai', pg_catalog.statement_timestamp())::date as end_date
   ),
   daily_counts as (
-    -- Each branch uses its existing timestamp B-tree and aggregates before UNION ALL.
-    -- The (id, version) primary key makes each branch unique per version/day.
-    -- Excluding same-local-day modifications makes the branches disjoint without
-    -- sorting/hashing the entire version identity set. NULL creation dates are safe.
-    select day, pg_catalog.sum(process_count)::bigint as process_count
-    from (
-      select pg_catalog.timezone('Asia/Shanghai', p.created_at)::date as day,
-        pg_catalog.count(*)::bigint as process_count
-      from public.processes p cross join date_bounds b
-      where p.created_at >= pg_catalog.timezone('Asia/Shanghai', b.start_date::timestamp)
-        and p.created_at < pg_catalog.timezone('Asia/Shanghai', (b.end_date + 1)::timestamp)
-      group by 1
-      union all
-      select pg_catalog.timezone('Asia/Shanghai', p.modified_at)::date as day,
-        pg_catalog.count(*)::bigint as process_count
-      from public.processes p cross join date_bounds b
-      where p.modified_at >= pg_catalog.timezone('Asia/Shanghai', b.start_date::timestamp)
-        and p.modified_at < pg_catalog.timezone('Asia/Shanghai', (b.end_date + 1)::timestamp)
-        and pg_catalog.timezone('Asia/Shanghai', p.modified_at)::date
-          is distinct from pg_catalog.timezone('Asia/Shanghai', p.created_at)::date
-      group by 1
-    ) activity
-    group by day
+    -- The processes primary key already enforces one row per dataset ID + version.
+    -- Date filtering uses created_at directly; status changes do not change creation history.
+    select pg_catalog.timezone('Asia/Shanghai', p.created_at)::date as day,
+      pg_catalog.count(*)::bigint as process_count
+    from public.processes p cross join date_bounds b
+    where p.created_at >= pg_catalog.timezone('Asia/Shanghai', b.start_date::timestamp)
+      and p.created_at < pg_catalog.timezone('Asia/Shanghai', (b.end_date + 1)::timestamp)
+    group by 1
   ),
   daily_payload as (
     select pg_catalog.jsonb_build_object(
-      'metric', 'dataset_version_activity_count',
-      'deduplicationKey', pg_catalog.jsonb_build_array('datasetType', 'datasetId', 'version', 'date'),
+      'metric', 'dataset_version_created_count',
+      'deduplicationKey', pg_catalog.jsonb_build_array('datasetType', 'datasetId', 'version'),
       'timezone', 'Asia/Shanghai', 'startDate', b.start_date, 'endDate', b.end_date,
       'days', pg_catalog.jsonb_agg(pg_catalog.jsonb_build_object(
         'date', d.day::date, 'processCount', coalesce(c.process_count, 0)
@@ -148,7 +139,7 @@ begin
     from locations group by location_code
   )
   select pg_catalog.jsonb_build_object(
-    'schemaVersion', 'national_carbon_organization_contribution_v5',
+    'schemaVersion', 'national_carbon_organization_contribution_v4',
     'datasetScope', 'process', 'attributionMode', 'current_user_profile',
     'generatedAt', pg_catalog.statement_timestamp(),
     'dataAsOf', coalesce((select pg_catalog.max(modified_at) from facts), pg_catalog.statement_timestamp()),
@@ -173,14 +164,12 @@ begin
       'globalProcessCount', coalesce((select process_count from regions where location_code = 'GLO'), 0),
       'unassignedProcessCount', coalesce((select process_count from regions where location_code is null), 0)
     ),
-    'dailyActivity', (select payload from daily_payload)
+    'dailyCreation', (select payload from daily_payload)
   ) into v_result;
   return v_result;
 end;
-$$;
+$function$;
 
-ALTER FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer) OWNER TO "postgres";
-
-REVOKE ALL ON FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer) FROM PUBLIC;
-
-GRANT ALL ON FUNCTION "api"."qry_national_carbon_organization_contributions"("p_limit" integer) TO "authenticated";
+alter function api.qry_national_carbon_organization_contributions(integer) owner to postgres;
+revoke all on function api.qry_national_carbon_organization_contributions(integer) from public, anon, service_role;
+grant execute on function api.qry_national_carbon_organization_contributions(integer) to authenticated;

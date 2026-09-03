@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-02
-lastReviewedCommit: '592c669ef2083e709305fccc6a0ca9704621baf9'
-lastReviewedNote: 'Reviewed for Database #600: additive version-aware Portal/Next APIs retain immutable projections and legacy interfaces; bounded candidates, exact groups, ACLs and local proof are explicit.'
+lastReviewedAt: 2026-09-03
+lastReviewedCommit: 0958524dd71774965c65da12b4fc7e9e0d936e79
+lastReviewedNote: 'Reviewed for Database #606: the query-only v5 daily activity contract counts process version-days from creation and latest modification; timezone deduplication, existing timestamp indexes, administrator ACLs, canonical local generation and coordinated consumer rollout are preserved.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

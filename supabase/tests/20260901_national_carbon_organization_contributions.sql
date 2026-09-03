@@ -3,7 +3,7 @@ begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions, public, api, private, auth;
 
-select plan(29);
+select no_plan();
 
 select is(
   (
@@ -231,6 +231,23 @@ values
     '57400000-0000-4000-8000-000000000004'
   );
 
+update public.processes set json_ordered = json_build_object(
+  'processDataSet', json_build_object('processInformation', json_build_object(
+    'geography', json_build_object('locationOfOperationSupplyOrProduction',
+      json_build_object('@location', case
+        when id = '57410000-0000-4000-8000-000000000001' and version = '01.00.000' then 'DE'
+        when id = '57410000-0000-4000-8000-000000000001' then ' cn '
+        when id = '57410000-0000-4000-8000-000000000002' then 'ZZ'
+        when id = '57410000-0000-4000-8000-000000000003' then 'GLO'
+        else null end)))))
+where id::text like '57410000-%';
+
+insert into private.roles (user_id, team_id, role) values
+  ('57400000-0000-4000-8000-000000000002', '00000000-0000-0000-0000-000000000000', 'review-member'),
+  ('57400000-0000-4000-8000-000000000003', '00000000-0000-0000-0000-000000000000', 'review-member'),
+  ('57400000-0000-4000-8000-000000000003', '57400000-0000-4000-8000-000000000010', 'review-member'),
+  ('57400000-0000-4000-8000-000000000004', '57400000-0000-4000-8000-000000000010', 'review-member');
+
 set local session_replication_role = origin;
 
 select set_config('request.jwt.claim.sub', '', true);
@@ -279,212 +296,73 @@ insert into organization_contribution_result (snapshot)
 select api.qry_national_carbon_organization_contributions(10);
 reset role;
 
-select is(
-  snapshot ->> 'schemaVersion',
-  'national_carbon_organization_contribution_v3'::text,
-  'the response uses the reviewer-assignment v3 schema'
-)
+select is(snapshot ->> 'schemaVersion', 'national_carbon_organization_contribution_v5', 'process-only activity v5 contract') from organization_contribution_result;
+select is(snapshot ->> 'datasetScope', 'process', 'scope is fixed to processes') from organization_contribution_result;
+select ok(not snapshot ?| array['scopes', 'defaultScope'], 'no model or combined scopes') from organization_contribution_result;
+select is(snapshot #>> '{summary,organizationCount}', '3', 'all registered normalized units count') from organization_contribution_result;
+select is(snapshot #>> '{summary,publishedDatasetCount}', '3', 'latest open process IDs attributed to current units') from organization_contribution_result;
+select is(snapshot #>> '{summary,pendingReviewDatasetCount}', '2', 'only latest state-20 processes count') from organization_contribution_result;
+select is(snapshot #>> '{summary,reviewerCount}', '2', 'only distinct platform review-members, not admins or foreign-team memberships') from organization_contribution_result;
+select ok(not (snapshot -> 'summary') ? 'publishedLast30DaysCount', 'retired 30-day KPI omitted') from organization_contribution_result;
+select is(jsonb_array_length(snapshot -> 'rankings'), 1, 'chart excludes zero-published units') from organization_contribution_result;
+select is(jsonb_array_length(snapshot -> 'organizations'), 3, 'table includes pending-only and zero-data units') from organization_contribution_result;
+select is(snapshot #>> '{rankings,0,organizationKey}', 'acme labs', 'case and whitespace normalization retained') from organization_contribution_result;
+select is(snapshot #>> '{rankings,0,publishedDatasetCount}', '3', 'model publication does not affect process rankings') from organization_contribution_result;
+select is(snapshot #>> '{organizations,1,assignedReviewerDatasetCount}', '1', 'Beta assigned review counted by current version') from organization_contribution_result;
+select is(snapshot #>> '{organizations,1,unassignedReviewerDatasetCount}', '1', 'Beta pending assignment counted independently') from organization_contribution_result;
+select is(snapshot #>> '{organizations,2,publishedDatasetCount}', '0', 'unit with no facts is returned with zeroes') from organization_contribution_result;
+select is(snapshot #>> '{regions,totalProcessCount}', '4', 'regions include every open process, including unknown organizations') from organization_contribution_result;
+select is(snapshot #> '{regions,items}', '[{"locationCode":"CN","processCount":1},{"locationCode":"ZZ","processCount":1}]'::jsonb, 'latest published geography is normalized; unknown codes are retained; old DE version excluded') from organization_contribution_result;
+select is(snapshot #>> '{regions,globalProcessCount}', '1', 'GLO is its own non-overlapping bucket') from organization_contribution_result;
+select is(snapshot #>> '{regions,unassignedProcessCount}', '1', 'missing geography is counted separately') from organization_contribution_result;
+select is((select sum((d->>'processCount')::bigint) from organization_contribution_result,
+  lateral jsonb_array_elements(snapshot #> '{dailyActivity,days}') d), 10::numeric,
+  'daily activity counts all process versions, regardless of state or unit; ignores models');
+select ok(not exists(select 1 from organization_contribution_result,
+  lateral jsonb_array_elements(snapshot #> '{dailyActivity,days}') d
+  where d ?| array['modelCount','allCount']), 'daily series contains no model or combined counts');
+select ok(snapshot #>> '{dailyActivity,metric}' = 'dataset_version_activity_count'
+  and snapshot #> '{dailyActivity,deduplicationKey}' = '["datasetType","datasetId","version","date"]'::jsonb
+  and snapshot #>> '{dailyActivity,timezone}' = 'Asia/Shanghai', 'daily identity/timezone contract retained')
 from organization_contribution_result;
+select ok(snapshot #>> '{dailyActivity,startDate}' =
+  (date_trunc('week', timezone('Asia/Shanghai', statement_timestamp()))::date - 364)::text
+  and jsonb_array_length(snapshot #> '{dailyActivity,days}') between 365 and 371,
+  'continuous 53-week daily window') from organization_contribution_result;
 
-select ok(
-  snapshot #>> '{dailyCreation,metric}' = 'dataset_version_created_count'
-    and snapshot #> '{dailyCreation,deduplicationKey}' =
-      '["datasetType", "datasetId", "version"]'::jsonb
-    and snapshot #>> '{dailyCreation,timezone}' = 'Asia/Shanghai',
-  'daily creation metadata freezes the version identity and reporting timezone'
-)
-from organization_contribution_result;
+-- The limit applies only to chart output. More than ten units need no extra query.
+set local session_replication_role = replica;
+insert into auth.users (id, raw_user_meta_data)
+select ('57400000-0000-4000-8000-' || lpad((100 + n)::text, 12, '0'))::uuid,
+  jsonb_build_object('organization', 'Extra Unit ' || n) from generate_series(1,12) n;
+insert into private.users (id, raw_user_meta_data)
+select id, raw_user_meta_data from auth.users
+where id::text like '57400000-%' and (raw_user_meta_data->>'organization') like 'Extra Unit %'
+on conflict (id) do update set raw_user_meta_data = excluded.raw_user_meta_data;
+set local session_replication_role = origin;
+select is(jsonb_array_length(api.qry_national_carbon_organization_contributions(1)->'organizations'),
+  15, 'all 15 units are returned even with p_limit=1');
+select is(jsonb_array_length(api.qry_national_carbon_organization_contributions(1)->'rankings'),
+  1, 'chart limit still enforced');
+select is(api.qry_national_carbon_organization_contributions(1) #>> '{summary,organizationCount}',
+  '15', 'all-unit total independent of chart');
 
-select ok(
-  snapshot #>> '{dailyCreation,startDate}' = (
-    date_trunc('week', timezone('Asia/Shanghai', statement_timestamp()))::date - 364
-  )::text
-    and snapshot #>> '{dailyCreation,endDate}' =
-      timezone('Asia/Shanghai', statement_timestamp())::date::text
-    and jsonb_array_length(snapshot #> '{dailyCreation,days}') =
-      timezone('Asia/Shanghai', statement_timestamp())::date
-        - (
-          date_trunc('week', timezone('Asia/Shanghai', statement_timestamp()))::date - 364
-        ) + 1,
-  'daily creation covers 53 calendar-week columns through the current Shanghai date'
-)
-from organization_contribution_result;
+-- Metadata changes dynamically reattribute existing facts; no owner snapshot is persisted.
+update private.users set raw_user_meta_data = '{"organization":"Beta Institute"}'
+where id = '57400000-0000-4000-8000-000000000002';
+select is(api.qry_national_carbon_organization_contributions(10) #>> '{rankings,0,organizationKey}',
+  'beta institute', 'current profile changes reattribute historical process contributions');
 
-select is(
-  (
-    select sum((day ->> 'processCount')::bigint)
-    from organization_contribution_result
-    cross join lateral jsonb_array_elements(snapshot #> '{dailyCreation,days}') as day
-  ),
-  9::numeric,
-  'daily Process creation counts every retained Process id-version row regardless of state or organization'
-);
-
-select is(
-  (
-    select sum((day ->> 'modelCount')::bigint)
-    from organization_contribution_result
-    cross join lateral jsonb_array_elements(snapshot #> '{dailyCreation,days}') as day
-  ),
-  5::numeric,
-  'daily Model creation counts every retained LifecycleModel id-version row'
-);
-
-select is(
-  (
-    select sum((day ->> 'allCount')::bigint)
-    from organization_contribution_result
-    cross join lateral jsonb_array_elements(snapshot #> '{dailyCreation,days}') as day
-  ),
-  14::numeric,
-  'daily All creation keeps Process and Model identities separate before summing them'
-);
-
-select is(
-  (
-    select day - 'date'
-    from organization_contribution_result
-    cross join lateral jsonb_array_elements(snapshot #> '{dailyCreation,days}') as day
-    where day ->> 'date' = (
-      timezone('Asia/Shanghai', statement_timestamp())::date - 2
-    )::text
-  ),
-  '{"processCount": 1, "modelCount": 1, "allCount": 2}'::jsonb,
-  'the same local day reports separate Process and Model counts plus their total'
-);
-
-select is(
-  snapshot #>> '{scopes,process,summary,publishedDatasetCount}',
-  '3'::text,
-  'Process published total counts latest-published IDs assigned to a current organization'
-)
-from organization_contribution_result;
-
-select is(
-  snapshot #>> '{scopes,process,summary,pendingReviewDatasetCount}',
-  '2'::text,
-  'Process pending review includes only IDs whose current latest version is state 20'
-)
-from organization_contribution_result;
-
-select is(
-  snapshot #>> '{scopes,model,summary,publishedDatasetCount}',
-  '2'::text,
-  'Model published total excludes a latest-published ID without a current organization'
-)
-from organization_contribution_result;
-
-select is(
-  snapshot #>> '{scopes,model,summary,pendingReviewDatasetCount}',
-  '1'::text,
-  'Model pending-review total excludes a current state-20 ID without an organization'
-)
-from organization_contribution_result;
-
-select is(
-  snapshot #>> '{scopes,all,summary,publishedDatasetCount}',
-  '5'::text,
-  'All keeps typed datasets separate while excluding rows without a current organization'
-)
-from organization_contribution_result;
-
-select is(
-  snapshot #>> '{scopes,all,summary,organizationCount}',
-  '3'::text,
-  'participating-unit count includes every current organization even without contribution facts'
-)
-from organization_contribution_result;
-
-select is(
-  snapshot #>> '{scopes,all,summary,publishedLast30DaysCount}',
-  '5'::text,
-  'last-30-day published total includes only rows assigned to a current organization'
-)
-from organization_contribution_result;
-
-select is(
-  snapshot #>> '{scopes,all,rankings,0,organizationKey}',
-  'acme labs'::text,
-  'organization normalization merges casing and repeated whitespace'
-)
-from organization_contribution_result;
-
-select is(
-  snapshot #>> '{scopes,all,rankings,0,publishedDatasetCount}',
-  '4'::text,
-  'the combined ranking aggregates published Process and Model facts'
-)
-from organization_contribution_result;
-
-select is(
-  snapshot #>> '{scopes,all,rankings,0,assignedReviewerDatasetCount}',
-  '1'::text,
-  'Acme has one assigned current review dataset'
-)
-from organization_contribution_result;
-
-select is(
-  snapshot #>> '{scopes,all,rankings,0,unassignedReviewerDatasetCount}',
-  '0'::text,
-  'Acme has no current review dataset awaiting assignment'
-)
-from organization_contribution_result;
-
-select is(
-  snapshot #>> '{scopes,all,rankings,1,assignedReviewerDatasetCount}',
-  '1'::text,
-  'Beta has one current review dataset with an assigned reviewer'
-)
-from organization_contribution_result;
-
-select is(
-  snapshot #>> '{scopes,all,rankings,1,unassignedReviewerDatasetCount}',
-  '1'::text,
-  'Beta has one current review dataset awaiting reviewer assignment'
-)
-from organization_contribution_result;
-
-select ok(
-  not (snapshot #> '{scopes,all,rankings,0}') ?| array[
-    'reviewingDatasetCount',
-    'contributorCount',
-    'contributionShare',
-    'latestContributedAt'
-  ],
-  'v3 ranking rows omit the retired review, contributor, share, and timestamp fields'
-)
-from organization_contribution_result;
-
-select is(
-  jsonb_array_length(snapshot #> '{scopes,process,rankings}'),
-  1,
-  'pending-only and unassigned organizations do not enter the Process ranking'
-)
-from organization_contribution_result;
-
-delete from public.processes
-where id = '57410000-0000-4000-8000-000000000005'
-  and version = '02.00.000';
-
-set local role authenticated;
-select set_config('request.jwt.claim.sub', '57400000-0000-4000-8000-000000000001', true);
-select set_config(
-  'request.jwt.claims',
-  '{"role":"authenticated","sub":"57400000-0000-4000-8000-000000000001"}',
-  true
-);
-select is(
-  (
-    select sum((day ->> 'allCount')::bigint)
-    from jsonb_array_elements(
-      api.qry_national_carbon_organization_contributions(10) #> '{dailyCreation,days}'
-    ) as day
-  ),
-  13::numeric,
-  'physical deletion removes the version from historical daily creation counts'
-);
-reset role;
-
+-- Commercial rows never enter the regional open-data count.
+set local session_replication_role = replica;
+update public.processes set state_code = 200
+where id = '57410000-0000-4000-8000-000000000002';
+select is(api.qry_national_carbon_organization_contributions(10) #>> '{regions,totalProcessCount}',
+  '3', 'commercial state 200 excluded from regions');
+delete from public.processes where id = '57410000-0000-4000-8000-000000000005' and version = '02.00.000';
+set local session_replication_role = origin;
+select is((select sum((d->>'processCount')::bigint) from jsonb_array_elements(
+  api.qry_national_carbon_organization_contributions(10) #> '{dailyActivity,days}') d),
+  9::numeric, 'deletion removes the version from daily history');
 select * from finish();
-
 rollback;

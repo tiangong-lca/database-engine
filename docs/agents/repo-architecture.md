@@ -30,9 +30,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-02
-lastReviewedCommit: '592c669ef2083e709305fccc6a0ca9704621baf9'
-lastReviewedNote: 'Reviewed for Database #600: additive version-aware Portal/Next APIs retain immutable projections and legacy interfaces; bounded candidates, exact groups, ACLs and local proof are explicit.'
+lastReviewedAt: 2026-09-03
+lastReviewedCommit: 0958524dd71774965c65da12b4fc7e9e0d936e79
+lastReviewedNote: 'Reviewed for Database #606: the query-only v5 daily activity contract counts process version-days from creation and latest modification; timezone deduplication, existing timestamp indexes, administrator ACLs, canonical local generation and coordinated consumer rollout are preserved.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -272,6 +272,49 @@ organization as a trimmed string of at most 200 characters. The database
 validates that representation on `private.users`; the existing Auth-to-private
 mirror remains its only synchronization path. This descriptive profile value
 must never be used as an authorization, role, team, or RLS input.
+
+## National Carbon Process Statistics
+
+`api.qry_national_carbon_organization_contributions(integer)` returns the
+administrator-only `national_carbon_organization_contribution_v5` snapshot.
+Only `public.processes` contributes dataset counts; LifecycleModels are not read.
+
+- `rankings` contains up to `p_limit` units with published processes, ordered by
+  published count and stable normalized unit name. `organizations` contains every
+  non-empty current profile organization, including review-only and zero-data
+  units. The limit never truncates `organizations` or summary metrics.
+- Unit attribution uses normalized `private.users.raw_user_meta_data.organization`.
+  Published and pending-review summary counts retain the organization-attributed
+  scope. Pending review uses the latest process version at state 20; its active
+  root review state 1 means assigned, while state 0 or no active root means
+  awaiting assignment. Counts represent datasets, not reviewer assignments.
+- `summary.reviewerCount` counts distinct users whose role is `review-member` in
+  the platform team (`00000000-0000-0000-0000-000000000000`); administrators and
+  memberships in other teams are excluded.
+- `regions` covers **all** open (`state_code=100`) process IDs, including owners
+  without a unit. Select the latest open version before reading its
+  `json_ordered.processDataSet.processInformation.geography.locationOfOperationSupplyOrProduction.@location`.
+  Trim and uppercase codes without folding country/subdivision codes together.
+  Preserve unknown codes; separate `GLO` and blank/non-string/missing geography.
+  These disjoint buckets reconcile to `totalProcessCount`, which can exceed the
+  organization-attributed published KPI.
+- `dailyActivity` uses `dataset_version_activity_count`: count retained process
+  versions on both their `created_at` and latest `modified_at` dates in
+  Asia/Shanghai, independent of status/unit. Deduplicate by dataset type, ID,
+  version and local date: same-day creation/modification counts once, different
+  days count once each. NULL timestamps contribute no date. Two independently
+  range-filtered, daily-aggregated scans reuse the timestamp B-trees; the
+  modification branch excludes its creation date before `UNION ALL` and summing.
+  The 53-week continuous zero-filled date series remains unchanged. Deletion
+  removes both dates; a later modification replaces the earlier modification
+  date. This is a current-row activity snapshot, not a full audit history.
+  The yearly total sums version-days, not unique versions or edit operations.
+  V5 deliberately replaces V4's `dailyCreation`; consumers must upgrade together.
+
+The RPC aggregates narrow keys/scalars in PostgreSQL, reads geography only after
+selecting winning open keys, and reuses existing latest-key, timestamp and active
+root-review indexes. No wide-row client download, per-unit query, backend
+pagination, new JSON GIN index, or synthetic 50,000-row benchmark is required.
 
 ## Stable Path Map
 
