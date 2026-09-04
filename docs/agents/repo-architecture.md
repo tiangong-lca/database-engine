@@ -31,7 +31,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-04
-lastReviewedCommit: f6e84f0017b4fc459cb62f7392d6de6e8b02a5e3
+lastReviewedCommit: 1437a9e7b1e234888d6c74bdb4c2b8afd71f7a81
 lastReviewedNote: 'Reviewed for Database #616: the Flow V2 semantic leaf uses the fixed public Portal executor and its state-100/200 RLS policy without granting BYPASSRLS or changing the reviewed query body and HNSW settings.'
 related:
   - ../../AGENTS.md

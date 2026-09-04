@@ -1,6 +1,6 @@
 ---
 lastReviewedAt: 2026-09-04
-lastReviewedCommit: f6e84f0017b4fc459cb62f7392d6de6e8b02a5e3
+lastReviewedCommit: 1437a9e7b1e234888d6c74bdb4c2b8afd71f7a81
 lastReviewedNote: "Reviewed for Issue #616: the guarded transactional Flow semantic owner/ACL alignment has explicit ordinary-failure and uncertain-commit recovery boundaries, without adding an index or data migration."
 title: Portal Projection Migration Recovery
 docType: runbook

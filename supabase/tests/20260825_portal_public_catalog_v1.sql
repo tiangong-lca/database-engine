@@ -210,6 +210,7 @@ select extensions.is(
         ('processes', 'modified_at'),
         ('flows', 'id'), ('flows', 'json'), ('flows', 'state_code'),
         ('flows', 'version'), ('flows', 'modified_at'),
+        ('flows', 'embedding_ft'),
         ('flowproperties', 'id'), ('flowproperties', 'json'),
         ('flowproperties', 'state_code'), ('flowproperties', 'version'),
         ('flowproperties', 'modified_at'),
