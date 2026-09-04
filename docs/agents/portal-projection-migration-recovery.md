@@ -1,7 +1,7 @@
 ---
-lastReviewedAt: 2026-09-03
-lastReviewedCommit: 6daed39ef26da7b3da6f2c7053ef835c8a5c75ad
-lastReviewedNote: "Reviewed for Issue #603: the two standalone adaptive Flow facet indexes and guarded transactional semantic-function cutover have explicit unrecorded-index and uncertain-commit recovery boundaries."
+lastReviewedAt: 2026-09-04
+lastReviewedCommit: 1437a9e7b1e234888d6c74bdb4c2b8afd71f7a81
+lastReviewedNote: "Reviewed for Issue #616: the guarded transactional Flow semantic owner/ACL alignment has explicit ordinary-failure and uncertain-commit recovery boundaries, without adding an index or data migration."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -17,6 +17,7 @@ whenToUse:
   - when an Issue 539 Portal sitemap exact-version child rollout stops before its public façade migration completes
   - when the Issue 563 Process keyword expression GIN is invalid or its cutover is unrecorded
   - when an Issue 603 adaptive Flow facet index is invalid or its semantic cutover is unrecorded
+  - when the Issue 616 Flow semantic executor alignment fails or its commit state is uncertain
 whenToUpdate:
   - when the Portal projection migration sequence or recovery test changes
 checkPaths:
@@ -59,8 +60,10 @@ checkPaths:
   - supabase/migrations/20260903120000_portal_flow_filter_geography_index.sql
   - supabase/migrations/20260903120001_portal_flow_filter_access_level_index.sql
   - supabase/migrations/20260903120002_portal_flow_adaptive_semantic_v2.sql
+  - supabase/migrations/20260904144000_portal_flow_semantic_executor_alignment.sql
   - supabase/tests/20260826_portal_candidate_first_search.sql
   - supabase/tests/20260903_portal_flow_adaptive_semantic_v2.sql
+  - supabase/tests/20260904_portal_flow_semantic_executor_alignment.sql
   - supabase/tests/benchmarks/20260826_portal_candidate_first_explain.sql
 related:
   - ../../AGENTS.md
@@ -73,8 +76,9 @@ related:
 
 This runbook covers only the additive Issue 531 Portal projection rollout, the
 narrow Issue 533 catalog-summary eligibility index, the Issue 539 sitemap
-exact-version child, and the Issue 603 query-only adaptive Flow indexes/cutover
-layered on top of the same synchronized facet projection.
+exact-version child, the Issue 603 query-only adaptive Flow indexes/cutover,
+and the Issue 616 Flow semantic executor alignment layered on top of the same
+synchronized facet projection.
 It does not authorize production mutation, migration-history edits, or
 deletion of an applied migration. Use the repository's normal tracked-delivery
 and Supabase branch controls before any hosted action.
@@ -517,6 +521,27 @@ projection/facet assertion results, then use a separately reviewed forward
 reconciliation. Do not edit migration history, restore function bytes by hand,
 or rebuild the facet projection. This rollout changes no facet row, derivation,
 Trigger, writer, manifest, public signature, or vector index.
+
+`20260904144000_portal_flow_semantic_executor_alignment.sql` is the Issue 616
+transactional follow-up. It requires the exact Issue 603 Flow semantic body,
+owner, function settings, caller, role attributes, source RLS policy, and
+pre-existing column/function privileges. In one transaction it grants only
+`flows.embedding_ft` to `portal_public_executor`, transfers only the Flow V2
+semantic leaf to that `NOLOGIN NOINHERIT NOBYPASSRLS` owner, restores explicit
+execute access to `api_internal_executor`, and verifies the resulting ACL/RLS
+boundary. It changes no function body, HNSW setting, index, source row,
+projection row, public signature, trigger, or writer.
+
+An ordinary statement, lock, or guard failure rolls back the column grant,
+owner transfer, function ACL, comment, and temporary maintenance grants
+together, so the unchanged migration may be retried after correcting the
+prerequisite. A COMMIT followed by a missing `20260904144000` ledger row is not
+blind-idempotent because the expected predecessor owner and column ACL have
+changed. Preserve the ledger row, live function SHA/owner/config/ACL, exact
+role attributes and memberships, `flows` column privileges, RLS policy, and
+table owner; then ship a separately reviewed reconciliation migration. Do not
+edit migration history, hand-transfer the function, broaden table SELECT, or
+disable/bypass RLS.
 
 The Portal sitemap rollout has a three-file transactional boundary. The expand
 file creates the exact-version child, composite primary/FK keys, ordered shard

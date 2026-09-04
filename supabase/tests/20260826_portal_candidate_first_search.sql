@@ -690,10 +690,10 @@ select extensions.ok(
   and not pg_catalog.has_column_privilege(
     'portal_public_executor', 'public.flows', 'search_text', 'SELECT'
   )
-  and not pg_catalog.has_column_privilege(
+  and pg_catalog.has_column_privilege(
     'portal_public_executor', 'public.flows', 'embedding_ft', 'SELECT'
   ),
-  'candidate owner retains only the original five safe source columns per table'
+  'candidate owner adds only the reviewed Flow semantic vector to the original safe columns'
 );
 
 select extensions.ok(

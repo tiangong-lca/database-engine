@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-03
-lastReviewedCommit: 6daed39ef26da7b3da6f2c7053ef835c8a5c75ad
-lastReviewedNote: 'Reviewed for Database #603: two consecutive local five-schema refreshes produced identical adaptive Flow helper, facet-index, and comment artifacts; generated-content boundaries are unchanged.'
+lastReviewedAt: 2026-09-04
+lastReviewedCommit: 1437a9e7b1e234888d6c74bdb4c2b8afd71f7a81
+lastReviewedNote: 'Reviewed for Database #616: two consecutive local five-schema refreshes produced identical Flow semantic owner, column ACL, function ACL, and comment artifacts; generated-content boundaries are unchanged.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

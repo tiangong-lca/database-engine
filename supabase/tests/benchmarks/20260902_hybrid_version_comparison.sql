@@ -77,12 +77,15 @@ begin
   $query$,v_table) into v_plan using pg_temp.portal_versions_vector(1,0),p_kind;
   return v_plan;
 end $$;
-grant execute on function pg_temp.version_hnsw_plan(text) to api_internal_executor;
-grant execute on function pg_temp.portal_versions_vector(real,real) to api_internal_executor;
-grant execute on function pg_temp.portal_versions_vector_text(real,real) to api_internal_executor;
+grant execute on function pg_temp.version_hnsw_plan(text)
+  to api_internal_executor,portal_public_executor;
+grant execute on function pg_temp.portal_versions_vector(real,real)
+  to api_internal_executor,portal_public_executor;
+grant execute on function pg_temp.portal_versions_vector_text(real,real)
+  to api_internal_executor,portal_public_executor;
 create temporary table comparison_plans(kind text,plan jsonb);
-grant insert on comparison_plans to api_internal_executor;
-grant api_internal_executor to postgres;
+grant insert on comparison_plans to api_internal_executor,portal_public_executor;
+grant api_internal_executor,portal_public_executor to postgres;
 set local role api_internal_executor;
 set local plan_cache_mode='force_custom_plan';
 set local hnsw.iterative_scan='strict_order';
@@ -90,7 +93,16 @@ set local hnsw.ef_search=200;
 set local hnsw.max_scan_tuples=20000;
 set local hnsw.scan_mem_multiplier=2;
 set local jit=off;
-insert into comparison_plans select kind,pg_temp.version_hnsw_plan(kind) from unnest(array['process','flow']) as kind;
+insert into comparison_plans values('process',pg_temp.version_hnsw_plan('process'));
+reset role;
+set local role portal_public_executor;
+set local plan_cache_mode='force_custom_plan';
+set local hnsw.iterative_scan='strict_order';
+set local hnsw.ef_search=200;
+set local hnsw.max_scan_tuples=20000;
+set local hnsw.scan_mem_multiplier=2;
+set local jit=off;
+insert into comparison_plans values('flow',pg_temp.version_hnsw_plan('flow'));
 reset role;
 
 with samples as (
@@ -127,6 +139,10 @@ select jsonb_build_object(
   'historicalTop20V1',coalesce((select hits from historical where historical.kind=timing.kind and revision='v1'),0),
   'historicalTop20V2',coalesce((select hits from historical where historical.kind=timing.kind and revision='v2'),0),
   'v2Plan',jsonb_build_object(
+    'executorRole',case timing.kind
+      when 'flow' then 'portal_public_executor'
+      else 'api_internal_executor'
+    end,
     'indexNames',jsonb_path_query_array(comparison_plans.plan,'$.**."Index Name"'),
     'executionMs',comparison_plans.plan #> '{0,Execution Time}',
     'sharedHitBlocks',comparison_plans.plan #> '{0,Plan,Shared Hit Blocks}',
