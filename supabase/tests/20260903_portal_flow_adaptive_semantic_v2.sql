@@ -78,7 +78,7 @@ select extensions.is(
 
 select extensions.ok(
   (
-    select routine.proowner = 'api_internal_executor'::regrole
+    select routine.proowner = 'portal_public_executor'::regrole
       and routine.prosecdef
       and routine.provolatile = 's'
       and routine.proparallel = 'r'
@@ -105,11 +105,16 @@ select extensions.ok(
     where routine.oid =
       'private.portal_projection_semantic_flow_v2(extensions.vector,jsonb)'::regprocedure
   ),
-  'adaptive Flow helper retains owner, hardening, 2000/2001 bound and HNSW fallback'
+  'adaptive Flow helper retains Portal owner, hardening, 2000/2001 bound and HNSW fallback'
 );
 
 select extensions.ok(
   pg_catalog.has_function_privilege(
+    'api_internal_executor',
+    'private.portal_projection_semantic_flow_v2(extensions.vector,jsonb)',
+    'EXECUTE'
+  )
+  and pg_catalog.has_function_privilege(
     'portal_public_executor',
     'private.portal_projection_semantic_flow_v2(extensions.vector,jsonb)',
     'EXECUTE'
@@ -129,7 +134,7 @@ select extensions.ok(
     'private.portal_projection_semantic_flow_v2(extensions.vector,jsonb)',
     'EXECUTE'
   ),
-  'adaptive helper remains private behind the Portal executor'
+  'adaptive helper remains private behind the internal-to-Portal executor boundary'
 );
 
 grant portal_public_executor to postgres;

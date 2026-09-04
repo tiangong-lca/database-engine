@@ -162,8 +162,8 @@ begin
 end;
 $$;
 
-ALTER FUNCTION "private"."portal_projection_semantic_flow_v2"("p_query_embedding" "extensions"."vector", "p_filters" "jsonb") OWNER TO "api_internal_executor";
+ALTER FUNCTION "private"."portal_projection_semantic_flow_v2"("p_query_embedding" "extensions"."vector", "p_filters" "jsonb") OWNER TO "portal_public_executor";
 
 REVOKE ALL ON FUNCTION "private"."portal_projection_semantic_flow_v2"("p_query_embedding" "extensions"."vector", "p_filters" "jsonb") FROM PUBLIC;
 
-GRANT ALL ON FUNCTION "private"."portal_projection_semantic_flow_v2"("p_query_embedding" "extensions"."vector", "p_filters" "jsonb") TO "portal_public_executor";
+GRANT ALL ON FUNCTION "private"."portal_projection_semantic_flow_v2"("p_query_embedding" "extensions"."vector", "p_filters" "jsonb") TO "api_internal_executor";

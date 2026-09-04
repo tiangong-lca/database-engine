@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-03
-lastReviewedCommit: 6daed39ef26da7b3da6f2c7053ef835c8a5c75ad
-lastReviewedNote: 'Reviewed for Database #603: the existing local schema-workspace and type generators deterministically capture the adaptive Flow helper and facet indexes; no script command changes are required.'
+lastReviewedAt: 2026-09-04
+lastReviewedCommit: 1437a9e7b1e234888d6c74bdb4c2b8afd71f7a81
+lastReviewedNote: 'Reviewed for Database #616: the hybrid benchmark now proves the natural Flow V2 plan under the Portal executor while existing schema-workspace and type generators capture the owner/ACL alignment deterministically.'
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -51,8 +51,11 @@ Local migration outputs and audit JSONL files should be written under `_artifact
 
 Runs rollback-only, explicitly isolated Database #600 synthetic comparison
 fixtures, 20-sample V1/V2 timings, top-10/20 identity overlap, restored
-historical-version coverage and a natural V2 semantic plan. It accepts only a
-named local Docker container; there is no remote URL or credential option.
+historical-version coverage and natural V2 semantic plans. The Process plan
+must remain under `api_internal_executor`; the Flow plan must run under
+`portal_public_executor` and naturally name `flows_embedding_ft_hnsw_idx`. It
+accepts only a named local Docker container; there is no remote URL or
+credential option.
 Output contains summary counts/timings/index names, not queries or vectors.
 Reset that isolated stack before and after. This diagnostic is not hosted
 relevance or production-cardinality release evidence.

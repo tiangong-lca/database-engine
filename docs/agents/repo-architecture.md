@@ -30,9 +30,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-03
-lastReviewedCommit: 6daed39ef26da7b3da6f2c7053ef835c8a5c75ad
-lastReviewedNote: 'Reviewed for Database #603: version-aware Portal Flow semantic retrieval uses an exact small-filter branch backed by narrow facet indexes while preserving the established HNSW branch and settings for broad searches.'
+lastReviewedAt: 2026-09-04
+lastReviewedCommit: 1437a9e7b1e234888d6c74bdb4c2b8afd71f7a81
+lastReviewedNote: 'Reviewed for Database #616: the Flow V2 semantic leaf uses the fixed public Portal executor and its state-100/200 RLS policy without granting BYPASSRLS or changing the reviewed query body and HNSW settings.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -379,6 +379,16 @@ The version-aware Portal Flow semantic helper is the narrow exception described
 below: small indexed geography/access-level populations are evaluated exactly
 instead of making HNSW traverse and then discard a large cold working set.
 
+The Flow V2 semantic leaf is a `SECURITY DEFINER` owned by the isolated
+`portal_public_executor`, not by the authenticated-inheriting internal role.
+That owner remains `NOLOGIN`, `NOINHERIT`, and `NOBYPASSRLS`; it receives only
+the additional `flows.embedding_ft` column read needed by this leaf and remains
+subject to the fixed Portal `state_code IN (100,200)` source policy. The outer
+fusion chain stays owned by `api_internal_executor`, which has explicit execute
+permission on the leaf. This removes authenticated actor/team policy machinery
+from the Flow ANN plan without disabling RLS or opening the private function to
+a browser role.
+
 The global process/flow HNSW indexes remain necessary for owner/team and broad
 visibility paths. A smaller process partial HNSW index covers the measured
 public `state_code = 100` path; large flow-specific duplicate indexes require
@@ -602,8 +612,10 @@ The HNSW branch's exact-key projection/filter existence probe retains an
 join that displaces the bounded source index path. Underfill on that approximate
 branch remains underfill; no pool-filling helper or duplicate vector index is
 added. The adaptive dispatch changes neither facet derivation/writes nor public
-function signatures, ACLs, timeouts, thresholds, candidate caps, grouping, or
-cursor semantics.
+function signatures, timeouts, thresholds, candidate caps, grouping, or cursor
+semantics. The later executor alignment changes only the private Flow leaf owner
+and one source-column grant; its body, HNSW settings, external execute ACLs, and
+public-state RLS remain unchanged.
 
 Grouping happens before pagination. `items` contains at most 20 best-version
 dataset representatives; `versionGroups` preserves every recalled exact

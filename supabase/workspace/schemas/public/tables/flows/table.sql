@@ -42,3 +42,5 @@ GRANT SELECT("state_code") ON TABLE "public"."flows" TO "portal_public_executor"
 GRANT SELECT("version") ON TABLE "public"."flows" TO "portal_public_executor";
 
 GRANT SELECT("modified_at") ON TABLE "public"."flows" TO "portal_public_executor";
+
+GRANT SELECT("embedding_ft") ON TABLE "public"."flows" TO "portal_public_executor";
