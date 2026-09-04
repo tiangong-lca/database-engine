@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-04
-lastReviewedCommit: 0abf978e8e9f50d1d6922f833d57d67110ca54c7
+lastReviewedCommit: f6e84f0017b4fc459cb62f7392d6de6e8b02a5e3
 lastReviewedNote: '已为 Database #616 复核：连续两次本地五 schema 刷新生成完全相同的 Flow 语义 owner、列 ACL、函数 ACL 和注释产物，生成内容边界不变。'
 related:
   - ../../AGENTS.md

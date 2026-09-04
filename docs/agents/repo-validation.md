@@ -33,7 +33,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-04
-lastReviewedCommit: 0abf978e8e9f50d1d6922f833d57d67110ca54c7
+lastReviewedCommit: f6e84f0017b4fc459cb62f7392d6de6e8b02a5e3
 lastReviewedNote: 'Reviewed for Database #616: Flow V2 semantic execution moves to the fixed public Portal role under its state-100/200 RLS policy, with focused owner, ACL, RLS, and natural-plan proof.'
 related:
   - ../../AGENTS.md

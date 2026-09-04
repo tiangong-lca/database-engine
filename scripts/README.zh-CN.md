@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-04
-lastReviewedCommit: 0abf978e8e9f50d1d6922f833d57d67110ca54c7
+lastReviewedCommit: f6e84f0017b4fc459cb62f7392d6de6e8b02a5e3
 lastReviewedNote: '已为 Database #616 复核：Hybrid 基准现在会验证 Portal executor 下的 Flow V2 自然计划，现有 schema workspace 与类型生成器可确定性捕获 owner/ACL 调整。'
 related:
   - ../AGENTS.md
