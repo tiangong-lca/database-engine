@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-03
-lastReviewedCommit: 6daed39ef26da7b3da6f2c7053ef835c8a5c75ad
-lastReviewedNote: '已为 Database #603 复核：连续两次本地五 schema 刷新生成完全相同的 Flow helper、facet 索引和注释文件，生成内容边界不变。'
+lastReviewedAt: 2026-09-04
+lastReviewedCommit: 0abf978e8e9f50d1d6922f833d57d67110ca54c7
+lastReviewedNote: '已为 Database #616 复核：连续两次本地五 schema 刷新生成完全相同的 Flow 语义 owner、列 ACL、函数 ACL 和注释产物，生成内容边界不变。'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

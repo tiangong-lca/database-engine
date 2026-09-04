@@ -37,9 +37,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-03
-lastReviewedCommit: 6daed39ef26da7b3da6f2c7053ef835c8a5c75ad
-lastReviewedNote: 'Reviewed for Database #603: the adaptive Flow query/index change remains database-engine-owned and follows the existing migration, generated-workspace, validation, and integration boundaries.'
+lastReviewedAt: 2026-09-04
+lastReviewedCommit: 0abf978e8e9f50d1d6922f833d57d67110ca54c7
+lastReviewedNote: 'Reviewed for Database #616: the Flow semantic executor ownership and narrow source-column grant remain database-engine-owned and follow the existing migration, generated-workspace, validation, and integration boundaries.'
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

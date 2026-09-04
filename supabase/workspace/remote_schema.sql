@@ -48396,10 +48396,10 @@ end;
 $$;
 
 
-ALTER FUNCTION "private"."portal_projection_semantic_flow_v2"("p_query_embedding" "extensions"."vector", "p_filters" "jsonb") OWNER TO "api_internal_executor";
+ALTER FUNCTION "private"."portal_projection_semantic_flow_v2"("p_query_embedding" "extensions"."vector", "p_filters" "jsonb") OWNER TO "portal_public_executor";
 
 
-COMMENT ON FUNCTION "private"."portal_projection_semantic_flow_v2"("p_query_embedding" "extensions"."vector", "p_filters" "jsonb") IS 'Returns at most 200 exact Flow versions: exact distance over at most 2000 indexed geography/access candidates, otherwise strict iterative HNSW.';
+COMMENT ON FUNCTION "private"."portal_projection_semantic_flow_v2"("p_query_embedding" "extensions"."vector", "p_filters" "jsonb") IS 'Returns at most 200 exact public Flow versions under portal_public_executor RLS: exact distance over at most 2000 indexed geography/access candidates, otherwise strict iterative HNSW.';
 
 
 
@@ -74672,6 +74672,10 @@ GRANT SELECT("modified_at") ON TABLE "public"."flows" TO "portal_public_executor
 
 
 
+GRANT SELECT("embedding_ft") ON TABLE "public"."flows" TO "portal_public_executor";
+
+
+
 REVOKE ALL ON FUNCTION "api"."flows_embedding_ft_input"("proc" "public"."flows") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."flows_embedding_ft_input"("proc" "public"."flows") TO "api_internal_executor";
 
@@ -76765,7 +76769,7 @@ REVOKE ALL ON FUNCTION "private"."portal_projection_semantic_flow_v1"("p_query_e
 
 
 REVOKE ALL ON FUNCTION "private"."portal_projection_semantic_flow_v2"("p_query_embedding" "extensions"."vector", "p_filters" "jsonb") FROM PUBLIC;
-GRANT ALL ON FUNCTION "private"."portal_projection_semantic_flow_v2"("p_query_embedding" "extensions"."vector", "p_filters" "jsonb") TO "portal_public_executor";
+GRANT ALL ON FUNCTION "private"."portal_projection_semantic_flow_v2"("p_query_embedding" "extensions"."vector", "p_filters" "jsonb") TO "api_internal_executor";
 
 
 
