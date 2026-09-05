@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-04
-lastReviewedCommit: 1437a9e7b1e234888d6c74bdb4c2b8afd71f7a81
-lastReviewedNote: '已为 Database #616 复核：Hybrid 基准现在会验证 Portal executor 下的 Flow V2 自然计划，现有 schema workspace 与类型生成器可确定性捕获 owner/ACL 调整。'
+lastReviewedAt: 2026-09-05
+lastReviewedCommit: bf5f6d1c3aa78de644217a87902c340dc1faab84
+lastReviewedNote: '已为 Database #620 复核：Hybrid 基准现在会验证固定 Portal executor 下的 Process 与 Flow V2 自然计划。'
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -51,8 +51,9 @@ related:
 
 仅在明确命名的 Database #600 独立本地 Docker 数据库中，使用 rollback-only
 合成数据比较 V1/V2 的 20 次耗时、前 10/20 项精确身份重合、历史版本覆盖和
-V2 自然语义查询计划。Process 计划必须继续使用 `api_internal_executor`；Flow
-计划必须使用 `portal_public_executor`，并自然命中
+Process 的 0、小集合、2,000、2,001、宽过滤、无过滤分段耗时，并记录宽过滤与
+无过滤 V2 自然语义查询计划。Process 与 Flow 的 HNSW 计划都必须使用
+`portal_public_executor`，并分别自然命中 `processes_embedding_ft_hnsw_idx` 和
 `flows_embedding_ft_hnsw_idx`。没有远程 URL 或凭据参数；只输出计数、耗时和
 索引名，不输出查询原文或向量。运行前后只重置该独立测试库。结果不代表真实
 相关性或生产数据量发布证明。

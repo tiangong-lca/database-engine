@@ -684,7 +684,7 @@ select extensions.ok(
   and not pg_catalog.has_column_privilege(
     'portal_public_executor', 'public.processes', 'search_text', 'SELECT'
   )
-  and not pg_catalog.has_column_privilege(
+  and pg_catalog.has_column_privilege(
     'portal_public_executor', 'public.processes', 'embedding_ft', 'SELECT'
   )
   and not pg_catalog.has_column_privilege(
@@ -693,7 +693,7 @@ select extensions.ok(
   and pg_catalog.has_column_privilege(
     'portal_public_executor', 'public.flows', 'embedding_ft', 'SELECT'
   ),
-  'candidate owner adds only the reviewed Flow semantic vector to the original safe columns'
+  'candidate owner adds only the reviewed Process and Flow semantic vectors to the original safe columns'
 );
 
 select extensions.ok(

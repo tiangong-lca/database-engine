@@ -298,12 +298,18 @@ grant execute on function pg_temp.portal_versions_vector_text(real,real) to api_
 
 select extensions.ok(
   (select p.prosrc !~ 'exact_v1|limit 5000|newer\.|latest'
-      and p.prosrc !~ 'v_exact_cutover|portal_catalog_facet_rows_v1'
+      and p.prosrc ~ 'v_exact_cutover constant integer := 2000'
+      and p.prosrc ~ 'v_indexed_probe'
+      and p.prosrc ~ 'portal_catalog_facet_rows_v1'
+      and p.prosrc ~ 'facet_geography'
+      and p.prosrc ~ 'facet_access_level'
+      and p.prosrc ~ 'limit v_exact_cutover \+ 1'
+      and p.prosrc ~ 'offset 0'
       and p.proconfig @> array['hnsw.iterative_scan=strict_order','hnsw.ef_search=200',
         'hnsw.max_scan_tuples=20000','hnsw.scan_mem_multiplier=2','statement_timeout=20s','row_security=on']
     from pg_proc p
     where p.oid='private.portal_projection_semantic_process_v2(vector,jsonb)'::regprocedure),
-  'Process keeps its bounded version-aware HNSW path without latest suppression or exact fallback');
+  'Process routes at most 2000 indexed exact versions and retains the predecessor HNSW fallback');
 
 select extensions.ok(
   (select p.prosrc !~ 'exact_v1|limit 5000|newer\.|latest'
@@ -347,31 +353,31 @@ select extensions.is(
 ) from unnest(array['process','flow']) as k cross join unnest(array[0,6,199,200]) as n;
 
 select extensions.is(
-  (select count(*) from private.portal_projection_semantic_flow_v2(
-    pg_temp.portal_versions_vector(1,0),
+  (select count(*) from private.portal_projection_semantic_candidates_v2(
+    k,pg_temp.portal_versions_vector(1,0),
     '{"geography":"zz199","accessLevel":"open","classification":"portal-hybrid"}'::jsonb)),
   199::bigint,
-  'Flow exact route uses indexed geography/access candidates and reapplies the complete filter'
-);
+  k || ' exact route uses indexed geography/access candidates and reapplies the complete filter'
+) from unnest(array['process','flow']) as k;
 
 select extensions.is(
   (select pg_catalog.array_agg(candidate.version order by candidate.version)
-   from private.portal_projection_semantic_flow_v2(
-     pg_temp.portal_versions_vector(0.7,0.7),
+   from private.portal_projection_semantic_candidates_v2(
+     k,pg_temp.portal_versions_vector(0.7,0.7),
      '{"geography":"cn","accessLevel":"open"}'::jsonb
    ) as candidate
    where candidate.id='60000000-0000-4000-8000-000000000002'::uuid),
   array['01.00.000','01.00.001']::text[],
-  'Flow exact route returns both qualifying exact versions of one dataset identity'
-);
+  k || ' exact route returns both qualifying exact versions of one dataset identity'
+) from unnest(array['process','flow']) as k;
 
 select extensions.is(
-  (select count(*) from private.portal_projection_semantic_flow_v2(
-    pg_temp.portal_versions_vector(1,0),
+  (select count(*) from private.portal_projection_semantic_candidates_v2(
+    k,pg_temp.portal_versions_vector(1,0),
     '{"accessLevel":"open"}'::jsonb)),
   200::bigint,
-  'access-level-only exact route retains the 200-candidate branch bound'
-);
+  k || ' access-level-only exact route retains the 200-candidate branch bound'
+) from unnest(array['process','flow']) as k;
 
 select extensions.is(
   (select count(*) from private.portal_projection_hybrid_candidates_v2(
