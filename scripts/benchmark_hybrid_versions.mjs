@@ -34,12 +34,44 @@ for (const record of records) {
   }
   if (value.kind === 'flow' && (
     value.v2Plan?.executorRole !== 'portal_public_executor' ||
-    !value.v2Plan?.indexNames?.includes('flows_embedding_ft_hnsw_idx')
+    !value.v2Plan?.indexNames?.includes('flows_embedding_ft_hnsw_idx') ||
+    value.v2UnfilteredPlan?.executorRole !== 'portal_public_executor' ||
+    !value.v2UnfilteredPlan?.indexNames?.includes('flows_embedding_ft_hnsw_idx')
   )) {
-    throw new Error('Flow V2 must naturally use source HNSW as portal_public_executor');
+    throw new Error('Broad and unfiltered Flow V2 must naturally use source HNSW as portal_public_executor');
   }
-  if (value.kind === 'process' && value.v2Plan?.executorRole !== 'api_internal_executor') {
-    throw new Error('Process V2 executor boundary changed unexpectedly');
+  if (value.kind === 'process' && (
+    value.v2Plan?.executorRole !== 'portal_public_executor' ||
+    !value.v2Plan?.indexNames?.includes('processes_embedding_ft_hnsw_idx') ||
+    value.v2UnfilteredPlan?.executorRole !== 'portal_public_executor' ||
+    !value.v2UnfilteredPlan?.indexNames?.includes('processes_embedding_ft_hnsw_idx')
+  )) {
+    throw new Error('Broad and unfiltered Process V2 must naturally use source HNSW as portal_public_executor');
+  }
+  if (value.kind === 'process') {
+    const expectedCases = {
+      zero: ['exact', 0],
+      selective: ['exact', 6],
+      boundary_2000: ['exact', 2000],
+      overflow_2001: ['hnsw', 2001],
+      broad: ['hnsw', 5020],
+      unfiltered: ['hnsw', null],
+    };
+    for (const [caseName, [expectedRoute, expectedPopulation]] of Object.entries(expectedCases)) {
+      const measured = value.adaptiveRouteTimings?.[caseName];
+      if (!measured || measured.expectedRoute !== expectedRoute ||
+          measured.observedRoute !== expectedRoute ||
+          measured.candidatePopulation !== expectedPopulation ||
+          !Number.isFinite(measured.firstMs) || !Number.isFinite(measured.repeatP50Ms) ||
+          !Number.isFinite(measured.repeatMaxMs)) {
+        throw new Error(`Invalid Process adaptive-route evidence for ${caseName}`);
+      }
+    }
+    if (value.adaptiveRouteTimings.zero.resultCount !== 0 ||
+        value.adaptiveRouteTimings.selective.resultCount !== 6 ||
+        value.adaptiveRouteTimings.boundary_2000.resultCount !== 200) {
+      throw new Error('Process exact-route result bounds drifted');
+    }
   }
   process.stdout.write(JSON.stringify(value) + '\n');
 }

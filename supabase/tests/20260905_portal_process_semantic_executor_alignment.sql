@@ -1,4 +1,4 @@
--- Database #616 catalog, ACL, and RLS proof for the Flow semantic executor.
+-- Database #620 catalog, ACL, and RLS proof for the Process semantic executor.
 begin;
 create extension if not exists pgtap with schema extensions;
 set local search_path = extensions,public,auth;
@@ -25,10 +25,10 @@ select extensions.is(
     select pg_catalog.pg_get_userbyid(routine.proowner)
     from pg_catalog.pg_proc as routine
     where routine.oid =
-      'private.portal_projection_semantic_flow_v2(extensions.vector,jsonb)'::regprocedure
+      'private.portal_projection_semantic_process_v2(extensions.vector,jsonb)'::regprocedure
   ),
   'portal_public_executor'::name,
-  'Flow semantic leaf executes as the fixed public Portal role'
+  'Process semantic leaf executes as the fixed public Portal role'
 );
 
 select extensions.is(
@@ -36,7 +36,7 @@ select extensions.is(
     extensions.digest(
       pg_catalog.convert_to(
         pg_catalog.pg_get_functiondef(
-          'private.portal_projection_semantic_flow_v2(extensions.vector,jsonb)'::regprocedure
+          'private.portal_projection_semantic_process_v2(extensions.vector,jsonb)'::regprocedure
         ),
         'UTF8'
       ),
@@ -44,8 +44,8 @@ select extensions.is(
     ),
     'hex'
   ),
-  '534a4e6cead5da4575747d50667e9280e469a672526d0eb97488b99577230b2a'::text,
-  'executor alignment leaves the reviewed Flow semantic body byte-identical'
+  '41aa02a05bd381fb86e068ee6d6830feb77d92022b0733dc6cbb90970dd44801'::text,
+  'executor alignment leaves the reviewed Process semantic body byte-identical'
 );
 
 select extensions.ok(
@@ -66,63 +66,63 @@ select extensions.ok(
       ]::text[]
     from pg_catalog.pg_proc as routine
     where routine.oid =
-      'private.portal_projection_semantic_flow_v2(extensions.vector,jsonb)'::regprocedure
+      'private.portal_projection_semantic_process_v2(extensions.vector,jsonb)'::regprocedure
   ),
   'security definer hardening, timeout, and HNSW settings remain unchanged'
 );
 
 select extensions.ok(
   pg_catalog.has_column_privilege(
-    'portal_public_executor', 'public.flows', 'id', 'SELECT'
+    'portal_public_executor', 'public.processes', 'id', 'SELECT'
   )
   and pg_catalog.has_column_privilege(
-    'portal_public_executor', 'public.flows', 'version', 'SELECT'
+    'portal_public_executor', 'public.processes', 'version', 'SELECT'
   )
   and pg_catalog.has_column_privilege(
-    'portal_public_executor', 'public.flows', 'state_code', 'SELECT'
-  )
-  and pg_catalog.has_column_privilege(
-    'portal_public_executor', 'public.flows', 'embedding_ft', 'SELECT'
-  )
-  and not pg_catalog.has_table_privilege(
-    'portal_public_executor', 'public.flows', 'SELECT'
-  )
-  and not pg_catalog.has_column_privilege(
-    'portal_public_executor', 'public.flows', 'search_text', 'SELECT'
-  )
-  and not pg_catalog.has_column_privilege(
-    'portal_public_executor', 'public.flows', 'extracted_md', 'SELECT'
+    'portal_public_executor', 'public.processes', 'state_code', 'SELECT'
   )
   and pg_catalog.has_column_privilege(
     'portal_public_executor', 'public.processes', 'embedding_ft', 'SELECT'
+  )
+  and not pg_catalog.has_table_privilege(
+    'portal_public_executor', 'public.processes', 'SELECT'
+  )
+  and not pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.processes', 'search_text', 'SELECT'
+  )
+  and not pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.processes', 'extracted_md', 'SELECT'
+  )
+  and pg_catalog.has_column_privilege(
+    'portal_public_executor', 'public.flows', 'embedding_ft', 'SELECT'
   ),
-  'Portal executor has only the reviewed Flow and Process vector-column grants'
+  'Portal executor has only the reviewed Process and Flow vector-column grants'
 );
 
 select extensions.ok(
   pg_catalog.has_function_privilege(
     'api_internal_executor',
-    'private.portal_projection_semantic_flow_v2(extensions.vector,jsonb)',
+    'private.portal_projection_semantic_process_v2(extensions.vector,jsonb)',
     'EXECUTE'
   )
   and pg_catalog.has_function_privilege(
     'portal_public_executor',
-    'private.portal_projection_semantic_flow_v2(extensions.vector,jsonb)',
+    'private.portal_projection_semantic_process_v2(extensions.vector,jsonb)',
     'EXECUTE'
   )
   and not pg_catalog.has_function_privilege(
     'anon',
-    'private.portal_projection_semantic_flow_v2(extensions.vector,jsonb)',
+    'private.portal_projection_semantic_process_v2(extensions.vector,jsonb)',
     'EXECUTE'
   )
   and not pg_catalog.has_function_privilege(
     'authenticated',
-    'private.portal_projection_semantic_flow_v2(extensions.vector,jsonb)',
+    'private.portal_projection_semantic_process_v2(extensions.vector,jsonb)',
     'EXECUTE'
   )
   and not pg_catalog.has_function_privilege(
     'service_role',
-    'private.portal_projection_semantic_flow_v2(extensions.vector,jsonb)',
+    'private.portal_projection_semantic_process_v2(extensions.vector,jsonb)',
     'EXECUTE'
   ),
   'internal caller remains admitted while every external role stays denied'
@@ -133,13 +133,13 @@ select extensions.ok(
     select relation.relrowsecurity
       and relation.relowner <> 'portal_public_executor'::regrole
     from pg_catalog.pg_class as relation
-    where relation.oid = 'public.flows'::regclass
+    where relation.oid = 'public.processes'::regclass
   )
   and exists (
     select 1
     from pg_catalog.pg_policy as policy
-    where policy.polrelid = 'public.flows'::regclass
-      and policy.polname = 'portal_public_executor_select_flows_v1'
+    where policy.polrelid = 'public.processes'::regclass
+      and policy.polname = 'portal_public_executor_select_processes_v1'
       and policy.polpermissive
       and policy.polcmd = 'r'
       and policy.polroles =
@@ -148,17 +148,18 @@ select extensions.ok(
         '(state_code = ANY (ARRAY[100, 200]))'
       and policy.polwithcheck is null
   ),
-  'Flow source keeps RLS with the exact Portal public-state policy'
+  'Process source keeps RLS with the exact Portal public-state policy'
 );
 
 -- Controlled source rows prove that the new vector privilege does not bypass
 -- RLS. User triggers are disabled only inside this rollback-only transaction.
-alter table public.flows disable trigger user;
+alter table public.processes disable trigger user;
 alter table private.portal_catalog_search_rows_v1 disable trigger user;
-insert into public.flows(id, version, state_code, embedding_ft)
+alter table private.portal_catalog_facet_rows_v1 disable trigger user;
+insert into public.processes(id, version, state_code, embedding_ft)
 values
   (
-    '61600000-0000-4000-8000-000000000001',
+    '62000000-0000-4000-8000-000000000001',
     '01.00.000',
     20,
     pg_catalog.array_cat(
@@ -167,7 +168,7 @@ values
     )::extensions.vector(1024)
   ),
   (
-    '61600000-0000-4000-8000-000000000002',
+    '62000000-0000-4000-8000-000000000002',
     '01.00.000',
     100,
     pg_catalog.array_cat(
@@ -187,13 +188,34 @@ insert into private.portal_catalog_search_rows_v1(
   projection_contract_version
 )
 values(
-  'flow',
-  '61600000-0000-4000-8000-000000000002',
+  'process',
+  '62000000-0000-4000-8000-000000000002',
   '01.00.000',
   100,
   '2026-09-04 00:00:00+00',
-  '{"document":""}',
+  '{"accessLevel":"open","geography":{"code":"zz620"},"document":""}',
   '',
+  1
+);
+
+insert into private.portal_catalog_facet_rows_v1(
+  dataset_kind,
+  id,
+  version,
+  state_code,
+  modified_at,
+  facet_access_level,
+  facet_geography,
+  facet_contract_version
+)
+values(
+  'process',
+  '62000000-0000-4000-8000-000000000002',
+  '01.00.000',
+  100,
+  '2026-09-04 00:00:00+00',
+  'open',
+  'zz620',
   1
 );
 
@@ -203,10 +225,10 @@ set local role portal_public_executor;
 select extensions.is(
   (
     select pg_catalog.count(*)
-    from public.flows
+    from public.processes
     where id in (
-      '61600000-0000-4000-8000-000000000001'::uuid,
-      '61600000-0000-4000-8000-000000000002'::uuid
+      '62000000-0000-4000-8000-000000000001'::uuid,
+      '62000000-0000-4000-8000-000000000002'::uuid
     )
   ),
   1::bigint,
@@ -215,28 +237,43 @@ select extensions.is(
 
 select extensions.lives_ok(
   $$select id, version, state_code, embedding_ft
-    from public.flows
-    where id = '61600000-0000-4000-8000-000000000002'::uuid$$,
-  'Portal executor can read exactly the Flow columns needed by the semantic leaf'
+    from public.processes
+    where id = '62000000-0000-4000-8000-000000000002'::uuid$$,
+  'Portal executor can read exactly the Process columns needed by the semantic leaf'
 );
 
 select extensions.is(
   (
     select pg_catalog.array_agg(candidate.id order by candidate.id)
-    from private.portal_projection_semantic_flow_v2(
+    from private.portal_projection_semantic_process_v2(
       pg_catalog.array_cat(
         array[1::real,0::real],
         pg_catalog.array_fill(0::real,array[1022])
       )::extensions.vector(1024),
-      '{}'::jsonb
+      '{"geography":"zz620","accessLevel":"open"}'::jsonb
     ) as candidate
     where candidate.id in (
-      '61600000-0000-4000-8000-000000000001'::uuid,
-      '61600000-0000-4000-8000-000000000002'::uuid
+      '62000000-0000-4000-8000-000000000001'::uuid,
+      '62000000-0000-4000-8000-000000000002'::uuid
     )
   ),
-  array['61600000-0000-4000-8000-000000000002'::uuid],
-  'closest nonpublic vector is hidden while the nearby public vector is returned'
+  array['62000000-0000-4000-8000-000000000002'::uuid],
+  'selective exact route hides the closest nonpublic vector and returns the public vector'
+);
+
+select extensions.is(
+  (
+    select pg_catalog.count(*)
+    from private.portal_projection_semantic_process_v2(
+      pg_catalog.array_cat(
+        array[1::real,0::real],
+        pg_catalog.array_fill(0::real,array[1022])
+      )::extensions.vector(1024),
+      '{"geography":"missing"}'::jsonb
+    )
+  ),
+  0::bigint,
+  'an empty indexed Process candidate set returns directly without HNSW fill'
 );
 
 reset role;

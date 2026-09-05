@@ -19,11 +19,113 @@ begin
       end if;
     end loop;
   end loop;
+
 end $$;
 analyze public.processes;
 analyze public.flows;
 analyze private.portal_catalog_search_rows_v1;
 create temporary table comparison_samples(kind text,revision text,sample integer,elapsed_ms double precision,payload jsonb);
+create temporary table process_route_cases(
+  case_name text primary key,
+  filters jsonb not null,
+  expected_route text not null,
+  candidate_population integer
+);
+insert into process_route_cases(case_name,filters,expected_route) values
+  ('zero','{"geography":"zz0"}','exact'),
+  ('selective','{"geography":"zz6"}','exact'),
+  ('boundary_2000','{"geography":"zx2k"}','exact'),
+  ('overflow_2001','{"geography":"zx2k1"}','hnsw'),
+  ('broad','{"geography":"zzb"}','hnsw'),
+  ('unfiltered','{}','hnsw');
+update process_route_cases as route_case
+set candidate_population = case
+  when route_case.filters ? 'geography' then (
+    select count(*)::integer
+    from private.portal_catalog_facet_rows_v1 as facet
+    where facet.dataset_kind = 'process'
+      and facet.state_code in (100,200)
+      and facet.facet_contract_version = 1
+      and facet.facet_geography = route_case.filters ->> 'geography'
+  )
+  else null
+end;
+create temporary table process_route_samples(
+  case_name text,
+  sample integer,
+  elapsed_ms double precision,
+  result_count integer,
+  observed_route text
+);
+create function pg_temp.measure_process_routes(p_case_names text[])
+returns void
+language plpgsql
+set search_path=''
+as $$
+declare
+  route_case record;
+  n integer;
+  started timestamptz;
+  elapsed double precision;
+  matched integer;
+  exact_calls_before bigint;
+  exact_calls_after bigint;
+  hnsw_calls_before bigint;
+  hnsw_calls_after bigint;
+  observed text;
+begin
+  for route_case in
+    select *
+    from pg_temp.process_route_cases
+    where case_name = any(p_case_names)
+    order by case_name
+  loop
+    for n in 1..6 loop
+      select
+        coalesce(sum(statements.calls) filter(
+          where statements.query like 'with candidate_keys as materialized%'
+            and statements.query like '%public.processes as source%'
+        ),0),
+        coalesce(sum(statements.calls) filter(
+          where statements.query like 'with nearest as materialized%'
+            and statements.query like '%public.processes as source%'
+        ),0)
+      into exact_calls_before,hnsw_calls_before
+      from extensions.pg_stat_statements as statements;
+
+      started := clock_timestamp();
+      select count(*)::integer
+      into matched
+      from private.portal_projection_semantic_process_v2(
+        pg_temp.portal_versions_vector(1,0),
+        route_case.filters
+      );
+      elapsed := extract(epoch from clock_timestamp()-started)*1000;
+
+      select
+        coalesce(sum(statements.calls) filter(
+          where statements.query like 'with candidate_keys as materialized%'
+            and statements.query like '%public.processes as source%'
+        ),0),
+        coalesce(sum(statements.calls) filter(
+          where statements.query like 'with nearest as materialized%'
+            and statements.query like '%public.processes as source%'
+        ),0)
+      into exact_calls_after,hnsw_calls_after
+      from extensions.pg_stat_statements as statements;
+
+      observed := case
+        when exact_calls_after = exact_calls_before + 1
+         and hnsw_calls_after = hnsw_calls_before then 'exact'
+        when exact_calls_after = exact_calls_before
+         and hnsw_calls_after = hnsw_calls_before + 1 then 'hnsw'
+        else 'ambiguous'
+      end;
+      insert into pg_temp.process_route_samples
+      values(route_case.case_name,n,elapsed,matched,observed);
+    end loop;
+  end loop;
+end $$;
 grant insert on comparison_samples to anon;
 grant execute on function pg_temp.portal_versions_vector_text(real,real) to anon;
 set local role anon;
@@ -50,7 +152,7 @@ begin
 end $$;
 
 reset role;
-create function pg_temp.version_hnsw_plan(p_kind text) returns jsonb
+create function pg_temp.version_hnsw_plan(p_kind text,p_filters jsonb) returns jsonb
 language plpgsql set search_path='' as $$
 declare v_plan jsonb; v_table text;
 begin
@@ -67,34 +169,26 @@ begin
           select 1 from private.portal_catalog_search_rows_v1 as projection
           where projection.dataset_kind=$2 and projection.id=source.id
             and projection.version=source.version::text and projection.state_code in (100,200)
-            and private.portal_card_matches_filters_v2(projection.card,'{"geography":"zzb"}')
+            and private.portal_card_matches_filters_v2(projection.card,$3)
           offset 0
         )
       order by source.embedding_ft operator(extensions.<=>) $1 limit 200
     )
     select * from nearest where distance>=0 and distance<=0.5
     order by distance+0::double precision,id,version desc
-  $query$,v_table) into v_plan using pg_temp.portal_versions_vector(1,0),p_kind;
+  $query$,v_table) into v_plan
+    using pg_temp.portal_versions_vector(1,0),p_kind,p_filters;
   return v_plan;
 end $$;
-grant execute on function pg_temp.version_hnsw_plan(text)
+grant execute on function pg_temp.version_hnsw_plan(text,jsonb)
   to api_internal_executor,portal_public_executor;
 grant execute on function pg_temp.portal_versions_vector(real,real)
   to api_internal_executor,portal_public_executor;
 grant execute on function pg_temp.portal_versions_vector_text(real,real)
   to api_internal_executor,portal_public_executor;
-create temporary table comparison_plans(kind text,plan jsonb);
+create temporary table comparison_plans(kind text,shape text,plan jsonb);
 grant insert on comparison_plans to api_internal_executor,portal_public_executor;
 grant api_internal_executor,portal_public_executor to postgres;
-set local role api_internal_executor;
-set local plan_cache_mode='force_custom_plan';
-set local hnsw.iterative_scan='strict_order';
-set local hnsw.ef_search=200;
-set local hnsw.max_scan_tuples=20000;
-set local hnsw.scan_mem_multiplier=2;
-set local jit=off;
-insert into comparison_plans values('process',pg_temp.version_hnsw_plan('process'));
-reset role;
 set local role portal_public_executor;
 set local plan_cache_mode='force_custom_plan';
 set local hnsw.iterative_scan='strict_order';
@@ -102,8 +196,64 @@ set local hnsw.ef_search=200;
 set local hnsw.max_scan_tuples=20000;
 set local hnsw.scan_mem_multiplier=2;
 set local jit=off;
-insert into comparison_plans values('flow',pg_temp.version_hnsw_plan('flow'));
+insert into comparison_plans values
+  ('process','broad',pg_temp.version_hnsw_plan('process','{"geography":"zzb"}')),
+  ('process','unfiltered',pg_temp.version_hnsw_plan('process','{}')),
+  ('flow','broad',pg_temp.version_hnsw_plan('flow','{"geography":"zzb"}')),
+  ('flow','unfiltered',pg_temp.version_hnsw_plan('flow','{}'));
 reset role;
+set local pg_stat_statements.track='all';
+select pg_temp.measure_process_routes(
+  array['zero','selective','broad','unfiltered']
+);
+
+-- Add the two cutoff populations only after broad/unfiltered plan and timing
+-- evidence has been captured, so their synthetic graph topology cannot skew
+-- the retained HNSW baseline. All boundary vectors remain inside threshold.
+do $$
+declare n integer;
+begin
+  for n in 1..2000 loop
+    perform pg_temp.version_fixture(
+      'process',
+      md5('process:adaptive-2000:' || n)::uuid,
+      '01.00.000',
+      100,
+      'Adaptive Process exact boundary',
+      pg_temp.portal_versions_vector(1,(n::numeric/100000)::real),
+      'ZX2K'
+    );
+  end loop;
+  for n in 1..2001 loop
+    perform pg_temp.version_fixture(
+      'process',
+      md5('process:adaptive-2001:' || n)::uuid,
+      '01.00.000',
+      100,
+      'Adaptive Process HNSW boundary',
+      pg_temp.portal_versions_vector(1,(n::numeric/100000)::real),
+      'ZX2K1'
+    );
+  end loop;
+end $$;
+analyze public.processes;
+analyze private.portal_catalog_search_rows_v1;
+analyze private.portal_catalog_facet_rows_v1;
+update process_route_cases as route_case
+set candidate_population = case
+  when route_case.filters ? 'geography' then (
+    select count(*)::integer
+    from private.portal_catalog_facet_rows_v1 as facet
+    where facet.dataset_kind = 'process'
+      and facet.state_code in (100,200)
+      and facet.facet_contract_version = 1
+      and facet.facet_geography = route_case.filters ->> 'geography'
+  )
+  else null
+end;
+select pg_temp.measure_process_routes(
+  array['boundary_2000','overflow_2001']
+);
 
 with samples as (
   select kind,revision,
@@ -129,6 +279,49 @@ with samples as (
   from keys where key ->> 'version'='01.00.000'
     and exists(select 1 from generate_series(1,20) as n where key ->> 'id'=md5(kind || ':comparison:' || n)::uuid::text)
   group by kind,revision
+), plan_values as (
+  select kind,shape,jsonb_build_object(
+    'executorRole','portal_public_executor',
+    'indexNames',jsonb_path_query_array(plan,'$.**."Index Name"'),
+    'executionMs',plan #> '{0,Execution Time}',
+    'sharedHitBlocks',plan #> '{0,Plan,Shared Hit Blocks}',
+    'sharedReadBlocks',plan #> '{0,Plan,Shared Read Blocks}',
+    'tempReadBlocks',plan #> '{0,Plan,Temp Read Blocks}',
+    'tempWrittenBlocks',plan #> '{0,Plan,Temp Written Blocks}'
+  ) as value
+  from comparison_plans
+), plan_summary as (
+  select kind,jsonb_object_agg(shape,value) as value
+  from plan_values
+  group by kind
+), route_timing as (
+  select
+    route_case.case_name,
+    route_case.expected_route,
+    route_case.candidate_population,
+    max(route_sample.result_count) as result_count,
+    case when count(distinct route_sample.observed_route)=1
+      then min(route_sample.observed_route) else 'mixed' end as observed_route,
+    max(route_sample.elapsed_ms) filter(where route_sample.sample=1) as first_ms,
+    percentile_cont(0.5) within group(order by route_sample.elapsed_ms)
+      filter(where route_sample.sample>1) as repeat_p50_ms,
+    max(route_sample.elapsed_ms) filter(where route_sample.sample>1) as repeat_max_ms
+  from process_route_cases as route_case
+  join process_route_samples as route_sample using(case_name)
+  group by route_case.case_name,route_case.expected_route,
+    route_case.candidate_population
+), route_summary as (
+  select jsonb_object_agg(case_name,jsonb_build_object(
+    'expectedRoute',expected_route,
+    'observedRoute',observed_route,
+    'candidatePopulation',candidate_population,
+    'resultCount',case when expected_route='exact'
+      then result_count else null end,
+    'firstMs',round(first_ms::numeric,3),
+    'repeatP50Ms',round(repeat_p50_ms::numeric,3),
+    'repeatMaxMs',round(repeat_max_ms::numeric,3)
+  )) as value
+  from route_timing
 )
 select jsonb_build_object(
   'benchmark','hybrid-version-comparison.v1',
@@ -138,18 +331,13 @@ select jsonb_build_object(
   'samplesPerRevision',20,'timings',timing.value,'topOverlapCounts',ranking_overlap.value,
   'historicalTop20V1',coalesce((select hits from historical where historical.kind=timing.kind and revision='v1'),0),
   'historicalTop20V2',coalesce((select hits from historical where historical.kind=timing.kind and revision='v2'),0),
-  'v2Plan',jsonb_build_object(
-    'executorRole',case timing.kind
-      when 'flow' then 'portal_public_executor'
-      else 'api_internal_executor'
-    end,
-    'indexNames',jsonb_path_query_array(comparison_plans.plan,'$.**."Index Name"'),
-    'executionMs',comparison_plans.plan #> '{0,Execution Time}',
-    'sharedHitBlocks',comparison_plans.plan #> '{0,Plan,Shared Hit Blocks}',
-    'sharedReadBlocks',comparison_plans.plan #> '{0,Plan,Shared Read Blocks}',
-    'tempReadBlocks',comparison_plans.plan #> '{0,Plan,Temp Read Blocks}',
-    'tempWrittenBlocks',comparison_plans.plan #> '{0,Plan,Temp Written Blocks}'
-  )
+  'v2Plan',plan_summary.value -> 'broad',
+  'v2UnfilteredPlan',plan_summary.value -> 'unfiltered',
+  'adaptiveRouteTimings',case when timing.kind='process'
+    then route_summary.value else null end
 )
-from timing join ranking_overlap using(kind) join comparison_plans using(kind);
+from timing
+join ranking_overlap using(kind)
+join plan_summary using(kind)
+cross join route_summary;
 rollback;
