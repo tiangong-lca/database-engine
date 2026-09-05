@@ -13,3 +13,5 @@ GRANT USAGE ON SCHEMA "api" TO "service_role";
 GRANT USAGE ON SCHEMA "api" TO "api_internal_executor";
 
 GRANT USAGE ON SCHEMA "api" TO "portal_public_executor";
+
+GRANT USAGE ON SCHEMA "api" TO "next_public_search_executor";

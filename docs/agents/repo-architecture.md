@@ -31,8 +31,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-05
-lastReviewedCommit: bf5f6d1c3aa78de644217a87902c340dc1faab84
-lastReviewedNote: 'Reviewed for Database #620: Process V2 now shares the bounded exact-filter route and fixed public Portal executor already established for Flow, while broad retrieval retains the existing HNSW path.'
+lastReviewedCommit: 2780433b9bb37d126643e8b0cf84811fa8bc377f
+lastReviewedNote: 'Reviewed for Database #624: authenticated Next Process/Flow V2 adds a public-only search-key projection and fixed executor for selective exact routing, while actor scopes stay on RLS and broad retrieval stays on HNSW.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

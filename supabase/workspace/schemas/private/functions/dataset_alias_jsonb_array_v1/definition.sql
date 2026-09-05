@@ -16,3 +16,5 @@ REVOKE ALL ON FUNCTION "private"."dataset_alias_jsonb_array_v1"("p_value" "jsonb
 GRANT ALL ON FUNCTION "private"."dataset_alias_jsonb_array_v1"("p_value" "jsonb") TO "service_role";
 
 GRANT ALL ON FUNCTION "private"."dataset_alias_jsonb_array_v1"("p_value" "jsonb") TO "api_internal_executor";
+
+GRANT ALL ON FUNCTION "private"."dataset_alias_jsonb_array_v1"("p_value" "jsonb") TO "next_public_search_executor";

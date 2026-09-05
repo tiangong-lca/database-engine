@@ -9,3 +9,5 @@ GRANT USAGE ON SCHEMA "private" TO "service_role";
 GRANT USAGE ON SCHEMA "private" TO "authenticated";
 
 GRANT USAGE ON SCHEMA "private" TO "portal_public_executor";
+
+GRANT USAGE ON SCHEMA "private" TO "next_public_search_executor";

@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-05
-lastReviewedCommit: bf5f6d1c3aa78de644217a87902c340dc1faab84
-lastReviewedNote: '已为 Database #620 复核：连续两次本地五 schema 刷新生成完全相同的 Process 自适应函数、索引、owner、列 ACL、函数 ACL 和注释产物，生成内容边界不变。'
+lastReviewedCommit: 2780433b9bb37d126643e8b0cf84811fa8bc377f
+lastReviewedNote: '已为 Database #624 复核：本地五 schema 刷新已覆盖 Next Hybrid V2 函数、投影、索引、策略、触发器、角色 ACL 与 API 类型；生成内容边界不变。'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
