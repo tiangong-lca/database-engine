@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-04
-lastReviewedCommit: 1437a9e7b1e234888d6c74bdb4c2b8afd71f7a81
-lastReviewedNote: 'Reviewed for Database #616: the hybrid benchmark now proves the natural Flow V2 plan under the Portal executor while existing schema-workspace and type generators capture the owner/ACL alignment deterministically.'
+lastReviewedAt: 2026-09-05
+lastReviewedCommit: bf5f6d1c3aa78de644217a87902c340dc1faab84
+lastReviewedNote: 'Reviewed for Database #620: the hybrid benchmark now proves both natural Process and Flow V2 plans under the fixed Portal executor.'
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -51,9 +51,11 @@ Local migration outputs and audit JSONL files should be written under `_artifact
 
 Runs rollback-only, explicitly isolated Database #600 synthetic comparison
 fixtures, 20-sample V1/V2 timings, top-10/20 identity overlap, restored
-historical-version coverage and natural V2 semantic plans. The Process plan
-must remain under `api_internal_executor`; the Flow plan must run under
-`portal_public_executor` and naturally name `flows_embedding_ft_hnsw_idx`. It
+historical-version coverage, Process zero/selective/2,000/2,001/broad/unfiltered
+route timings, and natural broad/unfiltered V2 semantic plans. Both Process and
+Flow HNSW plans must run under `portal_public_executor` and naturally name
+their respective `processes_embedding_ft_hnsw_idx` and
+`flows_embedding_ft_hnsw_idx`. It
 accepts only a named local Docker container; there is no remote URL or
 credential option.
 Output contains summary counts/timings/index names, not queries or vectors.

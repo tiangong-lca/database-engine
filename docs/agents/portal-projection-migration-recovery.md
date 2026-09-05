@@ -1,7 +1,7 @@
 ---
-lastReviewedAt: 2026-09-04
-lastReviewedCommit: 1437a9e7b1e234888d6c74bdb4c2b8afd71f7a81
-lastReviewedNote: "Reviewed for Issue #616: the guarded transactional Flow semantic owner/ACL alignment has explicit ordinary-failure and uncertain-commit recovery boundaries, without adding an index or data migration."
+lastReviewedAt: 2026-09-05
+lastReviewedCommit: bf5f6d1c3aa78de644217a87902c340dc1faab84
+lastReviewedNote: "Reviewed for Issue #620: the Process adaptive facet indexes, semantic cutover, and fixed-executor alignment now have explicit retry and uncertain-commit recovery boundaries."
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -18,6 +18,7 @@ whenToUse:
   - when the Issue 563 Process keyword expression GIN is invalid or its cutover is unrecorded
   - when an Issue 603 adaptive Flow facet index is invalid or its semantic cutover is unrecorded
   - when the Issue 616 Flow semantic executor alignment fails or its commit state is uncertain
+  - when an Issue 620 adaptive Process facet index is invalid or its semantic cutover or executor alignment is unrecorded
 whenToUpdate:
   - when the Portal projection migration sequence or recovery test changes
 checkPaths:
@@ -61,9 +62,15 @@ checkPaths:
   - supabase/migrations/20260903120001_portal_flow_filter_access_level_index.sql
   - supabase/migrations/20260903120002_portal_flow_adaptive_semantic_v2.sql
   - supabase/migrations/20260904144000_portal_flow_semantic_executor_alignment.sql
+  - supabase/migrations/20260905134000_portal_process_filter_geography_index.sql
+  - supabase/migrations/20260905134001_portal_process_filter_access_level_index.sql
+  - supabase/migrations/20260905134002_portal_process_adaptive_semantic_v2.sql
+  - supabase/migrations/20260905134003_portal_process_semantic_executor_alignment.sql
   - supabase/tests/20260826_portal_candidate_first_search.sql
   - supabase/tests/20260903_portal_flow_adaptive_semantic_v2.sql
   - supabase/tests/20260904_portal_flow_semantic_executor_alignment.sql
+  - supabase/tests/20260905_portal_process_adaptive_semantic_v2.sql
+  - supabase/tests/20260905_portal_process_semantic_executor_alignment.sql
   - supabase/tests/benchmarks/20260826_portal_candidate_first_explain.sql
 related:
   - ../../AGENTS.md
@@ -77,7 +84,8 @@ related:
 This runbook covers only the additive Issue 531 Portal projection rollout, the
 narrow Issue 533 catalog-summary eligibility index, the Issue 539 sitemap
 exact-version child, the Issue 603 query-only adaptive Flow indexes/cutover,
-and the Issue 616 Flow semantic executor alignment layered on top of the same
+the Issue 616 Flow semantic executor alignment, and the Issue 620 equivalent
+Process adaptive indexes/cutover/executor alignment layered on top of the same
 synchronized facet projection.
 It does not authorize production mutation, migration-history edits, or
 deletion of an applied migration. Use the repository's normal tracked-delivery
@@ -542,6 +550,48 @@ role attributes and memberships, `flows` column privileges, RLS policy, and
 table owner; then ship a separately reviewed reconciliation migration. Do not
 edit migration history, hand-transfer the function, broaden table SELECT, or
 disable/bypass RLS.
+
+The Issue 620 Process rollout repeats this recovery shape without sharing
+migration state with Flow. The standalone `20260905134000` and
+`20260905134001` files build
+`portal_catalog_facet_process_geography_v1_idx` and
+`portal_catalog_facet_process_access_level_v1_idx`. Cleanup is allowed only
+when the matching index migration and both later Process migrations are absent
+from history, the same-name relation is on the reviewed facet table, and it is
+either invalid, definition-drifted, or a canonical-valid COMMIT-gap copy. Run
+only the matching standalone statement, then retry the normal migration:
+
+```sql
+drop index concurrently if exists
+  private.portal_catalog_facet_process_geography_v1_idx;
+
+drop index concurrently if exists
+  private.portal_catalog_facet_process_access_level_v1_idx;
+```
+
+A recorded sibling index is a valid intermediate state. Never remove either
+index after its own history row or `20260905134002` is recorded.
+
+`20260905134002_portal_process_adaptive_semantic_v2.sql` transactionally
+requires the exact predecessor Process helper and both live index fingerprints,
+then replaces only the private Process V2 semantic body. Ordinary failure rolls
+back together and leaves recorded indexes safe for retry. If COMMIT succeeds
+but the `20260905134002` history row is absent, preserve the ledger, live
+function SHA/config/owner/ACL, both index definitions and validity flags, and
+projection/facet assertion results; reconcile with a separately reviewed
+forward migration. Do not edit history, hand-restore function bytes, or rebuild
+the facet projection.
+
+`20260905134003_portal_process_semantic_executor_alignment.sql` is the guarded
+transactional follow-up. It grants only `processes.embedding_ft` to
+`portal_public_executor`, transfers only the Process V2 semantic leaf, and
+restores explicit internal execute access while retaining public-state RLS and
+denying browser roles. Ordinary failure is safe to retry after its prerequisite
+is corrected. A successful COMMIT with a missing `20260905134003` history row
+is not blind-idempotent: preserve the ledger, function SHA/owner/config/ACL,
+role membership and attributes, Process column privileges, RLS policy, and
+table owner, then ship a reviewed forward reconciliation migration. Do not
+hand-transfer the function, broaden table SELECT, or disable/bypass RLS.
 
 The Portal sitemap rollout has a three-file transactional boundary. The expand
 file creates the exact-version child, composite primary/FK keys, ordered shard

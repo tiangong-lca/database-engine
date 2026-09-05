@@ -207,7 +207,7 @@ select extensions.is(
       values
         ('processes', 'id'), ('processes', 'json'),
         ('processes', 'state_code'), ('processes', 'version'),
-        ('processes', 'modified_at'),
+        ('processes', 'modified_at'), ('processes', 'embedding_ft'),
         ('flows', 'id'), ('flows', 'json'), ('flows', 'state_code'),
         ('flows', 'version'), ('flows', 'modified_at'),
         ('flows', 'embedding_ft'),

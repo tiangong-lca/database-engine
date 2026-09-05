@@ -30,9 +30,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-04
-lastReviewedCommit: 1437a9e7b1e234888d6c74bdb4c2b8afd71f7a81
-lastReviewedNote: 'Reviewed for Database #616: the Flow V2 semantic leaf uses the fixed public Portal executor and its state-100/200 RLS policy without granting BYPASSRLS or changing the reviewed query body and HNSW settings.'
+lastReviewedAt: 2026-09-05
+lastReviewedCommit: bf5f6d1c3aa78de644217a87902c340dc1faab84
+lastReviewedNote: 'Reviewed for Database #620: Process V2 now shares the bounded exact-filter route and fixed public Portal executor already established for Flow, while broad retrieval retains the existing HNSW path.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -375,19 +375,21 @@ semantic match count; private semantic helpers apply one 10x scan bound with a
 200-row floor. Empty residual JSON filters must be foldable under custom plans
 so they do not suppress HNSW. Filtered pgvector 0.8 HNSW paths use strict-order
 iterative scans because filtering happens after approximate index traversal.
-The version-aware Portal Flow semantic helper is the narrow exception described
-below: small indexed geography/access-level populations are evaluated exactly
-instead of making HNSW traverse and then discard a large cold working set.
+The version-aware Portal Process and Flow semantic helpers are the narrow
+exceptions described below: small indexed geography/access-level populations
+are evaluated exactly instead of making HNSW traverse and then discard a large
+cold working set.
 
-The Flow V2 semantic leaf is a `SECURITY DEFINER` owned by the isolated
-`portal_public_executor`, not by the authenticated-inheriting internal role.
-That owner remains `NOLOGIN`, `NOINHERIT`, and `NOBYPASSRLS`; it receives only
-the additional `flows.embedding_ft` column read needed by this leaf and remains
-subject to the fixed Portal `state_code IN (100,200)` source policy. The outer
-fusion chain stays owned by `api_internal_executor`, which has explicit execute
-permission on the leaf. This removes authenticated actor/team policy machinery
-from the Flow ANN plan without disabling RLS or opening the private function to
-a browser role.
+The Process and Flow V2 semantic leaves are `SECURITY DEFINER` functions owned
+by the isolated `portal_public_executor`, not by the authenticated-inheriting
+internal role. That owner remains `NOLOGIN`, `NOINHERIT`, and `NOBYPASSRLS`;
+it receives only the additional `processes.embedding_ft` and
+`flows.embedding_ft` column reads needed by those leaves and remains subject to
+the fixed Portal `state_code IN (100,200)` source policies. The outer fusion
+chain stays owned by `api_internal_executor`, which has explicit execute
+permission on both leaves. This removes authenticated actor/team policy
+machinery from Portal ANN plans without disabling RLS or opening either private
+function to a browser role.
 
 The global process/flow HNSW indexes remain necessary for owner/team and broad
 visibility paths. A smaller process partial HNSW index covers the measured
@@ -590,22 +592,22 @@ versions. Latest aliases and sitemaps retain their separate latest-only role.
 
 `api.portal_hybrid_search_v2` filters each branch before a 200-exact-version
 candidate bound and fuses only on `id/version` with the retained 0.5/0.5,
-`k=60` RRF normalized by 61. Process semantic retrieval and broad or unindexed
-Flow retrieval retain strict-order source HNSW with `ef_search=200`,
+`k=60` RRF normalized by 61. Broad or unindexed Process and Flow semantic
+retrieval retains strict-order source HNSW with `ef_search=200`,
 `max_scan_tuples=20000` and `scan_mem_multiplier=2`.
 
-Flow V2 requests containing a normalized geography and/or access-level filter
-first probe at most 2,001 exact-version keys from the synchronized facet
-projection. Two partial covering B-tree indexes hold only the geography or
-access-level value plus `(id, version)` for public Flow rows under facet contract
-v1; neither index stores an embedding. A population of at most 2,000 keys is
-materialized and evaluated with exact cosine distance, while zero matches return
-directly. The exact path rejoins the source and card projection, reapplies the
-complete canonical filter, preserves exact versions, and orders distance ties by
-ID/version. A 2,001st key, an empty filter, or a filter without either indexed
-dimension dispatches to the predecessor HNSW body unchanged. The cutoff is a
-conservative measured local crossover, not a global planner estimate or a new
-public contract.
+Process and Flow V2 requests containing a normalized geography and/or
+access-level filter first probe at most 2,001 exact-version keys from the
+synchronized facet projection. Each kind has two partial covering B-tree
+indexes holding only its geography or access-level value plus `(id, version)`
+under facet contract v1; none stores an embedding. A population of at most
+2,000 keys is materialized and evaluated with exact cosine distance, while zero
+matches return directly. The exact path rejoins the corresponding source and
+card projection, reapplies the complete canonical filter, preserves exact
+versions, and orders distance ties by ID/version. A 2,001st key, an empty
+filter, or a filter without either indexed dimension dispatches to that kind's
+predecessor HNSW body unchanged. The cutoff is a conservative measured local
+crossover, not a global planner estimate or a new public contract.
 
 The HNSW branch's exact-key projection/filter existence probe retains an
 `OFFSET 0` planner boundary so it cannot flatten into a projection-first full
@@ -613,9 +615,9 @@ join that displaces the bounded source index path. Underfill on that approximate
 branch remains underfill; no pool-filling helper or duplicate vector index is
 added. The adaptive dispatch changes neither facet derivation/writes nor public
 function signatures, timeouts, thresholds, candidate caps, grouping, or cursor
-semantics. The later executor alignment changes only the private Flow leaf owner
-and one source-column grant; its body, HNSW settings, external execute ACLs, and
-public-state RLS remain unchanged.
+semantics. The later executor alignments change only each private semantic leaf
+owner and its corresponding source-column grant; their bodies, HNSW settings,
+external execute ACLs, and public-state RLS remain unchanged.
 
 Grouping happens before pagination. `items` contains at most 20 best-version
 dataset representatives; `versionGroups` preserves every recalled exact
