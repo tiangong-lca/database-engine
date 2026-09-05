@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-05
-lastReviewedCommit: bf5f6d1c3aa78de644217a87902c340dc1faab84
-lastReviewedNote: '已为 Database #620 复核：Hybrid 基准现在会验证固定 Portal executor 下的 Process 与 Flow V2 自然计划。'
+lastReviewedCommit: 2780433b9bb37d126643e8b0cf84811fa8bc377f
+lastReviewedNote: '已为 Database #624 复核：受保护的 Next Hybrid V2 基准会在独立本地栈中验证精确/HNSW 分界、稳定结果身份及自然搜索键/PGroonga 计划。'
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -59,6 +59,17 @@ Process 的 0、小集合、2,000、2,001、宽过滤、无过滤分段耗时，
 相关性或生产数据量发布证明。
 
 `node scripts/benchmark_hybrid_versions.mjs --help`
+
+### `benchmark_next_hybrid_v2.mjs`
+
+仅对显式命名的 Database #624 独立本地 Docker 数据库运行 rollback-only 的
+Next Process/Flow 分段基准。它验证 0、1、2,000、2,001、宽过滤和无过滤的路由
+分界、排序结果的稳定摘要、精确过滤与公开机构 team 索引、现有 PGroonga 索引，
+以及符合条件的宽语义计划。该 runner 不接受数据库 URL 或凭据，并拒绝固定本地
+命名合同之外的容器。本地合成耗时只作为路由证据，生产数据量发布门禁仍须在
+持久化 Dev 完成。
+
+`node scripts/benchmark_next_hybrid_v2.mjs --help`
 
 ### `check_auth_email_templates.py`
 

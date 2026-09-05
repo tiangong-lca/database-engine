@@ -22,9 +22,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-09-02
-lastReviewedCommit: 2fa558cc39be4431e6886ada71aef521e862976c
-lastReviewedNote: "Reviewed for Issue #582: the PR workflow skips hosted Preview only when config, migrations, seed, and Function inputs are unchanged; deployable changes retain full proof."
+lastReviewedAt: 2026-09-05
+lastReviewedCommit: 2780433b9bb37d126643e8b0cf84811fa8bc377f
+lastReviewedNote: "Reviewed for Database #624: adding the Next Hybrid pgTAP gate changes no branch binding or deployment semantics; migration Preview, persistent Dev push, Edge follow-up, and dev-to-main promotion remain required."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

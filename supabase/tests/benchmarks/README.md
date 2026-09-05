@@ -39,6 +39,52 @@ The profile must be rerun on persistent staging after deployment. Compare its
 five named plans with the baseline recorded in Issue #292; do not treat a
 Preview branch with seed-only cardinality as equivalent evidence.
 
+## Next authenticated Process/Flow segmented profile
+
+Issue #624 uses a rollback-only local profile for the version-aware Next Hybrid
+V2 contract. The Node guard accepts only an explicitly named isolated local
+Database #624 container and has no remote URL input:
+
+```bash
+node scripts/benchmark_next_hybrid_v2.mjs \
+  --local-container supabase_db_database-engine-624
+```
+
+The profile creates transaction-scoped 1,024-dimensional fixtures and measures
+six samples for each Process and Flow segment: zero, one, exactly 2,000,
+exactly 2,001, broad, and unfiltered. It emits the actual and bounded-probe
+populations, selected `exact`/`hnsw` route, result count, stable SHA-256 identity
+digest, first observation, repeated p50/max, and natural exact/HNSW/PGroonga
+plan evidence. Every fixture write and temporary setting rolls back.
+
+The production pre-change baseline was collected on 2026-09-05 in a bounded
+read-only transaction and is retained in Database Issue #624. Representative
+observations were:
+
+- Process public unfiltered semantic: 1.013 seconds first, 266–267 milliseconds
+  repeated; a 159-row type filter took 786 milliseconds, and a known-empty type
+  took 623 milliseconds before the Edge retry.
+- Flow public unfiltered semantic: 27.683 seconds first, 1.130–1.476 seconds
+  repeated; a 9,800-row type filter took 2.515 seconds.
+- Flow classification with 338 eligible rows took 2.102 seconds and incorrectly
+  returned zero through V1.
+- Process/Flow lexical `water` took 5.125/7.013 seconds first; repeated Flow
+  lexical remained 6.903 seconds.
+- Flow had 3,012 public classification codes: 2,978 populations were at most
+  200, 32 were 201–2,000, and only 2 exceeded the exact-route cutoff.
+
+On the final isolated synthetic run, both entity kinds selected exact distance
+for 0/1/2,000 candidates and HNSW for 2,001/broad/unfiltered candidates. Flow
+small and 2,000-candidate repeated p50 were 4.978 and 13.079 milliseconds;
+Process was 4.377 and 12.499 milliseconds. The natural selective plans named
+the classification GIN, Process-type B-tree, and public-institution team
+B-tree indexes; lexical plans named the existing PGroonga indexes. The small
+synthetic HNSW universe may naturally
+choose a sequential scan; persistent Dev validation must prove the real broad
+plans still name `flows_embedding_ft_hnsw_idx` and
+`processes_embedding_ft_tg_hnsw_idx` before promotion. These local timings are
+route/correctness evidence, not a hosted latency claim.
+
 ## Guarded alias production-cardinality profile
 
 Run only against a reset local project or a disposable PR Preview branch after

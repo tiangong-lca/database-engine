@@ -22,3 +22,5 @@ REVOKE ALL ON FUNCTION "private"."pgroonga_escape_query_terms"("query_terms" "te
 GRANT ALL ON FUNCTION "private"."pgroonga_escape_query_terms"("query_terms" "text"[]) TO "service_role";
 
 GRANT ALL ON FUNCTION "private"."pgroonga_escape_query_terms"("query_terms" "text"[]) TO "api_internal_executor";
+
+GRANT ALL ON FUNCTION "private"."pgroonga_escape_query_terms"("query_terms" "text"[]) TO "next_public_search_executor";
