@@ -68,8 +68,8 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  284::bigint,
-  'api contains the active cutover and consumer facades, including six additive Portal/Next version-search APIs'
+  286::bigint,
+  'api contains the active cutover and consumer facades, including eight additive Portal/Next version-search APIs'
 );
 
 select is(
@@ -80,8 +80,8 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  314::bigint,
-  'private contains the active helpers, including fifteen additive exact-version search internals'
+  324::bigint,
+  'private contains the active helpers, including twenty-five additive exact-version search internals'
 );
 
 select ok(
@@ -112,7 +112,7 @@ select is(
     from pg_trigger trigger_record
     where not trigger_record.tgisinternal
   ),
-  116::bigint,
+  118::bigint,
   'all active application triggers remain present'
 );
 
@@ -121,7 +121,7 @@ select is(
     select count(*)
     from pg_policy
   ),
-  89::bigint,
+  91::bigint,
   'all RLS policies plus the nine restrictive OAuth relation guards remain present'
 );
 
@@ -136,7 +136,7 @@ select is(
       'util'::regnamespace
     )
   ),
-  562::bigint,
+  565::bigint,
   'all application constraints plus the OAuth registry constraints remain present'
 );
 
@@ -204,7 +204,7 @@ select is(
       and routine.prosecdef
       and owner_role.rolname = 'api_internal_executor'
   ),
-  36::bigint,
+  38::bigint,
   'private RLS, canonical Search, and opt-in Next version-search facades use the constrained executor'
 );
 
