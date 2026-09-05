@@ -22,9 +22,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-09-02
-lastReviewedCommit: 2fa558cc39be4431e6886ada71aef521e862976c
-lastReviewedNote: "已为 Issue #582 复核：PR workflow 只在 config、migration、seed 与 Function 输入均未变化时跳过 hosted Preview；可部署变更仍要求完整证据。"
+lastReviewedAt: 2026-09-05
+lastReviewedCommit: 2780433b9bb37d126643e8b0cf84811fa8bc377f
+lastReviewedNote: "已为 Database #624 复核：新增 Next Hybrid pgTAP 门禁不改变分支绑定或部署语义；仍需 migration Preview、持久化 Dev push、Edge 后续部署及 dev-to-main 晋升。"
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

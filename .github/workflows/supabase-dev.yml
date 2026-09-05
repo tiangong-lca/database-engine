@@ -65,6 +65,7 @@ jobs:
           supabase test db supabase/tests/20260826_portal_candidate_first_search.sql
           supabase test db supabase/tests/20260827_portal_card_context_v1.sql
           supabase test db supabase/tests/20260827_portal_sitemap_shards_v1.sql
+          supabase test db supabase/tests/20260905_next_hybrid_filter_adaptive_v2.sql
           supabase test db supabase/tests/20260623_data_product_publication_mvp.sql
           supabase test db supabase/tests/20260716_lci_lcia_release_control_plane.sql
           scripts/test_full_schema_cutover_upgrade.sh

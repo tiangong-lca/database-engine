@@ -956,6 +956,35 @@ export type Database = {
           version: string
         }[]
       }
+      hybrid_search_flow_versions_v2: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
+          lexical_weight?: number
+          match_count?: number
+          match_threshold?: number
+          page_current?: number
+          page_size?: number
+          query_embedding: string
+          query_terms?: string[]
+          query_text: string
+          rrf_k?: number
+          semantic_weight?: number
+          state_code_filter?: number
+          team_id_filter?: string
+        }
+        Returns: {
+          id: string
+          json: Json
+          modified_at: string
+          semantic_candidate_population: number
+          semantic_fallback_used: boolean
+          semantic_route: string
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
       hybrid_search_flowproperties: {
         Args: {
           data_source?: string
@@ -1125,6 +1154,38 @@ export type Database = {
           model_id: string
           model_version: string
           modified_at: string
+          team_id: string
+          total_count: number
+          version: string
+        }[]
+      }
+      hybrid_search_process_versions_v2: {
+        Args: {
+          data_source?: string
+          filter_condition?: Json
+          lexical_weight?: number
+          match_count?: number
+          match_threshold?: number
+          page_current?: number
+          page_size?: number
+          query_embedding: string
+          query_terms?: string[]
+          query_text: string
+          rrf_k?: number
+          semantic_weight?: number
+          state_code_filter?: number
+          team_id_filter?: string
+          type_of_data_set_filter?: string
+        }
+        Returns: {
+          id: string
+          json: Json
+          model_id: string
+          model_version: string
+          modified_at: string
+          semantic_candidate_population: number
+          semantic_fallback_used: boolean
+          semantic_route: string
           team_id: string
           total_count: number
           version: string

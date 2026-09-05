@@ -1,0 +1,1 @@
+CREATE OR REPLACE TRIGGER "zz_next_hybrid_public_process_candidate_v2" AFTER INSERT OR DELETE OR UPDATE OF "id", "version", "state_code", "team_id", "json", "embedding_ft", "modified_at" ON "public"."processes" FOR EACH ROW EXECUTE FUNCTION "private"."sync_next_hybrid_public_process_candidate_v2"();

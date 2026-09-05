@@ -38,8 +38,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-05
-lastReviewedCommit: bf5f6d1c3aa78de644217a87902c340dc1faab84
-lastReviewedNote: 'Reviewed for Database #620: Process adaptive semantic routing, executor ownership, and the narrow source-column grant remain database-engine-owned and follow the existing migration, generated-workspace, validation, and integration boundaries.'
+lastReviewedCommit: 2780433b9bb37d126643e8b0cf84811fa8bc377f
+lastReviewedNote: 'Reviewed for Database #624: Next Process/Flow V2 RPCs, public search-key projection, fixed executor, actor RLS, and generated contracts remain database-engine-owned and follow existing validation and integration boundaries.'
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

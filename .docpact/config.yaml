@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-09-05"
-lastReviewedCommit: "bf5f6d1c3aa78de644217a87902c340dc1faab84"
-lastReviewedNote: 'Reviewed for Database #620: existing Portal, migration-recovery, SQL-test, benchmark, and generated-workspace routes cover Process adaptive semantic routing and executor alignment; ownership and routing are unchanged.'
+lastReviewedCommit: "2780433b9bb37d126643e8b0cf84811fa8bc377f"
+lastReviewedNote: 'Reviewed for Database #624: existing migration, Hybrid benchmark, SQL-test, workflow, and generated-workspace routes cover authenticated Next Process/Flow V2; ownership and routing are unchanged.'
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

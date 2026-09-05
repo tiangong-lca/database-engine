@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-05
-lastReviewedCommit: bf5f6d1c3aa78de644217a87902c340dc1faab84
-lastReviewedNote: 'Reviewed for Database #620: the hybrid benchmark now proves both natural Process and Flow V2 plans under the fixed Portal executor.'
+lastReviewedCommit: 2780433b9bb37d126643e8b0cf84811fa8bc377f
+lastReviewedNote: 'Reviewed for Database #624: the guarded Next Hybrid V2 benchmark covers exact/HNSW cutoff routing, stable result identities, and natural search-key/PGroonga plans in an isolated local stack.'
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
@@ -63,6 +63,19 @@ Reset that isolated stack before and after. This diagnostic is not hosted
 relevance or production-cardinality release evidence.
 
 `node scripts/benchmark_hybrid_versions.mjs --help`
+
+### `benchmark_next_hybrid_v2.mjs`
+
+Runs the rollback-only Database #624 Next Process/Flow segmented benchmark
+against an explicitly named isolated local Docker database. It proves the
+zero/one/2,000/2,001/broad/unfiltered route boundary, stable ordered-result
+digests, exact-filter and public-institution team indexes, existing PGroonga
+indexes, and the eligible broad semantic plan. The runner accepts no database
+URL or credential and rejects every container outside its fixed local naming
+contract. Synthetic timings are local route evidence; persistent Dev remains
+the production-cardinality release gate.
+
+`node scripts/benchmark_next_hybrid_v2.mjs --help`
 
 ### `check_auth_email_templates.py`
 
