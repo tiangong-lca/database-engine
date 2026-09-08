@@ -19,7 +19,7 @@ begin
     );
     return jsonb_build_object(
       'kind', 'process',
-      'names', private.portal_localized_text_v1(v_information #> '{dataSetInformation,name,baseName}'),
+      'names', private.portal_process_names_v1(p_json),
       'generalComment', private.portal_localized_text_v1(v_information #> '{dataSetInformation,common:generalComment}'),
       'referenceProduct', private.portal_process_reference_product_v1(p_json),
       'functionalUnit', private.portal_process_functional_unit_v1(p_state_code, p_json),

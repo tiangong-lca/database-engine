@@ -12,7 +12,7 @@ declare
   v_dataset_count integer;
   v_groups jsonb;
 begin
-  perform private.assert_portal_catalog_projection_contract_v1();
+  perform private.assert_portal_catalog_projection_contract_cn1();
   with candidates as materialized (
     select candidate.*
     from private.portal_projection_hybrid_candidates_v2(
@@ -33,7 +33,7 @@ begin
         )
       ) as match_data
     from candidates as candidate
-    join private.portal_catalog_search_rows_v1 as projection
+    join private.portal_catalog_search_current_v2 as projection
       on projection.dataset_kind = p_kind and projection.id = candidate.id
         and projection.version = candidate.version
     where projection.state_code in (100,200)

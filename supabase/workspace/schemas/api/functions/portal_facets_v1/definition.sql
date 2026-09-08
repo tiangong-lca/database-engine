@@ -60,7 +60,7 @@ begin
     ) || '%';
   end if;
 
-  return private.catalog_portal_facets_cn1_impl(
+  return private.catalog_portal_facets_v1_impl(
     v_kind,
     v_query,
     v_exact_id,

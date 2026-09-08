@@ -22,6 +22,7 @@ def sql(s):
 
 if sql('select count(*) from public.processes') != '0' or sql('select count(*) from public.flows') != '0':
     raise RuntimeError('benchmark requires an empty isolated stack; refuses to mix with existing source records')
+legacy = sql("select coalesce(to_regclass('private.portal_catalog_search_rows_v2')::text,'')") == ''
 statuses=json.loads(sql("select json_agg(json_build_object('table',tgrelid::regclass::text,'name',tgname,'enabled',tgenabled)) from pg_trigger where tgrelid in ('public.processes'::regclass,'public.flows'::regclass) and not tgisinternal"))
 try:
     for table in ['processes','flows']:
@@ -42,27 +43,43 @@ jsonb_build_object('{root}',jsonb_build_object('{info}',jsonb_build_object('data
 'common:generalComment',jsonb_build_object('@xml:lang','en','#text',repeat('Synthetic fixture context. ',20))))))
 from generate_series({lo},{hi}) i;""")
         print(json.dumps({'seed':kind,'rows':count,'seconds':round(time.monotonic()-t,2)}),flush=True)
-    for table in ['processes','flows']:
-        sql(f'alter table public.{table} enable trigger portal_catalog_projection_content_sync_v2;')
+    if not legacy:
+        sql('alter table public.processes enable trigger portal_catalog_projection_content_sync_v2;')
     times=[]
-    for p in sorted((ROOT/'supabase/migrations').glob('202609080901*.sql')):
+    pattern='20260908*.sql' if legacy else '202609080901*.sql'
+    for p in sorted((ROOT/'supabase/migrations').glob(pattern)):
         t=time.monotonic();sql(p.read_text());elapsed=time.monotonic()-t;times.append(elapsed)
         print(json.dumps({'shard':p.name,'seconds':round(elapsed,3)}),flush=True)
-        assert elapsed<120, 'shard exceeded authored statement budget'
-    assert sql('select count(*) from private.portal_catalog_search_rows_v2')=='126246'
-    assert sql('select count(*) from private.portal_catalog_character_rows_v2')=='126246'
+        assert elapsed<60, 'backfill lacks 2x headroom under 120s statement budget'
+    assert sql('select count(*) from private.portal_catalog_search_rows_v2')=='17299'
+    assert sql('select count(*) from private.portal_catalog_character_rows_v2')=='17299'
     sql('analyze private.portal_catalog_search_rows_v2; analyze private.portal_catalog_character_rows_v2;')
     # Exact equality for Flow and non-name Process fields; timestamps are source-owned.
-    assert sql("select count(*) from private.portal_catalog_search_rows_v1 o join private.portal_catalog_search_rows_v2 n using(dataset_kind,id,version) where o.modified_at<>n.modified_at or (o.dataset_kind='flow' and o.card<>n.card) or (o.dataset_kind='process' and o.card-'names'-'document'<>n.card-'names'-'document')")=='0'
+    assert sql("select count(*) from private.portal_catalog_search_rows_v1 o join private.portal_catalog_search_current_v2 n using(dataset_kind,id,version) where o.modified_at<>n.modified_at or (o.dataset_kind='flow' and o.card<>n.card) or (o.dataset_kind='process' and o.card-'names'-'document'<>n.card-'names'-'document')")=='0'
     t=time.monotonic();sql((ROOT/'supabase/migrations/20260908090300_portal_composite_names_cutover.sql').read_text());cutover=time.monotonic()-t
     samples=[]
     for _ in range(20):
         t=time.monotonic();sql("set role anon; select jsonb_array_length(api.portal_search_processes_v2('Route17000needle628')->'items');");samples.append(time.monotonic()-t)
+    assert sql("select count(*) from private.portal_catalog_search_rows_v2 where dataset_kind='flow'")=='0'
+    assert sql("select count(*) from pg_trigger where tgrelid='public.flows'::regclass and tgname='portal_catalog_projection_content_sync_v2'")=='0'
+    # Natural selective plans must prune the other storage generation and retain indexes.
+    def walk(plan):
+        yield plan
+        for child in plan.get('Plans',[]): yield from walk(child)
+    plan_evidence=[]
+    for kind,needle,table,index in [('process','Route17000needle628','portal_catalog_search_rows_v2','portal_catalog_search_process_document_v2_pgroonga'),('flow','VolumeName628 17000','portal_catalog_search_rows_v1','portal_catalog_search_flow_document_v1_pgroonga')]:
+        plan=json.loads(sql(f"begin; grant portal_public_executor to postgres; set local role portal_public_executor; explain (analyze,buffers,format json) select id,version from private.portal_catalog_search_current_v2 where dataset_kind='{kind}' and document operator(extensions.&@) '{needle}' limit 20; rollback;"))[0]
+        nodes=list(walk(plan['Plan']))
+        assert index in [n.get('Index Name') for n in nodes], f'{kind}: selective lexical index missing'
+        relations={n['Relation Name'] for n in nodes if 'Relation Name' in n}
+        assert relations=={table}, f'{kind}: union route did not prune the other generation: {relations}'
+        plan_evidence.append({'kind':kind,'index':index,'executionMs':plan['Execution Time'],'relations':sorted(relations)})
+    print(json.dumps({'naturalRoutingPlans':plan_evidence,'canonicalBaseUpgrade':legacy}),flush=True)
     sizes=sql("select json_object_agg(relname,pg_total_relation_size(oid)) from pg_class where relnamespace='private'::regnamespace and relname in ('portal_catalog_search_rows_v1','portal_catalog_search_rows_v2','portal_catalog_character_rows_v1','portal_catalog_character_rows_v2')")
     print(json.dumps({'evidence':'isolated-synthetic','rows':126246,'maxShardSeconds':max(times),'cutoverSeconds':cutover,'searchRoundtripP95Seconds':sorted(samples)[18],'relationBytes':json.loads(sizes),'flowAndUnrelatedFields':'byte-equal'}),flush=True)
 finally:
     for table in ['processes','flows']:
-        sql(f'alter table public.{table} enable trigger portal_catalog_projection_content_sync_v2; delete from public.{table} where user_id=\'{OWNER}\';')
+        sql(f'delete from public.{table} where user_id=\'{OWNER}\';')
     for s in statuses:
         action={'O':'enable','D':'disable','R':'enable replica','A':'enable always'}[s['enabled']]
         name='"'+s['name'].replace('"','""')+'"'

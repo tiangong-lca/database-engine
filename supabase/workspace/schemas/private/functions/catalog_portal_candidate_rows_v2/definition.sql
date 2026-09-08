@@ -12,14 +12,14 @@ begin
   if p_query = '' then
     return query
     select p.id, p.version, p.card, p.state_code, p.modified_at
-    from private.portal_catalog_search_rows_v1 as p
+    from private.portal_catalog_search_current_v2 as p
     where p.dataset_kind = p_kind and p.state_code in (100,200);
     return;
   end if;
   if p_kind = 'flow' and private.portal_catalog_summary_valid_cas_v1(p_query) then
     return query
     select p.id, p.version, p.card, p.state_code, p.modified_at
-    from private.portal_catalog_search_rows_v1 as p
+    from private.portal_catalog_search_current_v2 as p
     where p.dataset_kind = 'flow' and p.state_code in (100,200)
       and pg_catalog.jsonb_typeof(p.card -> 'casNumber') = 'string'
       and p.card ->> 'casNumber' ~ '^[0-9]{2,7}-[0-9]{2}-[0-9]$'
@@ -41,12 +41,12 @@ begin
     from pattern_matches as pattern
     union
     select p.id, p.version
-    from private.portal_catalog_search_rows_v1 as p
+    from private.portal_catalog_search_current_v2 as p
     where p.dataset_kind = p_kind and p.id = p_exact_id and p.state_code in (100,200)
   )
   select p.id, p.version, p.card, p.state_code, p.modified_at
   from matched
-  join private.portal_catalog_search_rows_v1 as p
+  join private.portal_catalog_search_current_v2 as p
     on p.dataset_kind = p_kind and p.id = matched.id and p.version = matched.version
   where p.state_code in (100,200);
 end;

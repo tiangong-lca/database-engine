@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS "private"."portal_catalog_character_rows_v2" (
     "classification_exact_characters" "text" NOT NULL,
     "character_contract_version" smallint DEFAULT 1 NOT NULL,
     CONSTRAINT "portal_catalog_character_rows__character_contract_version_check" CHECK (("character_contract_version" = 1)),
-    CONSTRAINT "portal_catalog_character_rows_v1_dataset_kind_check" CHECK (("dataset_kind" = ANY (ARRAY['process'::"text", 'flow'::"text"]))),
+    CONSTRAINT "portal_catalog_character_rows_v1_dataset_kind_check" CHECK (("dataset_kind" = 'process'::"text")),
     CONSTRAINT "portal_catalog_character_rows_v1_state_code_check" CHECK (("state_code" = ANY (ARRAY[100, 200]))),
     CONSTRAINT "portal_catalog_character_rows_v1_version_check" CHECK (("version" ~ '^\d{2}\.\d{2}\.\d{3}$'::"text"))
 );

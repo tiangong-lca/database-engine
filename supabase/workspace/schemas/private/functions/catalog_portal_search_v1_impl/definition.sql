@@ -232,7 +232,7 @@ begin
       select portal_ordered_keys.*,
         projection.card
       from portal_ordered_keys
-      join private.portal_catalog_search_rows_v1 as projection
+      join private.portal_catalog_search_current_v2 as projection
         on projection.dataset_kind = 'flow'
        and projection.id = portal_ordered_keys.id
        and projection.version = portal_ordered_keys.version

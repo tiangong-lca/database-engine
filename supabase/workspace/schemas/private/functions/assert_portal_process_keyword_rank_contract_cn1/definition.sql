@@ -5,7 +5,7 @@ CREATE OR REPLACE FUNCTION "private"."assert_portal_process_keyword_rank_contrac
     AS $$
 declare
   v_expected_digest constant text :=
-    '87b67d2a63062c88b59fdd5c8699f0389f608f9b32a54a2d6f8e1e50bc42ae34';
+    '9686f14020c08ebfdd7a7cd0b049d8e0ea8b6acf9710d16fbe0bf3ca45510821';
   v_expected_index constant text :=
     'CREATE INDEX portal_catalog_search_process_exact_rank_v2_gin ON private.portal_catalog_search_rows_v2 USING gin (private.portal_process_rank_name_keys_v1(card), private.portal_process_rank_classification_keys_v1(card)) WHERE (dataset_kind = ''process''::text)';
 begin

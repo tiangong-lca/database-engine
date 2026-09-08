@@ -21,7 +21,7 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-08
-lastReviewedCommit: 0c6c00d93934c86d0059b37c3248d91449adab6b
+lastReviewedCommit: 207876abe58d3c9437430dffd4c770223e539218
 lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
 related:
   - ../../AGENTS.md

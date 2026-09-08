@@ -1323,7 +1323,7 @@ def main() -> int:
     composite_sql = (MIGRATIONS_DIR / composite_anchor).read_text(encoding="utf-8")
     for digest in (
         "5260ed0b5662bf6b4bdae5250d0971fca369d8f36766f32207df47acd68e3500",
-        "87b67d2a63062c88b59fdd5c8699f0389f608f9b32a54a2d6f8e1e50bc42ae34",
+        "9686f14020c08ebfdd7a7cd0b049d8e0ea8b6acf9710d16fbe0bf3ca45510821",
     ):
         if digest not in composite_sql:
             violations.append(f"{composite_anchor}: missing literal {digest}")

@@ -5,7 +5,7 @@ CREATE OR REPLACE FUNCTION "api"."portal_search_flows_v2"("p_query" "text", "p_f
     AS $$
 begin
   return pg_catalog.jsonb_set(private.portal_decorate_card_context_v1(
-    private.portal_search_cn2(
+    private.portal_search_v2(
       'flow', p_query, p_filters, p_sort, p_cursor, p_limit
     )
   ), '{schemaVersion}', '"portal.public-search-page.v2"'::jsonb);

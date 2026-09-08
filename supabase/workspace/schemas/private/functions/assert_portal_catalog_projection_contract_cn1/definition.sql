@@ -22,6 +22,18 @@ declare
     '5260ed0b5662bf6b4bdae5250d0971fca369d8f36766f32207df47acd68e3500';
   v_live_digest text;
 begin
+  perform private.assert_portal_catalog_projection_contract_v1();
+  -- Flow remains on frozen V1. Pin the zero-storage routing definitions and
+  -- invoker security so the mixed-kind readers cannot bypass either contract.
+  if (select count(*) from pg_catalog.pg_class c where
+      c.relowner='postgres'::regrole and c.relkind='v'
+      and c.reloptions @> array['security_invoker=true']::text[]
+      and ((c.oid='private.portal_catalog_search_current_v2'::regclass
+            and pg_catalog.md5(pg_catalog.pg_get_viewdef(c.oid,true))='1c2b797978f82e0c3db4975b57426e5e')
+        or (c.oid='private.portal_catalog_character_current_v2'::regclass
+            and pg_catalog.md5(pg_catalog.pg_get_viewdef(c.oid,true))='af8d2dfd90e14b2e06d7d95548f0d97d'))) <> 2 then
+    raise exception using errcode='55000', message='Portal name routing contract drifted';
+  end if;
   select private.portal_catalog_projection_manifest_sha256_cn1()
   into v_live_digest;
 

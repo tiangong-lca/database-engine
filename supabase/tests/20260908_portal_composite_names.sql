@@ -40,6 +40,12 @@ select throws_ok('select private.assert_portal_catalog_projection_contract_cn1()
 select lives_ok('select private.assert_portal_catalog_projection_contract_v1()','new-helper drift cannot redefine frozen V1 semantics');
 do $$ begin execute (select definition from original_names_helper); end $$;
 select lives_ok('select private.assert_portal_catalog_projection_contract_cn1()','restored exact helper satisfies the new manifest');
+select is((select count(*) from pg_trigger where tgrelid='public.flows'::regclass and tgname='portal_catalog_projection_content_sync_v2'),0::bigint,'Flow has no second writer');
+select ok(not has_table_privilege('anon','private.portal_catalog_search_current_v2','select'),'routing view is private');
+select ok((select reloptions @> array['security_invoker=true'] from pg_class where oid='private.portal_catalog_search_current_v2'::regclass),'routing uses caller RLS and privileges');
+alter view private.portal_catalog_search_current_v2 set (security_invoker=false);
+select throws_ok('select private.assert_portal_catalog_projection_contract_cn1()','55000','Portal name routing contract drifted','routing security drift fails closed');
+alter view private.portal_catalog_search_current_v2 set (security_invoker=true);
 -- Disable unrelated publication/embedding jobs only in this rollback fixture.
 alter table public.processes disable trigger user;
 alter table public.processes enable trigger portal_catalog_projection_content_sync_v1;
@@ -102,10 +108,24 @@ select ok((select octet_length(payload::text)<524288 from names_results where la
 select ok((select octet_length(payload->>'nextCursor')<3000 from names_results where label='longpage1'),'long names do not create unbounded cursors');
 select ok((select min(length(item#>>'{names,0,value}'))>600 from names_results cross join lateral jsonb_array_elements(payload->'items') item where label='longpage1'),'full primary names survive bounded sort fallback');
 select is((select count(distinct item#>>'{key,id}') from names_results cross join lateral jsonb_array_elements(payload->'items') item where label in ('longpage1','longpage2')),55::bigint,'long-name pages contain no duplicate keys');
-select ok((select (api.portal_search_processes_v1('LongName628','{}','name_asc',null,1)->>'queryFingerprint') is distinct from (private.portal_search_v1('process','LongName628','{}','name_asc',null,1)->>'queryFingerprint')),'new Search epoch cannot accept frozen name-order cursors');
+select ok((select (api.portal_search_processes_v1('LongName628','{}','name_asc',null,1)->>'queryFingerprint') is distinct from private.portal_query_fingerprint_v1('process','longname628','{}','name_asc')),'new Search epoch cannot accept frozen name-order cursors');
 update public.processes set state_code=20 where id='62810000-0000-4000-8000-000000000001';
 select is((select count(*) from private.portal_catalog_search_rows_v2 where id='62810000-0000-4000-8000-000000000001'),0::bigint,'withdrawal removes new search rows');
 select is((select count(*) from private.portal_catalog_character_rows_v2 where id='62810000-0000-4000-8000-000000000001'),0::bigint,'withdrawal cascades new character rows');
 select is((select count(*) from private.portal_catalog_facet_rows_v1 where id='62810000-0000-4000-8000-000000000001'),0::bigint,'name-independent facets remain synchronized through frozen writer');
+-- Unchanged Flow content is read directly from V1, including future updates.
+alter table public.flows disable trigger user;
+alter table public.flows enable trigger portal_catalog_projection_content_sync_v1;
+insert into public.flows(id,version,json,state_code,modified_at) values
+('62810000-0000-4000-8000-000000000002','01.00.000',
+'{"flowDataSet":{"flowInformation":{"dataSetInformation":{"name":{"baseName":"FlowStable628"}}}}}',100,'2026-09-08T00:00:00Z');
+select is((select count(*) from private.portal_catalog_search_rows_v2 where dataset_kind='flow'),0::bigint,'Flow never copied into Process shadow');
+select is((select card from private.portal_catalog_search_current_v2 where dataset_kind='flow' and id='62810000-0000-4000-8000-000000000002'),
+(select card from private.portal_catalog_search_rows_v1 where dataset_kind='flow' and id='62810000-0000-4000-8000-000000000002'),'Flow current card is exactly V1');
+select is(api.portal_search_flows_v1('FlowStable628')->>'queryFingerprint',private.portal_query_fingerprint_v1('flow','flowstable628','{}','relevance'),'Flow cursor epoch remains unchanged');
+select throws_ok($test$insert into private.portal_catalog_search_rows_v2
+select dataset_kind,id,version,state_code,modified_at,card,document,2 from private.portal_catalog_search_rows_v1 where dataset_kind='flow' and id='62810000-0000-4000-8000-000000000002'$test$,'23514',null,'shadow rejects Flow data');
+update public.flows set state_code=20 where id='62810000-0000-4000-8000-000000000002';
+select is((select count(*) from private.portal_catalog_search_current_v2 where dataset_kind='flow' and id='62810000-0000-4000-8000-000000000002'),0::bigint,'Flow withdrawal remains live through sole V1 writer');
 select * from finish();
 rollback;

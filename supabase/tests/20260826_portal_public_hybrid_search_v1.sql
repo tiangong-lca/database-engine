@@ -460,8 +460,6 @@ alter table public.processes
   enable trigger portal_catalog_projection_content_sync_v2;
 alter table public.flows
   enable trigger portal_catalog_projection_content_sync_v1;
-alter table public.flows
-  enable trigger portal_catalog_projection_content_sync_v2;
 
 insert into public.processes (
   id,

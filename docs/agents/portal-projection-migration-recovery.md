@@ -940,39 +940,41 @@ uses Supabase CLI `2.109.1`.
 
 ## Composite-name projection rollout
 
-The `20260908090000` expand creates the composite helper, a new read graph,
-immutable V2 registry, shadow card/character tables, and second Process/Flow
-source triggers. V1 card semantics and manifests remain intact. Flow cards are
-byte-equivalent; Process cards differ only in `names` and derived `document`.
-Both writer generations commit together, so existing facet/sitemap children
-remain exact for key, visibility, timestamp and their five name-independent facts.
+Ten migrations implement the Process-only change:
 
-The sixteen `20260908090100..115` UUID-sixteenth migrations lock eligible source
-rows in key order with `FOR SHARE` before deriving new cards. Each kind is capped
-at 20,000 eligible rows per shard, with a five-second lock wait and 120-second
-statement timeout. Concurrent updates, withdrawals, deletes and key changes
-serialize through the source lock and the dual writer. `ON CONFLICT DO NOTHING`
-prevents shard retries from replacing newer committed cards. Each shard records
-its committed counts and completion time in `private.portal_names_backfill_v2`.
-An over-bound shard requires a reviewed finer partition before deployment; never
-remove the bound or edit a recorded shard. Preview size is not production-volume
-proof.
+1. `20260908090000` installs the immutable composite-name helpers, Process-only
+   card/character tables and a Process dual writer. V1 Flow storage, indexes and
+   writer remain untouched. Two zero-storage invoker-security views combine
+   Process V2 with Flow V1 for shared readers; the live guard pins their exact
+   definitions, owner and invoker security as well as the frozen V1 contract.
+2. `20260908090100..103` backfill four Process UUID quarters, each bounded to
+   5,000 eligible records and 120 seconds with a five-second lock wait. Source rows are locked
+   in key order with `FOR SHARE`; concurrent source updates and deletions serialize
+   with the writer. `ON CONFLICT DO NOTHING` cannot overwrite newer committed
+   cards. One audit row per quarter records successful coverage. If the preflight count exceeds
+   the reviewed bound, fail and split the unrecorded backfill in a reviewed change.
+3. `20260908090202..205` build four Process lexical/rank/latest/summary indexes
+   concurrently, one top-level statement per migration. No Flow index is copied.
+4. `20260908090300` validates exact index readiness, manifests, completed backfill,
+   source-derived V1/V2 Process key/state/time parity and character coverage under
+   a short Process write fence. It atomically updates existing mutable readers
+   and public wrappers. Only immutable generations coexist; there is no duplicate
+   general Search/Hybrid/Facet reader graph.
 
-The six `20260908090200..205` migrations build lexical, rank and supporting
-indexes concurrently. Cutover `20260908090300` checks every exact index definition
-and readiness, all new manifests, sixteen completed shards, equal V1/V2
-key/state/timestamp sets, character coverage and both source triggers under a
-short source-write fence. It then switches the ten public Search, Hybrid, Facet,
-Summary and Detail wrappers atomically. Failure rolls back the wrappers; a
-recorded expand or shard must not be rerun by editing migration history. A shard
-COMMIT/history gap can replay unchanged. A concurrent index failure requires
-exact unrecorded-index inspection and reviewed recovery before retry; a
-same-name invalid or wrong index never qualifies for cutover.
+The original source JSON, version and modified_at remain unchanged. Both Process
+writers commit together, keeping the existing facet/sitemap chain synchronized.
+Each bounded Process quarter must demonstrate at least 2x statement-timeout
+headroom on the representative populated upgrade. Preview counts alone are not
+production-volume proof. A wrong or invalid concurrent index fails cutover; inspect
+only that exact unrecorded index before the normal reviewed recovery. Ordinary
+transaction failures roll back the file. Never edit persistent migration history.
 
-Validate from a blank isolated stack, then rehearse a populated base-to-head
-upgrade. On the installed head, the concurrency runner requires an explicitly
-isolated container and restores the original source-trigger state after cleaning
-its synthetic records:
+PR #629's earlier 24-file sequence was applied only to its disposable Preview.
+The revised ten-file canonical sequence requires explicit discard/reprovision of
+that exact PR Preview before fresh proof. Do not apply the shortened sequence over
+the earlier Preview ledger, and do not discard persistent Dev or Main state.
+
+Validate a blank isolated stack and a populated canonical-base-to-head upgrade:
 
 ```bash
 python3 scripts/test_portal_composite_names_upgrade.py \
@@ -984,12 +986,10 @@ python3 scripts/benchmark_portal_composite_names.py \
   --local-container supabase_db_database-engine-628
 ```
 
-The volume runner requires an empty isolated source set, creates 17,299 Process
-and 108,947 Flow fixtures, replays all sixteen shards, verifies unchanged Flow
-and unrelated Process fields, and measures cutover and selective Search. Its
-output is explicitly synthetic, including source/writer costs and relation
-sizes; it is not real-data relevance or production timing evidence.
-
-Keep deployed source-field readback, shard counts, index readiness, exact RPC
-version/name equality, response limits and cache-expiry evidence in the delivery
-Issue. Installing the helper alone does not complete the rollout.
+The volume runner requires empty isolated Process/Flow sources. It seeds 17,299
+Process and 108,947 Flow records, measures the Process-only rollout, verifies no
+Flow shadow rows or second writer, and checks unchanged unrelated fields plus
+representative query plans. All timings and storage sizes are synthetic evidence.
+Keep deployed exact-source readback, migration/index readiness, DTO agreement and
+cache-expiry evidence in the delivery Issue. Installing helpers alone does not
+complete deployment.

@@ -447,8 +447,9 @@ Do not collapse those phases into one validation note.
 For the composite-name projection, run a blank reset, all `*portal*.sql` suites,
 `20260805_full_schema_cutover.sql`, `20260806_api_contract_closure.sql`, adjacent
 OAuth/Hybrid contracts, and the isolated concurrency runner documented in
-`portal-projection-migration-recovery.md`. Keep both projection triggers enabled
-in synthetic source fixtures that disable unrelated authoring triggers. Preserve
+`portal-projection-migration-recovery.md`. Keep both Process projection triggers and the sole Flow V1 trigger enabled
+in synthetic fixtures that disable unrelated authoring triggers. Prove no Flow
+shadow rows or second writer and exact invoker-view routing/security. Preserve
 V1 latest-only and V2 matched-version expectations. Record populated shard timing,
 replay/concurrency results, long multilingual page/cursor bounds, strict consumer
 DTO validation, and the exact local regeneration comparison. Production source

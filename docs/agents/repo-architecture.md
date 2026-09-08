@@ -127,16 +127,17 @@ remains consumer-owned. The public `names` DTO shape and schema versions remain
 unchanged. Flow, reference-product, provider and exchange names retain their
 existing semantics.
 
-Composite-name Search uses `portal_catalog_search_rows_v2` and its character
-child. The `*_cn1`/`*_cn2` private read graph denotes the composite-name storage
-generation while preserving V1 latest-only and V2 matched-version RPC behavior.
-Its separate literal derivation and rank manifests leave the frozen V1 closure,
-registry and rows intact. Both source writers run in the same transaction;
-name-independent facet/sitemap facts remain on their unchanged V1 child chain.
-This retained rollback chain adds a second card writer and projection storage;
-it may be contracted only through separately reviewed migration work. Search
-and Hybrid V2 cursor fingerprints use a new name epoch. Old search-order cursors
-must restart after cutover. Rollout and recovery are owned by
+Composite-name Search stores only Process rows in `portal_catalog_search_rows_v2`
+and its character child. Flow retains its V1 rows, indexes and sole source writer.
+Two private invoker-security `UNION ALL` views route mixed-kind reads to Process
+V2 and Flow V1 without copying Flow data. Mutable readers update in place at
+cutover; only immutable derivation/rank controls and their required helpers have
+separate `cn1` identities. V1 latest-only and V2 matched-version RPC behavior
+remain distinct. The literal manifests leave the frozen V1 closure and registry
+intact. Process retains both writers so its name-independent facet/sitemap facts
+continue through the V1 chain; Flow gains no write amplification. A later reviewed
+contraction may retire redundant Process storage. Search and Hybrid V2 cursor
+fingerprints use a new name epoch. Rollout and recovery are owned by
 `portal-projection-migration-recovery.md`.
 
 `contracts/portal/**` owns the exhaustive versioned JSON Schemas for the anonymous Portal DTOs. `contracts/portal/generated/*.d.ts` is committed, deterministic output from those schemas; it is never a parallel handwritten contract. The matching `api.portal_*_v1` functions are additive façades: they fix visibility to public states 100/200, use stable keyset cursors, return canonical decimal strings, and recursively exclude actor/team/review fields, embeddings, credentials, private artifact locators, and database error detail. They do not replace or change legacy Search, raw-table RLS, Data Product, or Release consumers.

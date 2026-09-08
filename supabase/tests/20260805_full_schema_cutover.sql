@@ -80,8 +80,8 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  366::bigint,
-  'private contains the active helpers, including the twenty-five exact-version and forty-two composite-name internals'
+  337::bigint,
+  'private contains the active helpers, including the twenty-five exact-version and thirteen composite-name internals'
 );
 
 select ok(
@@ -112,8 +112,8 @@ select is(
     from pg_trigger trigger_record
     where not trigger_record.tgisinternal
   ),
-  121::bigint,
-  'all active application triggers and three composite-name sync triggers remain present'
+  120::bigint,
+  'all active application triggers and two Process composite-name sync triggers remain present'
 );
 
 select is(

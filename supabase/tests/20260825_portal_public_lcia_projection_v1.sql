@@ -715,8 +715,6 @@ alter table public.processes enable trigger user;
 alter table public.flows disable trigger user;
 alter table public.flows
   enable trigger portal_catalog_projection_content_sync_v1;
-alter table public.flows
-  enable trigger portal_catalog_projection_content_sync_v2;
 insert into public.flows (id, version, json, user_id, state_code)
 values (
   '52710000-0000-4000-8000-000000000106',

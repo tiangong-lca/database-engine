@@ -22,7 +22,7 @@ def sql(statement: str) -> str:
 
 # IDs and payloads are synthetic. All fixture source changes are cleaned up.
 IDS = ['62820000-0000-4000-8000-' + f'{i:012d}' for i in range(1, 5)]
-shard = (ROOT / 'supabase/migrations/20260908090106_portal_composite_names_backfill_6.sql').read_text()
+shard = (ROOT / 'supabase/migrations/20260908090101_portal_composite_names_backfill_1.sql').read_text()
 
 def writer(statement: str) -> subprocess.Popen:
     p = subprocess.Popen(CMD, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True)

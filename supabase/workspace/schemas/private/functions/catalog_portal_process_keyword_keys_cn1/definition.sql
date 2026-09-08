@@ -25,7 +25,7 @@ begin
   return query
   with matched_versions as materialized (
     select matched.id, matched.version
-    from private.catalog_portal_process_pattern_versions_cn1(
+    from private.catalog_portal_process_pattern_versions_v1(
       v_like_pattern
     ) as matched
   ), candidate_ids as materialized (
