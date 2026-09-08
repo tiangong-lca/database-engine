@@ -1,7 +1,7 @@
 ---
-lastReviewedAt: 2026-09-05
-lastReviewedCommit: bf5f6d1c3aa78de644217a87902c340dc1faab84
-lastReviewedNote: "Reviewed for Issue #620: the Process adaptive facet indexes, semantic cutover, and fixed-executor alignment now have explicit retry and uncertain-commit recovery boundaries."
+lastReviewedAt: 2026-09-08
+lastReviewedCommit: 0c6c00d93934c86d0059b37c3248d91449adab6b
+lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -937,3 +937,59 @@ expected five-second lock timeout is captured, the harness terminates exactly
 that application-name-bound backend and verifies a 5–30 second wall window,
 unchanged migration ledger/helper state, and successful retry. Formal evidence
 uses Supabase CLI `2.109.1`.
+
+## Composite-name projection rollout
+
+Ten migrations implement the Process-only change:
+
+1. `20260908090000` installs the immutable composite-name helpers, Process-only
+   card/character tables and a Process dual writer. V1 Flow storage, indexes and
+   writer remain untouched. Two zero-storage invoker-security views combine
+   Process V2 with Flow V1 for shared readers; the live guard pins their exact
+   definitions, owner and invoker security as well as the frozen V1 contract.
+2. `20260908090100..103` backfill four Process UUID quarters, each bounded to
+   5,000 eligible records and 120 seconds with a five-second lock wait. Source rows are locked
+   in key order with `FOR SHARE`; concurrent source updates and deletions serialize
+   with the writer. `ON CONFLICT DO NOTHING` cannot overwrite newer committed
+   cards. One audit row per quarter records successful coverage. If the preflight count exceeds
+   the reviewed bound, fail and split the unrecorded backfill in a reviewed change.
+3. `20260908090202..205` build four Process lexical/rank/latest/summary indexes
+   concurrently, one top-level statement per migration. No Flow index is copied.
+4. `20260908090300` validates exact index readiness, manifests, completed backfill,
+   source-derived V1/V2 Process key/state/time parity and character coverage under
+   a short Process write fence. It atomically updates existing mutable readers
+   and public wrappers. Only immutable generations coexist; there is no duplicate
+   general Search/Hybrid/Facet reader graph.
+
+The original source JSON, version and modified_at remain unchanged. Both Process
+writers commit together, keeping the existing facet/sitemap chain synchronized.
+Each bounded Process quarter must demonstrate at least 2x statement-timeout
+headroom on the representative populated upgrade. Preview counts alone are not
+production-volume proof. A wrong or invalid concurrent index fails cutover; inspect
+only that exact unrecorded index before the normal reviewed recovery. Ordinary
+transaction failures roll back the file. Never edit persistent migration history.
+
+PR #629's earlier 24-file sequence was applied only to its disposable Preview.
+The revised ten-file canonical sequence requires explicit discard/reprovision of
+that exact PR Preview before fresh proof. Do not apply the shortened sequence over
+the earlier Preview ledger, and do not discard persistent Dev or Main state.
+
+Validate a blank isolated stack and a populated canonical-base-to-head upgrade:
+
+```bash
+python3 scripts/test_portal_composite_names_upgrade.py \
+  --local-container supabase_db_database-engine-628
+supabase test db supabase/tests/20260908_portal_composite_names.sql
+python3 scripts/test_portal_composite_names_graph.py \
+  --local-container supabase_db_database-engine-628
+python3 scripts/benchmark_portal_composite_names.py \
+  --local-container supabase_db_database-engine-628
+```
+
+The volume runner requires empty isolated Process/Flow sources. It seeds 17,299
+Process and 108,947 Flow records, measures the Process-only rollout, verifies no
+Flow shadow rows or second writer, and checks unchanged unrelated fields plus
+representative query plans. All timings and storage sizes are synthetic evidence.
+Keep deployed exact-source readback, migration/index readiness, DTO agreement and
+cache-expiry evidence in the delivery Issue. Installing helpers alone does not
+complete deployment.

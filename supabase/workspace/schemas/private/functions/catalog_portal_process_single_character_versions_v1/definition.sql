@@ -13,7 +13,7 @@ CREATE OR REPLACE FUNCTION "private"."catalog_portal_process_single_character_ve
     AS $$
   select projection.id,
     projection.version
-  from private.portal_catalog_search_rows_v1 as projection
+  from private.portal_catalog_search_current_v2 as projection
   where projection.dataset_kind = 'process'
     and pg_catalog.strpos(projection.document, p_literal) > 0
 $$;

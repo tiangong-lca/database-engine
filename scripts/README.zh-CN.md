@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-05
-lastReviewedCommit: 2780433b9bb37d126643e8b0cf84811fa8bc377f
-lastReviewedNote: '已为 Database #624 复核：受保护的 Next Hybrid V2 基准会在独立本地栈中验证精确/HNSW 分界、稳定结果身份及自然搜索键/PGroonga 计划。'
+lastReviewedAt: 2026-09-08
+lastReviewedCommit: 031316ed04052f51a7c1a0d46f51f0341cbf362a
+lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

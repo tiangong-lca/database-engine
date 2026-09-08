@@ -684,6 +684,8 @@ values (
 alter table public.processes disable trigger user;
 alter table public.processes
   enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v2;
 
 insert into public.processes (id, version, json, user_id, state_code)
 values
@@ -3701,6 +3703,8 @@ reset role;
 alter table public.processes disable trigger user;
 alter table public.processes
   enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v2;
 insert into public.processes (id, version, json, user_id, state_code)
 values (
   '52710000-0000-4000-8000-000000000105', '01.00.000',

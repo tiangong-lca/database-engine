@@ -53,13 +53,13 @@ begin
         and process.embedding_ft is not null
         and exists (
           select 1
-          from private.portal_catalog_search_rows_v1 as projection
+          from private.portal_catalog_search_current_v2 as projection
           where projection.dataset_kind = 'process'
             and projection.id = process.id
             and projection.version = process.version::text
             and not exists (
               select 1
-              from private.portal_catalog_search_rows_v1 as newer
+              from private.portal_catalog_search_current_v2 as newer
               where newer.dataset_kind = projection.dataset_kind
                 and newer.id = projection.id
                 and (
@@ -137,13 +137,13 @@ begin
       and v_source_distances[source.ordinal] <= 0.5::double precision
       and exists (
         select 1
-        from private.portal_catalog_search_rows_v1 as projection
+        from private.portal_catalog_search_current_v2 as projection
         where projection.dataset_kind = 'process'
           and projection.id = v_source_ids[source.ordinal]
           and projection.version = v_source_versions[source.ordinal]
           and not exists (
             select 1
-            from private.portal_catalog_search_rows_v1 as newer
+            from private.portal_catalog_search_current_v2 as newer
             where newer.dataset_kind = projection.dataset_kind
               and newer.id = projection.id
               and (
@@ -169,7 +169,7 @@ begin
 
   return query
   select exact.*
-  from private.portal_projection_semantic_process_exact_v1(
+  from private.portal_projection_semantic_process_exact_cn1(
     p_query_embedding
   ) as exact;
   return;

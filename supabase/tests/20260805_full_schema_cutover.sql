@@ -80,8 +80,8 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  324::bigint,
-  'private contains the active helpers, including twenty-five additive exact-version search internals'
+  337::bigint,
+  'private contains the active helpers, including the twenty-five exact-version and thirteen composite-name internals'
 );
 
 select ok(
@@ -112,8 +112,8 @@ select is(
     from pg_trigger trigger_record
     where not trigger_record.tgisinternal
   ),
-  118::bigint,
-  'all active application triggers remain present'
+  120::bigint,
+  'all active application triggers and two Process composite-name sync triggers remain present'
 );
 
 select is(
@@ -121,8 +121,8 @@ select is(
     select count(*)
     from pg_policy
   ),
-  91::bigint,
-  'all RLS policies plus the nine restrictive OAuth relation guards remain present'
+  96::bigint,
+  'all RLS policies, nine OAuth guards and five composite-name policies remain present'
 );
 
 select is(
@@ -136,8 +136,8 @@ select is(
       'util'::regnamespace
     )
   ),
-  565::bigint,
-  'all application constraints plus the OAuth registry constraints remain present'
+  587::bigint,
+  'all application, OAuth registry and twenty-two composite-name constraints remain present'
 );
 
 select is(
@@ -165,8 +165,8 @@ select is(
       and class.relkind in ('r', 'p')
       and class.relrowsecurity
   ),
-  71::bigint,
-  'RLS enablement is preserved across moved tables and OAuth registry state'
+  75::bigint,
+  'RLS covers existing tables plus four private composite-name relations'
 );
 
 select ok(

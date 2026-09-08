@@ -11,7 +11,7 @@ declare
   v_items jsonb;
   v_next_cursor_payload jsonb;
 begin
-  perform private.assert_portal_catalog_character_contract_v1();
+  perform private.assert_portal_catalog_character_contract_cn1();
 
   if p_kind not in ('process', 'flow')
      or pg_catalog.char_length(p_query) <> 1
@@ -31,7 +31,7 @@ begin
       character_row.name_exact_characters,
       character_row.classification_characters,
       character_row.classification_exact_characters
-    from private.portal_catalog_character_rows_v1 as character_row
+    from private.portal_catalog_character_current_v2 as character_row
     where character_row.dataset_kind = p_kind
     order by character_row.id,
       character_row.version desc,
@@ -89,7 +89,7 @@ begin
     select ordered.*,
       projection.card
     from ordered
-    join private.portal_catalog_search_rows_v1 as projection
+    join private.portal_catalog_search_current_v2 as projection
       on projection.dataset_kind = p_kind
      and projection.id = ordered.id
      and projection.version = ordered.version

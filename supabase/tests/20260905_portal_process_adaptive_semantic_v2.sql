@@ -55,7 +55,7 @@ select extensions.is(
     ),
     'hex'
   ),
-  '41aa02a05bd381fb86e068ee6d6830feb77d92022b0733dc6cbb90970dd44801'::text,
+  '903b55f1ba30c6b6b19c030bbee4055ec0d53e6fbd54691d59b4548ce204637f'::text,
   'Process V2 semantic helper has the reviewed adaptive-route definition'
 );
 
