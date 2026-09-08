@@ -18,7 +18,10 @@ CMD = ['docker','exec','-i',args.local_container,'psql','-X','-qAt','-U','postgr
 OWNER = '62830000-0000-4000-8000-000000000001'
 
 def sql(s):
-    return subprocess.run(CMD,input=s,text=True,capture_output=True,check=True).stdout.strip()
+    result = subprocess.run(CMD, input=s, text=True, capture_output=True)
+    if result.returncode:
+        raise RuntimeError('Isolated benchmark SQL failed: ' + result.stderr[-2000:])
+    return result.stdout.strip()
 
 if sql('select count(*) from public.processes') != '0' or sql('select count(*) from public.flows') != '0':
     raise RuntimeError('benchmark requires an empty isolated stack; refuses to mix with existing source records')
@@ -46,9 +49,11 @@ from generate_series({lo},{hi}) i;""")
     if not legacy:
         sql('alter table public.processes enable trigger portal_catalog_projection_content_sync_v2;')
     times=[]
+    backfill_times=[]
     pattern='20260908*.sql' if legacy else '202609080901*.sql'
     for p in sorted((ROOT/'supabase/migrations').glob(pattern)):
         t=time.monotonic();sql(p.read_text());elapsed=time.monotonic()-t;times.append(elapsed)
+        if 'backfill' in p.name: backfill_times.append(elapsed)
         print(json.dumps({'shard':p.name,'seconds':round(elapsed,3)}),flush=True)
         assert elapsed<60, 'backfill lacks 2x headroom under 120s statement budget'
     assert sql('select count(*) from private.portal_catalog_search_rows_v2')=='17299'
@@ -76,7 +81,7 @@ from generate_series({lo},{hi}) i;""")
         plan_evidence.append({'kind':kind,'index':index,'executionMs':plan['Execution Time'],'relations':sorted(relations)})
     print(json.dumps({'naturalRoutingPlans':plan_evidence,'canonicalBaseUpgrade':legacy}),flush=True)
     sizes=sql("select json_object_agg(relname,pg_total_relation_size(oid)) from pg_class where relnamespace='private'::regnamespace and relname in ('portal_catalog_search_rows_v1','portal_catalog_search_rows_v2','portal_catalog_character_rows_v1','portal_catalog_character_rows_v2')")
-    print(json.dumps({'evidence':'isolated-synthetic','rows':126246,'maxShardSeconds':max(times),'cutoverSeconds':cutover,'searchRoundtripP95Seconds':sorted(samples)[18],'relationBytes':json.loads(sizes),'flowAndUnrelatedFields':'byte-equal'}),flush=True)
+    print(json.dumps({'evidence':'isolated-synthetic','rows':126246,'maxShardSeconds':max(backfill_times),'maxMigrationSeconds':max(times),'cutoverSeconds':cutover,'searchRoundtripP95Seconds':sorted(samples)[18],'relationBytes':json.loads(sizes),'flowAndUnrelatedFields':'byte-equal'}),flush=True)
 finally:
     for table in ['processes','flows']:
         sql(f'delete from public.{table} where user_id=\'{OWNER}\';')
