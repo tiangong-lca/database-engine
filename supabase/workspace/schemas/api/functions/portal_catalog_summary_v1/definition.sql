@@ -16,7 +16,7 @@ declare
   v_classification_example jsonb;
   v_result jsonb;
 begin
-  perform private.assert_portal_catalog_projection_contract_v1();
+  perform private.assert_portal_catalog_projection_contract_cn1();
   perform private.assert_portal_catalog_facet_contract_v1();
 
   with latest as materialized (
@@ -54,7 +54,7 @@ begin
         candidate.id,
         candidate.version,
         private.portal_catalog_summary_label_v1(candidate.card) as label
-      from private.portal_catalog_search_rows_v1 as candidate
+      from private.portal_catalog_search_rows_v2 as candidate
       join latest
         on latest.dataset_kind = candidate.dataset_kind
        and latest.id = candidate.id
@@ -76,7 +76,7 @@ begin
         candidate.id,
         candidate.version,
         private.portal_catalog_summary_label_v1(candidate.card) as label
-      from private.portal_catalog_search_rows_v1 as candidate
+      from private.portal_catalog_search_rows_v2 as candidate
       join latest
         on latest.dataset_kind = candidate.dataset_kind
        and latest.id = candidate.id
@@ -104,7 +104,7 @@ begin
   ), cas_unique_values as materialized (
     select candidate.card ->> 'casNumber' as cas_number,
       pg_catalog.min(candidate.id::text)::uuid as id
-    from private.portal_catalog_search_rows_v1 as candidate
+    from private.portal_catalog_search_rows_v2 as candidate
     where candidate.dataset_kind = 'flow'
       and pg_catalog.jsonb_typeof(candidate.card -> 'casNumber') = 'string'
       and candidate.card ->> 'casNumber' ~
@@ -128,7 +128,7 @@ begin
       unique_cas.cas_number,
       private.portal_catalog_summary_label_v1(candidate.card) as label
     from cas_unique_values as unique_cas
-    join private.portal_catalog_search_rows_v1 as candidate
+    join private.portal_catalog_search_rows_v2 as candidate
       on candidate.dataset_kind = 'flow'
      and candidate.id = unique_cas.id
      and candidate.card ->> 'casNumber' = unique_cas.cas_number
@@ -169,7 +169,7 @@ begin
         classification.ordinality,
         pg_catalog.btrim(classification.value ->> 'code') as code,
         private.portal_catalog_summary_label_v1(candidate.card) as label
-      from private.portal_catalog_search_rows_v1 as candidate
+      from private.portal_catalog_search_rows_v2 as candidate
       join latest
         on latest.dataset_kind = candidate.dataset_kind
        and latest.id = candidate.id
@@ -219,7 +219,7 @@ begin
         classification.ordinality,
         pg_catalog.btrim(classification.value ->> 'code') as code,
         private.portal_catalog_summary_label_v1(candidate.card) as label
-      from private.portal_catalog_search_rows_v1 as candidate
+      from private.portal_catalog_search_rows_v2 as candidate
       join latest
         on latest.dataset_kind = candidate.dataset_kind
        and latest.id = candidate.id

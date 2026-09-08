@@ -5,7 +5,7 @@ CREATE OR REPLACE FUNCTION "api"."portal_search_flows_v1"("p_query" "text", "p_f
     AS $$
 begin
   return private.portal_decorate_card_context_v1(
-    private.portal_search_v1(
+    private.portal_search_cn1(
       'flow', p_query, p_filters, p_sort, p_cursor, p_limit
     )
   );

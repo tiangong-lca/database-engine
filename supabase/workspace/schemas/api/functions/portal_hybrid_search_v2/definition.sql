@@ -12,7 +12,7 @@ begin
   v_input := private.portal_public_hybrid_input_v1(
     p_kind,p_query_terms,p_query_embedding,p_filters,p_limit);
   v_fingerprint := pg_catalog.encode(extensions.digest(
-    pg_catalog.convert_to('portal-hybrid-rank-v2:' || (v_input ->> 'queryFingerprint'),'UTF8'),
+    pg_catalog.convert_to('portal-hybrid-rank-v2:composite-names-v2:' || (v_input ->> 'queryFingerprint'),'UTF8'),
     'sha256'),'hex');
   if p_cursor is not null then
     v_cursor := private.portal_cursor_decode_v1(p_cursor);
@@ -31,7 +31,7 @@ begin
     end if;
   end if;
   v_page := private.portal_decorate_card_context_v1(private.portal_lcia_decorate_item_page_v1(
-    private.portal_projection_hybrid_search_v2_impl(
+    private.portal_projection_hybrid_search_cn2_impl(
       p_kind,
       array(select term.value from pg_catalog.jsonb_array_elements_text(v_input -> 'queryTerms')
         with ordinality as term(value,ordinality) order by term.ordinality),

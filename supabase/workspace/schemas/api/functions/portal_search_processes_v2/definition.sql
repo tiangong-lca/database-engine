@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION "api"."portal_search_processes_v2"("p_query" "text", 
 begin
   return pg_catalog.jsonb_set(private.portal_decorate_card_context_v1(
     private.portal_lcia_decorate_item_page_v1(
-      private.portal_search_v2(
+      private.portal_search_cn2(
         'process', p_query, p_filters, p_sort, p_cursor, p_limit
       )
     )

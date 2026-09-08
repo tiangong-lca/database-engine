@@ -217,7 +217,9 @@ alter table public.flows drop constraint flows_state_code_check;
 alter table public.processes disable trigger user;
 alter table public.flows disable trigger user;
 alter table public.processes enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.processes enable trigger portal_catalog_projection_content_sync_v2;
 alter table public.flows enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.flows enable trigger portal_catalog_projection_content_sync_v2;
 
 create function pg_temp.version_fixture(
   p_kind text,p_id uuid,p_version text,p_state integer,p_name text,p_vector extensions.vector,

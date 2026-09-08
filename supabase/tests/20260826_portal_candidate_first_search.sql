@@ -715,8 +715,8 @@ select extensions.is(
   (
     with expected(routine_identity) as (
       values
-        ('private.portal_search_v1(text,text,jsonb,text,text,integer)'::text),
-        ('private.portal_projection_hybrid_search_v1_impl(text,text[],extensions.vector,jsonb,integer,text)'),
+        ('private.portal_search_cn1(text,text,jsonb,text,text,integer)'::text),
+        ('private.portal_projection_hybrid_search_cn1_impl(text,text[],extensions.vector,jsonb,integer,text)'),
         ('api.portal_facets_v1(text,text,jsonb)')
     )
     select count(*)
@@ -729,11 +729,11 @@ select extensions.is(
       pg_catalog.length(routine.prosrc)
       - pg_catalog.length(pg_catalog.replace(
         routine.prosrc,
-        'assert_portal_catalog_projection_contract_v1',
+        'assert_portal_catalog_projection_contract_cn1',
         ''
       ))
     ) / pg_catalog.length(
-      'assert_portal_catalog_projection_contract_v1'
+      'assert_portal_catalog_projection_contract_cn1'
     ) = 1
   ),
   3::bigint,
@@ -1061,8 +1061,12 @@ alter table public.processes disable trigger user;
 alter table public.flows disable trigger user;
 alter table public.processes
   enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v2;
 alter table public.flows
   enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.flows
+  enable trigger portal_catalog_projection_content_sync_v2;
 
 set local role service_role;
 
@@ -2281,8 +2285,12 @@ alter table public.processes disable trigger user;
 alter table public.flows disable trigger user;
 alter table public.processes
   enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v2;
 alter table public.flows
   enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.flows
+  enable trigger portal_catalog_projection_content_sync_v2;
 
 set local role service_role;
 
@@ -2632,6 +2640,8 @@ revoke api_internal_executor from postgres;
 alter table public.flows disable trigger user;
 alter table public.flows
   enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.flows
+  enable trigger portal_catalog_projection_content_sync_v2;
 set local role service_role;
 
 insert into public.flows (
@@ -2951,8 +2961,12 @@ alter table public.processes disable trigger user;
 alter table public.flows disable trigger user;
 alter table public.processes
   enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v2;
 alter table public.flows
   enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.flows
+  enable trigger portal_catalog_projection_content_sync_v2;
 
 set local role service_role;
 
@@ -3339,7 +3353,7 @@ select extensions.ok(
   and (
     select routine.prosrc ~ $$v_query = '' and v_filters = '{}'::jsonb$$
       and routine.prosrc ~ 'catalog_portal_facets_empty_v1_impl'
-      and routine.prosrc ~ 'catalog_portal_facets_v1_impl'
+      and routine.prosrc ~ 'catalog_portal_facets_cn1_impl'
     from pg_catalog.pg_proc as routine
     where routine.oid = 'api.portal_facets_v1(text,text,jsonb)'::regprocedure
   )

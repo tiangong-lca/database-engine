@@ -11,7 +11,7 @@ declare
   v_exact_id uuid;
   v_like_pattern text;
 begin
-  perform private.assert_portal_catalog_projection_contract_v1();
+  perform private.assert_portal_catalog_projection_contract_cn1();
 
   if pg_catalog.octet_length(coalesce(p_kind, '')) > 32 then
     raise exception using errcode = '22023', message = 'invalid portal request';
@@ -60,7 +60,7 @@ begin
     ) || '%';
   end if;
 
-  return private.catalog_portal_facets_v1_impl(
+  return private.catalog_portal_facets_cn1_impl(
     v_kind,
     v_query,
     v_exact_id,

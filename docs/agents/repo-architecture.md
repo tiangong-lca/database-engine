@@ -30,9 +30,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-05
-lastReviewedCommit: 2780433b9bb37d126643e8b0cf84811fa8bc377f
-lastReviewedNote: 'Reviewed for Database #624: authenticated Next Process/Flow V2 adds a public-only search-key projection and fixed executor for selective exact routing, while actor scopes stay on RLS and broad retrieval stays on HNSW.'
+lastReviewedAt: 2026-09-08
+lastReviewedCommit: 0c6c00d93934c86d0059b37c3248d91449adab6b
+lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -116,6 +116,28 @@ ungranted, or revoked routes with SQLSTATE `42501`. OAuth scopes remain OIDC
 identity scopes and never grant database capabilities.
 
 ## Portal Public Read Boundary
+
+Process display names use the four ILCD name fields in source order: `baseName`,
+`treatmentStandardsRoutes`, `mixAndLocationTypes`, and
+`functionalUnitFlowProperties`. `private.portal_process_names_v1` joins nonempty
+parts with `; ` within each case-insensitive complete language tag, using the
+first nonempty value per part and the base-name language order/labels. Missing
+base names remain missing; region tags stay distinct, and language fallback
+remains consumer-owned. The public `names` DTO shape and schema versions remain
+unchanged. Flow, reference-product, provider and exchange names retain their
+existing semantics.
+
+Composite-name Search uses `portal_catalog_search_rows_v2` and its character
+child. The `*_cn1`/`*_cn2` private read graph denotes the composite-name storage
+generation while preserving V1 latest-only and V2 matched-version RPC behavior.
+Its separate literal derivation and rank manifests leave the frozen V1 closure,
+registry and rows intact. Both source writers run in the same transaction;
+name-independent facet/sitemap facts remain on their unchanged V1 child chain.
+This retained rollback chain adds a second card writer and projection storage;
+it may be contracted only through separately reviewed migration work. Search
+and Hybrid V2 cursor fingerprints use a new name epoch. Old search-order cursors
+must restart after cutover. Rollout and recovery are owned by
+`portal-projection-migration-recovery.md`.
 
 `contracts/portal/**` owns the exhaustive versioned JSON Schemas for the anonymous Portal DTOs. `contracts/portal/generated/*.d.ts` is committed, deterministic output from those schemas; it is never a parallel handwritten contract. The matching `api.portal_*_v1` functions are additive façades: they fix visibility to public states 100/200, use stable keyset cursors, return canonical decimal strings, and recursively exclude actor/team/review fields, embeddings, credentials, private artifact locators, and database error detail. They do not replace or change legacy Search, raw-table RLS, Data Product, or Release consumers.
 

@@ -22,9 +22,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-09-05
-lastReviewedCommit: 2780433b9bb37d126643e8b0cf84811fa8bc377f
-lastReviewedNote: "已为 Database #624 复核：新增 Next Hybrid pgTAP 门禁不改变分支绑定或部署语义；仍需 migration Preview、持久化 Dev push、Edge 后续部署及 dev-to-main 晋升。"
+lastReviewedAt: 2026-09-08
+lastReviewedCommit: 0c6c00d93934c86d0059b37c3248d91449adab6b
+lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

@@ -16,7 +16,7 @@ begin
   );
   v_page := private.portal_decorate_card_context_v1(
     private.portal_lcia_decorate_item_page_v1(
-      private.portal_projection_hybrid_search_v1_impl(
+      private.portal_projection_hybrid_search_cn1_impl(
         v_input ->> 'kind',
         array(
           select term.value

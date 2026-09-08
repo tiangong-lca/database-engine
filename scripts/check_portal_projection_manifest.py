@@ -1306,6 +1306,37 @@ def main() -> int:
             if pattern.search(executable_sql):
                 violations.append(f"{migration.name}: {identity}")
 
+    # Composite-name generation has its own frozen closure. Shared V1 helpers
+    # remain covered by the existing guards above; never exempt those identities.
+    composite_anchor = "20260908090000_portal_composite_names_expand.sql"
+    composite_identities = (
+        "private.portal_process_names_v1(jsonb)",
+        "private.portal_catalog_card_cn1(text,integer,jsonb)",
+        "private.catalog_portal_projection_payload_cn1(text,integer,jsonb)",
+        "private.portal_catalog_projection_manifest_sha256_cn1()",
+        "private.assert_portal_catalog_projection_contract_cn1()",
+        "private.catalog_portal_process_keyword_keys_cn1(text,text,uuid,text,integer)",
+        "private.catalog_portal_process_keyword_relevance_cn1_impl(text,text,uuid,text,integer,text)",
+        "private.portal_process_keyword_rank_manifest_sha256_cn1()",
+        "private.assert_portal_process_keyword_rank_contract_cn1()",
+    )
+    composite_sql = (MIGRATIONS_DIR / composite_anchor).read_text(encoding="utf-8")
+    for digest in (
+        "5260ed0b5662bf6b4bdae5250d0971fca369d8f36766f32207df47acd68e3500",
+        "87b67d2a63062c88b59fdd5c8699f0389f608f9b32a54a2d6f8e1e50bc42ae34",
+    ):
+        if digest not in composite_sql:
+            violations.append(f"{composite_anchor}: missing literal {digest}")
+    for identity in composite_identities:
+        pattern = mutation_pattern(identity)
+        if not pattern.search(composite_sql):
+            violations.append(f"{composite_anchor}: missing {identity}")
+        for migration in sorted(MIGRATIONS_DIR.glob("*.sql")):
+            if migration.name > composite_anchor and pattern.search(
+                sql_without_comments(migration.read_text(encoding="utf-8"))
+            ):
+                violations.append(f"{migration.name}: frozen composite helper {identity}")
+
     if violations:
         print(
             "Portal projection-v1 manifest governance failed:\n- "

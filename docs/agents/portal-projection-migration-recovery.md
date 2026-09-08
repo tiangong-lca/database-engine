@@ -1,7 +1,7 @@
 ---
-lastReviewedAt: 2026-09-05
-lastReviewedCommit: bf5f6d1c3aa78de644217a87902c340dc1faab84
-lastReviewedNote: "Reviewed for Issue #620: the Process adaptive facet indexes, semantic cutover, and fixed-executor alignment now have explicit retry and uncertain-commit recovery boundaries."
+lastReviewedAt: 2026-09-08
+lastReviewedCommit: 0c6c00d93934c86d0059b37c3248d91449adab6b
+lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
@@ -937,3 +937,59 @@ expected five-second lock timeout is captured, the harness terminates exactly
 that application-name-bound backend and verifies a 5–30 second wall window,
 unchanged migration ledger/helper state, and successful retry. Formal evidence
 uses Supabase CLI `2.109.1`.
+
+## Composite-name projection rollout
+
+The `20260908090000` expand creates the composite helper, a new read graph,
+immutable V2 registry, shadow card/character tables, and second Process/Flow
+source triggers. V1 card semantics and manifests remain intact. Flow cards are
+byte-equivalent; Process cards differ only in `names` and derived `document`.
+Both writer generations commit together, so existing facet/sitemap children
+remain exact for key, visibility, timestamp and their five name-independent facts.
+
+The sixteen `20260908090100..115` UUID-sixteenth migrations lock eligible source
+rows in key order with `FOR SHARE` before deriving new cards. Each kind is capped
+at 20,000 eligible rows per shard, with a five-second lock wait and 120-second
+statement timeout. Concurrent updates, withdrawals, deletes and key changes
+serialize through the source lock and the dual writer. `ON CONFLICT DO NOTHING`
+prevents shard retries from replacing newer committed cards. Each shard records
+its committed counts and completion time in `private.portal_names_backfill_v2`.
+An over-bound shard requires a reviewed finer partition before deployment; never
+remove the bound or edit a recorded shard. Preview size is not production-volume
+proof.
+
+The six `20260908090200..205` migrations build lexical, rank and supporting
+indexes concurrently. Cutover `20260908090300` checks every exact index definition
+and readiness, all new manifests, sixteen completed shards, equal V1/V2
+key/state/timestamp sets, character coverage and both source triggers under a
+short source-write fence. It then switches the ten public Search, Hybrid, Facet,
+Summary and Detail wrappers atomically. Failure rolls back the wrappers; a
+recorded expand or shard must not be rerun by editing migration history. A shard
+COMMIT/history gap can replay unchanged. A concurrent index failure requires
+exact unrecorded-index inspection and reviewed recovery before retry; a
+same-name invalid or wrong index never qualifies for cutover.
+
+Validate from a blank isolated stack, then rehearse a populated base-to-head
+upgrade. On the installed head, the concurrency runner requires an explicitly
+isolated container and restores the original source-trigger state after cleaning
+its synthetic records:
+
+```bash
+python3 scripts/test_portal_composite_names_upgrade.py \
+  --local-container supabase_db_database-engine-628
+supabase test db supabase/tests/20260908_portal_composite_names.sql
+python3 scripts/test_portal_composite_names_graph.py \
+  --local-container supabase_db_database-engine-628
+python3 scripts/benchmark_portal_composite_names.py \
+  --local-container supabase_db_database-engine-628
+```
+
+The volume runner requires an empty isolated source set, creates 17,299 Process
+and 108,947 Flow fixtures, replays all sixteen shards, verifies unchanged Flow
+and unrelated Process fields, and measures cutover and selective Search. Its
+output is explicitly synthetic, including source/writer costs and relation
+sizes; it is not real-data relevance or production timing evidence.
+
+Keep deployed source-field readback, shard counts, index readiness, exact RPC
+version/name equality, response limits and cache-expiry evidence in the delivery
+Issue. Installing the helper alone does not complete the rollout.

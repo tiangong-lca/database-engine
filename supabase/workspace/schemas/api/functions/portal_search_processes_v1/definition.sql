@@ -6,7 +6,7 @@ CREATE OR REPLACE FUNCTION "api"."portal_search_processes_v1"("p_query" "text", 
 begin
   return private.portal_decorate_card_context_v1(
     private.portal_lcia_decorate_item_page_v1(
-      private.portal_search_v1(
+      private.portal_search_cn1(
         'process', p_query, p_filters, p_sort, p_cursor, p_limit
       )
     )

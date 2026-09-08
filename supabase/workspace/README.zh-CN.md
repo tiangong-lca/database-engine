@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-05
-lastReviewedCommit: 2780433b9bb37d126643e8b0cf84811fa8bc377f
-lastReviewedNote: '已为 Database #624 复核：本地五 schema 刷新已覆盖 Next Hybrid V2 函数、投影、索引、策略、触发器、角色 ACL 与 API 类型；生成内容边界不变。'
+lastReviewedAt: 2026-09-08
+lastReviewedCommit: 0c6c00d93934c86d0059b37c3248d91449adab6b
+lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

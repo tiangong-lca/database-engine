@@ -396,8 +396,8 @@ select extensions.is(
       and routine.proname like 'portal\_%\_v1' escape '\'
       and routine.proowner = 'portal_public_executor'::regrole
   ),
-  49::bigint,
-  'the private executor-owned Portal helper surface contains the expected 49 v1 routines including Process rank expressions and manifest'
+  50::bigint,
+  'the private executor-owned Portal helper surface includes the composite-name helper and 49 frozen v1 routines'
 );
 
 select extensions.ok(
@@ -580,8 +580,8 @@ select extensions.is(
       and not routine.prosecdef
       and routine.proconfig @> array['search_path=""']::text[]
   ),
-  41::bigint,
-  'all 41 invoker Portal helpers are executor-owned and pinned to an empty search path'
+  42::bigint,
+  'all 42 invoker Portal helpers are executor-owned and pinned to an empty search path'
 );
 
 select extensions.is(
@@ -1481,8 +1481,12 @@ alter table public.processes disable trigger user;
 alter table public.flows disable trigger user;
 alter table public.processes
   enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v2;
 alter table public.flows
   enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.flows
+  enable trigger portal_catalog_projection_content_sync_v2;
 alter table public.flowproperties disable trigger user;
 alter table public.unitgroups disable trigger user;
 
@@ -3255,7 +3259,8 @@ select extensions.is(
     from portal_test_results
     where label = 'process_search_full'
   ),
-  pg_catalog.encode(
+  pg_catalog.encode(extensions.digest(pg_catalog.convert_to('composite-names-v2:' ||
+pg_catalog.encode(
     extensions.digest(
       pg_catalog.convert_to(
         pg_catalog.jsonb_build_object(
@@ -3269,7 +3274,7 @@ select extensions.is(
       'sha256'
     ),
     'hex'
-  ),
+  ), 'UTF8'), 'sha256'), 'hex'),
   'Process search publishes the exact canonical query fingerprint'
 );
 
@@ -4255,13 +4260,13 @@ select extensions.ok(
 
 create temporary table portal_summary_search_cards_original on commit drop as
 select dataset_kind, id, version, card
-from private.portal_catalog_search_rows_v1;
+from private.portal_catalog_search_rows_v2;
 
-update private.portal_catalog_search_rows_v1
+update private.portal_catalog_search_rows_v2
 set card = card - 'classifications'
 where dataset_kind = 'process';
 
-update private.portal_catalog_search_rows_v1
+update private.portal_catalog_search_rows_v2
 set card = pg_catalog.jsonb_set(
   card,
   '{classifications}',
@@ -4287,7 +4292,7 @@ select extensions.ok(
   'summary omits one-character classification evidence instead of advertising a broad timeout-prone query'
 );
 
-update private.portal_catalog_search_rows_v1 as target
+update private.portal_catalog_search_rows_v2 as target
 set card = original.card
 from portal_summary_search_cards_original as original
 where target.dataset_kind = original.dataset_kind
