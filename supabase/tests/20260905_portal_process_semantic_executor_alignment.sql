@@ -44,8 +44,8 @@ select extensions.is(
     ),
     'hex'
   ),
-  '41aa02a05bd381fb86e068ee6d6830feb77d92022b0733dc6cbb90970dd44801'::text,
-  'executor alignment leaves the reviewed Process semantic body byte-identical'
+  '903b55f1ba30c6b6b19c030bbee4055ec0d53e6fbd54691d59b4548ce204637f'::text,
+  'Process semantic body retains executor alignment with reviewed composite storage routing'
 );
 
 select extensions.ok(
@@ -197,6 +197,11 @@ values(
   '',
   1
 );
+
+insert into private.portal_catalog_search_rows_v2
+select dataset_kind,id,version,state_code,modified_at,card,document,2
+from private.portal_catalog_search_rows_v1
+where dataset_kind='process' and id='62000000-0000-4000-8000-000000000002';
 
 insert into private.portal_catalog_facet_rows_v1(
   dataset_kind,

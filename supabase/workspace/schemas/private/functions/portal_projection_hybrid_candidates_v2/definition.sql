@@ -8,7 +8,7 @@ CREATE OR REPLACE FUNCTION "private"."portal_projection_hybrid_candidates_v2"("p
   with lexical_counts as materialized (
     select match.id, match.version, pg_catalog.count(distinct match.term_ordinal)::integer as hit_count
     from private.catalog_portal_hybrid_pattern_matches_v1(p_kind,p_query_terms) as match
-    join private.portal_catalog_search_rows_v1 as projection
+    join private.portal_catalog_search_current_v2 as projection
       on projection.dataset_kind = p_kind and projection.id = match.id
         and projection.version = match.version
     where projection.state_code in (100,200)

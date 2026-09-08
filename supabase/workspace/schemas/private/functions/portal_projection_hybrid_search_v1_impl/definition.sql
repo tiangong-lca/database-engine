@@ -10,7 +10,7 @@ declare
   v_items jsonb;
   v_result jsonb;
 begin
-  perform private.assert_portal_catalog_projection_contract_v1();
+  perform private.assert_portal_catalog_projection_contract_cn1();
 
   with portal_lexical_matches as materialized (
     select match.id,
@@ -24,7 +24,7 @@ begin
     select distinct on (projection.id)
       projection.id,
       projection.version
-    from private.portal_catalog_search_rows_v1 as projection
+    from private.portal_catalog_search_current_v2 as projection
     where projection.dataset_kind = p_kind
     order by projection.id,
       projection.version desc,
@@ -108,7 +108,7 @@ begin
       projection.state_code,
       projection.modified_at
     from portal_fused
-    join private.portal_catalog_search_rows_v1 as projection
+    join private.portal_catalog_search_current_v2 as projection
       on projection.dataset_kind = p_kind
      and projection.id = portal_fused.id
      and projection.version = portal_fused.version

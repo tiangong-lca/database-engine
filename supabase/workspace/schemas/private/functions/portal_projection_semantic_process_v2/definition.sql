@@ -102,7 +102,7 @@ begin
       join public.processes as source
         on source.id = candidate.id
        and source.version::text = candidate.version
-      join private.portal_catalog_search_rows_v1 as projection
+      join private.portal_catalog_search_current_v2 as projection
         on projection.dataset_kind = 'process'
        and projection.id = candidate.id
        and projection.version = candidate.version
@@ -144,7 +144,7 @@ begin
     where source.state_code in (100,200)
       and source.embedding_ft is not null
       and exists (
-        select 1 from private.portal_catalog_search_rows_v1 as projection
+        select 1 from private.portal_catalog_search_current_v2 as projection
         where projection.dataset_kind = 'process'
           and projection.id = source.id and projection.version = source.version::text
           and projection.state_code in (100,200)

@@ -698,7 +698,7 @@ select extensions.ok(
 
 select extensions.ok(
   (
-    select routine.prosrc ~ 'portal_catalog_search_rows_v1'
+    select routine.prosrc ~ 'portal_catalog_search_current_v2'
       and routine.prosrc !~ 'public\.processes|public\.flows'
       and routine.prosrc ~ 'portal_projection_semantic_candidates_v1'
       and pg_catalog.strpos(routine.prosrc, 'portal_lexical_matches')
@@ -729,11 +729,11 @@ select extensions.is(
       pg_catalog.length(routine.prosrc)
       - pg_catalog.length(pg_catalog.replace(
         routine.prosrc,
-        'assert_portal_catalog_projection_contract_v1',
+        'assert_portal_catalog_projection_contract_cn1',
         ''
       ))
     ) / pg_catalog.length(
-      'assert_portal_catalog_projection_contract_v1'
+      'assert_portal_catalog_projection_contract_cn1'
     ) = 1
   ),
   3::bigint,
@@ -763,7 +763,7 @@ select extensions.ok(
           'jit=off',
           'row_security=on'
         ]::text[]
-        and routine.prosrc ~ 'portal_catalog_search_rows_v1'
+        and routine.prosrc ~ case when routine.proname='portal_projection_semantic_process_v1' then 'portal_catalog_search_current_v2' else 'portal_catalog_search_rows_v1' end
         and routine.prosrc ~ 'embedding_ft'
       )
   )
@@ -1061,6 +1061,8 @@ alter table public.processes disable trigger user;
 alter table public.flows disable trigger user;
 alter table public.processes
   enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v2;
 alter table public.flows
   enable trigger portal_catalog_projection_content_sync_v1;
 
@@ -1979,9 +1981,9 @@ select extensions.ok(
 select extensions.ok(
   (
     with fingerprint as (
-      select private.portal_query_fingerprint_v1(
+      select pg_catalog.encode(extensions.digest(pg_catalog.convert_to('composite-names-v2:' || private.portal_query_fingerprint_v1(
         'process', 'filterfillneedle', '{}'::jsonb, 'relevance'
-      ) as value
+      ),'UTF8'),'sha256'),'hex') as value
     ), predecessor as (
       select private.catalog_portal_search_v1_impl(
         'process',
@@ -2030,7 +2032,7 @@ select extensions.ok(
       and routine.proconfig = array['search_path=""']::text[]
       and routine.prosrc ~ 'char_length\(v_query\) > 1'
       and routine.prosrc ~ 'v_query !~'
-      and routine.prosrc ~ 'catalog_portal_process_keyword_relevance_v1_impl'
+      and routine.prosrc ~ 'catalog_portal_process_keyword_relevance_cn1_impl'
       and routine.prosrc ~ 'catalog_portal_single_character_search_v1_impl'
       and routine.prosrc ~ 'catalog_portal_search_v1_impl'
     from pg_catalog.pg_proc as routine
@@ -2281,6 +2283,8 @@ alter table public.processes disable trigger user;
 alter table public.flows disable trigger user;
 alter table public.processes
   enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v2;
 alter table public.flows
   enable trigger portal_catalog_projection_content_sync_v1;
 
@@ -2600,14 +2604,14 @@ select extensions.is(
         'from pg_catalog.generate_subscripts(v_ids, 1)'
       ) < pg_catalog.strpos(
         routine.prosrc,
-        'exact_v1'
+        case when routine.proname='portal_projection_semantic_process_v1' then 'exact_cn1' else 'exact_v1' end
       )
       and pg_catalog.strpos(
         routine.prosrc,
         E'    return;\n  end if;'
       ) < pg_catalog.strpos(
         routine.prosrc,
-        'exact_v1'
+        case when routine.proname='portal_projection_semantic_process_v1' then 'exact_cn1' else 'exact_v1' end
       )
   ),
   2::bigint,
@@ -2622,6 +2626,11 @@ grant api_internal_executor to postgres;
 set local role api_internal_executor;
 
 delete from private.portal_catalog_search_rows_v1
+where dataset_kind = 'process'
+  and id >= '53200000-0000-4000-8000-000000000051'::uuid
+  and id <= '53200000-0000-4000-8000-000000000205'::uuid;
+
+delete from private.portal_catalog_search_rows_v2
 where dataset_kind = 'process'
   and id >= '53200000-0000-4000-8000-000000000051'::uuid
   and id <= '53200000-0000-4000-8000-000000000205'::uuid;
@@ -2951,6 +2960,8 @@ alter table public.processes disable trigger user;
 alter table public.flows disable trigger user;
 alter table public.processes
   enable trigger portal_catalog_projection_content_sync_v1;
+alter table public.processes
+  enable trigger portal_catalog_projection_content_sync_v2;
 alter table public.flows
   enable trigger portal_catalog_projection_content_sync_v1;
 

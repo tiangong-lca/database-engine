@@ -14,7 +14,7 @@ begin
       projection.card,
       projection.state_code,
       projection.modified_at
-    from private.portal_catalog_search_rows_v1 as projection
+    from private.portal_catalog_search_current_v2 as projection
     where projection.dataset_kind = 'process'
     order by projection.id,
       projection.version desc,
@@ -36,7 +36,7 @@ begin
       select projection.id,
         projection.version,
         true
-      from private.portal_catalog_search_rows_v1 as projection
+      from private.portal_catalog_search_current_v2 as projection
       where projection.dataset_kind = 'process'
         and projection.id = p_exact_id
     ), candidate_ids as materialized (
@@ -56,7 +56,7 @@ begin
       cross join lateral (
         select projection.id,
           projection.version
-        from private.portal_catalog_search_rows_v1 as projection
+        from private.portal_catalog_search_current_v2 as projection
         where projection.dataset_kind = 'process'
           and projection.id = candidate_ids.id
         order by projection.version desc,
@@ -80,7 +80,7 @@ begin
       projection.state_code,
       projection.modified_at
     from eligible_keys
-    join private.portal_catalog_search_rows_v1 as projection
+    join private.portal_catalog_search_current_v2 as projection
       on projection.dataset_kind = 'process'
      and projection.id = eligible_keys.id
      and projection.version = eligible_keys.version;
@@ -109,7 +109,7 @@ begin
       cross join lateral (
         select projection.id,
           projection.version
-        from private.portal_catalog_search_rows_v1 as projection
+        from private.portal_catalog_search_current_v2 as projection
         where projection.dataset_kind = 'process'
           and projection.id = candidate_ids.id
         order by projection.version desc,
@@ -131,7 +131,7 @@ begin
       projection.state_code,
       projection.modified_at
     from eligible_keys
-    join private.portal_catalog_search_rows_v1 as projection
+    join private.portal_catalog_search_current_v2 as projection
       on projection.dataset_kind = 'process'
      and projection.id = eligible_keys.id
      and projection.version = eligible_keys.version;
@@ -146,7 +146,7 @@ begin
       projection.card,
       projection.state_code,
       projection.modified_at
-    from private.portal_catalog_search_rows_v1 as projection
+    from private.portal_catalog_search_current_v2 as projection
     where projection.dataset_kind = 'flow'
     order by projection.id,
       projection.version desc,
@@ -160,7 +160,7 @@ begin
     return query
     with candidate_ids as materialized (
       select distinct projection.id
-      from private.portal_catalog_search_rows_v1 as projection
+      from private.portal_catalog_search_current_v2 as projection
       where projection.dataset_kind = 'flow'
         and pg_catalog.jsonb_typeof(
           projection.card -> 'casNumber'
@@ -184,7 +184,7 @@ begin
           projection.card,
           projection.state_code,
           projection.modified_at
-        from private.portal_catalog_search_rows_v1 as projection
+        from private.portal_catalog_search_current_v2 as projection
         where projection.dataset_kind = 'flow'
           and projection.id = candidate_ids.id
         order by projection.version desc,
@@ -219,7 +219,7 @@ begin
       select projection.id,
         projection.version,
         true
-      from private.portal_catalog_search_rows_v1 as projection
+      from private.portal_catalog_search_current_v2 as projection
       where projection.dataset_kind = 'flow'
         and projection.id = p_exact_id
     ), candidate_ids as materialized (
@@ -239,7 +239,7 @@ begin
       cross join lateral (
         select projection.id,
           projection.version
-        from private.portal_catalog_search_rows_v1 as projection
+        from private.portal_catalog_search_current_v2 as projection
         where projection.dataset_kind = 'flow'
           and projection.id = candidate_ids.id
         order by projection.version desc,
@@ -263,7 +263,7 @@ begin
       projection.state_code,
       projection.modified_at
     from eligible_keys
-    join private.portal_catalog_search_rows_v1 as projection
+    join private.portal_catalog_search_current_v2 as projection
       on projection.dataset_kind = 'flow'
      and projection.id = eligible_keys.id
      and projection.version = eligible_keys.version;
@@ -292,7 +292,7 @@ begin
       cross join lateral (
         select projection.id,
           projection.version
-        from private.portal_catalog_search_rows_v1 as projection
+        from private.portal_catalog_search_current_v2 as projection
         where projection.dataset_kind = 'flow'
           and projection.id = candidate_ids.id
         order by projection.version desc,
@@ -314,7 +314,7 @@ begin
       projection.state_code,
       projection.modified_at
     from eligible_keys
-    join private.portal_catalog_search_rows_v1 as projection
+    join private.portal_catalog_search_current_v2 as projection
       on projection.dataset_kind = 'flow'
      and projection.id = eligible_keys.id
      and projection.version = eligible_keys.version;

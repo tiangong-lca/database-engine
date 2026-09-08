@@ -32,9 +32,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-05
-lastReviewedCommit: 2780433b9bb37d126643e8b0cf84811fa8bc377f
-lastReviewedNote: 'Reviewed for Database #624: authenticated Next Process/Flow canonical filters, bounded exact routing, public-key projection, JWT/team RLS, and segmented route/digest evidence now share the Hybrid validation contract.'
+lastReviewedAt: 2026-09-08
+lastReviewedCommit: 031316ed04052f51a7c1a0d46f51f0341cbf362a
+lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -441,6 +441,19 @@ For branch-oriented changes:
 - root workspace proof happens later in `lca-workspace`
 
 Do not collapse those phases into one validation note.
+
+## Composite Process names
+
+For the composite-name projection, run a blank reset, all `*portal*.sql` suites,
+`20260805_full_schema_cutover.sql`, `20260806_api_contract_closure.sql`, adjacent
+OAuth/Hybrid contracts, and the isolated concurrency runner documented in
+`portal-projection-migration-recovery.md`. Keep both Process projection triggers and the sole Flow V1 trigger enabled
+in synthetic fixtures that disable unrelated authoring triggers. Prove no Flow
+shadow rows or second writer and exact invoker-view routing/security. Preserve
+V1 latest-only and V2 matched-version expectations. Record populated shard timing,
+replay/concurrency results, long multilingual page/cursor bounds, strict consumer
+DTO validation, and the exact local regeneration comparison. Production source
+readback and deployed cache-expiry verification remain separate evidence.
 
 ## Minimum PR Validation Note
 

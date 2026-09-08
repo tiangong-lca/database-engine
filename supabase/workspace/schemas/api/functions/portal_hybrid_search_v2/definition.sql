@@ -12,7 +12,7 @@ begin
   v_input := private.portal_public_hybrid_input_v1(
     p_kind,p_query_terms,p_query_embedding,p_filters,p_limit);
   v_fingerprint := pg_catalog.encode(extensions.digest(
-    pg_catalog.convert_to('portal-hybrid-rank-v2:' || (v_input ->> 'queryFingerprint'),'UTF8'),
+    pg_catalog.convert_to('portal-hybrid-rank-v2:' || case when v_input ->> 'kind' = 'process' then 'composite-names-v2:' else '' end || (v_input ->> 'queryFingerprint'),'UTF8'),
     'sha256'),'hex');
   if p_cursor is not null then
     v_cursor := private.portal_cursor_decode_v1(p_cursor);

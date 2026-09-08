@@ -24,7 +24,7 @@ begin
   return query execute pg_catalog.format($sql$
     select projection.id,
       projection.version
-    from private.portal_catalog_search_rows_v1 as projection
+    from private.portal_catalog_search_current_v2 as projection
     where projection.dataset_kind = 'process'
       and projection.document like %L escape E'\\'
   $sql$, p_like_pattern);

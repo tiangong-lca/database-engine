@@ -1,0 +1,1 @@
+CREATE POLICY "portal_catalog_search_rows_internal_all_v2" ON "private"."portal_catalog_search_rows_v2" TO "api_internal_executor" USING (("state_code" = ANY (ARRAY[100, 200]))) WITH CHECK (("state_code" = ANY (ARRAY[100, 200])));

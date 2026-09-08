@@ -15,7 +15,7 @@ declare
   v_kernel jsonb;
   v_next_cursor_payload jsonb;
 begin
-  perform private.assert_portal_catalog_projection_contract_v1();
+  perform private.assert_portal_catalog_projection_contract_cn1();
 
   perform private.portal_validate_search_v1(
     p_kind,
@@ -33,6 +33,9 @@ begin
     v_filters,
     v_sort
   );
+  if p_kind = 'process' then
+  v_fingerprint := pg_catalog.encode(extensions.digest(pg_catalog.convert_to('composite-names-v2:' || v_fingerprint, 'UTF8'), 'sha256'), 'hex');
+  end if;
   v_fingerprint := pg_catalog.encode(extensions.digest(
     pg_catalog.convert_to('portal-search-versions-v2:' || v_fingerprint,'UTF8'),'sha256'),'hex');
   if p_cursor is not null then
