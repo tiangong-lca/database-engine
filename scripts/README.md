@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-08
-lastReviewedCommit: 031316ed04052f51a7c1a0d46f51f0341cbf362a
-lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
+lastReviewedAt: 2026-09-09
+lastReviewedCommit: fc743392d4ce256b5de1f6409a8ab7e90ec30614
+lastReviewedNote: 'Reviewed for Database #632: regenerate the exact local review-queue V4 schema and public/api types after migration proof; remote Dev remains authoritative after deployment and must be compared before promotion.'
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

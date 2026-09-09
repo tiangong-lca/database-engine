@@ -37,9 +37,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-08
-lastReviewedCommit: 207876abe58d3c9437430dffd4c770223e539218
-lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
+lastReviewedAt: 2026-09-09
+lastReviewedCommit: 945000520246b82916671ec2a01c60f172648924
+lastReviewedNote: 'Reviewed for Database #632: additive v4 review queues reuse existing seven-type lexical projections with exact version and actor boundaries; V3, schema ownership, migration authoring and hosted promotion proof remain unchanged.'
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

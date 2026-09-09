@@ -68,8 +68,8 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  286::bigint,
-  'api contains the active cutover and consumer facades, including eight additive Portal/Next version-search APIs'
+  288::bigint,
+  'api contains the active cutover and consumer facades, including eight additive Portal/Next version-search APIs and two V4 review queues'
 );
 
 select is(
@@ -80,8 +80,8 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  337::bigint,
-  'private contains the active helpers, including the twenty-five exact-version and thirteen composite-name internals'
+  338::bigint,
+  'private contains the active helpers, including the twenty-five exact-version, thirteen composite-name and one review-search internals'
 );
 
 select ok(
