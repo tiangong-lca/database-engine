@@ -32,9 +32,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-09
-lastReviewedCommit: 945000520246b82916671ec2a01c60f172648924
-lastReviewedNote: 'Reviewed for Database #632: additive v4 review queues reuse existing seven-type lexical projections with exact version and actor boundaries; V3, schema ownership, migration authoring and hosted promotion proof remain unchanged.'
+lastReviewedAt: "2026-09-09"
+lastReviewedCommit: "3368bffbe37b62bd76ee6cb4f07f064acccccdb9"
+lastReviewedNote: "Database #634: reviewed service-only v2 package admission, per-root insert-only transactions, lease fences and owner-scoped committed receipt readback."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -473,3 +473,5 @@ Install the versioned local hook once per checkout:
 ```
 
 The `pre-push` hook runs `scripts/docpact-gate.sh`, which delegates CLI lookup to `scripts/docpact` and performs strict config validation plus enforced lint before the push leaves the machine. The wrapper checks `DOCPACT_BIN`, Cargo install locations, Homebrew install locations, and then `PATH`, so local agent shells should not fail only because bare `docpact` is unavailable. The default comparison base is `origin/dev` for routine branches and `origin/main` for promote or hotfix branches. Override it for unusual stacks with `DOCPACT_BASE_REF=<ref>` or `scripts/docpact-gate.sh --base <ref>`. The gate writes its detailed report to a temporary file so normal pushes do not create `.docpact/runs/` artifacts.
+
+TIDAS partial import requires `supabase/tests/20260909_tidas_partial_import.sql`, including insert/skip, rollback isolation, replay counts, caller ownership, lease rejection and v2 admission. Preserve actual database triggers; tests may record calls at the external webhook boundary. Also qualify concurrent identity collisions and failure-after-commit recovery. Generated schema/ACL snapshots must follow the existing generation workflow after migration replay.

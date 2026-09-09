@@ -30,9 +30,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-09
-lastReviewedCommit: 945000520246b82916671ec2a01c60f172648924
-lastReviewedNote: 'Reviewed for Database #632: additive v4 review queues reuse existing seven-type lexical projections with exact version and actor boundaries; V3, schema ownership, migration authoring and hosted promotion proof remain unchanged.'
+lastReviewedAt: "2026-09-09"
+lastReviewedCommit: "3368bffbe37b62bd76ee6cb4f07f064acccccdb9"
+lastReviewedNote: "Database #634: reviewed service-only v2 package admission, per-root insert-only transactions, lease fences and owner-scoped committed receipt readback."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -786,3 +786,5 @@ If a task changes both schema and app behavior, the SQL truth still starts here.
 ## Local Docpact Push Gate
 
 This repository has a versioned local `pre-push` hook under `.githooks/pre-push` that delegates to `scripts/docpact-gate.sh`. The gate resolves the CLI through `scripts/docpact`, so local agent shells do not need bare `docpact` on `PATH`. The hook is a local developer guard for docpact config validation and enforced doc-governance linting; ordinary PRs and pushes rely on the local gate; `.github/workflows/ai-doc-lint.yml` is manual-dispatch fallback for remote reproduction.
+
+TIDAS v2 import adds private immutable input/plan bindings and committed root-group receipts. The Worker supplies a completed ZIP-only validation plan; the service-only group function owns atomic insert-only writes and the final lease fence. `api.svc_tidas_package_read_v2` reuses the existing owner check before returning committed counts when reports are unavailable. Legacy v1 admission remains available.

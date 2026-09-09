@@ -3081,6 +3081,18 @@ export type Database = {
         }
         Returns: Json
       }
+      svc_tidas_package_import_enqueue_v2: {
+        Args: {
+          p_artifact_byte_size: number
+          p_artifact_sha256: string
+          p_content_type?: string
+          p_filename: string
+          p_job_id: string
+          p_requested_by: string
+          p_source_artifact_id: string
+        }
+        Returns: Json
+      }
       svc_tidas_package_import_prepare: {
         Args: {
           p_artifact_url: string
@@ -3094,6 +3106,10 @@ export type Database = {
         Returns: Json
       }
       svc_tidas_package_read: {
+        Args: { p_lookup_id: string; p_requested_by: string }
+        Returns: Json
+      }
+      svc_tidas_package_read_v2: {
         Args: { p_lookup_id: string; p_requested_by: string }
         Returns: Json
       }
