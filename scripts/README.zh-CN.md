@@ -21,8 +21,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-09
-lastReviewedCommit: fc743392d4ce256b5de1f6409a8ab7e90ec30614
-lastReviewedNote: 'Reviewed for Database #632: regenerate the exact local review-queue V4 schema and public/api types after migration proof; remote Dev remains authoritative after deployment and must be compared before promotion.'
+lastReviewedCommit: 3368bffbe37b62bd76ee6cb4f07f064acccccdb9
+lastReviewedNote: 'Database #634: exact isolated migration replay, five-schema snapshots and public/api type regeneration cover the additive partial-import routines and receipt tables; remote Dev provenance remains a post-deployment gate.'
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

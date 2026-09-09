@@ -37,9 +37,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-09
-lastReviewedCommit: 945000520246b82916671ec2a01c60f172648924
-lastReviewedNote: 'Reviewed for Database #632: additive v4 review queues reuse existing seven-type lexical projections with exact version and actor boundaries; V3, schema ownership, migration authoring and hosted promotion proof remain unchanged.'
+lastReviewedAt: "2026-09-09"
+lastReviewedCommit: "3368bffbe37b62bd76ee6cb4f07f064acccccdb9"
+lastReviewedNote: "Database #634: reviewed additive service-only TIDAS partial-import transactions and receipt readback. Existing migration generation, caller roles and branch/deployment gates remain in force."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

@@ -26384,6 +26384,36 @@ $$;
 ALTER FUNCTION "api"."svc_tidas_package_import_enqueue"("p_requested_by" "uuid", "p_job_id" "uuid", "p_source_artifact_id" "uuid", "p_artifact_sha256" "text", "p_artifact_byte_size" bigint, "p_filename" "text", "p_content_type" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "api"."svc_tidas_package_import_enqueue_v2"("p_requested_by" "uuid", "p_job_id" "uuid", "p_source_artifact_id" "uuid", "p_artifact_sha256" "text", "p_artifact_byte_size" bigint, "p_filename" "text", "p_content_type" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare v_existing uuid; v_schema text; v_result jsonb; v_worker_id uuid;
+begin
+  select worker_job_id into v_existing from private.lca_package_artifacts
+  where id = p_source_artifact_id and job_id = p_job_id
+    and metadata ->> 'requested_by' = p_requested_by::text for update;
+  if v_existing is not null then
+    select payload_schema_version into v_schema from private.worker_jobs where id = v_existing;
+    if v_schema is distinct from 'tidas.import_package.request.v2' then
+      return jsonb_build_object('ok', false, 'code', 'IMPORT_POLICY_MISMATCH', 'status', 409);
+    end if;
+  end if;
+  v_result := api.svc_tidas_package_import_enqueue(p_requested_by, p_job_id, p_source_artifact_id,
+    p_artifact_sha256, p_artifact_byte_size, p_filename, p_content_type);
+  if coalesce((v_result ->> 'ok')::boolean, false) then
+    v_worker_id := (v_result ->> 'worker_job_id')::uuid;
+    update private.worker_jobs set payload_schema_version = 'tidas.import_package.request.v2',
+      payload_json = payload_json || jsonb_build_object('import_policy', 'root_closure_v2')
+    where id = v_worker_id and status = 'queued' and attempt_count = 0;
+  end if;
+  return v_result;
+end $$;
+
+
+ALTER FUNCTION "api"."svc_tidas_package_import_enqueue_v2"("p_requested_by" "uuid", "p_job_id" "uuid", "p_source_artifact_id" "uuid", "p_artifact_sha256" "text", "p_artifact_byte_size" bigint, "p_filename" "text", "p_content_type" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "api"."svc_tidas_package_import_prepare"("p_requested_by" "uuid", "p_job_id" "uuid", "p_source_artifact_id" "uuid", "p_artifact_url" "text", "p_content_type" "text", "p_filename" "text", "p_idempotency_key" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -26539,6 +26569,36 @@ $$;
 
 
 ALTER FUNCTION "api"."svc_tidas_package_read"("p_requested_by" "uuid", "p_lookup_id" "uuid") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "api"."svc_tidas_package_read_v2"("p_requested_by" "uuid", "p_lookup_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare v_result jsonb; v_worker uuid; v_progress jsonb;
+begin
+  v_result := api.svc_tidas_package_read(p_requested_by, p_lookup_id);
+  v_worker := (v_result #>> '{data,workerJobId}')::uuid;
+  if v_worker is null or v_result #>> '{data,payload,import_policy}' is distinct from 'root_closure_v2' then
+    return v_result;
+  end if;
+  with identities as (
+    select item ->> 'table' as tab, item ->> 'id' as id, item ->> 'version' as ver,
+      bool_or(item ->> 'disposition' = 'inserted') as inserted
+    from private.tidas_import_groups_v2 g
+    cross join lateral jsonb_array_elements(g.receipt -> 'items') item
+    where g.worker_job_id = v_worker
+    group by 1,2,3
+  )
+  select jsonb_build_object('imported_count', count(*) filter (where inserted),
+    'existing_count', count(*) filter (where not inserted),
+    'successful_root_count', (select count(*) from private.tidas_import_groups_v2 where worker_job_id = v_worker),
+    'source', 'committed_receipts') into v_progress from identities;
+  return jsonb_set(v_result, '{data,importProgress}', v_progress);
+end $$;
+
+
+ALTER FUNCTION "api"."svc_tidas_package_read_v2"("p_requested_by" "uuid", "p_lookup_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "api"."svc_worker_cancel_job"("p_job_id" "uuid", "p_cancelled_by" "uuid" DEFAULT NULL::"uuid", "p_reason" "text" DEFAULT NULL::"text") RETURNS "jsonb"
@@ -61776,6 +61836,146 @@ $$;
 ALTER FUNCTION "private"."sync_portal_sitemap_row_v1"() OWNER TO "api_internal_executor";
 
 
+CREATE OR REPLACE FUNCTION "private"."tidas_import_group_apply_v2"("p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_source_artifact_id" "uuid", "p_plan_sha256" "text", "p_root" "jsonb", "p_entries" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+declare
+  v_user uuid;
+  v_plan private.tidas_import_plans_v2%rowtype;
+  v_previous private.tidas_import_groups_v2%rowtype;
+  v_source_sha text;
+  v_entries_sha text;
+  v_root_table text := p_root ->> 'table';
+  v_root_id uuid := (p_root ->> 'id')::uuid;
+  v_root_version text := p_root ->> 'version';
+  v_entry jsonb;
+  v_table text;
+  v_id uuid;
+  v_version text;
+  v_inserted bigint;
+  v_count bigint := 0;
+  v_items jsonb := '[]'::jsonb;
+  v_receipt jsonb;
+begin
+  v_user := private.tidas_import_guard_v2(p_worker_job_id, p_lease_token, p_source_artifact_id);
+  if p_plan_sha256 is null or p_plan_sha256 !~ '^[0-9a-f]{64}$'
+     or v_root_table is null or v_root_table not in ('processes', 'lifecyclemodels')
+     or v_root_id is null or v_root_version is null
+     or v_root_version !~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$'
+     or jsonb_typeof(p_entries) is distinct from 'array' then
+    raise exception using errcode = '22023', message = 'TIDAS_IMPORT_GROUP_INVALID';
+  end if;
+  -- Explicit capacity admission; never silently truncate a root closure.
+  if jsonb_array_length(p_entries) = 0 or jsonb_array_length(p_entries) > 50000
+     or octet_length(p_entries::text) > 67108864 then
+    raise exception using errcode = '54000', message = 'TIDAS_IMPORT_GROUP_CAPACITY_EXCEEDED';
+  end if;
+  if not exists (select 1 from jsonb_array_elements(p_entries) e
+    where e ->> 'table' = v_root_table and e ->> 'id' = v_root_id::text
+      and e ->> 'version' = v_root_version)
+    or exists (select 1 from jsonb_array_elements(p_entries) e
+      group by e ->> 'table', e ->> 'id', e ->> 'version' having count(*) > 1) then
+    raise exception using errcode = '22023', message = 'TIDAS_IMPORT_GROUP_IDENTITY_INVALID';
+  end if;
+
+  select artifact_sha256 into v_source_sha from private.lca_package_artifacts where id = p_source_artifact_id;
+  insert into private.tidas_import_plans_v2(worker_job_id, source_artifact_id, source_sha256, plan_sha256)
+  values (p_worker_job_id, p_source_artifact_id, v_source_sha, p_plan_sha256)
+  on conflict (worker_job_id) do nothing;
+  select * into v_plan from private.tidas_import_plans_v2 where worker_job_id = p_worker_job_id for update;
+  if v_plan.source_artifact_id <> p_source_artifact_id or v_plan.source_sha256 <> v_source_sha
+     or v_plan.plan_sha256 <> p_plan_sha256 then
+    raise exception using errcode = '55000', message = 'TIDAS_IMPORT_PLAN_MISMATCH';
+  end if;
+  v_entries_sha := encode(extensions.digest(convert_to(p_entries::text, 'UTF8'), 'sha256'), 'hex');
+  select * into v_previous from private.tidas_import_groups_v2
+  where worker_job_id = p_worker_job_id and root_table = v_root_table
+    and root_id = v_root_id and root_version = v_root_version;
+  if found then
+    if v_previous.entries_sha256 <> v_entries_sha then
+      raise exception using errcode = '55000', message = 'TIDAS_IMPORT_GROUP_REPLAY_MISMATCH';
+    end if;
+    return v_previous.receipt;
+  end if;
+
+  for v_entry in select e from jsonb_array_elements(p_entries) e order by
+    case e ->> 'table' when 'contacts' then 1 when 'sources' then 2
+      when 'unitgroups' then 3 when 'flowproperties' then 4 when 'flows' then 5
+      when 'lifecyclemodels' then 6 when 'processes' then 7 else 8 end,
+    e ->> 'id', e ->> 'version'
+  loop
+    v_table := v_entry ->> 'table';
+    v_id := (v_entry ->> 'id')::uuid;
+    v_version := v_entry ->> 'version';
+    if v_table is null or v_table not in ('contacts','sources','unitgroups','flowproperties','flows','lifecyclemodels','processes')
+       or v_id is null or v_version is null or v_version !~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$'
+       or jsonb_typeof(v_entry -> 'json_ordered') is distinct from 'object' then
+      raise exception using errcode = '22023', message = 'TIDAS_IMPORT_ENTRY_INVALID';
+    end if;
+    if v_table = 'lifecyclemodels' then
+      insert into public.lifecyclemodels(id, version, json_ordered, rule_verification, json_tg, user_id)
+      values (v_id, v_version, v_entry -> 'json_ordered', coalesce((v_entry ->> 'rule_verification')::boolean, true),
+        coalesce(nullif(v_entry -> 'json_tg', 'null'::jsonb), '{}'::jsonb), v_user)
+      on conflict (id, version) do nothing;
+    elsif v_table = 'processes' then
+      insert into public.processes(id, version, json_ordered, rule_verification, model_id, user_id)
+      values (v_id, v_version, v_entry -> 'json_ordered', coalesce((v_entry ->> 'rule_verification')::boolean, true),
+        (v_entry ->> 'model_id')::uuid, v_user)
+      on conflict (id, version) do nothing;
+    else
+      execute format('insert into public.%I(id, version, json_ordered, rule_verification, user_id)
+        values ($1,$2,$3,$4,$5) on conflict (id, version) do nothing', v_table)
+      using v_id, v_version, v_entry -> 'json_ordered', coalesce((v_entry ->> 'rule_verification')::boolean, true), v_user;
+    end if;
+    get diagnostics v_inserted = row_count;
+    v_count := v_count + v_inserted;
+    v_items := v_items || jsonb_build_array(jsonb_build_object(
+      'table', v_table, 'id', v_id, 'version', v_version,
+      'disposition', case when v_inserted = 1 then 'inserted' else 'existing' end));
+  end loop;
+  v_receipt := jsonb_build_object('root', p_root,
+    'status', case when v_count > 0 then 'imported' else 'reused' end,
+    'inserted_count', v_count, 'existing_count', jsonb_array_length(p_entries) - v_count, 'items', v_items);
+  insert into private.tidas_import_groups_v2(worker_job_id, root_table, root_id, root_version, entries_sha256, receipt)
+  values (p_worker_job_id, v_root_table, v_root_id, v_root_version, v_entries_sha, v_receipt);
+  perform 1 from private.worker_jobs where id = p_worker_job_id for update;
+  perform private.tidas_import_guard_v2(p_worker_job_id, p_lease_token, p_source_artifact_id);
+  return v_receipt;
+end $_$;
+
+
+ALTER FUNCTION "private"."tidas_import_group_apply_v2"("p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_source_artifact_id" "uuid", "p_plan_sha256" "text", "p_root" "jsonb", "p_entries" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "private"."tidas_import_guard_v2"("p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_source_artifact_id" "uuid") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+declare v_user uuid;
+begin
+  select j.requested_by into v_user
+  from private.worker_jobs j
+  join private.lca_package_artifacts a on a.worker_job_id = j.id
+  where j.id = p_worker_job_id and j.lease_token = p_lease_token
+    and j.status = 'running' and j.lease_expires_at > clock_timestamp()
+    and j.job_kind = 'tidas.import_package'
+    and j.payload_schema_version = 'tidas.import_package.request.v2'
+    and j.payload_json ->> 'import_policy' = 'root_closure_v2'
+    and j.payload_json ->> 'source_artifact_id' = p_source_artifact_id::text
+    and a.id = p_source_artifact_id and a.artifact_kind = 'import_source'
+    and a.status = 'ready' and a.artifact_sha256 ~ '^[0-9a-f]{64}$'
+    and a.metadata ->> 'requested_by' = j.requested_by::text;
+  if v_user is null then
+    raise exception using errcode = '55000', message = 'TIDAS_IMPORT_LEASE_OR_SOURCE_INVALID';
+  end if;
+  return v_user;
+end $_$;
+
+
+ALTER FUNCTION "private"."tidas_import_guard_v2"("p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_source_artifact_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "private"."unitgroups_sync_jsonb_version"() RETURNS "trigger"
     LANGUAGE "plpgsql"
     SET "search_path" TO 'private', 'api', 'public', 'util', 'extensions', 'pg_temp'
@@ -70574,8 +70774,8 @@ CREATE TABLE IF NOT EXISTS "private"."lca_package_artifacts" (
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "worker_job_id" "uuid",
-    CONSTRAINT "lca_package_artifacts_format_chk" CHECK (("artifact_format" = ANY (ARRAY['tidas-package-zip:v1'::"text", 'tidas-package-export-report:v1'::"text", 'tidas-package-import-report:v1'::"text"]))),
-    CONSTRAINT "lca_package_artifacts_kind_chk" CHECK (("artifact_kind" = ANY (ARRAY['import_source'::"text", 'export_zip'::"text", 'export_report'::"text", 'import_report'::"text"]))),
+    CONSTRAINT "lca_package_artifacts_format_chk" CHECK (("artifact_format" = ANY (ARRAY['tidas-package-zip:v1'::"text", 'tidas-package-export-report:v1'::"text", 'tidas-package-import-report:v1'::"text", 'tidas-package-import-report:v2'::"text", 'tidas-package-import-details:v2'::"text"]))),
+    CONSTRAINT "lca_package_artifacts_kind_chk" CHECK (("artifact_kind" = ANY (ARRAY['import_source'::"text", 'export_zip'::"text", 'export_report'::"text", 'import_report'::"text", 'import_details'::"text"]))),
     CONSTRAINT "lca_package_artifacts_size_chk" CHECK ((("artifact_byte_size" IS NULL) OR ("artifact_byte_size" >= 0))),
     CONSTRAINT "lca_package_artifacts_status_chk" CHECK (("status" = ANY (ARRAY['pending'::"text", 'ready'::"text", 'failed'::"text", 'deleted'::"text"]))),
     CONSTRAINT "lca_package_artifacts_url_chk" CHECK (("length"("btrim"("artifact_url")) > 0))
@@ -72278,6 +72478,37 @@ CREATE TABLE IF NOT EXISTS "private"."teams" (
 ALTER TABLE "private"."teams" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "private"."tidas_import_groups_v2" (
+    "worker_job_id" "uuid" NOT NULL,
+    "root_table" "text" NOT NULL,
+    "root_id" "uuid" NOT NULL,
+    "root_version" "text" NOT NULL,
+    "entries_sha256" "text" NOT NULL,
+    "receipt" "jsonb" NOT NULL,
+    "committed_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "tidas_import_groups_v2_receipt_check" CHECK (("jsonb_typeof"("receipt") = 'object'::"text")),
+    CONSTRAINT "tidas_import_groups_v2_root_table_check" CHECK (("root_table" = ANY (ARRAY['processes'::"text", 'lifecyclemodels'::"text"]))),
+    CONSTRAINT "tidas_import_groups_v2_root_version_check" CHECK (("root_version" ~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$'::"text"))
+);
+
+
+ALTER TABLE "private"."tidas_import_groups_v2" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "private"."tidas_import_plans_v2" (
+    "worker_job_id" "uuid" NOT NULL,
+    "source_artifact_id" "uuid" NOT NULL,
+    "source_sha256" "text" NOT NULL,
+    "plan_sha256" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "tidas_import_plans_v2_plan_sha256_check" CHECK (("plan_sha256" ~ '^[0-9a-f]{64}$'::"text")),
+    CONSTRAINT "tidas_import_plans_v2_source_sha256_check" CHECK (("source_sha256" ~ '^[0-9a-f]{64}$'::"text"))
+);
+
+
+ALTER TABLE "private"."tidas_import_plans_v2" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "private"."users" (
     "id" "uuid" NOT NULL,
     "raw_user_meta_data" "jsonb",
@@ -73859,6 +74090,16 @@ ALTER TABLE ONLY "private"."roles"
 
 ALTER TABLE ONLY "private"."teams"
     ADD CONSTRAINT "teams_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "private"."tidas_import_groups_v2"
+    ADD CONSTRAINT "tidas_import_groups_v2_pkey" PRIMARY KEY ("worker_job_id", "root_table", "root_id", "root_version");
+
+
+
+ALTER TABLE ONLY "private"."tidas_import_plans_v2"
+    ADD CONSTRAINT "tidas_import_plans_v2_pkey" PRIMARY KEY ("worker_job_id");
 
 
 
@@ -76310,6 +76551,21 @@ ALTER TABLE ONLY "private"."roles"
 
 
 
+ALTER TABLE ONLY "private"."tidas_import_groups_v2"
+    ADD CONSTRAINT "tidas_import_groups_v2_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "private"."tidas_import_plans_v2"("worker_job_id");
+
+
+
+ALTER TABLE ONLY "private"."tidas_import_plans_v2"
+    ADD CONSTRAINT "tidas_import_plans_v2_source_artifact_id_fkey" FOREIGN KEY ("source_artifact_id") REFERENCES "private"."lca_package_artifacts"("id");
+
+
+
+ALTER TABLE ONLY "private"."tidas_import_plans_v2"
+    ADD CONSTRAINT "tidas_import_plans_v2_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "private"."worker_jobs"("id");
+
+
+
 ALTER TABLE ONLY "private"."worker_job_artifacts"
     ADD CONSTRAINT "worker_job_artifacts_job_id_fkey" FOREIGN KEY ("job_id") REFERENCES "private"."worker_jobs"("id") ON DELETE CASCADE;
 
@@ -76815,6 +77071,12 @@ CREATE POLICY "select by self and team and admin" ON "private"."users" FOR SELEC
 
 
 ALTER TABLE "private"."teams" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "private"."tidas_import_groups_v2" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "private"."tidas_import_plans_v2" ENABLE ROW LEVEL SECURITY;
 
 
 CREATE POLICY "transitional_reviews_update_submitter_only" ON "private"."reviews" FOR UPDATE TO "authenticated" USING (((( SELECT "auth"."uid"() AS "uid") IS NOT NULL) AND (((("json" -> 'user'::"text") ->> 'id'::"text"))::"uuid" = ( SELECT "auth"."uid"() AS "uid")))) WITH CHECK (((( SELECT "auth"."uid"() AS "uid") IS NOT NULL) AND (((("json" -> 'user'::"text") ->> 'id'::"text"))::"uuid" = ( SELECT "auth"."uid"() AS "uid"))));
@@ -78893,6 +79155,11 @@ GRANT ALL ON FUNCTION "api"."svc_tidas_package_import_enqueue"("p_requested_by" 
 
 
 
+REVOKE ALL ON FUNCTION "api"."svc_tidas_package_import_enqueue_v2"("p_requested_by" "uuid", "p_job_id" "uuid", "p_source_artifact_id" "uuid", "p_artifact_sha256" "text", "p_artifact_byte_size" bigint, "p_filename" "text", "p_content_type" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."svc_tidas_package_import_enqueue_v2"("p_requested_by" "uuid", "p_job_id" "uuid", "p_source_artifact_id" "uuid", "p_artifact_sha256" "text", "p_artifact_byte_size" bigint, "p_filename" "text", "p_content_type" "text") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "api"."svc_tidas_package_import_prepare"("p_requested_by" "uuid", "p_job_id" "uuid", "p_source_artifact_id" "uuid", "p_artifact_url" "text", "p_content_type" "text", "p_filename" "text", "p_idempotency_key" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."svc_tidas_package_import_prepare"("p_requested_by" "uuid", "p_job_id" "uuid", "p_source_artifact_id" "uuid", "p_artifact_url" "text", "p_content_type" "text", "p_filename" "text", "p_idempotency_key" "text") TO "service_role";
 
@@ -78900,6 +79167,11 @@ GRANT ALL ON FUNCTION "api"."svc_tidas_package_import_prepare"("p_requested_by" 
 
 REVOKE ALL ON FUNCTION "api"."svc_tidas_package_read"("p_requested_by" "uuid", "p_lookup_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."svc_tidas_package_read"("p_requested_by" "uuid", "p_lookup_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "api"."svc_tidas_package_read_v2"("p_requested_by" "uuid", "p_lookup_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."svc_tidas_package_read_v2"("p_requested_by" "uuid", "p_lookup_id" "uuid") TO "service_role";
 
 
 
@@ -80571,6 +80843,15 @@ REVOKE ALL ON FUNCTION "private"."sync_portal_catalog_search_row_v2"() FROM PUBL
 
 
 REVOKE ALL ON FUNCTION "private"."sync_portal_sitemap_row_v1"() FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."tidas_import_group_apply_v2"("p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_source_artifact_id" "uuid", "p_plan_sha256" "text", "p_root" "jsonb", "p_entries" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."tidas_import_group_apply_v2"("p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_source_artifact_id" "uuid", "p_plan_sha256" "text", "p_root" "jsonb", "p_entries" "jsonb") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "private"."tidas_import_guard_v2"("p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_source_artifact_id" "uuid") FROM PUBLIC;
 
 
 

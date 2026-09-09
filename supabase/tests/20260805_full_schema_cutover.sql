@@ -68,8 +68,8 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  288::bigint,
-  'api contains the active cutover and consumer facades, including eight additive Portal/Next version-search APIs and two V4 review queues'
+  290::bigint,
+  'api contains the active cutover and consumer facades, including eight additive Portal/Next version-search APIs and two V4 review queues plus two partial-import APIs'
 );
 
 select is(
@@ -80,8 +80,8 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  338::bigint,
-  'private contains the active helpers, including the twenty-five exact-version, thirteen composite-name and one review-search internals'
+  340::bigint,
+  'private contains the active helpers, including the twenty-five exact-version, thirteen composite-name and one review-search internals plus two partial-import helpers'
 );
 
 select ok(
@@ -136,8 +136,8 @@ select is(
       'util'::regnamespace
     )
   ),
-  587::bigint,
-  'all application, OAuth registry and twenty-two composite-name constraints remain present'
+  597::bigint,
+  'all application, OAuth registry and twenty-two composite-name constraints plus ten partial-import constraints remain present'
 );
 
 select is(
@@ -165,8 +165,8 @@ select is(
       and class.relkind in ('r', 'p')
       and class.relrowsecurity
   ),
-  75::bigint,
-  'RLS covers existing tables plus four private composite-name relations'
+  77::bigint,
+  'RLS covers existing tables plus four private composite-name relations and two private import receipt relations'
 );
 
 select ok(
