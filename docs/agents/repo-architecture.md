@@ -30,9 +30,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-08
-lastReviewedCommit: 031316ed04052f51a7c1a0d46f51f0341cbf362a
-lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
+lastReviewedAt: 2026-09-09
+lastReviewedCommit: 945000520246b82916671ec2a01c60f172648924
+lastReviewedNote: 'Reviewed for Database #632: additive v4 review queues reuse existing seven-type lexical projections with exact version and actor boundaries; V3, schema ownership, migration authoring and hosted promotion proof remain unchanged.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -76,6 +76,21 @@ in `private.api_capability_grants`. That table records the owning capability ID
 and admitted caller roles; migrations first remove inherited grants and then
 rebuild the external ACL from this closed manifest. New or overloaded RPCs are
 therefore denied until their exact signature is deliberately classified.
+
+## Review Queue Full-Text Search
+
+The v4 Admin/Member queue RPCs add `p_query` while preserving the v3 DTO,
+actor authorization, tab/display/type filters and task-level pagination. Empty
+queries retain v3 behavior. The ACL-closed, invoker-security
+`private.review_search_dataset_versions_v1` reads the seven existing
+`search_text text[]` projections with their ordinary data-list predicates and
+UUID fast path. It returns exact table/id/version identities without a latest
+version collapse; the authenticated queue facade applies review visibility and
+filters before totals/order/limit. Root and Reference rows remain independent.
+No new projection, index, extraction job or AI call is introduced. These are
+current stored projections of the reviewed version, not submission snapshots;
+missing asynchronous projections do not match lexical queries, but UUID lookup
+still works. Review/submitter/team metadata is outside this lexical scope.
 
 ## OAuth Client Authorization Boundary
 
