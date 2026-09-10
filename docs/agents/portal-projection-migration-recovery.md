@@ -1,7 +1,7 @@
 ---
-lastReviewedAt: 2026-09-08
-lastReviewedCommit: 0c6c00d93934c86d0059b37c3248d91449adab6b
-lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
+lastReviewedAt: 2026-09-10
+lastReviewedCommit: 413ef65fcb66991304db9013cc8fc642d7e89f4d
+lastReviewedNote: 'Reviewed for Database #636: raw Hybrid example-scope fingerprint refresh does not alter the immutable Portal helper closure, projection storage, rollout or recovery procedure; the isolated candidate-first regression passes all 83 assertions.'
 title: Portal Projection Migration Recovery
 docType: runbook
 scope: repo
