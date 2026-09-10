@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-09-08"
-lastReviewedCommit: "031316ed04052f51a7c1a0d46f51f0341cbf362a"
-lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
+lastReviewedAt: "2026-09-10"
+lastReviewedCommit: "dbbee4c2f9e4a6736297e6b2330bf341de5ee676"
+lastReviewedNote: "Database #638: reviewed the guarded automatic official CLI capability repair, exact migration upgrade proof, audit verification, and Production hotfix delivery boundary."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
