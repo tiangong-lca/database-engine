@@ -23,8 +23,7 @@ BEGIN
     WITH visible_keys AS (
       SELECT u.id, u.version, u.created_at, u.modified_at, u.team_id
       FROM public.unitgroups u
-      WHERE data_source = 'tg'
-        AND u.state_code = 100
+      WHERE ((data_source = 'tg' AND u.state_code = 100) OR (data_source = 'ex' AND u.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR u.team_id = team_id_filter)
       UNION ALL
       SELECT u.id, u.version, u.created_at, u.modified_at, u.team_id

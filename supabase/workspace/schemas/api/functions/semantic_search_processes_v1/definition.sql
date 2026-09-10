@@ -39,7 +39,7 @@ BEGIN
       AND c.json @> filter_condition_jsonb
       -- data_source 访问控制（保持你原逻辑）
       AND (
-           (data_source = 'tg' AND c.state_code = 100)
+           (((data_source = 'tg' AND c.state_code = 100) OR (data_source = 'ex' AND c.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
         OR (data_source = 'my' AND c.user_id = auth.uid())
       )
   )

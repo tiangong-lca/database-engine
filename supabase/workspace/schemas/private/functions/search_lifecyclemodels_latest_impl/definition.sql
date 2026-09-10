@@ -41,7 +41,7 @@ begin
         where l.id = exact_query_id
           and l.json @> filter_condition_jsonb
           and (
-            (normalized_data_source = 'tg' and l.state_code = 100 and (team_id_filter is null or l.team_id = team_id_filter))
+            (((normalized_data_source = 'tg' AND l.state_code = 100) OR (normalized_data_source = 'ex' AND l.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or l.team_id = team_id_filter))
             or (normalized_data_source = 'co' and l.state_code = 200 and (team_id_filter is null or l.team_id = team_id_filter))
             or (normalized_data_source = 'my' and effective_user_id is not null and l.user_id = effective_user_id and (state_code_filter is null or l.state_code = state_code_filter))
             or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and l.team_id = team_id_filter and (state_code_filter is null or l.state_code = state_code_filter))
@@ -56,7 +56,7 @@ begin
           from public.lifecyclemodels l2
           where l2.id = matched_ids.id
             and (
-              (normalized_data_source = 'tg' and l2.state_code = 100 and (team_id_filter is null or l2.team_id = team_id_filter))
+              (((normalized_data_source = 'tg' AND l2.state_code = 100) OR (normalized_data_source = 'ex' AND l2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or l2.team_id = team_id_filter))
               or (normalized_data_source = 'co' and l2.state_code = 200 and (team_id_filter is null or l2.team_id = team_id_filter))
               or (normalized_data_source = 'my' and effective_user_id is not null and l2.user_id = effective_user_id and (state_code_filter is null or l2.state_code = state_code_filter))
               or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and l2.team_id = team_id_filter and (state_code_filter is null or l2.state_code = state_code_filter))
@@ -97,7 +97,7 @@ begin
       select l.id, max(l.search_score) as search_score
       from text_matches l
       where (
-          ($5 = 'tg' and l.state_code = 100 and ($7 is null or l.team_id = $7))
+          ((($5 = 'tg' AND l.state_code = 100) OR ($5 = 'ex' AND l.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or l.team_id = $7))
           or ($5 = 'co' and l.state_code = 200 and ($7 is null or l.team_id = $7))
           or ($5 = 'my' and $6 is not null and l.user_id = $6 and ($8 is null or l.state_code = $8))
           or ($5 = 'te' and $7 is not null and $9 and l.team_id = $7 and ($8 is null or l.state_code = $8))
@@ -113,7 +113,7 @@ begin
         from public.lifecyclemodels l2
         where l2.id = matched_ids.id
           and (
-            ($5 = 'tg' and l2.state_code = 100 and ($7 is null or l2.team_id = $7))
+            ((($5 = 'tg' AND l2.state_code = 100) OR ($5 = 'ex' AND l2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or l2.team_id = $7))
             or ($5 = 'co' and l2.state_code = 200 and ($7 is null or l2.team_id = $7))
             or ($5 = 'my' and $6 is not null and l2.user_id = $6 and ($8 is null or l2.state_code = $8))
             or ($5 = 'te' and $7 is not null and $9 and l2.team_id = $7 and ($8 is null or l2.state_code = $8))

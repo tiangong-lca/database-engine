@@ -32,9 +32,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: "2026-09-09"
-lastReviewedCommit: "3368bffbe37b62bd76ee6cb4f07f064acccccdb9"
-lastReviewedNote: "Database #634: reviewed service-only v2 package admission, per-root insert-only transactions, lease fences and owner-scoped committed receipt readback."
+lastReviewedAt: 2026-09-10
+lastReviewedCommit: 60f2d114b22d984deb8705d3d626f39a3ad18f35
+lastReviewedNote: 'Database #636: reviewed authenticated example read scope, fixed-state search, original-write guard, selected-root export and exact-local snapshot regeneration; hosted deployment remains separate.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -475,3 +475,7 @@ Install the versioned local hook once per checkout:
 The `pre-push` hook runs `scripts/docpact-gate.sh`, which delegates CLI lookup to `scripts/docpact` and performs strict config validation plus enforced lint before the push leaves the machine. The wrapper checks `DOCPACT_BIN`, Cargo install locations, Homebrew install locations, and then `PATH`, so local agent shells should not fail only because bare `docpact` is unavailable. The default comparison base is `origin/dev` for routine branches and `origin/main` for promote or hotfix branches. Override it for unusual stacks with `DOCPACT_BASE_REF=<ref>` or `scripts/docpact-gate.sh --base <ref>`. The gate writes its detailed report to a temporary file so normal pushes do not create `.docpact/runs/` artifacts.
 
 TIDAS partial import requires `supabase/tests/20260909_tidas_partial_import.sql`, including insert/skip, rollback isolation, replay counts, caller ownership, lease rejection and v2 admission. Preserve actual database triggers; tests may record calls at the external webhook boundary. Also qualify concurrent identity collisions and failure-after-commit recovery. Generated schema/ACL snapshots must follow the existing generation workflow after migration replay.
+
+For authenticated example scope changes, run `supabase/tests/20260910_example_dataset_scope.sql` after a blank reset. It covers seven-table cross-owner reads, state/version/page isolation, lexical and semantic search, UUID references, matched Process/Flow versions, original-write denial, selected-root export admission, and anonymous exclusion. Keep `20260805_full_schema_cutover.sql` object counts and the `20260806_api_contract_closure.sql` migration-head expectation aligned with the actual migration.
+
+The example-scope migration intentionally changes four private raw Hybrid/semantic definitions. Update only their definition fingerprints in the two `20260826` Portal Hybrid/candidate suites and run both (64 and 83 assertions respectively); all eight routine owners, security modes, configs and ACLs remain pinned. This baseline refresh does not modify the immutable Portal projection helper closure or authorize Portal visibility changes.

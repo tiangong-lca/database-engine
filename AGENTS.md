@@ -37,9 +37,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: "2026-09-09"
-lastReviewedCommit: "3368bffbe37b62bd76ee6cb4f07f064acccccdb9"
-lastReviewedNote: "Database #634: reviewed additive service-only TIDAS partial-import transactions and receipt readback. Existing migration generation, caller roles and branch/deployment gates remain in force."
+lastReviewedAt: 2026-09-10
+lastReviewedCommit: 60f2d114b22d984deb8705d3d626f39a3ad18f35
+lastReviewedNote: 'Database #636: reviewed authenticated example read scope, fixed-state search, original-write guard, selected-root export and exact-local snapshot regeneration; hosted deployment remains separate.'
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

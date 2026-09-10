@@ -28,6 +28,9 @@ begin
 
   if normalized_data_source = 'tg' then
     visibility_clause := 'd.state_code = 100 and ($9::uuid is null or d.team_id = $9)';
+  elsif normalized_data_source = 'ex' then
+    if auth.uid() is null then return; end if;
+    visibility_clause := 'd.state_code = -1 and ($9::uuid is null or d.team_id = $9)';
   elsif normalized_data_source = 'co' then
     visibility_clause := 'd.state_code = 200 and ($9::uuid is null or d.team_id = $9)';
   elsif normalized_data_source = 'my' then

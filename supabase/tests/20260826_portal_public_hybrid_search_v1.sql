@@ -122,6 +122,8 @@ select extensions.ok(
 
 select extensions.is(
   (
+    -- Database #636 adds authenticated ex scope to four private raw helpers.
+    -- Pin those reviewed definitions; retain every owner, security and ACL expectation.
     with expected(
       routine_identity,
       definition_md5,
@@ -157,25 +159,25 @@ select extensions.is(
         ),
         (
           'private.hybrid_search_flows_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])',
-          'ae135bcc2856c90162805cd3d777d5ea', 'postgres', false,
+          '0e5bf19e87d1380c3c2371d58bc4e967', 'postgres', false,
           '{statement_timeout=60s,"search_path=private, api, public, util, extensions, extensions, pg_temp"}',
           '{postgres=X/postgres,service_role=X/postgres,api_internal_executor=X/postgres}'
         ),
         (
           'private.hybrid_search_processes_v2_impl(text,text,text,double precision,integer,double precision,double precision,integer,text,integer,integer,text[])',
-          '51c5e51a4ca22de1167d6b05e8c33b57', 'postgres', false,
+          '26211c4cf9dfb3f3303eac232166ad82', 'postgres', false,
           '{statement_timeout=60s,"search_path=private, api, public, util, extensions, extensions, pg_temp"}',
           '{postgres=X/postgres,service_role=X/postgres,api_internal_executor=X/postgres}'
         ),
         (
           'private.semantic_flow_candidates(text,text,double precision,integer,text)',
-          '0f2a7a47c8444e2c6a568c6c7506fc78', 'postgres', true,
+          'e3d07471dd6bdb23e0eb73ce2e75c519', 'postgres', true,
           '{"search_path=private, api, public, util, extensions, extensions, pg_temp",statement_timeout=60s,plan_cache_mode=force_custom_plan,hnsw.iterative_scan=strict_order}',
           '{postgres=X/postgres,service_role=X/postgres,api_internal_executor=X/postgres}'
         ),
         (
           'private.semantic_process_candidates(text,text,double precision,integer,text)',
-          'a52a02f9c6daf89d5dc55ed3c580c634', 'postgres', true,
+          'bcc38849cd377dc7a9ceecef818c0fdd', 'postgres', true,
           '{"search_path=private, api, public, util, extensions, extensions, pg_temp",statement_timeout=60s,plan_cache_mode=force_custom_plan,hnsw.iterative_scan=strict_order}',
           '{postgres=X/postgres,service_role=X/postgres,api_internal_executor=X/postgres}'
         )
@@ -200,7 +202,7 @@ select extensions.is(
     ) as difference
   ),
   0::bigint,
-  'all eight legacy raw Hybrid definitions, owners, security modes, configs, and ACLs remain byte-stable'
+  'all eight legacy raw Hybrid definitions, owners, security modes, configs, and ACLs match the reviewed example-scope baseline'
 );
 
 select extensions.is(

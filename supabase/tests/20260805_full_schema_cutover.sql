@@ -80,8 +80,8 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  340::bigint,
-  'private contains the active helpers, including the twenty-five exact-version, thirteen composite-name and one review-search internals plus two partial-import helpers'
+  341::bigint,
+  'private contains the active helpers, including the twenty-five exact-version, thirteen composite-name and one review-search internals plus two partial-import helpers and the example write guard'
 );
 
 select ok(
@@ -112,8 +112,8 @@ select is(
     from pg_trigger trigger_record
     where not trigger_record.tgisinternal
   ),
-  120::bigint,
-  'all active application triggers and two Process composite-name sync triggers remain present'
+  127::bigint,
+  'all active application triggers and two Process composite-name sync triggers plus seven example write guards remain present'
 );
 
 select is(
@@ -121,8 +121,8 @@ select is(
     select count(*)
     from pg_policy
   ),
-  96::bigint,
-  'all RLS policies, nine OAuth guards and five composite-name policies remain present'
+  103::bigint,
+  'all RLS policies, nine OAuth guards and five composite-name policies plus seven authenticated example policies remain present'
 );
 
 select is(

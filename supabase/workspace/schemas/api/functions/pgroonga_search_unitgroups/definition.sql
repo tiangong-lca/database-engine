@@ -18,7 +18,7 @@ BEGIN
   WHERE f.json @> filter_condition_jsonb
     AND f.json &@~ query_text
     AND (
-         (data_source = 'tg' AND f.state_code = 100)
+         (((data_source = 'tg' AND f.state_code = 100) OR (data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
          OR
          (data_source = 'my' AND f.user_id::text = this_user_id)
         )

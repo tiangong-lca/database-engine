@@ -205,7 +205,7 @@ BEGIN
 			WHERE f.json @> filter_condition_jsonb
 				AND f.json &@~ query_text
 				AND (
-					(data_source = 'tg' AND state_code = 100)
+					(((data_source = 'tg' AND state_code = 100) OR (data_source = 'ex' AND state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
 					OR (data_source = 'co' AND state_code = 200)
 					OR (data_source = 'my' AND user_id = auth.uid())
 					OR (

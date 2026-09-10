@@ -26,11 +26,12 @@ declare
   v_sql text;
 begin
   if p_kind not in ('process', 'flow')
-     or p_data_source not in ('my', 'te')
+     or p_data_source not in ('my', 'te', 'ex')
      or p_query_embedding is null
      or extensions.vector_dims(p_query_embedding) <> 1024
      or pg_catalog.jsonb_typeof(v_residual) is distinct from 'object'
-     or p_state_code < 0 then
+     or (p_state_code < 0 and not (p_data_source = 'ex' and p_state_code = -1))
+     or (p_data_source = 'ex' and p_state_code is not null and p_state_code <> -1) then
     raise exception using errcode = '22023', message = 'invalid Next Hybrid V2 request';
   end if;
   if v_actor is null then return; end if;
@@ -43,6 +44,7 @@ begin
 
   v_table_name := case p_kind when 'process' then 'processes' else 'flows' end;
   v_scope_sql := case p_data_source
+    when 'ex' then 'source.state_code = -1 and ($2::uuid is null or source.team_id = $2)'
     when 'my' then 'source.user_id = $1 and ($3::integer is null or source.state_code = $3)'
     else 'source.team_id = $2 and ($3::integer is null or source.state_code = $3)'
   end;
