@@ -38,8 +38,8 @@ checkPaths:
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
 lastReviewedAt: 2026-09-10
-lastReviewedCommit: 60f2d114b22d984deb8705d3d626f39a3ad18f35
-lastReviewedNote: 'Database #636: reviewed authenticated example read scope, fixed-state search, original-write guard, selected-root export and exact-local snapshot regeneration; hosted deployment remains separate.'
+lastReviewedCommit: 40b980d18a1a42af0ec50ea7caa0e08227c5efdd
+lastReviewedNote: "Database #640: reviewed export lifecycle ownership and validation routing; repository and hosted delivery boundaries are unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
