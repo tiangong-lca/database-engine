@@ -25,6 +25,12 @@ declare
   v_result jsonb;
   v_audit_id_before bigint;
 begin
+  -- Serialize environment-client configuration before selecting by capability
+  -- shape. The service facade must acquire a conflicting RowExclusiveLock on
+  -- this registry before it can create, enable, disable, or replace a client,
+  -- so no matching client can appear inside the selection/mutation window.
+  lock table private.oauth_client_registry in share row exclusive mode;
+
   select coalesce(array_agg(client.client_id order by client.client_id), array[]::text[])
   into v_matching_client_ids
   from private.oauth_client_registry as client

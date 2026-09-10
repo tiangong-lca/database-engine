@@ -39,8 +39,70 @@ select api.svc_oauth_client_configure(
 );
 SQL
 
+# Hold the capability table so the migration remains open after acquiring its
+# registry lock. A concurrent facade call must time out instead of introducing
+# a phantom candidate inside the selection/mutation window.
+psql "$database_url" -v ON_ERROR_STOP=1 -c \
+  "begin; lock table private.oauth_client_capability_grants in access exclusive mode; select pg_sleep(4); commit" \
+  >/dev/null &
+capability_lock_pid=$!
+
+for _ in {1..30}; do
+  capability_lock_count="$(
+    psql "$database_url" -v ON_ERROR_STOP=1 -Atc \
+      "select count(*) from pg_locks where relation = 'private.oauth_client_capability_grants'::regclass and mode = 'AccessExclusiveLock' and granted"
+  )"
+  [[ "$capability_lock_count" == "1" ]] && break
+  sleep 0.1
+done
+
+if [[ "$capability_lock_count" != "1" ]]; then
+  echo "Issue #638 could not establish the concurrency test blocker" >&2
+  wait "$capability_lock_pid" || true
+  exit 1
+fi
+
+psql "$database_url" -v ON_ERROR_STOP=1 -f "$migration" >/dev/null &
+migration_pid=$!
+
+for _ in {1..30}; do
+  registry_lock_count="$(
+    psql "$database_url" -v ON_ERROR_STOP=1 -Atc \
+      "select count(*) from pg_locks where relation = 'private.oauth_client_registry'::regclass and mode = 'ShareRowExclusiveLock' and granted"
+  )"
+  [[ "$registry_lock_count" == "1" ]] && break
+  sleep 0.1
+done
+
+if [[ "$registry_lock_count" != "1" ]]; then
+  echo "Issue #638 migration did not acquire the registry serialization lock" >&2
+  wait "$capability_lock_pid" || true
+  wait "$migration_pid" || true
+  exit 1
+fi
+
+if concurrent_output="$(
+  PGOPTIONS='-c statement_timeout=500ms' psql "$database_url" -v ON_ERROR_STOP=1 -c \
+    "select api.svc_oauth_client_configure('issue-638-concurrent-client', 'cli', true, array['CLI-RPC-01', 'DB-CORE-READ-01', 'DB-CORE-WRITE-01', 'NX-CORE-02'])" \
+    2>&1
+)"; then
+  echo "Issue #638 concurrent client configuration unexpectedly crossed the migration lock" >&2
+  wait "$capability_lock_pid" || true
+  wait "$migration_pid" || true
+  exit 1
+fi
+
+if [[ "$concurrent_output" != *"canceling statement due to statement timeout"* ]]; then
+  echo "Issue #638 concurrent client configuration failed for an unexpected reason" >&2
+  wait "$capability_lock_pid" || true
+  wait "$migration_pid" || true
+  exit 1
+fi
+
+wait "$capability_lock_pid"
+wait "$migration_pid"
+
 # Exactly one matching client is repaired through the audited service facade.
-psql "$database_url" -v ON_ERROR_STOP=1 -f "$migration"
 
 psql "$database_url" -v ON_ERROR_STOP=1 <<'SQL'
 do $verify_single_repair$
