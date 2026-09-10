@@ -86,6 +86,15 @@ audit under `private`. Environment-specific client IDs are provisioned through
 the service-only configuration façade after Supabase Auth registration; they
 are never hardcoded in a generic migration.
 
+The official Production CLI is an environment-specific registered client, so
+its grant is runtime database state rather than migration data. Its exact
+capability class is `CLI-RPC-01`, `DB-CORE-READ-01`, `DB-CORE-WRITE-01`,
+`NX-CORE-02`, and `EDGE-BUNDLE-01`. Operators must change that class only with
+`api.svc_oauth_client_configure`, after locking and verifying the exact current
+client and route-manifest state, and must verify both the resulting grant set
+and the append-only registry audit. A consumer repository may own the public
+client identifier and live use case, but it does not own this database grant.
+
 Direct MCP hosts use one public manual OAuth client per host and environment,
 with exact loopback callbacks and Dynamic Client Registration disabled. Each
 MCP client receives only `DB-CORE-READ-01`, `DB-CORE-WRITE-01`, and
