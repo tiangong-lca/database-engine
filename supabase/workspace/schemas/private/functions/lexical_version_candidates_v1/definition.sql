@@ -22,6 +22,7 @@ begin
   -- actor-checked membership; its old lexical caller has no explicit team selector.
   -- Do not broaden that lexical scope as a side effect of retaining versions.
   if p_source = 'tg' then v_scope := 'source.state_code = 100';
+  elsif p_source = 'ex' and auth.uid() is not null then v_scope := 'source.state_code = -1';
   elsif p_source = 'co' then v_scope := 'source.state_code = 200';
   elsif p_source = 'my' and v_actor is not null then v_scope := 'source.user_id = $3';
   else return;

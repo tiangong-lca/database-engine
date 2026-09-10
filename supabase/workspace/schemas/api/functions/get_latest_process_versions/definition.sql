@@ -24,8 +24,7 @@ BEGIN
     WITH visible_rows AS (
       SELECT p.*
       FROM public.processes p
-      WHERE data_source = 'tg'
-        AND p.state_code = 100
+      WHERE ((data_source = 'tg' AND p.state_code = 100) OR (data_source = 'ex' AND p.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR p.team_id = team_id_filter)
       UNION ALL
       SELECT p.*

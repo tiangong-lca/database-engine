@@ -23,8 +23,7 @@ BEGIN
     WITH visible_keys AS (
       SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
       FROM public.flowproperties f
-      WHERE data_source = 'tg'
-        AND f.state_code = 100
+      WHERE ((data_source = 'tg' AND f.state_code = 100) OR (data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR f.team_id = team_id_filter)
       UNION ALL
       SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id

@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS "public"."contacts" (
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
     "search_text" "text"[],
-    CONSTRAINT "contacts_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 3, 20, 100])))
+    CONSTRAINT "contacts_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 3, 20, 100])))
 );
 
 ALTER TABLE "public"."contacts" OWNER TO "postgres";

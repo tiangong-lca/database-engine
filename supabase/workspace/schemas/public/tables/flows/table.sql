@@ -15,7 +15,7 @@ CREATE TABLE IF NOT EXISTS "public"."flows" (
     "extracted_md" "text",
     "embedding_ft" "extensions"."vector"(1024),
     "search_text" "text"[],
-    CONSTRAINT "flows_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
+    CONSTRAINT "flows_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 20, 100, 200])))
 );
 
 ALTER TABLE "public"."flows" OWNER TO "postgres";

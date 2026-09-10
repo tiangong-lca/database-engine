@@ -24,8 +24,7 @@ BEGIN
     WITH visible_rows AS (
       SELECT l.*
       FROM public.lifecyclemodels l
-      WHERE data_source = 'tg'
-        AND l.state_code = 100
+      WHERE ((data_source = 'tg' AND l.state_code = 100) OR (data_source = 'ex' AND l.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR l.team_id = team_id_filter)
       UNION ALL
       SELECT l.*

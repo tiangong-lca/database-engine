@@ -30,9 +30,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: "2026-09-09"
-lastReviewedCommit: "3368bffbe37b62bd76ee6cb4f07f064acccccdb9"
-lastReviewedNote: "Database #634: reviewed service-only v2 package admission, per-root insert-only transactions, lease fences and owner-scoped committed receipt readback."
+lastReviewedAt: 2026-09-10
+lastReviewedCommit: 60f2d114b22d984deb8705d3d626f39a3ad18f35
+lastReviewedNote: 'Database #636: reviewed authenticated example read scope, fixed-state search, original-write guard, selected-root export and exact-local snapshot regeneration; hosted deployment remains separate.'
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -788,3 +788,7 @@ If a task changes both schema and app behavior, the SQL truth still starts here.
 This repository has a versioned local `pre-push` hook under `.githooks/pre-push` that delegates to `scripts/docpact-gate.sh`. The gate resolves the CLI through `scripts/docpact`, so local agent shells do not need bare `docpact` on `PATH`. The hook is a local developer guard for docpact config validation and enforced doc-governance linting; ordinary PRs and pushes rely on the local gate; `.github/workflows/ai-doc-lint.yml` is manual-dispatch fallback for remote reproduction.
 
 TIDAS v2 import adds private immutable input/plan bindings and committed root-group receipts. The Worker supplies a completed ZIP-only validation plan; the service-only group function owns atomic insert-only writes and the final lease fence. `api.svc_tidas_package_read_v2` reuses the existing owner check before returning committed counts when reports are unavailable. Legacy v1 admission remains available.
+
+## Authenticated example datasets
+
+All seven public dataset tables accept `state_code=-1` for curated examples. The additive authenticated SELECT policies admit cross-owner reads only with a non-null actor. The `ex` list, lexical, UUID-reference, and hybrid branches fix that state before ranking, latest-version selection, counts, and pagination. Process/Flow matched-version V2 uses the existing actor candidate path with a fixed example state; public projection candidates retain their original scope. Ordinary actors cannot update or delete example originals, including through definer bundle commands; service curation with no user JWT remains available. Selected-root package export admits exact example roots for an authenticated requesting actor; global open-data package scope and Portal publication visibility remain unchanged.

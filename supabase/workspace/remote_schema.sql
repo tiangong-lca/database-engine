@@ -111,7 +111,7 @@ begin
         from %1$s d
         where d.id = $1
           and (
-            ($4 = 'tg' and d.state_code = 100 and ($6 is null or d.team_id = $6))
+            ((($4 = 'tg' AND d.state_code = 100) OR ($4 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($6 is null or d.team_id = $6))
             or ($4 = 'co' and d.state_code = 200 and ($6 is null or d.team_id = $6))
             or ($4 = 'my' and $5 is not null and d.user_id = $5 and ($7 is null or d.state_code = $7))
             or ($4 = 'te' and $6 is not null and d.team_id = $6 and ($7 is null or d.state_code = $7))
@@ -127,7 +127,7 @@ begin
           from %1$s d2
           where d2.id = matched_ids.id
             and (
-              ($4 = 'tg' and d2.state_code = 100 and ($6 is null or d2.team_id = $6))
+              ((($4 = 'tg' AND d2.state_code = 100) OR ($4 = 'ex' AND d2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($6 is null or d2.team_id = $6))
               or ($4 = 'co' and d2.state_code = 200 and ($6 is null or d2.team_id = $6))
               or ($4 = 'my' and $5 is not null and d2.user_id = $5 and ($7 is null or d2.state_code = $7))
               or ($4 = 'te' and $6 is not null and d2.team_id = $6 and ($7 is null or d2.state_code = $7))
@@ -174,7 +174,7 @@ begin
       select d.id, max(d.search_score) as search_score
       from text_matches d
       where (
-          ($5 = 'tg' and d.state_code = 100 and ($7 is null or d.team_id = $7))
+          ((($5 = 'tg' AND d.state_code = 100) OR ($5 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or d.team_id = $7))
           or ($5 = 'co' and d.state_code = 200 and ($7 is null or d.team_id = $7))
           or ($5 = 'my' and $6 is not null and d.user_id = $6 and ($8 is null or d.state_code = $8))
           or ($5 = 'te' and $7 is not null and d.team_id = $7 and ($8 is null or d.state_code = $8))
@@ -190,7 +190,7 @@ begin
         from %1$s d2
         where d2.id = matched_ids.id
           and (
-            ($5 = 'tg' and d2.state_code = 100 and ($7 is null or d2.team_id = $7))
+            ((($5 = 'tg' AND d2.state_code = 100) OR ($5 = 'ex' AND d2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or d2.team_id = $7))
             or ($5 = 'co' and d2.state_code = 200 and ($7 is null or d2.team_id = $7))
             or ($5 = 'my' and $6 is not null and d2.user_id = $6 and ($8 is null or d2.state_code = $8))
             or ($5 = 'te' and $7 is not null and d2.team_id = $7 and ($8 is null or d2.state_code = $8))
@@ -7553,7 +7553,7 @@ begin
     );
   end if;
 
-  if v_state_code >= 100 then
+  if v_state_code = -1 or v_state_code >= 100 then
     return jsonb_build_object(
       'ok', false,
       'code', 'DATA_ALREADY_PUBLISHED',
@@ -14841,7 +14841,7 @@ CREATE TABLE IF NOT EXISTS "public"."contacts" (
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
     "search_text" "text"[],
-    CONSTRAINT "contacts_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 3, 20, 100])))
+    CONSTRAINT "contacts_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 3, 20, 100])))
 );
 
 
@@ -14880,7 +14880,7 @@ CREATE TABLE IF NOT EXISTS "public"."flowproperties" (
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
     "search_text" "text"[],
-    CONSTRAINT "flowproperties_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
+    CONSTRAINT "flowproperties_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 20, 100, 200])))
 );
 
 
@@ -14919,7 +14919,7 @@ CREATE TABLE IF NOT EXISTS "public"."flows" (
     "extracted_md" "text",
     "embedding_ft" "extensions"."vector"(1024),
     "search_text" "text"[],
-    CONSTRAINT "flows_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
+    CONSTRAINT "flows_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 20, 100, 200])))
 );
 
 
@@ -15056,8 +15056,7 @@ BEGIN
     WITH visible_keys AS (
       SELECT c.id, c.version, c.created_at, c.modified_at, c.team_id
       FROM public.contacts c
-      WHERE data_source = 'tg'
-        AND c.state_code = 100
+      WHERE ((data_source = 'tg' AND c.state_code = 100) OR (data_source = 'ex' AND c.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR c.team_id = team_id_filter)
       UNION ALL
       SELECT c.id, c.version, c.created_at, c.modified_at, c.team_id
@@ -15217,8 +15216,7 @@ BEGIN
       WITH visible_keys AS (
         SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
         FROM public.flows f
-        WHERE data_source = 'tg'
-          AND f.state_code = 100
+        WHERE ((data_source = 'tg' AND f.state_code = 100) OR (data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
           AND (team_id_filter IS NULL OR f.team_id = team_id_filter)
         UNION ALL
         SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
@@ -15319,8 +15317,7 @@ BEGIN
     WITH visible_rows AS (
       SELECT f.*
       FROM public.flows f
-      WHERE data_source = 'tg'
-        AND f.state_code = 100
+      WHERE ((data_source = 'tg' AND f.state_code = 100) OR (data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR f.team_id = team_id_filter)
       UNION ALL
       SELECT f.*
@@ -15473,8 +15470,7 @@ BEGIN
     WITH visible_keys AS (
       SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
       FROM public.flowproperties f
-      WHERE data_source = 'tg'
-        AND f.state_code = 100
+      WHERE ((data_source = 'tg' AND f.state_code = 100) OR (data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR f.team_id = team_id_filter)
       UNION ALL
       SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
@@ -15601,8 +15597,7 @@ BEGIN
     WITH visible_rows AS (
       SELECT l.*
       FROM public.lifecyclemodels l
-      WHERE data_source = 'tg'
-        AND l.state_code = 100
+      WHERE ((data_source = 'tg' AND l.state_code = 100) OR (data_source = 'ex' AND l.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR l.team_id = team_id_filter)
       UNION ALL
       SELECT l.*
@@ -15703,8 +15698,7 @@ BEGIN
     WITH visible_rows AS (
       SELECT p.*
       FROM public.processes p
-      WHERE data_source = 'tg'
-        AND p.state_code = 100
+      WHERE ((data_source = 'tg' AND p.state_code = 100) OR (data_source = 'ex' AND p.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR p.team_id = team_id_filter)
       UNION ALL
       SELECT p.*
@@ -15816,8 +15810,7 @@ BEGIN
     WITH visible_keys AS (
       SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
       FROM public.sources f
-      WHERE data_source = 'tg'
-        AND f.state_code = 100
+      WHERE ((data_source = 'tg' AND f.state_code = 100) OR (data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR f.team_id = team_id_filter)
       UNION ALL
       SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
@@ -15943,8 +15936,7 @@ BEGIN
     WITH visible_keys AS (
       SELECT u.id, u.version, u.created_at, u.modified_at, u.team_id
       FROM public.unitgroups u
-      WHERE data_source = 'tg'
-        AND u.state_code = 100
+      WHERE ((data_source = 'tg' AND u.state_code = 100) OR (data_source = 'ex' AND u.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR u.team_id = team_id_filter)
       UNION ALL
       SELECT u.id, u.version, u.created_at, u.modified_at, u.team_id
@@ -16929,7 +16921,7 @@ declare
   v_source text := coalesce(nullif(pg_catalog.lower(pg_catalog.btrim(data_source)),''),'tg');
   v_actor uuid := private.dataset_search_effective_user_id('');
 begin
-  if v_source not in ('tg','co','my','te')
+  if v_source not in ('tg','co','my','te','ex')
     or match_count is distinct from 200
     or page_size is null or page_size not between 1 and 100
     or page_current is null or page_current not between 1 and 400
@@ -16941,7 +16933,7 @@ begin
     or pg_catalog.jsonb_typeof(filter_condition) is distinct from 'object' then
     raise exception using errcode='22023',message='invalid version search request';
   end if;
-  if v_source in ('my','te') and v_actor is null then return; end if;
+  if v_source in ('my','te','ex') and v_actor is null then return; end if;
   return query
   with lexical as materialized (
     select candidate.*
@@ -16963,7 +16955,7 @@ begin
     select source.id,source.json,source.version,source.modified_at,source.team_id,fused.score
     from fused join public.flows as source
       on source.id=fused.id and source.version::text=fused.version
-    where (v_source='tg' and source.state_code=100)
+    where (((v_source = 'tg' AND source.state_code = 100) OR (v_source = 'ex' AND source.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
       or (v_source='co' and source.state_code=200)
       or (v_source='my' and source.user_id=v_actor)
       or (v_source='te' and exists(
@@ -17005,7 +16997,7 @@ declare
   v_elementary_codes text[] := '{}'::text[];
   v_query_embedding extensions.vector(1024);
 begin
-  if v_source not in ('tg', 'co', 'my', 'te')
+  if v_source not in ('tg', 'co', 'my', 'te', 'ex')
      or query_text is null or pg_catalog.btrim(query_text) = ''
      or match_count is distinct from 200
      or page_size is null or page_size not between 1 and 100
@@ -17016,7 +17008,8 @@ begin
      or lexical_weight + semantic_weight <= 0
      or rrf_k is null or rrf_k not between 1 and 1000
      or pg_catalog.jsonb_typeof(v_filter) is distinct from 'object'
-     or state_code_filter < 0 then
+     or (state_code_filter < 0 and not (v_source = 'ex' and state_code_filter = -1))
+     or (v_source = 'ex' and state_code_filter is not null and state_code_filter <> -1) then
     raise exception using errcode = '22023', message = 'invalid Next Flow Hybrid V2 request';
   end if;
 
@@ -17076,7 +17069,7 @@ begin
 
   v_residual := v_filter - 'flowType' - 'asInput' - 'classification';
 
-  if v_source in ('my', 'te') and v_actor is null then return; end if;
+  if v_source in ('my', 'te', 'ex') and v_actor is null then return; end if;
   if v_source = 'te' and (
     team_id_filter is null
     or not private.dataset_search_can_read_team_filter(team_id_filter, v_actor)
@@ -17116,7 +17109,7 @@ begin
       on source.id = fused.id
      and source.version::text = fused.version
     where (
-        (v_source = 'tg' and source.state_code = 100
+        (((v_source = 'tg' AND source.state_code = 100) OR (v_source = 'ex' AND source.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
           and (team_id_filter is null or source.team_id = team_id_filter))
         or (v_source = 'co' and source.state_code = 200
           and (team_id_filter is null or source.team_id = team_id_filter))
@@ -17373,7 +17366,7 @@ declare
   v_source text := coalesce(nullif(pg_catalog.lower(pg_catalog.btrim(data_source)),''),'tg');
   v_actor uuid := private.dataset_search_effective_user_id('');
 begin
-  if v_source not in ('tg','co','my','te')
+  if v_source not in ('tg','co','my','te','ex')
     or match_count is distinct from 200
     or page_size is null or page_size not between 1 and 100
     or page_current is null or page_current not between 1 and 400
@@ -17385,7 +17378,7 @@ begin
     or pg_catalog.jsonb_typeof(filter_condition) is distinct from 'object' then
     raise exception using errcode='22023',message='invalid version search request';
   end if;
-  if v_source in ('my','te') and v_actor is null then return; end if;
+  if v_source in ('my','te','ex') and v_actor is null then return; end if;
   return query
   with lexical as materialized (
     select candidate.*
@@ -17407,7 +17400,7 @@ begin
     select source.id,source.json,source.version,source.modified_at,source.model_id,source.model_version,source.team_id,fused.score
     from fused join public.processes as source
       on source.id=fused.id and source.version::text=fused.version
-    where (v_source='tg' and source.state_code=100)
+    where (((v_source = 'tg' AND source.state_code = 100) OR (v_source = 'ex' AND source.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
       or (v_source='co' and source.state_code=200)
       or (v_source='my' and source.user_id=v_actor)
       or (v_source='te' and exists(
@@ -17444,7 +17437,7 @@ declare
   v_query_embedding extensions.vector(1024);
 begin
   if v_process_type = 'all' then v_process_type := null; end if;
-  if v_source not in ('tg', 'co', 'my', 'te')
+  if v_source not in ('tg', 'co', 'my', 'te', 'ex')
      or query_text is null or pg_catalog.btrim(query_text) = ''
      or match_count is distinct from 200
      or page_size is null or page_size not between 1 and 100
@@ -17455,7 +17448,8 @@ begin
      or lexical_weight + semantic_weight <= 0
      or rrf_k is null or rrf_k not between 1 and 1000
      or pg_catalog.jsonb_typeof(filter_condition) is distinct from 'object'
-     or state_code_filter < 0
+     or (state_code_filter < 0 and not (v_source = 'ex' and state_code_filter = -1))
+     or (v_source = 'ex' and state_code_filter is not null and state_code_filter <> -1)
      or (
        v_process_type is not null
        and v_process_type not in (
@@ -17468,7 +17462,7 @@ begin
      ) then
     raise exception using errcode = '22023', message = 'invalid Next Process Hybrid V2 request';
   end if;
-  if v_source in ('my', 'te') and v_actor is null then return; end if;
+  if v_source in ('my', 'te', 'ex') and v_actor is null then return; end if;
   if v_source = 'te' and (
     team_id_filter is null
     or not private.dataset_search_can_read_team_filter(team_id_filter, v_actor)
@@ -17509,7 +17503,7 @@ begin
       on source.id = fused.id
      and source.version::text = fused.version
     where (
-        (v_source = 'tg' and source.state_code = 100
+        (((v_source = 'tg' AND source.state_code = 100) OR (v_source = 'ex' AND source.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
           and (team_id_filter is null or source.team_id = team_id_filter))
         or (v_source = 'co' and source.state_code = 200
           and (team_id_filter is null or source.team_id = team_id_filter))
@@ -17959,7 +17953,7 @@ CREATE TABLE IF NOT EXISTS "public"."lifecyclemodels" (
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
     "search_text" "text"[],
-    CONSTRAINT "lifecyclemodels_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100])))
+    CONSTRAINT "lifecyclemodels_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 20, 100])))
 );
 
 
@@ -18201,7 +18195,7 @@ BEGIN
 			f.modified_at,
 			COUNT(*) OVER() AS total_count
 		FROM contacts f
-		WHERE f.json @> filter_condition_jsonb AND f.json &@~ query_text AND ((data_source = 'tg' AND state_code = 100) or (data_source = 'my' AND user_id::text = this_user_id))
+		WHERE f.json @> filter_condition_jsonb AND f.json &@~ query_text AND ((((data_source = 'tg' AND state_code = 100) OR (data_source = 'ex' AND state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))) or (data_source = 'my' AND user_id::text = this_user_id))
 		ORDER BY pgroonga_score(tableoid, ctid) DESC
 		LIMIT page_size
 		OFFSET (page_current -1) * page_size;
@@ -18243,7 +18237,7 @@ BEGIN
 			f.modified_at,
 			COUNT(*) OVER() AS total_count
 		FROM flowproperties f
-		WHERE f.json @> filter_condition_jsonb AND f.json &@~ query_text AND ((data_source = 'tg' AND state_code = 100) or (data_source = 'my' AND user_id::text = this_user_id))
+		WHERE f.json @> filter_condition_jsonb AND f.json &@~ query_text AND ((((data_source = 'tg' AND state_code = 100) OR (data_source = 'ex' AND state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))) or (data_source = 'my' AND user_id::text = this_user_id))
 		ORDER BY pgroonga_score(tableoid, ctid) DESC
 		LIMIT page_size
 		OFFSET (page_current -1) * page_size;
@@ -18489,7 +18483,7 @@ BEGIN
 			WHERE f.json @> filter_condition_jsonb
 				AND f.json &@~ query_text
 				AND (
-					(data_source = 'tg' AND state_code = 100)
+					(((data_source = 'tg' AND state_code = 100) OR (data_source = 'ex' AND state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
 					OR (data_source = 'co' AND state_code = 200)
 					OR (data_source = 'my' AND user_id = auth.uid())
 					OR (
@@ -18752,7 +18746,7 @@ BEGIN
       WHERE f.json @> filter_condition_jsonb
         AND f.json &@~ query_text
         AND (
-          (data_source = 'tg' AND state_code = 100)
+          (((data_source = 'tg' AND state_code = 100) OR (data_source = 'ex' AND state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
           OR (data_source = 'co' AND state_code = 200)
           OR (data_source = 'my' AND user_id = auth.uid())
           OR (
@@ -19023,7 +19017,7 @@ BEGIN
 			WHERE f.json @> filter_condition_jsonb
 				AND f.json &@~ query_text
 				AND (
-					(data_source = 'tg' AND state_code = 100)
+					(((data_source = 'tg' AND state_code = 100) OR (data_source = 'ex' AND state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
 					OR (data_source = 'co' AND state_code = 200)
 					OR (data_source = 'my' AND user_id = auth.uid())
 					OR (
@@ -19090,7 +19084,7 @@ BEGIN
 			f.modified_at,
 			COUNT(*) OVER() AS total_count
 		FROM sources f
-		WHERE f.json @> filter_condition_jsonb AND f.json &@~ query_text AND ((data_source = 'tg' AND state_code = 100) or (data_source = 'my' AND user_id::text = this_user_id))
+		WHERE f.json @> filter_condition_jsonb AND f.json &@~ query_text AND ((((data_source = 'tg' AND state_code = 100) OR (data_source = 'ex' AND state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))) or (data_source = 'my' AND user_id::text = this_user_id))
 		ORDER BY pgroonga_score(tableoid, ctid) DESC
 		LIMIT page_size
 		OFFSET (page_current -1) * page_size;
@@ -19135,7 +19129,7 @@ BEGIN
   WHERE f.json @> filter_condition_jsonb
     AND f.json &@~ query_text
     AND (
-         (data_source = 'tg' AND f.state_code = 100)
+         (((data_source = 'tg' AND f.state_code = 100) OR (data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
          OR
          (data_source = 'my' AND f.user_id::text = this_user_id)
         )
@@ -21076,7 +21070,7 @@ CREATE TABLE IF NOT EXISTS "public"."processes" (
     "model_version" character(9),
     CONSTRAINT "processes_model_version_format_check" CHECK ((("model_version" IS NULL) OR (("model_version")::"text" ~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$'::"text"))),
     CONSTRAINT "processes_model_version_requires_model_id_check" CHECK ((("model_version" IS NULL) OR ("model_id" IS NOT NULL))),
-    CONSTRAINT "processes_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
+    CONSTRAINT "processes_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 20, 100, 200])))
 );
 
 
@@ -24475,7 +24469,7 @@ BEGIN
       (c.embedding_ft <=> query_embedding_vector) < 1 - match_threshold
       AND c.json @> filter_condition_jsonb
       AND (
-           (data_source = 'tg' AND c.state_code = 100)
+           (((data_source = 'tg' AND c.state_code = 100) OR (data_source = 'ex' AND c.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
         OR (data_source = 'my' AND c.user_id = auth.uid())
       )
       AND (
@@ -24561,7 +24555,7 @@ BEGIN
       AND c.json @> filter_condition_jsonb
       -- data_source 访问控制（与原逻辑一致）
       AND (
-           (data_source = 'tg' AND c.state_code = 100)
+           (((data_source = 'tg' AND c.state_code = 100) OR (data_source = 'ex' AND c.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
         OR (data_source = 'my' AND c.user_id = auth.uid())
       )
   )
@@ -24634,7 +24628,7 @@ BEGIN
       AND c.json @> filter_condition_jsonb
       -- data_source 访问控制（保持你原逻辑）
       AND (
-           (data_source = 'tg' AND c.state_code = 100)
+           (((data_source = 'tg' AND c.state_code = 100) OR (data_source = 'ex' AND c.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
         OR (data_source = 'my' AND c.user_id = auth.uid())
       )
   )
@@ -24714,7 +24708,7 @@ CREATE TABLE IF NOT EXISTS "public"."sources" (
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
     "search_text" "text"[],
-    CONSTRAINT "sources_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100])))
+    CONSTRAINT "sources_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 20, 100])))
 );
 
 
@@ -26176,6 +26170,7 @@ begin
     from requested
     join datasets using (table_name, id, version)
     where datasets.user_id = p_requested_by
+       or datasets.state_code = -1
        or datasets.state_code between 100 and 199;
 
     if v_exportable_count <> v_root_count then
@@ -26687,7 +26682,7 @@ CREATE TABLE IF NOT EXISTS "public"."unitgroups" (
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
     "search_text" "text"[],
-    CONSTRAINT "unitgroups_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
+    CONSTRAINT "unitgroups_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 20, 100, 200])))
 );
 
 
@@ -41859,7 +41854,7 @@ begin
       from public.flows f
       join fused on fused.id = f.id
       where (
-        (data_source = 'tg' and f.state_code = 100)
+        (((data_source = 'tg' AND f.state_code = 100) OR (data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
         or (data_source = 'co' and f.state_code = 200)
         or (data_source = 'my' and f.user_id = auth.uid())
         or (
@@ -41973,7 +41968,7 @@ begin
       from public.lifecyclemodels l
       join fused on fused.id = l.id
       where (
-        (data_source = 'tg' and l.state_code = 100)
+        (((data_source = 'tg' AND l.state_code = 100) OR (data_source = 'ex' AND l.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
         or (data_source = 'co' and l.state_code = 200)
         or (data_source = 'my' and l.user_id = auth.uid())
         or (
@@ -42088,7 +42083,7 @@ begin
       from public.processes p
       join fused on fused.id = p.id
       where (
-        (data_source = 'tg' and p.state_code = 100)
+        (((data_source = 'tg' AND p.state_code = 100) OR (data_source = 'ex' AND p.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
         or (data_source = 'co' and p.state_code = 200)
         or (data_source = 'my' and p.user_id = auth.uid())
         or (
@@ -42197,6 +42192,9 @@ begin
 
   if normalized_data_source = 'tg' then
     visibility_clause := 'd.state_code = 100 and ($5::uuid is null or d.team_id = $5)';
+  elsif normalized_data_source = 'ex' then
+    if auth.uid() is null then return; end if;
+    visibility_clause := 'd.state_code = -1 and ($5::uuid is null or d.team_id = $5)';
   elsif normalized_data_source = 'co' then
     visibility_clause := 'd.state_code = 200 and ($5::uuid is null or d.team_id = $5)';
   elsif normalized_data_source = 'my' then
@@ -44538,6 +44536,7 @@ begin
   -- actor-checked membership; its old lexical caller has no explicit team selector.
   -- Do not broaden that lexical scope as a side effect of retaining versions.
   if p_source = 'tg' then v_scope := 'source.state_code = 100';
+  elsif p_source = 'ex' and auth.uid() is not null then v_scope := 'source.state_code = -1';
   elsif p_source = 'co' then v_scope := 'source.state_code = 200';
   elsif p_source = 'my' and v_actor is not null then v_scope := 'source.user_id = $3';
   else return;
@@ -44622,8 +44621,9 @@ declare
   v_sql text;
 begin
   if p_kind not in ('process', 'flow')
-     or p_data_source not in ('my', 'te')
-     or p_state_code < 0 then
+     or p_data_source not in ('my', 'te', 'ex')
+     or (p_state_code < 0 and not (p_data_source = 'ex' and p_state_code = -1))
+     or (p_data_source = 'ex' and p_state_code is not null and p_state_code <> -1) then
     raise exception using errcode = '22023', message = 'invalid Next Hybrid V2 request';
   end if;
   if v_actor is null then return; end if;
@@ -44636,6 +44636,7 @@ begin
 
   v_table_name := case p_kind when 'process' then 'processes' else 'flows' end;
   v_scope_sql := case p_data_source
+    when 'ex' then 'source.state_code = -1 and ($2::uuid is null or source.team_id = $2)'
     when 'my' then 'source.user_id = $1 and ($3::integer is null or source.state_code = $3)'
     else 'source.team_id = $2 and ($3::integer is null or source.state_code = $3)'
   end;
@@ -44758,11 +44759,12 @@ declare
   v_sql text;
 begin
   if p_kind not in ('process', 'flow')
-     or p_data_source not in ('my', 'te')
+     or p_data_source not in ('my', 'te', 'ex')
      or p_query_embedding is null
      or extensions.vector_dims(p_query_embedding) <> 1024
      or pg_catalog.jsonb_typeof(v_residual) is distinct from 'object'
-     or p_state_code < 0 then
+     or (p_state_code < 0 and not (p_data_source = 'ex' and p_state_code = -1))
+     or (p_data_source = 'ex' and p_state_code is not null and p_state_code <> -1) then
     raise exception using errcode = '22023', message = 'invalid Next Hybrid V2 request';
   end if;
   if v_actor is null then return; end if;
@@ -44775,6 +44777,7 @@ begin
 
   v_table_name := case p_kind when 'process' then 'processes' else 'flows' end;
   v_scope_sql := case p_data_source
+    when 'ex' then 'source.state_code = -1 and ($2::uuid is null or source.team_id = $2)'
     when 'my' then 'source.user_id = $1 and ($3::integer is null or source.state_code = $3)'
     else 'source.team_id = $2 and ($3::integer is null or source.state_code = $3)'
   end;
@@ -45036,7 +45039,7 @@ begin
     return;
   end if;
 
-  if p_data_source in ('my', 'te') then
+  if p_data_source in ('my', 'te', 'ex') then
     return query
     select candidate.*
     from private.next_actor_lexical_version_candidates_v2(
@@ -45429,7 +45432,7 @@ begin
     return;
   end if;
 
-  if p_data_source in ('my', 'te') then
+  if p_data_source in ('my', 'te', 'ex') then
     return query
     select candidate.*
     from private.next_actor_semantic_version_candidates_v2(
@@ -52004,6 +52007,23 @@ $$;
 ALTER FUNCTION "private"."processes_sync_jsonb_version"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "private"."protect_example_dataset_write"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  IF OLD.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL THEN
+    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'EXAMPLE_DATASET_READ_ONLY';
+  END IF;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "private"."protect_example_dataset_write"() OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "private"."reviews" (
     "id" "uuid" NOT NULL,
     "data_id" "uuid",
@@ -53534,7 +53554,7 @@ begin
           'public.processes'::text as matched_entity_table
         from public.processes d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -53565,7 +53585,7 @@ begin
           'public.flows'::text as matched_entity_table
         from public.flows d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -53596,7 +53616,7 @@ begin
           'public.lifecyclemodels'::text as matched_entity_table
         from public.lifecyclemodels d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -53627,7 +53647,7 @@ begin
           'public.sources'::text as matched_entity_table
         from public.sources d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -53658,7 +53678,7 @@ begin
           'public.contacts'::text as matched_entity_table
         from public.contacts d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -53689,7 +53709,7 @@ begin
           'public.unitgroups'::text as matched_entity_table
         from public.unitgroups d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -53720,7 +53740,7 @@ begin
           'public.flowproperties'::text as matched_entity_table
         from public.flowproperties d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -53839,7 +53859,7 @@ begin
         where f.id = exact_query_id
           and f.json @> filter_condition_jsonb
           and (
-            (normalized_data_source = 'tg' and f.state_code = 100 and (team_id_filter is null or f.team_id = team_id_filter))
+            (((normalized_data_source = 'tg' AND f.state_code = 100) OR (normalized_data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or f.team_id = team_id_filter))
             or (normalized_data_source = 'co' and f.state_code = 200 and (team_id_filter is null or f.team_id = team_id_filter))
             or (normalized_data_source = 'my' and effective_user_id is not null and f.user_id = effective_user_id and (state_code_filter is null or f.state_code = state_code_filter))
             or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and f.team_id = team_id_filter and (state_code_filter is null or f.state_code = state_code_filter))
@@ -53901,7 +53921,7 @@ begin
           from public.flows f2
           where f2.id = matched_ids.id
             and (
-              (normalized_data_source = 'tg' and f2.state_code = 100 and (team_id_filter is null or f2.team_id = team_id_filter))
+              (((normalized_data_source = 'tg' AND f2.state_code = 100) OR (normalized_data_source = 'ex' AND f2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or f2.team_id = team_id_filter))
               or (normalized_data_source = 'co' and f2.state_code = 200 and (team_id_filter is null or f2.team_id = team_id_filter))
               or (normalized_data_source = 'my' and effective_user_id is not null and f2.user_id = effective_user_id and (state_code_filter is null or f2.state_code = state_code_filter))
               or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and f2.team_id = team_id_filter and (state_code_filter is null or f2.state_code = state_code_filter))
@@ -53942,7 +53962,7 @@ begin
       select f.id, max(f.search_score) as search_score
       from text_matches f
       where (
-          ($5 = 'tg' and f.state_code = 100 and ($7 is null or f.team_id = $7))
+          ((($5 = 'tg' AND f.state_code = 100) OR ($5 = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or f.team_id = $7))
           or ($5 = 'co' and f.state_code = 200 and ($7 is null or f.team_id = $7))
           or ($5 = 'my' and $6 is not null and f.user_id = $6 and ($8 is null or f.state_code = $8))
           or ($5 = 'te' and $7 is not null and $9 and f.team_id = $7 and ($8 is null or f.state_code = $8))
@@ -54005,7 +54025,7 @@ begin
         from public.flows f2
         where f2.id = matched_ids.id
           and (
-            ($5 = 'tg' and f2.state_code = 100 and ($7 is null or f2.team_id = $7))
+            ((($5 = 'tg' AND f2.state_code = 100) OR ($5 = 'ex' AND f2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or f2.team_id = $7))
             or ($5 = 'co' and f2.state_code = 200 and ($7 is null or f2.team_id = $7))
             or ($5 = 'my' and $6 is not null and f2.user_id = $6 and ($8 is null or f2.state_code = $8))
             or ($5 = 'te' and $7 is not null and $9 and f2.team_id = $7 and ($8 is null or f2.state_code = $8))
@@ -54085,7 +54105,7 @@ begin
         where l.id = exact_query_id
           and l.json @> filter_condition_jsonb
           and (
-            (normalized_data_source = 'tg' and l.state_code = 100 and (team_id_filter is null or l.team_id = team_id_filter))
+            (((normalized_data_source = 'tg' AND l.state_code = 100) OR (normalized_data_source = 'ex' AND l.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or l.team_id = team_id_filter))
             or (normalized_data_source = 'co' and l.state_code = 200 and (team_id_filter is null or l.team_id = team_id_filter))
             or (normalized_data_source = 'my' and effective_user_id is not null and l.user_id = effective_user_id and (state_code_filter is null or l.state_code = state_code_filter))
             or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and l.team_id = team_id_filter and (state_code_filter is null or l.state_code = state_code_filter))
@@ -54100,7 +54120,7 @@ begin
           from public.lifecyclemodels l2
           where l2.id = matched_ids.id
             and (
-              (normalized_data_source = 'tg' and l2.state_code = 100 and (team_id_filter is null or l2.team_id = team_id_filter))
+              (((normalized_data_source = 'tg' AND l2.state_code = 100) OR (normalized_data_source = 'ex' AND l2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or l2.team_id = team_id_filter))
               or (normalized_data_source = 'co' and l2.state_code = 200 and (team_id_filter is null or l2.team_id = team_id_filter))
               or (normalized_data_source = 'my' and effective_user_id is not null and l2.user_id = effective_user_id and (state_code_filter is null or l2.state_code = state_code_filter))
               or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and l2.team_id = team_id_filter and (state_code_filter is null or l2.state_code = state_code_filter))
@@ -54141,7 +54161,7 @@ begin
       select l.id, max(l.search_score) as search_score
       from text_matches l
       where (
-          ($5 = 'tg' and l.state_code = 100 and ($7 is null or l.team_id = $7))
+          ((($5 = 'tg' AND l.state_code = 100) OR ($5 = 'ex' AND l.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or l.team_id = $7))
           or ($5 = 'co' and l.state_code = 200 and ($7 is null or l.team_id = $7))
           or ($5 = 'my' and $6 is not null and l.user_id = $6 and ($8 is null or l.state_code = $8))
           or ($5 = 'te' and $7 is not null and $9 and l.team_id = $7 and ($8 is null or l.state_code = $8))
@@ -54157,7 +54177,7 @@ begin
         from public.lifecyclemodels l2
         where l2.id = matched_ids.id
           and (
-            ($5 = 'tg' and l2.state_code = 100 and ($7 is null or l2.team_id = $7))
+            ((($5 = 'tg' AND l2.state_code = 100) OR ($5 = 'ex' AND l2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or l2.team_id = $7))
             or ($5 = 'co' and l2.state_code = 200 and ($7 is null or l2.team_id = $7))
             or ($5 = 'my' and $6 is not null and l2.user_id = $6 and ($8 is null or l2.state_code = $8))
             or ($5 = 'te' and $7 is not null and $9 and l2.team_id = $7 and ($8 is null or l2.state_code = $8))
@@ -54236,7 +54256,7 @@ begin
         where p.id = exact_query_id
           and p.json @> filter_condition_jsonb
           and (
-            (normalized_data_source = 'tg' and p.state_code = 100 and (team_id_filter is null or p.team_id = team_id_filter))
+            (((normalized_data_source = 'tg' AND p.state_code = 100) OR (normalized_data_source = 'ex' AND p.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or p.team_id = team_id_filter))
             or (normalized_data_source = 'co' and p.state_code = 200 and (team_id_filter is null or p.team_id = team_id_filter))
             or (normalized_data_source = 'my' and effective_user_id is not null and p.user_id = effective_user_id and (state_code_filter is null or p.state_code = state_code_filter))
             or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and p.team_id = team_id_filter and (state_code_filter is null or p.state_code = state_code_filter))
@@ -54255,7 +54275,7 @@ begin
           from public.processes p2
           where p2.id = matched_ids.id
             and (
-              (normalized_data_source = 'tg' and p2.state_code = 100 and (team_id_filter is null or p2.team_id = team_id_filter))
+              (((normalized_data_source = 'tg' AND p2.state_code = 100) OR (normalized_data_source = 'ex' AND p2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or p2.team_id = team_id_filter))
               or (normalized_data_source = 'co' and p2.state_code = 200 and (team_id_filter is null or p2.team_id = team_id_filter))
               or (normalized_data_source = 'my' and effective_user_id is not null and p2.user_id = effective_user_id and (state_code_filter is null or p2.state_code = state_code_filter))
               or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and p2.team_id = team_id_filter and (state_code_filter is null or p2.state_code = state_code_filter))
@@ -54297,7 +54317,7 @@ begin
       select p.id, max(p.search_score) as search_score
       from text_matches p
       where (
-          ($5 = 'tg' and p.state_code = 100 and ($7 is null or p.team_id = $7))
+          ((($5 = 'tg' AND p.state_code = 100) OR ($5 = 'ex' AND p.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or p.team_id = $7))
           or ($5 = 'co' and p.state_code = 200 and ($7 is null or p.team_id = $7))
           or ($5 = 'my' and $6 is not null and p.user_id = $6 and ($8 is null or p.state_code = $8))
           or ($5 = 'te' and $7 is not null and $9 and p.team_id = $7 and ($8 is null or p.state_code = $8))
@@ -54317,7 +54337,7 @@ begin
         from public.processes p2
         where p2.id = matched_ids.id
           and (
-            ($5 = 'tg' and p2.state_code = 100 and ($7 is null or p2.team_id = $7))
+            ((($5 = 'tg' AND p2.state_code = 100) OR ($5 = 'ex' AND p2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or p2.team_id = $7))
             or ($5 = 'co' and p2.state_code = 200 and ($7 is null or p2.team_id = $7))
             or ($5 = 'my' and $6 is not null and p2.user_id = $6 and ($8 is null or p2.state_code = $8))
             or ($5 = 'te' and $7 is not null and $9 and p2.team_id = $7 and ($8 is null or p2.state_code = $8))
@@ -54399,7 +54419,7 @@ begin
         where p.id = exact_query_id
           and p.json @> filter_condition_jsonb
           and (
-            (normalized_data_source = 'tg' and p.state_code = 100 and (team_id_filter is null or p.team_id = team_id_filter))
+            (((normalized_data_source = 'tg' AND p.state_code = 100) OR (normalized_data_source = 'ex' AND p.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or p.team_id = team_id_filter))
             or (normalized_data_source = 'co' and p.state_code = 200 and (team_id_filter is null or p.team_id = team_id_filter))
             or (normalized_data_source = 'my' and effective_user_id is not null and p.user_id = effective_user_id and (state_code_filter is null or p.state_code = state_code_filter) and (not owner_draft_only or (p.state_code = 0)))
             or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and p.team_id = team_id_filter and (state_code_filter is null or p.state_code = state_code_filter))
@@ -54418,7 +54438,7 @@ begin
           from public.processes p2
           where p2.id = matched_ids.id
             and (
-              (normalized_data_source = 'tg' and p2.state_code = 100 and (team_id_filter is null or p2.team_id = team_id_filter))
+              (((normalized_data_source = 'tg' AND p2.state_code = 100) OR (normalized_data_source = 'ex' AND p2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or p2.team_id = team_id_filter))
               or (normalized_data_source = 'co' and p2.state_code = 200 and (team_id_filter is null or p2.team_id = team_id_filter))
               or (normalized_data_source = 'my' and effective_user_id is not null and p2.user_id = effective_user_id and (state_code_filter is null or p2.state_code = state_code_filter) and (not owner_draft_only or (p2.state_code = 0)))
               or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and p2.team_id = team_id_filter and (state_code_filter is null or p2.state_code = state_code_filter))
@@ -54461,7 +54481,7 @@ begin
       select p.id, max(p.search_score) as search_score
       from text_matches p
       where (
-          ($5 = 'tg' and p.state_code = 100 and ($7 is null or p.team_id = $7))
+          ((($5 = 'tg' AND p.state_code = 100) OR ($5 = 'ex' AND p.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or p.team_id = $7))
           or ($5 = 'co' and p.state_code = 200 and ($7 is null or p.team_id = $7))
           or ($5 = 'my' and $6 is not null and p.user_id = $6 and ($8 is null or p.state_code = $8) and (not $12 or (p.state_code = 0)))
           or ($5 = 'te' and $7 is not null and $9 and p.team_id = $7 and ($8 is null or p.state_code = $8))
@@ -54481,7 +54501,7 @@ begin
         from public.processes p2
         where p2.id = matched_ids.id
           and (
-            ($5 = 'tg' and p2.state_code = 100 and ($7 is null or p2.team_id = $7))
+            ((($5 = 'tg' AND p2.state_code = 100) OR ($5 = 'ex' AND p2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or p2.team_id = $7))
             or ($5 = 'co' and p2.state_code = 200 and ($7 is null or p2.team_id = $7))
             or ($5 = 'my' and $6 is not null and p2.user_id = $6 and ($8 is null or p2.state_code = $8) and (not $12 or (p2.state_code = 0)))
             or ($5 = 'te' and $7 is not null and $9 and p2.team_id = $7 and ($8 is null or p2.state_code = $8))
@@ -54639,6 +54659,46 @@ begin
         from public.flows f
         where f.embedding_ft is not null
           and f.state_code = 100
+          and (filter_condition_jsonb = '{}'::jsonb or f.json @> filter_condition_jsonb)
+          and (
+            flow_type is null
+            or flow_type = ''
+            or (f.json->'flowDataSet'->'modellingAndValidation'->'LCIMethod'->>'typeOfDataSet') = any(flow_type_array)
+          )
+          and (
+            as_input is null
+            or as_input = false
+            or not (
+              f.json @> '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"classificationInformation":{"common:elementaryFlowCategorization":{"common:category":[{"#text":"Emissions","@level":"0"}]}}}}}}'
+            )
+          )
+        order by f.embedding_ft <=> query_embedding_vector
+        limit candidate_size
+      ),
+      filtered as (
+        select candidates.*
+        from candidates
+        where candidates.candidate_distance < threshold_distance
+      )
+      select
+        rank() over (order by filtered.candidate_distance)::bigint,
+        filtered.candidate_id,
+        filtered.candidate_distance
+      from filtered
+      order by filtered.candidate_distance
+      limit normalized_match_count;
+    return;
+  end if;
+
+  if normalized_data_source = 'ex' and auth.uid() is not null then
+    return query
+      with candidates as materialized (
+        select
+          f.id as candidate_id,
+          (f.embedding_ft <=> query_embedding_vector) as candidate_distance
+        from public.flows f
+        where f.embedding_ft is not null
+          and f.state_code = -1
           and (filter_condition_jsonb = '{}'::jsonb or f.json @> filter_condition_jsonb)
           and (
             flow_type is null
@@ -54897,6 +54957,48 @@ begin
     return;
   end if;
 
+  if normalized_data_source = 'ex' and auth.uid() is not null then
+    return query
+      with candidates as materialized (
+        select
+          f.id as candidate_id,
+          f.version::text as candidate_version,
+          (f.embedding_ft operator(extensions.<=>) query_embedding_vector) as candidate_distance
+        from public.flows f
+        where f.embedding_ft is not null
+          and f.state_code = -1
+          and (filter_condition_jsonb = '{}'::jsonb or f.json @> filter_condition_jsonb)
+          and (
+            flow_type is null
+            or flow_type = ''
+            or (f.json->'flowDataSet'->'modellingAndValidation'->'LCIMethod'->>'typeOfDataSet') = any(flow_type_array)
+          )
+          and (
+            as_input is null
+            or as_input = false
+            or not (
+              f.json @> '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"classificationInformation":{"common:elementaryFlowCategorization":{"common:category":[{"#text":"Emissions","@level":"0"}]}}}}}}'
+            )
+          )
+        order by f.embedding_ft operator(extensions.<=>) query_embedding_vector
+        limit candidate_size
+      ),
+      filtered as (
+        select candidates.*
+        from candidates
+        where candidates.candidate_distance < threshold_distance
+      )
+      select
+        row_number() over (order by filtered.candidate_distance,filtered.candidate_id,filtered.candidate_version desc)::bigint,
+        filtered.candidate_id,
+        filtered.candidate_version,
+        filtered.candidate_distance
+      from filtered
+      order by filtered.candidate_distance,filtered.candidate_id,filtered.candidate_version desc
+      limit normalized_match_count;
+    return;
+  end if;
+
   if normalized_data_source = 'co' then
     return query
       with candidates as materialized (
@@ -55093,6 +55195,34 @@ begin
     return;
   end if;
 
+  if normalized_data_source = 'ex' and auth.uid() is not null then
+    return query
+      with candidates as materialized (
+        select
+          l.id as candidate_id,
+          (l.embedding_ft <=> query_embedding_vector) as candidate_distance
+        from public.lifecyclemodels l
+        where l.embedding_ft is not null
+          and l.state_code = -1
+          and l.json @> filter_condition_jsonb
+        order by l.embedding_ft <=> query_embedding_vector
+        limit candidate_size
+      ),
+      filtered as (
+        select candidates.*
+        from candidates
+        where candidates.candidate_distance < threshold_distance
+      )
+      select
+        rank() over (order by filtered.candidate_distance)::bigint,
+        filtered.candidate_id,
+        filtered.candidate_distance
+      from filtered
+      order by filtered.candidate_distance
+      limit normalized_match_count;
+    return;
+  end if;
+
   if normalized_data_source = 'co' then
     return query
       with candidates as materialized (
@@ -55230,6 +55360,34 @@ begin
         from public.processes p
         where p.embedding_ft is not null
           and p.state_code = 100
+          and (filter_condition_jsonb = '{}'::jsonb or p.json @> filter_condition_jsonb)
+        order by p.embedding_ft <=> query_embedding_vector
+        limit candidate_size
+      ),
+      filtered as (
+        select candidates.*
+        from candidates
+        where candidates.candidate_distance < threshold_distance
+      )
+      select
+        rank() over (order by filtered.candidate_distance)::bigint,
+        filtered.candidate_id,
+        filtered.candidate_distance
+      from filtered
+      order by filtered.candidate_distance
+      limit normalized_match_count;
+    return;
+  end if;
+
+  if normalized_data_source = 'ex' and auth.uid() is not null then
+    return query
+      with candidates as materialized (
+        select
+          p.id as candidate_id,
+          (p.embedding_ft <=> query_embedding_vector) as candidate_distance
+        from public.processes p
+        where p.embedding_ft is not null
+          and p.state_code = -1
           and (filter_condition_jsonb = '{}'::jsonb or p.json @> filter_condition_jsonb)
         order by p.embedding_ft <=> query_embedding_vector
         limit candidate_size
@@ -55410,6 +55568,36 @@ begin
     return;
   end if;
 
+  if normalized_data_source = 'ex' and auth.uid() is not null then
+    return query
+      with candidates as materialized (
+        select
+          p.id as candidate_id,
+          p.version::text as candidate_version,
+          (p.embedding_ft operator(extensions.<=>) query_embedding_vector) as candidate_distance
+        from public.processes p
+        where p.embedding_ft is not null
+          and p.state_code = -1
+          and (filter_condition_jsonb = '{}'::jsonb or p.json @> filter_condition_jsonb)
+        order by p.embedding_ft operator(extensions.<=>) query_embedding_vector
+        limit candidate_size
+      ),
+      filtered as (
+        select candidates.*
+        from candidates
+        where candidates.candidate_distance < threshold_distance
+      )
+      select
+        row_number() over (order by filtered.candidate_distance,filtered.candidate_id,filtered.candidate_version desc)::bigint,
+        filtered.candidate_id,
+        filtered.candidate_version,
+        filtered.candidate_distance
+      from filtered
+      order by filtered.candidate_distance,filtered.candidate_id,filtered.candidate_version desc
+      limit normalized_match_count;
+    return;
+  end if;
+
   if normalized_data_source = 'co' then
     return query
       with candidates as materialized (
@@ -55563,6 +55751,9 @@ begin
 
   if normalized_data_source = 'tg' then
     visibility_clause := 'd.state_code = 100 and ($7::uuid is null or d.team_id = $7)';
+  elsif normalized_data_source = 'ex' then
+    if auth.uid() is null then return; end if;
+    visibility_clause := 'd.state_code = -1 and ($7::uuid is null or d.team_id = $7)';
   elsif normalized_data_source = 'co' then
     visibility_clause := 'd.state_code = 200 and ($7::uuid is null or d.team_id = $7)';
   elsif normalized_data_source = 'my' then
@@ -55665,6 +55856,9 @@ begin
 
   if normalized_data_source = 'tg' then
     visibility_clause := 'd.state_code = 100 and ($9::uuid is null or d.team_id = $9)';
+  elsif normalized_data_source = 'ex' then
+    if auth.uid() is null then return; end if;
+    visibility_clause := 'd.state_code = -1 and ($9::uuid is null or d.team_id = $9)';
   elsif normalized_data_source = 'co' then
     visibility_clause := 'd.state_code = 200 and ($9::uuid is null or d.team_id = $9)';
   elsif normalized_data_source = 'my' then
@@ -76061,6 +76255,34 @@ CREATE OR REPLACE TRIGGER "processes_set_modified_at_trigger" BEFORE UPDATE OF "
 
 
 
+CREATE OR REPLACE TRIGGER "protect_example_dataset_write" BEFORE DELETE OR UPDATE ON "public"."contacts" FOR EACH ROW EXECUTE FUNCTION "private"."protect_example_dataset_write"();
+
+
+
+CREATE OR REPLACE TRIGGER "protect_example_dataset_write" BEFORE DELETE OR UPDATE ON "public"."flowproperties" FOR EACH ROW EXECUTE FUNCTION "private"."protect_example_dataset_write"();
+
+
+
+CREATE OR REPLACE TRIGGER "protect_example_dataset_write" BEFORE DELETE OR UPDATE ON "public"."flows" FOR EACH ROW EXECUTE FUNCTION "private"."protect_example_dataset_write"();
+
+
+
+CREATE OR REPLACE TRIGGER "protect_example_dataset_write" BEFORE DELETE OR UPDATE ON "public"."lifecyclemodels" FOR EACH ROW EXECUTE FUNCTION "private"."protect_example_dataset_write"();
+
+
+
+CREATE OR REPLACE TRIGGER "protect_example_dataset_write" BEFORE DELETE OR UPDATE ON "public"."processes" FOR EACH ROW EXECUTE FUNCTION "private"."protect_example_dataset_write"();
+
+
+
+CREATE OR REPLACE TRIGGER "protect_example_dataset_write" BEFORE DELETE OR UPDATE ON "public"."sources" FOR EACH ROW EXECUTE FUNCTION "private"."protect_example_dataset_write"();
+
+
+
+CREATE OR REPLACE TRIGGER "protect_example_dataset_write" BEFORE DELETE OR UPDATE ON "public"."unitgroups" FOR EACH ROW EXECUTE FUNCTION "private"."protect_example_dataset_write"();
+
+
+
 CREATE OR REPLACE TRIGGER "review_dataset_content_guard_v1" BEFORE UPDATE ON "public"."contacts" FOR EACH ROW EXECUTE FUNCTION "private"."review_dataset_content_guard_v1"();
 
 
@@ -77262,6 +77484,34 @@ CREATE POLICY "Enable read access for authenticated users" ON "public"."unitgrou
    FROM "private"."reviews" "r"
   WHERE (("r"."id" IN ( SELECT (("review_item"."value" ->> 'id'::"text"))::"uuid" AS "uuid"
            FROM "jsonb_array_elements"("unitgroups"."reviews") "review_item"("value"))) AND ("r"."reviewer_id" @> "jsonb_build_array"((( SELECT "auth"."uid"() AS "uid"))::"text")))))))));
+
+
+
+CREATE POLICY "authenticated_example_read" ON "public"."contacts" FOR SELECT TO "authenticated" USING ((("state_code" = '-1'::integer) AND (( SELECT "auth"."uid"() AS "uid") IS NOT NULL)));
+
+
+
+CREATE POLICY "authenticated_example_read" ON "public"."flowproperties" FOR SELECT TO "authenticated" USING ((("state_code" = '-1'::integer) AND (( SELECT "auth"."uid"() AS "uid") IS NOT NULL)));
+
+
+
+CREATE POLICY "authenticated_example_read" ON "public"."flows" FOR SELECT TO "authenticated" USING ((("state_code" = '-1'::integer) AND (( SELECT "auth"."uid"() AS "uid") IS NOT NULL)));
+
+
+
+CREATE POLICY "authenticated_example_read" ON "public"."lifecyclemodels" FOR SELECT TO "authenticated" USING ((("state_code" = '-1'::integer) AND (( SELECT "auth"."uid"() AS "uid") IS NOT NULL)));
+
+
+
+CREATE POLICY "authenticated_example_read" ON "public"."processes" FOR SELECT TO "authenticated" USING ((("state_code" = '-1'::integer) AND (( SELECT "auth"."uid"() AS "uid") IS NOT NULL)));
+
+
+
+CREATE POLICY "authenticated_example_read" ON "public"."sources" FOR SELECT TO "authenticated" USING ((("state_code" = '-1'::integer) AND (( SELECT "auth"."uid"() AS "uid") IS NOT NULL)));
+
+
+
+CREATE POLICY "authenticated_example_read" ON "public"."unitgroups" FOR SELECT TO "authenticated" USING ((("state_code" = '-1'::integer) AND (( SELECT "auth"."uid"() AS "uid") IS NOT NULL)));
 
 
 
@@ -80387,6 +80637,10 @@ GRANT ALL ON FUNCTION "private"."processes_derivative_rebuild_embedding_input"("
 REVOKE ALL ON FUNCTION "private"."processes_sync_jsonb_version"() FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."processes_sync_jsonb_version"() TO "service_role";
 GRANT ALL ON FUNCTION "private"."processes_sync_jsonb_version"() TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."protect_example_dataset_write"() FROM PUBLIC;
 
 
 

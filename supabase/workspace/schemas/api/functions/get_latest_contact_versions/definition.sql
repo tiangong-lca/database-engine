@@ -23,8 +23,7 @@ BEGIN
     WITH visible_keys AS (
       SELECT c.id, c.version, c.created_at, c.modified_at, c.team_id
       FROM public.contacts c
-      WHERE data_source = 'tg'
-        AND c.state_code = 100
+      WHERE ((data_source = 'tg' AND c.state_code = 100) OR (data_source = 'ex' AND c.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR c.team_id = team_id_filter)
       UNION ALL
       SELECT c.id, c.version, c.created_at, c.modified_at, c.team_id

@@ -37,7 +37,7 @@ begin
         from %1$s d
         where d.id = $1
           and (
-            ($4 = 'tg' and d.state_code = 100 and ($6 is null or d.team_id = $6))
+            ((($4 = 'tg' AND d.state_code = 100) OR ($4 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($6 is null or d.team_id = $6))
             or ($4 = 'co' and d.state_code = 200 and ($6 is null or d.team_id = $6))
             or ($4 = 'my' and $5 is not null and d.user_id = $5 and ($7 is null or d.state_code = $7))
             or ($4 = 'te' and $6 is not null and d.team_id = $6 and ($7 is null or d.state_code = $7))
@@ -53,7 +53,7 @@ begin
           from %1$s d2
           where d2.id = matched_ids.id
             and (
-              ($4 = 'tg' and d2.state_code = 100 and ($6 is null or d2.team_id = $6))
+              ((($4 = 'tg' AND d2.state_code = 100) OR ($4 = 'ex' AND d2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($6 is null or d2.team_id = $6))
               or ($4 = 'co' and d2.state_code = 200 and ($6 is null or d2.team_id = $6))
               or ($4 = 'my' and $5 is not null and d2.user_id = $5 and ($7 is null or d2.state_code = $7))
               or ($4 = 'te' and $6 is not null and d2.team_id = $6 and ($7 is null or d2.state_code = $7))
@@ -100,7 +100,7 @@ begin
       select d.id, max(d.search_score) as search_score
       from text_matches d
       where (
-          ($5 = 'tg' and d.state_code = 100 and ($7 is null or d.team_id = $7))
+          ((($5 = 'tg' AND d.state_code = 100) OR ($5 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or d.team_id = $7))
           or ($5 = 'co' and d.state_code = 200 and ($7 is null or d.team_id = $7))
           or ($5 = 'my' and $6 is not null and d.user_id = $6 and ($8 is null or d.state_code = $8))
           or ($5 = 'te' and $7 is not null and d.team_id = $7 and ($8 is null or d.state_code = $8))
@@ -116,7 +116,7 @@ begin
         from %1$s d2
         where d2.id = matched_ids.id
           and (
-            ($5 = 'tg' and d2.state_code = 100 and ($7 is null or d2.team_id = $7))
+            ((($5 = 'tg' AND d2.state_code = 100) OR ($5 = 'ex' AND d2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or d2.team_id = $7))
             or ($5 = 'co' and d2.state_code = 200 and ($7 is null or d2.team_id = $7))
             or ($5 = 'my' and $6 is not null and d2.user_id = $6 and ($8 is null or d2.state_code = $8))
             or ($5 = 'te' and $7 is not null and d2.team_id = $7 and ($8 is null or d2.state_code = $8))

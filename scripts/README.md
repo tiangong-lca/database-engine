@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-09
-lastReviewedCommit: 3368bffbe37b62bd76ee6cb4f07f064acccccdb9
-lastReviewedNote: 'Database #634: exact isolated migration replay, five-schema snapshots and public/api type regeneration cover the additive partial-import routines and receipt tables; remote Dev provenance remains a post-deployment gate.'
+lastReviewedAt: 2026-09-10
+lastReviewedCommit: 60f2d114b22d984deb8705d3d626f39a3ad18f35
+lastReviewedNote: 'Database #636: reviewed authenticated example read scope, fixed-state search, original-write guard, selected-root export and exact-local snapshot regeneration; hosted deployment remains separate.'
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml

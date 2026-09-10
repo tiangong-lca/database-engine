@@ -8,7 +8,7 @@ declare
   v_source text := coalesce(nullif(pg_catalog.lower(pg_catalog.btrim(data_source)),''),'tg');
   v_actor uuid := private.dataset_search_effective_user_id('');
 begin
-  if v_source not in ('tg','co','my','te')
+  if v_source not in ('tg','co','my','te','ex')
     or match_count is distinct from 200
     or page_size is null or page_size not between 1 and 100
     or page_current is null or page_current not between 1 and 400
@@ -20,7 +20,7 @@ begin
     or pg_catalog.jsonb_typeof(filter_condition) is distinct from 'object' then
     raise exception using errcode='22023',message='invalid version search request';
   end if;
-  if v_source in ('my','te') and v_actor is null then return; end if;
+  if v_source in ('my','te','ex') and v_actor is null then return; end if;
   return query
   with lexical as materialized (
     select candidate.*
@@ -42,7 +42,7 @@ begin
     select source.id,source.json,source.version,source.modified_at,source.team_id,fused.score
     from fused join public.flows as source
       on source.id=fused.id and source.version::text=fused.version
-    where (v_source='tg' and source.state_code=100)
+    where (((v_source = 'tg' AND source.state_code = 100) OR (v_source = 'ex' AND source.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
       or (v_source='co' and source.state_code=200)
       or (v_source='my' and source.user_id=v_actor)
       or (v_source='te' and exists(

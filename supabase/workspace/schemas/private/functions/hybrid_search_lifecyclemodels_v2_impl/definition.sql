@@ -59,7 +59,7 @@ begin
       from public.lifecyclemodels l
       join fused on fused.id = l.id
       where (
-        (data_source = 'tg' and l.state_code = 100)
+        (((data_source = 'tg' AND l.state_code = 100) OR (data_source = 'ex' AND l.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
         or (data_source = 'co' and l.state_code = 200)
         or (data_source = 'my' and l.user_id = auth.uid())
         or (

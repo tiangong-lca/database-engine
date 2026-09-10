@@ -13,7 +13,7 @@ declare
   v_query_embedding extensions.vector(1024);
 begin
   if v_process_type = 'all' then v_process_type := null; end if;
-  if v_source not in ('tg', 'co', 'my', 'te')
+  if v_source not in ('tg', 'co', 'my', 'te', 'ex')
      or query_text is null or pg_catalog.btrim(query_text) = ''
      or match_count is distinct from 200
      or page_size is null or page_size not between 1 and 100
@@ -24,7 +24,8 @@ begin
      or lexical_weight + semantic_weight <= 0
      or rrf_k is null or rrf_k not between 1 and 1000
      or pg_catalog.jsonb_typeof(filter_condition) is distinct from 'object'
-     or state_code_filter < 0
+     or (state_code_filter < 0 and not (v_source = 'ex' and state_code_filter = -1))
+     or (v_source = 'ex' and state_code_filter is not null and state_code_filter <> -1)
      or (
        v_process_type is not null
        and v_process_type not in (
@@ -37,7 +38,7 @@ begin
      ) then
     raise exception using errcode = '22023', message = 'invalid Next Process Hybrid V2 request';
   end if;
-  if v_source in ('my', 'te') and v_actor is null then return; end if;
+  if v_source in ('my', 'te', 'ex') and v_actor is null then return; end if;
   if v_source = 'te' and (
     team_id_filter is null
     or not private.dataset_search_can_read_team_filter(team_id_filter, v_actor)
@@ -78,7 +79,7 @@ begin
       on source.id = fused.id
      and source.version::text = fused.version
     where (
-        (v_source = 'tg' and source.state_code = 100
+        (((v_source = 'tg' AND source.state_code = 100) OR (v_source = 'ex' AND source.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
           and (team_id_filter is null or source.team_id = team_id_filter))
         or (v_source = 'co' and source.state_code = 200
           and (team_id_filter is null or source.team_id = team_id_filter))

@@ -60,7 +60,7 @@ begin
       from public.processes p
       join fused on fused.id = p.id
       where (
-        (data_source = 'tg' and p.state_code = 100)
+        (((data_source = 'tg' AND p.state_code = 100) OR (data_source = 'ex' AND p.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
         or (data_source = 'co' and p.state_code = 200)
         or (data_source = 'my' and p.user_id = auth.uid())
         or (

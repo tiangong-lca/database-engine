@@ -110,7 +110,7 @@ begin
     );
   end if;
 
-  if v_state_code >= 100 then
+  if v_state_code = -1 or v_state_code >= 100 then
     return jsonb_build_object(
       'ok', false,
       'code', 'DATA_ALREADY_PUBLISHED',

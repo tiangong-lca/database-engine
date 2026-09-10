@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-09-09"
-lastReviewedCommit: "3368bffbe37b62bd76ee6cb4f07f064acccccdb9"
-lastReviewedNote: "Database #634: reviewed service-only v2 package admission, per-root insert-only transactions, lease fences and owner-scoped committed receipt readback."
+lastReviewedAt: "2026-09-10"
+lastReviewedCommit: "60f2d114b22d984deb8705d3d626f39a3ad18f35"
+lastReviewedNote: "Database #636: authenticated examples and exact-local migration snapshots reviewed; ownership and hosted deployment gates remain unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

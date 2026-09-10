@@ -70,7 +70,7 @@ begin
           'public.processes'::text as matched_entity_table
         from public.processes d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -101,7 +101,7 @@ begin
           'public.flows'::text as matched_entity_table
         from public.flows d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -132,7 +132,7 @@ begin
           'public.lifecyclemodels'::text as matched_entity_table
         from public.lifecyclemodels d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -163,7 +163,7 @@ begin
           'public.sources'::text as matched_entity_table
         from public.sources d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -194,7 +194,7 @@ begin
           'public.contacts'::text as matched_entity_table
         from public.contacts d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -225,7 +225,7 @@ begin
           'public.unitgroups'::text as matched_entity_table
         from public.unitgroups d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -256,7 +256,7 @@ begin
           'public.flowproperties'::text as matched_entity_table
         from public.flowproperties d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
