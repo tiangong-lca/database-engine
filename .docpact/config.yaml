@@ -1,8 +1,8 @@
 version: 1
 layout: repo
 lastReviewedAt: "2026-09-10"
-lastReviewedCommit: "60f2d114b22d984deb8705d3d626f39a3ad18f35"
-lastReviewedNote: "Database #636: authenticated examples and exact-local migration snapshots reviewed; ownership and hosted deployment gates remain unchanged."
+lastReviewedCommit: "40b980d18a1a42af0ec50ea7caa0e08227c5efdd"
+lastReviewedNote: "Database #640: reviewed completed-export refresh for every scope, unchanged service ACLs, local regression proof and exact-local snapshot regeneration."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.

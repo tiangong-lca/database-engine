@@ -22,9 +22,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-09-08
-lastReviewedCommit: 0c6c00d93934c86d0059b37c3248d91449adab6b
-lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
+lastReviewedAt: 2026-09-10
+lastReviewedCommit: f9f18978ecd073105724141b59b3ea992e352e5b
+lastReviewedNote: "Database #640: reviewed package lifecycle regression coverage in the local CI contract; hosted authority and deployment steps are unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

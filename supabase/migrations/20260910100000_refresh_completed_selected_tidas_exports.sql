@@ -1,3 +1,6 @@
+-- Issue #640: align selected-root export refresh with bulk export lifecycle.
+-- Preserve the current example-data authorization and existing function ACL.
+
 CREATE OR REPLACE FUNCTION "api"."svc_tidas_package_export_enqueue"("p_requested_by" "uuid", "p_scope" "text", "p_roots" "jsonb", "p_request_key" "text", "p_request_payload" "jsonb", "p_job_id" "uuid", "p_idempotency_key" "text") RETURNS "jsonb"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -196,9 +199,3 @@ begin
   );
 end
 $_$;
-
-ALTER FUNCTION "api"."svc_tidas_package_export_enqueue"("p_requested_by" "uuid", "p_scope" "text", "p_roots" "jsonb", "p_request_key" "text", "p_request_payload" "jsonb", "p_job_id" "uuid", "p_idempotency_key" "text") OWNER TO "postgres";
-
-REVOKE ALL ON FUNCTION "api"."svc_tidas_package_export_enqueue"("p_requested_by" "uuid", "p_scope" "text", "p_roots" "jsonb", "p_request_key" "text", "p_request_payload" "jsonb", "p_job_id" "uuid", "p_idempotency_key" "text") FROM PUBLIC;
-
-GRANT ALL ON FUNCTION "api"."svc_tidas_package_export_enqueue"("p_requested_by" "uuid", "p_scope" "text", "p_roots" "jsonb", "p_request_key" "text", "p_request_payload" "jsonb", "p_job_id" "uuid", "p_idempotency_key" "text") TO "service_role";
