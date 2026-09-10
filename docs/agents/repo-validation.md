@@ -64,6 +64,9 @@ pgTAP files explicitly after a clean reset, and run the change-specific shell
 or Node upgrade/transport harnesses named in the proof matrix. Workflows that
 need Git provenance still check out full history (`fetch-depth: 0`).
 
+The local contract job in `supabase-dev.yml` always runs the package capability,
+ownership, bulk-refresh and selected-root-refresh suites before hosted steps.
+
 ## Proof Matrix
 
 | Change type | Minimum local proof | Stronger proof when risk is higher | Notes |
