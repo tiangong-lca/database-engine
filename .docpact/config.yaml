@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-09-10"
-lastReviewedCommit: "40b980d18a1a42af0ec50ea7caa0e08227c5efdd"
-lastReviewedNote: "Database #640: reviewed completed-export refresh for every scope, unchanged service ACLs, local regression proof and exact-local snapshot regeneration."
+lastReviewedAt: "2026-09-11"
+lastReviewedCommit: "bf1c1b9247d9f22c6b8b1307cc4584df86fa8599"
+lastReviewedNote: "Database #642 / PR #643: reconciled Dev export-refresh review (#640) with Main official CLI capability-repair review (#638); retained both contracts and aligned the API closure assertion with migration 20260910150000."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
