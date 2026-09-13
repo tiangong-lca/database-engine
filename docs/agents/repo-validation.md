@@ -32,9 +32,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-10
-lastReviewedCommit: 40b980d18a1a42af0ec50ea7caa0e08227c5efdd
-lastReviewedNote: "Database #640: reviewed completed-export refresh for every scope, unchanged service ACLs, local regression proof and exact-local snapshot regeneration."
+lastReviewedAt: 2026-09-13
+lastReviewedCommit: 784c64dd82e22fa8667e64dc94569fe68411d72c
+lastReviewedNote: "Database #644: documented the review-queue full-text-search, TIDAS partial-import, and example-dataset-scope suites as always-run local-contract coverage; proof matrix and hosted boundaries unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -65,7 +65,8 @@ or Node upgrade/transport harnesses named in the proof matrix. Workflows that
 need Git provenance still check out full history (`fetch-depth: 0`).
 
 The local contract job in `supabase-dev.yml` always runs the package capability,
-ownership, bulk-refresh and selected-root-refresh suites before hosted steps.
+ownership, bulk-refresh, selected-root-refresh, review-queue full-text-search,
+TIDAS partial-import, and example-dataset-scope suites before hosted steps.
 
 ## Proof Matrix
 

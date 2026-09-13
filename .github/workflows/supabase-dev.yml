@@ -58,6 +58,9 @@ jobs:
           supabase test db supabase/tests/20260810_issue_448_package_ownership_and_attempt_diagnostics.sql
           supabase test db supabase/tests/20260810_issue_455_mutable_export_terminal_refresh.sql
           supabase test db supabase/tests/20260910_selected_export_refresh.sql
+          supabase test db supabase/tests/20260909_review_queue_full_text_search.sql
+          supabase test db supabase/tests/20260909_tidas_partial_import.sql
+          supabase test db supabase/tests/20260910_example_dataset_scope.sql
           supabase test db supabase/tests/20260830_oauth_client_capability_foundation.sql
           supabase test db supabase/tests/20260831_oauth_actor_command_capabilities.sql
           supabase test db supabase/tests/20260901_national_carbon_organization_contributions.sql

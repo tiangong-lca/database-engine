@@ -20,9 +20,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-10
-lastReviewedCommit: 40b980d18a1a42af0ec50ea7caa0e08227c5efdd
-lastReviewedNote: "Database #640: reviewed completed-export refresh for every scope, unchanged service ACLs, local regression proof and exact-local snapshot regeneration."
+lastReviewedAt: 2026-09-13
+lastReviewedCommit: 784c64dd82e22fa8667e64dc94569fe68411d72c
+lastReviewedNote: "Database #644: reviewed the workflow-contract script's added required invocations for three local-contract SQL suites; script entrypoints and workspace refresh behavior unchanged."
 related:
   - ../AGENTS.md
   - ../.docpact/config.yaml
