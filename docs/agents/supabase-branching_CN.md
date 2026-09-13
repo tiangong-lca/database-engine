@@ -22,9 +22,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-09-08
-lastReviewedCommit: 0c6c00d93934c86d0059b37c3248d91449adab6b
-lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
+lastReviewedAt: 2026-09-13
+lastReviewedCommit: 784c64dd82e22fa8667e64dc94569fe68411d72c
+lastReviewedNote: "Database #644: updated the production Supabase GitHub integration repository identity to tiangong-lca/database; branch bindings, Vault rules, and persistent-Dev deployment steps unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -128,7 +128,7 @@ canonical-base-to-head upgrade；追加的 Preview repair 本身不能证明首�
 
 生产项目的 Supabase GitHub integration 应绑定到：
 
-- repository: `tiangong-lca/database-engine`
+- repository: `tiangong-lca/database`
 - relative path: `supabase`
 
 当 Git `main` 前进时，该 integration 会自动把已提交的 migration 应用到生产项目。
@@ -311,7 +311,7 @@ python3 scripts/test_check_auth_email_templates.py
 ### 生产 `main` 部署
 
 - 对 Git `main` 的 push 由生产项目的 Supabase GitHub integration 处理。
-- 该 integration 监听 repository `tiangong-lca/database-engine`，relative path 为 `supabase`。
+- 该 integration 监听 repository `tiangong-lca/database`，relative path 为 `supabase`。
 - 当 `main` 前进时，已提交且尚未应用的 migrations 会自动应用到生产项目。
 - 不假定项目配置会随 migration 自动同步；`supabase/config.toml` 变化时，必须
   显式推送到生产项目并验证托管 PostgREST 设置。

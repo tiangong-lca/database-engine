@@ -111,7 +111,7 @@ begin
         from %1$s d
         where d.id = $1
           and (
-            ($4 = 'tg' and d.state_code = 100 and ($6 is null or d.team_id = $6))
+            ((($4 = 'tg' AND d.state_code = 100) OR ($4 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($6 is null or d.team_id = $6))
             or ($4 = 'co' and d.state_code = 200 and ($6 is null or d.team_id = $6))
             or ($4 = 'my' and $5 is not null and d.user_id = $5 and ($7 is null or d.state_code = $7))
             or ($4 = 'te' and $6 is not null and d.team_id = $6 and ($7 is null or d.state_code = $7))
@@ -127,7 +127,7 @@ begin
           from %1$s d2
           where d2.id = matched_ids.id
             and (
-              ($4 = 'tg' and d2.state_code = 100 and ($6 is null or d2.team_id = $6))
+              ((($4 = 'tg' AND d2.state_code = 100) OR ($4 = 'ex' AND d2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($6 is null or d2.team_id = $6))
               or ($4 = 'co' and d2.state_code = 200 and ($6 is null or d2.team_id = $6))
               or ($4 = 'my' and $5 is not null and d2.user_id = $5 and ($7 is null or d2.state_code = $7))
               or ($4 = 'te' and $6 is not null and d2.team_id = $6 and ($7 is null or d2.state_code = $7))
@@ -174,7 +174,7 @@ begin
       select d.id, max(d.search_score) as search_score
       from text_matches d
       where (
-          ($5 = 'tg' and d.state_code = 100 and ($7 is null or d.team_id = $7))
+          ((($5 = 'tg' AND d.state_code = 100) OR ($5 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or d.team_id = $7))
           or ($5 = 'co' and d.state_code = 200 and ($7 is null or d.team_id = $7))
           or ($5 = 'my' and $6 is not null and d.user_id = $6 and ($8 is null or d.state_code = $8))
           or ($5 = 'te' and $7 is not null and d.team_id = $7 and ($8 is null or d.state_code = $8))
@@ -190,7 +190,7 @@ begin
         from %1$s d2
         where d2.id = matched_ids.id
           and (
-            ($5 = 'tg' and d2.state_code = 100 and ($7 is null or d2.team_id = $7))
+            ((($5 = 'tg' AND d2.state_code = 100) OR ($5 = 'ex' AND d2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or d2.team_id = $7))
             or ($5 = 'co' and d2.state_code = 200 and ($7 is null or d2.team_id = $7))
             or ($5 = 'my' and $6 is not null and d2.user_id = $6 and ($8 is null or d2.state_code = $8))
             or ($5 = 'te' and $7 is not null and d2.team_id = $7 and ($8 is null or d2.state_code = $8))
@@ -7553,7 +7553,7 @@ begin
     );
   end if;
 
-  if v_state_code >= 100 then
+  if v_state_code = -1 or v_state_code >= 100 then
     return jsonb_build_object(
       'ok', false,
       'code', 'DATA_ALREADY_PUBLISHED',
@@ -14841,7 +14841,7 @@ CREATE TABLE IF NOT EXISTS "public"."contacts" (
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
     "search_text" "text"[],
-    CONSTRAINT "contacts_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 3, 20, 100])))
+    CONSTRAINT "contacts_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 3, 20, 100])))
 );
 
 
@@ -14880,7 +14880,7 @@ CREATE TABLE IF NOT EXISTS "public"."flowproperties" (
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
     "search_text" "text"[],
-    CONSTRAINT "flowproperties_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
+    CONSTRAINT "flowproperties_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 20, 100, 200])))
 );
 
 
@@ -14919,7 +14919,7 @@ CREATE TABLE IF NOT EXISTS "public"."flows" (
     "extracted_md" "text",
     "embedding_ft" "extensions"."vector"(1024),
     "search_text" "text"[],
-    CONSTRAINT "flows_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
+    CONSTRAINT "flows_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 20, 100, 200])))
 );
 
 
@@ -15056,8 +15056,7 @@ BEGIN
     WITH visible_keys AS (
       SELECT c.id, c.version, c.created_at, c.modified_at, c.team_id
       FROM public.contacts c
-      WHERE data_source = 'tg'
-        AND c.state_code = 100
+      WHERE ((data_source = 'tg' AND c.state_code = 100) OR (data_source = 'ex' AND c.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR c.team_id = team_id_filter)
       UNION ALL
       SELECT c.id, c.version, c.created_at, c.modified_at, c.team_id
@@ -15217,8 +15216,7 @@ BEGIN
       WITH visible_keys AS (
         SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
         FROM public.flows f
-        WHERE data_source = 'tg'
-          AND f.state_code = 100
+        WHERE ((data_source = 'tg' AND f.state_code = 100) OR (data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
           AND (team_id_filter IS NULL OR f.team_id = team_id_filter)
         UNION ALL
         SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
@@ -15319,8 +15317,7 @@ BEGIN
     WITH visible_rows AS (
       SELECT f.*
       FROM public.flows f
-      WHERE data_source = 'tg'
-        AND f.state_code = 100
+      WHERE ((data_source = 'tg' AND f.state_code = 100) OR (data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR f.team_id = team_id_filter)
       UNION ALL
       SELECT f.*
@@ -15473,8 +15470,7 @@ BEGIN
     WITH visible_keys AS (
       SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
       FROM public.flowproperties f
-      WHERE data_source = 'tg'
-        AND f.state_code = 100
+      WHERE ((data_source = 'tg' AND f.state_code = 100) OR (data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR f.team_id = team_id_filter)
       UNION ALL
       SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
@@ -15601,8 +15597,7 @@ BEGIN
     WITH visible_rows AS (
       SELECT l.*
       FROM public.lifecyclemodels l
-      WHERE data_source = 'tg'
-        AND l.state_code = 100
+      WHERE ((data_source = 'tg' AND l.state_code = 100) OR (data_source = 'ex' AND l.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR l.team_id = team_id_filter)
       UNION ALL
       SELECT l.*
@@ -15703,8 +15698,7 @@ BEGIN
     WITH visible_rows AS (
       SELECT p.*
       FROM public.processes p
-      WHERE data_source = 'tg'
-        AND p.state_code = 100
+      WHERE ((data_source = 'tg' AND p.state_code = 100) OR (data_source = 'ex' AND p.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR p.team_id = team_id_filter)
       UNION ALL
       SELECT p.*
@@ -15816,8 +15810,7 @@ BEGIN
     WITH visible_keys AS (
       SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
       FROM public.sources f
-      WHERE data_source = 'tg'
-        AND f.state_code = 100
+      WHERE ((data_source = 'tg' AND f.state_code = 100) OR (data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR f.team_id = team_id_filter)
       UNION ALL
       SELECT f.id, f.version, f.created_at, f.modified_at, f.team_id
@@ -15943,8 +15936,7 @@ BEGIN
     WITH visible_keys AS (
       SELECT u.id, u.version, u.created_at, u.modified_at, u.team_id
       FROM public.unitgroups u
-      WHERE data_source = 'tg'
-        AND u.state_code = 100
+      WHERE ((data_source = 'tg' AND u.state_code = 100) OR (data_source = 'ex' AND u.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
         AND (team_id_filter IS NULL OR u.team_id = team_id_filter)
       UNION ALL
       SELECT u.id, u.version, u.created_at, u.modified_at, u.team_id
@@ -16929,7 +16921,7 @@ declare
   v_source text := coalesce(nullif(pg_catalog.lower(pg_catalog.btrim(data_source)),''),'tg');
   v_actor uuid := private.dataset_search_effective_user_id('');
 begin
-  if v_source not in ('tg','co','my','te')
+  if v_source not in ('tg','co','my','te','ex')
     or match_count is distinct from 200
     or page_size is null or page_size not between 1 and 100
     or page_current is null or page_current not between 1 and 400
@@ -16941,7 +16933,7 @@ begin
     or pg_catalog.jsonb_typeof(filter_condition) is distinct from 'object' then
     raise exception using errcode='22023',message='invalid version search request';
   end if;
-  if v_source in ('my','te') and v_actor is null then return; end if;
+  if v_source in ('my','te','ex') and v_actor is null then return; end if;
   return query
   with lexical as materialized (
     select candidate.*
@@ -16963,7 +16955,7 @@ begin
     select source.id,source.json,source.version,source.modified_at,source.team_id,fused.score
     from fused join public.flows as source
       on source.id=fused.id and source.version::text=fused.version
-    where (v_source='tg' and source.state_code=100)
+    where (((v_source = 'tg' AND source.state_code = 100) OR (v_source = 'ex' AND source.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
       or (v_source='co' and source.state_code=200)
       or (v_source='my' and source.user_id=v_actor)
       or (v_source='te' and exists(
@@ -17005,7 +16997,7 @@ declare
   v_elementary_codes text[] := '{}'::text[];
   v_query_embedding extensions.vector(1024);
 begin
-  if v_source not in ('tg', 'co', 'my', 'te')
+  if v_source not in ('tg', 'co', 'my', 'te', 'ex')
      or query_text is null or pg_catalog.btrim(query_text) = ''
      or match_count is distinct from 200
      or page_size is null or page_size not between 1 and 100
@@ -17016,7 +17008,8 @@ begin
      or lexical_weight + semantic_weight <= 0
      or rrf_k is null or rrf_k not between 1 and 1000
      or pg_catalog.jsonb_typeof(v_filter) is distinct from 'object'
-     or state_code_filter < 0 then
+     or (state_code_filter < 0 and not (v_source = 'ex' and state_code_filter = -1))
+     or (v_source = 'ex' and state_code_filter is not null and state_code_filter <> -1) then
     raise exception using errcode = '22023', message = 'invalid Next Flow Hybrid V2 request';
   end if;
 
@@ -17076,7 +17069,7 @@ begin
 
   v_residual := v_filter - 'flowType' - 'asInput' - 'classification';
 
-  if v_source in ('my', 'te') and v_actor is null then return; end if;
+  if v_source in ('my', 'te', 'ex') and v_actor is null then return; end if;
   if v_source = 'te' and (
     team_id_filter is null
     or not private.dataset_search_can_read_team_filter(team_id_filter, v_actor)
@@ -17116,7 +17109,7 @@ begin
       on source.id = fused.id
      and source.version::text = fused.version
     where (
-        (v_source = 'tg' and source.state_code = 100
+        (((v_source = 'tg' AND source.state_code = 100) OR (v_source = 'ex' AND source.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
           and (team_id_filter is null or source.team_id = team_id_filter))
         or (v_source = 'co' and source.state_code = 200
           and (team_id_filter is null or source.team_id = team_id_filter))
@@ -17373,7 +17366,7 @@ declare
   v_source text := coalesce(nullif(pg_catalog.lower(pg_catalog.btrim(data_source)),''),'tg');
   v_actor uuid := private.dataset_search_effective_user_id('');
 begin
-  if v_source not in ('tg','co','my','te')
+  if v_source not in ('tg','co','my','te','ex')
     or match_count is distinct from 200
     or page_size is null or page_size not between 1 and 100
     or page_current is null or page_current not between 1 and 400
@@ -17385,7 +17378,7 @@ begin
     or pg_catalog.jsonb_typeof(filter_condition) is distinct from 'object' then
     raise exception using errcode='22023',message='invalid version search request';
   end if;
-  if v_source in ('my','te') and v_actor is null then return; end if;
+  if v_source in ('my','te','ex') and v_actor is null then return; end if;
   return query
   with lexical as materialized (
     select candidate.*
@@ -17407,7 +17400,7 @@ begin
     select source.id,source.json,source.version,source.modified_at,source.model_id,source.model_version,source.team_id,fused.score
     from fused join public.processes as source
       on source.id=fused.id and source.version::text=fused.version
-    where (v_source='tg' and source.state_code=100)
+    where (((v_source = 'tg' AND source.state_code = 100) OR (v_source = 'ex' AND source.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
       or (v_source='co' and source.state_code=200)
       or (v_source='my' and source.user_id=v_actor)
       or (v_source='te' and exists(
@@ -17444,7 +17437,7 @@ declare
   v_query_embedding extensions.vector(1024);
 begin
   if v_process_type = 'all' then v_process_type := null; end if;
-  if v_source not in ('tg', 'co', 'my', 'te')
+  if v_source not in ('tg', 'co', 'my', 'te', 'ex')
      or query_text is null or pg_catalog.btrim(query_text) = ''
      or match_count is distinct from 200
      or page_size is null or page_size not between 1 and 100
@@ -17455,7 +17448,8 @@ begin
      or lexical_weight + semantic_weight <= 0
      or rrf_k is null or rrf_k not between 1 and 1000
      or pg_catalog.jsonb_typeof(filter_condition) is distinct from 'object'
-     or state_code_filter < 0
+     or (state_code_filter < 0 and not (v_source = 'ex' and state_code_filter = -1))
+     or (v_source = 'ex' and state_code_filter is not null and state_code_filter <> -1)
      or (
        v_process_type is not null
        and v_process_type not in (
@@ -17468,7 +17462,7 @@ begin
      ) then
     raise exception using errcode = '22023', message = 'invalid Next Process Hybrid V2 request';
   end if;
-  if v_source in ('my', 'te') and v_actor is null then return; end if;
+  if v_source in ('my', 'te', 'ex') and v_actor is null then return; end if;
   if v_source = 'te' and (
     team_id_filter is null
     or not private.dataset_search_can_read_team_filter(team_id_filter, v_actor)
@@ -17509,7 +17503,7 @@ begin
       on source.id = fused.id
      and source.version::text = fused.version
     where (
-        (v_source = 'tg' and source.state_code = 100
+        (((v_source = 'tg' AND source.state_code = 100) OR (v_source = 'ex' AND source.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))
           and (team_id_filter is null or source.team_id = team_id_filter))
         or (v_source = 'co' and source.state_code = 200
           and (team_id_filter is null or source.team_id = team_id_filter))
@@ -17959,7 +17953,7 @@ CREATE TABLE IF NOT EXISTS "public"."lifecyclemodels" (
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
     "search_text" "text"[],
-    CONSTRAINT "lifecyclemodels_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100])))
+    CONSTRAINT "lifecyclemodels_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 20, 100])))
 );
 
 
@@ -18201,7 +18195,7 @@ BEGIN
 			f.modified_at,
 			COUNT(*) OVER() AS total_count
 		FROM contacts f
-		WHERE f.json @> filter_condition_jsonb AND f.json &@~ query_text AND ((data_source = 'tg' AND state_code = 100) or (data_source = 'my' AND user_id::text = this_user_id))
+		WHERE f.json @> filter_condition_jsonb AND f.json &@~ query_text AND ((((data_source = 'tg' AND state_code = 100) OR (data_source = 'ex' AND state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))) or (data_source = 'my' AND user_id::text = this_user_id))
 		ORDER BY pgroonga_score(tableoid, ctid) DESC
 		LIMIT page_size
 		OFFSET (page_current -1) * page_size;
@@ -18243,7 +18237,7 @@ BEGIN
 			f.modified_at,
 			COUNT(*) OVER() AS total_count
 		FROM flowproperties f
-		WHERE f.json @> filter_condition_jsonb AND f.json &@~ query_text AND ((data_source = 'tg' AND state_code = 100) or (data_source = 'my' AND user_id::text = this_user_id))
+		WHERE f.json @> filter_condition_jsonb AND f.json &@~ query_text AND ((((data_source = 'tg' AND state_code = 100) OR (data_source = 'ex' AND state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))) or (data_source = 'my' AND user_id::text = this_user_id))
 		ORDER BY pgroonga_score(tableoid, ctid) DESC
 		LIMIT page_size
 		OFFSET (page_current -1) * page_size;
@@ -18489,7 +18483,7 @@ BEGIN
 			WHERE f.json @> filter_condition_jsonb
 				AND f.json &@~ query_text
 				AND (
-					(data_source = 'tg' AND state_code = 100)
+					(((data_source = 'tg' AND state_code = 100) OR (data_source = 'ex' AND state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
 					OR (data_source = 'co' AND state_code = 200)
 					OR (data_source = 'my' AND user_id = auth.uid())
 					OR (
@@ -18752,7 +18746,7 @@ BEGIN
       WHERE f.json @> filter_condition_jsonb
         AND f.json &@~ query_text
         AND (
-          (data_source = 'tg' AND state_code = 100)
+          (((data_source = 'tg' AND state_code = 100) OR (data_source = 'ex' AND state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
           OR (data_source = 'co' AND state_code = 200)
           OR (data_source = 'my' AND user_id = auth.uid())
           OR (
@@ -19023,7 +19017,7 @@ BEGIN
 			WHERE f.json @> filter_condition_jsonb
 				AND f.json &@~ query_text
 				AND (
-					(data_source = 'tg' AND state_code = 100)
+					(((data_source = 'tg' AND state_code = 100) OR (data_source = 'ex' AND state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
 					OR (data_source = 'co' AND state_code = 200)
 					OR (data_source = 'my' AND user_id = auth.uid())
 					OR (
@@ -19090,7 +19084,7 @@ BEGIN
 			f.modified_at,
 			COUNT(*) OVER() AS total_count
 		FROM sources f
-		WHERE f.json @> filter_condition_jsonb AND f.json &@~ query_text AND ((data_source = 'tg' AND state_code = 100) or (data_source = 'my' AND user_id::text = this_user_id))
+		WHERE f.json @> filter_condition_jsonb AND f.json &@~ query_text AND ((((data_source = 'tg' AND state_code = 100) OR (data_source = 'ex' AND state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))) or (data_source = 'my' AND user_id::text = this_user_id))
 		ORDER BY pgroonga_score(tableoid, ctid) DESC
 		LIMIT page_size
 		OFFSET (page_current -1) * page_size;
@@ -19135,7 +19129,7 @@ BEGIN
   WHERE f.json @> filter_condition_jsonb
     AND f.json &@~ query_text
     AND (
-         (data_source = 'tg' AND f.state_code = 100)
+         (((data_source = 'tg' AND f.state_code = 100) OR (data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
          OR
          (data_source = 'my' AND f.user_id::text = this_user_id)
         )
@@ -21076,7 +21070,7 @@ CREATE TABLE IF NOT EXISTS "public"."processes" (
     "model_version" character(9),
     CONSTRAINT "processes_model_version_format_check" CHECK ((("model_version" IS NULL) OR (("model_version")::"text" ~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$'::"text"))),
     CONSTRAINT "processes_model_version_requires_model_id_check" CHECK ((("model_version" IS NULL) OR ("model_id" IS NOT NULL))),
-    CONSTRAINT "processes_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
+    CONSTRAINT "processes_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 20, 100, 200])))
 );
 
 
@@ -22144,6 +22138,138 @@ COMMENT ON FUNCTION "api"."qry_review_get_admin_queue_items_v3"("p_status" "text
 
 
 
+CREATE OR REPLACE FUNCTION "api"."qry_review_get_admin_queue_items_v4"("p_status" "text" DEFAULT NULL::"text", "p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 50, "p_sort_by" "text" DEFAULT 'modified_at'::"text", "p_sort_order" "text" DEFAULT 'desc'::"text", "p_display_mode" "text" DEFAULT 'all'::"text", "p_target_table" "text" DEFAULT NULL::"text", "p_query" "text" DEFAULT NULL::"text") RETURNS TABLE("id" "uuid", "data_id" "uuid", "data_version" "text", "state_code" integer, "review_kind" "text", "target_table" "text", "reviewer_id" "jsonb", "json" "jsonb", "deadline" timestamp with time zone, "created_at" timestamp with time zone, "modified_at" timestamp with time zone, "comment_state_codes" "jsonb", "root_matches_status" boolean, "root_can_read" boolean, "total_count" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  v_actor uuid := auth.uid();
+  v_query text := nullif(pg_catalog.btrim(p_query), '');
+  v_limit integer := greatest(1, least(coalesce(p_page_size, 50), 100));
+  v_offset integer := (greatest(coalesce(p_page, 1), 1) - 1) * v_limit;
+  v_sort_key text := case pg_catalog.lower(coalesce(p_sort_by, ''))
+    when 'created_at' then 'created_at'
+    when 'createat' then 'created_at'
+    when 'deadline' then 'deadline'
+    when 'state_code' then 'state_code'
+    when 'statecode' then 'state_code'
+    else 'modified_at'
+  end;
+  v_order_dir text := api.cmd_membership_resolve_sort_direction(p_sort_order);
+  v_status text := pg_catalog.lower(coalesce(p_status, ''));
+  v_display_mode text := pg_catalog.lower(pg_catalog.btrim(coalesce(p_display_mode, 'all')));
+  v_target_table text := nullif(
+    pg_catalog.lower(pg_catalog.btrim(coalesce(p_target_table, ''))),
+    ''
+  );
+  v_state_code integer;
+begin
+  if v_actor is null or not api.cmd_review_is_review_admin(v_actor) then
+    return;
+  end if;
+
+  case v_status
+    when '', 'all' then v_state_code := null;
+    when 'unassigned' then v_state_code := 0;
+    when 'assigned' then v_state_code := 1;
+    when 'admin-rejected' then v_state_code := -1;
+    else return;
+  end case;
+
+  if v_display_mode not in ('all', 'model_process', 'other') then
+    raise exception using
+      errcode = '22023',
+      message = 'INVALID_REVIEW_DISPLAY_MODE';
+  end if;
+  if v_target_table is not null and not (
+    v_target_table = any(array[
+      'contacts', 'sources', 'unitgroups', 'flowproperties', 'flows',
+      'processes', 'lifecyclemodels'
+    ]::text[])
+  ) then
+    raise exception using
+      errcode = '22023',
+      message = 'INVALID_REVIEW_TARGET_TABLE';
+  end if;
+
+  if pg_catalog.char_length(v_query) > 1000 then
+    raise exception using errcode = '22023', message = 'REVIEW_QUERY_TOO_LONG';
+  end if;
+
+  return query
+  with matches as materialized (
+    select * from private.review_search_dataset_versions_v1(v_query, v_target_table)
+    where v_query is not null
+  ), q as (
+    select
+      review_row.id,
+      review_row.data_id,
+      pg_catalog.btrim(review_row.data_version::text) as data_version,
+      review_row.state_code,
+      review_row.review_kind,
+      review_row.target_table,
+      coalesce(review_row.reviewer_id, '[]'::jsonb) as reviewer_id,
+      coalesce(review_row.json, '{}'::jsonb) as json,
+      review_row.deadline,
+      review_row.created_at,
+      review_row.modified_at,
+      coalesce(review_comments.comment_state_codes, '[]'::jsonb) as comment_state_codes,
+      true as root_matches_status,
+      true as root_can_read
+    from private.reviews as review_row
+    left join lateral (
+      select pg_catalog.jsonb_agg(
+        pg_catalog.to_jsonb(comment_row.state_code)
+        order by comment_row.created_at, comment_row.reviewer_id
+      ) filter (where comment_row.reviewer_id is not null) as comment_state_codes
+      from private.comments as comment_row
+      where comment_row.review_id = review_row.id
+    ) as review_comments on true
+    where review_row.review_kind in ('root', 'reference')
+      and (v_state_code is null or review_row.state_code = v_state_code)
+      and (
+        v_display_mode = 'all'
+        or (
+          v_display_mode = 'model_process'
+          and review_row.target_table in ('processes', 'lifecyclemodels')
+        )
+        or (
+          v_display_mode = 'other'
+          and review_row.target_table not in ('processes', 'lifecyclemodels')
+        )
+      )
+      and (v_target_table is null or review_row.target_table = v_target_table)
+      and (v_query is null or exists (
+        select 1 from matches
+        where matches.target_table = review_row.target_table
+          and matches.data_id = review_row.data_id
+          and matches.data_version = review_row.data_version
+      ))
+  )
+  select q.*, pg_catalog.count(*) over() as total_count
+  from q
+  order by
+    case when v_sort_key = 'created_at' and v_order_dir = 'asc' then q.created_at end asc nulls last,
+    case when v_sort_key = 'created_at' and v_order_dir = 'desc' then q.created_at end desc nulls last,
+    case when v_sort_key = 'deadline' and v_order_dir = 'asc' then q.deadline end asc nulls last,
+    case when v_sort_key = 'deadline' and v_order_dir = 'desc' then q.deadline end desc nulls last,
+    case when v_sort_key = 'state_code' and v_order_dir = 'asc' then q.state_code end asc nulls last,
+    case when v_sort_key = 'state_code' and v_order_dir = 'desc' then q.state_code end desc nulls last,
+    case when v_sort_key = 'modified_at' and v_order_dir = 'asc' then q.modified_at end asc nulls last,
+    case when v_sort_key = 'modified_at' and v_order_dir = 'desc' then q.modified_at end desc nulls last,
+    q.id
+  limit v_limit offset v_offset;
+end;
+$$;
+
+
+ALTER FUNCTION "api"."qry_review_get_admin_queue_items_v4"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text", "p_query" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "api"."qry_review_get_admin_queue_items_v4"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text", "p_query" "text") IS 'Admin full-text queue over exact dataset versions; search_text matches precede task count and pagination. Empty query preserves v3 behavior.';
+
+
+
 CREATE OR REPLACE FUNCTION "api"."qry_review_get_admin_root_queue_items_v2"("p_status" "text" DEFAULT NULL::"text", "p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 10, "p_sort_by" "text" DEFAULT 'modified_at'::"text", "p_sort_order" "text" DEFAULT 'desc'::"text") RETURNS TABLE("id" "uuid", "data_id" "uuid", "data_version" "text", "state_code" integer, "review_kind" "text", "target_table" "text", "reviewer_id" "jsonb", "json" "jsonb", "deadline" timestamp with time zone, "created_at" timestamp with time zone, "modified_at" timestamp with time zone, "comment_state_codes" "jsonb", "root_matches_status" boolean, "root_can_read" boolean, "total_count" bigint)
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -22617,6 +22743,137 @@ ALTER FUNCTION "api"."qry_review_get_member_queue_items_v3"("p_status" "text", "
 
 
 COMMENT ON FUNCTION "api"."qry_review_get_member_queue_items_v3"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text") IS 'Current actor queue with server-side display-mode and target-table filtering, then one independently paginated row per readable assigned Root or Reference Review.';
+
+
+
+CREATE OR REPLACE FUNCTION "api"."qry_review_get_member_queue_items_v4"("p_status" "text" DEFAULT 'pending'::"text", "p_page" integer DEFAULT 1, "p_page_size" integer DEFAULT 50, "p_sort_by" "text" DEFAULT 'modified_at'::"text", "p_sort_order" "text" DEFAULT 'desc'::"text", "p_display_mode" "text" DEFAULT 'all'::"text", "p_target_table" "text" DEFAULT NULL::"text", "p_query" "text" DEFAULT NULL::"text") RETURNS TABLE("id" "uuid", "data_id" "uuid", "data_version" "text", "review_state_code" integer, "review_kind" "text", "target_table" "text", "reviewer_id" "jsonb", "json" "jsonb", "deadline" timestamp with time zone, "created_at" timestamp with time zone, "modified_at" timestamp with time zone, "comment_state_code" integer, "comment_json" "jsonb", "comment_created_at" timestamp with time zone, "comment_modified_at" timestamp with time zone, "root_matches_status" boolean, "root_can_read" boolean, "total_count" bigint)
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare
+  v_actor uuid := auth.uid();
+  v_query text := nullif(pg_catalog.btrim(p_query), '');
+  v_limit integer := greatest(1, least(coalesce(p_page_size, 50), 100));
+  v_offset integer := (greatest(coalesce(p_page, 1), 1) - 1) * v_limit;
+  v_sort_key text := case pg_catalog.lower(coalesce(p_sort_by, ''))
+    when 'created_at' then 'created_at'
+    when 'createat' then 'created_at'
+    when 'deadline' then 'deadline'
+    when 'state_code' then 'state_code'
+    when 'statecode' then 'state_code'
+    when 'comment_modified_at' then 'comment_modified_at'
+    when 'commentmodifiedat' then 'comment_modified_at'
+    else 'modified_at'
+  end;
+  v_order_dir text := api.cmd_membership_resolve_sort_direction(p_sort_order);
+  v_status text := pg_catalog.lower(coalesce(p_status, 'pending'));
+  v_display_mode text := pg_catalog.lower(pg_catalog.btrim(coalesce(p_display_mode, 'all')));
+  v_target_table text := nullif(
+    pg_catalog.lower(pg_catalog.btrim(coalesce(p_target_table, ''))),
+    ''
+  );
+begin
+  if v_actor is null or not api.cmd_review_is_review_member(v_actor) then
+    return;
+  end if;
+  if v_status not in ('pending', 'reviewed', 'reviewer-rejected') then
+    return;
+  end if;
+  if v_display_mode not in ('all', 'model_process', 'other') then
+    raise exception using
+      errcode = '22023',
+      message = 'INVALID_REVIEW_DISPLAY_MODE';
+  end if;
+  if v_target_table is not null and not (
+    v_target_table = any(array[
+      'contacts', 'sources', 'unitgroups', 'flowproperties', 'flows',
+      'processes', 'lifecyclemodels'
+    ]::text[])
+  ) then
+    raise exception using
+      errcode = '22023',
+      message = 'INVALID_REVIEW_TARGET_TABLE';
+  end if;
+
+  if pg_catalog.char_length(v_query) > 1000 then
+    raise exception using errcode = '22023', message = 'REVIEW_QUERY_TOO_LONG';
+  end if;
+
+  return query
+  with matches as materialized (
+    select * from private.review_search_dataset_versions_v1(v_query, v_target_table)
+    where v_query is not null
+  ), q as (
+    select
+      review_row.id,
+      review_row.data_id,
+      pg_catalog.btrim(review_row.data_version::text) as data_version,
+      review_row.state_code as review_state_code,
+      review_row.review_kind,
+      review_row.target_table,
+      coalesce(review_row.reviewer_id, '[]'::jsonb) as reviewer_id,
+      coalesce(review_row.json, '{}'::jsonb) as json,
+      review_row.deadline,
+      review_row.created_at,
+      greatest(review_row.modified_at, comment_row.modified_at) as modified_at,
+      comment_row.state_code as comment_state_code,
+      coalesce(comment_row.json::jsonb, '{}'::jsonb) as comment_json,
+      comment_row.created_at as comment_created_at,
+      comment_row.modified_at as comment_modified_at,
+      true as root_matches_status,
+      true as root_can_read
+    from private.comments as comment_row
+    join private.reviews as review_row on review_row.id = comment_row.review_id
+    where review_row.review_kind in ('root', 'reference')
+      and comment_row.reviewer_id = v_actor
+      and api.policy_review_can_read(review_row.id, v_actor)
+      and (
+        v_display_mode = 'all'
+        or (
+          v_display_mode = 'model_process'
+          and review_row.target_table in ('processes', 'lifecyclemodels')
+        )
+        or (
+          v_display_mode = 'other'
+          and review_row.target_table not in ('processes', 'lifecyclemodels')
+        )
+      )
+      and (v_target_table is null or review_row.target_table = v_target_table)
+      and (v_query is null or exists (
+        select 1 from matches
+        where matches.target_table = review_row.target_table
+          and matches.data_id = review_row.data_id
+          and matches.data_version = review_row.data_version
+      ))
+      and (
+        (v_status = 'pending' and comment_row.state_code = 0 and review_row.state_code > 0)
+        or (v_status = 'reviewed' and comment_row.state_code = any(array[1, 2, -3]) and review_row.state_code > 0)
+        or (v_status = 'reviewer-rejected' and comment_row.state_code = -1 and review_row.state_code = -1)
+      )
+  )
+  select q.*, pg_catalog.count(*) over() as total_count
+  from q
+  order by
+    case when v_sort_key = 'created_at' and v_order_dir = 'asc' then q.created_at end asc nulls last,
+    case when v_sort_key = 'created_at' and v_order_dir = 'desc' then q.created_at end desc nulls last,
+    case when v_sort_key = 'deadline' and v_order_dir = 'asc' then q.deadline end asc nulls last,
+    case when v_sort_key = 'deadline' and v_order_dir = 'desc' then q.deadline end desc nulls last,
+    case when v_sort_key = 'state_code' and v_order_dir = 'asc' then q.review_state_code end asc nulls last,
+    case when v_sort_key = 'state_code' and v_order_dir = 'desc' then q.review_state_code end desc nulls last,
+    case when v_sort_key = 'comment_modified_at' and v_order_dir = 'asc' then q.comment_modified_at end asc nulls last,
+    case when v_sort_key = 'comment_modified_at' and v_order_dir = 'desc' then q.comment_modified_at end desc nulls last,
+    case when v_sort_key = 'modified_at' and v_order_dir = 'asc' then q.modified_at end asc nulls last,
+    case when v_sort_key = 'modified_at' and v_order_dir = 'desc' then q.modified_at end desc nulls last,
+    q.id
+  limit v_limit offset v_offset;
+end;
+$$;
+
+
+ALTER FUNCTION "api"."qry_review_get_member_queue_items_v4"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text", "p_query" "text") OWNER TO "postgres";
+
+
+COMMENT ON FUNCTION "api"."qry_review_get_member_queue_items_v4"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text", "p_query" "text") IS 'Actor full-text queue over exact dataset versions; existing assignment/readability and tab filters apply before task count and pagination.';
 
 
 
@@ -24212,7 +24469,7 @@ BEGIN
       (c.embedding_ft <=> query_embedding_vector) < 1 - match_threshold
       AND c.json @> filter_condition_jsonb
       AND (
-           (data_source = 'tg' AND c.state_code = 100)
+           (((data_source = 'tg' AND c.state_code = 100) OR (data_source = 'ex' AND c.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
         OR (data_source = 'my' AND c.user_id = auth.uid())
       )
       AND (
@@ -24298,7 +24555,7 @@ BEGIN
       AND c.json @> filter_condition_jsonb
       -- data_source 访问控制（与原逻辑一致）
       AND (
-           (data_source = 'tg' AND c.state_code = 100)
+           (((data_source = 'tg' AND c.state_code = 100) OR (data_source = 'ex' AND c.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
         OR (data_source = 'my' AND c.user_id = auth.uid())
       )
   )
@@ -24371,7 +24628,7 @@ BEGIN
       AND c.json @> filter_condition_jsonb
       -- data_source 访问控制（保持你原逻辑）
       AND (
-           (data_source = 'tg' AND c.state_code = 100)
+           (((data_source = 'tg' AND c.state_code = 100) OR (data_source = 'ex' AND c.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
         OR (data_source = 'my' AND c.user_id = auth.uid())
       )
   )
@@ -24451,7 +24708,7 @@ CREATE TABLE IF NOT EXISTS "public"."sources" (
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
     "search_text" "text"[],
-    CONSTRAINT "sources_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100])))
+    CONSTRAINT "sources_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 20, 100])))
 );
 
 
@@ -25913,6 +26170,7 @@ begin
     from requested
     join datasets using (table_name, id, version)
     where datasets.user_id = p_requested_by
+       or datasets.state_code = -1
        or datasets.state_code between 100 and 199;
 
     if v_exportable_count <> v_root_count then
@@ -25936,20 +26194,9 @@ begin
       hit_count = hit_count + 1, last_accessed_at = now(), updated_at = now()
     where id = v_cache.id returning * into v_cache;
 
-    -- selected_roots contains exact immutable dataset identities, so its ready
-    -- artifact remains reusable. The other scopes describe mutable datasets and
-    -- must reach worker_enqueue_job after completion to allocate fresh work.
-    if v_scope = 'selected_roots'
-       and v_cache.status = 'ready'
-       and v_cache.job_id is not null then
-      return jsonb_build_object(
-        'ok', true,
-        'mode', 'cache_hit',
-        'job_id', v_cache.job_id,
-        'worker_job_id', v_cache.worker_job_id
-      );
-    end if;
-
+    -- All scopes may change without changing the request identities. Reuse
+    -- active work, but let completed exports reach worker_enqueue_job so a new
+    -- intent reads current root/dependency data and keeps its own artifacts.
     if v_cache.worker_job_id is not null then
       select * into v_worker from private.worker_jobs where id = v_cache.worker_job_id;
       if v_worker.status in ('queued', 'running', 'waiting', 'stale', 'completed', 'blocked') then
@@ -25960,11 +26207,10 @@ begin
           returning * into v_cache;
         end if;
 
-        if v_worker.status <> 'completed' or v_scope = 'selected_roots' then
+        if v_worker.status <> 'completed' then
           return jsonb_build_object(
             'ok', true,
             'mode', case
-              when v_worker.status = 'completed' then 'cache_hit'
               when v_worker.status = 'blocked' then 'blocked'
               else 'in_progress'
             end,
@@ -26119,6 +26365,36 @@ $$;
 
 
 ALTER FUNCTION "api"."svc_tidas_package_import_enqueue"("p_requested_by" "uuid", "p_job_id" "uuid", "p_source_artifact_id" "uuid", "p_artifact_sha256" "text", "p_artifact_byte_size" bigint, "p_filename" "text", "p_content_type" "text") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "api"."svc_tidas_package_import_enqueue_v2"("p_requested_by" "uuid", "p_job_id" "uuid", "p_source_artifact_id" "uuid", "p_artifact_sha256" "text", "p_artifact_byte_size" bigint, "p_filename" "text", "p_content_type" "text" DEFAULT NULL::"text") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare v_existing uuid; v_schema text; v_result jsonb; v_worker_id uuid;
+begin
+  select worker_job_id into v_existing from private.lca_package_artifacts
+  where id = p_source_artifact_id and job_id = p_job_id
+    and metadata ->> 'requested_by' = p_requested_by::text for update;
+  if v_existing is not null then
+    select payload_schema_version into v_schema from private.worker_jobs where id = v_existing;
+    if v_schema is distinct from 'tidas.import_package.request.v2' then
+      return jsonb_build_object('ok', false, 'code', 'IMPORT_POLICY_MISMATCH', 'status', 409);
+    end if;
+  end if;
+  v_result := api.svc_tidas_package_import_enqueue(p_requested_by, p_job_id, p_source_artifact_id,
+    p_artifact_sha256, p_artifact_byte_size, p_filename, p_content_type);
+  if coalesce((v_result ->> 'ok')::boolean, false) then
+    v_worker_id := (v_result ->> 'worker_job_id')::uuid;
+    update private.worker_jobs set payload_schema_version = 'tidas.import_package.request.v2',
+      payload_json = payload_json || jsonb_build_object('import_policy', 'root_closure_v2')
+    where id = v_worker_id and status = 'queued' and attempt_count = 0;
+  end if;
+  return v_result;
+end $$;
+
+
+ALTER FUNCTION "api"."svc_tidas_package_import_enqueue_v2"("p_requested_by" "uuid", "p_job_id" "uuid", "p_source_artifact_id" "uuid", "p_artifact_sha256" "text", "p_artifact_byte_size" bigint, "p_filename" "text", "p_content_type" "text") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "api"."svc_tidas_package_import_prepare"("p_requested_by" "uuid", "p_job_id" "uuid", "p_source_artifact_id" "uuid", "p_artifact_url" "text", "p_content_type" "text", "p_filename" "text", "p_idempotency_key" "text" DEFAULT NULL::"text") RETURNS "jsonb"
@@ -26278,6 +26554,36 @@ $$;
 ALTER FUNCTION "api"."svc_tidas_package_read"("p_requested_by" "uuid", "p_lookup_id" "uuid") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "api"."svc_tidas_package_read_v2"("p_requested_by" "uuid", "p_lookup_id" "uuid") RETURNS "jsonb"
+    LANGUAGE "plpgsql" STABLE SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $$
+declare v_result jsonb; v_worker uuid; v_progress jsonb;
+begin
+  v_result := api.svc_tidas_package_read(p_requested_by, p_lookup_id);
+  v_worker := (v_result #>> '{data,workerJobId}')::uuid;
+  if v_worker is null or v_result #>> '{data,payload,import_policy}' is distinct from 'root_closure_v2' then
+    return v_result;
+  end if;
+  with identities as (
+    select item ->> 'table' as tab, item ->> 'id' as id, item ->> 'version' as ver,
+      bool_or(item ->> 'disposition' = 'inserted') as inserted
+    from private.tidas_import_groups_v2 g
+    cross join lateral jsonb_array_elements(g.receipt -> 'items') item
+    where g.worker_job_id = v_worker
+    group by 1,2,3
+  )
+  select jsonb_build_object('imported_count', count(*) filter (where inserted),
+    'existing_count', count(*) filter (where not inserted),
+    'successful_root_count', (select count(*) from private.tidas_import_groups_v2 where worker_job_id = v_worker),
+    'source', 'committed_receipts') into v_progress from identities;
+  return jsonb_set(v_result, '{data,importProgress}', v_progress);
+end $$;
+
+
+ALTER FUNCTION "api"."svc_tidas_package_read_v2"("p_requested_by" "uuid", "p_lookup_id" "uuid") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "api"."svc_worker_cancel_job"("p_job_id" "uuid", "p_cancelled_by" "uuid" DEFAULT NULL::"uuid", "p_reason" "text" DEFAULT NULL::"text") RETURNS "jsonb"
     LANGUAGE "sql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -26364,7 +26670,7 @@ CREATE TABLE IF NOT EXISTS "public"."unitgroups" (
     "embedding_ft_at" timestamp with time zone,
     "embedding_ft" "extensions"."vector"(1024),
     "search_text" "text"[],
-    CONSTRAINT "unitgroups_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
+    CONSTRAINT "unitgroups_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 20, 100, 200])))
 );
 
 
@@ -41536,7 +41842,7 @@ begin
       from public.flows f
       join fused on fused.id = f.id
       where (
-        (data_source = 'tg' and f.state_code = 100)
+        (((data_source = 'tg' AND f.state_code = 100) OR (data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
         or (data_source = 'co' and f.state_code = 200)
         or (data_source = 'my' and f.user_id = auth.uid())
         or (
@@ -41650,7 +41956,7 @@ begin
       from public.lifecyclemodels l
       join fused on fused.id = l.id
       where (
-        (data_source = 'tg' and l.state_code = 100)
+        (((data_source = 'tg' AND l.state_code = 100) OR (data_source = 'ex' AND l.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
         or (data_source = 'co' and l.state_code = 200)
         or (data_source = 'my' and l.user_id = auth.uid())
         or (
@@ -41765,7 +42071,7 @@ begin
       from public.processes p
       join fused on fused.id = p.id
       where (
-        (data_source = 'tg' and p.state_code = 100)
+        (((data_source = 'tg' AND p.state_code = 100) OR (data_source = 'ex' AND p.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
         or (data_source = 'co' and p.state_code = 200)
         or (data_source = 'my' and p.user_id = auth.uid())
         or (
@@ -41874,6 +42180,9 @@ begin
 
   if normalized_data_source = 'tg' then
     visibility_clause := 'd.state_code = 100 and ($5::uuid is null or d.team_id = $5)';
+  elsif normalized_data_source = 'ex' then
+    if auth.uid() is null then return; end if;
+    visibility_clause := 'd.state_code = -1 and ($5::uuid is null or d.team_id = $5)';
   elsif normalized_data_source = 'co' then
     visibility_clause := 'd.state_code = 200 and ($5::uuid is null or d.team_id = $5)';
   elsif normalized_data_source = 'my' then
@@ -44215,6 +44524,7 @@ begin
   -- actor-checked membership; its old lexical caller has no explicit team selector.
   -- Do not broaden that lexical scope as a side effect of retaining versions.
   if p_source = 'tg' then v_scope := 'source.state_code = 100';
+  elsif p_source = 'ex' and auth.uid() is not null then v_scope := 'source.state_code = -1';
   elsif p_source = 'co' then v_scope := 'source.state_code = 200';
   elsif p_source = 'my' and v_actor is not null then v_scope := 'source.user_id = $3';
   else return;
@@ -44299,8 +44609,9 @@ declare
   v_sql text;
 begin
   if p_kind not in ('process', 'flow')
-     or p_data_source not in ('my', 'te')
-     or p_state_code < 0 then
+     or p_data_source not in ('my', 'te', 'ex')
+     or (p_state_code < 0 and not (p_data_source = 'ex' and p_state_code = -1))
+     or (p_data_source = 'ex' and p_state_code is not null and p_state_code <> -1) then
     raise exception using errcode = '22023', message = 'invalid Next Hybrid V2 request';
   end if;
   if v_actor is null then return; end if;
@@ -44313,6 +44624,7 @@ begin
 
   v_table_name := case p_kind when 'process' then 'processes' else 'flows' end;
   v_scope_sql := case p_data_source
+    when 'ex' then 'source.state_code = -1 and ($2::uuid is null or source.team_id = $2)'
     when 'my' then 'source.user_id = $1 and ($3::integer is null or source.state_code = $3)'
     else 'source.team_id = $2 and ($3::integer is null or source.state_code = $3)'
   end;
@@ -44435,11 +44747,12 @@ declare
   v_sql text;
 begin
   if p_kind not in ('process', 'flow')
-     or p_data_source not in ('my', 'te')
+     or p_data_source not in ('my', 'te', 'ex')
      or p_query_embedding is null
      or extensions.vector_dims(p_query_embedding) <> 1024
      or pg_catalog.jsonb_typeof(v_residual) is distinct from 'object'
-     or p_state_code < 0 then
+     or (p_state_code < 0 and not (p_data_source = 'ex' and p_state_code = -1))
+     or (p_data_source = 'ex' and p_state_code is not null and p_state_code <> -1) then
     raise exception using errcode = '22023', message = 'invalid Next Hybrid V2 request';
   end if;
   if v_actor is null then return; end if;
@@ -44452,6 +44765,7 @@ begin
 
   v_table_name := case p_kind when 'process' then 'processes' else 'flows' end;
   v_scope_sql := case p_data_source
+    when 'ex' then 'source.state_code = -1 and ($2::uuid is null or source.team_id = $2)'
     when 'my' then 'source.user_id = $1 and ($3::integer is null or source.state_code = $3)'
     else 'source.team_id = $2 and ($3::integer is null or source.state_code = $3)'
   end;
@@ -44713,7 +45027,7 @@ begin
     return;
   end if;
 
-  if p_data_source in ('my', 'te') then
+  if p_data_source in ('my', 'te', 'ex') then
     return query
     select candidate.*
     from private.next_actor_lexical_version_candidates_v2(
@@ -45106,7 +45420,7 @@ begin
     return;
   end if;
 
-  if p_data_source in ('my', 'te') then
+  if p_data_source in ('my', 'te', 'ex') then
     return query
     select candidate.*
     from private.next_actor_semantic_version_candidates_v2(
@@ -51681,6 +51995,23 @@ $$;
 ALTER FUNCTION "private"."processes_sync_jsonb_version"() OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "private"."protect_example_dataset_write"() RETURNS "trigger"
+    LANGUAGE "plpgsql"
+    SET "search_path" TO ''
+    AS $$
+BEGIN
+  IF OLD.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL THEN
+    RAISE EXCEPTION USING ERRCODE = '42501', MESSAGE = 'EXAMPLE_DATASET_READ_ONLY';
+  END IF;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+
+
+ALTER FUNCTION "private"."protect_example_dataset_write"() OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "private"."reviews" (
     "id" "uuid" NOT NULL,
     "data_id" "uuid",
@@ -52655,6 +52986,50 @@ $$;
 ALTER FUNCTION "private"."review_root_currently_references_target_v1"("p_root_review_id" "uuid", "p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text") OWNER TO "postgres";
 
 
+CREATE OR REPLACE FUNCTION "private"."review_search_dataset_versions_v1"("p_query" "text", "p_target_table" "text" DEFAULT NULL::"text") RETURNS TABLE("target_table" "text", "data_id" "uuid", "data_version" character)
+    LANGUAGE "plpgsql" STABLE
+    SET "search_path" TO ''
+    AS $_$
+declare
+  v_table text;
+  v_uuid uuid;
+  v_terms text[];
+  v_predicate text;
+begin
+  if nullif(pg_catalog.btrim(p_query), '') is null then return; end if;
+  if pg_catalog.btrim(p_query) ~* '^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$' then
+    v_uuid := pg_catalog.btrim(p_query)::uuid;
+  end if;
+  v_terms := private.pgroonga_escape_query_terms(array[p_query]);
+  foreach v_table in array array[
+    'contacts', 'sources', 'unitgroups', 'flowproperties', 'flows',
+    'processes', 'lifecyclemodels'
+  ] loop
+    if p_target_table is not null and v_table <> p_target_table then continue; end if;
+    if v_uuid is not null then
+      return query execute pg_catalog.format(
+        'select %L::text, d.id, d.version from public.%I d where d.id = $1',
+        v_table, v_table
+      ) using v_uuid;
+    else
+      -- Preserve the current ordinary data-list predicates: foundation query
+      -- syntax and core escaped term arrays. No AI expansion or JSON flattening.
+      v_predicate := case when v_table in ('flows', 'processes', 'lifecyclemodels')
+        then 'd.search_text operator(extensions.&@~|) $2'
+        else 'd.search_text operator(extensions.&@~) $1' end;
+      return query execute pg_catalog.format(
+        'select %L::text, d.id, d.version from public.%I d where %s',
+        v_table, v_table, v_predicate
+      ) using p_query, v_terms;
+    end if;
+  end loop;
+end;
+$_$;
+
+
+ALTER FUNCTION "private"."review_search_dataset_versions_v1"("p_query" "text", "p_target_table" "text") OWNER TO "postgres";
+
+
 CREATE OR REPLACE FUNCTION "private"."review_v2_comment_guard"() RETURNS "trigger"
     LANGUAGE "plpgsql" SECURITY DEFINER
     SET "search_path" TO ''
@@ -53167,7 +53542,7 @@ begin
           'public.processes'::text as matched_entity_table
         from public.processes d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -53198,7 +53573,7 @@ begin
           'public.flows'::text as matched_entity_table
         from public.flows d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -53229,7 +53604,7 @@ begin
           'public.lifecyclemodels'::text as matched_entity_table
         from public.lifecyclemodels d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -53260,7 +53635,7 @@ begin
           'public.sources'::text as matched_entity_table
         from public.sources d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -53291,7 +53666,7 @@ begin
           'public.contacts'::text as matched_entity_table
         from public.contacts d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -53322,7 +53697,7 @@ begin
           'public.unitgroups'::text as matched_entity_table
         from public.unitgroups d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -53353,7 +53728,7 @@ begin
           'public.flowproperties'::text as matched_entity_table
         from public.flowproperties d
         where (
-            ($1 = 'tg' and d.state_code = 100 and ($3 is null or d.team_id = $3))
+            ((($1 = 'tg' AND d.state_code = 100) OR ($1 = 'ex' AND d.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($3 is null or d.team_id = $3))
             or ($1 = 'co' and d.state_code = 200 and ($3 is null or d.team_id = $3))
             or ($1 = 'my' and $2 is not null and d.user_id = $2 and ($4 is null or d.state_code = $4))
             or ($1 = 'te' and $3 is not null and $5 and d.team_id = $3 and ($4 is null or d.state_code = $4))
@@ -53472,7 +53847,7 @@ begin
         where f.id = exact_query_id
           and f.json @> filter_condition_jsonb
           and (
-            (normalized_data_source = 'tg' and f.state_code = 100 and (team_id_filter is null or f.team_id = team_id_filter))
+            (((normalized_data_source = 'tg' AND f.state_code = 100) OR (normalized_data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or f.team_id = team_id_filter))
             or (normalized_data_source = 'co' and f.state_code = 200 and (team_id_filter is null or f.team_id = team_id_filter))
             or (normalized_data_source = 'my' and effective_user_id is not null and f.user_id = effective_user_id and (state_code_filter is null or f.state_code = state_code_filter))
             or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and f.team_id = team_id_filter and (state_code_filter is null or f.state_code = state_code_filter))
@@ -53534,7 +53909,7 @@ begin
           from public.flows f2
           where f2.id = matched_ids.id
             and (
-              (normalized_data_source = 'tg' and f2.state_code = 100 and (team_id_filter is null or f2.team_id = team_id_filter))
+              (((normalized_data_source = 'tg' AND f2.state_code = 100) OR (normalized_data_source = 'ex' AND f2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or f2.team_id = team_id_filter))
               or (normalized_data_source = 'co' and f2.state_code = 200 and (team_id_filter is null or f2.team_id = team_id_filter))
               or (normalized_data_source = 'my' and effective_user_id is not null and f2.user_id = effective_user_id and (state_code_filter is null or f2.state_code = state_code_filter))
               or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and f2.team_id = team_id_filter and (state_code_filter is null or f2.state_code = state_code_filter))
@@ -53575,7 +53950,7 @@ begin
       select f.id, max(f.search_score) as search_score
       from text_matches f
       where (
-          ($5 = 'tg' and f.state_code = 100 and ($7 is null or f.team_id = $7))
+          ((($5 = 'tg' AND f.state_code = 100) OR ($5 = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or f.team_id = $7))
           or ($5 = 'co' and f.state_code = 200 and ($7 is null or f.team_id = $7))
           or ($5 = 'my' and $6 is not null and f.user_id = $6 and ($8 is null or f.state_code = $8))
           or ($5 = 'te' and $7 is not null and $9 and f.team_id = $7 and ($8 is null or f.state_code = $8))
@@ -53638,7 +54013,7 @@ begin
         from public.flows f2
         where f2.id = matched_ids.id
           and (
-            ($5 = 'tg' and f2.state_code = 100 and ($7 is null or f2.team_id = $7))
+            ((($5 = 'tg' AND f2.state_code = 100) OR ($5 = 'ex' AND f2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or f2.team_id = $7))
             or ($5 = 'co' and f2.state_code = 200 and ($7 is null or f2.team_id = $7))
             or ($5 = 'my' and $6 is not null and f2.user_id = $6 and ($8 is null or f2.state_code = $8))
             or ($5 = 'te' and $7 is not null and $9 and f2.team_id = $7 and ($8 is null or f2.state_code = $8))
@@ -53718,7 +54093,7 @@ begin
         where l.id = exact_query_id
           and l.json @> filter_condition_jsonb
           and (
-            (normalized_data_source = 'tg' and l.state_code = 100 and (team_id_filter is null or l.team_id = team_id_filter))
+            (((normalized_data_source = 'tg' AND l.state_code = 100) OR (normalized_data_source = 'ex' AND l.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or l.team_id = team_id_filter))
             or (normalized_data_source = 'co' and l.state_code = 200 and (team_id_filter is null or l.team_id = team_id_filter))
             or (normalized_data_source = 'my' and effective_user_id is not null and l.user_id = effective_user_id and (state_code_filter is null or l.state_code = state_code_filter))
             or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and l.team_id = team_id_filter and (state_code_filter is null or l.state_code = state_code_filter))
@@ -53733,7 +54108,7 @@ begin
           from public.lifecyclemodels l2
           where l2.id = matched_ids.id
             and (
-              (normalized_data_source = 'tg' and l2.state_code = 100 and (team_id_filter is null or l2.team_id = team_id_filter))
+              (((normalized_data_source = 'tg' AND l2.state_code = 100) OR (normalized_data_source = 'ex' AND l2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or l2.team_id = team_id_filter))
               or (normalized_data_source = 'co' and l2.state_code = 200 and (team_id_filter is null or l2.team_id = team_id_filter))
               or (normalized_data_source = 'my' and effective_user_id is not null and l2.user_id = effective_user_id and (state_code_filter is null or l2.state_code = state_code_filter))
               or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and l2.team_id = team_id_filter and (state_code_filter is null or l2.state_code = state_code_filter))
@@ -53774,7 +54149,7 @@ begin
       select l.id, max(l.search_score) as search_score
       from text_matches l
       where (
-          ($5 = 'tg' and l.state_code = 100 and ($7 is null or l.team_id = $7))
+          ((($5 = 'tg' AND l.state_code = 100) OR ($5 = 'ex' AND l.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or l.team_id = $7))
           or ($5 = 'co' and l.state_code = 200 and ($7 is null or l.team_id = $7))
           or ($5 = 'my' and $6 is not null and l.user_id = $6 and ($8 is null or l.state_code = $8))
           or ($5 = 'te' and $7 is not null and $9 and l.team_id = $7 and ($8 is null or l.state_code = $8))
@@ -53790,7 +54165,7 @@ begin
         from public.lifecyclemodels l2
         where l2.id = matched_ids.id
           and (
-            ($5 = 'tg' and l2.state_code = 100 and ($7 is null or l2.team_id = $7))
+            ((($5 = 'tg' AND l2.state_code = 100) OR ($5 = 'ex' AND l2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or l2.team_id = $7))
             or ($5 = 'co' and l2.state_code = 200 and ($7 is null or l2.team_id = $7))
             or ($5 = 'my' and $6 is not null and l2.user_id = $6 and ($8 is null or l2.state_code = $8))
             or ($5 = 'te' and $7 is not null and $9 and l2.team_id = $7 and ($8 is null or l2.state_code = $8))
@@ -53869,7 +54244,7 @@ begin
         where p.id = exact_query_id
           and p.json @> filter_condition_jsonb
           and (
-            (normalized_data_source = 'tg' and p.state_code = 100 and (team_id_filter is null or p.team_id = team_id_filter))
+            (((normalized_data_source = 'tg' AND p.state_code = 100) OR (normalized_data_source = 'ex' AND p.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or p.team_id = team_id_filter))
             or (normalized_data_source = 'co' and p.state_code = 200 and (team_id_filter is null or p.team_id = team_id_filter))
             or (normalized_data_source = 'my' and effective_user_id is not null and p.user_id = effective_user_id and (state_code_filter is null or p.state_code = state_code_filter))
             or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and p.team_id = team_id_filter and (state_code_filter is null or p.state_code = state_code_filter))
@@ -53888,7 +54263,7 @@ begin
           from public.processes p2
           where p2.id = matched_ids.id
             and (
-              (normalized_data_source = 'tg' and p2.state_code = 100 and (team_id_filter is null or p2.team_id = team_id_filter))
+              (((normalized_data_source = 'tg' AND p2.state_code = 100) OR (normalized_data_source = 'ex' AND p2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or p2.team_id = team_id_filter))
               or (normalized_data_source = 'co' and p2.state_code = 200 and (team_id_filter is null or p2.team_id = team_id_filter))
               or (normalized_data_source = 'my' and effective_user_id is not null and p2.user_id = effective_user_id and (state_code_filter is null or p2.state_code = state_code_filter))
               or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and p2.team_id = team_id_filter and (state_code_filter is null or p2.state_code = state_code_filter))
@@ -53930,7 +54305,7 @@ begin
       select p.id, max(p.search_score) as search_score
       from text_matches p
       where (
-          ($5 = 'tg' and p.state_code = 100 and ($7 is null or p.team_id = $7))
+          ((($5 = 'tg' AND p.state_code = 100) OR ($5 = 'ex' AND p.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or p.team_id = $7))
           or ($5 = 'co' and p.state_code = 200 and ($7 is null or p.team_id = $7))
           or ($5 = 'my' and $6 is not null and p.user_id = $6 and ($8 is null or p.state_code = $8))
           or ($5 = 'te' and $7 is not null and $9 and p.team_id = $7 and ($8 is null or p.state_code = $8))
@@ -53950,7 +54325,7 @@ begin
         from public.processes p2
         where p2.id = matched_ids.id
           and (
-            ($5 = 'tg' and p2.state_code = 100 and ($7 is null or p2.team_id = $7))
+            ((($5 = 'tg' AND p2.state_code = 100) OR ($5 = 'ex' AND p2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or p2.team_id = $7))
             or ($5 = 'co' and p2.state_code = 200 and ($7 is null or p2.team_id = $7))
             or ($5 = 'my' and $6 is not null and p2.user_id = $6 and ($8 is null or p2.state_code = $8))
             or ($5 = 'te' and $7 is not null and $9 and p2.team_id = $7 and ($8 is null or p2.state_code = $8))
@@ -54032,7 +54407,7 @@ begin
         where p.id = exact_query_id
           and p.json @> filter_condition_jsonb
           and (
-            (normalized_data_source = 'tg' and p.state_code = 100 and (team_id_filter is null or p.team_id = team_id_filter))
+            (((normalized_data_source = 'tg' AND p.state_code = 100) OR (normalized_data_source = 'ex' AND p.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or p.team_id = team_id_filter))
             or (normalized_data_source = 'co' and p.state_code = 200 and (team_id_filter is null or p.team_id = team_id_filter))
             or (normalized_data_source = 'my' and effective_user_id is not null and p.user_id = effective_user_id and (state_code_filter is null or p.state_code = state_code_filter) and (not owner_draft_only or (p.state_code = 0)))
             or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and p.team_id = team_id_filter and (state_code_filter is null or p.state_code = state_code_filter))
@@ -54051,7 +54426,7 @@ begin
           from public.processes p2
           where p2.id = matched_ids.id
             and (
-              (normalized_data_source = 'tg' and p2.state_code = 100 and (team_id_filter is null or p2.team_id = team_id_filter))
+              (((normalized_data_source = 'tg' AND p2.state_code = 100) OR (normalized_data_source = 'ex' AND p2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and (team_id_filter is null or p2.team_id = team_id_filter))
               or (normalized_data_source = 'co' and p2.state_code = 200 and (team_id_filter is null or p2.team_id = team_id_filter))
               or (normalized_data_source = 'my' and effective_user_id is not null and p2.user_id = effective_user_id and (state_code_filter is null or p2.state_code = state_code_filter) and (not owner_draft_only or (p2.state_code = 0)))
               or (normalized_data_source = 'te' and team_id_filter is not null and can_read_team_filter and p2.team_id = team_id_filter and (state_code_filter is null or p2.state_code = state_code_filter))
@@ -54094,7 +54469,7 @@ begin
       select p.id, max(p.search_score) as search_score
       from text_matches p
       where (
-          ($5 = 'tg' and p.state_code = 100 and ($7 is null or p.team_id = $7))
+          ((($5 = 'tg' AND p.state_code = 100) OR ($5 = 'ex' AND p.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or p.team_id = $7))
           or ($5 = 'co' and p.state_code = 200 and ($7 is null or p.team_id = $7))
           or ($5 = 'my' and $6 is not null and p.user_id = $6 and ($8 is null or p.state_code = $8) and (not $12 or (p.state_code = 0)))
           or ($5 = 'te' and $7 is not null and $9 and p.team_id = $7 and ($8 is null or p.state_code = $8))
@@ -54114,7 +54489,7 @@ begin
         from public.processes p2
         where p2.id = matched_ids.id
           and (
-            ($5 = 'tg' and p2.state_code = 100 and ($7 is null or p2.team_id = $7))
+            ((($5 = 'tg' AND p2.state_code = 100) OR ($5 = 'ex' AND p2.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)) and ($7 is null or p2.team_id = $7))
             or ($5 = 'co' and p2.state_code = 200 and ($7 is null or p2.team_id = $7))
             or ($5 = 'my' and $6 is not null and p2.user_id = $6 and ($8 is null or p2.state_code = $8) and (not $12 or (p2.state_code = 0)))
             or ($5 = 'te' and $7 is not null and $9 and p2.team_id = $7 and ($8 is null or p2.state_code = $8))
@@ -54272,6 +54647,46 @@ begin
         from public.flows f
         where f.embedding_ft is not null
           and f.state_code = 100
+          and (filter_condition_jsonb = '{}'::jsonb or f.json @> filter_condition_jsonb)
+          and (
+            flow_type is null
+            or flow_type = ''
+            or (f.json->'flowDataSet'->'modellingAndValidation'->'LCIMethod'->>'typeOfDataSet') = any(flow_type_array)
+          )
+          and (
+            as_input is null
+            or as_input = false
+            or not (
+              f.json @> '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"classificationInformation":{"common:elementaryFlowCategorization":{"common:category":[{"#text":"Emissions","@level":"0"}]}}}}}}'
+            )
+          )
+        order by f.embedding_ft <=> query_embedding_vector
+        limit candidate_size
+      ),
+      filtered as (
+        select candidates.*
+        from candidates
+        where candidates.candidate_distance < threshold_distance
+      )
+      select
+        rank() over (order by filtered.candidate_distance)::bigint,
+        filtered.candidate_id,
+        filtered.candidate_distance
+      from filtered
+      order by filtered.candidate_distance
+      limit normalized_match_count;
+    return;
+  end if;
+
+  if normalized_data_source = 'ex' and auth.uid() is not null then
+    return query
+      with candidates as materialized (
+        select
+          f.id as candidate_id,
+          (f.embedding_ft <=> query_embedding_vector) as candidate_distance
+        from public.flows f
+        where f.embedding_ft is not null
+          and f.state_code = -1
           and (filter_condition_jsonb = '{}'::jsonb or f.json @> filter_condition_jsonb)
           and (
             flow_type is null
@@ -54530,6 +54945,48 @@ begin
     return;
   end if;
 
+  if normalized_data_source = 'ex' and auth.uid() is not null then
+    return query
+      with candidates as materialized (
+        select
+          f.id as candidate_id,
+          f.version::text as candidate_version,
+          (f.embedding_ft operator(extensions.<=>) query_embedding_vector) as candidate_distance
+        from public.flows f
+        where f.embedding_ft is not null
+          and f.state_code = -1
+          and (filter_condition_jsonb = '{}'::jsonb or f.json @> filter_condition_jsonb)
+          and (
+            flow_type is null
+            or flow_type = ''
+            or (f.json->'flowDataSet'->'modellingAndValidation'->'LCIMethod'->>'typeOfDataSet') = any(flow_type_array)
+          )
+          and (
+            as_input is null
+            or as_input = false
+            or not (
+              f.json @> '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"classificationInformation":{"common:elementaryFlowCategorization":{"common:category":[{"#text":"Emissions","@level":"0"}]}}}}}}'
+            )
+          )
+        order by f.embedding_ft operator(extensions.<=>) query_embedding_vector
+        limit candidate_size
+      ),
+      filtered as (
+        select candidates.*
+        from candidates
+        where candidates.candidate_distance < threshold_distance
+      )
+      select
+        row_number() over (order by filtered.candidate_distance,filtered.candidate_id,filtered.candidate_version desc)::bigint,
+        filtered.candidate_id,
+        filtered.candidate_version,
+        filtered.candidate_distance
+      from filtered
+      order by filtered.candidate_distance,filtered.candidate_id,filtered.candidate_version desc
+      limit normalized_match_count;
+    return;
+  end if;
+
   if normalized_data_source = 'co' then
     return query
       with candidates as materialized (
@@ -54726,6 +55183,34 @@ begin
     return;
   end if;
 
+  if normalized_data_source = 'ex' and auth.uid() is not null then
+    return query
+      with candidates as materialized (
+        select
+          l.id as candidate_id,
+          (l.embedding_ft <=> query_embedding_vector) as candidate_distance
+        from public.lifecyclemodels l
+        where l.embedding_ft is not null
+          and l.state_code = -1
+          and l.json @> filter_condition_jsonb
+        order by l.embedding_ft <=> query_embedding_vector
+        limit candidate_size
+      ),
+      filtered as (
+        select candidates.*
+        from candidates
+        where candidates.candidate_distance < threshold_distance
+      )
+      select
+        rank() over (order by filtered.candidate_distance)::bigint,
+        filtered.candidate_id,
+        filtered.candidate_distance
+      from filtered
+      order by filtered.candidate_distance
+      limit normalized_match_count;
+    return;
+  end if;
+
   if normalized_data_source = 'co' then
     return query
       with candidates as materialized (
@@ -54863,6 +55348,34 @@ begin
         from public.processes p
         where p.embedding_ft is not null
           and p.state_code = 100
+          and (filter_condition_jsonb = '{}'::jsonb or p.json @> filter_condition_jsonb)
+        order by p.embedding_ft <=> query_embedding_vector
+        limit candidate_size
+      ),
+      filtered as (
+        select candidates.*
+        from candidates
+        where candidates.candidate_distance < threshold_distance
+      )
+      select
+        rank() over (order by filtered.candidate_distance)::bigint,
+        filtered.candidate_id,
+        filtered.candidate_distance
+      from filtered
+      order by filtered.candidate_distance
+      limit normalized_match_count;
+    return;
+  end if;
+
+  if normalized_data_source = 'ex' and auth.uid() is not null then
+    return query
+      with candidates as materialized (
+        select
+          p.id as candidate_id,
+          (p.embedding_ft <=> query_embedding_vector) as candidate_distance
+        from public.processes p
+        where p.embedding_ft is not null
+          and p.state_code = -1
           and (filter_condition_jsonb = '{}'::jsonb or p.json @> filter_condition_jsonb)
         order by p.embedding_ft <=> query_embedding_vector
         limit candidate_size
@@ -55043,6 +55556,36 @@ begin
     return;
   end if;
 
+  if normalized_data_source = 'ex' and auth.uid() is not null then
+    return query
+      with candidates as materialized (
+        select
+          p.id as candidate_id,
+          p.version::text as candidate_version,
+          (p.embedding_ft operator(extensions.<=>) query_embedding_vector) as candidate_distance
+        from public.processes p
+        where p.embedding_ft is not null
+          and p.state_code = -1
+          and (filter_condition_jsonb = '{}'::jsonb or p.json @> filter_condition_jsonb)
+        order by p.embedding_ft operator(extensions.<=>) query_embedding_vector
+        limit candidate_size
+      ),
+      filtered as (
+        select candidates.*
+        from candidates
+        where candidates.candidate_distance < threshold_distance
+      )
+      select
+        row_number() over (order by filtered.candidate_distance,filtered.candidate_id,filtered.candidate_version desc)::bigint,
+        filtered.candidate_id,
+        filtered.candidate_version,
+        filtered.candidate_distance
+      from filtered
+      order by filtered.candidate_distance,filtered.candidate_id,filtered.candidate_version desc
+      limit normalized_match_count;
+    return;
+  end if;
+
   if normalized_data_source = 'co' then
     return query
       with candidates as materialized (
@@ -55196,6 +55739,9 @@ begin
 
   if normalized_data_source = 'tg' then
     visibility_clause := 'd.state_code = 100 and ($7::uuid is null or d.team_id = $7)';
+  elsif normalized_data_source = 'ex' then
+    if auth.uid() is null then return; end if;
+    visibility_clause := 'd.state_code = -1 and ($7::uuid is null or d.team_id = $7)';
   elsif normalized_data_source = 'co' then
     visibility_clause := 'd.state_code = 200 and ($7::uuid is null or d.team_id = $7)';
   elsif normalized_data_source = 'my' then
@@ -55298,6 +55844,9 @@ begin
 
   if normalized_data_source = 'tg' then
     visibility_clause := 'd.state_code = 100 and ($9::uuid is null or d.team_id = $9)';
+  elsif normalized_data_source = 'ex' then
+    if auth.uid() is null then return; end if;
+    visibility_clause := 'd.state_code = -1 and ($9::uuid is null or d.team_id = $9)';
   elsif normalized_data_source = 'co' then
     visibility_clause := 'd.state_code = 200 and ($9::uuid is null or d.team_id = $9)';
   elsif normalized_data_source = 'my' then
@@ -61467,6 +62016,146 @@ $$;
 
 
 ALTER FUNCTION "private"."sync_portal_sitemap_row_v1"() OWNER TO "api_internal_executor";
+
+
+CREATE OR REPLACE FUNCTION "private"."tidas_import_group_apply_v2"("p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_source_artifact_id" "uuid", "p_plan_sha256" "text", "p_root" "jsonb", "p_entries" "jsonb") RETURNS "jsonb"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+declare
+  v_user uuid;
+  v_plan private.tidas_import_plans_v2%rowtype;
+  v_previous private.tidas_import_groups_v2%rowtype;
+  v_source_sha text;
+  v_entries_sha text;
+  v_root_table text := p_root ->> 'table';
+  v_root_id uuid := (p_root ->> 'id')::uuid;
+  v_root_version text := p_root ->> 'version';
+  v_entry jsonb;
+  v_table text;
+  v_id uuid;
+  v_version text;
+  v_inserted bigint;
+  v_count bigint := 0;
+  v_items jsonb := '[]'::jsonb;
+  v_receipt jsonb;
+begin
+  v_user := private.tidas_import_guard_v2(p_worker_job_id, p_lease_token, p_source_artifact_id);
+  if p_plan_sha256 is null or p_plan_sha256 !~ '^[0-9a-f]{64}$'
+     or v_root_table is null or v_root_table not in ('processes', 'lifecyclemodels')
+     or v_root_id is null or v_root_version is null
+     or v_root_version !~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$'
+     or jsonb_typeof(p_entries) is distinct from 'array' then
+    raise exception using errcode = '22023', message = 'TIDAS_IMPORT_GROUP_INVALID';
+  end if;
+  -- Explicit capacity admission; never silently truncate a root closure.
+  if jsonb_array_length(p_entries) = 0 or jsonb_array_length(p_entries) > 50000
+     or octet_length(p_entries::text) > 67108864 then
+    raise exception using errcode = '54000', message = 'TIDAS_IMPORT_GROUP_CAPACITY_EXCEEDED';
+  end if;
+  if not exists (select 1 from jsonb_array_elements(p_entries) e
+    where e ->> 'table' = v_root_table and e ->> 'id' = v_root_id::text
+      and e ->> 'version' = v_root_version)
+    or exists (select 1 from jsonb_array_elements(p_entries) e
+      group by e ->> 'table', e ->> 'id', e ->> 'version' having count(*) > 1) then
+    raise exception using errcode = '22023', message = 'TIDAS_IMPORT_GROUP_IDENTITY_INVALID';
+  end if;
+
+  select artifact_sha256 into v_source_sha from private.lca_package_artifacts where id = p_source_artifact_id;
+  insert into private.tidas_import_plans_v2(worker_job_id, source_artifact_id, source_sha256, plan_sha256)
+  values (p_worker_job_id, p_source_artifact_id, v_source_sha, p_plan_sha256)
+  on conflict (worker_job_id) do nothing;
+  select * into v_plan from private.tidas_import_plans_v2 where worker_job_id = p_worker_job_id for update;
+  if v_plan.source_artifact_id <> p_source_artifact_id or v_plan.source_sha256 <> v_source_sha
+     or v_plan.plan_sha256 <> p_plan_sha256 then
+    raise exception using errcode = '55000', message = 'TIDAS_IMPORT_PLAN_MISMATCH';
+  end if;
+  v_entries_sha := encode(extensions.digest(convert_to(p_entries::text, 'UTF8'), 'sha256'), 'hex');
+  select * into v_previous from private.tidas_import_groups_v2
+  where worker_job_id = p_worker_job_id and root_table = v_root_table
+    and root_id = v_root_id and root_version = v_root_version;
+  if found then
+    if v_previous.entries_sha256 <> v_entries_sha then
+      raise exception using errcode = '55000', message = 'TIDAS_IMPORT_GROUP_REPLAY_MISMATCH';
+    end if;
+    return v_previous.receipt;
+  end if;
+
+  for v_entry in select e from jsonb_array_elements(p_entries) e order by
+    case e ->> 'table' when 'contacts' then 1 when 'sources' then 2
+      when 'unitgroups' then 3 when 'flowproperties' then 4 when 'flows' then 5
+      when 'lifecyclemodels' then 6 when 'processes' then 7 else 8 end,
+    e ->> 'id', e ->> 'version'
+  loop
+    v_table := v_entry ->> 'table';
+    v_id := (v_entry ->> 'id')::uuid;
+    v_version := v_entry ->> 'version';
+    if v_table is null or v_table not in ('contacts','sources','unitgroups','flowproperties','flows','lifecyclemodels','processes')
+       or v_id is null or v_version is null or v_version !~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$'
+       or jsonb_typeof(v_entry -> 'json_ordered') is distinct from 'object' then
+      raise exception using errcode = '22023', message = 'TIDAS_IMPORT_ENTRY_INVALID';
+    end if;
+    if v_table = 'lifecyclemodels' then
+      insert into public.lifecyclemodels(id, version, json_ordered, rule_verification, json_tg, user_id)
+      values (v_id, v_version, v_entry -> 'json_ordered', coalesce((v_entry ->> 'rule_verification')::boolean, true),
+        coalesce(nullif(v_entry -> 'json_tg', 'null'::jsonb), '{}'::jsonb), v_user)
+      on conflict (id, version) do nothing;
+    elsif v_table = 'processes' then
+      insert into public.processes(id, version, json_ordered, rule_verification, model_id, user_id)
+      values (v_id, v_version, v_entry -> 'json_ordered', coalesce((v_entry ->> 'rule_verification')::boolean, true),
+        (v_entry ->> 'model_id')::uuid, v_user)
+      on conflict (id, version) do nothing;
+    else
+      execute format('insert into public.%I(id, version, json_ordered, rule_verification, user_id)
+        values ($1,$2,$3,$4,$5) on conflict (id, version) do nothing', v_table)
+      using v_id, v_version, v_entry -> 'json_ordered', coalesce((v_entry ->> 'rule_verification')::boolean, true), v_user;
+    end if;
+    get diagnostics v_inserted = row_count;
+    v_count := v_count + v_inserted;
+    v_items := v_items || jsonb_build_array(jsonb_build_object(
+      'table', v_table, 'id', v_id, 'version', v_version,
+      'disposition', case when v_inserted = 1 then 'inserted' else 'existing' end));
+  end loop;
+  v_receipt := jsonb_build_object('root', p_root,
+    'status', case when v_count > 0 then 'imported' else 'reused' end,
+    'inserted_count', v_count, 'existing_count', jsonb_array_length(p_entries) - v_count, 'items', v_items);
+  insert into private.tidas_import_groups_v2(worker_job_id, root_table, root_id, root_version, entries_sha256, receipt)
+  values (p_worker_job_id, v_root_table, v_root_id, v_root_version, v_entries_sha, v_receipt);
+  perform 1 from private.worker_jobs where id = p_worker_job_id for update;
+  perform private.tidas_import_guard_v2(p_worker_job_id, p_lease_token, p_source_artifact_id);
+  return v_receipt;
+end $_$;
+
+
+ALTER FUNCTION "private"."tidas_import_group_apply_v2"("p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_source_artifact_id" "uuid", "p_plan_sha256" "text", "p_root" "jsonb", "p_entries" "jsonb") OWNER TO "postgres";
+
+
+CREATE OR REPLACE FUNCTION "private"."tidas_import_guard_v2"("p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_source_artifact_id" "uuid") RETURNS "uuid"
+    LANGUAGE "plpgsql" SECURITY DEFINER
+    SET "search_path" TO ''
+    AS $_$
+declare v_user uuid;
+begin
+  select j.requested_by into v_user
+  from private.worker_jobs j
+  join private.lca_package_artifacts a on a.worker_job_id = j.id
+  where j.id = p_worker_job_id and j.lease_token = p_lease_token
+    and j.status = 'running' and j.lease_expires_at > clock_timestamp()
+    and j.job_kind = 'tidas.import_package'
+    and j.payload_schema_version = 'tidas.import_package.request.v2'
+    and j.payload_json ->> 'import_policy' = 'root_closure_v2'
+    and j.payload_json ->> 'source_artifact_id' = p_source_artifact_id::text
+    and a.id = p_source_artifact_id and a.artifact_kind = 'import_source'
+    and a.status = 'ready' and a.artifact_sha256 ~ '^[0-9a-f]{64}$'
+    and a.metadata ->> 'requested_by' = j.requested_by::text;
+  if v_user is null then
+    raise exception using errcode = '55000', message = 'TIDAS_IMPORT_LEASE_OR_SOURCE_INVALID';
+  end if;
+  return v_user;
+end $_$;
+
+
+ALTER FUNCTION "private"."tidas_import_guard_v2"("p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_source_artifact_id" "uuid") OWNER TO "postgres";
 
 
 CREATE OR REPLACE FUNCTION "private"."unitgroups_sync_jsonb_version"() RETURNS "trigger"
@@ -70267,8 +70956,8 @@ CREATE TABLE IF NOT EXISTS "private"."lca_package_artifacts" (
     "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "updated_at" timestamp with time zone DEFAULT "now"() NOT NULL,
     "worker_job_id" "uuid",
-    CONSTRAINT "lca_package_artifacts_format_chk" CHECK (("artifact_format" = ANY (ARRAY['tidas-package-zip:v1'::"text", 'tidas-package-export-report:v1'::"text", 'tidas-package-import-report:v1'::"text"]))),
-    CONSTRAINT "lca_package_artifacts_kind_chk" CHECK (("artifact_kind" = ANY (ARRAY['import_source'::"text", 'export_zip'::"text", 'export_report'::"text", 'import_report'::"text"]))),
+    CONSTRAINT "lca_package_artifacts_format_chk" CHECK (("artifact_format" = ANY (ARRAY['tidas-package-zip:v1'::"text", 'tidas-package-export-report:v1'::"text", 'tidas-package-import-report:v1'::"text", 'tidas-package-import-report:v2'::"text", 'tidas-package-import-details:v2'::"text"]))),
+    CONSTRAINT "lca_package_artifacts_kind_chk" CHECK (("artifact_kind" = ANY (ARRAY['import_source'::"text", 'export_zip'::"text", 'export_report'::"text", 'import_report'::"text", 'import_details'::"text"]))),
     CONSTRAINT "lca_package_artifacts_size_chk" CHECK ((("artifact_byte_size" IS NULL) OR ("artifact_byte_size" >= 0))),
     CONSTRAINT "lca_package_artifacts_status_chk" CHECK (("status" = ANY (ARRAY['pending'::"text", 'ready'::"text", 'failed'::"text", 'deleted'::"text"]))),
     CONSTRAINT "lca_package_artifacts_url_chk" CHECK (("length"("btrim"("artifact_url")) > 0))
@@ -71971,6 +72660,37 @@ CREATE TABLE IF NOT EXISTS "private"."teams" (
 ALTER TABLE "private"."teams" OWNER TO "postgres";
 
 
+CREATE TABLE IF NOT EXISTS "private"."tidas_import_groups_v2" (
+    "worker_job_id" "uuid" NOT NULL,
+    "root_table" "text" NOT NULL,
+    "root_id" "uuid" NOT NULL,
+    "root_version" "text" NOT NULL,
+    "entries_sha256" "text" NOT NULL,
+    "receipt" "jsonb" NOT NULL,
+    "committed_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "tidas_import_groups_v2_receipt_check" CHECK (("jsonb_typeof"("receipt") = 'object'::"text")),
+    CONSTRAINT "tidas_import_groups_v2_root_table_check" CHECK (("root_table" = ANY (ARRAY['processes'::"text", 'lifecyclemodels'::"text"]))),
+    CONSTRAINT "tidas_import_groups_v2_root_version_check" CHECK (("root_version" ~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$'::"text"))
+);
+
+
+ALTER TABLE "private"."tidas_import_groups_v2" OWNER TO "postgres";
+
+
+CREATE TABLE IF NOT EXISTS "private"."tidas_import_plans_v2" (
+    "worker_job_id" "uuid" NOT NULL,
+    "source_artifact_id" "uuid" NOT NULL,
+    "source_sha256" "text" NOT NULL,
+    "plan_sha256" "text" NOT NULL,
+    "created_at" timestamp with time zone DEFAULT "now"() NOT NULL,
+    CONSTRAINT "tidas_import_plans_v2_plan_sha256_check" CHECK (("plan_sha256" ~ '^[0-9a-f]{64}$'::"text")),
+    CONSTRAINT "tidas_import_plans_v2_source_sha256_check" CHECK (("source_sha256" ~ '^[0-9a-f]{64}$'::"text"))
+);
+
+
+ALTER TABLE "private"."tidas_import_plans_v2" OWNER TO "postgres";
+
+
 CREATE TABLE IF NOT EXISTS "private"."users" (
     "id" "uuid" NOT NULL,
     "raw_user_meta_data" "jsonb",
@@ -73552,6 +74272,16 @@ ALTER TABLE ONLY "private"."roles"
 
 ALTER TABLE ONLY "private"."teams"
     ADD CONSTRAINT "teams_pkey" PRIMARY KEY ("id");
+
+
+
+ALTER TABLE ONLY "private"."tidas_import_groups_v2"
+    ADD CONSTRAINT "tidas_import_groups_v2_pkey" PRIMARY KEY ("worker_job_id", "root_table", "root_id", "root_version");
+
+
+
+ALTER TABLE ONLY "private"."tidas_import_plans_v2"
+    ADD CONSTRAINT "tidas_import_plans_v2_pkey" PRIMARY KEY ("worker_job_id");
 
 
 
@@ -75513,6 +76243,34 @@ CREATE OR REPLACE TRIGGER "processes_set_modified_at_trigger" BEFORE UPDATE OF "
 
 
 
+CREATE OR REPLACE TRIGGER "protect_example_dataset_write" BEFORE DELETE OR UPDATE ON "public"."contacts" FOR EACH ROW EXECUTE FUNCTION "private"."protect_example_dataset_write"();
+
+
+
+CREATE OR REPLACE TRIGGER "protect_example_dataset_write" BEFORE DELETE OR UPDATE ON "public"."flowproperties" FOR EACH ROW EXECUTE FUNCTION "private"."protect_example_dataset_write"();
+
+
+
+CREATE OR REPLACE TRIGGER "protect_example_dataset_write" BEFORE DELETE OR UPDATE ON "public"."flows" FOR EACH ROW EXECUTE FUNCTION "private"."protect_example_dataset_write"();
+
+
+
+CREATE OR REPLACE TRIGGER "protect_example_dataset_write" BEFORE DELETE OR UPDATE ON "public"."lifecyclemodels" FOR EACH ROW EXECUTE FUNCTION "private"."protect_example_dataset_write"();
+
+
+
+CREATE OR REPLACE TRIGGER "protect_example_dataset_write" BEFORE DELETE OR UPDATE ON "public"."processes" FOR EACH ROW EXECUTE FUNCTION "private"."protect_example_dataset_write"();
+
+
+
+CREATE OR REPLACE TRIGGER "protect_example_dataset_write" BEFORE DELETE OR UPDATE ON "public"."sources" FOR EACH ROW EXECUTE FUNCTION "private"."protect_example_dataset_write"();
+
+
+
+CREATE OR REPLACE TRIGGER "protect_example_dataset_write" BEFORE DELETE OR UPDATE ON "public"."unitgroups" FOR EACH ROW EXECUTE FUNCTION "private"."protect_example_dataset_write"();
+
+
+
 CREATE OR REPLACE TRIGGER "review_dataset_content_guard_v1" BEFORE UPDATE ON "public"."contacts" FOR EACH ROW EXECUTE FUNCTION "private"."review_dataset_content_guard_v1"();
 
 
@@ -76000,6 +76758,21 @@ ALTER TABLE ONLY "private"."portal_sitemap_rows_v1"
 
 ALTER TABLE ONLY "private"."roles"
     ADD CONSTRAINT "roles_user_id_fkey" FOREIGN KEY ("user_id") REFERENCES "auth"."users"("id");
+
+
+
+ALTER TABLE ONLY "private"."tidas_import_groups_v2"
+    ADD CONSTRAINT "tidas_import_groups_v2_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "private"."tidas_import_plans_v2"("worker_job_id");
+
+
+
+ALTER TABLE ONLY "private"."tidas_import_plans_v2"
+    ADD CONSTRAINT "tidas_import_plans_v2_source_artifact_id_fkey" FOREIGN KEY ("source_artifact_id") REFERENCES "private"."lca_package_artifacts"("id");
+
+
+
+ALTER TABLE ONLY "private"."tidas_import_plans_v2"
+    ADD CONSTRAINT "tidas_import_plans_v2_worker_job_id_fkey" FOREIGN KEY ("worker_job_id") REFERENCES "private"."worker_jobs"("id");
 
 
 
@@ -76510,6 +77283,12 @@ CREATE POLICY "select by self and team and admin" ON "private"."users" FOR SELEC
 ALTER TABLE "private"."teams" ENABLE ROW LEVEL SECURITY;
 
 
+ALTER TABLE "private"."tidas_import_groups_v2" ENABLE ROW LEVEL SECURITY;
+
+
+ALTER TABLE "private"."tidas_import_plans_v2" ENABLE ROW LEVEL SECURITY;
+
+
 CREATE POLICY "transitional_reviews_update_submitter_only" ON "private"."reviews" FOR UPDATE TO "authenticated" USING (((( SELECT "auth"."uid"() AS "uid") IS NOT NULL) AND (((("json" -> 'user'::"text") ->> 'id'::"text"))::"uuid" = ( SELECT "auth"."uid"() AS "uid")))) WITH CHECK (((( SELECT "auth"."uid"() AS "uid") IS NOT NULL) AND (((("json" -> 'user'::"text") ->> 'id'::"text"))::"uuid" = ( SELECT "auth"."uid"() AS "uid"))));
 
 
@@ -76693,6 +77472,34 @@ CREATE POLICY "Enable read access for authenticated users" ON "public"."unitgrou
    FROM "private"."reviews" "r"
   WHERE (("r"."id" IN ( SELECT (("review_item"."value" ->> 'id'::"text"))::"uuid" AS "uuid"
            FROM "jsonb_array_elements"("unitgroups"."reviews") "review_item"("value"))) AND ("r"."reviewer_id" @> "jsonb_build_array"((( SELECT "auth"."uid"() AS "uid"))::"text")))))))));
+
+
+
+CREATE POLICY "authenticated_example_read" ON "public"."contacts" FOR SELECT TO "authenticated" USING ((("state_code" = '-1'::integer) AND (( SELECT "auth"."uid"() AS "uid") IS NOT NULL)));
+
+
+
+CREATE POLICY "authenticated_example_read" ON "public"."flowproperties" FOR SELECT TO "authenticated" USING ((("state_code" = '-1'::integer) AND (( SELECT "auth"."uid"() AS "uid") IS NOT NULL)));
+
+
+
+CREATE POLICY "authenticated_example_read" ON "public"."flows" FOR SELECT TO "authenticated" USING ((("state_code" = '-1'::integer) AND (( SELECT "auth"."uid"() AS "uid") IS NOT NULL)));
+
+
+
+CREATE POLICY "authenticated_example_read" ON "public"."lifecyclemodels" FOR SELECT TO "authenticated" USING ((("state_code" = '-1'::integer) AND (( SELECT "auth"."uid"() AS "uid") IS NOT NULL)));
+
+
+
+CREATE POLICY "authenticated_example_read" ON "public"."processes" FOR SELECT TO "authenticated" USING ((("state_code" = '-1'::integer) AND (( SELECT "auth"."uid"() AS "uid") IS NOT NULL)));
+
+
+
+CREATE POLICY "authenticated_example_read" ON "public"."sources" FOR SELECT TO "authenticated" USING ((("state_code" = '-1'::integer) AND (( SELECT "auth"."uid"() AS "uid") IS NOT NULL)));
+
+
+
+CREATE POLICY "authenticated_example_read" ON "public"."unitgroups" FOR SELECT TO "authenticated" USING ((("state_code" = '-1'::integer) AND (( SELECT "auth"."uid"() AS "uid") IS NOT NULL)));
 
 
 
@@ -78186,6 +78993,12 @@ GRANT ALL ON FUNCTION "api"."qry_review_get_admin_queue_items_v3"("p_status" "te
 
 
 
+REVOKE ALL ON FUNCTION "api"."qry_review_get_admin_queue_items_v4"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text", "p_query" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."qry_review_get_admin_queue_items_v4"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text", "p_query" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "api"."qry_review_get_admin_queue_items_v4"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text", "p_query" "text") TO "api_internal_executor";
+
+
+
 REVOKE ALL ON FUNCTION "api"."qry_review_get_admin_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."qry_review_get_admin_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") TO "api_internal_executor";
 GRANT ALL ON FUNCTION "api"."qry_review_get_admin_root_queue_items_v2"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text") TO "authenticated";
@@ -78219,6 +79032,12 @@ GRANT ALL ON FUNCTION "api"."qry_review_get_member_queue_items"("p_status" "text
 REVOKE ALL ON FUNCTION "api"."qry_review_get_member_queue_items_v3"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."qry_review_get_member_queue_items_v3"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text") TO "authenticated";
 GRANT ALL ON FUNCTION "api"."qry_review_get_member_queue_items_v3"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text") TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "api"."qry_review_get_member_queue_items_v4"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text", "p_query" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."qry_review_get_member_queue_items_v4"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text", "p_query" "text") TO "authenticated";
+GRANT ALL ON FUNCTION "api"."qry_review_get_member_queue_items_v4"("p_status" "text", "p_page" integer, "p_page_size" integer, "p_sort_by" "text", "p_sort_order" "text", "p_display_mode" "text", "p_target_table" "text", "p_query" "text") TO "api_internal_executor";
 
 
 
@@ -78574,6 +79393,11 @@ GRANT ALL ON FUNCTION "api"."svc_tidas_package_import_enqueue"("p_requested_by" 
 
 
 
+REVOKE ALL ON FUNCTION "api"."svc_tidas_package_import_enqueue_v2"("p_requested_by" "uuid", "p_job_id" "uuid", "p_source_artifact_id" "uuid", "p_artifact_sha256" "text", "p_artifact_byte_size" bigint, "p_filename" "text", "p_content_type" "text") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."svc_tidas_package_import_enqueue_v2"("p_requested_by" "uuid", "p_job_id" "uuid", "p_source_artifact_id" "uuid", "p_artifact_sha256" "text", "p_artifact_byte_size" bigint, "p_filename" "text", "p_content_type" "text") TO "service_role";
+
+
+
 REVOKE ALL ON FUNCTION "api"."svc_tidas_package_import_prepare"("p_requested_by" "uuid", "p_job_id" "uuid", "p_source_artifact_id" "uuid", "p_artifact_url" "text", "p_content_type" "text", "p_filename" "text", "p_idempotency_key" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."svc_tidas_package_import_prepare"("p_requested_by" "uuid", "p_job_id" "uuid", "p_source_artifact_id" "uuid", "p_artifact_url" "text", "p_content_type" "text", "p_filename" "text", "p_idempotency_key" "text") TO "service_role";
 
@@ -78581,6 +79405,11 @@ GRANT ALL ON FUNCTION "api"."svc_tidas_package_import_prepare"("p_requested_by" 
 
 REVOKE ALL ON FUNCTION "api"."svc_tidas_package_read"("p_requested_by" "uuid", "p_lookup_id" "uuid") FROM PUBLIC;
 GRANT ALL ON FUNCTION "api"."svc_tidas_package_read"("p_requested_by" "uuid", "p_lookup_id" "uuid") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "api"."svc_tidas_package_read_v2"("p_requested_by" "uuid", "p_lookup_id" "uuid") FROM PUBLIC;
+GRANT ALL ON FUNCTION "api"."svc_tidas_package_read_v2"("p_requested_by" "uuid", "p_lookup_id" "uuid") TO "service_role";
 
 
 
@@ -79799,6 +80628,10 @@ GRANT ALL ON FUNCTION "private"."processes_sync_jsonb_version"() TO "api_interna
 
 
 
+REVOKE ALL ON FUNCTION "private"."protect_example_dataset_write"() FROM PUBLIC;
+
+
+
 GRANT ALL ON TABLE "private"."reviews" TO "service_role";
 GRANT SELECT ON TABLE "private"."reviews" TO "api_internal_executor";
 GRANT SELECT ON TABLE "private"."reviews" TO "authenticated";
@@ -79878,6 +80711,10 @@ GRANT ALL ON FUNCTION "private"."review_revision_fingerprint_v1"("p_target_table
 
 REVOKE ALL ON FUNCTION "private"."review_root_currently_references_target_v1"("p_root_review_id" "uuid", "p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text") FROM PUBLIC;
 GRANT ALL ON FUNCTION "private"."review_root_currently_references_target_v1"("p_root_review_id" "uuid", "p_target_table" "text", "p_target_id" "uuid", "p_target_version" "text") TO "api_internal_executor";
+
+
+
+REVOKE ALL ON FUNCTION "private"."review_search_dataset_versions_v1"("p_query" "text", "p_target_table" "text") FROM PUBLIC;
 
 
 
@@ -80248,6 +81085,15 @@ REVOKE ALL ON FUNCTION "private"."sync_portal_catalog_search_row_v2"() FROM PUBL
 
 
 REVOKE ALL ON FUNCTION "private"."sync_portal_sitemap_row_v1"() FROM PUBLIC;
+
+
+
+REVOKE ALL ON FUNCTION "private"."tidas_import_group_apply_v2"("p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_source_artifact_id" "uuid", "p_plan_sha256" "text", "p_root" "jsonb", "p_entries" "jsonb") FROM PUBLIC;
+GRANT ALL ON FUNCTION "private"."tidas_import_group_apply_v2"("p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_source_artifact_id" "uuid", "p_plan_sha256" "text", "p_root" "jsonb", "p_entries" "jsonb") TO "service_role";
+
+
+
+REVOKE ALL ON FUNCTION "private"."tidas_import_guard_v2"("p_worker_job_id" "uuid", "p_lease_token" "uuid", "p_source_artifact_id" "uuid") FROM PUBLIC;
 
 
 

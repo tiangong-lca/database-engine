@@ -15,7 +15,7 @@ BEGIN
 			f.modified_at,
 			COUNT(*) OVER() AS total_count
 		FROM flowproperties f
-		WHERE f.json @> filter_condition_jsonb AND f.json &@~ query_text AND ((data_source = 'tg' AND state_code = 100) or (data_source = 'my' AND user_id::text = this_user_id))
+		WHERE f.json @> filter_condition_jsonb AND f.json &@~ query_text AND ((((data_source = 'tg' AND state_code = 100) OR (data_source = 'ex' AND state_code = -1 AND (SELECT auth.uid()) IS NOT NULL))) or (data_source = 'my' AND user_id::text = this_user_id))
 		ORDER BY pgroonga_score(tableoid, ctid) DESC
 		LIMIT page_size
 		OFFSET (page_current -1) * page_size;

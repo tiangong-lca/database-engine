@@ -218,8 +218,8 @@ insert into issue_455_results values (
 
 select is(
   (select value ->> 'mode' from issue_455_results where label = 'selected_after_terminal'),
-  'cache_hit',
-  'an exact selected-roots export retains terminal cache reuse'
+  'queued',
+  'a completed selected-roots export refreshes like a bulk export'
 );
 
 select is(
@@ -228,9 +228,9 @@ select is(
     from issue_455_results
     where label = 'selected_after_terminal'
   ),
-  '45510000-0000-4000-8000-000000000005|'
-    || (select value ->> 'worker_job_id' from issue_455_results where label = 'selected_first'),
-  'selected-roots terminal reuse returns the original canonical identities'
+  '45510000-0000-4000-8000-000000000006|'
+    || (select value ->> 'worker_job_id' from issue_455_results where label = 'selected_after_terminal'),
+  'selected-roots refresh returns the new canonical identities'
 );
 
 select is(
@@ -241,8 +241,8 @@ select is(
       and job_kind = 'tidas.export_package'
       and idempotency_key = 'issue455:selected'
   ),
-  1::bigint,
-  'selected-roots terminal reuse does not enqueue duplicate Worker work'
+  2::bigint,
+  'selected-roots refresh creates new Worker work after completion'
 );
 
 select * from finish();

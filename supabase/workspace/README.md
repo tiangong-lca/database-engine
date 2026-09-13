@@ -20,9 +20,9 @@ checkPaths:
   - .githooks/pre-push
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-08
-lastReviewedCommit: 031316ed04052f51a7c1a0d46f51f0341cbf362a
-lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
+lastReviewedAt: 2026-09-13
+lastReviewedCommit: 784c64dd82e22fa8667e64dc94569fe68411d72c
+lastReviewedNote: "Database #644: reviewed generated-workspace stability against the local-contract suite additions; refresh behavior and stable-overlay rules unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml

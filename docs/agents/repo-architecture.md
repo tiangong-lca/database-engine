@@ -30,9 +30,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-08
-lastReviewedCommit: 031316ed04052f51a7c1a0d46f51f0341cbf362a
-lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
+lastReviewedAt: 2026-09-13
+lastReviewedCommit: 784c64dd82e22fa8667e64dc94569fe68411d72c
+lastReviewedNote: "Database #644: reviewed workflow-contract script protection of three additional local-contract SQL suites; stable-versus-generated path map unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -76,6 +76,21 @@ in `private.api_capability_grants`. That table records the owning capability ID
 and admitted caller roles; migrations first remove inherited grants and then
 rebuild the external ACL from this closed manifest. New or overloaded RPCs are
 therefore denied until their exact signature is deliberately classified.
+
+## Review Queue Full-Text Search
+
+The v4 Admin/Member queue RPCs add `p_query` while preserving the v3 DTO,
+actor authorization, tab/display/type filters and task-level pagination. Empty
+queries retain v3 behavior. The ACL-closed, invoker-security
+`private.review_search_dataset_versions_v1` reads the seven existing
+`search_text text[]` projections with their ordinary data-list predicates and
+UUID fast path. It returns exact table/id/version identities without a latest
+version collapse; the authenticated queue facade applies review visibility and
+filters before totals/order/limit. Root and Reference rows remain independent.
+No new projection, index, extraction job or AI call is introduced. These are
+current stored projections of the reviewed version, not submission snapshots;
+missing asynchronous projections do not match lexical queries, but UUID lookup
+still works. Review/submitter/team metadata is outside this lexical scope.
 
 ## OAuth Client Authorization Boundary
 
@@ -688,7 +703,7 @@ Queue growth controls preserve lease freshness without turning every renewal int
 
 Review submission itself never enqueues or waits for Worker computation. A Review Admin may manually start a global `review.quality_diagnostic` job that evaluates completeness and numerical quality together. The report is read-only and informational: findings, inability to evaluate, and execution failure do not mutate review state or block assignment, approval, or rejection. Review Members cannot start or read this administrative report, and the job does not enter the ordinary task-center feed.
 
-Retained domain tables such as `lca_package_artifacts`, `lca_package_export_items`, `lca_package_request_cache`, `lca_results`, `lca_result_cache`, `lca_latest_all_unit_results`, and `lca_network_snapshots` are not replacement job tables. They store worker-produced artifacts, caches, projections, reports, or coordinator domain state. `dataset_review_submit_requests` and `dataset_review_submit_gate_runs` are legacy compatibility/audit history only; they no longer authorize or reject review submission. The package request cache deduplicates active work for mutable scopes (`current_user`, `open_data`, and `current_user_and_open_data`), but a new intent after completion must advance to a fresh Worker/package job; only `selected_roots`, whose exact root IDs and versions are request content, retains terminal artifact reuse. Package retention is Worker-owned because SQL cannot prove object deletion: the database helper is preview-only and mutating calls fail closed. Package-domain foreign keys use `ON DELETE RESTRICT`, so bounded artifact/cache/export-detail cleanup cannot erase canonical `worker_jobs` history. Post-cutover rows should be traceable back to `worker_jobs` through the appropriate worker job reference columns, except for explicitly documented exceptions such as snapshot identity rows that are traced through downstream worker-linked records.
+Retained domain tables such as `lca_package_artifacts`, `lca_package_export_items`, `lca_package_request_cache`, `lca_results`, `lca_result_cache`, `lca_latest_all_unit_results`, and `lca_network_snapshots` are not replacement job tables. They store worker-produced artifacts, caches, projections, reports, or coordinator domain state. `dataset_review_submit_requests` and `dataset_review_submit_gate_runs` are legacy compatibility/audit history only; they no longer authorize or reject review submission. The package request cache deduplicates active work for every export scope (`selected_roots`, `current_user`, `open_data`, and `current_user_and_open_data`), but a new intent after completion must advance to a fresh Worker/package job. Exact root IDs and versions identify requested datasets, not immutable content: both root rows and their dependency closure can change without changing that request. Historical jobs keep their own artifacts; refreshed pending jobs must not expose an earlier ZIP. Package retention is Worker-owned because SQL cannot prove object deletion: the database helper is preview-only and mutating calls fail closed. Package-domain foreign keys use `ON DELETE RESTRICT`, so bounded artifact/cache/export-detail cleanup cannot erase canonical `worker_jobs` history. Post-cutover rows should be traceable back to `worker_jobs` through the appropriate worker job reference columns, except for explicitly documented exceptions such as snapshot identity rows that are traced through downstream worker-linked records.
 
 Use `private.worker_domain_traceability_cutoffs` and
 `util.worker_domain_traceability_violations` for DB-side audit checks when
@@ -782,3 +797,9 @@ If a task changes both schema and app behavior, the SQL truth still starts here.
 ## Local Docpact Push Gate
 
 This repository has a versioned local `pre-push` hook under `.githooks/pre-push` that delegates to `scripts/docpact-gate.sh`. The gate resolves the CLI through `scripts/docpact`, so local agent shells do not need bare `docpact` on `PATH`. The hook is a local developer guard for docpact config validation and enforced doc-governance linting; ordinary PRs and pushes rely on the local gate; `.github/workflows/ai-doc-lint.yml` is manual-dispatch fallback for remote reproduction.
+
+TIDAS v2 import adds private immutable input/plan bindings and committed root-group receipts. The Worker supplies a completed ZIP-only validation plan; the service-only group function owns atomic insert-only writes and the final lease fence. `api.svc_tidas_package_read_v2` reuses the existing owner check before returning committed counts when reports are unavailable. Legacy v1 admission remains available.
+
+## Authenticated example datasets
+
+All seven public dataset tables accept `state_code=-1` for curated examples. The additive authenticated SELECT policies admit cross-owner reads only with a non-null actor. The `ex` list, lexical, UUID-reference, and hybrid branches fix that state before ranking, latest-version selection, counts, and pagination. Process/Flow matched-version V2 uses the existing actor candidate path with a fixed example state; public projection candidates retain their original scope. Ordinary actors cannot update or delete example originals, including through definer bundle commands; service curation with no user JWT remains available. Selected-root package export admits exact example roots for an authenticated requesting actor; global open-data package scope and Portal publication visibility remain unchanged.

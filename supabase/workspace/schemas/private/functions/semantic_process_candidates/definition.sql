@@ -50,6 +50,34 @@ begin
     return;
   end if;
 
+  if normalized_data_source = 'ex' and auth.uid() is not null then
+    return query
+      with candidates as materialized (
+        select
+          p.id as candidate_id,
+          (p.embedding_ft <=> query_embedding_vector) as candidate_distance
+        from public.processes p
+        where p.embedding_ft is not null
+          and p.state_code = -1
+          and (filter_condition_jsonb = '{}'::jsonb or p.json @> filter_condition_jsonb)
+        order by p.embedding_ft <=> query_embedding_vector
+        limit candidate_size
+      ),
+      filtered as (
+        select candidates.*
+        from candidates
+        where candidates.candidate_distance < threshold_distance
+      )
+      select
+        rank() over (order by filtered.candidate_distance)::bigint,
+        filtered.candidate_id,
+        filtered.candidate_distance
+      from filtered
+      order by filtered.candidate_distance
+      limit normalized_match_count;
+    return;
+  end if;
+
   if normalized_data_source = 'co' then
     return query
       with candidates as materialized (

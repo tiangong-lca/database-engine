@@ -22,9 +22,9 @@ checkPaths:
   - .github/workflows/supabase-dev.yml
   - .env.supabase.dev.local.example
   - .env.supabase.main.local.example
-lastReviewedAt: 2026-09-08
-lastReviewedCommit: 0c6c00d93934c86d0059b37c3248d91449adab6b
-lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
+lastReviewedAt: 2026-09-13
+lastReviewedCommit: 784c64dd82e22fa8667e64dc94569fe68411d72c
+lastReviewedNote: "Database #644: updated the production Supabase GitHub integration repository identity to tiangong-lca/database; branch bindings, Vault rules, and persistent-Dev deployment steps unchanged."
 related:
   - ../../AGENTS.md
   - ../../.docpact/config.yaml
@@ -126,7 +126,7 @@ Usage rules:
 
 Supabase GitHub integration for the production project must point to:
 
-- repository: `tiangong-lca/database-engine`
+- repository: `tiangong-lca/database`
 - relative path: `supabase`
 
 This integration applies committed migrations to the production project automatically
@@ -373,7 +373,7 @@ Rules:
 ### Production `main` deployment
 
 - Pushes to Git `main` are handled by the production project's Supabase GitHub integration.
-- The integration watches repository `tiangong-lca/database-engine` with relative path `supabase`.
+- The integration watches repository `tiangong-lca/database` with relative path `supabase`.
 - Checked-in pending migrations are applied automatically to the production project when `main` advances.
 - Project configuration is not assumed to follow the migration automatically;
   when `supabase/config.toml` changes, push it explicitly to the production

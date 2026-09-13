@@ -85,6 +85,48 @@ begin
     return;
   end if;
 
+  if normalized_data_source = 'ex' and auth.uid() is not null then
+    return query
+      with candidates as materialized (
+        select
+          f.id as candidate_id,
+          f.version::text as candidate_version,
+          (f.embedding_ft operator(extensions.<=>) query_embedding_vector) as candidate_distance
+        from public.flows f
+        where f.embedding_ft is not null
+          and f.state_code = -1
+          and (filter_condition_jsonb = '{}'::jsonb or f.json @> filter_condition_jsonb)
+          and (
+            flow_type is null
+            or flow_type = ''
+            or (f.json->'flowDataSet'->'modellingAndValidation'->'LCIMethod'->>'typeOfDataSet') = any(flow_type_array)
+          )
+          and (
+            as_input is null
+            or as_input = false
+            or not (
+              f.json @> '{"flowDataSet":{"flowInformation":{"dataSetInformation":{"classificationInformation":{"common:elementaryFlowCategorization":{"common:category":[{"#text":"Emissions","@level":"0"}]}}}}}}'
+            )
+          )
+        order by f.embedding_ft operator(extensions.<=>) query_embedding_vector
+        limit candidate_size
+      ),
+      filtered as (
+        select candidates.*
+        from candidates
+        where candidates.candidate_distance < threshold_distance
+      )
+      select
+        row_number() over (order by filtered.candidate_distance,filtered.candidate_id,filtered.candidate_version desc)::bigint,
+        filtered.candidate_id,
+        filtered.candidate_version,
+        filtered.candidate_distance
+      from filtered
+      order by filtered.candidate_distance,filtered.candidate_id,filtered.candidate_version desc
+      limit normalized_match_count;
+    return;
+  end if;
+
   if normalized_data_source = 'co' then
     return query
       with candidates as materialized (

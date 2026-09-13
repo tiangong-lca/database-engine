@@ -37,9 +37,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-08
-lastReviewedCommit: 207876abe58d3c9437430dffd4c770223e539218
-lastReviewedNote: 'Reviewed for Database #628: composite Process names use an additive shadow projection and controlled migration rollout; repository ownership, frozen V1 boundaries, branch policy, generated-workspace authoring and hosted proof requirements remain intact.'
+lastReviewedAt: 2026-09-13
+lastReviewedCommit: 784c64dd82e22fa8667e64dc94569fe68411d72c
+lastReviewedNote: "Database #644: reviewed canonical repository identity migration to tiangong-lca/database, Gitleaks Action removal without replacement, and local-contract suite additions; repo contract, branch policy, and hosted boundaries unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md

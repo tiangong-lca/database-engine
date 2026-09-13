@@ -68,8 +68,8 @@ select is(
     where namespace.nspname = 'api'
       and routine.prokind = 'f'
   ),
-  286::bigint,
-  'api contains the active cutover and consumer facades, including eight additive Portal/Next version-search APIs'
+  290::bigint,
+  'api contains the active cutover and consumer facades, including eight additive Portal/Next version-search APIs and two V4 review queues plus two partial-import APIs'
 );
 
 select is(
@@ -80,8 +80,8 @@ select is(
     where namespace.nspname = 'private'
       and routine.prokind = 'f'
   ),
-  337::bigint,
-  'private contains the active helpers, including the twenty-five exact-version and thirteen composite-name internals'
+  341::bigint,
+  'private contains the active helpers, including the twenty-five exact-version, thirteen composite-name and one review-search internals plus two partial-import helpers and the example write guard'
 );
 
 select ok(
@@ -112,8 +112,8 @@ select is(
     from pg_trigger trigger_record
     where not trigger_record.tgisinternal
   ),
-  120::bigint,
-  'all active application triggers and two Process composite-name sync triggers remain present'
+  127::bigint,
+  'all active application triggers and two Process composite-name sync triggers plus seven example write guards remain present'
 );
 
 select is(
@@ -121,8 +121,8 @@ select is(
     select count(*)
     from pg_policy
   ),
-  96::bigint,
-  'all RLS policies, nine OAuth guards and five composite-name policies remain present'
+  103::bigint,
+  'all RLS policies, nine OAuth guards and five composite-name policies plus seven authenticated example policies remain present'
 );
 
 select is(
@@ -136,8 +136,8 @@ select is(
       'util'::regnamespace
     )
   ),
-  587::bigint,
-  'all application, OAuth registry and twenty-two composite-name constraints remain present'
+  597::bigint,
+  'all application, OAuth registry and twenty-two composite-name constraints plus ten partial-import constraints remain present'
 );
 
 select is(
@@ -165,8 +165,8 @@ select is(
       and class.relkind in ('r', 'p')
       and class.relrowsecurity
   ),
-  75::bigint,
-  'RLS covers existing tables plus four private composite-name relations'
+  77::bigint,
+  'RLS covers existing tables plus four private composite-name relations and two private import receipt relations'
 );
 
 select ok(

@@ -19,7 +19,7 @@ CREATE TABLE IF NOT EXISTS "public"."processes" (
     "model_version" character(9),
     CONSTRAINT "processes_model_version_format_check" CHECK ((("model_version" IS NULL) OR (("model_version")::"text" ~ '^[0-9]{2}\.[0-9]{2}\.[0-9]{3}$'::"text"))),
     CONSTRAINT "processes_model_version_requires_model_id_check" CHECK ((("model_version" IS NULL) OR ("model_id" IS NOT NULL))),
-    CONSTRAINT "processes_state_code_check" CHECK (("state_code" = ANY (ARRAY[0, 20, 100, 200])))
+    CONSTRAINT "processes_state_code_check" CHECK (("state_code" = ANY (ARRAY['-1'::integer, 0, 20, 100, 200])))
 );
 
 ALTER TABLE "public"."processes" OWNER TO "postgres";

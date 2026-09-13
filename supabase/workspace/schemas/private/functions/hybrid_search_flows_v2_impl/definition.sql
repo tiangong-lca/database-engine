@@ -59,7 +59,7 @@ begin
       from public.flows f
       join fused on fused.id = f.id
       where (
-        (data_source = 'tg' and f.state_code = 100)
+        (((data_source = 'tg' AND f.state_code = 100) OR (data_source = 'ex' AND f.state_code = -1 AND (SELECT auth.uid()) IS NOT NULL)))
         or (data_source = 'co' and f.state_code = 200)
         or (data_source = 'my' and f.user_id = auth.uid())
         or (

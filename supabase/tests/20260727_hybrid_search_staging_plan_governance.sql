@@ -83,8 +83,8 @@ select is(
     where routine.oid =
       'private.semantic_process_candidates(text,text,double precision,integer,text)'::regprocedure
   ),
-  4,
-  'all four process visibility branches can fold an empty JSON filter away'
+  5,
+  'all five (including examples) process visibility branches can fold an empty JSON filter away'
 );
 
 select is(
@@ -102,8 +102,8 @@ select is(
     where routine.oid =
       'private.semantic_flow_candidates(text,text,double precision,integer,text)'::regprocedure
   ),
-  4,
-  'all four flow visibility branches can fold an empty JSON filter away'
+  5,
+  'all five (including examples) flow visibility branches can fold an empty JSON filter away'
 );
 
 select is(

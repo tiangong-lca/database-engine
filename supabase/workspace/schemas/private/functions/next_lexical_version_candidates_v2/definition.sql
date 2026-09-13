@@ -15,7 +15,7 @@ begin
     return;
   end if;
 
-  if p_data_source in ('my', 'te') then
+  if p_data_source in ('my', 'te', 'ex') then
     return query
     select candidate.*
     from private.next_actor_lexical_version_candidates_v2(
