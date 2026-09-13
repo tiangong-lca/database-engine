@@ -1,8 +1,8 @@
 version: 1
 layout: repo
-lastReviewedAt: "2026-09-11"
-lastReviewedCommit: "bf1c1b9247d9f22c6b8b1307cc4584df86fa8599"
-lastReviewedNote: "Database #642 / PR #643: reconciled Dev export-refresh review (#640) with Main official CLI capability-repair review (#638); retained both contracts and aligned the API closure assertion with migration 20260910150000."
+lastReviewedAt: "2026-09-13"
+lastReviewedCommit: "784c64dd82e22fa8667e64dc94569fe68411d72c"
+lastReviewedNote: "Database #644: migrated canonicalRepo to tiangong-lca/database, removed the Gitleaks Action and its Action-only config, and added the review-queue full-text-search, TIDAS partial-import, and example-dataset-scope suites to the local-contract job; physical directory/owner labels and hosted boundaries unchanged."
 
 # Keep deterministic governance facts here.
 # AGENTS.md remains the repo contract entrypoint.
@@ -11,7 +11,7 @@ catalog:
   repos:
     - id: database-engine
       path: .
-      canonicalRepo: tiangong-lca/database-engine
+      canonicalRepo: tiangong-lca/database
       entryDoc: AGENTS.md
       branchPolicyDoc: docs/agents/supabase-branching.md
       workflowDocs:

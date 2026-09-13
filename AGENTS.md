@@ -37,9 +37,9 @@ checkPaths:
   - scripts/docpact
   - scripts/docpact-gate.sh
   - scripts/install-git-hooks.sh
-lastReviewedAt: 2026-09-10
-lastReviewedCommit: 40b980d18a1a42af0ec50ea7caa0e08227c5efdd
-lastReviewedNote: "Database #640: reviewed export lifecycle ownership and validation routing; repository and hosted delivery boundaries are unchanged."
+lastReviewedAt: 2026-09-13
+lastReviewedCommit: 784c64dd82e22fa8667e64dc94569fe68411d72c
+lastReviewedNote: "Database #644: reviewed canonical repository identity migration to tiangong-lca/database, Gitleaks Action removal without replacement, and local-contract suite additions; repo contract, branch policy, and hosted boundaries unchanged."
 related:
   - .docpact/config.yaml
   - docs/agents/repo-validation.md
